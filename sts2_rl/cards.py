@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 class CardType(Enum):
     ATTACK = "attack"
     SKILL = "skill"
+    POWER = "power"
+    STATUS = "status"
+    CURSE = "curse"
 
 
 class Card(ABC):
@@ -18,9 +21,15 @@ class Card(ABC):
     name: str
     card_type: CardType
     energy_cost: int
+    is_playable: bool = True
+    is_ethereal: bool = False
+    has_turn_end_in_hand_effect: bool = False
 
     @abstractmethod
     def on_play(self, ctx: CombatCtx) -> None: ...
+
+    def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
+        pass
 
     def __repr__(self) -> str:
         return self.name
@@ -48,8 +57,44 @@ class DefendCard(Card):
         BlockCmd.apply(ctx.hooks, ctx.player, 5, card=self)
 
 
+class BurnCard(Card):
+    """Status — Unplayable. At end of turn, deal 2 damage to the player."""
+    id = "burn"
+    name = "Burn"
+    card_type = CardType.STATUS
+    energy_cost = 0
+    is_playable = False
+    has_turn_end_in_hand_effect = True
+
+    def on_play(self, ctx: CombatCtx) -> None:
+        pass
+
+    def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
+        from .cmds import DamageCmd
+        DamageCmd.deal(ctx.hooks, ctx.player, 2, dealer=None, card=self)
+
+
+class WoundCard(Card):
+    """Status — Unplayable. No effect."""
+    id = "wound"
+    name = "Wound"
+    card_type = CardType.STATUS
+    energy_cost = 0
+    is_playable = False
+
+    def on_play(self, ctx: CombatCtx) -> None:
+        pass
+
+
 STRIKE = StrikeCard()
 DEFEND = DefendCard()
+BURN = BurnCard()
+WOUND = WoundCard()
 
-CARD_REGISTRY: dict[str, Card] = {"strike": STRIKE, "defend": DEFEND}
+CARD_REGISTRY: dict[str, Card] = {
+    "strike": STRIKE,
+    "defend": DEFEND,
+    "burn": BURN,
+    "wound": WOUND,
+}
 CARD_TO_IDX: dict[str, int] = {"strike": 0, "defend": 1}

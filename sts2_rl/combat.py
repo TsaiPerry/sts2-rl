@@ -93,6 +93,31 @@ class CombatState:
         self.result = CombatResult(player_won=player_won, turns_taken=self.turn)
         self.hooks.on_combat_end(player_won)
 
+    def _process_turn_end_cards(self) -> None:
+        """Mirror DoTurnEnd: exhaust ethereal cards, then fire turn-end-in-hand effects."""
+        ctx = self._ctx()
+
+        # Ethereal cards with no turn-end effect exhaust immediately.
+        for card in [c for c in self.player.hand if c.is_ethereal and not c.has_turn_end_in_hand_effect]:
+            if self.hooks.should_ethereal_trigger(card):
+                self.player.hand.remove(card)
+                self.player.exhaust_pile.append(card)
+                self.hooks.on_card_exhausted(card)
+
+        # Cards with a turn-end effect: fire the effect, then exhaust or discard.
+        for card in [c for c in self.player.hand if c.has_turn_end_in_hand_effect]:
+            self.player.hand.remove(card)
+            card.on_turn_end_in_hand(ctx)
+            if self.player.is_dead:
+                self._end_combat(player_won=False)
+                return
+            if card.is_ethereal and self.hooks.should_ethereal_trigger(card):
+                self.player.exhaust_pile.append(card)
+                self.hooks.on_card_exhausted(card)
+            else:
+                self.player.discard_pile.append(card)
+                self.hooks.on_card_discarded(card)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -105,6 +130,8 @@ class CombatState:
             return False
 
         card = self.player.hand[hand_index]
+        if not card.is_playable:
+            return False
         actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
         if actual_cost > self.player.energy:
             return False
@@ -131,6 +158,9 @@ class CombatState:
             return
 
         self.hooks.on_player_turn_end(self.player)
+        self._process_turn_end_cards()
+        if self.phase == Phase.COMBAT_OVER:
+            return
         self.player.discard_hand()
         self._execute_enemy_turn()
 
@@ -144,6 +174,8 @@ class CombatState:
             return []
         actions = [0]
         for i, card in enumerate(self.player.hand):
+            if not card.is_playable:
+                continue
             actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
             if actual_cost <= self.player.energy:
                 actions.append(i + 1)
