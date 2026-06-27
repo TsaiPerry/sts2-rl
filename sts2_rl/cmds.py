@@ -160,8 +160,8 @@ class StrengthCmd:
 class DrawCmd:
     @staticmethod
     def draw(player: PlayerCombatState, count: int) -> None:
-        """Draw count cards. Hooks (on_card_drawn, on_shuffle, should_draw) fire inside player._draw."""
-        player._draw(count)
+        """Draw count cards mid-turn (from_hand_draw=False). Hooks fire inside player._draw."""
+        player._draw(count, from_hand_draw=False)
 
 
 class ExhaustCmd:

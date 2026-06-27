@@ -1,7 +1,7 @@
 """
 Tests for every power in sts2_rl/powers.py.
 
-Run with:  python -m pytest test_powers.py -v
+Run with:  python -m pytest test/test_powers.py -v
 """
 from __future__ import annotations
 

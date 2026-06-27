@@ -1,6 +1,6 @@
 from .env import STS2CombatEnv
 from .combat import CombatState, CombatCtx
-from .cards import Card, StrikeCard, DefendCard, SweepCard, make_card, register_card
+from .cards import Card, StrikeCard, DefendCard, SweepCard, BreakthroughCard, make_card, register_card
 from .creatures import Creature
 from .player import PlayerCombatState
 from .monsters import Monster, Intent, Encounter, FuzzyWurmCrawler, FUZZY_WURM_ENCOUNTER

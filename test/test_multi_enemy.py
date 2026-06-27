@@ -1,7 +1,7 @@
 """
 Tests for multi-enemy combat: targeting, victory conditions, and turn execution.
 
-Run with:  python -m pytest test_multi_enemy.py -v
+Run with:  python -m pytest test/test_multi_enemy.py -v
 """
 from __future__ import annotations
 

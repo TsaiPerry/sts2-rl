@@ -192,7 +192,8 @@ class CombatState:
 
         play_count = self.hooks.modify_card_play_count(card, self.enemy, 1)
         for _ in range(play_count):
-            if card.target_type == TargetType.ALL_ENEMIES:
+            if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
+                # Framework routes: call on_play once per living enemy.
                 for idx, e in enumerate(self.enemies):
                     if e.is_dead:
                         continue
@@ -200,6 +201,7 @@ class CombatState:
                     if self._all_enemies_dead() or self.player.is_dead:
                         break
             else:
+                # Card handles its own routing (or doesn't need enemy iteration).
                 card.on_play(self._ctx(), target_idx)
             if self._all_enemies_dead():
                 self._end_combat(player_won=True)

@@ -44,7 +44,7 @@ class PlayerCombatState(Creature):
         self._hooks.on_player_turn_start(self)
 
         draw_count = self._hooks.modify_hand_draw(self, self.DRAW_PER_TURN)
-        self._draw(draw_count)
+        self._draw(draw_count, from_hand_draw=True)
 
     def discard_hand(self) -> None:
         """Discard all cards in hand to the discard pile, firing per-card hooks."""
@@ -54,11 +54,11 @@ class PlayerCombatState(Creature):
         self.hand = []
         self._hooks.on_hand_emptied(self)
 
-    def _draw(self, n: int) -> None:
+    def _draw(self, n: int, from_hand_draw: bool = False) -> None:
         for _ in range(n):
             if len(self.hand) >= self.MAX_HAND_SIZE:
                 break
-            if not self._hooks.should_draw(self):
+            if not self._hooks.should_draw(self, from_hand_draw):
                 break
             if not self.draw_pile:
                 if not self.discard_pile:
@@ -69,4 +69,4 @@ class PlayerCombatState(Creature):
                 self._hooks.on_shuffle(self)
             card = self.draw_pile.pop()
             self.hand.append(card)
-            self._hooks.on_card_drawn(card)
+            self._hooks.on_card_drawn(card, from_hand_draw)

@@ -249,11 +249,16 @@ class HookSystem:
             if hasattr(l, "on_card_played"):
                 l.on_card_played(card)
 
-    def on_card_drawn(self, card: Card) -> None:
-        """Fires each time a card enters the hand from the draw pile."""
+    def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
+        """Fires each time a card enters the hand from the draw pile.
+
+        from_hand_draw is True only for the initial hand draw at the start of
+        the player's turn; False for all mid-turn draws (card effects, powers).
+        Mirrors STS2's AfterCardDrawn / AfterCardDrawnEarly fromHandDraw param.
+        """
         for l in list(self._listeners):
             if hasattr(l, "on_card_drawn"):
-                l.on_card_drawn(card)
+                l.on_card_drawn(card, from_hand_draw)
 
     def on_card_discarded(self, card: Card) -> None:
         """Fires when a card is discarded at end of turn (not when played)."""
@@ -387,11 +392,16 @@ class HookSystem:
                     return False
         return True
 
-    def should_draw(self, player: PlayerCombatState) -> bool:
-        """False from any listener prevents the next draw (e.g. No Draw status)."""
+    def should_draw(self, player: PlayerCombatState, from_hand_draw: bool = False) -> bool:
+        """False from any listener prevents the next draw (e.g. No Draw status).
+
+        from_hand_draw is True only for the initial hand draw at the start of
+        the player's turn; False for all mid-turn draws (card effects, powers).
+        Mirrors STS2's ShouldDraw fromHandDraw param.
+        """
         for l in list(self._listeners):
             if hasattr(l, "should_draw"):
-                if not l.should_draw(player):
+                if not l.should_draw(player, from_hand_draw):
                     return False
         return True
 
