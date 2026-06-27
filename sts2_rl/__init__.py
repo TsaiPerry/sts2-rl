@@ -3,7 +3,7 @@ from .combat import CombatState, CombatCtx
 from .cards import Card, StrikeCard, DefendCard, SweepCard, BreakthroughCard, make_card, register_card
 from .creatures import Creature
 from .player import PlayerCombatState
-from .monsters import Monster, Intent, Encounter, FuzzyWurmCrawler, FUZZY_WURM_ENCOUNTER
+from .monsters import Monster, Intent, Encounter, FuzzyWurmCrawler, FUZZY_WURM_ENCOUNTER, Nibbit, NIBBITS_NORMAL, NIBBITS_WEAK
 from .hooks import HookSystem
 from .cmds import DamageCmd, BlockCmd, StrengthCmd, PowerCmd
 from .powers import (

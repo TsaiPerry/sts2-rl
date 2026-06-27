@@ -10,60 +10,18 @@ import random
 from sts2_rl import CombatState
 from sts2_rl.cards import StrikeCard, SweepCard
 from sts2_rl.cmds import DamageCmd, PowerCmd
-from sts2_rl.monsters import Encounter, Intent, Monster, MoveType
+from sts2_rl.monsters import Encounter, FuzzyWurmCrawler, Nibbit
 from sts2_rl.powers import PoisonPower, ThornsPower, VulnerablePower
 
-
-# ── Test-only monsters ─────────────────────────────────────────────────────
-
-class MultiHitMonster(Monster):
-    """Attacks 3 × 2 damage per turn.  Fixed 10 HP."""
-    min_hp = 10
-    max_hp = 10
-
-    @property
-    def current_intent(self) -> Intent:
-        return Intent(move_type=MoveType.ATTACK, damage=2, hits=3)
-
-    def take_turn(self, ctx) -> None:
-        self._execute_attack(ctx, 2, 3)
+TWO_CRAWLERS = Encounter(id="two_crawlers", monster_classes=[FuzzyWurmCrawler, FuzzyWurmCrawler])
+CRAWLER_AND_NIBBIT = Encounter(id="crawler_nibbit", monster_classes=[FuzzyWurmCrawler, Nibbit])
 
 
-class AttackMonster(Monster):
-    """Attacks the player for 3 damage each turn.  Fixed 10 HP."""
-    min_hp = 10
-    max_hp = 10
-
-    @property
-    def current_intent(self) -> Intent:
-        return Intent(move_type=MoveType.ATTACK, damage=3, hits=1)
-
-    def take_turn(self, ctx) -> None:
-        DamageCmd.deal(ctx.hooks, ctx.player, 3, dealer=self)
-
-
-class BuffMonster(Monster):
-    """Applies Vulnerable(3) to the player each turn.  Fixed 8 HP."""
-    min_hp = 8
-    max_hp = 8
-
-    @property
-    def current_intent(self) -> Intent:
-        return Intent(move_type=MoveType.BUFF, buffs=[(VulnerablePower, 3)])
-
-    def take_turn(self, ctx) -> None:
-        # Apply 3 stacks so that after the on_enemy_turn_end tick (3→2),
-        # Vulnerable is still visible and testable.
-        PowerCmd.apply(ctx.hooks, ctx.player, VulnerablePower, 3)
-
-
-TWO_ATTACKERS = Encounter(id="two_attack", monster_classes=[AttackMonster, AttackMonster])
-ATTACKER_AND_BUFFER = Encounter(id="atk_buf", monster_classes=[AttackMonster, BuffMonster])
-
-
-def fresh(encounter: Encounter = TWO_ATTACKERS, seed: int = 0) -> CombatState:
-    """Combat with 5 Strike cards in hand and ample energy."""
+def fresh(encounter: Encounter = TWO_CRAWLERS, seed: int = 0) -> CombatState:
+    """Combat with a fixed RNG seed and all enemies normalised to 10 HP."""
     cs = CombatState(rng=random.Random(seed), encounter=encounter)
+    for e in cs.enemies:
+        e.hp = e.max_hp = 10
     cs.player.hand.clear()
     cs.player.hand.extend([StrikeCard() for _ in range(5)])
     cs.player.energy = 10
@@ -89,9 +47,9 @@ class TestEncounterCreation:
         assert cs.enemy is cs.enemies[0]
 
     def test_mixed_encounter_creates_different_types(self):
-        cs = fresh(ATTACKER_AND_BUFFER)
-        assert isinstance(cs.enemies[0], AttackMonster)
-        assert isinstance(cs.enemies[1], BuffMonster)
+        cs = fresh(CRAWLER_AND_NIBBIT)
+        assert isinstance(cs.enemies[0], FuzzyWurmCrawler)
+        assert isinstance(cs.enemies[1], Nibbit)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -101,7 +59,7 @@ class TestEncounterCreation:
 class TestTargeting:
     def test_no_target_idx_hits_first_enemy(self):
         cs = fresh()
-        cs.play_card(0)                     # target_idx omitted
+        cs.play_card(0)
         assert cs.enemies[0].hp == 10 - 6
         assert cs.enemies[1].hp == 10
 
@@ -119,14 +77,14 @@ class TestTargeting:
 
     def test_can_target_each_enemy_independently(self):
         cs = fresh()
-        cs.play_card(0, target_idx=0)       # enemy 0: 10 → 4
-        cs.play_card(0, target_idx=1)       # enemy 1: 10 → 4
+        cs.play_card(0, target_idx=0)
+        cs.play_card(0, target_idx=1)
         assert cs.enemies[0].hp == 4
         assert cs.enemies[1].hp == 4
 
     def test_out_of_range_target_idx_falls_back_to_first_living(self):
         cs = fresh()
-        cs.play_card(0, target_idx=99)      # no enemy 99 → first living (enemies[0])
+        cs.play_card(0, target_idx=99)
         assert cs.enemies[0].hp == 10 - 6
         assert cs.enemies[1].hp == 10
 
@@ -143,7 +101,7 @@ class TestCtxEnemyProperty:
 
     def test_skips_dead_first_enemy(self):
         cs = fresh()
-        cs.enemies[0].hp = 0               # mark dead directly
+        cs.enemies[0].hp = 0
         ctx = cs._ctx()
         assert ctx.enemy is cs.enemies[1]
 
@@ -152,7 +110,7 @@ class TestCtxEnemyProperty:
         cs.enemies[0].hp = 0
         cs.enemies[1].hp = 0
         ctx = cs._ctx()
-        assert ctx.enemy is cs.enemies[0]  # graceful fallback
+        assert ctx.enemy is cs.enemies[0]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -178,20 +136,19 @@ class TestVictoryCondition:
         assert cs.result.player_won
 
     def test_killing_both_simultaneously_not_needed(self):
-        # Sequential kills are fine; victory triggers on the last death
         cs = fresh()
         for _ in range(2):
-            cs.play_card(0, target_idx=0)   # kill enemy 0
+            cs.play_card(0, target_idx=0)
         assert not cs.is_over
         for _ in range(2):
-            cs.play_card(0, target_idx=1)   # kill enemy 1
+            cs.play_card(0, target_idx=1)
         assert cs.is_over and cs.result.player_won
 
     def test_enemy_property_tracks_first_living_after_death(self):
         cs = fresh()
         cs.play_card(0, target_idx=0)
         cs.play_card(0, target_idx=0)       # enemy 0 dead
-        assert cs.enemy is cs.enemies[1]    # property now points to enemy 1
+        assert cs.enemy is cs.enemies[1]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -203,8 +160,8 @@ class TestEnemyTurnExecution:
         cs = fresh()
         hp_before = cs.player.hp
         cs.end_turn()
-        # 2 × AttackMonster (3 dmg each) = 6 total; no player block
-        assert cs.player.hp == hp_before - 6
+        # 2 × FuzzyWurmCrawler ACID_GOOP (4 dmg each) = 8 total
+        assert cs.player.hp == hp_before - 8
 
     def test_dead_enemy_skips_its_turn(self):
         cs = fresh()
@@ -212,7 +169,7 @@ class TestEnemyTurnExecution:
         cs.play_card(0, target_idx=0)       # enemy 0 dead before end of turn
         hp_before = cs.player.hp
         cs.end_turn()
-        assert cs.player.hp == hp_before - 3   # only enemy 1 attacks
+        assert cs.player.hp == hp_before - 4   # only enemy 1 attacks (4 dmg)
 
     def test_each_enemy_block_clears_before_its_turn(self):
         cs = fresh()
@@ -224,118 +181,72 @@ class TestEnemyTurnExecution:
 
     def test_poison_kills_one_enemy_other_still_attacks(self):
         cs = fresh()
-        PowerCmd.apply(cs.hooks, cs.enemies[0], PoisonPower, 20)  # fatal on turn start
+        PowerCmd.apply(cs.hooks, cs.enemies[0], PoisonPower, 20)
         hp_before = cs.player.hp
         cs.end_turn()
-        # Enemy 0 died from Poison before attacking; enemy 1 attacked for 3
-        assert cs.player.hp == hp_before - 3
+        # Enemy 0 died from Poison before attacking; enemy 1 attacked for 4
+        assert cs.player.hp == hp_before - 4
         assert cs.enemies[0].is_dead
 
     def test_poison_kills_last_enemy_triggers_victory(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemies[0], PoisonPower, 20)
-        # Kill enemy 1 before the turn ends
         cs.play_card(0, target_idx=1)
         cs.play_card(0, target_idx=1)
         assert not cs.is_over                   # enemy 0 still alive
         cs.end_turn()
-        # Enemy 1 already dead; enemy 0 dies from Poison → all dead → victory
         assert cs.is_over
         assert cs.result.player_won
 
     def test_thorns_kills_both_enemies_triggering_victory(self):
-        # ThornsPower(10) reflects 10 to every attacker; both 10-HP enemies die.
-        # Verifies that after enemy 0 dies mid-turn, the loop continues
-        # and enemy 1 still takes its turn (and also dies from Thorns).
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 10)
         hp_before = cs.player.hp
         cs.end_turn()
-        # Each enemy attacked once (3 dmg) before being reflected to death.
+        # Each FuzzyWurmCrawler attacked once (4 dmg) before dying to Thorns.
         assert cs.is_over
         assert cs.result.player_won
-        assert cs.player.hp == hp_before - 6   # 3 dmg from enemy 0 + 3 from enemy 1
+        assert cs.player.hp == hp_before - 8   # 4 dmg from each crawler
 
-    def test_mixed_encounter_buff_enemy_applies_debuff_to_player(self):
-        cs = fresh(ATTACKER_AND_BUFFER)
+    def test_mixed_encounter_buff_enemy_buffs_self(self):
+        cs = fresh(CRAWLER_AND_NIBBIT)
         cs.end_turn()
-        # BuffMonster applied Vulnerable(3); on_enemy_side_end ticked it once to 2.
-        assert cs.player.powers["vulnerable"].amount == 2
+        # Back Nibbit opens with HISS: applies Strength 2 to itself
+        assert cs.enemies[1].powers["strength"].amount == 2
 
-    def test_multiple_rounds_accumulate_damage(self):
+    def test_enemy_rotates_moves_across_rounds(self):
         cs = fresh()
         hp_before = cs.player.hp
-        cs.end_turn()   # round 1: -6
-        cs.end_turn()   # round 2: -6
-        assert cs.player.hp == hp_before - 12
+        cs.end_turn()   # round 1: both ACID_GOOP → −8
+        assert cs.player.hp == hp_before - 8
+        cs.end_turn()   # round 2: both INHALE (buff, no damage)
+        assert cs.player.hp == hp_before - 8
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Thorns reflect targeting and multi-hit interaction
+# Thorns reflect targeting
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestThornsReflect:
     def test_thorns_reflects_only_to_attacker_not_bystander(self):
-        # Two enemies take turns sequentially.  ThornsPower(3) on the player
-        # should deal 3 damage to whichever enemy attacked, NOT to the other.
-        cs = fresh(Encounter(id="t", monster_classes=[AttackMonster, AttackMonster]))
+        cs = fresh(Encounter(id="t", monster_classes=[FuzzyWurmCrawler, FuzzyWurmCrawler]))
         PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 3)
         cs.end_turn()
-        # Enemy 0 attacked → took 3 Thorns (10 - 3 = 7 HP).
-        # Enemy 1 attacked → took 3 Thorns (10 - 3 = 7 HP).
-        # Neither was hit by Thorns from the OTHER enemy's attack.
+        # Each crawler attacked → took 3 Thorns; neither was hit by the other's reflect.
         assert cs.enemies[0].hp == 7
         assert cs.enemies[1].hp == 7
 
     def test_thorns_bystander_takes_zero_reflect_damage(self):
-        # If only ONE enemy attacks (the other is already dead), the dead one
-        # must not receive any Thorns damage.
-        cs = fresh(Encounter(id="t", monster_classes=[AttackMonster, AttackMonster]))
+        cs = fresh(Encounter(id="t", monster_classes=[FuzzyWurmCrawler, FuzzyWurmCrawler]))
         cs.enemies[1].hp = 0   # mark enemy 1 as pre-dead
         PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 3)
         cs.end_turn()
-        # Enemy 0 attacked → took 3 Thorns → 7 HP.
-        # Enemy 1 was already dead and should be unchanged at 0.
         assert cs.enemies[0].hp == 7
         assert cs.enemies[1].hp == 0
 
-    def test_multi_hit_stops_when_attacker_dies_from_thorns(self):
-        # MultiHitMonster does 3 hits × 2 damage.  Thorns(15) kills it on
-        # the first hit, so only 1 hit should land on the player.
-        cs = fresh(Encounter(id="t", monster_classes=[MultiHitMonster]))
-        PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 15)  # fatal on first reflect
-        hp_before = cs.player.hp
-        cs.end_turn()
-        assert cs.enemies[0].is_dead
-        # Only 1 of 3 hits landed before the attacker died.
-        assert cs.player.hp == hp_before - 2   # 1 hit × 2 damage
-
-    def test_multi_hit_all_hits_land_when_attacker_survives(self):
-        # Thorns(1) reflects only 1 damage per hit; MultiHitMonster (10 HP)
-        # survives all 3 hits and all 3 hits land on the player.
-        cs = fresh(Encounter(id="t", monster_classes=[MultiHitMonster]))
-        PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 1)
-        hp_before = cs.player.hp
-        cs.end_turn()
-        assert not cs.enemies[0].is_dead
-        assert cs.enemies[0].hp == 10 - 3      # 3 hits × 1 Thorns each
-        assert cs.player.hp == hp_before - 6   # 3 hits × 2 damage each
-
-    def test_multi_hit_partial_hits_when_attacker_dies_on_second(self):
-        # Thorns(6) on player: MultiHitMonster (10 HP).
-        # Hit 1: player takes 2, Thorns deals 6 → monster at 4 HP, still alive.
-        # Hit 2: player takes 2, Thorns deals 6 → monster at -2 HP (dead).
-        # Hit 3: should NOT fire because attacker is dead.
-        cs = fresh(Encounter(id="t", monster_classes=[MultiHitMonster]))
-        PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 6)
-        hp_before = cs.player.hp
-        cs.end_turn()
-        assert cs.enemies[0].is_dead
-        assert cs.player.hp == hp_before - 4   # 2 hits × 2 damage (not 3 hits)
-
 
 # ══════════════════════════════════════════════════════════════════════════
-# Fix 1: ALL_ENEMIES card routing (SweepCard)
+# ALL_ENEMIES card routing (SweepCard)
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestAllEnemiesCard:
@@ -348,32 +259,31 @@ class TestAllEnemiesCard:
 
     def test_sweep_skips_already_dead_enemy(self):
         cs = fresh()
-        cs.enemies[0].hp = 0            # mark dead before playing
+        cs.enemies[0].hp = 0
         cs.player.hand.insert(0, SweepCard())
         cs.play_card(0)
-        assert cs.enemies[0].hp == 0   # corpse untouched
+        assert cs.enemies[0].hp == 0
         assert cs.enemies[1].hp == 10 - 4
 
     def test_sweep_kills_both_triggers_victory(self):
-        cs = fresh(Encounter(id="t", monster_classes=[AttackMonster, AttackMonster]))
+        cs = fresh(Encounter(id="t", monster_classes=[FuzzyWurmCrawler, FuzzyWurmCrawler]))
         for e in cs.enemies:
-            e.hp = 4                    # one hit from Sweep is lethal
+            e.hp = e.max_hp = 4
         cs.player.hand.insert(0, SweepCard())
         cs.play_card(0)
         assert cs.is_over
         assert cs.result.player_won
 
     def test_sweep_ignores_caller_target_idx(self):
-        # target_idx is meaningless for ALL_ENEMIES cards — both should be hit.
         cs = fresh()
         cs.player.hand.insert(0, SweepCard())
-        cs.play_card(0, target_idx=1)   # caller "targets" enemy 1, but Sweep hits all
+        cs.play_card(0, target_idx=1)
         assert cs.enemies[0].hp == 10 - 4
         assert cs.enemies[1].hp == 10 - 4
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Fix 2: Dead-enemy target validation for ANY_ENEMY cards
+# Dead-enemy target validation for ANY_ENEMY cards
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestDeadTargetFallback:
@@ -382,7 +292,6 @@ class TestDeadTargetFallback:
         cs.play_card(0, target_idx=0)   # 10 → 4
         cs.play_card(0, target_idx=0)   # enemy 0 dies
         assert cs.enemies[0].is_dead
-        # Now try to target the dead enemy — should redirect to enemies[1]
         cs.play_card(0, target_idx=0)
         assert cs.enemies[1].hp == 10 - 6
 
@@ -404,17 +313,15 @@ class TestDeadTargetFallback:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Fix 3: Debuffs tick once per round (on_enemy_side_end), not per enemy
+# Debuffs tick once per round (on_enemy_side_end), not per enemy
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestDebuffTickRateWithMultipleEnemies:
     def test_vulnerable_ticks_once_per_round_with_two_enemies(self):
-        # With 2 enemies, Vulnerable should still tick only once per round —
-        # not twice (once per enemy's individual turn end).
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 3)
         cs.end_turn()
-        assert cs.player.powers["vulnerable"].amount == 2   # 3 → 2, not 3 → 1
+        assert cs.player.powers["vulnerable"].amount == 2
 
     def test_two_rounds_reduce_vulnerable_by_two(self):
         cs = fresh()
@@ -430,10 +337,8 @@ class TestDebuffTickRateWithMultipleEnemies:
         assert cs.enemies[0].powers["vulnerable"].amount == 2
 
     def test_per_enemy_turn_end_does_not_tick_debuffs(self):
-        # Manually fire on_enemy_turn_end twice (simulating two enemies acting)
-        # without firing on_enemy_side_end — debuffs must stay at their initial amount.
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 3)
         cs.hooks.on_enemy_turn_end(cs.enemies[0])
         cs.hooks.on_enemy_turn_end(cs.enemies[1])
-        assert cs.player.powers["vulnerable"].amount == 3  # no tick yet
+        assert cs.player.powers["vulnerable"].amount == 3

@@ -1,7 +1,7 @@
 """Interactive Slay the Spire 2 combat demo.
 
 Deck      : 3 × Strike, 2 × Defend, 1 × Breakthrough (power), 1 × Sweep (AoE attack)
-Encounter : Slime (14–16 HP, 6 dmg/turn) + Goblin (9–11 HP, 3×2 dmg/turn)
+Encounter : Nibbit front (42–46 HP) + Nibbit back (42–46 HP)
 
 Controls  : type a card index to play it, 'e' to end your turn.
 """
@@ -15,36 +15,7 @@ import random
 
 from sts2_rl import CombatState
 from sts2_rl.cards import BreakthroughCard, DefendCard, StrikeCard, SweepCard, TargetType
-from sts2_rl.monsters import Encounter, Intent, Monster, MoveType
-
-
-# ── Demo monsters ────────────────────────────────────────────────────────────
-
-class Slime(Monster):
-    min_hp = 14
-    max_hp = 16
-
-    @property
-    def current_intent(self) -> Intent:
-        return Intent(move_type=MoveType.ATTACK, damage=6, hits=1)
-
-    def take_turn(self, ctx) -> None:
-        self._execute_attack(ctx, 6, 1)
-
-
-class Goblin(Monster):
-    min_hp = 9
-    max_hp = 11
-
-    @property
-    def current_intent(self) -> Intent:
-        return Intent(move_type=MoveType.ATTACK, damage=3, hits=2)
-
-    def take_turn(self, ctx) -> None:
-        self._execute_attack(ctx, 3, 2)
-
-
-DEMO_ENCOUNTER = Encounter(id="demo", monster_classes=[Slime, Goblin])
+from sts2_rl.monsters import Monster, MoveType, NIBBITS_NORMAL
 
 
 # ── Display helpers ───────────────────────────────────────────────────────────
@@ -111,7 +82,7 @@ def main() -> None:
     )
     state = CombatState(
         starting_deck=deck,
-        encounter=DEMO_ENCOUNTER,
+        encounter=NIBBITS_NORMAL,
         rng=random.Random(),
     )
     _render(state)
