@@ -16,57 +16,124 @@ class CardType(Enum):
     CURSE = "curse"
 
 
+class CardRarity(Enum):
+    BASIC = "basic"
+    COMMON = "common"
+    UNCOMMON = "uncommon"
+    RARE = "rare"
+    STATUS = "status"
+    CURSE = "curse"
+
+
+class TargetType(Enum):
+    ANY_ENEMY = "any_enemy"
+    ALL_ENEMIES = "all_enemies"
+    SELF = "self"
+    NONE = "none"
+
+
+_CARD_CLASSES: dict[str, type[Card]] = {}
+
+
+def register_card(cls: type[Card]) -> type[Card]:
+    _CARD_CLASSES[cls.id] = cls
+    return cls
+
+
+def make_card(card_id: str) -> Card:
+    return _CARD_CLASSES[card_id]()
+
+
 class Card(ABC):
     id: str
     name: str
     card_type: CardType
-    energy_cost: int
+    rarity: CardRarity
+    target_type: TargetType = TargetType.ANY_ENEMY
     is_playable: bool = True
     is_ethereal: bool = False
     has_turn_end_in_hand_effect: bool = False
+    is_unpowered: bool = False
+
+    def __init__(self) -> None:
+        self.upgrade_level: int = 0
+        self._energy_cost: int = 0
+        self._init_vars()
+
+    def _init_vars(self) -> None:
+        pass
+
+    def _on_upgrade(self) -> None:
+        pass
+
+    def upgrade(self) -> None:
+        self.upgrade_level += 1
+        self._on_upgrade()
+
+    @property
+    def energy_cost(self) -> int:
+        return self._energy_cost
 
     @abstractmethod
-    def on_play(self, ctx: CombatCtx) -> None: ...
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None: ...
 
     def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
         pass
 
     def __repr__(self) -> str:
-        return self.name
+        suffix = "+" * self.upgrade_level if self.upgrade_level > 0 else ""
+        return f"{self.name}{suffix}"
 
 
+@register_card
 class StrikeCard(Card):
     id = "strike"
     name = "Strike"
     card_type = CardType.ATTACK
-    energy_cost = 1
+    rarity = CardRarity.BASIC
+    target_type = TargetType.ANY_ENEMY
 
-    def on_play(self, ctx: CombatCtx) -> None:
+    def _init_vars(self) -> None:
+        self._energy_cost = 1
+        self._damage = 6
+
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from .cmds import DamageCmd
-        DamageCmd.deal(ctx.hooks, ctx.enemy, 6 + ctx.player.strength, dealer=ctx.player, card=self)
+        DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)
 
 
+@register_card
 class DefendCard(Card):
     id = "defend"
     name = "Defend"
     card_type = CardType.SKILL
-    energy_cost = 1
+    rarity = CardRarity.BASIC
+    target_type = TargetType.SELF
 
-    def on_play(self, ctx: CombatCtx) -> None:
+    def _init_vars(self) -> None:
+        self._energy_cost = 1
+        self._block = 5
+
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from .cmds import BlockCmd
-        BlockCmd.apply(ctx.hooks, ctx.player, 5, card=self)
+        BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)
 
 
+@register_card
 class BurnCard(Card):
-    """Status — Unplayable. At end of turn, deal 2 damage to the player."""
     id = "burn"
     name = "Burn"
     card_type = CardType.STATUS
-    energy_cost = 0
+    rarity = CardRarity.STATUS
+    target_type = TargetType.NONE
     is_playable = False
+    is_unpowered = True
     has_turn_end_in_hand_effect = True
 
-    def on_play(self, ctx: CombatCtx) -> None:
+    def _init_vars(self) -> None:
+        self._energy_cost = 0
+
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
 
     def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
@@ -74,27 +141,41 @@ class BurnCard(Card):
         DamageCmd.deal(ctx.hooks, ctx.player, 2, dealer=None, card=self)
 
 
+@register_card
 class WoundCard(Card):
-    """Status — Unplayable. No effect."""
     id = "wound"
     name = "Wound"
     card_type = CardType.STATUS
-    energy_cost = 0
+    rarity = CardRarity.STATUS
+    target_type = TargetType.NONE
     is_playable = False
+    is_unpowered = True
 
-    def on_play(self, ctx: CombatCtx) -> None:
+    def _init_vars(self) -> None:
+        self._energy_cost = 0
+
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
 
 
-STRIKE = StrikeCard()
-DEFEND = DefendCard()
-BURN = BurnCard()
-WOUND = WoundCard()
+@register_card
+class SweepCard(Card):
+    """Hits every living enemy for 4 damage.
 
-CARD_REGISTRY: dict[str, Card] = {
-    "strike": STRIKE,
-    "defend": DEFEND,
-    "burn": BURN,
-    "wound": WOUND,
-}
-CARD_TO_IDX: dict[str, int] = {"strike": 0, "defend": 1}
+    play_card routes ALL_ENEMIES cards by calling on_play once per living
+    enemy with that enemy's index as target_idx, so on_play just applies
+    damage to the routed target.
+    """
+    id = "sweep"
+    name = "Sweep"
+    card_type = CardType.ATTACK
+    rarity = CardRarity.BASIC
+    target_type = TargetType.ALL_ENEMIES
+
+    def _init_vars(self) -> None:
+        self._energy_cost = 1
+        self._damage = 4
+
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
+        from .cmds import DamageCmd
+        DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)

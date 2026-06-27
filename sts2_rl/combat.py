@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from .cards import Card, STRIKE, DEFEND
-from .cmds import DamageCmd, StrengthCmd
+from .cards import Card, make_card, TargetType
+from .cmds import DamageCmd
 from .hooks import HookSystem
-from .monsters import FuzzyWurmCrawler, MoveType
+from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
 from .player import PlayerCombatState
 
 
@@ -28,8 +28,22 @@ class CombatCtx:
     """Lightweight context passed to cards and Cmds during execution."""
     combat: CombatState
     player: PlayerCombatState
-    enemy: FuzzyWurmCrawler
+    enemies: list[Monster]
     hooks: HookSystem
+
+    @property
+    def enemy(self) -> Monster:
+        """First living enemy; falls back to the first enemy if all are dead."""
+        for e in self.enemies:
+            if not e.is_dead:
+                return e
+        return self.enemies[0]
+
+    def resolve_target(self, target_idx: int | None) -> Monster:
+        """Return the indexed enemy if it is alive; otherwise the first living enemy."""
+        if target_idx is not None and target_idx < len(self.enemies) and not self.enemies[target_idx].is_dead:
+            return self.enemies[target_idx]
+        return self.enemy
 
 
 class CombatState:
@@ -39,17 +53,20 @@ class CombatState:
         self,
         starting_deck: list[Card] | None = None,
         rng: random.Random | None = None,
+        encounter: Encounter | None = None,
     ) -> None:
         self._rng = rng or random.Random()
 
         if starting_deck is None:
-            starting_deck = [STRIKE] * 5 + [DEFEND] * 4
+            starting_deck = [make_card("strike") for _ in range(5)] + [make_card("defend") for _ in range(4)]
 
         self.hooks = HookSystem()
         self.player = PlayerCombatState(
             self.PLAYER_MAX_HP, starting_deck, self._rng, self.hooks
         )
-        self.enemy = FuzzyWurmCrawler(rng=self._rng)
+        self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
+            self.hooks, self._rng
+        )
         self.phase = Phase.PLAYER_TURN
         self.turn = 1
         self.result: Optional[CombatResult] = None
@@ -57,36 +74,61 @@ class CombatState:
         self.hooks.on_combat_start()
         self.player.start_turn()
 
+    @property
+    def enemy(self) -> Monster:
+        """First living enemy; falls back to the first enemy if all are dead."""
+        for e in self.enemies:
+            if not e.is_dead:
+                return e
+        return self.enemies[0]
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _ctx(self) -> CombatCtx:
-        return CombatCtx(self, self.player, self.enemy, self.hooks)
+        return CombatCtx(self, self.player, self.enemies, self.hooks)
+
+    def _all_enemies_dead(self) -> bool:
+        return all(e.is_dead for e in self.enemies)
 
     def _execute_enemy_turn(self) -> None:
-        if self.enemy.block > 0 and self.hooks.should_clear_block(self.enemy):
-            self.enemy.block = 0
-            self.hooks.on_block_cleared(self.enemy)
+        for enemy in list(self.enemies):
+            if enemy.is_dead:
+                continue
 
-        self.hooks.on_enemy_turn_start(self.enemy)
-        move = self.enemy.current_move
+            # Clear block at the start of this enemy's turn.
+            if enemy.block > 0 and self.hooks.should_clear_block(enemy):
+                enemy.block = 0
+                self.hooks.on_block_cleared(enemy)
 
-        if move.move_type == MoveType.ATTACK:
-            DamageCmd.deal(
-                self.hooks,
-                self.player,
-                move.damage + self.enemy.strength,
-                dealer=self.enemy,
-            )
+            # Turn-start events (Poison, DemonForm, etc. can fire here).
+            self.hooks.on_enemy_turn_start(enemy)
+            if enemy.is_dead:
+                if self._all_enemies_dead():
+                    self._end_combat(player_won=True)
+                    return
+                continue
+            if self.player.is_dead:
+                self._end_combat(player_won=False)
+                return
+
+            # Execute the enemy's move (attack / buff / etc.).
+            enemy.take_turn(self._ctx())
             if self.player.is_dead:
                 self.phase = Phase.COMBAT_OVER
                 self.result = CombatResult(player_won=False, turns_taken=self.turn)
-        elif move.move_type == MoveType.BUFF:
-            StrengthCmd.apply(self.hooks, self.enemy, move.strength_gain)
+                return
+            if self._all_enemies_dead():
+                self._end_combat(player_won=True)
+                return
 
-        self.enemy.advance_move()
-        self.hooks.on_enemy_turn_end(self.enemy)
+            # Turn-end events (Regen, Ritual, per-enemy effects, etc.).
+            self.hooks.on_enemy_turn_end(enemy)
+
+        # Side-end: fires once after all enemies have acted (debuff ticks, etc.).
+        if self.phase != Phase.COMBAT_OVER:
+            self.hooks.on_enemy_side_end()
 
     def _end_combat(self, player_won: bool) -> None:
         self.phase = Phase.COMBAT_OVER
@@ -122,8 +164,15 @@ class CombatState:
     # Public API
     # ------------------------------------------------------------------
 
-    def play_card(self, hand_index: int) -> bool:
-        """Play the card at hand_index. Returns False if the action is invalid."""
+    def play_card(self, hand_index: int, target_idx: int | None = None) -> bool:
+        """Play the card at hand_index.
+
+        For ANY_ENEMY cards, target_idx selects which enemy in self.enemies to
+        attack; if omitted or out of range the first living enemy is used.
+        SELF and ALL_ENEMIES cards ignore target_idx.
+
+        Returns False if the action is invalid.
+        """
         if self.phase != Phase.PLAYER_TURN:
             return False
         if hand_index < 0 or hand_index >= len(self.player.hand):
@@ -143,12 +192,28 @@ class CombatState:
 
         play_count = self.hooks.modify_card_play_count(card, self.enemy, 1)
         for _ in range(play_count):
-            card.on_play(self._ctx())
+            if card.target_type == TargetType.ALL_ENEMIES:
+                for idx, e in enumerate(self.enemies):
+                    if e.is_dead:
+                        continue
+                    card.on_play(self._ctx(), idx)
+                    if self._all_enemies_dead() or self.player.is_dead:
+                        break
+            else:
+                card.on_play(self._ctx(), target_idx)
+            if self._all_enemies_dead():
+                self._end_combat(player_won=True)
+                return True
+            if self.player.is_dead:
+                self._end_combat(player_won=False)
+                return True
 
         self.hooks.on_card_played(card)
 
-        if self.enemy.is_dead:
+        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=True)
+        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=False)
 
         return True
 
@@ -167,6 +232,8 @@ class CombatState:
         if self.phase != Phase.COMBAT_OVER:
             self.turn += 1
             self.player.start_turn()
+            if self.player.is_dead and self.phase != Phase.COMBAT_OVER:
+                self._end_combat(player_won=False)
 
     def valid_actions(self) -> list[int]:
         """0 = end turn, 1+ = play card at hand index (action - 1)."""

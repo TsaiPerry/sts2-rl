@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from .creatures import Creature
     from .hooks import HookSystem
     from .player import PlayerCombatState
+    from .powers import Power, PowerType
 
 
 class DamageCmd:
@@ -22,7 +23,7 @@ class DamageCmd:
         if not hooks.should_allow_hitting(target):
             return 0
 
-        # 1. Additive modifiers then multiplicative (e.g. Vulnerable, Weak)
+        # 1. Additive modifiers then multiplicative (e.g. Strength, Vulnerable, Weak)
         amount = amount + hooks.modify_damage_additive(target, amount, dealer, card)
         amount = int(amount * hooks.modify_damage_multiplicative(target, amount, dealer, card))
 
@@ -33,34 +34,37 @@ class DamageCmd:
 
         amount = max(0, amount)
 
-        # 3. Block absorption
+        # 3. Pre-block hit event (e.g. CurlUp triggers even when block absorbs)
+        if amount > 0:
+            hooks.on_attacked(target, amount, dealer, card)
+
+        # 4. Block absorption
         hp_lost = amount
         if target.block > 0:
             absorbed = min(target.block, amount)
             target.block -= absorbed
             hp_lost -= absorbed
             if target.block == 0 and hp_lost > 0:
-                # attack broke through block entirely
                 hooks.on_block_broken(target)
 
-        # 4. HP-loss modifiers applied after block (e.g. Torii: cap at 1, Tungsten Rod: -1)
+        # 5. HP-loss modifiers applied after block (e.g. Torii: cap at 1, Tungsten Rod: -1)
         if hp_lost > 0:
             hp_lost = hooks.modify_hp_lost(target, hp_lost, dealer, card)
 
-        # 5. Apply HP loss
+        # 6. Apply HP loss
         if hp_lost > 0:
             old_hp = target.hp
             target.hp = max(0, target.hp - hp_lost)
             hooks.on_hp_changed(target, target.hp - old_hp)
 
-            # 6. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
+            # 7. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
             if target.hp <= 0:
                 if hooks.should_die(target):
                     hooks.on_death(target)
                 else:
                     target.hp = 1
 
-        # 7. Post-damage events
+        # 8. Post-damage events
         hooks.on_damage_received(target, hp_lost, dealer, card)
         if dealer is not None and hp_lost > 0:
             hooks.on_damage_dealt(dealer, target, hp_lost, card)
@@ -85,6 +89,59 @@ class BlockCmd:
         return amount
 
 
+class PowerCmd:
+    @staticmethod
+    def apply(
+        hooks: HookSystem,
+        target: Creature,
+        power_cls: type[Power],
+        amount: int,
+        applier: Creature | None = None,
+    ) -> None:
+        """
+        Apply a power to a creature.
+
+        Debuffs are intercepted by Artifact (one stack consumed per debuff blocked).
+        If the power is already present on the target, on_stack() is called instead
+        of creating a new instance.
+        """
+        from .powers import PowerType
+
+        if power_cls.power_type == PowerType.DEBUFF:
+            artifact = target.powers.get("artifact")
+            if artifact is not None:
+                artifact.amount -= 1
+                hooks.on_power_amount_changed("artifact", target, -1)
+                if artifact.amount <= 0:
+                    artifact._expire()
+                return  # debuff blocked
+
+        if power_cls.id in target.powers:
+            existing = target.powers[power_cls.id]
+            old_amount = existing.amount
+            existing.on_stack(amount)
+            hooks.on_power_amount_changed(power_cls.id, target, existing.amount - old_amount)
+        else:
+            power = power_cls(owner=target, amount=amount, hooks=hooks, applier=applier)
+            target.powers[power_cls.id] = power
+            hooks.register(power)
+            hooks.on_power_applied(power_cls.id, target, amount)
+
+    @staticmethod
+    def remove(
+        hooks: HookSystem,
+        target: Creature,
+        power_id: str,
+    ) -> None:
+        """Remove a power from a creature by ID."""
+        power = target.powers.pop(power_id, None)
+        if power is not None:
+            try:
+                hooks.unregister(power)
+            except ValueError:
+                pass
+
+
 class StrengthCmd:
     @staticmethod
     def apply(
@@ -93,10 +150,10 @@ class StrengthCmd:
         amount: int,
         card: Card | None = None,
     ) -> int:
-        """Apply strength through the hook pipeline. Returns final strength gained."""
+        """Apply strength via the hook pipeline. Returns final strength gained."""
+        from .powers import StrengthPower
         amount = hooks.modify_strength_given(target, amount, card)
-        target.strength += amount
-        hooks.on_power_applied("strength", target, amount)
+        PowerCmd.apply(hooks, target, StrengthPower, amount)
         return amount
 
 

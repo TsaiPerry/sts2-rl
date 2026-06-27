@@ -23,6 +23,7 @@ class PlayerCombatState(Creature):
         hooks: HookSystem,
     ) -> None:
         super().__init__(max_hp)
+        self.side = "player"
         self.energy = 0
         self.hand: list[Card] = []
         self.draw_pile: list[Card] = deck.copy()

@@ -9,7 +9,7 @@ from gymnasium import spaces
 
 from .cards import StrikeCard, DefendCard
 from .combat import CombatState, Phase
-from .monsters import MoveType
+from .monsters import MoveType, Intent
 
 # action 0 = end turn, 1 = play a Strike, 2 = play a Defend
 N_ACTIONS = 3
@@ -103,11 +103,11 @@ class STS2CombatEnv(gym.Env):
             f"Piles   draw={len(s.player.draw_pile)}"
             f"  discard={len(s.player.discard_pile)}"
         )
-        move = s.enemy.current_move
+        intent = s.enemy.current_intent
         intent_str = (
-            f"Attack {move.damage + s.enemy.strength}"
-            if move.move_type == MoveType.ATTACK
-            else f"Buff ({move.name})"
+            f"Attack {intent.total_damage + s.enemy.strength}"
+            if intent.move_type == MoveType.ATTACK
+            else "Buff"
         )
         print(
             f"Enemy   HP {s.enemy.hp}/{s.enemy.max_hp}"
@@ -141,9 +141,9 @@ class STS2CombatEnv(gym.Env):
         strikes = sum(1 for c in p.hand if isinstance(c, StrikeCard))
         defends = sum(1 for c in p.hand if isinstance(c, DefendCard))
 
-        move = s.enemy.current_move
-        intent_attack = float(move.move_type == MoveType.ATTACK)
-        intent_dmg = (move.damage + s.enemy.strength) if move.move_type == MoveType.ATTACK else 0
+        intent = s.enemy.current_intent
+        intent_attack = float(intent.move_type == MoveType.ATTACK)
+        intent_dmg = (intent.total_damage + s.enemy.strength) if intent.move_type == MoveType.ATTACK else 0
 
         return np.array(
             [
