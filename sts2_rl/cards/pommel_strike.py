@@ -9,21 +9,30 @@ if TYPE_CHECKING:
 
 
 @register_card
-class StrikeCard(Card):
-    id = "strike"
-    name = "Strike"
+class PommelStrikeCard(Card):
+    """Attack (Common, 1E) — deal 9 damage; draw 1 card.
+
+    Source: PommelStrike.cs
+      Cost 1 | Attack | Common | TargetType.AnyEnemy | Strike tag
+      OnUpgrade: damage +1 (→ 10), draw +1 (→ 2)
+    """
+    id = "pommel_strike"
+    name = "Pommel Strike"
     card_type = CardType.ATTACK
-    rarity = CardRarity.BASIC
+    rarity = CardRarity.COMMON
     target_type = TargetType.ANY_ENEMY
     tags = frozenset({"strike"})
 
     def _init_vars(self) -> None:
         self._energy_cost = 1
-        self._damage = 6
+        self._damage = 9
+        self._cards = 1
 
     def _on_upgrade(self) -> None:
-        self._damage += 3
+        self._damage += 1
+        self._cards += 1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from ..cmds import DamageCmd
+        from ..cmds import DamageCmd, DrawCmd
         DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)
+        DrawCmd.draw(ctx.player, self._cards)

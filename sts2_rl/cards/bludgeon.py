@@ -9,20 +9,25 @@ if TYPE_CHECKING:
 
 
 @register_card
-class StrikeCard(Card):
-    id = "strike"
-    name = "Strike"
+class BludgeonCard(Card):
+    """Attack (Uncommon, 3E) — deal 32 damage.
+
+    Source: Bludgeon.cs
+      Cost 3 | Attack | Uncommon | TargetType.AnyEnemy
+      OnUpgrade: damage +10 (→ 42)
+    """
+    id = "bludgeon"
+    name = "Bludgeon"
     card_type = CardType.ATTACK
-    rarity = CardRarity.BASIC
+    rarity = CardRarity.UNCOMMON
     target_type = TargetType.ANY_ENEMY
-    tags = frozenset({"strike"})
 
     def _init_vars(self) -> None:
-        self._energy_cost = 1
-        self._damage = 6
+        self._energy_cost = 3
+        self._damage = 32
 
     def _on_upgrade(self) -> None:
-        self._damage += 3
+        self._damage += 10
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd

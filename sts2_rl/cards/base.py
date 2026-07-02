@@ -22,6 +22,8 @@ class CardRarity(Enum):
     COMMON = "common"
     UNCOMMON = "uncommon"
     RARE = "rare"
+    ANCIENT = "ancient"
+    TOKEN = "token"
     STATUS = "status"
     CURSE = "curse"
 
@@ -29,6 +31,7 @@ class CardRarity(Enum):
 class TargetType(Enum):
     ANY_ENEMY = "any_enemy"
     ALL_ENEMIES = "all_enemies"
+    RANDOM_ENEMY = "random_enemy"
     SELF = "self"
     NONE = "none"
 
@@ -55,6 +58,11 @@ class Card(ABC):
     is_ethereal: bool = False
     has_turn_end_in_hand_effect: bool = False
     is_unpowered: bool = False
+    # Exhaust keyword: the card goes to the exhaust pile instead of the
+    # discard pile after being played (mirrors CardKeyword.Exhaust).
+    exhausts: bool = False
+    # Card tags (mirrors CardModel.Tags, e.g. "strike" for Perfected Strike).
+    tags: frozenset[str] = frozenset()
     # When True, play_card calls on_play once for ALL_ENEMIES cards; the card
     # iterates enemies itself (needed when a card has a one-time setup step
     # alongside per-enemy damage, e.g. Breakthrough's self-damage).

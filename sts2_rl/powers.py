@@ -236,7 +236,7 @@ class EnragePower(Power):
 
 
 class RupturePower(Power):
-    """Gain 1 Strength whenever the owner loses HP from damage."""
+    """Gain N Strength whenever the owner loses HP from damage."""
 
     id = "rupture"
     name = "Rupture"
@@ -251,7 +251,7 @@ class RupturePower(Power):
     ) -> None:
         if target is self.owner and amount > 0:
             from .cmds import StrengthCmd
-            StrengthCmd.apply(self.hooks, self.owner, 1)
+            StrengthCmd.apply(self.hooks, self.owner, self.amount)
 
 
 class CurlUpPower(Power):

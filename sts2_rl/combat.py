@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from .cards import Card, make_card, TargetType
+from .cards import Card, CardType, make_card, TargetType
 from .cmds import DamageCmd
 from .hooks import HookSystem
 from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
@@ -201,7 +201,10 @@ class CombatState:
         self.player.energy -= actual_cost
         self.hooks.on_energy_spent(card, actual_cost)
         self.player.hand.pop(hand_index)
-        self.player.discard_pile.append(card)
+        # Power cards are removed from the combat entirely when played;
+        # everything else resolves from the discard pile.
+        if card.card_type != CardType.POWER:
+            self.player.discard_pile.append(card)
 
         play_count = self.hooks.modify_card_play_count(card, self.enemy, 1)
         for _ in range(play_count):
@@ -216,12 +219,14 @@ class CombatState:
             else:
                 # Card handles its own routing (or doesn't need enemy iteration).
                 card.on_play(self._ctx(), target_idx)
-            if self._all_enemies_dead():
-                self._end_combat(player_won=True)
-                return True
-            if self.player.is_dead:
-                self._end_combat(player_won=False)
-                return True
+            if self._all_enemies_dead() or self.player.is_dead:
+                break
+
+        # Exhaust keyword: move the played card from discard to exhaust.
+        if card.exhausts and card in self.player.discard_pile:
+            self.player.discard_pile.remove(card)
+            self.player.exhaust_pile.append(card)
+            self.hooks.on_card_exhausted(card)
 
         self.hooks.on_card_played(card)
 
