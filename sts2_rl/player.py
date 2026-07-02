@@ -35,6 +35,7 @@ class PlayerCombatState(Creature):
         self.potions: list[Potion] = list(potions or [])[: self.MAX_POTIONS]
         self._rng = rng
         self._hooks = hooks
+        self._first_turn = True
         rng.shuffle(self.draw_pile)
 
     @property
@@ -54,6 +55,17 @@ class PlayerCombatState(Creature):
         self._hooks.on_player_turn_start(self)
 
         draw_count = self._hooks.modify_hand_draw(self, self.DRAW_PER_TURN)
+        if self._first_turn:
+            self._first_turn = False
+            # Innate cards move to the top of the draw pile and the first-turn
+            # draw is raised to include all of them (mirrors CombatManager's
+            # combat-start innate handling: MoveToTop + handDraw = max(...)).
+            innates = [c for c in self.draw_pile if c.innate]
+            if innates:
+                for card in innates:
+                    self.draw_pile.remove(card)
+                self.draw_pile.extend(innates)  # end of list = top of pile
+                draw_count = max(draw_count, len(innates))
         self._draw(draw_count, from_hand_draw=True)
 
     def discard_hand(self) -> None:

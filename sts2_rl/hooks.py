@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .valueprops import ValueProp
+
 if TYPE_CHECKING:
     from .cards import Card
     from .creatures import Creature
@@ -320,11 +322,15 @@ class HookSystem:
         amount: int,
         dealer: Creature | None = None,
         card: Card | None = None,
+        props: ValueProp = ValueProp.NONE,
     ) -> None:
-        """Fires after a creature receives damage (post-pipeline, post-block)."""
+        """Fires after a creature receives damage (post-pipeline, post-block).
+
+        props carries the damage typing (mirrors AfterDamageReceived's
+        ValueProp param) so listeners can gate on powered attacks."""
         for l in list(self._listeners):
             if hasattr(l, "on_damage_received"):
-                l.on_damage_received(target, amount, dealer, card)
+                l.on_damage_received(target, amount, dealer, card, props)
 
     def on_damage_dealt(
         self,
@@ -364,17 +370,35 @@ class HookSystem:
 
     # ── Event hooks — powers ─────────────────────────────────────────────
 
-    def on_power_applied(self, name: str, target: Creature, amount: int) -> None:
-        """Fires when a power (strength, dexterity, etc.) is applied to a creature."""
+    def on_power_applied(
+        self,
+        name: str,
+        target: Creature,
+        amount: int,
+        applier: Creature | None = None,
+    ) -> None:
+        """Fires when a power (strength, dexterity, etc.) is applied to a creature.
+
+        applier is the creature that applied the power, when known (mirrors
+        AfterPowerApplied's applier param)."""
         for l in list(self._listeners):
             if hasattr(l, "on_power_applied"):
-                l.on_power_applied(name, target, amount)
+                l.on_power_applied(name, target, amount, applier)
 
-    def on_power_amount_changed(self, name: str, target: Creature, delta: int) -> None:
-        """Fires when an existing power's stack count changes."""
+    def on_power_amount_changed(
+        self,
+        name: str,
+        target: Creature,
+        delta: int,
+        applier: Creature | None = None,
+    ) -> None:
+        """Fires when an existing power's stack count changes.
+
+        applier is the creature that caused the change, when known (None for
+        ticks/expiry)."""
         for l in list(self._listeners):
             if hasattr(l, "on_power_amount_changed"):
-                l.on_power_amount_changed(name, target, delta)
+                l.on_power_amount_changed(name, target, delta, applier)
 
     # ── Event hooks — creatures entering / leaving combat ───────────────
 

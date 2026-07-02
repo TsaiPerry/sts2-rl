@@ -82,7 +82,7 @@ class DamageCmd:
                     target.hp = 1
 
         # 8. Post-damage events
-        hooks.on_damage_received(target, hp_lost, dealer, card)
+        hooks.on_damage_received(target, hp_lost, dealer, card, props)
         if dealer is not None and hp_lost > 0:
             hooks.on_damage_dealt(dealer, target, hp_lost, card)
 
@@ -212,12 +212,14 @@ class PowerCmd:
             existing = target.powers[power_cls.id]
             old_amount = existing.amount
             existing.on_stack(amount)
-            hooks.on_power_amount_changed(power_cls.id, target, existing.amount - old_amount)
+            hooks.on_power_amount_changed(
+                power_cls.id, target, existing.amount - old_amount, applier
+            )
         else:
             power = power_cls(owner=target, amount=amount, hooks=hooks, applier=applier)
             target.powers[power_cls.id] = power
             hooks.register(power)
-            hooks.on_power_applied(power_cls.id, target, amount)
+            hooks.on_power_applied(power_cls.id, target, amount, applier)
 
     @staticmethod
     def remove(
@@ -312,6 +314,21 @@ class CardPileCmd:
         entered-combat hook so active powers can afflict it (mirrors
         CardPileCmd.AddToCombatAndPreview)."""
         player.discard_pile.append(card)
+        hooks.on_card_entered_combat(card)
+
+    @staticmethod
+    def add_to_hand(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        card: Card,
+    ) -> None:
+        """Add a newly created card to the player's hand (overflow goes to the
+        discard pile), firing the entered-combat hook (mirrors
+        CardPileCmd.AddGeneratedCardToCombat with PileType.Hand)."""
+        if len(player.hand) < player.MAX_HAND_SIZE:
+            player.hand.append(card)
+        else:
+            player.discard_pile.append(card)
         hooks.on_card_entered_combat(card)
 
 

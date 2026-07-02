@@ -61,6 +61,9 @@ class Card(ABC):
     # Exhaust keyword: the card goes to the exhaust pile instead of the
     # discard pile after being played (mirrors CardKeyword.Exhaust).
     exhausts: bool = False
+    # Innate keyword: starts on top of the draw pile, and the first-turn hand
+    # draw is raised to include all innate cards (mirrors CardKeyword.Innate).
+    innate: bool = False
     # Card tags (mirrors CardModel.Tags, e.g. "strike" for Perfected Strike).
     tags: frozenset[str] = frozenset()
     # When True, play_card calls on_play once for ALL_ENEMIES cards; the card

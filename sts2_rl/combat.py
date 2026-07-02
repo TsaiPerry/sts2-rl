@@ -72,6 +72,12 @@ class CombatState:
         )
         self.phase = Phase.PLAYER_TURN
         self.turn = 1
+        # Which side is currently acting ("player" / "enemy"); mirrors the
+        # game's CombatState.CurrentSide (used by e.g. Inferno).
+        self.current_side = "player"
+        # Attack card plays this turn (mirrors CombatHistory.CardPlaysStarted
+        # filtered to attacks-this-turn; used by Juggling to seed its counter).
+        self.attacks_played_this_turn = 0
         self.result: Optional[CombatResult] = None
 
         self.hooks.on_combat_start()
@@ -100,6 +106,13 @@ class CombatState:
         return all(e.is_gone for e in (primaries or self.enemies))
 
     def _execute_enemy_turn(self) -> None:
+        self.current_side = "enemy"
+        try:
+            self._run_enemy_turns()
+        finally:
+            self.current_side = "player"
+
+    def _run_enemy_turns(self) -> None:
         for enemy in list(self.enemies):
             if enemy.is_gone:
                 continue
@@ -201,6 +214,22 @@ class CombatState:
         self.player.energy -= actual_cost
         self.hooks.on_energy_spent(card, actual_cost)
         self.player.hand.pop(hand_index)
+        self._resolve_card_play(card, target_idx)
+
+        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=True)
+        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=False)
+
+        return True
+
+    def _resolve_card_play(self, card: Card, target_idx: int | None) -> None:
+        """Shared card-play resolution: result pile placement, play-count loop,
+        exhaust-keyword move, and the played hook. The card must already be
+        removed from the hand (or whichever pile it was played from)."""
+        if card.card_type == CardType.ATTACK:
+            # One CardPlay regardless of play count (One-Two Punch doubling).
+            self.attacks_played_this_turn += 1
         # Power cards are removed from the combat entirely when played;
         # everything else resolves from the discard pile.
         if card.card_type != CardType.POWER:
@@ -230,12 +259,39 @@ class CombatState:
 
         self.hooks.on_card_played(card)
 
+    def auto_play_card(self, card: Card, target_idx: int | None = None) -> None:
+        """Play a card for free (mirrors CardCmd.AutoPlay): no energy is spent.
+
+        The card is removed from whichever pile currently holds it. Unplayable
+        or hook-blocked cards move to the discard pile without being played;
+        ANY_ENEMY cards target a random living enemy when target_idx is
+        omitted. The played card ends in its normal result pile.
+        """
+        if self.phase == Phase.COMBAT_OVER or self.player.is_dead:
+            return
+        for pile in (self.player.hand, self.player.draw_pile, self.player.discard_pile):
+            if card in pile:
+                pile.remove(card)
+                break
+        if not card.is_playable or not self.hooks.should_play_card(card):
+            # MoveToResultPileWithoutPlaying: no on_play, no played hook.
+            self.player.discard_pile.append(card)
+            return
+        if card.target_type == TargetType.ANY_ENEMY and target_idx is None:
+            living = [i for i, e in enumerate(self.enemies) if not e.is_gone]
+            if not living:
+                self.player.discard_pile.append(card)
+                return
+            target_idx = self._rng.choice(living)
+        # BeforeCardPlayed fires for auto-plays too (0 energy spent) — powers
+        # like Free Attack consume their stacks here.
+        self.hooks.on_energy_spent(card, 0)
+        self._resolve_card_play(card, target_idx)
+
         if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=True)
         elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=False)
-
-        return True
 
     def use_potion(self, slot: int, target_idx: int | None = None) -> bool:
         """Use the potion in the given slot (removed on use).
@@ -266,6 +322,9 @@ class CombatState:
             return
 
         self.hooks.on_player_turn_end(self.player)
+        if self.phase == Phase.COMBAT_OVER:
+            # Turn-end effects (e.g. Stampede auto-plays) can end the fight.
+            return
         self._process_turn_end_cards()
         if self.phase == Phase.COMBAT_OVER:
             return
@@ -274,6 +333,7 @@ class CombatState:
 
         if self.phase != Phase.COMBAT_OVER:
             self.turn += 1
+            self.attacks_played_this_turn = 0
             self.player.start_turn()
             if self.player.is_dead and self.phase != Phase.COMBAT_OVER:
                 self._end_combat(player_won=False)
