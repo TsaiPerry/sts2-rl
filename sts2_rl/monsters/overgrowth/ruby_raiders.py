@@ -27,7 +27,7 @@ class AxeRubyRaider(Monster):
         move = self._CYCLE[self._step % 3]
         if move == "BIG_SWING":
             return Intent(MoveType.ATTACK, damage=12)
-        return Intent(MoveType.ATTACK, damage=5)
+        return Intent(MoveType.ATTACK, damage=5, also=(MoveType.DEFEND,))
 
     def take_turn(self, ctx: CombatCtx) -> None:
         from ...cmds import BlockCmd
@@ -95,7 +95,7 @@ class CrossbowRubyRaider(Monster):
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "RELOAD":
-            return Intent(MoveType.BUFF, buffs=[])
+            return Intent(MoveType.DEFEND)  # gains block
         return Intent(MoveType.ATTACK, damage=14)
 
     def take_turn(self, ctx: CombatCtx) -> None:
@@ -121,7 +121,7 @@ class TrackerRubyRaider(Monster):
     def current_intent(self) -> Intent:
         if self._move_key == "TRACK":
             from ...powers import FrailPower
-            return Intent(MoveType.BUFF, buffs=[(FrailPower, 2)])
+            return Intent(MoveType.DEBUFF, buffs=[(FrailPower, 2)])
         return Intent(MoveType.ATTACK, damage=1, hits=8)
 
     def take_turn(self, ctx: CombatCtx) -> None:

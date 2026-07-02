@@ -1,0 +1,284 @@
+"""Declarative monster move state machine, ported from STS2's
+MonsterMoveStateMachine (src/Core/MonsterMoves/MonsterMoveStateMachine).
+
+A monster's behaviour is a graph of states:
+
+  MoveState             — a performable move (with the intent it telegraphs);
+                          transitions to a fixed follow-up state.
+  RandomBranchState     — weighted random chooser. Weights can be lambdas
+                          (evaluated at roll time) and are zeroed by repeat
+                          rules / cooldowns based on the machine's move log.
+  ConditionalBranchState— first branch whose condition is true wins.
+
+Rolling walks the graph from the current state until it lands on a MoveState;
+branch states are invisible pass-throughs. The machine keeps a state_log of
+every move taken, which is what powers the history-dependent randomness
+(CANNOT_REPEAT, USE_ONLY_ONCE, cooldowns).
+"""
+from __future__ import annotations
+
+import random
+from enum import Enum
+from typing import TYPE_CHECKING, Callable
+
+from .base import Intent, Monster, MoveType
+
+if TYPE_CHECKING:
+    from ..combat import CombatCtx
+    from ..hooks import HookSystem
+
+
+class MoveRepeatType(Enum):
+    CAN_REPEAT_FOREVER = "can_repeat_forever"
+    CAN_REPEAT_X_TIMES = "can_repeat_x_times"
+    CANNOT_REPEAT = "cannot_repeat"
+    USE_ONLY_ONCE = "use_only_once"
+
+
+class MonsterState:
+    """Base node in the move graph."""
+
+    def __init__(self, state_id: str) -> None:
+        self.id = state_id
+
+    should_appear_in_logs = True
+    is_move = False
+
+    @property
+    def can_transition_away(self) -> bool:
+        return True
+
+    def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
+        raise NotImplementedError
+
+    def register_states(self, states: dict[str, MonsterState]) -> None:
+        states[self.id] = self
+
+    def on_enter_state(self) -> None:
+        pass
+
+    def on_exit_state(self) -> None:
+        pass
+
+
+class MoveState(MonsterState):
+    """A performable move: an on_perform callback plus the intent it shows.
+
+    intent may be a static Intent or a zero-arg callable returning one (for
+    moves whose telegraphed numbers depend on combat state).
+    """
+
+    is_move = True
+
+    def __init__(
+        self,
+        state_id: str,
+        on_perform: Callable[[CombatCtx], None],
+        intent: Intent | Callable[[], Intent],
+        must_perform_once_before_transitioning: bool = False,
+    ) -> None:
+        super().__init__(state_id)
+        self._on_perform = on_perform
+        self._intent = intent
+        self.must_perform_once_before_transitioning = must_perform_once_before_transitioning
+        self.follow_up: MonsterState | None = None
+        self._performed_at_least_once = False
+
+    @property
+    def intent(self) -> Intent:
+        return self._intent() if callable(self._intent) else self._intent
+
+    @property
+    def can_transition_away(self) -> bool:
+        if self.must_perform_once_before_transitioning:
+            return self._performed_at_least_once
+        return True
+
+    def perform(self, ctx: CombatCtx) -> None:
+        self._performed_at_least_once = True
+        self._on_perform(ctx)
+
+    def on_exit_state(self) -> None:
+        self._performed_at_least_once = False
+
+    def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
+        if self.follow_up is None:
+            raise RuntimeError(f"MoveState {self.id} has no follow-up state")
+        return self.follow_up.id
+
+
+class RandomBranchState(MonsterState):
+    """Weighted random chooser (mirrors RandomBranchState).
+
+    Effective branch weight is computed at roll time from three inputs:
+      - the base weight (a constant or a zero-arg lambda),
+      - the repeat rule, which zeroes the weight based on the move log
+        (CANNOT_REPEAT: not twice in a row; CAN_REPEAT_X_TIMES(n): not n+ in a
+        row; USE_ONLY_ONCE: never after it has been used),
+      - the cooldown, which zeroes the weight if the move appears in the last
+        N logged moves.
+    """
+
+    should_appear_in_logs = False
+
+    def __init__(self, state_id: str) -> None:
+        super().__init__(state_id)
+        self._branches: list[dict] = []
+
+    def add_branch(
+        self,
+        state: MonsterState,
+        weight: float | Callable[[], float] = 1.0,
+        repeat_type: MoveRepeatType = MoveRepeatType.CAN_REPEAT_FOREVER,
+        max_times: int = 0,
+        cooldown: int = 0,
+    ) -> None:
+        if repeat_type is MoveRepeatType.CAN_REPEAT_X_TIMES and max_times <= 0:
+            raise ValueError("CAN_REPEAT_X_TIMES requires max_times > 0")
+        self._branches.append({
+            "state_id": state.id,
+            "weight": weight,
+            "repeat_type": repeat_type,
+            "max_times": max_times,
+            "cooldown": cooldown,
+        })
+
+    def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
+        machine = owner.machine
+        weights = [self._effective_weight(b, machine) for b in self._branches]
+        total = sum(weights)
+        if total <= 0:
+            raise RuntimeError(f"No valid branch in RandomBranchState {self.id}")
+        roll = rng.random() * total
+        for branch, weight in zip(self._branches, weights):
+            roll -= weight
+            if roll <= 0:
+                return branch["state_id"]
+        return self._branches[-1]["state_id"]
+
+    @staticmethod
+    def _effective_weight(branch: dict, machine: MonsterMoveStateMachine) -> float:
+        log = machine.state_log
+        state = machine.states[branch["state_id"]]
+        repeat = branch["repeat_type"]
+
+        allowed = 1.0
+        if repeat is MoveRepeatType.USE_ONLY_ONCE:
+            if state in log:
+                allowed = 0.0
+        elif repeat is not MoveRepeatType.CAN_REPEAT_FOREVER:
+            # CANNOT_REPEAT is "at most 1 in a row"; X_TIMES is "at most n in a row"
+            n = 1 if repeat is MoveRepeatType.CANNOT_REPEAT else branch["max_times"]
+            allowed = 0.0 if len(log) >= n and all(s is state for s in log[-n:]) else 1.0
+
+        if branch["cooldown"] > 0:
+            recent_moves = [s for s in reversed(log) if s.is_move][: branch["cooldown"]]
+            if any(m.id == branch["state_id"] for m in recent_moves):
+                return 0.0
+
+        base = branch["weight"]
+        return allowed * (base() if callable(base) else base)
+
+
+class ConditionalBranchState(MonsterState):
+    """First branch whose condition returns True wins (mirrors ConditionalBranchState)."""
+
+    should_appear_in_logs = False
+
+    def __init__(self, state_id: str) -> None:
+        super().__init__(state_id)
+        self._branches: list[tuple[str, Callable[[], bool] | None]] = []
+
+    def add_state(self, state: MonsterState, condition: Callable[[], bool] | None = None) -> None:
+        """condition=None is an unconditional fallback (always taken if reached)."""
+        self._branches.append((state.id, condition))
+
+    def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
+        for state_id, condition in self._branches:
+            if condition is None or condition():
+                return state_id
+        raise RuntimeError(f"No valid branch in ConditionalBranchState {self.id}")
+
+
+class MonsterMoveStateMachine:
+    def __init__(self, states: list[MonsterState], initial_state: MonsterState) -> None:
+        self.states: dict[str, MonsterState] = {}
+        for state in states:
+            state.register_states(self.states)
+        self._initial_state = initial_state
+        self.current: MonsterState = initial_state
+        self._performed_first_move = False
+        self.state_log: list[MonsterState] = []
+        if self.current.should_appear_in_logs:
+            self.state_log.append(self.current)
+
+    def roll_move(self, owner: MachineMonster, rng: random.Random) -> MoveState:
+        """Advance to the next MoveState and return it. The initial move is
+        sticky: rolling before it has been performed returns it unchanged."""
+        self._find_next_move_state(owner, rng)
+        if not self.current.is_move:
+            raise RuntimeError(f"{self.current.id} is not a valid move state")
+        return self.current  # type: ignore[return-value]
+
+    def force_current_state(self, state: MonsterState) -> None:
+        """Externally override the current state (used by stuns/phase changes)."""
+        self._set_current_state(state)
+
+    def on_move_performed(self, _move: MoveState) -> None:
+        self._performed_first_move = True
+
+    def _find_next_move_state(self, owner: MachineMonster, rng: random.Random) -> None:
+        if not self.current.can_transition_away or (
+            not self._performed_first_move and self.current.is_move
+        ):
+            return
+        logged: MonsterState | None = None
+        while True:
+            next_id = self.current.get_next_state(owner, rng)
+            if next_id is not None and next_id not in self.states:
+                raise RuntimeError(f"no valid state found: {next_id}")
+            self._set_current_state(
+                self._initial_state if next_id is None else self.states[next_id]
+            )
+            if logged is None and self.current.should_appear_in_logs:
+                logged = self.current
+            if self.current.is_move:
+                break
+        if logged is not None:
+            self.state_log.append(logged)
+
+    def _set_current_state(self, state: MonsterState) -> None:
+        self.current.on_exit_state()
+        self.current = state
+        self.current.on_enter_state()
+
+
+class MachineMonster(Monster):
+    """Monster driven by a MonsterMoveStateMachine instead of hand-rolled
+    _move_key logic. Subclasses implement build_machine().
+
+    The next move is rolled immediately after the current one is performed —
+    the sim's equivalent of the game rolling at intent-display time, since no
+    player action can intervene between the two points.
+    """
+
+    def __init__(self, hooks: HookSystem, rng: random.Random) -> None:
+        super().__init__(hooks, rng)
+        self._rng = rng
+        self.machine = self.build_machine()
+        self._current_move: MoveState = self.machine.roll_move(self, rng)
+
+    def build_machine(self) -> MonsterMoveStateMachine:
+        raise NotImplementedError
+
+    @property
+    def current_intent(self) -> Intent:
+        if self.stunned:
+            return Intent(MoveType.STUN)
+        return self._current_move.intent
+
+    def take_turn(self, ctx: CombatCtx) -> None:
+        move = self._current_move
+        move.perform(ctx)
+        self.machine.on_move_performed(move)
+        self._current_move = self.machine.roll_move(self, self._rng)

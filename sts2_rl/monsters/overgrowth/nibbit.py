@@ -36,7 +36,10 @@ class Nibbit(Monster):
         if self._move_key == "BUTT":
             return Intent(move_type=MoveType.ATTACK, damage=_BUTT_DAMAGE, hits=1)
         if self._move_key == "SLICE":
-            return Intent(move_type=MoveType.ATTACK, damage=_SLICE_DAMAGE, hits=1)
+            return Intent(
+                move_type=MoveType.ATTACK, damage=_SLICE_DAMAGE, hits=1,
+                also=(MoveType.DEFEND,),
+            )
         from ...powers import StrengthPower
         return Intent(move_type=MoveType.BUFF, buffs=[(StrengthPower, _HISS_STRENGTH)])
 

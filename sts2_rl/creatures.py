@@ -13,6 +13,10 @@ class Creature:
         self.block = 0
         self.side: str = "enemy"
         self.powers: dict[str, Power] = {}
+        # Set by CreatureCmd.stun; the creature skips its next turn.
+        self.stunned = False
+        # Set by CreatureCmd.escape; the creature has left combat alive.
+        self.escaped = False
 
     @property
     def strength(self) -> int:
@@ -23,3 +27,8 @@ class Creature:
     @property
     def is_dead(self) -> bool:
         return self.hp <= 0
+
+    @property
+    def is_gone(self) -> bool:
+        """Dead or escaped — no longer participating in combat."""
+        return self.is_dead or self.escaped

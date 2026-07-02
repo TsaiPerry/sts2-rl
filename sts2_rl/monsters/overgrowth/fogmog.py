@@ -4,6 +4,13 @@ import random
 from typing import TYPE_CHECKING
 
 from ..base import Encounter, Intent, Monster, MoveType
+from ..state_machine import (
+    MachineMonster,
+    MonsterMoveStateMachine,
+    MoveRepeatType,
+    MoveState,
+    RandomBranchState,
+)
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
@@ -32,8 +39,10 @@ class EyeWithTeeth(Monster):
 
     @property
     def current_intent(self) -> Intent:
-        # Both the revive turn and DISTRACT (3 Dazed cards) render as non-attacks.
-        return Intent(MoveType.BUFF, buffs=[])
+        illusion = self._illusion
+        if illusion is not None and illusion.is_reviving:
+            return Intent(MoveType.HEAL)  # revive turn
+        return Intent(MoveType.STATUS_CARD)  # DISTRACT: 3 Dazed cards
 
     def take_turn(self, ctx: CombatCtx) -> None:
         illusion = self._illusion
@@ -46,42 +55,52 @@ class EyeWithTeeth(Monster):
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, DazedCard())
 
 
-class Fogmog(Monster):
-    """ILLUSION (summon Eye With Teeth) → SWIPE → 40% SWIPE / 60% HEADBUTT;
-    the random SWIPE is always followed by HEADBUTT, and HEADBUTT always
-    returns to SWIPE (which branches again)."""
+class Fogmog(MachineMonster):
+    """ILLUSION (summon Eye With Teeth) → SWIPE → branch: 40% SWIPE_RANDOM /
+    60% HEADBUTT (each weight-zeroed if it was the previous move); the random
+    SWIPE is always followed by HEADBUTT, and HEADBUTT returns to SWIPE, which
+    branches again. A faithful port of the source's move state machine."""
     min_hp = 74
     max_hp = 74
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
-        self._rng = rng or random.Random()
-        self._move_key = "ILLUSION"
 
-    @property
-    def current_intent(self) -> Intent:
-        if self._move_key == "ILLUSION":
-            return Intent(MoveType.BUFF, buffs=[])  # summon EyeWithTeeth
-        if self._move_key in ("SWIPE", "SWIPE_RANDOM"):
-            return Intent(MoveType.ATTACK, damage=_SWIPE_DMG)
-        return Intent(MoveType.ATTACK, damage=_HEADBUTT_DMG)
+    def build_machine(self) -> MonsterMoveStateMachine:
+        swipe_intent = Intent(
+            MoveType.ATTACK, damage=_SWIPE_DMG, also=(MoveType.BUFF,)
+        )
+        illusion = MoveState("ILLUSION_MOVE", self._illusion_move, Intent(MoveType.SUMMON))
+        swipe = MoveState("SWIPE_MOVE", self._swipe_move, swipe_intent)
+        swipe_random = MoveState("SWIPE_RANDOM_MOVE", self._swipe_move, swipe_intent)
+        headbutt = MoveState(
+            "HEADBUTT_MOVE", self._headbutt_move,
+            Intent(MoveType.ATTACK, damage=_HEADBUTT_DMG),
+        )
+        branch = RandomBranchState("BRANCH")
+        branch.add_branch(swipe_random, weight=0.4, repeat_type=MoveRepeatType.CANNOT_REPEAT)
+        branch.add_branch(headbutt, weight=0.6, repeat_type=MoveRepeatType.CANNOT_REPEAT)
 
-    def take_turn(self, ctx: CombatCtx) -> None:
+        illusion.follow_up = swipe
+        swipe.follow_up = branch
+        swipe_random.follow_up = headbutt
+        headbutt.follow_up = swipe
+        return MonsterMoveStateMachine(
+            [illusion, swipe, swipe_random, branch, headbutt], illusion
+        )
+
+    def _illusion_move(self, ctx: CombatCtx) -> None:
+        from ...cmds import CreatureCmd
+        CreatureCmd.add(ctx.hooks, EyeWithTeeth(ctx.hooks, self._rng))
+
+    def _swipe_move(self, ctx: CombatCtx) -> None:
+        self._execute_attack(ctx, _SWIPE_DMG, 1)
         from ...cmds import PowerCmd
-        if self._move_key == "ILLUSION":
-            ctx.enemies.append(EyeWithTeeth(ctx.hooks, self._rng))
-            self._move_key = "SWIPE"
-        elif self._move_key in ("SWIPE", "SWIPE_RANDOM"):
-            self._execute_attack(ctx, _SWIPE_DMG, 1)
-            from ...powers import StrengthPower
-            PowerCmd.apply(ctx.hooks, self, StrengthPower, _SWIPE_STR)
-            if self._move_key == "SWIPE":
-                self._move_key = "SWIPE_RANDOM" if self._rng.random() < 0.4 else "HEADBUTT"
-            else:
-                self._move_key = "HEADBUTT"
-        else:  # HEADBUTT
-            self._execute_attack(ctx, _HEADBUTT_DMG, 1)
-            self._move_key = "SWIPE"
+        from ...powers import StrengthPower
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, _SWIPE_STR)
+
+    def _headbutt_move(self, ctx: CombatCtx) -> None:
+        self._execute_attack(ctx, _HEADBUTT_DMG, 1)
 
 
 FOGMOG_NORMAL = Encounter(

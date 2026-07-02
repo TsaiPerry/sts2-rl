@@ -27,7 +27,7 @@ class ShrinkerBeetle(Monster):
     def current_intent(self) -> Intent:
         if self._move_key == "SHRINKER":
             from ...powers import ShrinkPower
-            return Intent(MoveType.BUFF, buffs=[(ShrinkPower, -1)])
+            return Intent(MoveType.DEBUFF, buffs=[(ShrinkPower, -1)])
         if self._move_key == "STOMP":
             return Intent(MoveType.ATTACK, damage=_STOMP_DMG)
         return Intent(MoveType.ATTACK, damage=_CHOMP_DMG)

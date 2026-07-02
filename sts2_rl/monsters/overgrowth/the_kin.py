@@ -82,9 +82,9 @@ class KinPriest(Monster):
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "ORB_FRAILTY":
-            return Intent(MoveType.ATTACK, damage=_ORB_FRAILTY_DMG)
+            return Intent(MoveType.ATTACK, damage=_ORB_FRAILTY_DMG, also=(MoveType.DEBUFF,))
         if self._move_key == "ORB_WEAKNESS":
-            return Intent(MoveType.ATTACK, damage=_ORB_WEAKNESS_DMG)
+            return Intent(MoveType.ATTACK, damage=_ORB_WEAKNESS_DMG, also=(MoveType.DEBUFF,))
         if self._move_key == "BEAM":
             return Intent(MoveType.ATTACK, damage=_BEAM_DMG, hits=_BEAM_HITS)
         from ...powers import StrengthPower

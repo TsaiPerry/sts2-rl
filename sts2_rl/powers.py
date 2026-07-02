@@ -124,10 +124,8 @@ class RegenPower(Power):
     power_type = PowerType.BUFF
 
     def _apply_regen(self) -> None:
-        heal = min(self.amount, self.owner.max_hp - self.owner.hp)
-        if heal > 0:
-            self.owner.hp += heal
-            self.hooks.on_hp_changed(self.owner, heal)
+        from .cmds import CreatureCmd
+        CreatureCmd.heal(self.hooks, self.owner, self.amount)
         self._tick()
 
     def on_enemy_turn_end(self, enemy: Creature) -> None:
@@ -292,7 +290,11 @@ class ArtifactPower(Power):
 
 
 class ThornsPower(Power):
-    """Reflect N unblockable damage to the attacker when the owner is hit."""
+    """Reflect N damage to the attacker when the owner is hit.
+
+    The reflected damage is unpowered but blockable (STS2's ThornsPower deals
+    ValueProp.Unpowered damage): the attacker's block absorbs it, Strength and
+    Vulnerable do not modify it."""
 
     id = "thorns"
     name = "Thorns"
@@ -307,14 +309,11 @@ class ThornsPower(Power):
     ) -> None:
         if target is not self.owner or dealer is None:
             return
-        # Bypass block — apply HP loss directly to the attacker
-        old_hp = dealer.hp
-        dealer.hp = max(0, dealer.hp - self.amount)
-        hp_lost = old_hp - dealer.hp
-        if hp_lost > 0:
-            self.hooks.on_hp_changed(dealer, -hp_lost)
-            if dealer.hp <= 0 and self.hooks.should_die(dealer):
-                self.hooks.on_death(dealer)
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        DamageCmd.deal(
+            self.hooks, dealer, self.amount, props=DamageProps.NON_CARD_UNPOWERED
+        )
 
 
 class IntangiblePower(Power):
@@ -429,17 +428,12 @@ class PoisonPower(Power):
     def _apply_poison(self) -> None:
         if self.owner.is_dead:
             return
-        old_hp = self.owner.hp
-        self.owner.hp = max(0, self.owner.hp - self.amount)
-        hp_lost = old_hp - self.owner.hp
-        if hp_lost > 0:
-            self.hooks.on_hp_changed(self.owner, -hp_lost)
-            if self.owner.hp <= 0:
-                if self.hooks.should_die(self.owner):
-                    self.hooks.on_death(self.owner)
-                else:
-                    self.owner.hp = 1
-        self.hooks.on_damage_received(self.owner, hp_lost, None, None)
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        # Unblockable, unpowered HP loss (STS2: ValueProp.Unblockable | Unpowered)
+        DamageCmd.deal(
+            self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_HP_LOSS
+        )
         self._tick()
 
     def on_enemy_turn_start(self, enemy: Creature) -> None:
@@ -643,10 +637,12 @@ class InfestedPower(Power):
         combat = self.hooks.combat
         if combat is None:
             return
+        from .cmds import CreatureCmd
         from .monsters.overgrowth.phrog_parasite import Wriggler
         for i in range(4):
-            combat.enemies.append(
-                Wriggler(self.hooks, combat._rng, start_stunned=True, slot=i + 1)
+            CreatureCmd.add(
+                self.hooks,
+                Wriggler(self.hooks, combat._rng, start_stunned=True, slot=i + 1),
             )
         self._expire()
 
@@ -661,7 +657,11 @@ class ConstrictPower(Power):
 
     def _squeeze(self) -> None:
         from .cmds import DamageCmd
-        DamageCmd.deal(self.hooks, self.owner, self.amount)
+        from .valueprops import DamageProps
+        # Blockable, unpowered damage from a power (like Thorns).
+        DamageCmd.deal(
+            self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_UNPOWERED
+        )
 
     def on_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
@@ -801,10 +801,8 @@ class IllusionPower(Power):
     def revive(self) -> None:
         """Called by the owner's take_turn to perform the REVIVE move."""
         self.is_reviving = False
-        healed = self.owner.max_hp - self.owner.hp
-        if healed > 0:
-            self.owner.hp = self.owner.max_hp
-            self.hooks.on_hp_changed(self.owner, healed)
+        from .cmds import CreatureCmd
+        CreatureCmd.heal(self.hooks, self.owner, self.owner.max_hp - self.owner.hp)
 
 
 # ── Registry ─────────────────────────────────────────────────────────────

@@ -376,6 +376,34 @@ class HookSystem:
             if hasattr(l, "on_power_amount_changed"):
                 l.on_power_amount_changed(name, target, delta)
 
+    # ── Event hooks — creatures entering / leaving combat ───────────────
+
+    def on_creature_added(self, creature: Creature) -> None:
+        """Fires when a creature joins combat mid-fight (mirrors AfterCreatureAddedToCombat)."""
+        for l in list(self._listeners):
+            if hasattr(l, "on_creature_added"):
+                l.on_creature_added(creature)
+
+    def on_creature_escaped(self, creature: Creature) -> None:
+        """Fires when a creature escapes from combat alive."""
+        for l in list(self._listeners):
+            if hasattr(l, "on_creature_escaped"):
+                l.on_creature_escaped(creature)
+
+    def on_stunned(self, creature: Creature) -> None:
+        """Fires when a creature is stunned (will skip its next turn)."""
+        for l in list(self._listeners):
+            if hasattr(l, "on_stunned"):
+                l.on_stunned(creature)
+
+    # ── Event hooks — potions ────────────────────────────────────────────
+
+    def on_potion_used(self, potion: Any, target: Creature | None) -> None:
+        """Fires after a potion's effect resolves (mirrors AfterPotionUsed)."""
+        for l in list(self._listeners):
+            if hasattr(l, "on_potion_used"):
+                l.on_potion_used(potion, target)
+
     # ── Event hooks — death ──────────────────────────────────────────────
 
     def on_death(self, creature: Creature) -> None:

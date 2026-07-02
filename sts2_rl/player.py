@@ -8,12 +8,14 @@ from .hooks import HookSystem
 
 if TYPE_CHECKING:
     from .cards import Card
+    from .potions import Potion
 
 
 class PlayerCombatState(Creature):
     ENERGY_PER_TURN = 3
     DRAW_PER_TURN = 5
     MAX_HAND_SIZE = 10
+    MAX_POTIONS = 3
 
     def __init__(
         self,
@@ -21,6 +23,7 @@ class PlayerCombatState(Creature):
         deck: list[Card],
         rng: random.Random,
         hooks: HookSystem,
+        potions: list[Potion] | None = None,
     ) -> None:
         super().__init__(max_hp)
         self.side = "player"
@@ -29,6 +32,7 @@ class PlayerCombatState(Creature):
         self.draw_pile: list[Card] = deck.copy()
         self.discard_pile: list[Card] = []
         self.exhaust_pile: list[Card] = []
+        self.potions: list[Potion] = list(potions or [])[: self.MAX_POTIONS]
         self._rng = rng
         self._hooks = hooks
         rng.shuffle(self.draw_pile)

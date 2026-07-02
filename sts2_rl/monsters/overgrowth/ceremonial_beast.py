@@ -18,12 +18,11 @@ _PLOW_AMT = 150
 
 # Phase 1: STAMP (apply Plow 150), then PLOW every turn until the Plow power
 # breaks (unblocked damage leaves the beast at ≤150 HP — handled by PlowPower,
-# which strips all Strength and calls on_plow_broken).
-# Phase 2: STUN (skip a turn) → BEAST_CRY → STOMP → CRUSH → BEAST_CRY → ...
+# which strips all Strength and calls on_plow_broken, stunning the beast).
+# Phase 2 (after the stunned turn): BEAST_CRY → STOMP → CRUSH → BEAST_CRY → ...
 _TRANSITIONS = {
     "STAMP": "PLOW",
     "PLOW": "PLOW",
-    "STUN": "BEAST_CRY",
     "BEAST_CRY": "STOMP",
     "STOMP": "CRUSH",
     "CRUSH": "BEAST_CRY",
@@ -39,19 +38,23 @@ class CeremonialBeast(Monster):
         self._move_key = "STAMP"
 
     def on_plow_broken(self) -> None:
-        """Called by PlowPower when unblocked damage drops HP to ≤ the Plow amount."""
-        self._move_key = "STUN"
+        """Called by PlowPower when unblocked damage drops HP to ≤ the Plow amount.
+        The beast skips a turn, then enters phase 2 at BEAST_CRY."""
+        from ...cmds import CreatureCmd
+        CreatureCmd.stun(self._hooks, self, next_move_key="BEAST_CRY")
 
     @property
     def current_intent(self) -> Intent:
+        if self.stunned:
+            return Intent(MoveType.STUN)
         move = self._move_key
         if move == "STAMP":
             from ...powers import PlowPower
             return Intent(MoveType.BUFF, buffs=[(PlowPower, _PLOW_AMT)])
         if move == "PLOW":
             return Intent(MoveType.ATTACK, damage=_PLOW_DMG)
-        if move in ("STUN", "BEAST_CRY"):
-            return Intent(MoveType.BUFF, buffs=[])
+        if move == "BEAST_CRY":
+            return Intent(MoveType.CARD_DEBUFF)  # Ringing afflicts the player's cards
         if move == "STOMP":
             return Intent(MoveType.ATTACK, damage=_STOMP_DMG)
         # CRUSH
@@ -67,8 +70,6 @@ class CeremonialBeast(Monster):
             self._execute_attack(ctx, _PLOW_DMG, 1)
             from ...powers import StrengthPower
             PowerCmd.apply(ctx.hooks, self, StrengthPower, _PLOW_STR)
-        elif move == "STUN":
-            pass  # stunned: do nothing
         elif move == "BEAST_CRY":
             from ...powers import RingingPower
             PowerCmd.apply(ctx.hooks, ctx.player, RingingPower, 1, applier=self)
@@ -78,8 +79,9 @@ class CeremonialBeast(Monster):
             self._execute_attack(ctx, _CRUSH_DMG, 1)
             from ...powers import StrengthPower
             PowerCmd.apply(ctx.hooks, self, StrengthPower, _CRUSH_STR)
-        # PlowPower may have interrupted the cycle mid-turn (player kills the
-        # plow during their turn); only advance if the move wasn't replaced.
+        # PlowPower may have interrupted the cycle mid-turn (the plow breaking
+        # stuns the beast and redirects to BEAST_CRY); only advance if the
+        # move wasn't replaced.
         if self._move_key == move:
             self._move_key = _TRANSITIONS[move]
 

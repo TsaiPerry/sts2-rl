@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .valueprops import DamageProps, ValueProp, is_powered_attack
+
 if TYPE_CHECKING:
     from .afflictions import Affliction
     from .cards import Card
@@ -19,29 +21,43 @@ class DamageCmd:
         amount: int,
         dealer: Creature | None = None,
         card: Card | None = None,
+        props: ValueProp | None = None,
     ) -> int:
-        """Full damage pipeline. Returns actual HP lost (after block and modifiers)."""
+        """Full damage pipeline. Returns actual HP lost (after block and modifiers).
+
+        props types the damage (mirrors STS2 ValueProp). When omitted it is
+        inferred: card/monster attack damage (MOVE), downgraded to unpowered
+        for cards marked is_unpowered.
+        """
+        if props is None:
+            if card is not None and card.is_unpowered:
+                props = DamageProps.CARD_UNPOWERED
+            else:
+                props = DamageProps.CARD  # == MONSTER_MOVE
         if not hooks.should_allow_hitting(target):
             return 0
 
-        # 1. Additive modifiers then multiplicative (e.g. Strength, Vulnerable, Weak)
-        amount = amount + hooks.modify_damage_additive(target, amount, dealer, card)
-        amount = int(amount * hooks.modify_damage_multiplicative(target, amount, dealer, card))
+        # 1. Additive then multiplicative modifiers (Strength, Vulnerable, Weak).
+        #    Only powered attacks are modified (mirrors IsPoweredAttack checks).
+        if is_powered_attack(props):
+            amount = amount + hooks.modify_damage_additive(target, amount, dealer, card)
+            amount = int(amount * hooks.modify_damage_multiplicative(target, amount, dealer, card))
 
-        # 2. Damage cap (e.g. Intangible: cap at 1)
+        # 2. Damage cap (e.g. Intangible: cap at 1) — applies to all damage types
         cap = hooks.modify_damage_cap(target, dealer, card)
         if cap is not None:
             amount = min(amount, cap)
 
         amount = max(0, amount)
 
-        # 3. Pre-block hit event (e.g. CurlUp triggers even when block absorbs)
-        if amount > 0:
+        # 3. Pre-block hit event for attacks (e.g. CurlUp triggers even when
+        #    block absorbs). Non-move damage (Poison, Thorns) is not a "hit".
+        if amount > 0 and ValueProp.MOVE in props:
             hooks.on_attacked(target, amount, dealer, card)
 
-        # 4. Block absorption
+        # 4. Block absorption (skipped for unblockable HP loss like Poison)
         hp_lost = amount
-        if target.block > 0:
+        if target.block > 0 and ValueProp.UNBLOCKABLE not in props:
             absorbed = min(target.block, amount)
             target.block -= absorbed
             hp_lost -= absorbed
@@ -80,14 +96,89 @@ class BlockCmd:
         target: Creature,
         amount: int,
         card: Card | None = None,
+        props: ValueProp | None = None,
     ) -> int:
-        """Apply block through the hook pipeline. Returns final block gained."""
-        amount = amount + hooks.modify_block_additive(target, amount, card)
-        amount = int(amount * hooks.modify_block_multiplicative(target, amount, card))
+        """Apply block through the hook pipeline. Returns final block gained.
+
+        Unpowered block (e.g. Block Potion) skips Dexterity/Frail modifiers,
+        mirroring STS2's IsPoweredCardOrMonsterMoveBlock check.
+        """
+        if props is None:
+            props = ValueProp.MOVE
+        if is_powered_attack(props):  # same Move-and-not-Unpowered rule as damage
+            amount = amount + hooks.modify_block_additive(target, amount, card)
+            amount = int(amount * hooks.modify_block_multiplicative(target, amount, card))
         amount = max(0, amount)
         target.block += amount
         hooks.on_block_gained(target, amount)
         return amount
+
+
+class CreatureCmd:
+    """Creature-level verbs beyond plain damage (mirrors STS2's CreatureCmd)."""
+
+    @staticmethod
+    def heal(hooks: HookSystem, target: Creature, amount: int) -> int:
+        """Heal up to amount HP, capped at max HP. Returns HP actually restored."""
+        if target.is_dead:
+            return 0
+        healed = min(amount, target.max_hp - target.hp)
+        if healed > 0:
+            target.hp += healed
+            hooks.on_hp_changed(target, healed)
+        return healed
+
+    @staticmethod
+    def kill(hooks: HookSystem, target: Creature) -> None:
+        """Set HP to 0 through the death-prevention pipeline (mirrors Kill)."""
+        if target.is_dead:
+            return
+        old_hp = target.hp
+        target.hp = 0
+        hooks.on_hp_changed(target, -old_hp)
+        if hooks.should_die(target):
+            hooks.on_death(target)
+        else:
+            target.hp = 1
+
+    @staticmethod
+    def stun(hooks: HookSystem, target: Creature, next_move_key: str | None = None) -> None:
+        """Stun a creature: it skips its next turn (mirrors CreatureCmd.Stun).
+
+        next_move_key optionally overrides the move performed after the stunned
+        turn (the source's nextMoveId); by default the creature resumes its
+        pattern where it left off.
+        """
+        target.stunned = True
+        if next_move_key is not None and hasattr(target, "_move_key"):
+            target._move_key = next_move_key
+        hooks.on_stunned(target)
+
+    @staticmethod
+    def escape(hooks: HookSystem, creature: Creature) -> None:
+        """Remove a creature from combat without killing it (mirrors Escape).
+
+        Escaped creatures no longer act, cannot be targeted, and count as gone
+        for the win condition.
+        """
+        if creature.is_dead or creature.escaped:
+            return
+        creature.escaped = True
+        hooks.on_creature_escaped(creature)
+        # Escaping can end the fight (mirrors CheckWinCondition after Escape).
+        combat = hooks.combat
+        if combat is not None and not combat.is_over and combat._all_enemies_dead():
+            combat._end_combat(player_won=True)
+
+    @staticmethod
+    def add(hooks: HookSystem, creature: Creature) -> None:
+        """Add a creature to combat mid-fight (mirrors CreatureCmd.Add), firing
+        the added-to-combat hook so powers can react."""
+        combat = hooks.combat
+        if combat is None:
+            return
+        combat.enemies.append(creature)
+        hooks.on_creature_added(creature)
 
 
 class PowerCmd:

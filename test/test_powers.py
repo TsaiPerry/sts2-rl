@@ -290,14 +290,25 @@ class TestThorns:
         DamageCmd.deal(cs.hooks, cs.player, 5, dealer=None)
         assert cs.enemy.hp == enemy_hp_before  # no dealer → no reflection
 
-    def test_reflection_bypasses_attacker_block(self):
+    def test_reflection_is_blockable(self):
+        # STS2 Thorns deals ValueProp.Unpowered damage: the attacker's block
+        # absorbs it (unlike Poison, which is Unblockable).
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 5)
         cs.enemy.block = 100
         enemy_hp_before = cs.enemy.hp
         DamageCmd.deal(cs.hooks, cs.player, 3, dealer=cs.enemy)
-        assert cs.enemy.hp == enemy_hp_before - 5  # direct HP; ignores block
-        assert cs.enemy.block == 100               # block untouched
+        assert cs.enemy.hp == enemy_hp_before  # fully absorbed by block
+        assert cs.enemy.block == 95
+
+    def test_reflection_not_boosted_by_attacker_vulnerable(self):
+        # Unpowered damage skips the Vulnerable multiplier.
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 4)
+        PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 3)
+        enemy_hp_before = cs.enemy.hp
+        DamageCmd.deal(cs.hooks, cs.player, 3, dealer=cs.enemy)
+        assert cs.enemy.hp == enemy_hp_before - 4  # 4, not 6
 
 
 # ══════════════════════════════════════════════════════════════════════════

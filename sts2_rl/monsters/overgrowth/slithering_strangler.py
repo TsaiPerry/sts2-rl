@@ -29,9 +29,9 @@ class SlitheringStrangler(Monster):
     def current_intent(self) -> Intent:
         if self._move_key == "CONSTRICT":
             from ...powers import ConstrictPower
-            return Intent(MoveType.BUFF, buffs=[(ConstrictPower, _CONSTRICT_AMT)])
+            return Intent(MoveType.DEBUFF, buffs=[(ConstrictPower, _CONSTRICT_AMT)])
         if self._move_key == "THWACK":
-            return Intent(MoveType.ATTACK, damage=_THWACK_DMG)
+            return Intent(MoveType.ATTACK, damage=_THWACK_DMG, also=(MoveType.DEFEND,))
         return Intent(MoveType.ATTACK, damage=_LASH_DMG)
 
     def take_turn(self, ctx: CombatCtx) -> None:

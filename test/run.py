@@ -46,12 +46,13 @@ def _powers_str(c: Creature) -> str:
 
 def _intent_str(e: Monster) -> str:
     intent = e.current_intent
+    extra = "".join(f" +{t.value}" for t in intent.also)
     if intent.move_type != MoveType.ATTACK:
-        return "Buff"
+        return f"{intent.move_type.value.replace('_', ' ').title()}{extra}"
     dmg = intent.damage + e.strength
     if intent.hits > 1:
-        return f"Attack {intent.hits}×{dmg} ({intent.hits * dmg} total)"
-    return f"Attack {dmg}"
+        return f"Attack {intent.hits}×{dmg} ({intent.hits * dmg} total){extra}"
+    return f"Attack {dmg}{extra}"
 
 
 def _enemy_line(i: int, e: Monster) -> str:

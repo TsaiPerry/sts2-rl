@@ -28,7 +28,7 @@ class BygoneEffigy(Monster):
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "SLEEP":
-            return Intent(MoveType.BUFF, buffs=[])
+            return Intent(MoveType.SLEEP)
         if self._move_key == "WAKE":
             from ...powers import StrengthPower
             return Intent(MoveType.BUFF, buffs=[(StrengthPower, _WAKE_STR)])

@@ -14,7 +14,7 @@ from .monsters import MoveType, Intent
 # action 0 = end turn, 1 = play a Strike, 2 = play a Defend
 N_ACTIONS = 3
 
-# Observation layout (12 floats, all in [0, 1]):
+# Observation layout (17 floats, all in [0, 1]):
 #   [0]  player_hp_norm
 #   [1]  player_block_norm       (cap 30)
 #   [2]  player_energy_norm      (cap 3)
@@ -27,7 +27,13 @@ N_ACTIONS = 3
 #   [9]  enemy_strength_norm     (cap 50)
 #   [10] enemy_intent_is_attack  (0 or 1)
 #   [11] enemy_intent_damage_norm (cap 30)
-OBS_DIM = 12
+# Intent-type flags (primary or secondary intent; 0 or 1 each):
+#   [12] enemy_intent_debuffs        (DEBUFF / DEBUFF_STRONG / CARD_DEBUFF)
+#   [13] enemy_intent_adds_statuses  (STATUS_CARD)
+#   [14] enemy_intent_defends        (DEFEND)
+#   [15] enemy_intent_summons        (SUMMON)
+#   [16] enemy_intent_is_idle        (STUN / SLEEP — enemy will not act)
+OBS_DIM = 17
 
 
 class STS2CombatEnv(gym.Env):
@@ -142,8 +148,17 @@ class STS2CombatEnv(gym.Env):
         defends = sum(1 for c in p.hand if isinstance(c, DefendCard))
 
         intent = s.enemy.current_intent
-        intent_attack = float(intent.move_type == MoveType.ATTACK)
-        intent_dmg = (intent.total_damage + s.enemy.strength) if intent.move_type == MoveType.ATTACK else 0
+        intent_attack = float(intent.has(MoveType.ATTACK))
+        intent_dmg = (intent.total_damage + s.enemy.strength) if intent.has(MoveType.ATTACK) else 0
+        intent_debuffs = float(
+            intent.has(MoveType.DEBUFF)
+            or intent.has(MoveType.DEBUFF_STRONG)
+            or intent.has(MoveType.CARD_DEBUFF)
+        )
+        intent_statuses = float(intent.has(MoveType.STATUS_CARD))
+        intent_defends = float(intent.has(MoveType.DEFEND))
+        intent_summons = float(intent.has(MoveType.SUMMON))
+        intent_idle = float(intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP))
 
         return np.array(
             [
@@ -159,6 +174,11 @@ class STS2CombatEnv(gym.Env):
                 min(s.enemy.strength, 50) / 50.0,
                 intent_attack,
                 min(intent_dmg, 30) / 30.0,
+                intent_debuffs,
+                intent_statuses,
+                intent_defends,
+                intent_summons,
+                intent_idle,
             ],
             dtype=np.float32,
         )

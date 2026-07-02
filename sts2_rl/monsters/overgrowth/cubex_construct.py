@@ -38,7 +38,7 @@ class CubexConstruct(Monster):
             from ...powers import StrengthPower
             return Intent(MoveType.BUFF, buffs=[(StrengthPower, _CHARGE_STR)])
         if self._move_key == "RB":
-            return Intent(MoveType.ATTACK, damage=_RB_DMG)
+            return Intent(MoveType.ATTACK, damage=_RB_DMG, also=(MoveType.BUFF,))
         return Intent(MoveType.ATTACK, damage=_EXPEL_DMG, hits=_EXPEL_HITS)
 
     def take_turn(self, ctx: CombatCtx) -> None:

@@ -35,9 +35,11 @@ class Flyconid(Monster):
     def current_intent(self) -> Intent:
         if self._move_key == "V_SPORES":
             from ...powers import VulnerablePower
-            return Intent(MoveType.BUFF, buffs=[(VulnerablePower, _V_SPORES_VULN)])
+            return Intent(MoveType.DEBUFF, buffs=[(VulnerablePower, _V_SPORES_VULN)])
         if self._move_key == "FRAIL_SPORES":
-            return Intent(MoveType.ATTACK, damage=_FRAIL_SPORES_DMG)
+            return Intent(
+                MoveType.ATTACK, damage=_FRAIL_SPORES_DMG, also=(MoveType.DEBUFF,)
+            )
         return Intent(MoveType.ATTACK, damage=_SMASH_DMG)
 
     def take_turn(self, ctx: CombatCtx) -> None:

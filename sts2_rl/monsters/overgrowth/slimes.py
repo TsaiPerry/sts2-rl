@@ -27,7 +27,7 @@ class LeafSlimeS(Monster):
     def current_intent(self) -> Intent:
         if self._move_key == "TACKLE":
             return Intent(MoveType.ATTACK, damage=3)
-        return Intent(MoveType.BUFF, buffs=[])  # GOOP: adds Slimed card (not yet implemented)
+        return Intent(MoveType.STATUS_CARD)  # GOOP: adds a Slimed card
 
     def take_turn(self, ctx: CombatCtx) -> None:
         if self._move_key == "TACKLE":
@@ -70,7 +70,7 @@ class LeafSlimeM(Monster):
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "STICKY_SHOT":
-            return Intent(MoveType.BUFF, buffs=[])  # adds 2 Slimed cards
+            return Intent(MoveType.STATUS_CARD)  # adds 2 Slimed cards
         return Intent(MoveType.ATTACK, damage=8)
 
     def take_turn(self, ctx: CombatCtx) -> None:
@@ -98,7 +98,7 @@ class TwigSlimeM(Monster):
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "STICKY_SHOT":
-            return Intent(MoveType.BUFF, buffs=[])  # adds 1 Slimed card
+            return Intent(MoveType.STATUS_CARD)  # adds 1 Slimed card
         return Intent(MoveType.ATTACK, damage=11, hits=1)
 
     def take_turn(self, ctx: CombatCtx) -> None:

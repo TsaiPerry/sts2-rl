@@ -10,6 +10,7 @@ from .cmds import DamageCmd
 from .hooks import HookSystem
 from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
 from .player import PlayerCombatState
+from .potions import Potion
 
 
 class Phase(Enum):
@@ -33,15 +34,15 @@ class CombatCtx:
 
     @property
     def enemy(self) -> Monster:
-        """First living enemy; falls back to the first enemy if all are dead."""
+        """First living enemy; falls back to the first enemy if all are gone."""
         for e in self.enemies:
-            if not e.is_dead:
+            if not e.is_gone:
                 return e
         return self.enemies[0]
 
     def resolve_target(self, target_idx: int | None) -> Monster:
         """Return the indexed enemy if it is alive; otherwise the first living enemy."""
-        if target_idx is not None and target_idx < len(self.enemies) and not self.enemies[target_idx].is_dead:
+        if target_idx is not None and target_idx < len(self.enemies) and not self.enemies[target_idx].is_gone:
             return self.enemies[target_idx]
         return self.enemy
 
@@ -54,6 +55,7 @@ class CombatState:
         starting_deck: list[Card] | None = None,
         rng: random.Random | None = None,
         encounter: Encounter | None = None,
+        potions: list[Potion] | None = None,
     ) -> None:
         self._rng = rng or random.Random()
 
@@ -63,7 +65,7 @@ class CombatState:
         self.hooks = HookSystem()
         self.hooks.combat = self
         self.player = PlayerCombatState(
-            self.PLAYER_MAX_HP, starting_deck, self._rng, self.hooks
+            self.PLAYER_MAX_HP, starting_deck, self._rng, self.hooks, potions=potions
         )
         self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
             self.hooks, self._rng
@@ -77,9 +79,9 @@ class CombatState:
 
     @property
     def enemy(self) -> Monster:
-        """First living enemy; falls back to the first enemy if all are dead."""
+        """First living enemy; falls back to the first enemy if all are gone."""
         for e in self.enemies:
-            if not e.is_dead:
+            if not e.is_gone:
                 return e
         return self.enemies[0]
 
@@ -92,13 +94,14 @@ class CombatState:
 
     def _all_enemies_dead(self) -> bool:
         # Minions (Kin Followers, Eye With Teeth) are secondary enemies: combat
-        # is won once every primary enemy is dead, even if minions survive.
+        # is won once every primary enemy is dead or escaped, even if minions
+        # survive.
         primaries = [e for e in self.enemies if "minion" not in e.powers]
-        return all(e.is_dead for e in (primaries or self.enemies))
+        return all(e.is_gone for e in (primaries or self.enemies))
 
     def _execute_enemy_turn(self) -> None:
         for enemy in list(self.enemies):
-            if enemy.is_dead:
+            if enemy.is_gone:
                 continue
 
             # Clear block at the start of this enemy's turn.
@@ -117,8 +120,12 @@ class CombatState:
                 self._end_combat(player_won=False)
                 return
 
-            # Execute the enemy's move (attack / buff / etc.).
-            enemy.take_turn(self._ctx())
+            # Execute the enemy's move, or skip it if stunned (turn-start and
+            # turn-end effects like Poison still fire on a stunned turn).
+            if enemy.stunned:
+                enemy.stunned = False
+            else:
+                enemy.take_turn(self._ctx())
             if self.player.is_dead:
                 self.phase = Phase.COMBAT_OVER
                 self.result = CombatResult(player_won=False, turns_taken=self.turn)
@@ -201,7 +208,7 @@ class CombatState:
             if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
                 # Framework routes: call on_play once per living enemy.
                 for idx, e in enumerate(self.enemies):
-                    if e.is_dead:
+                    if e.is_gone:
                         continue
                     card.on_play(self._ctx(), idx)
                     if self._all_enemies_dead() or self.player.is_dead:
@@ -223,6 +230,29 @@ class CombatState:
         elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=False)
 
+        return True
+
+    def use_potion(self, slot: int, target_idx: int | None = None) -> bool:
+        """Use the potion in the given slot (removed on use).
+
+        For targeted potions, target_idx selects the enemy (defaults to the
+        first living enemy). Returns False if the action is invalid.
+        """
+        if self.phase != Phase.PLAYER_TURN:
+            return False
+        if slot < 0 or slot >= len(self.player.potions):
+            return False
+
+        potion = self.player.potions.pop(slot)
+        ctx = self._ctx()
+        target = ctx.resolve_target(target_idx) if potion.targeted else None
+        potion.use(ctx, target)
+        self.hooks.on_potion_used(potion, target)
+
+        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=True)
+        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=False)
         return True
 
     def end_turn(self) -> None:

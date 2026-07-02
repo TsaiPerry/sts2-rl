@@ -14,13 +14,32 @@ if TYPE_CHECKING:
 
 
 class MoveType(Enum):
+    """Full intent vocabulary, mirroring STS2's IntentType."""
+
     ATTACK = "attack"
     BUFF = "buff"
+    DEBUFF = "debuff"                # applies a power debuff to the player
+    DEBUFF_STRONG = "debuff_strong"
+    DEFEND = "defend"                # gains block
+    ESCAPE = "escape"                # flees combat
+    HEAL = "heal"
+    HIDDEN = "hidden"
+    SUMMON = "summon"                # adds creatures to combat
+    SLEEP = "sleep"
+    STUN = "stun"                    # skipping this turn (stunned)
+    STATUS_CARD = "status_card"      # shuffles status cards into player piles
+    CARD_DEBUFF = "card_debuff"      # afflicts the player's cards
+    DEATH_BLOW = "death_blow"
+    UNKNOWN = "unknown"
 
 
 @dataclass
 class Intent:
     """What an enemy intends to do on its next turn.
+
+    move_type is the primary intent; `also` carries secondary intent types for
+    moves that do several things (mirrors STS2 MoveStates holding multiple
+    intents, e.g. an attack that also gains block shows ATTACK + DEFEND).
 
     For ATTACK: damage is per-hit, hits is the number of hits.
     For BUFF:   buffs is a list of (PowerClass, amount) to apply to self.
@@ -29,10 +48,15 @@ class Intent:
     damage: int = 0
     hits: int = 1
     buffs: list[tuple[type[Power], int]] = field(default_factory=list)
+    also: tuple[MoveType, ...] = ()
 
     @property
     def total_damage(self) -> int:
         return self.damage * self.hits
+
+    def has(self, move_type: MoveType) -> bool:
+        """True if move_type is the primary or a secondary intent."""
+        return self.move_type == move_type or move_type in self.also
 
 
 class Monster(Creature):
