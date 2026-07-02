@@ -33,6 +33,12 @@ class PlayerCombatState(Creature):
         self._hooks = hooks
         rng.shuffle(self.draw_pile)
 
+    @property
+    def all_cards(self) -> list[Card]:
+        """Every card the player owns in this combat, across all piles
+        (mirrors STS2's PlayerCombatState.AllCards)."""
+        return self.hand + self.draw_pile + self.discard_pile + self.exhaust_pile
+
     def start_turn(self) -> None:
         """Reset block/energy, fire turn-start hooks, then draw."""
         if self._hooks.should_clear_block(self):

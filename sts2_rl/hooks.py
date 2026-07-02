@@ -23,6 +23,9 @@ class HookSystem:
 
     def __init__(self) -> None:
         self._listeners: list[Any] = []
+        # Back-reference to the owning CombatState; set by CombatState.__init__.
+        # Lets powers reach combat-level state (e.g. Infested spawning Wrigglers).
+        self.combat: Any = None
 
     def register(self, listener: Any) -> None:
         self._listeners.append(listener)
@@ -260,6 +263,13 @@ class HookSystem:
             if hasattr(l, "on_card_drawn"):
                 l.on_card_drawn(card, from_hand_draw)
 
+    def on_card_entered_combat(self, card: Card) -> None:
+        """Fires when a card is created mid-combat (e.g. Slimed, Dazed, Wound
+        added by an enemy). Lets active powers afflict it (Ringing, Tangled)."""
+        for l in list(self._listeners):
+            if hasattr(l, "on_card_entered_combat"):
+                l.on_card_entered_combat(card)
+
     def on_card_discarded(self, card: Card) -> None:
         """Fires when a card is discarded at end of turn (not when played)."""
         for l in list(self._listeners):
@@ -410,6 +420,14 @@ class HookSystem:
         for l in list(self._listeners):
             if hasattr(l, "should_allow_hitting"):
                 if not l.should_allow_hitting(target):
+                    return False
+        return True
+
+    def should_play_card(self, card: Card) -> bool:
+        """False from any listener prevents the card from being played (e.g. Ringing)."""
+        for l in list(self._listeners):
+            if hasattr(l, "should_play_card"):
+                if not l.should_play_card(card):
                     return False
         return True
 

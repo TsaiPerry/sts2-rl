@@ -5,6 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ..afflictions import Affliction
     from ..combat import CombatCtx
 
 
@@ -62,6 +63,8 @@ class Card(ABC):
     def __init__(self) -> None:
         self.upgrade_level: int = 0
         self._energy_cost: int = 0
+        # At most one affliction per card (mirrors CardModel.Affliction).
+        self.affliction: "Affliction | None" = None
         self._init_vars()
 
     def _init_vars(self) -> None:

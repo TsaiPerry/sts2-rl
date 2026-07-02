@@ -5,6 +5,9 @@ from .burn import BurnCard
 from .wound import WoundCard
 from .breakthrough import BreakthroughCard
 from .sweep import SweepCard
+from .slimed import SlimedCard
+from .dazed import DazedCard
+from .infection import InfectionCard
 
 __all__ = [
     "Card",
@@ -19,4 +22,7 @@ __all__ = [
     "WoundCard",
     "BreakthroughCard",
     "SweepCard",
+    "SlimedCard",
+    "DazedCard",
+    "InfectionCard",
 ]

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .afflictions import Affliction
     from .cards import Card
     from .creatures import Creature
     from .hooks import HookSystem
@@ -178,6 +179,49 @@ class ExhaustCmd:
             player.discard_pile.remove(card)
         player.exhaust_pile.append(card)
         hooks.on_card_exhausted(card)
+
+
+class CardCmd:
+    @staticmethod
+    def afflict(
+        card: Card,
+        affliction_cls: type[Affliction],
+        amount: int,
+    ) -> Affliction | None:
+        """Attach an affliction to a card (mirrors CardCmd.Afflict).
+
+        A card holds at most one affliction: an unafflicted card gets a new
+        instance, re-applying the same type stacks the amount, and a card
+        afflicted with a different type is left untouched (returns None).
+        """
+        if card.affliction is None:
+            affliction = affliction_cls(amount)
+            affliction.card = card
+            card.affliction = affliction
+            return affliction
+        if isinstance(card.affliction, affliction_cls):
+            card.affliction.amount += amount
+            return card.affliction
+        return None
+
+    @staticmethod
+    def clear_affliction(card: Card) -> None:
+        """Remove a card's affliction if it has one (mirrors ClearAffliction)."""
+        card.affliction = None
+
+
+class CardPileCmd:
+    @staticmethod
+    def add_to_discard(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        card: Card,
+    ) -> None:
+        """Add a newly created card to the player's discard pile, firing the
+        entered-combat hook so active powers can afflict it (mirrors
+        CardPileCmd.AddToCombatAndPreview)."""
+        player.discard_pile.append(card)
+        hooks.on_card_entered_combat(card)
 
 
 class EnergyCmd:

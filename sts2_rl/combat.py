@@ -61,6 +61,7 @@ class CombatState:
             starting_deck = [make_card("strike") for _ in range(5)] + [make_card("defend") for _ in range(4)]
 
         self.hooks = HookSystem()
+        self.hooks.combat = self
         self.player = PlayerCombatState(
             self.PLAYER_MAX_HP, starting_deck, self._rng, self.hooks
         )
@@ -90,7 +91,10 @@ class CombatState:
         return CombatCtx(self, self.player, self.enemies, self.hooks)
 
     def _all_enemies_dead(self) -> bool:
-        return all(e.is_dead for e in self.enemies)
+        # Minions (Kin Followers, Eye With Teeth) are secondary enemies: combat
+        # is won once every primary enemy is dead, even if minions survive.
+        primaries = [e for e in self.enemies if "minion" not in e.powers]
+        return all(e.is_dead for e in (primaries or self.enemies))
 
     def _execute_enemy_turn(self) -> None:
         for enemy in list(self.enemies):
@@ -181,6 +185,8 @@ class CombatState:
         card = self.player.hand[hand_index]
         if not card.is_playable:
             return False
+        if not self.hooks.should_play_card(card):
+            return False
         actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
         if actual_cost > self.player.energy:
             return False
@@ -244,6 +250,8 @@ class CombatState:
         actions = [0]
         for i, card in enumerate(self.player.hand):
             if not card.is_playable:
+                continue
+            if not self.hooks.should_play_card(card):
                 continue
             actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
             if actual_cost <= self.player.energy:

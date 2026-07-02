@@ -451,6 +451,362 @@ class PoisonPower(Power):
             self._apply_poison()
 
 
+# ── Overgrowth enemy powers ───────────────────────────────────────────────
+
+
+class SlowPower(Power):
+    """Owner takes +10% damage from powered attacks per card played this turn.
+
+    The counter resets when the owner's side starts its turn (so it builds up
+    over the player's whole turn), mirroring STS2's SlowPower DynamicVar.
+    """
+
+    id = "slow"
+    name = "Slow"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._cards_this_turn = 0
+
+    def on_card_played(self, card: Card) -> None:
+        self._cards_this_turn += 1
+
+    def on_enemy_turn_start(self, enemy: Creature) -> None:
+        if enemy is self.owner:
+            self._cards_this_turn = 0
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> float:
+        if target is self.owner and card is not None and not card.is_unpowered:
+            return 1.0 + 0.1 * self._cards_this_turn
+        return 1.0
+
+
+class TerritorialPower(Power):
+    """Owner gains N Strength at the end of its side's turn."""
+
+    id = "territorial"
+    name = "Territorial"
+    power_type = PowerType.BUFF
+
+    def on_enemy_side_end(self) -> None:
+        if not self.owner.is_dead:
+            from .cmds import PowerCmd
+            PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)
+
+
+class PlowPower(Power):
+    """Ceremonial Beast's charge counter.
+
+    When unblocked damage leaves the owner at or below N HP, the owner loses
+    all Strength, is stunned (on_plow_broken), and this power is removed.
+    """
+
+    id = "plow"
+    name = "Plow"
+    power_type = PowerType.DEBUFF
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> None:
+        if target is not self.owner or amount <= 0 or self.owner.is_dead:
+            return
+        if self.owner.hp > self.amount:
+            return
+        from .cmds import PowerCmd
+        PowerCmd.remove(self.hooks, self.owner, "strength")
+        on_broken = getattr(self.owner, "on_plow_broken", None)
+        if on_broken is not None:
+            on_broken()
+        self._expire()
+
+
+class RingingPower(Power):
+    """Afflicts every unafflicted card the player owns with Ringing: once any
+    card has been played this turn, Ringing-afflicted cards cannot be played.
+    Cards created mid-combat are afflicted too. Removed (clearing all Ringing
+    afflictions) at the end of the owner's (player's) turn."""
+
+    id = "ringing"
+    name = "Ringing"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._card_played_this_turn = False
+        from .afflictions import RingingAffliction
+        from .cmds import CardCmd
+        for card in getattr(owner, "all_cards", ()):
+            if card.affliction is None:
+                CardCmd.afflict(card, RingingAffliction, 1)
+
+    def on_card_entered_combat(self, card: Card) -> None:
+        if card.affliction is None:
+            from .afflictions import RingingAffliction
+            from .cmds import CardCmd
+            CardCmd.afflict(card, RingingAffliction, 1)
+
+    def should_play_card(self, card: Card) -> bool:
+        from .afflictions import RingingAffliction
+        if isinstance(card.affliction, RingingAffliction):
+            return not self._card_played_this_turn
+        return True
+
+    def on_card_played(self, card: Card) -> None:
+        self._card_played_this_turn = True
+
+    def on_player_turn_start(self, player: Creature) -> None:
+        if player is self.owner:
+            self._card_played_this_turn = False
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._expire()
+
+    def _expire(self) -> None:
+        from .afflictions import RingingAffliction
+        from .cmds import CardCmd
+        for card in getattr(self.owner, "all_cards", ()):
+            if isinstance(card.affliction, RingingAffliction):
+                CardCmd.clear_affliction(card)
+        super()._expire()
+
+
+class ShrinkPower(Power):
+    """Owner deals 30% less damage with powered attacks.
+
+    A negative amount means infinite duration (Shrinker Beetle applies -1);
+    positive amounts tick down at the end of the owner's side turn.
+    Removed if the applier dies.
+    """
+
+    id = "shrink"
+    name = "Shrink"
+    power_type = PowerType.DEBUFF
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> float:
+        if dealer is self.owner and card is not None and not card.is_unpowered:
+            return 0.7
+        return 1.0
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner and self.amount > 0:
+            self._tick()
+
+    def on_enemy_side_end(self) -> None:
+        if self.owner.side == "enemy" and self.amount > 0:
+            self._tick()
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is self.applier:
+            self._expire()
+
+
+class InfestedPower(Power):
+    """When the owner dies, 4 stunned Wrigglers join the fight."""
+
+    id = "infested"
+    name = "Infested"
+    power_type = PowerType.BUFF
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner:
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .monsters.overgrowth.phrog_parasite import Wriggler
+        for i in range(4):
+            combat.enemies.append(
+                Wriggler(self.hooks, combat._rng, start_stunned=True, slot=i + 1)
+            )
+        self._expire()
+
+
+class ConstrictPower(Power):
+    """Owner takes N damage at the end of its side's turn. Removed if the
+    applier dies."""
+
+    id = "constrict"
+    name = "Constrict"
+    power_type = PowerType.DEBUFF
+
+    def _squeeze(self) -> None:
+        from .cmds import DamageCmd
+        DamageCmd.deal(self.hooks, self.owner, self.amount)
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._squeeze()
+
+    def on_enemy_side_end(self) -> None:
+        if self.owner.side == "enemy" and not self.owner.is_dead:
+            self._squeeze()
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is self.applier:
+            self._expire()
+
+
+class TangledPower(Power):
+    """Afflicts the player's Attack cards with Entangled: they cost N more
+    energy while afflicted. Attack cards created mid-combat are afflicted too.
+    Removed (clearing all Entangled afflictions) at the end of the owner's
+    (player's) turn."""
+
+    id = "tangled"
+    name = "Tangled"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        from .cards import CardType
+        from .afflictions import EntangledAffliction
+        from .cmds import CardCmd
+        for card in getattr(owner, "all_cards", ()):
+            if card.affliction is None and card.card_type == CardType.ATTACK:
+                CardCmd.afflict(card, EntangledAffliction, 1)
+
+    def on_card_entered_combat(self, card: Card) -> None:
+        from .cards import CardType
+        if card.affliction is None and card.card_type == CardType.ATTACK:
+            from .afflictions import EntangledAffliction
+            from .cmds import CardCmd
+            CardCmd.afflict(card, EntangledAffliction, 1)
+
+    def modify_card_energy_cost(self, card: Card, cost: int) -> int:
+        from .afflictions import EntangledAffliction
+        if isinstance(card.affliction, EntangledAffliction):
+            return cost + self.amount
+        return cost
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._expire()
+
+    def _expire(self) -> None:
+        from .afflictions import EntangledAffliction
+        from .cmds import CardCmd
+        for card in getattr(self.owner, "all_cards", ()):
+            if isinstance(card.affliction, EntangledAffliction):
+                CardCmd.clear_affliction(card)
+        super()._expire()
+
+
+class SlipperyPower(Power):
+    """Each stack caps one hit's HP loss at 1, then is consumed. Fully blocked
+    hits do not consume a stack."""
+
+    id = "slippery"
+    name = "Slippery"
+    power_type = PowerType.BUFF
+
+    def modify_hp_lost(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> int:
+        if target is self.owner and amount >= 1:
+            return 1
+        return amount
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> None:
+        if target is self.owner and amount >= 1:
+            self._tick()
+
+
+class MinionPower(Power):
+    """Marks the owner as a secondary enemy: its survival does not keep combat
+    going once every primary enemy is dead (checked in CombatState)."""
+
+    id = "minion"
+    name = "Minion"
+    power_type = PowerType.BUFF
+
+
+class IllusionPower(Power):
+    """The owner cannot truly die: lethal damage leaves it at 1 HP, untargetable,
+    and it spends its next turn reviving to full HP. Also marks it as a minion."""
+
+    id = "illusion"
+    name = "Illusion"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.is_reviving = False
+        if "minion" not in owner.powers:
+            from .cmds import PowerCmd
+            PowerCmd.apply(hooks, owner, MinionPower, 1)
+
+    def should_die(self, creature: Creature) -> bool:
+        if creature is self.owner:
+            self.is_reviving = True
+            return False
+        return True
+
+    def should_allow_hitting(self, target: Creature) -> bool:
+        if target is self.owner and self.is_reviving:
+            return False
+        return True
+
+    def revive(self) -> None:
+        """Called by the owner's take_turn to perform the REVIVE move."""
+        self.is_reviving = False
+        healed = self.owner.max_hp - self.owner.hp
+        if healed > 0:
+            self.owner.hp = self.owner.max_hp
+            self.hooks.on_hp_changed(self.owner, healed)
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -474,5 +830,16 @@ ALL_POWERS: dict[str, type[Power]] = {
         WeakPower,
         FrailPower,
         PoisonPower,
+        SlowPower,
+        TerritorialPower,
+        PlowPower,
+        RingingPower,
+        ShrinkPower,
+        InfestedPower,
+        ConstrictPower,
+        TangledPower,
+        SlipperyPower,
+        MinionPower,
+        IllusionPower,
     ]
 }
