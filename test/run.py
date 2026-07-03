@@ -22,7 +22,12 @@ from sts2_rl.monsters import Monster, MoveType
 from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH_ENCOUNTERS
 
 # ── Change this key to fight a different Overgrowth encounter ─────────────────
-ENCOUNTER = OVERGROWTH_ENCOUNTERS["slimes_weak"]
+ENCOUNTER = OVERGROWTH_ENCOUNTERS["slimes_normal"]
+DECK =  ([make_card("strike") for _ in range(4)]
+        + [make_card("defend") for _ in range(4)]
+        + [make_card("breakthrough")]
+        + [make_card("armaments"), make_card("whirlwind")]
+        + [make_card("bash")])
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SEP = "─" * 56
@@ -173,12 +178,7 @@ def _play_card(state: CombatState, idx: int) -> bool:
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def _build_deck() -> list[Card]:
-    return (
-        [make_card("strike") for _ in range(3)]
-        + [make_card("defend") for _ in range(2)]
-        + [make_card("breakthrough"), make_card("sweep")]
-        + [make_card("armaments"), make_card("whirlwind")]
-    )
+    return DECK
 
 
 def main() -> None:
