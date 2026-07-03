@@ -2,7 +2,9 @@
 
 Deck      : 3 × Strike, 2 × Defend, 1 × Breakthrough (power), 1 × Sweep (AoE),
             1 × Armaments (card selection), 1 × Whirlwind (X-cost)
-Controls  : type a card index to play it, 'e' to end your turn.
+Controls  : type a card index to play it, 'e' to end your turn,
+            'd' to view the draw pile, 'p' the discard pile, 'x' the
+            exhaust pile.
             Card-selection effects (Armaments, Burning Pact, ...) prompt you
             to choose; X-cost cards spend all remaining energy.
 """
@@ -27,7 +29,8 @@ DECK =  ([make_card("strike") for _ in range(4)]
         + [make_card("defend") for _ in range(4)]
         + [make_card("breakthrough")]
         + [make_card("armaments"), make_card("whirlwind")]
-        + [make_card("bash")])
+        + [make_card("bash"), make_card("anger")]
+        + [make_card("burning_pact")])
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SEP = "─" * 56
@@ -93,6 +96,28 @@ def _hand_line(state: CombatState, i: int, card: Card) -> str:
     else:
         note = ""
     return f"    {i}: [{_cost_str(state, card)}E] {name:14s} {hint}{note}"
+
+
+def _show_pile(name: str, cards: list[Card], *, hide_order: bool = False) -> None:
+    """Print a pile as grouped counts ("2× Strike, 1× Bash").
+
+    hide_order sorts the listing so viewing the draw pile doesn't leak the
+    actual draw order (matches how the real game shows it).
+    """
+    if not cards:
+        print(f"  {name} pile is empty.")
+        return
+    names = [repr(c) for c in cards]
+    if hide_order:
+        names.sort()
+    groups: list[tuple[str, int]] = []
+    for n in names:
+        if groups and groups[-1][0] == n:
+            groups[-1] = (n, groups[-1][1] + 1)
+        else:
+            groups.append((n, 1))
+    listing = ", ".join(f"{count}× {n}" if count > 1 else n for n, count in groups)
+    print(f"  {name} pile ({len(cards)}): {listing}")
 
 
 def _render(state: CombatState) -> None:
@@ -195,11 +220,17 @@ def main() -> None:
         if raw == "e":
             state.end_turn()
             _render(state)
+        elif raw == "d":
+            _show_pile("Draw", state.player.draw_pile, hide_order=True)
+        elif raw == "p":
+            _show_pile("Discard", state.player.discard_pile)
+        elif raw == "x":
+            _show_pile("Exhaust", state.player.exhaust_pile)
         elif raw.isdigit():
             if _play_card(state, int(raw)):
                 _render(state)
         else:
-            print("  Enter a card index or 'e' to end your turn.")
+            print("  Enter a card index, 'e' to end turn, 'd'/'p'/'x' = draw/discard/exhaust pile.")
 
     r = state.result
     print(f"\n{'Victory!' if r.player_won else 'Defeat.'} (completed in {r.turns_taken} turn(s))")
