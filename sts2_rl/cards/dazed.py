@@ -10,12 +10,19 @@ if TYPE_CHECKING:
 
 @register_card
 class DazedCard(Card):
+    """Status — Unplayable, Ethereal.
+
+    Source: Dazed.cs
+      Cost -1 | Status | Status | TargetType.None
+      Keywords: Ethereal, Unplayable; no effects
+    """
     id = "dazed"
     name = "Dazed"
     card_type = CardType.STATUS
     rarity = CardRarity.STATUS
     target_type = TargetType.NONE
     is_playable = False
+    is_ethereal = True
     max_upgrade_level = 0
     is_unpowered = True
 

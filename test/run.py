@@ -22,7 +22,7 @@ from sts2_rl.monsters import Monster, MoveType
 from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH_ENCOUNTERS
 
 # ── Change this key to fight a different Overgrowth encounter ─────────────────
-ENCOUNTER = OVERGROWTH_ENCOUNTERS["slimes_normal"]
+ENCOUNTER = OVERGROWTH_ENCOUNTERS["phrog_parasite"]
 DECK =  ([make_card("strike") for _ in range(4)]
         + [make_card("defend") for _ in range(4)]
         + [make_card("breakthrough")]

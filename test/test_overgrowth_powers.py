@@ -437,11 +437,23 @@ class TestStatusCardClasses:
     def test_slimed_is_status_type(self):
         assert SlimedCard.card_type == CardType.STATUS
 
-    def test_slimed_is_not_playable(self):
-        assert not SlimedCard.is_playable
+    def test_slimed_is_playable_for_1_and_exhausts(self):
+        # Slimed.cs: Cost 1 | Exhaust keyword (playable, unlike most statuses).
+        assert SlimedCard.is_playable
+        assert SlimedCard.exhausts
+        assert SlimedCard().energy_cost == 1
 
-    def test_slimed_is_unpowered(self):
-        assert SlimedCard.is_unpowered
+    def test_slimed_play_draws_one_and_exhausts(self):
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = SlimedCard()
+        CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
+        hand_before = len(cs.player.hand)
+        energy_before = cs.player.energy
+        assert cs.play_card(cs.player.hand.index(card))
+        assert card in cs.player.exhaust_pile
+        assert cs.player.energy == energy_before - 1
+        assert len(cs.player.hand) == hand_before  # played one, drew one
 
     def test_dazed_is_status_type(self):
         assert DazedCard.card_type == CardType.STATUS
@@ -449,8 +461,17 @@ class TestStatusCardClasses:
     def test_dazed_is_not_playable(self):
         assert not DazedCard.is_playable
 
-    def test_dazed_is_unpowered(self):
-        assert DazedCard.is_unpowered
+    def test_dazed_is_ethereal(self):
+        # Dazed.cs keywords: Ethereal, Unplayable.
+        assert DazedCard.is_ethereal
+
+    def test_dazed_exhausts_at_turn_end(self):
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = DazedCard()
+        CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
+        cs.end_turn()
+        assert card in cs.player.exhaust_pile
 
     def test_infection_is_status_type(self):
         assert InfectionCard.card_type == CardType.STATUS
@@ -460,6 +481,28 @@ class TestStatusCardClasses:
 
     def test_infection_is_unpowered(self):
         assert InfectionCard.is_unpowered
+
+    def test_infection_deals_3_at_turn_end_in_hand(self):
+        # Infection.cs: OnTurnEndInHand damages the owner for 3 (Unpowered|Move),
+        # then the card is discarded like any other non-ethereal status.
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = InfectionCard()
+        CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
+        before = cs.player.hp
+        cs._process_turn_end_cards()
+        assert cs.player.hp == before - 3
+        assert card in cs.player.discard_pile
+
+    def test_infection_damage_is_blockable(self):
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = InfectionCard()
+        CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
+        cs.player.block = 3
+        before = cs.player.hp
+        cs._process_turn_end_cards()
+        assert cs.player.hp == before
 
     def test_all_three_have_distinct_ids(self):
         assert len({SlimedCard.id, DazedCard.id, InfectionCard.id}) == 3
