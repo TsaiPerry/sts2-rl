@@ -79,12 +79,17 @@ class Monster(Creature):
         raise NotImplementedError
 
     def _execute_attack(self, ctx: CombatCtx, damage: int, hits: int) -> None:
-        """Deal a multi-hit attack, stopping early if attacker or player dies."""
+        """Deal a multi-hit attack, stopping early if attacker or player dies.
+
+        The before/after hooks bracket the whole attack command (all hits),
+        mirroring AttackCommand's BeforeAttack/AfterAttack."""
         from ..cmds import DamageCmd
+        ctx.hooks.before_attack(self)
         for _ in range(hits):
             DamageCmd.deal(ctx.hooks, ctx.player, damage, dealer=self)
             if ctx.player.is_dead or self.is_dead:
                 break
+        ctx.hooks.after_attack(self)
 
 
 @dataclass

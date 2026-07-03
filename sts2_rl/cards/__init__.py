@@ -9,6 +9,7 @@ from .sweep import SweepCard
 from .slimed import SlimedCard
 from .dazed import DazedCard
 from .infection import InfectionCard
+from .beckon import BeckonCard
 
 # ── Ironclad attacks ──────────────────────────────────────────────────────
 from .anger import AngerCard

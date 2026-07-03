@@ -215,11 +215,24 @@ class PowerCmd:
             hooks.on_power_amount_changed(
                 power_cls.id, target, existing.amount - old_amount, applier
             )
+            # Mirrors ModifyAmount → ShouldRemoveDueToAmount: stacking to 0
+            # removes the power (or to <= 0 for powers that can't go negative).
+            if existing.amount == 0 or (
+                existing.amount < 0 and not existing.allow_negative
+            ):
+                existing._expire()
+                return
+            power = existing
         else:
             power = power_cls(owner=target, amount=amount, hooks=hooks, applier=applier)
             target.powers[power_cls.id] = power
             hooks.register(power)
             hooks.on_power_applied(power_cls.id, target, amount, applier)
+
+        # Debuffs landing on the player skip their first duration tick
+        # (mirrors PowerCmd.Apply setting SkipNextDurationTick).
+        if target.side == "player" and power_cls.power_type == PowerType.DEBUFF:
+            power.skip_next_tick = True
 
     @staticmethod
     def remove(
@@ -322,6 +335,19 @@ class CardPileCmd:
         """Add a newly created card to the player's discard pile (mirrors
         CardPileCmd.AddToCombatAndPreview)."""
         player.discard_pile.append(card)
+        CardPileCmd._enter_combat(hooks, card)
+
+    @staticmethod
+    def add_to_draw(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        card: Card,
+    ) -> None:
+        """Add a newly created card to a random position in the player's draw
+        pile (mirrors AddGeneratedCardToCombat with PileType.Draw,
+        CardPilePosition.Random)."""
+        rng = hooks.combat._rng
+        player.draw_pile.insert(rng.randrange(len(player.draw_pile) + 1), card)
         CardPileCmd._enter_combat(hooks, card)
 
     @staticmethod

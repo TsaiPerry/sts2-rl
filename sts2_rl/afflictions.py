@@ -36,3 +36,10 @@ class EntangledAffliction(Affliction):
 
     id = "entangled"
     name = "Entangled"
+
+
+class SmogAffliction(Affliction):
+    """Applied by SmoggyPower to Skill cards; blocks playing them this turn."""
+
+    id = "smog"
+    name = "Smog"

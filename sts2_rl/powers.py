@@ -27,6 +27,11 @@ class Power:
     id: str
     name: str
     power_type: PowerType
+    # Mirrors PowerModel.AllowNegative: powers that can hold a negative amount
+    # (Strength, Dexterity). When stacking drops the amount to 0 (or below 0
+    # for powers that don't allow negatives) the power is removed, mirroring
+    # PowerCmd.ModifyAmount → ShouldRemoveDueToAmount.
+    allow_negative = False
 
     def __init__(
         self,
@@ -39,6 +44,9 @@ class Power:
         self.amount = amount
         self.hooks = hooks
         self.applier = applier
+        # Set by PowerCmd.apply when a debuff lands on the player: the first
+        # duration tick is skipped (mirrors PowerModel.SkipNextDurationTick).
+        self.skip_next_tick = False
 
     def on_stack(self, amount: int) -> None:
         """Called when more of this power is applied to the same owner. Default: additive."""
@@ -52,6 +60,15 @@ class Power:
         self.hooks.on_power_amount_changed(self.id, self.owner, -1)
         if self.amount <= 0:
             self._expire()
+
+    def _tick_duration(self) -> None:
+        """_tick, but honouring skip_next_tick (mirrors PowerCmd.TickDownDuration —
+        used by Vulnerable/Weak/Frail so a debuff applied to the player during
+        the enemy turn survives its first side-end tick)."""
+        if self.skip_next_tick:
+            self.skip_next_tick = False
+            return
+        self._tick()
 
     def _expire(self) -> None:
         """Remove this power from owner.powers and unregister from the hook system."""
@@ -74,6 +91,7 @@ class StrengthPower(Power):
     id = "strength"
     name = "Strength"
     power_type = PowerType.BUFF
+    allow_negative = True
 
     def modify_damage_additive(
         self,
@@ -93,6 +111,7 @@ class DexterityPower(Power):
     id = "dexterity"
     name = "Dexterity"
     power_type = PowerType.BUFF
+    allow_negative = True
 
     def modify_block_additive(
         self,
@@ -385,7 +404,7 @@ class VulnerablePower(Power):
         return mult
 
     def on_enemy_side_end(self) -> None:
-        self._tick()
+        self._tick_duration()
 
 
 class WeakPower(Power):
@@ -407,7 +426,7 @@ class WeakPower(Power):
         return 1.0
 
     def on_enemy_side_end(self) -> None:
-        self._tick()
+        self._tick_duration()
 
 
 class FrailPower(Power):
@@ -428,7 +447,7 @@ class FrailPower(Power):
         return 1.0
 
     def on_enemy_side_end(self) -> None:
-        self._tick()
+        self._tick_duration()
 
 
 class PoisonPower(Power):
@@ -945,12 +964,16 @@ class StampedePower(Power):
 class PlatingPower(Power):
     """Gain N block at the end of the owner's turn (before turn-end card
     effects); lose 1 stack at the start of the owner's turn (except on the
-    first turn of combat). The game's enemies-start-with-block special case
-    is not ported (no sim enemy starts with Plating)."""
+    first turn of combat). Enemies that start combat with Plating also start
+    with the block (mirrors PlatingPower.BeforeSideTurnStart on round 1)."""
 
     id = "plating"
     name = "Plating"
     power_type = PowerType.BUFF
+
+    def on_combat_start(self) -> None:
+        if self.owner.side == "enemy":
+            self._gain_block()
 
     def _gain_block(self) -> None:
         from .cmds import BlockCmd
@@ -1447,6 +1470,390 @@ class IllusionPower(Power):
         CreatureCmd.heal(self.hooks, self.owner, self.owner.max_hp - self.owner.hp)
 
 
+class RavenousPower(Power):
+    """When another creature on the owner's side dies, the owner spends its
+    next turn devouring the corpse (stunned) and gains N Strength
+    (Corpse Slug; mirrors RavenousPower.AfterDeath)."""
+
+    id = "ravenous"
+    name = "Ravenous"
+    power_type = PowerType.BUFF
+
+    def on_death(self, creature: Creature) -> None:
+        if (
+            creature is self.owner
+            or creature.side != self.owner.side
+            or self.owner.is_dead
+        ):
+            return
+        from .cmds import CreatureCmd, PowerCmd
+        CreatureCmd.stun(self.hooks, self.owner)
+        PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)
+
+
+class SuckPower(Power):
+    """Gain N Strength each time one of the owner's powered attack hits deals
+    unblocked damage to the other side (Fossil Stalker; mirrors
+    SuckPower.AfterAttack's per-hit UnblockedDamage check)."""
+
+    id = "suck"
+    name = "Suck"
+    power_type = PowerType.BUFF
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .valueprops import is_powered_attack
+        if (
+            dealer is self.owner
+            and target.side != self.owner.side
+            and amount > 0
+            and is_powered_attack(props)
+        ):
+            from .cmds import PowerCmd
+            PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)
+
+
+class SurprisePower(Power):
+    """When the owner dies, a Sneaky Gremlin and a Fat Gremlin jump out of the
+    crate and join the fight (Gremlin Merc; mirrors SurprisePower.AfterDeath).
+    The stolen-gold transfer (Thievery/Heist) is not ported — the sim has no
+    gold."""
+
+    id = "surprise"
+    name = "Surprise"
+    power_type = PowerType.BUFF
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner:
+            return
+        from .cmds import CreatureCmd
+        from .monsters.underdocks.gremlin_merc import FatGremlin, SneakyGremlin
+        rng = self.hooks.combat._rng
+        CreatureCmd.add(self.hooks, SneakyGremlin(self.hooks, rng))
+        CreatureCmd.add(self.hooks, FatGremlin(self.hooks, rng))
+
+
+class SmoggyPower(Power):
+    """Once the player plays a Skill, every other unafflicted Skill they own is
+    afflicted with Smog and cannot be played for the rest of the turn; Smog
+    clears at the end of the player's turn (Living Fog; mirrors SmoggyPower)."""
+
+    id = "smoggy"
+    name = "Smoggy"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._skill_played_this_turn = False
+
+    def on_stack(self, amount: int) -> None:
+        pass  # single-stack (PowerStackType.Single)
+
+    @staticmethod
+    def _is_skill(card: Card) -> bool:
+        from .cards import CardType
+        return card.card_type == CardType.SKILL
+
+    def _afflict(self, card: Card) -> None:
+        from .afflictions import SmogAffliction
+        from .cmds import CardCmd
+        CardCmd.afflict(card, SmogAffliction, 1)
+
+    def on_card_played(self, card: Card) -> None:
+        if not self._is_skill(card):
+            return
+        self._skill_played_this_turn = True
+        for c in getattr(self.owner, "all_cards", ()):
+            if self._is_skill(c) and c.affliction is None:
+                self._afflict(c)
+
+    def on_card_entered_combat(self, card: Card) -> None:
+        if (
+            self._is_skill(card)
+            and card.affliction is None
+            and self._skill_played_this_turn
+        ):
+            self._afflict(card)
+
+    def should_play_card(self, card: Card) -> bool:
+        from .afflictions import SmogAffliction
+        return not isinstance(card.affliction, SmogAffliction)
+
+    def on_player_turn_start(self, player: Creature) -> None:
+        if player is self.owner:
+            self._skill_played_this_turn = False
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is not self.owner:
+            return
+        from .afflictions import SmogAffliction
+        from .cmds import CardCmd
+        for c in getattr(self.owner, "all_cards", ()):
+            if isinstance(c.affliction, SmogAffliction):
+                CardCmd.clear_affliction(c)
+        self._skill_played_this_turn = False
+
+
+class SkittishPower(Power):
+    """The first time each turn a card attack deals unblocked damage to the
+    owner, the owner gains N block (Phantasmal Gardener; mirrors
+    SkittishPower.AfterAttack — once per turn, unpowered block)."""
+
+    id = "skittish"
+    name = "Skittish"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._blocked_this_turn = False
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        if (
+            target is self.owner
+            and not self._blocked_this_turn
+            and card is not None
+            and ValueProp.MOVE in props
+            and amount > 0
+            and not self.owner.is_dead
+        ):
+            self._blocked_this_turn = True
+            from .cmds import BlockCmd
+            BlockCmd.apply(
+                self.hooks, self.owner, self.amount, props=ValueProp.UNPOWERED
+            )
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        # End of the opposing (player) side's turn resets the once-per-turn gate.
+        self._blocked_this_turn = False
+
+
+class AsleepPower(Power):
+    """The owner sleeps for N of its turns, then wakes; taking unblocked damage
+    wakes it immediately (removing its Plating) and it spends the next turn
+    waking up (Lagavulin Matriarch; mirrors AsleepPower). Plating is removed
+    before the final sleeping turn's block gain, so a natural wake also comes
+    up without block. The owner must implement wake_up(stunned=...)."""
+
+    id = "asleep"
+    name = "Asleep"
+    power_type = PowerType.BUFF
+
+    def _remove_plating(self) -> None:
+        from .cmds import PowerCmd
+        PowerCmd.remove(self.hooks, self.owner, "plating")
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        if target is self.owner and amount > 0:
+            self._remove_plating()
+            self._expire()
+            self.owner.wake_up(stunned=True)
+
+    def on_enemy_turn_start(self, enemy: Creature) -> None:
+        # Mirrors BeforeSideTurnEndVeryEarly: drop Plating on the final
+        # sleeping turn so no block is gained at that turn's end.
+        if enemy is self.owner and self.amount <= 1:
+            self._remove_plating()
+
+    def on_enemy_turn_end(self, enemy: Creature) -> None:
+        if enemy is not self.owner:
+            return
+        self.amount -= 1
+        self.hooks.on_power_amount_changed(self.id, self.owner, -1)
+        if self.amount <= 0:
+            self._expire()
+            self.owner.wake_up(stunned=False)
+
+
+class VigorPower(Power):
+    """The owner's next powered attack deals +N damage per hit; the stacks
+    held when the attack started are consumed once it finishes (Terror Eel;
+    mirrors VigorPower.BeforeAttack/ModifyDamageAdditive/AfterAttack).
+
+    The attack boundary comes from Monster._execute_attack, so only monster
+    attacks consume Vigor — nothing in the sim grants the player Vigor."""
+
+    id = "vigor"
+    name = "Vigor"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._amount_when_attack_started: int | None = None
+
+    def modify_damage_additive(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> int:
+        if dealer is self.owner:
+            return self.amount
+        return 0
+
+    def before_attack(self, dealer: Creature) -> None:
+        if dealer is self.owner and self._amount_when_attack_started is None:
+            self._amount_when_attack_started = self.amount
+
+    def after_attack(self, dealer: Creature) -> None:
+        if dealer is not self.owner or self._amount_when_attack_started is None:
+            return
+        consumed = self._amount_when_attack_started
+        self._amount_when_attack_started = None
+        self.amount -= consumed
+        self.hooks.on_power_amount_changed(self.id, self.owner, -consumed)
+        if self.amount <= 0:
+            self._expire()
+
+
+class ShriekPower(Power):
+    """When unblocked damage leaves the owner at or below N HP, the owner is
+    stunned and screams TERROR next (Terror Eel; mirrors
+    ShriekPower.AfterDamageReceived). The owner must implement
+    trigger_terror()."""
+
+    id = "shriek"
+    name = "Shriek"
+    power_type = PowerType.DEBUFF
+    allow_negative = True
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        if (
+            target is self.owner
+            and amount > 0
+            and not self.owner.is_gone
+            and self.owner.hp <= self.amount
+        ):
+            self.owner.trigger_terror()
+            self._expire()
+
+
+class HardenedShellPower(Power):
+    """The owner cannot lose more than N HP per side-turn (Skulking Colony;
+    mirrors HardenedShellPower.ModifyHpLostBeforeOstyLate — the cap counts
+    unblocked damage and resets at the start of each side's turn)."""
+
+    id = "hardened_shell"
+    name = "Hardened Shell"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._damage_received_this_turn = 0
+
+    def modify_hp_lost(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> int:
+        if target is not self.owner or amount == 0:
+            return amount
+        return min(amount, self.amount - self._damage_received_this_turn)
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        if target is self.owner and amount > 0:
+            self._damage_received_this_turn += amount
+
+    def on_player_turn_start(self, player: Creature) -> None:
+        self._damage_received_this_turn = 0
+
+    def on_enemy_turn_start(self, enemy: Creature) -> None:
+        if enemy is self.owner:
+            self._damage_received_this_turn = 0
+
+
+class SteamEruptionPower(Power):
+    """While present, the owner cannot die: a killing blow instead flips it
+    into its ABOUT_TO_BLOW → EXPLODE sequence (Waterfall Giant; mirrors
+    SteamEruptionPower.AfterDeath / ShouldStopCombatFromEnding — the game
+    lets the death happen but keeps the giant in combat at 999999999 HP; the
+    sim prevents the death outright, which is observably the same). The owner
+    must implement trigger_about_to_blow()."""
+
+    id = "steam_eruption"
+    name = "Steam Eruption"
+    power_type = PowerType.BUFF
+
+    def should_die(self, creature: Creature) -> bool:
+        if creature is self.owner:
+            self.owner.trigger_about_to_blow()
+            return False
+        return True
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        # After a prevented death, restore the game's "infinite HP" display
+        # (mirrors CreatureCmd.SetMaxAndCurrentHp(999999999)).
+        if target is self.owner and getattr(self.owner, "is_about_to_blow", False):
+            self.owner.hp = self.owner.max_hp = 999_999_999
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -1503,5 +1910,15 @@ ALL_POWERS: dict[str, type[Power]] = {
         SlipperyPower,
         MinionPower,
         IllusionPower,
+        RavenousPower,
+        SuckPower,
+        SurprisePower,
+        SmoggyPower,
+        SkittishPower,
+        AsleepPower,
+        VigorPower,
+        ShriekPower,
+        HardenedShellPower,
+        SteamEruptionPower,
     ]
 }

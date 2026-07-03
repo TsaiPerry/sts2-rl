@@ -246,6 +246,19 @@ class HookSystem:
             if hasattr(l, "on_enemy_side_end"):
                 l.on_enemy_side_end()
 
+    def before_attack(self, dealer: Creature) -> None:
+        """Fires before a monster attack command's hits (mirrors Hook.BeforeAttack)."""
+        for l in list(self._listeners):
+            if hasattr(l, "before_attack"):
+                l.before_attack(dealer)
+
+    def after_attack(self, dealer: Creature) -> None:
+        """Fires after a monster attack command's last hit (mirrors Hook.AfterAttack);
+        powers that boost "the next attack" (Vigor) consume their stacks here."""
+        for l in list(self._listeners):
+            if hasattr(l, "after_attack"):
+                l.after_attack(dealer)
+
     # ── Event hooks — card lifecycle ─────────────────────────────────────
 
     def on_card_played(self, card: Card) -> None:

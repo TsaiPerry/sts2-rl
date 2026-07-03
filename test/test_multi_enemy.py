@@ -320,14 +320,17 @@ class TestDebuffTickRateWithMultipleEnemies:
     def test_vulnerable_ticks_once_per_round_with_two_enemies(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 3)
-        cs.end_turn()
+        cs.end_turn()   # first tick skipped (player debuff, SkipNextDurationTick)
+        assert cs.player.powers["vulnerable"].amount == 3
+        cs.end_turn()   # subsequent rounds tick once each
         assert cs.player.powers["vulnerable"].amount == 2
 
     def test_two_rounds_reduce_vulnerable_by_two(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 4)
-        cs.end_turn()   # round 1: 4 → 3
-        cs.end_turn()   # round 2: 3 → 2
+        cs.end_turn()   # round 1: skip-first-tick → 4
+        cs.end_turn()   # round 2: 4 → 3
+        cs.end_turn()   # round 3: 3 → 2
         assert cs.player.powers["vulnerable"].amount == 2
 
     def test_enemy_vulnerable_ticks_once_per_round(self):

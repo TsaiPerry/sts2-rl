@@ -149,11 +149,15 @@ class TestVulnerable:
         assert "vulnerable" not in cs.enemy.powers
 
     def test_ticks_on_enemy_turn_end_regardless_of_owner(self):
-        # STS2: AfterSideTurnEnd fires for side==Enemy unconditionally, no owner check
+        # STS2: AfterSideTurnEnd fires for side==Enemy unconditionally, no owner
+        # check — but a debuff on the player skips its first duration tick
+        # (SkipNextDurationTick).
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 3)
         cs.end_turn()
-        assert cs.player.powers["vulnerable"].amount == 2  # ticked even though player owns it
+        assert cs.player.powers["vulnerable"].amount == 3  # first tick skipped
+        cs.end_turn()
+        assert cs.player.powers["vulnerable"].amount == 2  # ticks from then on
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -696,7 +700,11 @@ class TestInteractions:
 class TestDebuffTickTiming:
     """Vulnerable/Weak/Frail/Intangible tick at on_enemy_side_end (once per round)
     for BOTH the player and the enemy, regardless of who owns each stack.
-    They never tick at on_player_turn_end or on_enemy_turn_end."""
+    They never tick at on_player_turn_end or on_enemy_turn_end.
+
+    Debuffs applied to the player skip their FIRST side-end tick (mirrors
+    PowerCmd setting SkipNextDurationTick for player-side debuffs); Intangible
+    is a buff, so it ticks immediately even on the player."""
 
     _DEBUFFS = [VulnerablePower, WeakPower, FrailPower, IntangiblePower]
     _IDS = ["vulnerable", "weak", "frail", "intangible"]
@@ -728,7 +736,9 @@ class TestDebuffTickTiming:
         self._apply_all(cs, 3)
         cs.hooks.on_enemy_side_end()
         for pid in self._IDS:
-            assert cs.player.powers[pid].amount == 2, pid
+            # Player debuffs skip their first tick; Intangible is a buff.
+            expected = 2 if pid == "intangible" else 3
+            assert cs.player.powers[pid].amount == expected, pid
             assert cs.enemy.powers[pid].amount == 2, pid
 
     def test_player_turn_end_then_enemy_side_end_net_one_tick(self):
@@ -738,18 +748,24 @@ class TestDebuffTickTiming:
         cs.hooks.on_player_turn_end(cs.player)
         cs.hooks.on_enemy_side_end()
         for pid in self._IDS:
-            assert cs.player.powers[pid].amount == 2, pid
+            expected = 2 if pid == "intangible" else 3
+            assert cs.player.powers[pid].amount == expected, pid
             assert cs.enemy.powers[pid].amount == 2, pid
 
     def test_tick_three_times_then_both_expire(self):
         cs = fresh()
         self._apply_all(cs, 3)
-        cs.hooks.on_enemy_side_end()  # 3 → 2
-        cs.hooks.on_enemy_side_end()  # 2 → 1
-        cs.hooks.on_enemy_side_end()  # 1 → 0 → expired
+        cs.hooks.on_enemy_side_end()  # enemy 3 → 2; player debuffs skip
+        cs.hooks.on_enemy_side_end()  # enemy 2 → 1; player debuffs 3 → 2
+        cs.hooks.on_enemy_side_end()  # enemy expired; player debuffs 2 → 1
+        for pid in self._IDS:
+            assert pid not in cs.enemy.powers, pid
+        assert "intangible" not in cs.player.powers  # buff: no skip
+        for pid in ("vulnerable", "weak", "frail"):
+            assert cs.player.powers[pid].amount == 1, pid
+        cs.hooks.on_enemy_side_end()  # player debuffs expire one tick later
         for pid in self._IDS:
             assert pid not in cs.player.powers, pid
-            assert pid not in cs.enemy.powers, pid
 
     def test_asymmetric_amounts_tick_independently(self):
         # Player has 1 stack, enemy has 3 — they expire at different side ends.
@@ -759,11 +775,16 @@ class TestDebuffTickTiming:
             PowerCmd.apply(cs.hooks, cs.enemy, cls, 3)
 
         cs.hooks.on_enemy_side_end()
+        assert "intangible" not in cs.player.powers  # buff: expired immediately
+        for pid in ("vulnerable", "weak", "frail"):
+            assert cs.player.powers[pid].amount == 1, f"player {pid} skipped first tick"
         for pid in self._IDS:
-            assert pid not in cs.player.powers, f"player {pid} should have expired"
             assert cs.enemy.powers[pid].amount == 2, pid
 
         cs.hooks.on_enemy_side_end()
+        for pid in self._IDS:
+            assert pid not in cs.player.powers, f"player {pid} should have expired"
+
         cs.hooks.on_enemy_side_end()
         for pid in self._IDS:
             assert pid not in cs.enemy.powers, f"enemy {pid} should have expired"
