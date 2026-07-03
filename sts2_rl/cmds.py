@@ -305,16 +305,24 @@ class CardCmd:
 
 class CardPileCmd:
     @staticmethod
+    def _enter_combat(hooks: HookSystem, card: Card) -> None:
+        """Register a newly created card as a hook listener (cards listen for
+        their whole combat lifetime, mirroring CardModel = AbstractModel) and
+        fire the entered-combat hook so active powers can afflict it."""
+        card.combat = hooks.combat
+        hooks.register(card)
+        hooks.on_card_entered_combat(card)
+
+    @staticmethod
     def add_to_discard(
         hooks: HookSystem,
         player: PlayerCombatState,
         card: Card,
     ) -> None:
-        """Add a newly created card to the player's discard pile, firing the
-        entered-combat hook so active powers can afflict it (mirrors
+        """Add a newly created card to the player's discard pile (mirrors
         CardPileCmd.AddToCombatAndPreview)."""
         player.discard_pile.append(card)
-        hooks.on_card_entered_combat(card)
+        CardPileCmd._enter_combat(hooks, card)
 
     @staticmethod
     def add_to_hand(
@@ -323,13 +331,43 @@ class CardPileCmd:
         card: Card,
     ) -> None:
         """Add a newly created card to the player's hand (overflow goes to the
-        discard pile), firing the entered-combat hook (mirrors
-        CardPileCmd.AddGeneratedCardToCombat with PileType.Hand)."""
+        discard pile) (mirrors CardPileCmd.AddGeneratedCardToCombat with
+        PileType.Hand)."""
         if len(player.hand) < player.MAX_HAND_SIZE:
             player.hand.append(card)
         else:
             player.discard_pile.append(card)
-        hooks.on_card_entered_combat(card)
+        CardPileCmd._enter_combat(hooks, card)
+
+
+class CardSelectCmd:
+    """In-combat card selection (mirrors the game's CardSelectCmd). The actual
+    choice is made by CombatState.select_cards — random by default, or by an
+    installed card_selector."""
+
+    @staticmethod
+    def from_hand(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        purpose: str,
+        count: int = 1,
+        predicate=None,
+    ) -> list[Card]:
+        """Pick up to count cards from the hand (mirrors CardSelectCmd.FromHand)."""
+        candidates = [c for c in player.hand if predicate is None or predicate(c)]
+        return hooks.combat.select_cards(purpose, candidates, count)
+
+    @staticmethod
+    def from_pile(
+        hooks: HookSystem,
+        pile: list[Card],
+        purpose: str,
+        count: int = 1,
+        predicate=None,
+    ) -> list[Card]:
+        """Pick up to count cards from any pile (mirrors FromCombatPile)."""
+        candidates = [c for c in pile if predicate is None or predicate(c)]
+        return hooks.combat.select_cards(purpose, candidates, count)
 
 
 class EnergyCmd:

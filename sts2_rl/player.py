@@ -46,6 +46,10 @@ class PlayerCombatState(Creature):
 
     def start_turn(self) -> None:
         """Reset block/energy, fire turn-start hooks, then draw."""
+        # "This turn" card-cost modifiers (Stomp, Infernal Blade) expire.
+        for card in self.all_cards:
+            card.reset_turn_cost_modifiers()
+
         if self._hooks.should_clear_block(self):
             self.block = 0
             self._hooks.on_block_cleared(self)
@@ -76,6 +80,14 @@ class PlayerCombatState(Creature):
         self.hand = []
         self._hooks.on_hand_emptied(self)
 
+    def reshuffle_discard_into_draw(self) -> None:
+        """Shuffle the discard pile into the empty draw pile (mirrors
+        CardPileCmd.ShuffleIfNecessary's reshuffle step)."""
+        self.draw_pile = self.discard_pile
+        self.discard_pile = []
+        self._rng.shuffle(self.draw_pile)
+        self._hooks.on_shuffle(self)
+
     def _draw(self, n: int, from_hand_draw: bool = False) -> None:
         for _ in range(n):
             if len(self.hand) >= self.MAX_HAND_SIZE:
@@ -85,10 +97,7 @@ class PlayerCombatState(Creature):
             if not self.draw_pile:
                 if not self.discard_pile:
                     break
-                self.draw_pile = self.discard_pile
-                self.discard_pile = []
-                self._rng.shuffle(self.draw_pile)
-                self._hooks.on_shuffle(self)
+                self.reshuffle_discard_into_draw()
             card = self.draw_pile.pop()
             self.hand.append(card)
             self._hooks.on_card_drawn(card, from_hand_draw)

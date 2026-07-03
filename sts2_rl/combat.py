@@ -7,6 +7,7 @@ from typing import Optional
 
 from .cards import Card, CardType, make_card, TargetType
 from .cmds import DamageCmd
+from .history import CombatHistory
 from .hooks import HookSystem
 from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
 from .player import PlayerCombatState
@@ -64,20 +65,29 @@ class CombatState:
 
         self.hooks = HookSystem()
         self.hooks.combat = self
+        self.turn = 1
+        # Combat event log (mirrors CombatManager.History). Registered before
+        # any other listener so entries exist by the time powers/cards react.
+        self.history = CombatHistory(self)
+        self.hooks.register(self.history)
         self.player = PlayerCombatState(
             self.PLAYER_MAX_HP, starting_deck, self._rng, self.hooks, potions=potions
         )
+        # Cards are hook listeners for their whole combat lifetime (mirrors
+        # CardModel being an AbstractModel), so cards like Drum of Battle can
+        # react to events from any pile.
+        for card in self.player.all_cards:
+            card.combat = self
+            self.hooks.register(card)
         self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
             self.hooks, self._rng
         )
         self.phase = Phase.PLAYER_TURN
-        self.turn = 1
         # Which side is currently acting ("player" / "enemy"); mirrors the
         # game's CombatState.CurrentSide (used by e.g. Inferno).
         self.current_side = "player"
-        # Attack card plays this turn (mirrors CombatHistory.CardPlaysStarted
-        # filtered to attacks-this-turn; used by Juggling to seed its counter).
-        self.attacks_played_this_turn = 0
+        # Pluggable in-combat card chooser (see select_cards); None = random.
+        self.card_selector = None
         self.result: Optional[CombatResult] = None
 
         self.hooks.on_combat_start()
@@ -207,9 +217,15 @@ class CombatState:
             return False
         if not self.hooks.should_play_card(card):
             return False
-        actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
-        if actual_cost > self.player.energy:
-            return False
+        if card.energy_cost_x:
+            # X-cost: spend ALL remaining energy; the card reads captured_x
+            # (mirrors EnergyCost.CapturedXValue / ResolveEnergyXValue).
+            actual_cost = self.player.energy
+            card.captured_x = actual_cost
+        else:
+            actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
+            if actual_cost > self.player.energy:
+                return False
 
         self.player.energy -= actual_cost
         self.hooks.on_energy_spent(card, actual_cost)
@@ -227,9 +243,6 @@ class CombatState:
         """Shared card-play resolution: result pile placement, play-count loop,
         exhaust-keyword move, and the played hook. The card must already be
         removed from the hand (or whichever pile it was played from)."""
-        if card.card_type == CardType.ATTACK:
-            # One CardPlay regardless of play count (One-Two Punch doubling).
-            self.attacks_played_this_turn += 1
         # Power cards are removed from the combat entirely when played;
         # everything else resolves from the discard pile.
         if card.card_type != CardType.POWER:
@@ -269,7 +282,13 @@ class CombatState:
         """
         if self.phase == Phase.COMBAT_OVER or self.player.is_dead:
             return
-        for pile in (self.player.hand, self.player.draw_pile, self.player.discard_pile):
+        piles = (
+            self.player.hand,
+            self.player.draw_pile,
+            self.player.discard_pile,
+            self.player.exhaust_pile,  # e.g. Howl From Beyond replays itself
+        )
+        for pile in piles:
             if card in pile:
                 pile.remove(card)
                 break
@@ -283,6 +302,9 @@ class CombatState:
                 self.player.discard_pile.append(card)
                 return
             target_idx = self._rng.choice(living)
+        if card.energy_cost_x:
+            # AutoPlay captures X from current energy without spending it.
+            card.captured_x = self.player.energy
         # BeforeCardPlayed fires for auto-plays too (0 energy spent) — powers
         # like Free Attack consume their stacks here.
         self.hooks.on_energy_spent(card, 0)
@@ -292,6 +314,29 @@ class CombatState:
             self._end_combat(player_won=True)
         elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=False)
+
+    def select_cards(
+        self,
+        purpose: str,
+        candidates: list[Card],
+        count: int = 1,
+    ) -> list[Card]:
+        """In-combat card selection (mirrors CardSelectCmd's selection screens).
+
+        purpose is a short label describing the choice ("upgrade", "exhaust",
+        "from_discard", ...) so a policy can distinguish selection contexts.
+        The choice is delegated to self.card_selector — a callable
+        (purpose, candidates, count) -> list[Card] — when one is installed
+        (by tests, the env, or an agent); otherwise up to count cards are
+        picked uniformly at random with the combat RNG.
+        """
+        if count <= 0 or not candidates:
+            return []
+        count = min(count, len(candidates))
+        if self.card_selector is not None:
+            chosen = list(self.card_selector(purpose, list(candidates), count))[:count]
+            return [c for c in chosen if c in candidates]
+        return self._rng.sample(candidates, count)
 
     def use_potion(self, slot: int, target_idx: int | None = None) -> bool:
         """Use the potion in the given slot (removed on use).
@@ -333,7 +378,6 @@ class CombatState:
 
         if self.phase != Phase.COMBAT_OVER:
             self.turn += 1
-            self.attacks_played_this_turn = 0
             self.player.start_turn()
             if self.player.is_dead and self.phase != Phase.COMBAT_OVER:
                 self._end_combat(player_won=False)
@@ -347,6 +391,10 @@ class CombatState:
             if not card.is_playable:
                 continue
             if not self.hooks.should_play_card(card):
+                continue
+            if card.energy_cost_x:
+                # X-cost cards are always affordable (X may be 0).
+                actions.append(i + 1)
                 continue
             actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
             if actual_cost <= self.player.energy:

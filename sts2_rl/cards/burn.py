@@ -16,6 +16,7 @@ class BurnCard(Card):
     rarity = CardRarity.STATUS
     target_type = TargetType.NONE
     is_playable = False
+    max_upgrade_level = 0
     is_unpowered = True
     has_turn_end_in_hand_effect = True
 

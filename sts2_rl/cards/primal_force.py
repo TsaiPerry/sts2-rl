@@ -37,4 +37,5 @@ class PrimalForceCard(Card):
             if self.upgrade_level > 0:
                 rock.upgrade()
             player.hand[idx] = rock
+            ctx.hooks.register(rock)
             ctx.hooks.on_card_entered_combat(rock)

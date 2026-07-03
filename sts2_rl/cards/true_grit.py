@@ -10,16 +10,14 @@ if TYPE_CHECKING:
 
 @register_card
 class TrueGritCard(Card):
-    """Skill (Common, 1E) — gain 7 block; exhaust a random card from your hand.
+    """Skill (Common, 1E) — gain 7 block; exhaust a random card from your hand
+    (upgraded: exhaust a CHOSEN card, via the combat's card selector).
 
     Source: TrueGrit.cs
       Cost 1 | Skill | Common | TargetType.Self
       OnPlay: GainBlock(7), then exhaust a random hand card
-      OnUpgrade: block +2 (→ 9)
-
-    Deviation: the upgraded card lets the player CHOOSE the card to exhaust;
-    the sim has no in-combat selection screens, so the upgraded version also
-    exhausts randomly.
+        (upgraded: CardSelectCmd.FromHand — player's choice)
+      OnUpgrade: block +2 (→ 9), selection instead of random
     """
     id = "true_grit"
     name = "True Grit"
@@ -35,8 +33,14 @@ class TrueGritCard(Card):
         self._block += 2
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from ..cmds import BlockCmd, ExhaustCmd
+        from ..cmds import BlockCmd, CardSelectCmd, ExhaustCmd
         BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)
-        if ctx.player.hand:
+        if not ctx.player.hand:
+            return
+        if self.upgrade_level > 0:
+            chosen = CardSelectCmd.from_hand(ctx.hooks, ctx.player, "exhaust")
+            victim = chosen[0] if chosen else None
+        else:
             victim = ctx.combat._rng.choice(ctx.player.hand)
+        if victim is not None:
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, victim)

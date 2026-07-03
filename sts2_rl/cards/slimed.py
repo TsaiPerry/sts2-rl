@@ -16,6 +16,7 @@ class SlimedCard(Card):
     rarity = CardRarity.STATUS
     target_type = TargetType.NONE
     is_playable = False
+    max_upgrade_level = 0
     is_unpowered = True
 
     def _init_vars(self) -> None:

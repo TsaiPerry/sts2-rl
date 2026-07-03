@@ -763,8 +763,7 @@ class JuggernautPower(Power):
 class JugglingPower(Power):
     """When the owner plays their 3rd Attack in a turn, add N copies of it to
     the hand. Attacks played earlier in the turn count (the counter is seeded
-    from the combat's attack-play count, mirroring the CombatHistory seed in
-    AfterApplied)."""
+    from combat history, mirroring the CombatHistory seed in AfterApplied)."""
 
     id = "juggling"
     name = "Juggling"
@@ -780,7 +779,7 @@ class JugglingPower(Power):
         super().__init__(owner, amount, hooks, applier)
         combat = hooks.combat
         self._attacks_this_turn = (
-            combat.attacks_played_this_turn if combat is not None else 0
+            combat.history.attack_plays_this_turn() if combat is not None else 0
         )
 
     def on_card_played(self, card: Card) -> None:

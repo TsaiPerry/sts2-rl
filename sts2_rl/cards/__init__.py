@@ -1,4 +1,5 @@
 from .base import Card, CardType, CardRarity, TargetType, register_card, make_card
+from .pool import IRONCLAD_POOL, pool_card_ids, random_pool_cards
 from .strike import StrikeCard
 from .defend import DefendCard
 from .burn import BurnCard
@@ -24,7 +25,9 @@ from .feed import FeedCard
 from .fiend_fire import FiendFireCard
 from .fight_me import FightMeCard
 from .giant_rock import GiantRockCard
+from .headbutt import HeadbuttCard
 from .hemokinesis import HemokinesisCard
+from .howl_from_beyond import HowlFromBeyondCard
 from .iron_wave import IronWaveCard
 from .mangle import MangleCard
 from .molten_fist import MoltenFistCard
@@ -34,23 +37,35 @@ from .pillage import PillageCard
 from .pommel_strike import PommelStrikeCard
 from .rampage import RampageCard
 from .setup_strike import SetupStrikeCard
+from .spite import SpiteCard
+from .stomp import StompCard
 from .sword_boomerang import SwordBoomerangCard
+from .tear_asunder import TearAsunderCard
 from .thrash import ThrashCard
 from .thunderclap import ThunderclapCard
 from .twin_strike import TwinStrikeCard
 from .unrelenting import UnrelentingCard
 from .uppercut import UppercutCard
+from .whirlwind import WhirlwindCard
 
 # ── Ironclad skills ───────────────────────────────────────────────────────
+from .armaments import ArmamentsCard
 from .battle_trance import BattleTranceCard
 from .blood_wall import BloodWallCard
 from .bloodletting import BloodlettingCard
+from .brand import BrandCard
+from .burning_pact import BurningPactCard
+from .cascade import CascadeCard
 from .colossus import ColossusCard
 from .dominate import DominateCard
+from .drum_of_battle import DrumOfBattleCard
+from .evil_eye import EvilEyeCard
 from .expect_a_fight import ExpectAFightCard
 from .flame_barrier import FlameBarrierCard
+from .forgotten_ritual import ForgottenRitualCard
 from .havoc import HavocCard
 from .impervious import ImperviousCard
+from .infernal_blade import InfernalBladeCard
 from .not_yet import NotYetCard
 from .offering import OfferingCard
 from .one_two_punch import OneTwoPunchCard
@@ -58,6 +73,7 @@ from .primal_force import PrimalForceCard
 from .rage import RageCard
 from .second_wind import SecondWindCard
 from .shrug_it_off import ShrugItOffCard
+from .stoke import StokeCard
 from .taunt import TauntCard
 from .tremble import TrembleCard
 from .true_grit import TrueGritCard
@@ -90,6 +106,9 @@ __all__ = [
     "TargetType",
     "register_card",
     "make_card",
+    "IRONCLAD_POOL",
+    "pool_card_ids",
+    "random_pool_cards",
     "StrikeCard",
     "DefendCard",
     "BurnCard",
@@ -114,7 +133,9 @@ __all__ = [
     "FiendFireCard",
     "FightMeCard",
     "GiantRockCard",
+    "HeadbuttCard",
     "HemokinesisCard",
+    "HowlFromBeyondCard",
     "IronWaveCard",
     "MangleCard",
     "MoltenFistCard",
@@ -124,22 +145,34 @@ __all__ = [
     "PommelStrikeCard",
     "RampageCard",
     "SetupStrikeCard",
+    "SpiteCard",
+    "StompCard",
     "SwordBoomerangCard",
+    "TearAsunderCard",
     "ThrashCard",
     "ThunderclapCard",
     "TwinStrikeCard",
     "UnrelentingCard",
     "UppercutCard",
+    "WhirlwindCard",
     # Ironclad skills
+    "ArmamentsCard",
     "BattleTranceCard",
     "BloodWallCard",
     "BloodlettingCard",
+    "BrandCard",
+    "BurningPactCard",
+    "CascadeCard",
     "ColossusCard",
     "DominateCard",
+    "DrumOfBattleCard",
+    "EvilEyeCard",
     "ExpectAFightCard",
     "FlameBarrierCard",
+    "ForgottenRitualCard",
     "HavocCard",
     "ImperviousCard",
+    "InfernalBladeCard",
     "NotYetCard",
     "OfferingCard",
     "OneTwoPunchCard",
@@ -147,6 +180,7 @@ __all__ = [
     "RageCard",
     "SecondWindCard",
     "ShrugItOffCard",
+    "StokeCard",
     "TauntCard",
     "TrembleCard",
     "TrueGritCard",
