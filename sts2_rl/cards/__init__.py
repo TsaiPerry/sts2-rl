@@ -1,5 +1,12 @@
 from .base import Card, CardType, CardRarity, TargetType, register_card, make_card
-from .pool import IRONCLAD_POOL, pool_card_ids, random_pool_cards
+from .pool import (
+    CURSE_POOL,
+    IRONCLAD_POOL,
+    curse_pool_ids,
+    pool_card_ids,
+    random_curses,
+    random_pool_cards,
+)
 from .strike import StrikeCard
 from .defend import DefendCard
 from .burn import BurnCard
@@ -10,6 +17,14 @@ from .slimed import SlimedCard
 from .dazed import DazedCard
 from .infection import InfectionCard
 from .beckon import BeckonCard
+from .toxic import ToxicCard
+from .frantic_escape import FranticEscapeCard
+from .knowledge_curses import (
+    DisintegrationCard,
+    MindRotCard,
+    SlothCard,
+    WasteAwayCard,
+)
 
 # ── Ironclad attacks ──────────────────────────────────────────────────────
 from .anger import AngerCard
@@ -79,6 +94,26 @@ from .taunt import TauntCard
 from .tremble import TrembleCard
 from .true_grit import TrueGritCard
 
+# ── Curses ────────────────────────────────────────────────────────────────
+from .ascenders_bane import AscendersBaneCard
+from .bad_luck import BadLuckCard
+from .clumsy import ClumsyCard
+from .curse_of_the_bell import CurseOfTheBellCard
+from .debt import DebtCard
+from .decay import DecayCard
+from .doubt import DoubtCard
+from .enthralled import EnthralledCard
+from .folly import FollyCard
+from .greed import GreedCard
+from .guilty import GuiltyCard
+from .injury import InjuryCard
+from .normality import NormalityCard
+from .poor_sleep import PoorSleepCard
+from .regret import RegretCard
+from .shame import ShameCard
+from .spore_mind import SporeMindCard
+from .writhe import WritheCard
+
 # ── Ironclad powers ───────────────────────────────────────────────────────
 from .aggression import AggressionCard
 from .barricade_card import BarricadeCard
@@ -108,8 +143,11 @@ __all__ = [
     "register_card",
     "make_card",
     "IRONCLAD_POOL",
+    "CURSE_POOL",
     "pool_card_ids",
+    "curse_pool_ids",
     "random_pool_cards",
+    "random_curses",
     "StrikeCard",
     "DefendCard",
     "BurnCard",
@@ -119,6 +157,12 @@ __all__ = [
     "SlimedCard",
     "DazedCard",
     "InfectionCard",
+    "ToxicCard",
+    "FranticEscapeCard",
+    "DisintegrationCard",
+    "MindRotCard",
+    "SlothCard",
+    "WasteAwayCard",
     # Ironclad attacks
     "AngerCard",
     "AshenStrikeCard",
@@ -185,6 +229,25 @@ __all__ = [
     "TauntCard",
     "TrembleCard",
     "TrueGritCard",
+    # Curses
+    "AscendersBaneCard",
+    "BadLuckCard",
+    "ClumsyCard",
+    "CurseOfTheBellCard",
+    "DebtCard",
+    "DecayCard",
+    "DoubtCard",
+    "EnthralledCard",
+    "FollyCard",
+    "GreedCard",
+    "GuiltyCard",
+    "InjuryCard",
+    "NormalityCard",
+    "PoorSleepCard",
+    "RegretCard",
+    "ShameCard",
+    "SporeMindCard",
+    "WritheCard",
     # Ironclad powers
     "AggressionCard",
     "BarricadeCard",

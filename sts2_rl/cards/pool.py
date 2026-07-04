@@ -34,6 +34,46 @@ IRONCLAD_POOL: tuple[str, ...] = (
 )
 
 
+# The curse card pool (CurseCardPool.cs) — all 18 curses, in the source's
+# order. Random curse generation draws from the subset with
+# CanBeGeneratedByModifiers (CursedRun, Neow's Bones, Sere Talon).
+CURSE_POOL: tuple[str, ...] = (
+    "ascenders_bane", "bad_luck", "clumsy", "curse_of_the_bell", "debt",
+    "decay", "doubt", "enthralled", "folly", "greed", "guilty", "injury",
+    "normality", "poor_sleep", "regret", "shame", "spore_mind", "writhe",
+)
+
+
+def curse_pool_ids(generatable_only: bool = True) -> list[str]:
+    """Ids in the curse pool, by default only those a random-curse effect can
+    generate (mirrors the CanBeGeneratedByModifiers filter every consumer of
+    CurseCardPool applies)."""
+    return [
+        card_id for card_id in CURSE_POOL
+        if not generatable_only
+        or _CARD_CLASSES[card_id].can_be_generated_by_modifiers
+    ]
+
+
+def random_curses(
+    rng: random.Random,
+    count: int = 1,
+    distinct: bool = False,
+) -> list[Card]:
+    """Generate random curses from the generatable curse pool.
+
+    Mirrors the game's consumers: CursedRun picks uniformly with replacement
+    (Rng.Niche.NextItem); Neow's Bones and Sere Talon pick distinct curses,
+    removing each choice from the candidate list (distinct=True).
+    """
+    options = curse_pool_ids()
+    if distinct:
+        chosen = rng.sample(options, min(count, len(options)))
+    else:
+        chosen = [rng.choice(options) for _ in range(count)]
+    return [make_card(card_id) for card_id in chosen]
+
+
 def pool_card_ids(
     card_type: CardType | None = None,
     pool: tuple[str, ...] = IRONCLAD_POOL,

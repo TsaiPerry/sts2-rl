@@ -488,11 +488,17 @@ class HookSystem:
                     return False
         return True
 
-    def should_play_card(self, card: Card) -> bool:
-        """False from any listener prevents the card from being played (e.g. Ringing)."""
+    def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
+        """False from any listener prevents the card from being played (e.g. Ringing).
+
+        auto_play is True when the play is an auto-play (Havoc, Stampede, ...)
+        rather than a manual play from the hand — mirrors the AutoPlayType
+        argument of the game's ShouldPlay hook (Enthralled only blocks manual
+        plays).
+        """
         for l in list(self._listeners):
             if hasattr(l, "should_play_card"):
-                if not l.should_play_card(card):
+                if not l.should_play_card(card, auto_play):
                     return False
         return True
 

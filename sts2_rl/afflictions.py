@@ -43,3 +43,11 @@ class SmogAffliction(Affliction):
 
     id = "smog"
     name = "Smog"
+
+
+class TaintedAffliction(Affliction):
+    """Applied by VitalSparkPower (Infested Prism) to Skill cards; playing a
+    Tainted card gives the player Tainted (take +N attack damage this turn)."""
+
+    id = "tainted"
+    name = "Tainted"

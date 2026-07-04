@@ -64,10 +64,22 @@ class Card(ABC):
     # Innate keyword: starts on top of the draw pile, and the first-turn hand
     # draw is raised to include all innate cards (mirrors CardKeyword.Innate).
     innate: bool = False
+    # Retain keyword: the card is not discarded by the end-of-turn hand flush
+    # (mirrors CardKeyword.Retain / ShouldRetainThisTurn).
+    retain: bool = False
+    # Eternal keyword: the card cannot be removed from the deck (mirrors
+    # CardKeyword.Eternal → IsRemovable). Deck removal happens between
+    # combats, so this flag has no effect inside the sim; it is kept for
+    # fidelity with the source card definitions.
+    eternal: bool = False
     # X-cost (mirrors HasEnergyCostX): the card costs ALL remaining energy;
     # play_card stores the amount spent in captured_x for on_play to read
     # (mirrors EnergyCost.CapturedXValue / ResolveEnergyXValue).
     energy_cost_x: bool = False
+    # Mirrors CardModel.CanBeGeneratedByModifiers: whether the card can be
+    # picked when a random curse is generated (CursedRun modifier, Neow's
+    # Bones / Sere Talon relics all filter the curse pool by this).
+    can_be_generated_by_modifiers: bool = True
     # Card tags (mirrors CardModel.Tags, e.g. "strike" for Perfected Strike).
     tags: frozenset[str] = frozenset()
     # Mirrors CardModel.MaxUpgradeLevel (0 for statuses/curses — they can

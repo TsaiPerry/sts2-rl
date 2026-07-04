@@ -292,7 +292,7 @@ class CombatState:
             if card in pile:
                 pile.remove(card)
                 break
-        if not card.is_playable or not self.hooks.should_play_card(card):
+        if not card.is_playable or not self.hooks.should_play_card(card, auto_play=True):
             # MoveToResultPileWithoutPlaying: no on_play, no played hook.
             self.player.discard_pile.append(card)
             return

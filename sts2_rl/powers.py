@@ -1226,7 +1226,7 @@ class RingingPower(Power):
             from .cmds import CardCmd
             CardCmd.afflict(card, RingingAffliction, 1)
 
-    def should_play_card(self, card: Card) -> bool:
+    def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
         from .afflictions import RingingAffliction
         if isinstance(card.affliction, RingingAffliction):
             return not self._card_played_this_turn
@@ -1587,7 +1587,7 @@ class SmoggyPower(Power):
         ):
             self._afflict(card)
 
-    def should_play_card(self, card: Card) -> bool:
+    def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
         from .afflictions import SmogAffliction
         return not isinstance(card.affliction, SmogAffliction)
 
@@ -1854,6 +1854,660 @@ class SteamEruptionPower(Power):
             self.owner.hp = self.owner.max_hp = 999_999_999
 
 
+# ── Hive enemy powers ─────────────────────────────────────────────────────
+
+
+class ImbalancedPower(Power):
+    """When one of the owner's attacks is fully blocked, the owner is thrown
+    off balance and loses its next turn (Bowlbug Rock; mirrors
+    ImbalancedPower.AfterDamageGiven's WasFullyBlocked check). The owner may
+    define `is_off_balance` (BowlbugRock's move machine reads it); other
+    owners are stunned directly."""
+
+    id = "imbalanced"
+    name = "Imbalanced"
+    power_type = PowerType.DEBUFF
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        if (
+            dealer is self.owner
+            and target is not self.owner
+            and amount == 0
+            and ValueProp.MOVE in props
+        ):
+            if hasattr(self.owner, "is_off_balance"):
+                self.owner.is_off_balance = True
+            else:
+                from .cmds import CreatureCmd
+                CreatureCmd.stun(self.hooks, self.owner)
+
+
+class HardToKillPower(Power):
+    """The owner cannot take more than N damage per hit (Exoskeleton; mirrors
+    HardToKillPower.ModifyDamageCap)."""
+
+    id = "hard_to_kill"
+    name = "Hard to Kill"
+    power_type = PowerType.BUFF
+
+    def modify_damage_cap(
+        self,
+        target: Creature,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> int | None:
+        if target is self.owner:
+            return self.amount
+        return None
+
+
+class TenderPower(Power):
+    """Each card the owner plays this turn costs them 1 Strength and 1
+    Dexterity; both are restored at the end of the owner's turn (Hunter
+    Killer's Tenderizing Goop; mirrors TenderPower)."""
+
+    id = "tender"
+    name = "Tender"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._cards_played_this_turn = 0
+
+    def on_card_played(self, card: Card) -> None:
+        self._cards_played_this_turn += 1
+        from .cmds import PowerCmd
+        PowerCmd.apply(self.hooks, self.owner, StrengthPower, -1)
+        PowerCmd.apply(self.hooks, self.owner, DexterityPower, -1)
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is not self.owner or self._cards_played_this_turn == 0:
+            return
+        from .cmds import PowerCmd
+        PowerCmd.apply(self.hooks, self.owner, StrengthPower, self._cards_played_this_turn)
+        PowerCmd.apply(self.hooks, self.owner, DexterityPower, self._cards_played_this_turn)
+        self._cards_played_this_turn = 0
+
+
+class HatchPower(Power):
+    """Visible countdown until a Tough Egg hatches; decrements at the end of
+    the owner's turn (mirrors HatchPower — the hatch itself is the egg's
+    HATCH move, this power is just the timer)."""
+
+    id = "hatch"
+    name = "Hatch"
+    power_type = PowerType.BUFF
+
+    def on_enemy_turn_end(self, enemy: Creature) -> None:
+        if enemy is self.owner:
+            self._tick()
+
+
+class SlumberPower(Power):
+    """The owner sleeps for N of its turns; each point of unblocked damage
+    received also counts down a turn. Waking from damage costs the owner a
+    stunned turn; a natural wake does not (Slumbering Beetle; mirrors
+    SlumberPower). The owner must implement wake_up(stunned=...)."""
+
+    id = "slumber"
+    name = "Slumber"
+    power_type = PowerType.BUFF
+
+    def _count_down(self, woke_from_damage: bool) -> None:
+        self.amount -= 1
+        self.hooks.on_power_amount_changed(self.id, self.owner, -1)
+        if self.amount <= 0:
+            self._expire()
+            self.owner.wake_up(stunned=woke_from_damage)
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        if target is self.owner and amount > 0:
+            self._count_down(woke_from_damage=True)
+
+    def on_enemy_turn_end(self, enemy: Creature) -> None:
+        if enemy is self.owner:
+            self._count_down(woke_from_damage=False)
+
+
+class EscapeArtistPower(Power):
+    """Visual timer for when the Thieving Hopper will escape; counts down to 1
+    at the end of the owner's turn (mirrors EscapeArtistPower — the escape
+    itself is the hopper's ESCAPE move)."""
+
+    id = "escape_artist"
+    name = "Escape Artist"
+    power_type = PowerType.BUFF
+
+    def on_enemy_turn_end(self, enemy: Creature) -> None:
+        if enemy is self.owner and self.amount > 1:
+            self.amount -= 1
+            self.hooks.on_power_amount_changed(self.id, self.owner, -1)
+
+
+class FlutterPower(Power):
+    """The owner takes 50% damage from powered attacks; each hit that deals
+    unblocked damage consumes a stack, and at 0 the owner falls out of the air
+    stunned (Thieving Hopper; mirrors FlutterPower)."""
+
+    id = "flutter"
+    name = "Flutter"
+    power_type = PowerType.BUFF
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> float:
+        if target is self.owner:
+            return 0.5
+        return 1.0
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .valueprops import is_powered_attack
+        if target is not self.owner or amount <= 0 or not is_powered_attack(props):
+            return
+        self.amount -= 1
+        self.hooks.on_power_amount_changed(self.id, self.owner, -1)
+        if self.amount <= 0:
+            self._expire()
+            if hasattr(self.owner, "is_hovering"):
+                self.owner.is_hovering = False
+            from .cmds import CreatureCmd
+            CreatureCmd.stun(self.hooks, self.owner)
+            # The stun replaces the telegraphed move: the owner resumes at the
+            # move AFTER it (mirrors Stun(owner, StunnedMove,
+            # StateLog.Last().GetNextState())).
+            machine = getattr(self.owner, "machine", None)
+            if machine is not None:
+                self.owner._current_move = machine.roll_move(
+                    self.owner, self.owner._rng
+                )
+
+
+class SwipePower(Power):
+    """Holds the card(s) the Thieving Hopper stole. In the game, killing the
+    owner returns the stolen card to the deck as a combat reward; the sim has
+    no out-of-combat rewards, so the cards simply stay gone (they were removed
+    from the combat piles when stolen)."""
+
+    id = "swipe"
+    name = "Swipe"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.stolen_cards: list[Card] = []
+
+
+class BurrowedPower(Power):
+    """The owner's block persists between turns; when its block is broken by
+    an attack it is dug out of the ground and loses its next turn (Tunneler;
+    mirrors BurrowedPower). The owner must implement get_stunned()."""
+
+    id = "burrowed"
+    name = "Burrowed"
+    power_type = PowerType.BUFF
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def should_clear_block(self, creature: Creature) -> bool:
+        if creature is self.owner:
+            return False
+        return True
+
+    def on_block_broken(self, target: Creature) -> None:
+        if target is self.owner:
+            self.owner.get_stunned()
+            self._expire()
+            self.owner.block = 0  # AfterRemoved: LoseBlock(all)
+
+
+class ReattachPower(Power):
+    """A Decimillipede segment cannot truly die while another segment stands:
+    it withers (unhittable, no move) and reattaches two of its turns later
+    with N HP. Killing the last standing segment kills the whole millipede
+    (mirrors ReattachPower's ShouldOwnerDeathTriggerFatal — a withered segment
+    counts as dead for that check)."""
+
+    id = "reattach"
+    name = "Reattach"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.is_reviving = False
+
+    def _other_segments(self) -> list[Creature]:
+        combat = self.hooks.combat
+        if combat is None:
+            return []
+        return [
+            e for e in combat.enemies
+            if e is not self.owner and "reattach" in e.powers
+        ]
+
+    def _all_others_down(self) -> bool:
+        return all(
+            s.is_dead or s.powers["reattach"].is_reviving
+            for s in self._other_segments()
+        )
+
+    def should_die(self, creature: Creature) -> bool:
+        if creature is not self.owner or self.is_reviving:
+            return True
+        if self._all_others_down():
+            return True  # last segment standing: the death is real
+        self.is_reviving = True
+        self.owner.enter_dead_state()
+        return False
+
+    def should_allow_hitting(self, target: Creature) -> bool:
+        if target is self.owner and self.is_reviving:
+            return False
+        return True
+
+    def do_reattach(self) -> None:
+        """Called by the owner's REATTACH move: come back with N HP."""
+        if self._all_others_down():
+            return  # mirrors DoReattach's AreAllOtherSegmentsDead guard
+        self.is_reviving = False
+        delta = self.amount - self.owner.hp
+        self.owner.hp = self.amount
+        self.hooks.on_hp_changed(self.owner, delta)
+
+    def on_death(self, creature: Creature) -> None:
+        # The last standing segment died for real: withered segments die too.
+        if (
+            creature is self.owner
+            or not self.is_reviving
+            or self.owner.is_dead
+            or "reattach" not in creature.powers
+            or not self._all_others_down()
+        ):
+            return
+        self.is_reviving = False
+        old_hp = self.owner.hp
+        self.owner.hp = 0
+        self.hooks.on_hp_changed(self.owner, -old_hp)
+        self.hooks.on_death(self.owner)
+
+
+class PersonalHivePower(Power):
+    """Whenever a powered attack hits the owner, N Dazed cards are shuffled
+    into the attacker's draw pile — even if the hit was fully blocked
+    (Entomancer; mirrors PersonalHivePower.AfterDamageReceived)."""
+
+    id = "personal_hive"
+    name = "Personal Hive"
+    power_type = PowerType.BUFF
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .valueprops import is_powered_attack
+        if (
+            target is not self.owner
+            or dealer is None
+            or dealer.side != "player"
+            or not is_powered_attack(props)
+        ):
+            return
+        from .cards import DazedCard
+        from .cmds import CardPileCmd
+        for _ in range(self.amount):
+            CardPileCmd.add_to_draw(self.hooks, dealer, DazedCard())
+
+
+class VitalSparkPower(Power):
+    """Afflicts every Skill the player owns with Tainted N: playing a Tainted
+    card gives the player Tainted N (take +N attack damage until end of the
+    enemy turn). Skills created mid-combat are afflicted too; stacking the
+    power raises every affliction's amount; the afflictions clear when the
+    owner dies (Infested Prism; mirrors VitalSparkPower)."""
+
+    id = "vital_spark"
+    name = "Vital Spark"
+    power_type = PowerType.BUFF
+
+    @staticmethod
+    def _is_skill(card: Card) -> bool:
+        from .cards import CardType
+        return card.card_type == CardType.SKILL
+
+    def _afflict(self, card: Card) -> None:
+        from .afflictions import TaintedAffliction
+        from .cmds import CardCmd
+        CardCmd.afflict(card, TaintedAffliction, self.amount)
+
+    def _player_cards(self):
+        combat = self.hooks.combat
+        return combat.player.all_cards if combat is not None else ()
+
+    def on_combat_start(self) -> None:
+        for card in self._player_cards():
+            if self._is_skill(card) and card.affliction is None:
+                self._afflict(card)
+
+    def on_card_entered_combat(self, card: Card) -> None:
+        if self._is_skill(card) and card.affliction is None:
+            self._afflict(card)
+
+    def on_card_played(self, card: Card) -> None:
+        from .afflictions import TaintedAffliction
+        if isinstance(card.affliction, TaintedAffliction):
+            combat = self.hooks.combat
+            if combat is not None:
+                from .cmds import PowerCmd
+                PowerCmd.apply(self.hooks, combat.player, TaintedPower, self.amount)
+
+    def on_stack(self, amount: int) -> None:
+        super().on_stack(amount)
+        # AfterPowerAmountChanged: sync every Tainted affliction to the new amount.
+        from .afflictions import TaintedAffliction
+        for card in self._player_cards():
+            if isinstance(card.affliction, TaintedAffliction):
+                card.affliction.amount = self.amount
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner:
+            return
+        from .afflictions import TaintedAffliction
+        from .cmds import CardCmd
+        for card in self._player_cards():
+            if isinstance(card.affliction, TaintedAffliction):
+                CardCmd.clear_affliction(card)
+        self._expire()
+
+
+class TaintedPower(Power):
+    """The owner takes +N damage from powered attacks; removed at the end of
+    the enemy turn (applied by VitalSparkPower when a Tainted Skill is
+    played; mirrors TaintedPower)."""
+
+    id = "tainted"
+    name = "Tainted"
+    power_type = PowerType.DEBUFF
+
+    def modify_damage_additive(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> int:
+        if target is self.owner:
+            return self.amount
+        return 0
+
+    def on_enemy_side_end(self) -> None:
+        self._expire()
+
+
+class BackAttackLeftPower(Power):
+    """Marker power for SurroundedPower (the Kaiser Crab's left arm)."""
+
+    id = "back_attack_left"
+    name = "Back Attack (Left)"
+    power_type = PowerType.BUFF
+
+
+class BackAttackRightPower(Power):
+    """Marker power for SurroundedPower (the Kaiser Crab's right arm)."""
+
+    id = "back_attack_right"
+    name = "Back Attack (Right)"
+    power_type = PowerType.BUFF
+
+
+class CrabRagePower(Power):
+    """When a teammate dies, the owner gains 6 Strength and 99 block, then
+    this power is removed (Kaiser Crab; mirrors CrabRagePower)."""
+
+    id = "crab_rage"
+    name = "Crab Rage"
+    power_type = PowerType.BUFF
+
+    STRENGTH_GAIN = 6
+    BLOCK_GAIN = 99
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is self.owner or creature.side != self.owner.side:
+            return
+        from .cmds import BlockCmd, PowerCmd
+        from .valueprops import ValueProp as VP
+        PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.STRENGTH_GAIN)
+        BlockCmd.apply(self.hooks, self.owner, self.BLOCK_GAIN, props=VP.UNPOWERED)
+        self._expire()
+
+
+class SurroundedPower(Power):
+    """Kaiser Crab: the player faces one arm; the other arm's attacks deal
+    50% more damage. Damaging a crab with a targeted card (or potion) turns
+    the player to face it; when an arm dies the player faces the survivor.
+    The game turns on any targeted card play — the sim approximates with
+    single-target card damage (mirrors SurroundedPower)."""
+
+    id = "surrounded"
+    name = "Surrounded"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.facing = "right"
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> float:
+        if target is not self.owner or dealer is None:
+            return 1.0
+        if self.facing == "right" and "back_attack_left" in dealer.powers:
+            return 1.5
+        if self.facing == "left" and "back_attack_right" in dealer.powers:
+            return 1.5
+        return 1.0
+
+    def _update_direction(self, target: Creature) -> None:
+        if self.facing == "right" and "back_attack_left" in target.powers:
+            self.facing = "left"
+        elif self.facing == "left" and "back_attack_right" in target.powers:
+            self.facing = "right"
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .cards import TargetType
+        if (
+            dealer is self.owner
+            and card is not None
+            and card.target_type == TargetType.ANY_ENEMY
+        ):
+            self._update_direction(target)
+
+    def on_potion_used(self, potion, target: Creature | None) -> None:
+        if target is not None:
+            self._update_direction(target)
+
+    def on_death(self, creature: Creature) -> None:
+        if creature.side == self.owner.side:
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        living = [e for e in combat.enemies if not e.is_gone]
+        if living and all("back_attack_left" in e.powers for e in living):
+            self._update_direction(living[0])
+        elif living and all("back_attack_right" in e.powers for e in living):
+            self._update_direction(living[0])
+
+
+class SandpitPower(Power):
+    """The Insatiable's devour timer: counts down at the start of the owner's
+    turn; when it runs out the player is eaten — killed outright (mirrors
+    SandpitPower.AfterRemoved). Frantic Escape adds a stack, delaying it."""
+
+    id = "sandpit"
+    name = "Sandpit"
+    power_type = PowerType.BUFF
+
+    def on_enemy_turn_start(self, enemy: Creature) -> None:
+        if enemy is self.owner:
+            self._tick()
+
+    def _expire(self) -> None:
+        owner_gone = self.owner.is_gone
+        combat = self.hooks.combat
+        super()._expire()
+        if owner_gone or combat is None:
+            return
+        target = combat.player
+        if not target.is_dead:
+            from .cmds import CreatureCmd
+            CreatureCmd.kill(self.hooks, target)
+
+
+class DisintegrationPower(Power):
+    """The owner takes N unpowered damage at the end of each of their turns
+    (Knowledge Demon's Curse of Knowledge; mirrors DisintegrationPower)."""
+
+    id = "disintegration"
+    name = "Disintegration"
+    power_type = PowerType.DEBUFF
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is not self.owner:
+            return
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        DamageCmd.deal(
+            self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_UNPOWERED
+        )
+
+
+class MindRotPower(Power):
+    """The owner draws N fewer cards at the start of each turn (Knowledge
+    Demon's Curse of Knowledge; mirrors MindRotPower)."""
+
+    id = "mind_rot"
+    name = "Mind Rot"
+    power_type = PowerType.DEBUFF
+
+    def modify_hand_draw(self, player: Creature, count: int) -> int:
+        if player is self.owner:
+            return max(0, count - self.amount)
+        return count
+
+
+class SlothPower(Power):
+    """The owner can only play N cards per turn (Knowledge Demon's Curse of
+    Knowledge; mirrors SlothPower)."""
+
+    id = "sloth"
+    name = "Sloth"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._cards_played_this_turn = 0
+
+    def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
+        return self._cards_played_this_turn < self.amount
+
+    def on_card_played(self, card: Card) -> None:
+        self._cards_played_this_turn += 1
+
+    def on_player_turn_start(self, player: Creature) -> None:
+        if player is self.owner:
+            self._cards_played_this_turn = 0
+
+
+class WasteAwayPower(Power):
+    """The owner gains N less energy at the start of each turn (Knowledge
+    Demon's Curse of Knowledge; mirrors WasteAwayPower)."""
+
+    id = "waste_away"
+    name = "Waste Away"
+    power_type = PowerType.DEBUFF
+
+    def modify_max_energy(self, player: Creature, amount: int) -> int:
+        if player is self.owner:
+            return amount - self.amount
+        return amount
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -1920,5 +2574,27 @@ ALL_POWERS: dict[str, type[Power]] = {
         ShriekPower,
         HardenedShellPower,
         SteamEruptionPower,
+        ImbalancedPower,
+        HardToKillPower,
+        TenderPower,
+        HatchPower,
+        SlumberPower,
+        EscapeArtistPower,
+        FlutterPower,
+        SwipePower,
+        BurrowedPower,
+        ReattachPower,
+        PersonalHivePower,
+        VitalSparkPower,
+        TaintedPower,
+        BackAttackLeftPower,
+        BackAttackRightPower,
+        CrabRagePower,
+        SurroundedPower,
+        SandpitPower,
+        DisintegrationPower,
+        MindRotPower,
+        SlothPower,
+        WasteAwayPower,
     ]
 }

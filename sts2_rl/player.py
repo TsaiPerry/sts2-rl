@@ -73,11 +73,14 @@ class PlayerCombatState(Creature):
         self._draw(draw_count, from_hand_draw=True)
 
     def discard_hand(self) -> None:
-        """Discard all cards in hand to the discard pile, firing per-card hooks."""
-        for card in list(self.hand):
+        """Discard the hand to the discard pile at end of turn, firing per-card
+        hooks. Retain cards stay in hand (mirrors the end-of-turn flush in
+        CombatManager skipping ShouldRetainThisTurn cards)."""
+        flushed = [c for c in self.hand if not c.retain]
+        for card in flushed:
             self._hooks.on_card_discarded(card)
-        self.discard_pile.extend(self.hand)
-        self.hand = []
+        self.discard_pile.extend(flushed)
+        self.hand = [c for c in self.hand if c.retain]
         self._hooks.on_hand_emptied(self)
 
     def reshuffle_discard_into_draw(self) -> None:

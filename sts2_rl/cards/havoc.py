@@ -44,7 +44,7 @@ class HavocCard(Card):
             return
         card = player.draw_pile.pop()  # top of the draw pile
 
-        if card.is_playable and ctx.hooks.should_play_card(card):
+        if card.is_playable and ctx.hooks.should_play_card(card, auto_play=True):
             living = [i for i, e in enumerate(ctx.enemies) if not e.is_gone]
             if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
                 for i in living:
