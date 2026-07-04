@@ -1,3 +1,11 @@
+"""Afflictions — markers attached to a single card, mirroring STS2's
+AfflictionModel.
+
+An affliction carries no logic of its own: the power that applied it reads it
+back later. Ringing/Smog/Tainted gate whether a card can be played this turn;
+Entangled raises an Attack card's energy cost. Applied and cleared through
+`CardCmd.afflict` / `clear_affliction` in cmds.py.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

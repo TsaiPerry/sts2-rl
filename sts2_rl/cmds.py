@@ -1,3 +1,17 @@
+"""Command layer — the verbs that mutate combat state, mirroring STS2's Cmd
+classes (DamageCmd, CreatureCmd, PowerCmd, ...).
+
+All effects go through a Cmd rather than touching hp/block/powers directly;
+that is what keeps hook dispatch correct. The centrepiece is
+`DamageCmd.deal`, the full typed damage pipeline (powered modifiers → cap →
+on_attacked → block → modify_hp_lost → apply → death check → post-damage
+events). Other Cmds cover block, healing/kill/stun/escape/add, applying and
+removing powers, strength, drawing, exhausting, afflicting cards, moving
+generated cards between piles, in-combat card selection, and energy gain.
+
+Each Cmd is a namespace of @staticmethods taking the `HookSystem` (and usually
+a target) explicitly — there is no Cmd instance state.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

@@ -1,9 +1,50 @@
+"""sts2_rl — a pure-Python simulation of Slay the Spire 2 combat.
+
+The engine models one STS2 combat with full fidelity to the decompiled game
+(see CLAUDE.md and MODULES.md), wrapped in a Gymnasium environment for training
+RL agents. This module re-exports the public API — the combat driver, the
+command and hook layers, and the commonly used creatures/cards/potions/powers.
+The full power and potion catalogues are reachable via the `ALL_POWERS` /
+`ALL_POTIONS` registries; `make_card` / `make_potion` build any card/potion by
+id.
+"""
+from __future__ import annotations
+
+# ── Environment ──────────────────────────────────────────────────────────────
 from .env import STS2CombatEnv
+
+# ── Combat engine ────────────────────────────────────────────────────────────
 from .combat import CombatState, CombatCtx
-from .cards import Card, StrikeCard, DefendCard, SweepCard, BreakthroughCard, make_card, register_card
 from .creatures import Creature
 from .player import PlayerCombatState
-from .monsters import Monster, Intent, Encounter, FuzzyWurmCrawler, FUZZY_WURM_ENCOUNTER, Nibbit, NIBBITS_NORMAL, NIBBITS_WEAK
+from .hooks import HookSystem
+
+# ── Command layer ────────────────────────────────────────────────────────────
+from .cmds import DamageCmd, BlockCmd, StrengthCmd, PowerCmd, CreatureCmd
+from .valueprops import ValueProp, DamageProps
+
+# ── Cards ────────────────────────────────────────────────────────────────────
+from .cards import (
+    Card,
+    StrikeCard,
+    DefendCard,
+    SweepCard,
+    BreakthroughCard,
+    make_card,
+    register_card,
+)
+
+# ── Monsters ─────────────────────────────────────────────────────────────────
+from .monsters import (
+    Monster,
+    Intent,
+    Encounter,
+    FuzzyWurmCrawler,
+    FUZZY_WURM_ENCOUNTER,
+    Nibbit,
+    NIBBITS_NORMAL,
+    NIBBITS_WEAK,
+)
 from .monsters.base import MoveType
 from .monsters.state_machine import (
     MachineMonster,
@@ -14,9 +55,8 @@ from .monsters.state_machine import (
     RandomBranchState,
     ConditionalBranchState,
 )
-from .hooks import HookSystem
-from .cmds import DamageCmd, BlockCmd, StrengthCmd, PowerCmd, CreatureCmd
-from .valueprops import ValueProp, DamageProps
+
+# ── Potions (see ALL_POTIONS / make_potion for the full catalogue) ───────────
 from .potions import (
     Potion,
     FirePotion,
@@ -27,9 +67,12 @@ from .potions import (
     make_potion,
     ALL_POTIONS,
 )
+
+# ── Powers (see ALL_POWERS for the full catalogue) ───────────────────────────
 from .powers import (
     Power,
     PowerType,
+    # Buffs
     StrengthPower,
     DexterityPower,
     BarricadePower,
@@ -44,9 +87,85 @@ from .powers import (
     ArtifactPower,
     ThornsPower,
     IntangiblePower,
+    # Debuffs
     VulnerablePower,
     WeakPower,
     FrailPower,
     PoisonPower,
     ALL_POWERS,
 )
+
+__all__ = [
+    # Environment
+    "STS2CombatEnv",
+    # Combat engine
+    "CombatState",
+    "CombatCtx",
+    "Creature",
+    "PlayerCombatState",
+    "HookSystem",
+    # Command layer
+    "DamageCmd",
+    "BlockCmd",
+    "StrengthCmd",
+    "PowerCmd",
+    "CreatureCmd",
+    "ValueProp",
+    "DamageProps",
+    # Cards
+    "Card",
+    "StrikeCard",
+    "DefendCard",
+    "SweepCard",
+    "BreakthroughCard",
+    "make_card",
+    "register_card",
+    # Monsters
+    "Monster",
+    "Intent",
+    "Encounter",
+    "MoveType",
+    "FuzzyWurmCrawler",
+    "FUZZY_WURM_ENCOUNTER",
+    "Nibbit",
+    "NIBBITS_NORMAL",
+    "NIBBITS_WEAK",
+    "MachineMonster",
+    "MonsterMoveStateMachine",
+    "MonsterState",
+    "MoveState",
+    "MoveRepeatType",
+    "RandomBranchState",
+    "ConditionalBranchState",
+    # Potions
+    "Potion",
+    "FirePotion",
+    "BlockPotion",
+    "StrengthPotion",
+    "BloodPotion",
+    "WeakPotion",
+    "make_potion",
+    "ALL_POTIONS",
+    # Powers
+    "Power",
+    "PowerType",
+    "StrengthPower",
+    "DexterityPower",
+    "BarricadePower",
+    "RegenPower",
+    "RitualPower",
+    "DemonFormPower",
+    "FeelNoPainPower",
+    "DarkEmbracePower",
+    "EnragePower",
+    "RupturePower",
+    "CurlUpPower",
+    "ArtifactPower",
+    "ThornsPower",
+    "IntangiblePower",
+    "VulnerablePower",
+    "WeakPower",
+    "FrailPower",
+    "PoisonPower",
+    "ALL_POWERS",
+]

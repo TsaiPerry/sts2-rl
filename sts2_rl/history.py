@@ -1,3 +1,11 @@
+"""CombatHistory — the combat event log, mirroring CombatManager.History.
+
+Records typed entries (card plays, card exhausts, damage received) tagged with
+the turn they happened on. Registered as the first hook listener so entries
+already exist when powers and cards react to the same event, and queried by
+cards/powers for "did X happen this turn / this combat" conditionals (Evil Eye,
+Spite, Tear Asunder, Stomp, ...).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

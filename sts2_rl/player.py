@@ -1,3 +1,13 @@
+"""PlayerCombatState — the player side of a combat, mirroring STS2's
+PlayerCombatState.
+
+Extends Creature with energy, the four card piles (hand / draw / discard /
+exhaust), and potions. Owns the card-flow verbs: `start_turn` (clear block →
+reset energy → turn-start hooks → draw, with innate-card handling on turn 1),
+`discard_hand` (respecting Retain), `reshuffle_discard_into_draw`, and the
+low-level `_draw`. Constants (ENERGY_PER_TURN, DRAW_PER_TURN, MAX_HAND_SIZE,
+MAX_POTIONS) live here as class attributes.
+"""
 from __future__ import annotations
 
 import random

@@ -1,3 +1,12 @@
+"""Damage/block typing — ValueProp flags and DamageProps combinations.
+
+Every `DamageCmd.deal` / `BlockCmd.apply` is typed with `ValueProp` flags,
+mirroring STS2's ValueProp. The flags decide which parts of the damage
+pipeline apply: only MOVE-and-not-UNPOWERED ("powered") damage is boosted by
+Strength/Vulnerable/Weak (`is_powered_attack`), and UNBLOCKABLE damage skips
+block absorption. `DamageProps` bundles the common flag combinations by source
+(card attack, monster move, HP-loss drawback, Poison, ...).
+"""
 from __future__ import annotations
 
 from enum import IntFlag

@@ -1,3 +1,16 @@
+"""CombatState — the top-level combat driver and turn loop.
+
+Owns the player, the enemy list, the shared RNG, the HookSystem, and the
+CombatHistory, and wires them together at construction. Exposes the player-
+facing API — `play_card` / `auto_play_card` / `use_potion` / `end_turn` /
+`select_cards` / `valid_actions` — and runs the turn structure documented in
+CLAUDE.md (player turn-end → turn-end-in-hand cards → discard → per-enemy
+turns → side-end → next player turn), ending combat when the player dies or
+every non-minion enemy is gone.
+
+Also defines `CombatCtx`, the lightweight per-execution context handed to cards
+and Cmds during resolution, and the `Phase` / `CombatResult` value types.
+"""
 from __future__ import annotations
 
 import random

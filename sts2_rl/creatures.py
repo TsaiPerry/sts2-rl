@@ -1,3 +1,10 @@
+"""Creature base class — the common ground between the player and monsters.
+
+A Creature owns the state every combatant shares: HP, block, the `powers`
+dict, side ("player"/"enemy"), and the `stunned`/`escaped` flags that the
+combat loop reads. `PlayerCombatState` (player.py) and `Monster`
+(monsters/base.py) both subclass it. Mirrors STS2's CreatureModel.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

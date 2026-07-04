@@ -1,3 +1,12 @@
+"""STS2CombatEnv — the Gymnasium wrapper used for RL training.
+
+Deliberately narrower than the full engine: a minimal Strike/Defend training
+env with 3 actions (end turn / play a Strike / play a Defend) and a 17-float
+observation (documented in the OBS layout comment below). Reward is the
+per-step normalized HP delta plus 1.0 on a win. `action_masks` supports
+sb3-contrib's MaskablePPO. The engine underneath supports far more (full hand,
+targeting, potions, every encounter) — this env just doesn't expose it yet.
+"""
 from __future__ import annotations
 
 import random

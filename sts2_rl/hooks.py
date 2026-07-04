@@ -1,3 +1,14 @@
+"""HookSystem — the central callback registry, mirroring STS2's AbstractModel
+hook pattern.
+
+Every power, card, and the combat history register as a listener on a single
+`HookSystem`. Dispatch is duck-typed: a hook only calls listeners that define a
+matching method, so a listener implements only the hooks it cares about. Three
+families (see the HookSystem docstring): Modifier (aggregate a return value),
+Event (fire-and-forget), and Predicate (any False short-circuits). `HookSystem.
+combat` back-references the owning CombatState so listeners can reach
+combat-level state.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

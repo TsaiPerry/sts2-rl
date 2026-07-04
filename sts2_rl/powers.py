@@ -1,3 +1,15 @@
+"""Powers — buffs and debuffs, mirroring STS2's PowerModel (src/Core/Models/
+Powers).
+
+Every power subclasses `Power` and overrides only the hook methods it needs;
+the HookSystem calls them by duck-typing. `PowerCmd.apply` (cmds.py) handles
+stacking, Artifact interception of debuffs, and registration; `_tick` /
+`_tick_duration` handle duration decrement and `_expire` unregisters.
+
+Organised into sections: Buffs, Debuffs, Ironclad card powers, Overgrowth
+(Act 1) enemy powers, and Hive (Act 2) enemy powers, followed by the
+`ALL_POWERS` id→class registry at the bottom.
+"""
 from __future__ import annotations
 
 from enum import Enum
