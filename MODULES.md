@@ -141,7 +141,8 @@ actions (end turn / play a Strike / play a Defend) and a 17-float observation
 (layout documented at the top of the file). Reward is the per-step normalized
 HP delta plus 1.0 on a win; `action_masks` supports sb3-contrib's MaskablePPO.
 Growing the action space to full hand indices + targets + potions is the
-natural next step (the engine already supports all of it).
+natural next step (the engine already supports all of it) — [RL.md](RL.md)
+maps out every interface that work needs to cover.
 
 ## `test/run.py` — interactive demo
 A standalone terminal client for playing a combat by hand — not part of the

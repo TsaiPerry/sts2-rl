@@ -155,7 +155,8 @@ def _interactive_selector(purpose: str, candidates: list[Card], count: int) -> l
     """Card selector for CombatState.card_selector: prompts instead of random.
 
     Called mid-card-resolution by effects like Armaments ("upgrade"),
-    Burning Pact ("exhaust"), Headbutt ("from_discard"), Brand ("brand").
+    Brand / Burning Pact / True Grit+ ("exhaust"), Headbutt ("to_draw_top"),
+    and the Knowledge Demon's curse pick ("curse_of_knowledge").
     """
     count = min(count, len(candidates))
     if count == len(candidates):
