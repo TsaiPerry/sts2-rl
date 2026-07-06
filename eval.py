@@ -22,10 +22,10 @@ class _TorchProxy:
 _sb3_save_util.th = _TorchProxy()
 
 from sb3_contrib import MaskablePPO
-from sts2_rl import STS2CombatEnv
+from sts2_rl import STS2CombatEnv, STS2FullCombatEnv
 
-def evaluate(model_path: str, n_episodes: int = 1000) -> None:
-    env = STS2CombatEnv()
+def evaluate(model_path: str, n_episodes: int = 1000, env_name: str = "simple") -> None:
+    env = STS2FullCombatEnv() if env_name == "full" else STS2CombatEnv()
     model = MaskablePPO.load(model_path, env=env)
 
     final_hp = []
@@ -71,5 +71,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model", help="Path to saved model (e.g. sts2_ppo)")
     parser.add_argument("--episodes", type=int, default=1000)
+    parser.add_argument("--env", choices=["simple", "full"], default="simple",
+                        help="'simple' = STS2CombatEnv (default, matches sts2_ppo); "
+                             "'full' = STS2FullCombatEnv (matches train.py / sts2_full)")
     args = parser.parse_args()
-    evaluate(args.model, args.episodes)
+    evaluate(args.model, args.episodes, args.env)

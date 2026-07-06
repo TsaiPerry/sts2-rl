@@ -1,4 +1,21 @@
+# Local docs / notes (kept out of the repo)
 CLAUDE.md
-venv
 ENEMIES.md
 RL.md
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+venv
+.venv/
+
+# RL training artifacts (trained models, logs)
+sts2_full.zip
+*.monitor.csv
+monitor.csv
+tensorboard/
+runs/

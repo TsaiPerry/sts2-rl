@@ -12,6 +12,7 @@ from __future__ import annotations
 
 # ── Environment ──────────────────────────────────────────────────────────────
 from .env import STS2CombatEnv
+from .full_env import STS2FullCombatEnv
 
 # ── Combat engine ────────────────────────────────────────────────────────────
 from .combat import CombatState, CombatCtx
@@ -98,6 +99,7 @@ from .powers import (
 __all__ = [
     # Environment
     "STS2CombatEnv",
+    "STS2FullCombatEnv",
     # Combat engine
     "CombatState",
     "CombatCtx",
