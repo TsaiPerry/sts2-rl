@@ -17,7 +17,14 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 import random
 
-from sts2_rl import CombatState
+from sts2_rl import (
+    CombatState,
+    preview_card_block,
+    preview_card_damage,
+    preview_card_energy_cost,
+    preview_incoming_damage,
+    preview_total_incoming,
+)
 from sts2_rl.cards import Card, TargetType, make_card
 from sts2_rl.creatures import Creature
 from sts2_rl.monsters import Monster, MoveType
@@ -49,15 +56,16 @@ _TARGET_HINTS = {
 def _cost_str(state: CombatState, card: Card) -> str:
     if card.energy_cost_x:
         return "X"
-    # card.energy_cost already includes per-turn modifiers (Stomp discounts,
-    # Infernal Blade freebies); the hook adds power effects on top (Tangled).
-    return str(state.hooks.modify_card_energy_cost(card, card.energy_cost))
+    # preview_card_energy_cost mirrors play_card's cost resolution: the effective
+    # cost after per-turn modifiers (Stomp discounts, Infernal Blade freebies)
+    # and power hooks (Tangled).
+    return str(preview_card_energy_cost(state, card))
 
 
 def _is_affordable(state: CombatState, card: Card) -> bool:
     if card.energy_cost_x:
         return True  # X may be 0
-    return state.hooks.modify_card_energy_cost(card, card.energy_cost) <= state.player.energy
+    return preview_card_energy_cost(state, card) <= state.player.energy
 
 
 def _powers_str(c: Creature) -> str:
@@ -66,23 +74,44 @@ def _powers_str(c: Creature) -> str:
     return f"  [{', '.join(f'{n}:{pw.amount}' for n, pw in c.powers.items())}]"
 
 
-def _intent_str(e: Monster) -> str:
+def _intent_str(state: CombatState, e: Monster) -> str:
     intent = e.current_intent
     extra = "".join(f" +{t.value}" for t in intent.also)
     if intent.move_type != MoveType.ATTACK:
         return f"{intent.move_type.value.replace('_', ' ').title()}{extra}"
-    dmg = intent.damage + e.strength
-    if intent.hits > 1:
-        return f"Attack {intent.hits}×{dmg} ({intent.hits * dmg} total){extra}"
-    return f"Attack {dmg}{extra}"
+    # preview_incoming_damage runs the full modifier pipeline (enemy
+    # Strength/Weak, player Vulnerable, Intangible cap) — the number the intent
+    # actually displays. None means the enemy is stunned and will skip the move.
+    prev = preview_incoming_damage(state, e)
+    if prev is None:
+        return f"Attack (stunned){extra}"
+    if prev.hits > 1:
+        return f"Attack {prev.hits}×{prev.per_hit} ({prev.total} total){extra}"
+    return f"Attack {prev.per_hit}{extra}"
 
 
-def _enemy_line(i: int, e: Monster) -> str:
+def _enemy_line(state: CombatState, i: int, e: Monster) -> str:
     name = e.__class__.__name__
     if e.is_dead:
         return f"  [{i}] {name:10s}  DEAD"
     blk = f"  Block {e.block}" if e.block else ""
-    return f"  [{i}] {name:10s}  HP {e.hp:>3}/{e.max_hp}{blk}  → {_intent_str(e)}{_powers_str(e)}"
+    return f"  [{i}] {name:10s}  HP {e.hp:>3}/{e.max_hp}{blk}  → {_intent_str(state, e)}{_powers_str(e)}"
+
+
+def _effect_preview(state: CombatState, card: Card) -> str:
+    """Fully-modified damage/block the card would produce right now — the
+    numbers the game prints on the card face. Damage is previewed against the
+    first living enemy (the default hover target)."""
+    parts: list[str] = []
+    target = next((e for e in state.enemies if not e.is_dead), None)
+    if target is not None:
+        dmg = preview_card_damage(state, card, target)
+        if dmg is not None:
+            parts.append(f"{dmg} dmg")
+    blk = preview_card_block(state, card)
+    if blk is not None:
+        parts.append(f"{blk} blk")
+    return f"  ({', '.join(parts)})" if parts else ""
 
 
 def _hand_line(state: CombatState, i: int, card: Card) -> str:
@@ -95,7 +124,7 @@ def _hand_line(state: CombatState, i: int, card: Card) -> str:
         note = "  (no energy)"
     else:
         note = ""
-    return f"    {i}: [{_cost_str(state, card)}E] {name:14s} {hint}{note}"
+    return f"    {i}: [{_cost_str(state, card)}E] {name:14s} {hint}{_effect_preview(state, card)}{note}"
 
 
 def _show_pile(name: str, cards: list[Card], *, hide_order: bool = False) -> None:
@@ -128,7 +157,10 @@ def _render(state: CombatState) -> None:
     print(f"  Draw {len(p.draw_pile)}  Discard {len(p.discard_pile)}  Exhaust {len(p.exhaust_pile)}")
     print()
     for i, e in enumerate(state.enemies):
-        print(_enemy_line(i, e))
+        print(_enemy_line(state, i, e))
+    incoming = preview_total_incoming(state)
+    if incoming:
+        print(f"\n  Incoming this turn: {incoming} HP (after block)")
     print()
     print("  Hand:")
     for i, card in enumerate(p.hand):

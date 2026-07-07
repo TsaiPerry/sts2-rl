@@ -122,6 +122,56 @@ class Card(ABC):
         """Mirrors CardModel.IsUpgradable (upgrade level below the max)."""
         return self.upgrade_level < self.max_upgrade_level
 
+    # ── Declarative base stats (machine-readable card numbers) ───────────
+    # Cards store their printed numbers as instance vars set in _init_vars
+    # and mutated by _on_upgrade (self._damage / self._hits / self._block /
+    # self._hp_loss, plus one card-specific "magic" amount) — the repo-wide
+    # convention. These properties expose that convention as a uniform read
+    # API (mirrors the game's dynamic card vars, CardModel.
+    # UpdateDynamicVarPreview reads the same numbers), so upgrades are
+    # reflected automatically. Cards whose damage is computed from combat
+    # state (Body Slam, Bully, Ashen Strike, Perfected Strike) define
+    # calc_damage(ctx, target) instead; previews.card_base_damage prefers it.
+
+    # Attr names that hold a card's principal secondary number ("magic
+    # number"), in priority order; magic_number exposes the first present.
+    _MAGIC_ATTRS = (
+        "_vulnerable", "_weak", "_strength", "_power_amount", "_power",
+        "_plating", "_cards", "_energy", "_energy_gain", "_heal", "_extra",
+        "_increase", "_attacks", "_repeat",
+    )
+
+    @property
+    def base_damage(self) -> int | None:
+        """Printed per-hit attack damage before modifiers; None if the card
+        deals no enemy damage (or computes it — see calc_damage)."""
+        return getattr(self, "_damage", None)
+
+    @property
+    def base_hits(self) -> int:
+        """How many times the attack damage is dealt (1 for single hits)."""
+        return getattr(self, "_hits", 1)
+
+    @property
+    def base_block(self) -> int | None:
+        """Printed block gained before modifiers; None if the card grants none."""
+        return getattr(self, "_block", None)
+
+    @property
+    def base_hp_loss(self) -> int:
+        """Self HP-loss drawback printed on the card (Offering, Hemokinesis)."""
+        return getattr(self, "_hp_loss", 0)
+
+    @property
+    def magic_number(self) -> int | None:
+        """The card's principal secondary number (Vulnerable stacks, cards
+        drawn, Strength gained, ...); None if it has no such number."""
+        for attr in self._MAGIC_ATTRS:
+            value = getattr(self, attr, None)
+            if value is not None:
+                return value
+        return None
+
     @property
     def energy_cost(self) -> int:
         if self._free_this_turn:

@@ -135,6 +135,60 @@ the **first** hook listener so entries exist before other listeners react to
 the same event, and queried by cards/powers for "did X happen this turn / this
 combat" conditionals.
 
+### `previews.py` — pure damage/block/cost previews
+The numbers the game shows the player, as *pure reads*: each helper replays
+the exact modifier stages of `DamageCmd.deal` / `BlockCmd.apply` without
+calling a Cmd, so previewing can never mutate combat state.
+`preview_incoming_damage` / `preview_total_incoming` mirror the intent
+display (`AttackIntent.GetSingleDamage`) including post-block HP loss;
+`preview_card_damage` / `preview_card_block` / `preview_card_energy_cost` /
+`card_base_damage` mirror the on-card numbers. Feeds the env observation and
+any policy that needs lethal math.
+
+### `selectors.py` — `scripted_card_selector`
+The deterministic heuristic for `CombatState.card_selector` (RL.md wiring
+option 2), installed by `STS2FullCombatEnv` by default: `"upgrade"` →
+highest-cost upgradable card, `"exhaust"` → Status/Curse first,
+`"to_draw_top"` → cheapest attack, `"curse_of_knowledge"` → the least
+crippling Knowledge Demon curse, unknown purposes → offered order. A pure
+function of `(purpose, candidates, count)` — no RNG, no state reads — so
+selection effects add no hidden stochasticity to training.
+
+### `full_env.py` — `STS2FullCombatEnv` (+ obs layout, `AblatedObsEnv`)
+The full-combat Gymnasium env for MaskablePPO: flat `Discrete` action space
+(end turn / play card×target / potion×target) with legality masks, and the
+schema-v2 observation (see [OBS_PLAN.md](OBS_PLAN.md)) — absolute HP/block/
+damage on a shared unit, pipeline-accurate intent and card previews, the
+per-(hand, enemy) effective-damage matrix, full power vocabulary, enemy
+identity, and pile-composition histograms. The obs dimension is measured from
+a probe combat at construction so the declared space can never drift from
+`_build_obs`. Also exposes the named observation layout (`obs_segments` /
+`obs_slices`: segment name → slice, used by the pin tests and the ablation),
+`numeric_obs_indices` (every absolute-number/preview dim), and
+`AblatedObsEnv` — the baseline ablation arm that zeroes those dims while
+keeping shape, masks, and dynamics identical.
+
+### `probes.py` — the lethal-arithmetic probe suite
+Eight scripted micro-scenarios (`PROBES`) in four single-number pairs —
+strike-lethal edge (enemy 6 vs 7 HP), block-or-die edge (12 vs 11 telegraphed
+against 12 HP), Vulnerable present/absent, player Weak present/absent — where
+passing both sides of a pair requires doing the exact arithmetic. Each probe
+is a one-dummy combat (fixed-stat `probe_dummy` enemy, hand = [Strike,
+Defend], 1 energy); a policy plays one turn and a turn-level outcome is
+checked (won untouched / survived / raced). `run_probes` / `probe_accuracy`
+score any `(env, obs, mask) -> action` policy; `lethal_oracle` is the
+scripted numerate ceiling (8/8 by construction) and a baseline player.
+
+### `evaluation.py` — win rate + probe accuracy side by side
+`evaluate_win_rate` (seeded episodes over any env; reports win rate, mean
+turns, mean HP left) and `evaluate_probes`, plus the policy adapters:
+`masked_random_policy`, `model_policy` (MaskablePPO, with an optional obs
+transform), and `ablation_transform` (the `AblatedObsEnv` zeroing as a
+transform, for evaluating ablation-trained models on the raw-obs probes).
+CLIs: `py eval.py MODEL --env full [--ablated] [--baselines]` prints the
+metrics table; `py test/ablation.py` trains full-vs-ablated MaskablePPO arms
+on identical seeds and reports win-rate curves + probe accuracy for both.
+
 ### `env.py` — `STS2CombatEnv`
 The Gymnasium wrapper for RL training. Deliberately narrower than the engine: 3
 actions (end turn / play a Strike / play a Defend) and a 17-float observation

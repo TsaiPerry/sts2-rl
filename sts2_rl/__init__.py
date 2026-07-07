@@ -24,6 +24,42 @@ from .hooks import HookSystem
 from .cmds import DamageCmd, BlockCmd, StrengthCmd, PowerCmd, CreatureCmd
 from .valueprops import ValueProp, DamageProps
 
+# ── Previews (pure reads of the numbers the game displays) ───────────────────
+from .previews import (
+    AttackPreview,
+    preview_incoming_damage,
+    preview_total_incoming,
+    card_base_damage,
+    preview_card_damage,
+    preview_card_block,
+    preview_card_energy_cost,
+)
+
+# ── Card selection (deterministic CombatState.card_selector heuristic) ───────
+from .selectors import scripted_card_selector
+
+# ── Evaluation (OBS_PLAN Phase 4: lethal probes, win-rate evals, ablation) ───
+from .full_env import AblatedObsEnv, numeric_obs_indices, obs_segments, obs_slices
+from .probes import (
+    PROBES,
+    Probe,
+    ProbeResult,
+    lethal_oracle,
+    probe_accuracy,
+    probe_dummy,
+    run_probe,
+    run_probes,
+)
+from .evaluation import (
+    WinRateReport,
+    ablation_transform,
+    evaluate_probes,
+    evaluate_win_rate,
+    masked_random_policy,
+    model_policy,
+    probe_summary,
+)
+
 # ── Cards ────────────────────────────────────────────────────────────────────
 from .cards import (
     Card,
@@ -114,6 +150,36 @@ __all__ = [
     "CreatureCmd",
     "ValueProp",
     "DamageProps",
+    # Previews
+    "AttackPreview",
+    "preview_incoming_damage",
+    "preview_total_incoming",
+    "card_base_damage",
+    "preview_card_damage",
+    "preview_card_block",
+    "preview_card_energy_cost",
+    # Card selection
+    "scripted_card_selector",
+    # Evaluation
+    "AblatedObsEnv",
+    "numeric_obs_indices",
+    "obs_segments",
+    "obs_slices",
+    "PROBES",
+    "Probe",
+    "ProbeResult",
+    "lethal_oracle",
+    "probe_accuracy",
+    "probe_dummy",
+    "run_probe",
+    "run_probes",
+    "WinRateReport",
+    "ablation_transform",
+    "evaluate_probes",
+    "evaluate_win_rate",
+    "masked_random_policy",
+    "model_policy",
+    "probe_summary",
     # Cards
     "Card",
     "StrikeCard",
