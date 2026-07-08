@@ -1,0 +1,290 @@
+"""Raw-PyTorch masked PPO for STS2FullCombatEnv (no stable-baselines).
+
+    py train_torch.py                                       # Act-1 pool
+    py train_torch.py --encounter fuzzy_wurm_weak --timesteps 500000
+    py train_torch.py --resume runs/sts2_torch.pt           # continue
+
+This is the baseline loop from the plan: a plain MLP torso (``sts2_rl.models``)
+trained with PPO. The one thing MaskablePPO did for us — applying
+``env.action_masks()`` — we now do ourselves, at BOTH act-time and update-time,
+so the ratio and entropy are computed over the same masked distribution the
+agent acted under.
+
+Single-file, hand-vectorized over ``--n-envs`` synchronous envs. Everything the
+architecture plan cares about is swappable without touching this file: change
+the torso in ``models.py``; change the observation in ``full_env.py``. The loop
+only depends on ``reset`` / ``step`` / ``action_masks`` and the model's three
+methods.
+"""
+from __future__ import annotations
+
+import argparse
+import time
+from collections import deque
+
+import numpy as np
+import torch
+import torch.nn as nn
+
+from sts2_rl import STS2FullCombatEnv
+from sts2_rl.full_env import OBS_SCHEMA_VERSION
+from sts2_rl.models import MaskedActorCritic
+from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
+
+
+def parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser()
+    # experiment
+    ap.add_argument("--timesteps", type=int, default=1_000_000)
+    ap.add_argument("--encounter", default=None,
+                    help="Overgrowth encounter key to fix (default: sample the whole act)")
+    ap.add_argument("--card-obs", choices=["hybrid", "features"], default="hybrid")
+    ap.add_argument("--enemy-hp-reward", type=float, default=0.0,
+                    help="dense damage-dealt reward weight (0 = HP-delta + win only)")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--save", default="runs/sts2_torch.pt")
+    ap.add_argument("--resume", default=None)
+    ap.add_argument("--save-every", type=int, default=50, help="iterations between checkpoints")
+    # rollout / PPO
+    ap.add_argument("--n-envs", type=int, default=8)
+    ap.add_argument("--n-steps", type=int, default=512, help="rollout length per env")
+    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--gamma", type=float, default=0.99)
+    ap.add_argument("--gae-lambda", type=float, default=0.95)
+    ap.add_argument("--clip", type=float, default=0.2)
+    ap.add_argument("--epochs", type=int, default=4)
+    ap.add_argument("--minibatches", type=int, default=8)
+    ap.add_argument("--ent-coef", type=float, default=0.01)
+    ap.add_argument("--vf-coef", type=float, default=0.5)
+    ap.add_argument("--max-grad-norm", type=float, default=0.5)
+    ap.add_argument("--target-kl", type=float, default=None,
+                    help="early-stop the epoch loop if approx_kl exceeds this")
+    ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
+    return ap.parse_args()
+
+
+def make_env(args: argparse.Namespace) -> STS2FullCombatEnv:
+    return STS2FullCombatEnv(
+        encounter=OVERGROWTH[args.encounter] if args.encounter else None,
+        card_obs=args.card_obs,
+        enemy_hp_reward_scale=args.enemy_hp_reward,
+    )
+
+
+def main() -> None:
+    args = parse_args()
+    device = torch.device(args.device)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    envs = [make_env(args) for _ in range(args.n_envs)]
+    obs_dim = envs[0].observation_space.shape[0]
+    n_actions = envs[0].action_space.n
+
+    agent = MaskedActorCritic(obs_dim, n_actions, hidden=tuple(args.hidden)).to(device)
+    optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr, eps=1e-5)
+
+    start_iter = 0
+    if args.resume:
+        ckpt = torch.load(args.resume, map_location=device, weights_only=False)
+        if ckpt.get("obs_schema") != OBS_SCHEMA_VERSION:
+            raise SystemExit(
+                f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
+                f"{OBS_SCHEMA_VERSION}; the observation layout changed — retrain.")
+        agent.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optim"])
+        start_iter = ckpt.get("iteration", 0)
+        print(f"Resumed from {args.resume} at iteration {start_iter}")
+
+    # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
+    N, E = args.n_steps, args.n_envs
+    obs_buf = torch.zeros((N, E, obs_dim), device=device)
+    mask_buf = torch.zeros((N, E, n_actions), dtype=torch.bool, device=device)
+    act_buf = torch.zeros((N, E), dtype=torch.long, device=device)
+    logp_buf = torch.zeros((N, E), device=device)
+    rew_buf = torch.zeros((N, E), device=device)
+    done_buf = torch.zeros((N, E), device=device)
+    val_buf = torch.zeros((N, E), device=device)
+
+    def stack_masks() -> torch.Tensor:
+        return torch.as_tensor(
+            np.array([e.action_masks() for e in envs]), dtype=torch.bool, device=device)
+
+    # initial state (distinct seed per env, then their RNG streams run on)
+    next_obs = torch.as_tensor(
+        np.array([e.reset(seed=args.seed + i)[0] for i, e in enumerate(envs)]),
+        dtype=torch.float32, device=device)
+    next_mask = stack_masks()
+    next_done = torch.zeros(E, device=device)
+
+    # episodic logging (raw env reward, not the training-time bootstrap fold-in)
+    ep_ret_running = np.zeros(E, dtype=np.float64)
+    ep_len_running = np.zeros(E, dtype=np.int64)
+    ret_hist: deque[float] = deque(maxlen=100)
+    len_hist: deque[int] = deque(maxlen=100)
+    win_hist: deque[float] = deque(maxlen=100)
+
+    batch_size = N * E
+    mb_size = batch_size // args.minibatches
+    n_iters = args.timesteps // batch_size
+    global_step = 0
+    t0 = time.time()
+
+    for iteration in range(start_iter, start_iter + n_iters):
+        # ── collect a rollout ───────────────────────────────────────────────
+        for t in range(N):
+            global_step += E
+            obs_buf[t] = next_obs
+            mask_buf[t] = next_mask
+            done_buf[t] = next_done
+            with torch.no_grad():
+                action, logp, _, value = agent.get_action_and_value(next_obs, next_mask)
+            val_buf[t] = value
+            act_buf[t] = action
+            logp_buf[t] = logp
+
+            acts = action.cpu().numpy()
+            new_obs = np.empty((E, obs_dim), np.float32)
+            rewards = np.empty(E, np.float32)
+            dones = np.empty(E, np.float32)
+            for i, env in enumerate(envs):
+                o, r, term, trunc, info = env.step(int(acts[i]))
+                ep_ret_running[i] += r
+                ep_len_running[i] += 1
+                # Time-limit bootstrap: fold gamma*V(terminal obs) into the reward
+                # and mark done, so GAE treats truncation correctly without a
+                # separate terminal-value path (a natural termination bootstraps 0).
+                if trunc and not term:
+                    with torch.no_grad():
+                        tv = agent.get_value(
+                            torch.as_tensor(o, dtype=torch.float32, device=device).unsqueeze(0))
+                    r = r + args.gamma * float(tv.item())
+                done = term or trunc
+                if done:
+                    ret_hist.append(float(ep_ret_running[i]))
+                    len_hist.append(int(ep_len_running[i]))
+                    win_hist.append(1.0 if info.get("is_success") else 0.0)
+                    ep_ret_running[i] = 0.0
+                    ep_len_running[i] = 0
+                    o, _ = env.reset()
+                new_obs[i] = o
+                rewards[i] = r
+                dones[i] = float(done)
+            rew_buf[t] = torch.as_tensor(rewards, device=device)
+            next_obs = torch.as_tensor(new_obs, dtype=torch.float32, device=device)
+            next_mask = stack_masks()
+            next_done = torch.as_tensor(dones, device=device)
+
+        # ── GAE ─────────────────────────────────────────────────────────────
+        with torch.no_grad():
+            next_value = agent.get_value(next_obs)
+        advantages = torch.zeros_like(rew_buf)
+        lastgae = torch.zeros(E, device=device)
+        for t in reversed(range(N)):
+            if t == N - 1:
+                nonterminal = 1.0 - next_done
+                nextval = next_value
+            else:
+                nonterminal = 1.0 - done_buf[t + 1]
+                nextval = val_buf[t + 1]
+            delta = rew_buf[t] + args.gamma * nextval * nonterminal - val_buf[t]
+            lastgae = delta + args.gamma * args.gae_lambda * nonterminal * lastgae
+            advantages[t] = lastgae
+        returns = advantages + val_buf
+
+        # ── flatten and update ──────────────────────────────────────────────
+        b_obs = obs_buf.reshape(-1, obs_dim)
+        b_mask = mask_buf.reshape(-1, n_actions)
+        b_act = act_buf.reshape(-1)
+        b_logp = logp_buf.reshape(-1)
+        b_adv = advantages.reshape(-1)
+        b_ret = returns.reshape(-1)
+        b_val = val_buf.reshape(-1)
+
+        idx = np.arange(batch_size)
+        approx_kl = torch.tensor(0.0)
+        clipfracs: list[float] = []
+        for _ in range(args.epochs):
+            np.random.shuffle(idx)
+            for start in range(0, batch_size, mb_size):
+                mb = idx[start:start + mb_size]
+                _, newlogp, entropy, newval = agent.get_action_and_value(
+                    b_obs[mb], b_mask[mb], b_act[mb])
+                logratio = newlogp - b_logp[mb]
+                ratio = logratio.exp()
+                with torch.no_grad():
+                    approx_kl = ((ratio - 1) - logratio).mean()
+                    clipfracs.append(((ratio - 1.0).abs() > args.clip).float().mean().item())
+
+                mb_adv = b_adv[mb]
+                mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
+
+                pg_loss = torch.max(
+                    -mb_adv * ratio,
+                    -mb_adv * torch.clamp(ratio, 1 - args.clip, 1 + args.clip),
+                ).mean()
+
+                # clipped value loss
+                v_unclipped = (newval - b_ret[mb]) ** 2
+                v_clip = b_val[mb] + torch.clamp(newval - b_val[mb], -args.clip, args.clip)
+                v_clipped = (v_clip - b_ret[mb]) ** 2
+                v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
+
+                ent_loss = entropy.mean()
+                loss = pg_loss - args.ent_coef * ent_loss + args.vf_coef * v_loss
+
+                optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                optimizer.step()
+
+            if args.target_kl is not None and approx_kl > args.target_kl:
+                break
+
+        # ── logging ─────────────────────────────────────────────────────────
+        sps = int(global_step / (time.time() - t0))
+        ret = np.mean(ret_hist) if ret_hist else float("nan")
+        wr = np.mean(win_hist) if win_hist else float("nan")
+        eplen = np.mean(len_hist) if len_hist else float("nan")
+        print(
+            f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
+            f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
+            f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
+            f"ent {ent_loss.item():.3f}  kl {approx_kl.item():.4f}  "
+            f"clipfrac {np.mean(clipfracs):.3f}",
+            flush=True,
+        )
+
+        if args.save and (iteration + 1) % args.save_every == 0:
+            save(agent, optimizer, iteration + 1, args)
+
+    if args.save:
+        save(agent, optimizer, start_iter + n_iters, args)
+        print(f"Saved to {args.save}")
+
+    for e in envs:
+        e.close()
+
+
+def save(agent: MaskedActorCritic, optimizer, iteration: int, args) -> None:
+    import os
+    d = os.path.dirname(args.save)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    torch.save(
+        {
+            "model": agent.state_dict(),
+            "optim": optimizer.state_dict(),
+            "iteration": iteration,
+            "obs_dim": agent.obs_dim,
+            "n_actions": agent.n_actions,
+            "hidden": agent.hidden,
+            "obs_schema": OBS_SCHEMA_VERSION,
+        },
+        args.save,
+    )
+
+
+if __name__ == "__main__":
+    main()
