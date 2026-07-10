@@ -52,7 +52,7 @@ from sts2_rl.probes import lethal_oracle
 def evaluate_simple(model_path: str, n_episodes: int = 1000) -> None:
     """The original toy-env evaluation (STS2CombatEnv, 3 actions)."""
     env = STS2CombatEnv()
-    model = MaskablePPO.load(model_path, env=env)
+    model = MaskablePPO.load(model_path, env=env, device="cpu")
 
     final_hp = []
     wins = 0
@@ -113,7 +113,9 @@ def evaluate_full(
         specs["masked-random"] = (random_pol, None, random_pol)
         specs["oracle"] = (lethal_oracle, None, lethal_oracle)
     if model_path is not None:
-        model = MaskablePPO.load(model_path)
+        # Inference on a 256x256 MLP: CPU avoids SB3's auto-to-GPU warning and
+        # the host<->device copy per predict() call.
+        model = MaskablePPO.load(model_path, device="cpu")
         if ablated:
             specs[f"model:{model_path}"] = (
                 model_policy(model),

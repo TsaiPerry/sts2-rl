@@ -1,8 +1,14 @@
 """Raw-PyTorch masked PPO for STS2FullCombatEnv (no stable-baselines).
 
-    py train_torch.py                                       # Act-1 pool
+    py train_torch.py                                       # Act-1 pool; auto-resumes runs/sts2_torch.pt if present
+    py train_torch.py --fresh                               # ignore any existing checkpoint, start over
     py train_torch.py --encounter fuzzy_wurm_weak --timesteps 500000
-    py train_torch.py --resume runs/sts2_torch.pt           # continue
+    py train_torch.py --resume runs/other.pt                # continue from a specific checkpoint
+
+By default a run *continues* the checkpoint at ``--save`` if the file already
+exists (so re-running ``py train_torch.py`` trains the same model further instead
+of clobbering it); pass ``--fresh`` to start a new model, or ``--resume PATH`` to
+continue from a different checkpoint.
 
 This is the baseline loop from the plan: a plain MLP torso (``sts2_rl.models``)
 trained with PPO. The one thing MaskablePPO did for us — applying
@@ -15,10 +21,18 @@ architecture plan cares about is swappable without touching this file: change
 the torso in ``models.py``; change the observation in ``full_env.py``. The loop
 only depends on ``reset`` / ``step`` / ``action_masks`` and the model's three
 methods.
+
+Runs on CPU by default, and that is usually the *fast* choice: a 256x256 MLP
+over 8 Python-stepped envs is bottlenecked on env stepping and per-step
+host<->device copies, not on matmul, so a GPU tends to be slower here. SB3
+warns about the same thing for MlpPolicy PPO. ``--device cuda`` is there for
+when the torso grows big enough to pay for the transfers -- measure ``sps``
+before and after rather than assuming.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import time
 from collections import deque
 
@@ -41,10 +55,18 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--card-obs", choices=["hybrid", "features"], default="hybrid")
     ap.add_argument("--enemy-hp-reward", type=float, default=0.0,
                     help="dense damage-dealt reward weight (0 = HP-delta + win only)")
+    ap.add_argument("--win-hp-bonus", type=float, default=1.0,
+                    help="terminal win bonus scaled by final HP fraction: win reward is "
+                         "reward_win + win_hp_bonus*(hp/max_hp), so clean wins beat sloppy ones "
+                         "(0 = flat win bonus, the old behavior)")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--device", default="cpu",
+                    help="cpu (default, usually fastest here), cuda, or auto")
     ap.add_argument("--save", default="runs/sts2_torch.pt")
-    ap.add_argument("--resume", default=None)
+    ap.add_argument("--resume", default=None,
+                    help="continue from this checkpoint (default: auto-resume --save if it exists)")
+    ap.add_argument("--fresh", action="store_true",
+                    help="start a new model even if a checkpoint exists at --save")
     ap.add_argument("--save-every", type=int, default=50, help="iterations between checkpoints")
     # rollout / PPO
     ap.add_argument("--n-envs", type=int, default=8)
@@ -64,17 +86,48 @@ def parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
+def resolve_device(requested: str) -> torch.device:
+    """Map ``--device`` onto a real device, and say out loud what we picked.
+
+    ``torch.cuda.is_available()`` is False both when the wheel has no CUDA
+    support compiled in and when it has support but no GPU is visible. Those
+    need different fixes, so they get different messages.
+    """
+    cpu_only_wheel = torch.version.cuda is None
+
+    if requested == "auto":
+        requested = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(requested)
+
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise SystemExit(
+            f"--device cuda requested, but torch reports no usable GPU.\n"
+            + (f"  torch {torch.__version__} is a CPU-only build. Reinstall from a\n"
+               f"  CUDA wheel index -- see the PyTorch section of requirements.txt.\n"
+               if cpu_only_wheel else
+               f"  torch {torch.__version__} has CUDA {torch.version.cuda} support, but no\n"
+               f"  GPU is visible. Check the driver and CUDA_VISIBLE_DEVICES.\n")
+        )
+
+    # Printed unconditionally: a CPU-only wheel on a GPU box is otherwise
+    # indistinguishable from a working GPU setup until you notice the sps.
+    build = torch.version.cuda or "cpu-only build"
+    print(f"torch {torch.__version__} [{build}]  device: {device}", flush=True)
+    return device
+
+
 def make_env(args: argparse.Namespace) -> STS2FullCombatEnv:
     return STS2FullCombatEnv(
         encounter=OVERGROWTH[args.encounter] if args.encounter else None,
         card_obs=args.card_obs,
         enemy_hp_reward_scale=args.enemy_hp_reward,
+        win_hp_bonus=args.win_hp_bonus,
     )
 
 
 def main() -> None:
     args = parse_args()
-    device = torch.device(args.device)
+    device = resolve_device(args.device)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
@@ -82,20 +135,44 @@ def main() -> None:
     obs_dim = envs[0].observation_space.shape[0]
     n_actions = envs[0].action_space.n
 
+    # Resolve which checkpoint (if any) to continue from: an explicit --resume
+    # wins; otherwise re-running auto-continues the checkpoint at --save so a
+    # bare `py train_torch.py` trains the same model further. --fresh forces a
+    # new model even when one exists.
+    resume_path = None
+    if args.fresh:
+        if args.resume:
+            raise SystemExit("--fresh and --resume are mutually exclusive.")
+    elif args.resume:
+        resume_path = args.resume
+    elif args.save and os.path.exists(args.save):
+        resume_path = args.save
+        print(f"Auto-resuming existing checkpoint {args.save} "
+              f"(pass --fresh to start a new model).")
+
     agent = MaskedActorCritic(obs_dim, n_actions, hidden=tuple(args.hidden)).to(device)
     optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr, eps=1e-5)
 
     start_iter = 0
-    if args.resume:
-        ckpt = torch.load(args.resume, map_location=device, weights_only=False)
+    if resume_path:
+        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
         if ckpt.get("obs_schema") != OBS_SCHEMA_VERSION:
             raise SystemExit(
                 f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
                 f"{OBS_SCHEMA_VERSION}; the observation layout changed — retrain.")
+        # The checkpoint's architecture must match the env/args this run built;
+        # a mismatch (different obs, action space, or --hidden) would surface as
+        # a cryptic load_state_dict error, so check first with a clear message.
+        arch = (ckpt.get("obs_dim"), ckpt.get("n_actions"), tuple(ckpt.get("hidden", ())))
+        want = (obs_dim, n_actions, tuple(args.hidden))
+        if arch != want:
+            raise SystemExit(
+                f"checkpoint architecture {arch} != this run's {want} "
+                f"(obs_dim, n_actions, hidden); can't resume — match --hidden or use --fresh.")
         agent.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optim"])
         start_iter = ckpt.get("iteration", 0)
-        print(f"Resumed from {args.resume} at iteration {start_iter}")
+        print(f"Resumed from {resume_path} at iteration {start_iter}")
 
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs

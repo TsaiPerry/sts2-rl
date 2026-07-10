@@ -7,9 +7,14 @@ Controls  : type a card index to play it, 'e' to end your turn,
             exhaust pile.
             Card-selection effects (Armaments, Burning Pact, ...) prompt you
             to choose; X-cost cards spend all remaining energy.
+Model     : if a trained checkpoint exists at MODEL_PATH, each render also
+            prints the action the model would take (its argmax over the same
+            observation/action space it trains on). Missing checkpoint / torch
+            just turns the hint off — the demo still runs.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,6 +36,7 @@ from sts2_rl.monsters import Monster, MoveType
 from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH_ENCOUNTERS
 
 # ── Change this key to fight a different Overgrowth encounter ─────────────────
+MODEL_PATH = "runs/sts2_torch.pt"   # checkpoint to source move suggestions from
 ENCOUNTER = OVERGROWTH_ENCOUNTERS["phrog_parasite"]
 DECK =  ([make_card("strike") for _ in range(4)]
         + [make_card("defend") for _ in range(4)]
@@ -165,7 +171,100 @@ def _render(state: CombatState) -> None:
     print("  Hand:")
     for i, card in enumerate(p.hand):
         print(_hand_line(state, i, card))
+    _print_suggestion(state)
     print(_SEP)
+
+
+# ── Model move suggestion ─────────────────────────────────────────────────────
+# Populated by _load_agent() in main(); left as (None, None) when no usable
+# checkpoint exists so the rest of the demo is unaffected.
+_AGENT = None
+_SUGGEST_ENV = None
+
+
+def _load_agent(path: str, device: str = "cpu"):
+    """Load a train_torch.py checkpoint + a throwaway env to build observations.
+
+    Returns (agent, env) or (None, None) with a one-line reason printed. The env
+    is only borrowed for its _build_obs / action_masks / _decode_action — we
+    point its _state at the live combat, never step it."""
+    if not os.path.exists(path):
+        print(f"  (model hints off: no checkpoint at {path} — train one with `py train_torch.py`)")
+        return None, None
+    try:
+        import torch
+        from sts2_rl import STS2FullCombatEnv
+        from sts2_rl.full_env import OBS_SCHEMA_VERSION
+        from sts2_rl.models import MaskedActorCritic
+    except Exception as exc:  # torch not installed, etc.
+        print(f"  (model hints off: {exc})")
+        return None, None
+
+    ckpt = torch.load(path, map_location=device, weights_only=False)
+    if ckpt.get("obs_schema") != OBS_SCHEMA_VERSION:
+        print(f"  (model hints off: checkpoint obs schema {ckpt.get('obs_schema')} "
+              f"!= current {OBS_SCHEMA_VERSION} — retrain)")
+        return None, None
+
+    agent = MaskedActorCritic(
+        ckpt["obs_dim"], ckpt["n_actions"], hidden=tuple(ckpt["hidden"])
+    ).to(device)
+    agent.load_state_dict(ckpt["model"])
+    agent.eval()
+
+    env = STS2FullCombatEnv(card_obs="hybrid")
+    if env.observation_space.shape[0] != ckpt["obs_dim"]:
+        print("  (model hints off: env/checkpoint observation dimension mismatch)")
+        return None, None
+    return agent, env
+
+
+def _describe_action(env, state: CombatState, action: int) -> str:
+    """Human-readable form of a flat env action, aligned to the displayed hand."""
+    kind, a, b = env._decode_action(action)
+    if kind == "end":
+        return "end turn"
+    if kind == "potion":
+        pots = getattr(state.player, "potions", [])
+        name = repr(pots[a]) if a < len(pots) and pots[a] else f"potion {a}"
+        return f"use {name}"
+    hand = state.player.hand
+    if a >= len(hand):
+        return f"play hand[{a}]"
+    card = hand[a]
+    desc = f"play card {a} ({card!r})"
+    if card.target_type == TargetType.ANY_ENEMY and b < len(state.enemies):
+        desc += f" → [{b}] {state.enemies[b].__class__.__name__}"
+    return desc
+
+
+def _print_suggestion(state: CombatState) -> None:
+    """Print the model's argmax move (and its top alternatives) for this state."""
+    if _AGENT is None or _SUGGEST_ENV is None or state.is_over:
+        return
+    import numpy as np
+    import torch
+
+    _SUGGEST_ENV._state = state          # borrow, read-only
+    obs = _SUGGEST_ENV._build_obs()
+    mask = _SUGGEST_ENV.action_masks()
+    obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+    mask_t = torch.as_tensor(mask, dtype=torch.bool).unsqueeze(0)
+    with torch.no_grad():
+        logits = _AGENT.actor(obs_t).masked_fill(~mask_t, float("-inf"))
+        probs = torch.softmax(logits, dim=-1).squeeze(0).numpy()
+
+    order = np.argsort(probs)[::-1]
+    best = int(order[0])
+    print(f"\n  Model would: {_describe_action(_SUGGEST_ENV, state, best)}  "
+          f"({probs[best] * 100:.0f}%)")
+    alts = [int(i) for i in order[1:] if probs[i] > 0.02][:2]
+    if alts:
+        alt_str = ", ".join(
+            f"{_describe_action(_SUGGEST_ENV, state, i)} ({probs[i] * 100:.0f}%)"
+            for i in alts
+        )
+        print(f"    else: {alt_str}")
 
 
 # ── Input handling ────────────────────────────────────────────────────────────
@@ -246,6 +345,10 @@ def main() -> None:
         rng=random.Random(),
     )
     state.card_selector = _interactive_selector
+
+    global _AGENT, _SUGGEST_ENV
+    _AGENT, _SUGGEST_ENV = _load_agent(MODEL_PATH)
+
     _render(state)
 
     while not state.is_over:

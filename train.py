@@ -52,11 +52,13 @@ def main() -> None:
     encounter = OVERGROWTH[args.encounter] if args.encounter else None
     env = Monitor(STS2FullCombatEnv(encounter=encounter, card_obs=args.card_obs))
 
+    # device="cpu" explicitly: SB3's "auto" would move MlpPolicy to the GPU and
+    # then warn that PPO-with-an-MLP is slower there than on the CPU.
     if args.resume and os.path.exists(args.resume + ".zip"):
-        model = MaskablePPO.load(args.resume, env=env)
+        model = MaskablePPO.load(args.resume, env=env, device="cpu")
         print(f"Resuming from {args.resume}.zip")
     else:
-        model = MaskablePPO("MlpPolicy", env, verbose=1)
+        model = MaskablePPO("MlpPolicy", env, verbose=1, device="cpu")
         print("Starting fresh.")
 
     model.learn(total_timesteps=args.timesteps)

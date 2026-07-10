@@ -53,9 +53,11 @@ The exact dimension is measured once at construction so the declared space and
 
 Reward (all configurable): per-step normalized player-HP delta, plus a terminal
 win/loss bonus. Because only ``end turn`` advances the enemy, damage taken is
-naturally attributed to the step that ended the turn. ``enemy_hp_reward_scale``
-(default 0) adds a dense damage-dealt signal normalized by the encounter's
-total starting HP.
+naturally attributed to the step that ended the turn. On a win the bonus is
+``reward_win + win_hp_bonus * (final HP / max HP)`` — ``win_hp_bonus`` (default 0)
+makes winning with more HP worth more, so the agent is pushed to win *clean* and
+not just to win. ``enemy_hp_reward_scale`` (default 0) adds a dense damage-dealt
+signal normalized by the encounter's total starting HP.
 
 Simplifications (documented, not silent): mid-play card *selections* (Armaments,
 Burning Pact, the Knowledge Demon curse pick, …) are not exposed as separate
@@ -80,6 +82,7 @@ from .cards.base import _CARD_CLASSES
 from .combat import CombatState, Phase
 from .history import CardPlayedEntry, DamageReceivedEntry
 from .monsters import Encounter, Monster, MoveType
+from .monsters.overgrowth import BOSS_ENCOUNTER_KEYS as _BOSS_KEYS
 from .monsters.overgrowth import ENCOUNTERS as _OVERGROWTH
 from .player import PlayerCombatState
 from .potions import ALL_POTIONS, Potion, make_potion
@@ -257,10 +260,12 @@ def numeric_obs_indices(card_obs: str = "hybrid") -> np.ndarray:
     return np.asarray(idx, dtype=np.int64)
 
 
-DEFAULT_DECK_IDS = ["strike"] * 5 + ["defend"] * 4
-# Default training pool: the whole Act 1 (Overgrowth). Pass encounter=/encounters=
-# to fix a single fight or supply your own curriculum.
-DEFAULT_ENCOUNTERS: list[Encounter] = list(_OVERGROWTH.values())
+DEFAULT_DECK_IDS = ["strike"] * 5 + ["defend"] * 4 + ["bash"] + ["whirlwind"] + ["bloodletting"] + ["pommel_strike"] + ["tremble"]
+# Default training pool: Act 1 (Overgrowth) minus the bosses. Pass
+# encounter=/encounters= to fix a single fight or supply your own curriculum.
+DEFAULT_ENCOUNTERS: list[Encounter] = [
+    e for k, e in _OVERGROWTH.items() if k not in _BOSS_KEYS
+]
 
 
 def _clip01(x: float) -> float:
@@ -291,6 +296,7 @@ class STS2FullCombatEnv(gym.Env):
         card_selector: Callable[[str, list[Card], int], list[Card]] | None = scripted_card_selector,
         reward_win: float = 1.0,
         reward_loss: float = 0.0,
+        win_hp_bonus: float = 0.0,
         hp_reward_scale: float = 1.0,
         enemy_hp_reward_scale: float = 0.0,
         max_steps: int = 2000,
@@ -316,6 +322,7 @@ class STS2FullCombatEnv(gym.Env):
         self._card_selector = card_selector
         self._reward_win = reward_win
         self._reward_loss = reward_loss
+        self._win_hp_bonus = win_hp_bonus
         self._hp_reward_scale = hp_reward_scale
         self._enemy_hp_reward_scale = enemy_hp_reward_scale
         self._max_steps = max_steps
@@ -392,7 +399,15 @@ class STS2FullCombatEnv(gym.Env):
 
         terminated = s.is_over
         if terminated:
-            reward += self._reward_win if s.result.player_won else self._reward_loss
+            if s.result.player_won:
+                # Win bonus scaled by HP conserved: reward_win is the floor for
+                # any win, win_hp_bonus * (final HP fraction) rewards winning
+                # *clean*, so a full-HP win beats a near-death one.
+                reward += self._reward_win + self._win_hp_bonus * (
+                    s.player.hp / max(1, s.player.max_hp)
+                )
+            else:
+                reward += self._reward_loss
         truncated = (not terminated) and self._steps >= self._max_steps
 
         return self._build_obs(), float(reward), terminated, truncated, self._info()

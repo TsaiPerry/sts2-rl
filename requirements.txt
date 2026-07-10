@@ -1,4 +1,62 @@
+# ---------------------------------------------------------------------------
+# sts2-rl dependencies
+#
+# 1. Create and activate a virtualenv (Windows / PowerShell).
+#    Use the `py` launcher: bare `python` often resolves to the Microsoft
+#    Store stub, which fails with "Python was not found".
+#
+#      py -3.12 -m venv venv
+#      .\venv\Scripts\Activate.ps1
+#
+# 2. Install PyTorch explicitly (see below). Do this BEFORE step 3.
+# 3. pip install -r requirements.txt
+#
+# ---------------------------------------------------------------------------
+# PyTorch: pick CPU or GPU. This is a manual step on purpose.
+#
+# Plain `pip install torch` on Windows pulls the CPU-only wheel from PyPI.
+# It works, it just ignores your GPU -- and it fails silently, training at
+# a fraction of the speed rather than raising an error. The CUDA wheels live
+# on a separate index that a requirements file cannot select per-package.
+#
+#   CPU-only:
+#     pip install torch
+#
+#   NVIDIA GPU (CUDA 12.6 -- safe default, needs driver >= 560):
+#     pip install torch --index-url https://download.pytorch.org/whl/cu126
+#
+#   NVIDIA GPU (CUDA 13.0 -- newer, needs driver >= 580):
+#     pip install torch --index-url https://download.pytorch.org/whl/cu130
+#
+# Check which build you ended up with:
+#
+#   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+#
+#   2.12.1+cpu    False   <- CPU build
+#   2.12.1+cu126  True    <- GPU build, working
+#   2.12.1+cu126  False   <- GPU build, but driver/GPU not visible
+#
+# To switch builds, uninstall first -- pip will not swap them on its own,
+# because both satisfy the `torch>=2.0` pin below:
+#
+#   pip uninstall torch
+#
+# Before you reach for the GPU build: for this workload the CPU build is
+# probably the faster one. train_torch.py runs a 256x256 MLP over Python-stepped
+# envs, so it is bottlenecked on env stepping, not matmul, and the per-step
+# host<->device copies cost more than the GPU saves. SB3 warns about exactly
+# this for MlpPolicy PPO. train_torch.py, train.py and eval.py all default to
+# CPU on purpose. Take the CUDA wheel when the torso grows big enough to pay
+# for the transfers -- and compare the reported `sps` before and after.
+# ---------------------------------------------------------------------------
+
 gymnasium>=0.29
 numpy>=1.24
+
+# Installed separately -- see the PyTorch section above. Listed here so a
+# torch-less environment is caught at install time rather than at import.
+torch>=2.0
+
+# Legacy SB3 training path (train.py). train_torch.py does not use these.
 stable-baselines3>=2.3
 sb3-contrib>=2.3

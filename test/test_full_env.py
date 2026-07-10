@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from sts2_rl import STS2FullCombatEnv
+from sts2_rl.monsters.overgrowth import ENCOUNTERS as ALL_ENCOUNTERS
 from sts2_rl.full_env import (
     DEFAULT_ENCOUNTERS,
     ENEMY_ROW_DIM,
@@ -60,7 +61,7 @@ def test_obs_within_declared_space_at_reset():
     assert obs.min() >= 0.0 and obs.max() <= 1.0
 
 
-@pytest.mark.parametrize("enc", DEFAULT_ENCOUNTERS, ids=lambda e: e.id)
+@pytest.mark.parametrize("enc", list(ALL_ENCOUNTERS.values()), ids=lambda e: e.id)
 def test_every_encounter_runs_to_completion(enc):
     env = STS2FullCombatEnv(encounter=enc, max_steps=400)
     terminated, truncated, info = _masked_rollout(env, seed=3, max_steps=400)

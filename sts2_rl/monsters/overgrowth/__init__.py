@@ -57,6 +57,10 @@ ENCOUNTERS: dict[str, Encounter] = {
     "vantom":                VANTOM_BOSS,
 }
 
+BOSS_ENCOUNTER_KEYS: frozenset[str] = frozenset({
+    "ceremonial_beast", "the_kin", "vantom",
+})
+
 __all__ = [
     # base re-exports
     "MoveType", "Intent", "Monster", "Encounter",
@@ -78,5 +82,5 @@ __all__ = [
     "SLIMES_NORMAL", "SLIMES_WEAK", "SLITHERING_STRANGLER_NORMAL",
     "SNAPPING_JAXFRUIT_NORMAL", "THE_KIN_BOSS", "VANTOM_BOSS",
     "VINE_SHAMBLER_NORMAL",
-    "ENCOUNTERS",
+    "ENCOUNTERS", "BOSS_ENCOUNTER_KEYS",
 ]
