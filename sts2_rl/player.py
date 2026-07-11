@@ -64,7 +64,13 @@ class PlayerCombatState(Creature):
             self.block = 0
             self._hooks.on_block_cleared(self)
 
-        self.energy = self._hooks.modify_max_energy(self, self.ENERGY_PER_TURN)
+        # Energy reset — or add-to-current when a listener vetoes the reset
+        # (mirrors ShouldPlayerResetEnergy → ResetEnergy / AddMaxEnergyToCurrent).
+        gained = self._hooks.modify_max_energy(self, self.ENERGY_PER_TURN)
+        if self._hooks.should_reset_energy(self):
+            self.energy = gained
+        else:
+            self.energy += gained
         self._hooks.on_energy_reset(self)
         self._hooks.on_player_turn_start(self)
 
@@ -81,6 +87,9 @@ class PlayerCombatState(Creature):
                 self.draw_pile.extend(innates)  # end of list = top of pile
                 draw_count = max(draw_count, len(innates))
         self._draw(draw_count, from_hand_draw=True)
+        # Post-draw turn-start slot (the game's AfterPlayerTurnStart /
+        # player-side AfterSideTurnStart, both of which run after the draw).
+        self._hooks.on_player_turn_started(self)
 
     def discard_hand(self) -> None:
         """Discard the hand to the discard pile at end of turn, firing per-card

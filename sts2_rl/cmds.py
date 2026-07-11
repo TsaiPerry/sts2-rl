@@ -124,7 +124,7 @@ class BlockCmd:
             amount = int(amount * hooks.modify_block_multiplicative(target, amount, card))
         amount = max(0, amount)
         target.block += amount
-        hooks.on_block_gained(target, amount)
+        hooks.on_block_gained(target, amount, card)
         return amount
 
 
@@ -221,6 +221,8 @@ class PowerCmd:
                 if artifact.amount <= 0:
                     artifact._expire()
                 return  # debuff blocked
+
+        amount = hooks.modify_power_amount(power_cls, target, amount, applier)
 
         if power_cls.id in target.powers:
             existing = target.powers[power_cls.id]

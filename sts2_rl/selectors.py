@@ -14,6 +14,8 @@ hidden stochasticity from selection effects:
 * ``"to_draw_top"`` — the cheapest attack, then the cheapest card.
 * ``"curse_of_knowledge"`` — the least crippling of the Knowledge Demon's
   permanent-curse pair (see ``_CURSE_OF_KNOWLEDGE_RANK``).
+* ``"gambling_chip"`` — only Status/Curse cards (the mulligan may return
+  fewer than ``count``; junk is worth redrawing, everything else is kept).
 * any other purpose — the first candidates, in offered order.
 
 Every branch is a stable sort over the candidate order, so ties resolve
@@ -74,4 +76,8 @@ def scripted_card_selector(
         keyed.sort(
             key=lambda p: (_CURSE_OF_KNOWLEDGE_RANK.get(p[1].id, len(_CURSE_OF_KNOWLEDGE_RANK)), p[0])
         )
+    elif purpose == "gambling_chip":
+        # Gambling Chip's turn-1 mulligan may pick 0..count cards: toss only
+        # the dead weight (Statuses/Curses) and keep everything playable.
+        keyed = [p for p in keyed if _is_junk(p[1])]
     return [card for _, card in keyed[:count]]

@@ -16,7 +16,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from .cards import Card, CardType, make_card, TargetType
 from .cmds import DamageCmd
@@ -25,6 +25,9 @@ from .hooks import HookSystem
 from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
 from .player import PlayerCombatState
 from .potions import Potion
+
+if TYPE_CHECKING:
+    from .relics import Relic
 
 
 class Phase(Enum):
@@ -70,6 +73,8 @@ class CombatState:
         rng: random.Random | None = None,
         encounter: Encounter | None = None,
         potions: list[Potion] | None = None,
+        relics: list[Relic] | None = None,
+        card_selector=None,
     ) -> None:
         self._rng = rng or random.Random()
 
@@ -95,12 +100,20 @@ class CombatState:
         self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
             self.hooks, self._rng
         )
+        # Relics are hook listeners for the whole combat (mirrors RelicModel :
+        # AbstractModel with ShouldReceiveCombatHooks); attach() sets the
+        # combat back-reference and registers them.
+        self.relics: list[Relic] = list(relics or [])
+        for relic in self.relics:
+            relic.attach(self)
         self.phase = Phase.PLAYER_TURN
         # Which side is currently acting ("player" / "enemy"); mirrors the
         # game's CombatState.CurrentSide (used by e.g. Inferno).
         self.current_side = "player"
         # Pluggable in-combat card chooser (see select_cards); None = random.
-        self.card_selector = None
+        # Accepted as a constructor arg because turn-1 effects (Gambling Chip)
+        # can request a selection during __init__, before callers could set it.
+        self.card_selector = card_selector
         self.result: Optional[CombatResult] = None
 
         self.hooks.on_combat_start()
@@ -233,8 +246,10 @@ class CombatState:
         if card.energy_cost_x:
             # X-cost: spend ALL remaining energy; the card reads captured_x
             # (mirrors EnergyCost.CapturedXValue / ResolveEnergyXValue).
+            # Listeners can raise the captured X without changing the energy
+            # spent (ModifyXValue — Chemical X).
             actual_cost = self.player.energy
-            card.captured_x = actual_cost
+            card.captured_x = self.hooks.modify_x_value(card, actual_cost)
         else:
             actual_cost = self.hooks.modify_card_energy_cost(card, card.energy_cost)
             if actual_cost > self.player.energy:
@@ -261,8 +276,16 @@ class CombatState:
         if card.card_type != CardType.POWER:
             self.player.discard_pile.append(card)
 
+        self.hooks.before_card_played(card)
         play_count = self.hooks.modify_card_play_count(card, self.enemy, 1)
+        # Attack plays are bracketed by the attack-command boundary (mirrors
+        # AttackCommand firing BeforeAttack/AfterAttack) so "next attack"
+        # powers on the player (Vigor from Akabeko) consume their stacks after
+        # one full multi-hit attack.
+        is_attack = card.card_type == CardType.ATTACK
         for _ in range(play_count):
+            if is_attack:
+                self.hooks.before_attack(self.player)
             if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
                 # Framework routes: call on_play once per living enemy.
                 for idx, e in enumerate(self.enemies):
@@ -274,6 +297,8 @@ class CombatState:
             else:
                 # Card handles its own routing (or doesn't need enemy iteration).
                 card.on_play(self._ctx(), target_idx)
+            if is_attack:
+                self.hooks.after_attack(self.player)
             if self._all_enemies_dead() or self.player.is_dead:
                 break
 
@@ -317,7 +342,7 @@ class CombatState:
             target_idx = self._rng.choice(living)
         if card.energy_cost_x:
             # AutoPlay captures X from current energy without spending it.
-            card.captured_x = self.player.energy
+            card.captured_x = self.hooks.modify_x_value(card, self.player.energy)
         # BeforeCardPlayed fires for auto-plays too (0 energy spent) — powers
         # like Free Attack consume their stacks here.
         self.hooks.on_energy_spent(card, 0)
@@ -386,7 +411,8 @@ class CombatState:
         self._process_turn_end_cards()
         if self.phase == Phase.COMBAT_OVER:
             return
-        self.player.discard_hand()
+        if self.hooks.should_flush_hand():
+            self.player.discard_hand()
         self._execute_enemy_turn()
 
         if self.phase != Phase.COMBAT_OVER:

@@ -355,9 +355,12 @@ class STS2FullCombatEnv(gym.Env):
         deck = [make_card(cid) for cid in self._deck_ids]
         potions = [make_potion(pid) for pid in self._potion_ids] or None
         encounter = rng.choice(self._encounters)
-        state = CombatState(starting_deck=deck, rng=rng, encounter=encounter, potions=potions)
-        if self._card_selector is not None:
-            state.card_selector = self._card_selector
+        # The selector goes in at construction so turn-1 selection effects
+        # (e.g. Gambling Chip's mulligan) already see it.
+        state = CombatState(
+            starting_deck=deck, rng=rng, encounter=encounter, potions=potions,
+            card_selector=self._card_selector,
+        )
         return state
 
     # ------------------------------------------------------------------

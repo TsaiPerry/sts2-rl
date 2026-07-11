@@ -413,7 +413,7 @@ class VulnerablePower(Power):
             cruelty = dealer.powers.get("cruelty")
             if cruelty is not None:
                 mult += cruelty.amount / 100.0
-        return mult
+        return self.hooks.modify_vulnerable_multiplier(dealer, mult)
 
     def on_enemy_side_end(self) -> None:
         self._tick_duration()
@@ -774,7 +774,9 @@ class JuggernautPower(Power):
     name = "Juggernaut"
     power_type = PowerType.BUFF
 
-    def on_block_gained(self, target: Creature, amount: int) -> None:
+    def on_block_gained(
+        self, target: Creature, amount: int, card: Card | None = None
+    ) -> None:
         if target is not self.owner or amount <= 0:
             return
         combat = self.hooks.combat
@@ -885,6 +887,15 @@ class ManglePower(TemporaryStrengthPower):
     name = "Mangle"
     power_type = PowerType.DEBUFF
     _sign = -1
+
+
+class ReptileTrinketPower(TemporaryStrengthPower):
+    """Temporary Strength from Reptile Trinket (granted each time a potion is
+    used): reverted at the end of the owner's side turn."""
+
+    id = "reptile_trinket"
+    name = "Reptile Trinket"
+    power_type = PowerType.BUFF
 
 
 class OneTwoPunchPower(Power):
@@ -2553,6 +2564,7 @@ ALL_POWERS: dict[str, type[Power]] = {
         JugglingPower,
         SetupStrikePower,
         ManglePower,
+        ReptileTrinketPower,
         OneTwoPunchPower,
         PyrePower,
         RagePower,

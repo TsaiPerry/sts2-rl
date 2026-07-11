@@ -93,6 +93,15 @@ from .monsters.state_machine import (
     ConditionalBranchState,
 )
 
+# ── Relics (see ALL_RELICS / make_relic for the full catalogue) ──────────────
+from .relics import (
+    Relic,
+    RelicRarity,
+    make_relic,
+    register_relic,
+    ALL_RELICS,
+)
+
 # ── Potions (see ALL_POTIONS / make_potion for the full catalogue) ───────────
 from .potions import (
     Potion,
@@ -205,6 +214,12 @@ __all__ = [
     "MoveRepeatType",
     "RandomBranchState",
     "ConditionalBranchState",
+    # Relics
+    "Relic",
+    "RelicRarity",
+    "make_relic",
+    "register_relic",
+    "ALL_RELICS",
     # Potions
     "Potion",
     "FirePotion",

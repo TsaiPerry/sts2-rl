@@ -15,6 +15,7 @@ class DefendCard(Card):
     card_type = CardType.SKILL
     rarity = CardRarity.BASIC
     target_type = TargetType.SELF
+    tags = frozenset({"defend"})
 
     def _init_vars(self) -> None:
         self._energy_cost = 1

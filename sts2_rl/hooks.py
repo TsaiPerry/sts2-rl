@@ -150,6 +150,32 @@ class HookSystem:
                 amount = l.modify_strength_given(target, amount, card)
         return amount
 
+    def modify_power_amount(
+        self,
+        power_cls: type,
+        target: Creature,
+        amount: int,
+        applier: Creature | None = None,
+    ) -> int:
+        """Chain-modify the amount of a power as it is applied (mirrors
+        TryModifyPowerAmountReceived; e.g. Ruined Helmet doubles the first
+        Strength gain). Only runs on real applications, never previews."""
+        for l in list(self._listeners):
+            if hasattr(l, "modify_power_amount"):
+                amount = l.modify_power_amount(power_cls, target, amount, applier)
+        return amount
+
+    def modify_vulnerable_multiplier(
+        self, dealer: Creature | None, mult: float
+    ) -> float:
+        """Chain-modify the Vulnerable damage multiplier (mirrors
+        ModifyVulnerableMultiplier; e.g. Paper Phrog adds +0.25). Consulted by
+        VulnerablePower — stateless, so it is preview-safe."""
+        for l in list(self._listeners):
+            if hasattr(l, "modify_vulnerable_multiplier"):
+                mult = l.modify_vulnerable_multiplier(dealer, mult)
+        return mult
+
     def modify_card_energy_cost(self, card: Card, cost: int) -> int:
         """Chain-modify a card's energy cost for this play (e.g. Apotheosis, Nightmare)."""
         for l in list(self._listeners):
@@ -197,6 +223,14 @@ class HookSystem:
                 value = l.modify_orb_value(player, value)
         return value
 
+    def modify_x_value(self, card: Card, value: int) -> int:
+        """Chain-modify the X captured when an X-cost card is played (mirrors
+        ModifyXValue, e.g. Chemical X +2)."""
+        for l in list(self._listeners):
+            if hasattr(l, "modify_x_value"):
+                value = l.modify_x_value(card, value)
+        return max(0, value)
+
     # ── Event hooks — combat lifecycle ───────────────────────────────────
 
     def on_combat_start(self) -> None:
@@ -218,6 +252,18 @@ class HookSystem:
         for l in list(self._listeners):
             if hasattr(l, "on_player_turn_start"):
                 l.on_player_turn_start(player)
+
+    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+        """Fires at the start of the player's turn AFTER the hand is drawn.
+
+        Maps the game's post-draw turn-start slots — AfterPlayerTurnStart(Late)
+        and the player-side AfterSideTurnStart, which CombatManager fires after
+        SetupPlayerTurn (energy reset → hand draw) completes. Most turn-start
+        relics live here (Akabeko, Bellows, Lantern, ...).
+        """
+        for l in list(self._listeners):
+            if hasattr(l, "on_player_turn_started"):
+                l.on_player_turn_started(player)
 
     def on_player_turn_end(self, player: PlayerCombatState) -> None:
         """Fires at the end of the player's turn, before the hand is discarded."""
@@ -271,6 +317,14 @@ class HookSystem:
                 l.after_attack(dealer)
 
     # ── Event hooks — card lifecycle ─────────────────────────────────────
+
+    def before_card_played(self, card: Card) -> None:
+        """Fires before a card's on_play() resolves (mirrors BeforeCardPlayed).
+        Used by relics that must act on the card before its effects (e.g. Pen
+        Nib marking the 10th Attack for doubling)."""
+        for l in list(self._listeners):
+            if hasattr(l, "before_card_played"):
+                l.before_card_played(card)
 
     def on_card_played(self, card: Card) -> None:
         """Fires after a card's on_play() resolves."""
@@ -368,11 +422,14 @@ class HookSystem:
             if hasattr(l, "on_damage_dealt"):
                 l.on_damage_dealt(dealer, target, amount, card)
 
-    def on_block_gained(self, target: Creature, amount: int) -> None:
-        """Fires after block is added to a creature."""
+    def on_block_gained(
+        self, target: Creature, amount: int, card: Card | None = None
+    ) -> None:
+        """Fires after block is added to a creature. `card` is the source card
+        when the block came from a card play (None for powers/potions/relics)."""
         for l in list(self._listeners):
             if hasattr(l, "on_block_gained"):
-                l.on_block_gained(target, amount)
+                l.on_block_gained(target, amount, card)
 
     def on_block_broken(self, target: Creature) -> None:
         """Fires when an attack deals more damage than the target's remaining block."""
@@ -478,6 +535,16 @@ class HookSystem:
                     return False
         return True
 
+    def should_reset_energy(self, player: PlayerCombatState) -> bool:
+        """False from any listener makes turn-start energy ADD to the current
+        energy instead of replacing it (mirrors ShouldPlayerResetEnergy →
+        ResetEnergy / AddMaxEnergyToCurrent; e.g. Ice Cream)."""
+        for l in list(self._listeners):
+            if hasattr(l, "should_reset_energy"):
+                if not l.should_reset_energy(player):
+                    return False
+        return True
+
     def should_draw(self, player: PlayerCombatState, from_hand_draw: bool = False) -> bool:
         """False from any listener prevents the next draw (e.g. No Draw status).
 
@@ -488,6 +555,16 @@ class HookSystem:
         for l in list(self._listeners):
             if hasattr(l, "should_draw"):
                 if not l.should_draw(player, from_hand_draw):
+                    return False
+        return True
+
+    def should_flush_hand(self) -> bool:
+        """False from any listener keeps the hand instead of discarding it at
+        the end of the turn (mirrors ShouldFlush; e.g. Ringing Triangle keeps
+        the turn-1 hand)."""
+        for l in list(self._listeners):
+            if hasattr(l, "should_flush_hand"):
+                if not l.should_flush_hand():
                     return False
         return True
 
