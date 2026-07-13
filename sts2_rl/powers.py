@@ -1131,6 +1131,37 @@ class ViciousPower(Power):
         self._maybe_draw(name, delta, applier)
 
 
+class ToricToughnessPower(Power):
+    """For the next N turns, gain the stored block after block is cleared at
+    turn start. amount tracks turns left; the block value is set separately.
+
+    Source: ToricToughnessPower.cs — AfterBlockCleared: GainBlock(Block,
+    Unpowered), then Decrement. The game makes each application a separate
+    instance (PowerInstanceType.Instanced); the sim keeps one instance per
+    power id, so re-applying stacks the turn counter and overwrites the block
+    value (an approximation that only matters with multiple copies active).
+    """
+
+    id = "toric_toughness"
+    name = "Toric Toughness"
+    power_type = PowerType.BUFF
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.block = 0
+
+    def set_block(self, block: int) -> None:
+        """Mirrors ToricToughnessPower.SetBlock (Amount is the turn counter)."""
+        self.block = block
+
+    def on_block_cleared(self, target: Creature) -> None:
+        if target is not self.owner:
+            return
+        from .cmds import BlockCmd
+        BlockCmd.apply(self.hooks, self.owner, self.block, props=ValueProp.UNPOWERED)
+        self._tick()
+
+
 # ── Overgrowth enemy powers ───────────────────────────────────────────────
 
 
@@ -2558,6 +2589,7 @@ ALL_POWERS: dict[str, type[Power]] = {
         CrimsonMantlePower,
         CrueltyPower,
         FlameBarrierPower,
+        ToricToughnessPower,
         HellraiserPower,
         InfernoPower,
         JuggernautPower,

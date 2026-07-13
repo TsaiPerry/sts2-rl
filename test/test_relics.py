@@ -142,9 +142,11 @@ class TestRegistry:
     ]
 
     def test_full_ironclad_pool_registered(self):
-        # SharedRelicPool (118) + IroncladRelicPool (8) = 126, all constructible
-        # by id, and the original alphabetical head is still present.
-        assert len(ALL_RELICS) == 126
+        # SharedRelicPool (118) + IroncladRelicPool (8) = 126 pool relics,
+        # plus the event-granted Sword of Stone (Sunken Statue) = 127, all
+        # constructible by id, and the original alphabetical head is present.
+        assert len(ALL_RELICS) == 127
+        assert "sword_of_stone" in ALL_RELICS
         for rid in ALL_RELICS:
             assert make_relic(rid).id == rid
         assert set(self.FIRST_50) <= set(ALL_RELICS)

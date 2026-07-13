@@ -75,6 +75,8 @@ class CombatState:
         potions: list[Potion] | None = None,
         relics: list[Relic] | None = None,
         card_selector=None,
+        max_hp: int | None = None,
+        current_hp: int | None = None,
     ) -> None:
         self._rng = rng or random.Random()
 
@@ -89,14 +91,25 @@ class CombatState:
         self.history = CombatHistory(self)
         self.hooks.register(self.history)
         self.player = PlayerCombatState(
-            self.PLAYER_MAX_HP, starting_deck, self._rng, self.hooks, potions=potions
+            max_hp if max_hp is not None else self.PLAYER_MAX_HP,
+            starting_deck, self._rng, self.hooks, potions=potions,
         )
+        if current_hp is not None:
+            # Runs enter combats with carried-over HP (RunState.create_combat).
+            self.player.hp = min(current_hp, self.player.max_hp)
         # Cards are hook listeners for their whole combat lifetime (mirrors
         # CardModel being an AbstractModel), so cards like Drum of Battle can
         # react to events from any pile.
         for card in self.player.all_cards:
+            card.reset_combat_state()
             card.combat = self
             self.hooks.register(card)
+            # Enchantments listen alongside their card (the game clones the
+            # canonical enchantment into each combat with a fresh status).
+            if card.enchantment is not None:
+                card.enchantment.reset()
+                card.enchantment.combat = self
+                self.hooks.register(card.enchantment)
         self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
             self.hooks, self._rng
         )

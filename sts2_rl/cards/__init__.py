@@ -25,6 +25,7 @@ from .knowledge_curses import (
     SlothCard,
     WasteAwayCard,
 )
+from .event_cards import ByrdonisEggCard, PeckCard, ToricToughnessCard
 
 # ── Ironclad attacks ──────────────────────────────────────────────────────
 from .anger import AngerCard
@@ -163,6 +164,10 @@ __all__ = [
     "MindRotCard",
     "SlothCard",
     "WasteAwayCard",
+    # Event cards
+    "ByrdonisEggCard",
+    "PeckCard",
+    "ToricToughnessCard",
     # Ironclad attacks
     "AngerCard",
     "AshenStrikeCard",

@@ -15,6 +15,7 @@ class CardType(Enum):
     POWER = "power"
     STATUS = "status"
     CURSE = "curse"
+    QUEST = "quest"
 
 
 class CardRarity(Enum):
@@ -26,6 +27,8 @@ class CardRarity(Enum):
     TOKEN = "token"
     STATUS = "status"
     CURSE = "curse"
+    EVENT = "event"
+    QUEST = "quest"
 
 
 class TargetType(Enum):
@@ -99,8 +102,16 @@ class Card(ABC):
         # (mirror EnergyCost.AddThisTurn and SetToFreeThisTurn).
         self._cost_delta_this_turn: int = 0
         self._free_this_turn: bool = False
+        # Cost override lasting the rest of the combat (mirrors
+        # EnergyCost.SetThisCombat, used by the Slither enchantment); cleared
+        # by reset_combat_state at combat setup.
+        self._cost_this_combat: int | None = None
         # At most one affliction per card (mirrors CardModel.Affliction).
         self.affliction: "Affliction | None" = None
+        # At most one enchantment per card (mirrors CardModel.Enchantment).
+        # Attached out of combat (events); registered as a hook listener by
+        # CombatState so it can react to its card being drawn/played.
+        self.enchantment = None
         # Back-reference to the owning combat (mirrors CardModel.CombatState),
         # set when the card is registered as a hook listener; lets card-level
         # hook methods reach combat state (Stomp, Drum of Battle, Howl).
@@ -176,7 +187,20 @@ class Card(ABC):
     def energy_cost(self) -> int:
         if self._free_this_turn:
             return 0
-        return max(0, self._energy_cost + self._cost_delta_this_turn)
+        base = self._energy_cost if self._cost_this_combat is None else self._cost_this_combat
+        return max(0, base + self._cost_delta_this_turn)
+
+    def set_cost_this_combat(self, cost: int) -> None:
+        """Override this card's base cost for the rest of the combat (mirrors
+        EnergyCost.SetThisCombat, e.g. the Slither enchantment's random cost)."""
+        self._cost_this_combat = cost
+
+    def reset_combat_state(self) -> None:
+        """Clear per-combat card state (called by CombatState at setup, since
+        a run reuses the same Card objects across combats)."""
+        self._cost_this_combat = None
+        self.captured_x = 0
+        self.reset_turn_cost_modifiers()
 
     def add_cost_this_turn(self, delta: int) -> None:
         """Change this card's cost until the end of the turn (mirrors

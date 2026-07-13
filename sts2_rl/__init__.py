@@ -141,6 +141,25 @@ from .powers import (
     ALL_POWERS,
 )
 
+# ── Run layer, enchantments & events ─────────────────────────────────────────
+from .run import RunState, ironclad_starting_deck
+from .enchantments import (
+    Enchantment,
+    SownEnchantment,
+    SlitherEnchantment,
+    make_enchantment,
+    ALL_ENCHANTMENTS,
+)
+from .events import (
+    Event,
+    EventOption,
+    make_event,
+    register_event,
+    allowed_events,
+    ALL_EVENTS,
+    OVERGROWTH_EVENTS,
+)
+
 __all__ = [
     # Environment
     "STS2CombatEnv",
@@ -251,4 +270,19 @@ __all__ = [
     "FrailPower",
     "PoisonPower",
     "ALL_POWERS",
+    # Run layer, enchantments & events
+    "RunState",
+    "ironclad_starting_deck",
+    "Enchantment",
+    "SownEnchantment",
+    "SlitherEnchantment",
+    "make_enchantment",
+    "ALL_ENCHANTMENTS",
+    "Event",
+    "EventOption",
+    "make_event",
+    "register_event",
+    "allowed_events",
+    "ALL_EVENTS",
+    "OVERGROWTH_EVENTS",
 ]
