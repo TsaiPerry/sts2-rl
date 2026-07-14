@@ -142,11 +142,21 @@ class TestRegistry:
     ]
 
     def test_full_ironclad_pool_registered(self):
-        # SharedRelicPool (118) + IroncladRelicPool (8) = 126 pool relics,
-        # plus the event-granted Sword of Stone (Sunken Statue) = 127, all
-        # constructible by id, and the original alphabetical head is present.
-        assert len(ALL_RELICS) == 127
+        # SharedRelicPool (118) + IroncladRelicPool (8) = 126 pool relics, plus
+        # the event-granted Sword of Stone (Sunken Statue), the 7 Act-2 event
+        # relics (Drowning Beacon's Fresnel Lens is already a pool relic; Trash
+        # Heap's Darkstone Periapt / Dream Catcher / Hand Drill / Maw Bank / The
+        # Boot, Colossal Flower's Pollinous Core, Lost Wisp), and the 4 Act-3
+        # (Glory) event relics (Grave of the Forgotten's Forgotten Soul, Hungry
+        # for Mushrooms' Big / Fragrant Mushroom, Round Tea Party's Royal Poison)
+        # = 138, all constructible by id, and the original head is present.
+        assert len(ALL_RELICS) == 138
         assert "sword_of_stone" in ALL_RELICS
+        for eid in ("lost_wisp", "the_boot", "pollinous_core", "darkstone_periapt",
+                    "dream_catcher", "hand_drill", "maw_bank",
+                    "forgotten_soul", "big_mushroom", "fragrant_mushroom",
+                    "royal_poison"):
+            assert eid in ALL_RELICS
         for rid in ALL_RELICS:
             assert make_relic(rid).id == rid
         assert set(self.FIRST_50) <= set(ALL_RELICS)

@@ -152,6 +152,16 @@ from .hive import (
     TUNNELER_WEAK,
 )
 
+# Glory (Act 3) enemies
+from .glory import (
+    BattleFriendV1,
+    BattleFriendV2,
+    BattleFriendV3,
+    BATTLEWORN_DUMMY_SETTING_1,
+    BATTLEWORN_DUMMY_SETTING_2,
+    BATTLEWORN_DUMMY_SETTING_3,
+)
+
 __all__ = [
     "MoveType", "Intent", "Monster", "Encounter",
     "BygoneEffigy", "Byrdonis", "CeremonialBeast", "CubexConstruct",
@@ -198,4 +208,7 @@ __all__ = [
     "MYTES_NORMAL", "OVICOPTER_NORMAL", "SLUMBERING_BEETLE_NORMAL",
     "SPINY_TOAD_NORMAL", "THE_INSATIABLE_BOSS", "THE_OBSCURA_NORMAL",
     "THIEVING_HOPPER_WEAK", "TUNNELER_WEAK",
+    "BattleFriendV1", "BattleFriendV2", "BattleFriendV3",
+    "BATTLEWORN_DUMMY_SETTING_1", "BATTLEWORN_DUMMY_SETTING_2",
+    "BATTLEWORN_DUMMY_SETTING_3",
 ]

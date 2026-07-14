@@ -118,4 +118,101 @@ class SlitherEnchantment(Enchantment):
         card.set_cost_this_combat(self.combat._rng.randrange(4))
 
 
+@register_enchantment
+class SteadyEnchantment(Enchantment):
+    """Steady — the enchanted card gains Retain.
+
+    Source: Steady.cs — OnEnchant: AddKeyword(Retain). Granted by the
+    Waterlogged Scriptorium event (Tentacle Quill / Prickly Sponge). Retain is
+    a static card property, so this sets it at enchant time and re-asserts it
+    each combat (the card is deep-copied per combat).
+    """
+
+    id = "steady"
+    name = "Steady"
+
+    def attach(self, card: Card) -> None:
+        super().attach(card)
+        card.retain = True
+
+    def reset(self) -> None:
+        super().reset()
+        if self.card is not None:
+            self.card.retain = True
+
+
+@register_enchantment
+class SpiralEnchantment(Enchantment):
+    """Spiral — the enchanted card is played 1 extra time.
+
+    Source: Spiral.cs — EnchantPlayCount: original + Times(1). CanEnchant is
+    restricted to Basic cards tagged Strike or Defend. Granted by the
+    Spiraling Whirlpool event.
+    """
+
+    id = "spiral"
+    name = "Spiral"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardRarity
+
+        if not super().can_enchant(card):
+            return False
+        return card.rarity == CardRarity.BASIC and (
+            "strike" in card.tags or "defend" in card.tags
+        )
+
+    def modify_card_play_count(self, card: Card, target, count: int) -> int:
+        if card is self.card:
+            return count + self.amount
+        return count
+
+
+@register_enchantment
+class PerfectFitEnchantment(Enchantment):
+    """Perfect Fit — after the draw pile is reshuffled, this card is placed on
+    top of the draw pile (drawn next).
+
+    Source: PerfectFit.cs — ModifyShuffleOrder (non-initial): move the card to
+    the front of the shuffle. Granted by the Field of Man-Sized Holes event.
+    The sim draws from the end of draw_pile, so "top" = list end.
+    """
+
+    id = "perfect_fit"
+    name = "Perfect Fit"
+
+    def on_shuffle(self, player) -> None:
+        if self.card is not None and self.card in player.draw_pile:
+            player.draw_pile.remove(self.card)
+            player.draw_pile.append(self.card)  # list end = top of draw pile
+
+
+@register_enchantment
+class SoulsEnchantment(Enchantment):
+    """Souls — removes the enchanted card's Exhaust keyword.
+
+    Source: SoulsPower.cs — CanEnchant additionally requires the card to have
+    Exhaust; OnEnchant removes it. Granted by the Grave of the Forgotten event
+    (Confront). Exhaust is a static card property, so this clears it at enchant
+    time and re-asserts the clear each combat (the card is deep-copied per
+    combat)."""
+
+    id = "souls"
+    name = "Souls"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        return super().can_enchant(card) and card.exhausts
+
+    def attach(self, card: Card) -> None:
+        super().attach(card)
+        card.exhausts = False
+
+    def reset(self) -> None:
+        super().reset()
+        if self.card is not None:
+            self.card.exhausts = False
+
+
 ALL_ENCHANTMENTS: dict[str, type[Enchantment]] = dict(_ENCHANTMENT_CLASSES)

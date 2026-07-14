@@ -25,7 +25,32 @@ from .knowledge_curses import (
     SlothCard,
     WasteAwayCard,
 )
-from .event_cards import ByrdonisEggCard, PeckCard, ToricToughnessCard
+from .event_cards import (
+    ByrdonisEggCard,
+    PeckCard,
+    ToricToughnessCard,
+    UltimateStrikeCard,
+    UltimateDefendCard,
+    ExterminateCard,
+    SquashCard,
+    MetamorphosisCard,
+    EnlightenmentCard,
+    FeedingFrenzyCard,
+    LanternKeyCard,
+)
+from .trash_heap_cards import (
+    CaltropsCard,
+    ClashCard,
+    DistractionCard,
+    DualWieldCard,
+    EntrenchCard,
+    HelloWorldCard,
+    OutmaneuverCard,
+    ReboundCard,
+    RipAndTearCard,
+    StackCard,
+)
+from .mad_science import MadScienceCard
 
 # ── Ironclad attacks ──────────────────────────────────────────────────────
 from .anger import AngerCard
@@ -168,6 +193,25 @@ __all__ = [
     "ByrdonisEggCard",
     "PeckCard",
     "ToricToughnessCard",
+    "UltimateStrikeCard",
+    "UltimateDefendCard",
+    "ExterminateCard",
+    "SquashCard",
+    "MetamorphosisCard",
+    "EnlightenmentCard",
+    "FeedingFrenzyCard",
+    "LanternKeyCard",
+    "CaltropsCard",
+    "ClashCard",
+    "DistractionCard",
+    "DualWieldCard",
+    "EntrenchCard",
+    "HelloWorldCard",
+    "OutmaneuverCard",
+    "ReboundCard",
+    "RipAndTearCard",
+    "StackCard",
+    "MadScienceCard",
     # Ironclad attacks
     "AngerCard",
     "AshenStrikeCard",

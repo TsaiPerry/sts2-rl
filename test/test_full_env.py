@@ -46,12 +46,12 @@ def _masked_rollout(env, seed, max_steps=500):
 def test_spaces_declared():
     env = STS2FullCombatEnv()
     assert OBS_SCHEMA_VERSION == 2
-    assert env.observation_space.shape[0] == 4681   # hybrid, schema v2
+    assert env.observation_space.shape[0] == 5192   # hybrid, schema v2
     assert env.action_space.n == env.n_actions == 79
 
 
 def test_features_mode_is_smaller():
-    assert STS2FullCombatEnv(card_obs="features").observation_space.shape[0] == 3481
+    assert STS2FullCombatEnv(card_obs="features").observation_space.shape[0] == 3802
 
 
 def test_obs_within_declared_space_at_reset():

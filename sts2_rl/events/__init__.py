@@ -39,6 +39,13 @@ ALL_EVENTS: dict[str, type[Event]] = dict(_EVENT_CLASSES)
 globals().update({cls.__name__: cls for cls in ALL_EVENTS.values()})
 
 from .dense_vegetation import DENSE_VEGETATION_EVENT_ENCOUNTER  # noqa: E402
+from .punch_off import PUNCH_OFF_EVENT_ENCOUNTER  # noqa: E402
+from .the_lantern_key import MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER  # noqa: E402
+from ..monsters.glory import (  # noqa: E402
+    BATTLEWORN_DUMMY_SETTING_1,
+    BATTLEWORN_DUMMY_SETTING_2,
+    BATTLEWORN_DUMMY_SETTING_3,
+)
 
 # The Act-1 pool in the source's order (Overgrowth.cs AllEvents).
 OVERGROWTH_EVENTS: tuple[str, ...] = (
@@ -55,6 +62,46 @@ OVERGROWTH_EVENTS: tuple[str, ...] = (
     "wellspring",
     "whispering_hollow",
     "wood_carvings",
+)
+
+# The Act-2 pool in the source's order (Underdocks.cs AllEvents). Sunken Statue
+# is shared with Act 1.
+UNDERDOCKS_EVENTS: tuple[str, ...] = (
+    "abyssal_baths",
+    "drowning_beacon",
+    "endless_conveyor",
+    "punch_off",
+    "spiraling_whirlpool",
+    "sunken_statue",
+    "sunken_treasury",
+    "doors_of_light_and_dark",
+    "trash_heap",
+    "waterlogged_scriptorium",
+)
+
+# The parallel Act-2 "Hive" pool in the source's order (Hive.cs AllEvents).
+HIVE_EVENTS: tuple[str, ...] = (
+    "amalgamator",
+    "bugslayer",
+    "colorful_philosophers",
+    "colossal_flower",
+    "field_of_man_sized_holes",
+    "infested_automaton",
+    "lost_wisp",
+    "spirit_grafter",
+    "the_lantern_key",
+    "zen_weaver",
+)
+
+# The Act-3 "Glory" pool in the source's order (Glory.cs AllEvents).
+GLORY_EVENTS: tuple[str, ...] = (
+    "battleworn_dummy",
+    "grave_of_the_forgotten",
+    "hungry_for_mushrooms",
+    "reflections",
+    "round_tea_party",
+    "trial",
+    "tinker_time",
 )
 
 
@@ -76,7 +123,15 @@ __all__ = [
     "register_event",
     "ALL_EVENTS",
     "OVERGROWTH_EVENTS",
+    "UNDERDOCKS_EVENTS",
+    "HIVE_EVENTS",
+    "GLORY_EVENTS",
     "allowed_events",
     "DENSE_VEGETATION_EVENT_ENCOUNTER",
+    "PUNCH_OFF_EVENT_ENCOUNTER",
+    "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
+    "BATTLEWORN_DUMMY_SETTING_1",
+    "BATTLEWORN_DUMMY_SETTING_2",
+    "BATTLEWORN_DUMMY_SETTING_3",
     *sorted(cls.__name__ for cls in ALL_EVENTS.values()),
 ]

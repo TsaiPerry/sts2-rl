@@ -27,6 +27,10 @@ class Potion:
     id: str
     name: str
     targeted: bool = False
+    # Mirrors whether a potion appears in the character/shared reward pools
+    # (PotionReward). Event-only potions (Glowwater) set this False so the
+    # sim's random_potion helper doesn't offer them.
+    in_reward_pool: bool = True
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         raise NotImplementedError
@@ -115,6 +119,25 @@ class WeakPotion(Potion):
         PowerCmd.apply(
             ctx.hooks, target or ctx.enemy, WeakPower, self.WEAK, applier=ctx.player
         )
+
+
+@register_potion
+class GlowwaterPotion(Potion):
+    """Exhaust your whole hand, then draw 10 cards.
+
+    Source: GlowwaterPotion.cs — Event rarity, CombatOnly. Granted by the
+    Drowning Beacon event (not part of the random reward pool)."""
+
+    id = "glowwater"
+    name = "Glowwater Potion"
+    in_reward_pool = False
+    DRAW = 10
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DrawCmd, ExhaustCmd
+        for card in list(ctx.player.hand):
+            ExhaustCmd.exhaust(ctx.hooks, ctx.player, card)
+        DrawCmd.draw(ctx.player, self.DRAW)
 
 
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)

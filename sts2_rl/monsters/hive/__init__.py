@@ -22,6 +22,11 @@ from .decimillipede import (
     DECIMILLIPEDE_ELITE,
 )
 from .entomancer import Entomancer, ENTOMANCER_ELITE
+from .flail_knight import (
+    FlailKnight,
+    MysteriousKnight,
+    MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER,
+)
 from .exoskeleton import Exoskeleton, EXOSKELETONS_NORMAL, EXOSKELETONS_WEAK
 from .hunter_killer import HunterKiller, HUNTER_KILLER_NORMAL
 from .infested_prism import InfestedPrism, INFESTED_PRISMS_ELITE
@@ -71,7 +76,8 @@ __all__ = [
     "BowlbugEgg", "BowlbugNectar", "BowlbugRock", "BowlbugSilk", "Chomper",
     "Crusher", "DecimillipedeSegment", "DecimillipedeSegmentBack",
     "DecimillipedeSegmentFront", "DecimillipedeSegmentMiddle", "Entomancer",
-    "Exoskeleton", "HunterKiller", "InfestedPrism", "KnowledgeDemon",
+    "Exoskeleton", "FlailKnight", "MysteriousKnight", "HunterKiller",
+    "InfestedPrism", "KnowledgeDemon",
     "LouseProgenitor", "Myte", "Ovicopter", "Parafright", "Rocket",
     "SlumberingBeetle", "SpinyToad", "TheInsatiable", "TheObscura",
     "ThievingHopper", "ToughEgg", "Tunneler",
@@ -83,5 +89,6 @@ __all__ = [
     "MYTES_NORMAL", "OVICOPTER_NORMAL", "SLUMBERING_BEETLE_NORMAL",
     "SPINY_TOAD_NORMAL", "THE_INSATIABLE_BOSS", "THE_OBSCURA_NORMAL",
     "THIEVING_HOPPER_WEAK", "TUNNELER_WEAK",
+    "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
     "ENCOUNTERS",
 ]

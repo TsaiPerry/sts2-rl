@@ -36,7 +36,9 @@ from .potions import Potion, _POTION_CLASSES
 from .relics import ALL_RELICS, Relic, RelicRarity, make_relic
 
 if TYPE_CHECKING:
+    from .actmap import ActMapConfig, MapPoint, StandardMap
     from .monsters import Encounter
+    from .rooms import RoomResolution, RoomSet, RoomType, UnknownOdds
 
 
 # Rarities eligible for the relic grab bag (starter/shop/event/ancient relics
@@ -72,8 +74,13 @@ class RunState:
         relics: list[Relic] | None = None,
         potions: list[Potion] | None = None,
         card_selector: Callable[[str, list[Card], int], list[Card]] | None = None,
+        total_floor: int = 0,
     ) -> None:
         self.rng = rng or random.Random()
+        # How many rooms have been entered this run (IRunState.TotalFloor).
+        # Used by event gates like Punch-Off (>= 6); the sim has no map, so the
+        # caller sets this when it matters.
+        self.total_floor = total_floor
         self.deck: list[Card] = deck if deck is not None else ironclad_starting_deck()
         self.max_hp = max_hp if max_hp is not None else self.STARTING_HP
         self.hp = hp if hp is not None else self.max_hp
@@ -91,6 +98,16 @@ class RunState:
             if cls.rarity in _BAG_RARITIES
         ]
         self.rng.shuffle(self.relic_grab_bag)
+        # ── Map / act state (populated by start_act) ─────────────────────
+        self.map: StandardMap | None = None
+        self.room_set: RoomSet | None = None
+        self.unknown_odds: UnknownOdds | None = None
+        self.current_point: MapPoint | None = None
+        # (point, room_type) for every point entered this act, in order.
+        self.map_history: list[tuple[MapPoint, RoomType]] = []
+        # Event ids seen this run (RunState.VisitedEventIds) — feeds
+        # RoomSet.EnsureNextEventIsValid.
+        self.visited_event_ids: set[str] = set()
 
     # ── HP ───────────────────────────────────────────────────────────────
 
@@ -213,8 +230,11 @@ class RunState:
     def random_potion(self) -> Potion:
         """A uniformly random potion from the implemented pool (approximates
         the character + shared potion pools of PotionReward)."""
-        cls = self.rng.choice(sorted(_POTION_CLASSES.values(), key=lambda c: c.id))
-        return cls()
+        pool = sorted(
+            (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
+            key=lambda c: c.id,
+        )
+        return self.rng.choice(pool)()
 
     # ── Relics ───────────────────────────────────────────────────────────
 
@@ -254,6 +274,140 @@ class RunState:
         if relic is not None:
             self.relics.append(relic)
         return relic
+
+    # ── Map / travel (actmap.py + rooms.py) ──────────────────────────────
+
+    def start_act(
+        self,
+        act: str | ActMapConfig = "overgrowth",
+        ascension: int = 0,
+        is_final_act: bool = False,
+    ) -> StandardMap:
+        """Generate the act's map and room queues and stand at the Ancient.
+
+        Mirrors the game's act entry: StandardActMap.CreateFor +
+        ActModel.GenerateRooms + UnknownMapPointOdds.ResetToBase. The game
+        rolls all acts' rooms at run start from dedicated RNG streams; the
+        sim rolls per-act from the single shared run RNG (map first, then
+        rooms), per the repo's one-RNG convention.
+
+        `ascension` is the run's cumulative ascension level; it changes the
+        map only via SwarmingElites (Asc 1+, 8 elites) and DoubleBoss (Asc
+        10, a second boss). DoubleBoss applies only when `is_final_act` is
+        set (RunManager adds the second boss to the last act only).
+        """
+        from .actmap import ACT_MAP_CONFIGS, AscensionLevel, StandardMap
+        from .rooms import RoomSet, UnknownOdds, act_rooms
+
+        config = ACT_MAP_CONFIGS[act] if isinstance(act, str) else act
+        self.act_config = config
+        self.ascension = ascension
+        has_second_boss = is_final_act and ascension >= AscensionLevel.DOUBLE_BOSS
+        self.map = StandardMap(
+            rng=self.rng,
+            config=config,
+            ascension=ascension,
+            has_second_boss=has_second_boss,
+        )
+        rooms = act_rooms(config.name)
+        self.room_set = RoomSet.generate(
+            rooms,
+            self.rng,
+            config.num_rooms,
+            config.num_weak_encounters,
+            has_second_boss=has_second_boss,
+        )
+        if self.unknown_odds is None:
+            self.unknown_odds = UnknownOdds()
+        else:
+            self.unknown_odds.reset_to_base()
+        self.current_point = self.map.starting_point
+        self.map_history = []
+        self._last_room_types: list[RoomType] = []
+        return self.map
+
+    @property
+    def at_act_end(self) -> bool:
+        """True once standing on a terminal boss node (the boss on a normal
+        act, or the second boss under DoubleBoss). Callers loop travel
+        until this holds."""
+        return self.current_point is not None and not self.current_point.children
+
+    def travelable_points(self) -> list[MapPoint]:
+        """MapTravel.GetTravelablePointsFrom: the current point's children
+        (no free-travel hook in the sim), in a stable order."""
+        if self.current_point is None:
+            raise RuntimeError("Call start_act before traveling")
+        return sorted(
+            self.current_point.children, key=lambda p: (p.col, p.row)
+        )
+
+    def enter_point(self, point: MapPoint) -> RoomResolution:
+        """Travel to a child point and resolve its room (the sim's
+        RunManager.EnterMapPointInternal).
+
+        Combat rooms return the encounter to fight (drive it with
+        create_combat / finish_combat); event rooms return the built Event;
+        treasure auto-grants a grab-bag relic (approximation — the sim has
+        no reward screens); shops are no-op stubs; rest sites return bare
+        so the caller picks rest_heal() or an upgrade.
+        """
+        from .events import make_event
+        from .rooms import (
+            RoomResolution,
+            RoomType,
+            build_room_type_blacklist,
+            roll_room_type,
+        )
+
+        if self.current_point is None or self.room_set is None:
+            raise RuntimeError("Call start_act before traveling")
+        if point not in self.current_point.children:
+            raise ValueError(f"{point} is not reachable from {self.current_point}")
+
+        # Blacklist is computed from the point being left: its rooms and
+        # its children (RunManager builds it before moving).
+        blacklist = build_room_type_blacklist(
+            self._last_room_types, self.current_point.children
+        )
+        room_type = roll_room_type(
+            point.point_type, self.unknown_odds, self.rng, blacklist
+        )
+        self.current_point = point
+        resolution = RoomResolution(
+            point=point, map_point_type=point.point_type, room_type=room_type
+        )
+        if room_type == RoomType.MONSTER:
+            resolution.encounter = self.room_set.next_normal_encounter
+        elif room_type == RoomType.ELITE:
+            resolution.encounter = self.room_set.next_elite_encounter
+        elif room_type == RoomType.BOSS:
+            resolution.encounter = self.room_set.next_boss_encounter
+        elif room_type == RoomType.EVENT:
+            self.room_set.ensure_next_event_is_valid(self)
+            event_id = self.room_set.next_event_id
+            if event_id is not None:
+                resolution.event = make_event(event_id, self)
+                self.visited_event_ids.add(event_id)
+        elif room_type == RoomType.TREASURE:
+            resolution.relic = self.obtain_relic_from_grab_bag()
+        self.room_set.mark_visited(room_type)
+        self._last_room_types = [room_type]
+        self.map_history.append((point, room_type))
+        return resolution
+
+    def rest_heal(self) -> int:
+        """Take the rest site's heal option (30% of max HP, truncated)."""
+        return self.heal(self.rest_site_heal_amount())
+
+    def rest_upgrade(self) -> Card | None:
+        """Take the rest site's smith option: upgrade one card chosen via
+        the run's card selector (random without one)."""
+        chosen = self.select_cards("upgrade", self.upgradable_cards(), 1)
+        if not chosen:
+            return None
+        chosen[0].upgrade()
+        return chosen[0]
 
     # ── Combat integration ───────────────────────────────────────────────
 

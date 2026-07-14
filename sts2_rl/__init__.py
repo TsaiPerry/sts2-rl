@@ -141,8 +141,30 @@ from .powers import (
     ALL_POWERS,
 )
 
-# ── Run layer, enchantments & events ─────────────────────────────────────────
+# ── Run layer, map, enchantments & events ────────────────────────────────────
 from .run import RunState, ironclad_starting_deck
+from .actmap import (
+    ActMapConfig,
+    AscensionLevel,
+    MapPoint,
+    MapPointType,
+    MapPointTypeCounts,
+    StandardMap,
+    golden_path_map,
+    ACT_MAP_CONFIGS,
+    OVERGROWTH_MAP,
+    UNDERDOCKS_MAP,
+    HIVE_MAP,
+    GLORY_MAP,
+)
+from .rooms import (
+    ActRooms,
+    RoomResolution,
+    RoomSet,
+    RoomType,
+    UnknownOdds,
+    act_rooms,
+)
 from .enchantments import (
     Enchantment,
     SownEnchantment,
@@ -158,6 +180,9 @@ from .events import (
     allowed_events,
     ALL_EVENTS,
     OVERGROWTH_EVENTS,
+    UNDERDOCKS_EVENTS,
+    HIVE_EVENTS,
+    GLORY_EVENTS,
 )
 
 __all__ = [
@@ -270,9 +295,27 @@ __all__ = [
     "FrailPower",
     "PoisonPower",
     "ALL_POWERS",
-    # Run layer, enchantments & events
+    # Run layer, map, enchantments & events
     "RunState",
     "ironclad_starting_deck",
+    "ActMapConfig",
+    "AscensionLevel",
+    "MapPoint",
+    "MapPointType",
+    "MapPointTypeCounts",
+    "StandardMap",
+    "golden_path_map",
+    "ACT_MAP_CONFIGS",
+    "OVERGROWTH_MAP",
+    "UNDERDOCKS_MAP",
+    "HIVE_MAP",
+    "GLORY_MAP",
+    "ActRooms",
+    "RoomResolution",
+    "RoomSet",
+    "RoomType",
+    "UnknownOdds",
+    "act_rooms",
     "Enchantment",
     "SownEnchantment",
     "SlitherEnchantment",
@@ -285,4 +328,7 @@ __all__ = [
     "allowed_events",
     "ALL_EVENTS",
     "OVERGROWTH_EVENTS",
+    "UNDERDOCKS_EVENTS",
+    "HIVE_EVENTS",
+    "GLORY_EVENTS",
 ]

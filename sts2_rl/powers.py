@@ -2562,6 +2562,194 @@ class WasteAwayPower(Power):
         return amount
 
 
+# ── Event-card powers (Trash Heap / Endless Conveyor) ─────────────────────
+
+
+class FeedingFrenzyPower(TemporaryStrengthPower):
+    """Temporary Strength from Feeding Frenzy (Endless Conveyor's Seapunk
+    Salad card): granted on play, reverted at the end of the owner's turn.
+
+    Source: FeedingFrenzyPower.cs (a TemporaryStrengthPower)."""
+
+    id = "feeding_frenzy"
+    name = "Feeding Frenzy"
+    power_type = PowerType.BUFF
+
+
+class EnergyNextTurnPower(Power):
+    """Gain N energy at the start of the owner's next turn, then remove
+    (Outmaneuver; mirrors EnergyNextTurnPower.AfterEnergyReset → GainEnergy +
+    Remove). Counter-stacked, so replaying stacks the pending energy."""
+
+    id = "energy_next_turn"
+    name = "Energy Next Turn"
+    power_type = PowerType.BUFF
+
+    def on_energy_reset(self, player: Creature) -> None:
+        if player is not self.owner:
+            return
+        from .cmds import EnergyCmd
+        EnergyCmd.gain(self.hooks, self.owner, self.amount)
+        self._expire()
+
+
+class ReboundPower(Power):
+    """The owner's next N card plays go on top of the draw pile instead of the
+    discard pile; removed at the end of the owner's turn (Rebound; mirrors
+    ReboundPower.ModifyCardPlayResultPileTypeAndPosition + AfterSideTurnEnd).
+
+    Rebound applies this during its own resolution, so — matching the game's
+    ordering — the Rebound card itself is the first play redirected."""
+
+    id = "rebound"
+    name = "Rebound"
+    power_type = PowerType.BUFF
+
+    def on_card_played(self, card: Card) -> None:
+        player = self.owner
+        # ModifyCardPlayResultPileTypeAndPosition only redirects Discard → Draw
+        # top (power cards leave combat, exhausted cards are already gone).
+        if card not in getattr(player, "discard_pile", ()):
+            return
+        player.discard_pile.remove(card)
+        player.draw_pile.append(card)  # list end = top of draw pile
+        self._tick()
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._expire()
+
+
+class HelloWorldPower(Power):
+    """At the start of each of the owner's turns (before the hand draw), add N
+    distinct random Common cards from the character pool to the hand
+    (Hello World; mirrors HelloWorldPower.BeforeHandDraw). Counter-stacked."""
+
+    id = "hello_world"
+    name = "Hello World"
+    power_type = PowerType.BUFF
+
+    def on_player_turn_start(self, player: Creature) -> None:
+        if player is not self.owner or self.amount < 1:
+            return
+        from .cards import CardRarity, make_card
+        from .cards.pool import pool_card_ids
+        from .cmds import CardPileCmd
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        commons = [
+            cid for cid in pool_card_ids()
+            if make_card(cid).rarity == CardRarity.COMMON
+        ]
+        if not commons:
+            return
+        n = min(self.amount, len(commons))
+        for cid in combat._rng.sample(commons, n):
+            CardPileCmd.add_to_hand(self.hooks, player, make_card(cid))
+
+
+# ── Glory (Act 3) card / enemy powers ──────────────────────────────────────
+
+
+class StranglePower(Power):
+    """For the rest of this turn, whenever the applier plays a card the owner
+    takes [amount] unblockable, unpowered damage. Removed at the end of the
+    owner's side turn.
+
+    Source: StranglePower.cs — BeforeCardPlayed records the amount for each card
+    the applier plays (so it never triggers on the card that applied it), and
+    AfterCardPlayed deals that amount to the owner. Applied to a target by the
+    Mad Science card's Choking rider (Tinker Time event)."""
+
+    id = "strangle"
+    name = "Strangle"
+    power_type = PowerType.DEBUFF
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # Cards seen at BeforeCardPlayed → the Strangle amount at that moment
+        # (mirrors the source's amountsForPlayedCards). A card only triggers
+        # Strangle if it was recorded here, so the card that applied Strangle —
+        # already past its BeforeCardPlayed — never triggers it on itself.
+        self._amounts: dict[int, int] = {}
+
+    def before_card_played(self, card: Card) -> None:
+        self._amounts[id(card)] = self.amount
+
+    def on_card_played(self, card: Card) -> None:
+        amount = self._amounts.pop(id(card), None)
+        if amount is None or self.owner.is_gone:
+            return
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        DamageCmd.deal(
+            self.hooks, self.owner, amount, props=DamageProps.NON_CARD_HP_LOSS
+        )
+
+    def on_enemy_side_end(self) -> None:
+        self._expire()
+
+
+class CuriousPower(Power):
+    """Power cards cost [amount] less energy (minimum 0).
+
+    Source: CuriousPower.cs — TryModifyEnergyCostInCombat reduces the owner's
+    Power cards by Amount, floored at 0. Applied by the Mad Science card's
+    Curious rider (Tinker Time event)."""
+
+    id = "curious"
+    name = "Curious"
+    power_type = PowerType.BUFF
+
+    def modify_card_energy_cost(self, card: Card, cost: int) -> int:
+        from .cards import CardType
+        if card.card_type != CardType.POWER or cost <= 0:
+            return cost
+        return max(0, cost - self.amount)
+
+
+class ImprovementPower(Power):
+    """After combat, upgrade [amount] random upgradable deck cards.
+
+    Source: ImprovementPower.cs — AfterCombatEnd upgrades Amount random
+    upgradable cards in the deck. Applied by the Mad Science card's Improvement
+    rider (Tinker Time event). The sim fights over a deep-copied deck and does
+    not sync card upgrades back to the run, so the after-combat upgrade is a
+    documented no-op here (the power is modelled so the rider is constructible
+    and its in-combat presence is faithful)."""
+
+    id = "improvement"
+    name = "Improvement"
+    power_type = PowerType.BUFF
+
+
+class BattlewornDummyTimeLimitPower(Power):
+    """At the end of the owner's turn, count down; at 0 the owner flees.
+
+    Source: BattlewornDummyTimeLimitPower.cs — AfterSideTurnEnd decrements while
+    Amount > 1, otherwise flags the encounter as RanOutOfTime and Escapes the
+    owner. Applied to the Battle Friend dummies (Battleworn Dummy event); if the
+    player cannot destroy the dummy in time it escapes and no reward is given."""
+
+    id = "battleworn_dummy_time_limit"
+    name = "Time Limit"
+    power_type = PowerType.BUFF
+
+    def on_enemy_turn_end(self, enemy: Creature) -> None:
+        if enemy is not self.owner:
+            return
+        if self.amount > 1:
+            self.amount -= 1
+            self.hooks.on_power_amount_changed(self.id, self.owner, -1)
+            return
+        encounter = getattr(self.hooks.combat, "encounter", None)
+        if encounter is not None and hasattr(encounter, "ran_out_of_time"):
+            encounter.ran_out_of_time = True
+        from .cmds import CreatureCmd
+        CreatureCmd.escape(self.hooks, self.owner)
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -2652,5 +2840,13 @@ ALL_POWERS: dict[str, type[Power]] = {
         MindRotPower,
         SlothPower,
         WasteAwayPower,
+        FeedingFrenzyPower,
+        EnergyNextTurnPower,
+        ReboundPower,
+        HelloWorldPower,
+        StranglePower,
+        CuriousPower,
+        ImprovementPower,
+        BattlewornDummyTimeLimitPower,
     ]
 }

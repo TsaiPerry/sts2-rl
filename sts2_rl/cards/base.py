@@ -128,6 +128,23 @@ class Card(ABC):
         self.upgrade_level += 1
         self._on_upgrade()
 
+    def downgrade(self) -> None:
+        """Mirrors CardCmd.Downgrade: drop one upgrade level. A run reuses the
+        same Card object, so rather than track per-upgrade deltas we rebuild the
+        printed numbers from base (_init_vars) and re-apply the upgrades up to
+        the new level — the same re-derive-from-canonical approach the game
+        uses. No-op at level 0.
+
+        Cards whose _on_upgrade toggles a keyword flag (Innate/Exhaust/...) must
+        also initialise that flag in _init_vars so the rebuild is exact."""
+        if self.upgrade_level <= 0:
+            return
+        target = self.upgrade_level - 1
+        self.upgrade_level = 0
+        self._init_vars()
+        for _ in range(target):
+            self.upgrade()
+
     @property
     def is_upgradable(self) -> bool:
         """Mirrors CardModel.IsUpgradable (upgrade level below the max)."""
