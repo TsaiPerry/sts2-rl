@@ -143,6 +143,19 @@ class CreatureCmd:
         return healed
 
     @staticmethod
+    def lose_max_hp(hooks: HookSystem, target: Creature, amount: int) -> None:
+        """Reduce max HP by amount, clamping current HP down to it (mirrors
+        CreatureCmd.LoseMaxHp: both max and current HP drop). Max HP floors at
+        1. Used by Paper Cuts (Scroll of Biting)."""
+        if amount <= 0:
+            return
+        target.max_hp = max(1, target.max_hp - amount)
+        if target.hp > target.max_hp:
+            old_hp = target.hp
+            target.hp = target.max_hp
+            hooks.on_hp_changed(target, target.hp - old_hp)
+
+    @staticmethod
     def kill(hooks: HookSystem, target: Creature) -> None:
         """Set HP to 0 through the death-prevention pipeline (mirrors Kill)."""
         if target.is_dead:

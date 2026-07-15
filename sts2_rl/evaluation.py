@@ -106,11 +106,17 @@ def evaluate_win_rate(
             mask = env.action_masks()
             action = int(policy(env, obs, mask))
             if not mask[action]:
-                action = 0   # illegal pick → end turn, so the eval can't stall
+                # Illegal pick → first legal action, so the eval can't stall
+                # (end turn on the combat env; phase-dependent on the run env).
+                action = int(np.flatnonzero(mask)[0])
             obs, _reward, terminated, truncated, info = env.step(action)
         wins += int(info.get("is_success", False))
-        turns.append(int(info.get("turn", 0)))
-        hp_left.append(max(0, env.unwrapped._state.player.hp))
+        # The combat env reports turns; the run env reports floors reached.
+        turns.append(int(info.get("turn", info.get("floor", 0))))
+        if "hp_left" in info:
+            hp_left.append(int(info["hp_left"]))
+        else:  # combat-env fallback (kept for wrapped envs without hp_left)
+            hp_left.append(max(0, env.unwrapped._state.player.hp))
     return WinRateReport(episodes, wins, float(np.mean(turns)), float(np.mean(hp_left)))
 
 

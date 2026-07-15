@@ -27,6 +27,10 @@ class Potion:
     id: str
     name: str
     targeted: bool = False
+    # PotionModel.Rarity — drives the shop price (MerchantPotionEntry.GetCost:
+    # Rare 100, Uncommon 75, else 50). Every implemented reward-pool potion is
+    # Common in the source; kept as an attr so rarer potions price correctly.
+    rarity: str = "common"
     # Mirrors whether a potion appears in the character/shared reward pools
     # (PotionReward). Event-only potions (Glowwater) set this False so the
     # sim's random_potion helper doesn't offer them.
@@ -130,6 +134,7 @@ class GlowwaterPotion(Potion):
 
     id = "glowwater"
     name = "Glowwater Potion"
+    rarity = "event"
     in_reward_pool = False
     DRAW = 10
 

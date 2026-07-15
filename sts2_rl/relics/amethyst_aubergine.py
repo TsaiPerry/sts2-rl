@@ -10,3 +10,4 @@ class AmethystAubergine(Relic):
     id = "amethyst_aubergine"
     name = "Amethyst Aubergine"
     rarity = RelicRarity.COMMON
+    is_allowed_in_shops = False  # AmethystAubergine.IsAllowedInShops

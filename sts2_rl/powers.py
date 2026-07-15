@@ -2750,6 +2750,520 @@ class BattlewornDummyTimeLimitPower(Power):
         CreatureCmd.escape(self.hooks, self.owner)
 
 
+# ── Glory (Act 3) enemy powers ─────────────────────────────────────────────
+
+
+class PaperCutsPower(Power):
+    """When one of the owner's powered attacks deals unblocked damage to the
+    player, the player loses N max HP (Scroll of Biting; mirrors
+    PaperCutsPower.AfterDamageGiven)."""
+
+    id = "paper_cuts"
+    name = "Paper Cuts"
+    power_type = PowerType.BUFF
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .valueprops import is_powered_attack
+        if (
+            dealer is self.owner
+            and target.side == "player"
+            and amount > 0
+            and is_powered_attack(props)
+        ):
+            from .cmds import CreatureCmd
+            CreatureCmd.lose_max_hp(self.hooks, target, self.amount)
+
+
+class StockPower(Power):
+    """When the owner dies, a fresh Axebot spawns in its place with one fewer
+    Stock (Axebot; mirrors StockPower.AfterDeath + ShouldStopCombatFromEnding).
+    The replacement boots up before attacking."""
+
+    id = "stock"
+    name = "Stock"
+    power_type = PowerType.BUFF
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner or self.amount <= 0:
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .cmds import CreatureCmd
+        from .monsters.glory.axebot import Axebot
+        CreatureCmd.add(
+            self.hooks,
+            Axebot(self.hooks, combat._rng, stock=self.amount - 1, respawn=True),
+        )
+        self._expire()
+
+
+class RampartPower(Power):
+    """At the start of the player's turn, every Turret Operator ally gains N
+    block (Living Shield; mirrors RampartPower.AfterSideTurnStart)."""
+
+    id = "rampart"
+    name = "Rampart"
+    power_type = PowerType.BUFF
+
+    def on_player_turn_start(self, player: Creature) -> None:
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .cmds import BlockCmd
+        from .monsters.glory.turret_operator import TurretOperator
+        for enemy in combat.enemies:
+            if isinstance(enemy, TurretOperator) and not enemy.is_gone:
+                BlockCmd.apply(self.hooks, enemy, self.amount, props=ValueProp.UNPOWERED)
+
+
+class GalvanicPower(Power):
+    """Afflicts every Power card the player owns with Galvanized; playing a
+    Galvanized card deals N (unpowered) damage to the player (Globe Head;
+    mirrors GalvanicPower). Power cards created mid-combat are afflicted too."""
+
+    id = "galvanic"
+    name = "Galvanic"
+    power_type = PowerType.BUFF
+
+    @staticmethod
+    def _is_power(card: Card) -> bool:
+        from .cards import CardType
+        return card.card_type == CardType.POWER
+
+    def _afflict(self, card: Card) -> None:
+        from .afflictions import GalvanizedAffliction
+        from .cmds import CardCmd
+        CardCmd.afflict(card, GalvanizedAffliction, self.amount)
+
+    def _player_cards(self):
+        combat = self.hooks.combat
+        return combat.player.all_cards if combat is not None else ()
+
+    def on_combat_start(self) -> None:
+        for card in self._player_cards():
+            if self._is_power(card) and card.affliction is None:
+                self._afflict(card)
+
+    def on_card_entered_combat(self, card: Card) -> None:
+        if self._is_power(card) and card.affliction is None:
+            self._afflict(card)
+
+    def on_card_played(self, card: Card) -> None:
+        from .afflictions import GalvanizedAffliction
+        if not isinstance(card.affliction, GalvanizedAffliction):
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        DamageCmd.deal(
+            self.hooks, combat.player, self.amount, props=DamageProps.NON_CARD_UNPOWERED
+        )
+
+
+class SoarPower(Power):
+    """The owner takes 50% damage from powered attacks (Owl Magistrate; mirrors
+    SoarPower.ModifyDamageMultiplicative). Applied while flying, removed on the
+    dive (Verdict)."""
+
+    id = "soar"
+    name = "Soar"
+    power_type = PowerType.BUFF
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> float:
+        if target is self.owner:
+            return 0.5
+        return 1.0
+
+
+class _PossessPower(Power):
+    """Base for the Lost/Forgotten possession powers: track the stat the owner
+    drains from the player and give it back when the owner dies (mirrors
+    PossessStrengthPower / PossessSpeedPower)."""
+
+    _stat_id: str
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._stolen: dict[Creature, int] = {}
+
+    def _track(self, name: str, target: Creature, delta: int, applier: Creature | None) -> None:
+        if (
+            applier is self.owner
+            and name == self._stat_id
+            and target.side == "player"
+            and delta < 0
+        ):
+            self._stolen[target] = self._stolen.get(target, 0) + delta
+
+    def on_power_applied(
+        self, name: str, target: Creature, amount: int, applier: Creature | None = None
+    ) -> None:
+        self._track(name, target, amount, applier)
+
+    def on_power_amount_changed(
+        self, name: str, target: Creature, delta: int, applier: Creature | None = None
+    ) -> None:
+        self._track(name, target, delta, applier)
+
+    def _stat_power(self) -> type[Power]:
+        raise NotImplementedError
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner:
+            return
+        from .cmds import PowerCmd
+        for target, amount in self._stolen.items():
+            PowerCmd.apply(self.hooks, target, self._stat_power(), -amount)
+        self._stolen.clear()
+        self._expire()
+
+
+class PossessStrengthPower(_PossessPower):
+    """When the owner dies, all the Strength it drained from the player is
+    returned (The Lost; mirrors PossessStrengthPower)."""
+
+    id = "possess_strength"
+    name = "Possess Strength"
+    power_type = PowerType.BUFF
+    _stat_id = "strength"
+
+    def _stat_power(self) -> type[Power]:
+        return StrengthPower
+
+
+class PossessSpeedPower(_PossessPower):
+    """When the owner dies, all the Dexterity it drained from the player is
+    returned (The Forgotten; mirrors PossessSpeedPower)."""
+
+    id = "possess_speed"
+    name = "Possess Speed"
+    power_type = PowerType.BUFF
+    _stat_id = "dexterity"
+
+    def _stat_power(self) -> type[Power]:
+        return DexterityPower
+
+
+class DampenPower(Power):
+    """When applied, downgrades every upgraded card the player owns by one
+    level; the upgrades are restored when the applier dies (Magi Knight;
+    mirrors DampenPower). Does not stack."""
+
+    id = "dampen"
+    name = "Dampen"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._downgraded: dict[Card, int] = {}
+        for card in getattr(owner, "all_cards", ()):
+            if card.upgrade_level > 0 and card not in self._downgraded:
+                self._downgraded[card] = card.upgrade_level
+                card.downgrade()
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.None
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.applier:
+            return
+        self._expire()
+
+    def _expire(self) -> None:
+        for card, level in self._downgraded.items():
+            while card.upgrade_level < level:
+                card.upgrade()
+        self._downgraded.clear()
+        super()._expire()
+
+
+class HexPower(Power):
+    """Afflicts every unafflicted card the player owns with Hexed, making it
+    Ethereal for as long as this power lives; removed when the applier dies
+    (Spectral Knight; mirrors HexPower). Cards created mid-combat are afflicted
+    too.
+
+    The game grants Ethereal through TryModifyKeywordsInCombat; the sim has no
+    keyword-modifier hook, so this sets the card's is_ethereal flag directly
+    (on per-combat card copies) and restores it when Hex is removed."""
+
+    id = "hex"
+    name = "Hex"
+    power_type = PowerType.DEBUFF
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def _afflict(self, card: Card) -> None:
+        from .afflictions import HexedAffliction
+        from .cmds import CardCmd
+        if CardCmd.afflict(card, HexedAffliction, self.amount) is not None:
+            card._hex_prev_ethereal = card.is_ethereal
+            card.is_ethereal = True
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        for card in getattr(owner, "all_cards", ()):
+            if card.affliction is None:
+                self._afflict(card)
+
+    def on_card_entered_combat(self, card: Card) -> None:
+        if card.affliction is None:
+            self._afflict(card)
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is self.applier:
+            self._expire()
+
+    def _expire(self) -> None:
+        from .afflictions import HexedAffliction
+        from .cmds import CardCmd
+        for card in getattr(self.owner, "all_cards", ()):
+            if isinstance(card.affliction, HexedAffliction):
+                card.is_ethereal = getattr(card, "_hex_prev_ethereal", False)
+                CardCmd.clear_affliction(card)
+        super()._expire()
+
+
+class HighVoltagePower(Power):
+    """The owner gains N Strength at the end of its side's turn (Zapbot;
+    mirrors HighVoltagePower.AfterSideTurnEnd)."""
+
+    id = "high_voltage"
+    name = "High Voltage"
+    power_type = PowerType.BUFF
+
+    def on_enemy_side_end(self) -> None:
+        if not self.owner.is_dead:
+            from .cmds import PowerCmd
+            PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)
+
+
+class WitheringPresencePower(Power):
+    """Every N cards the player plays, a Wither status card is added to their
+    hand — matched to the Aeonglass's Increasing-Intensity upgrade count
+    (mirrors WitheringPresencePower). The display counter starts at N (6)."""
+
+    id = "withering_presence"
+    name = "Withering Presence"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._cards_left = amount
+
+    def on_card_played(self, card: Card) -> None:
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        self._cards_left -= 1
+        if self._cards_left > 0:
+            return
+        self._cards_left = self.amount
+        from .cards import WitherCard
+        from .cmds import CardPileCmd
+        wither = WitherCard()
+        for _ in range(getattr(self.owner, "wither_upgrade_count", 0)):
+            wither.fake_upgrade()
+        CardPileCmd.add_to_hand(self.hooks, combat.player, wither)
+
+
+class ChainsOfBindingPower(Power):
+    """Afflicts up to N cards the player draws each turn with Bound; only one
+    Bound card can be played per turn. Bound afflictions clear at the end of
+    the player's turn (the Queen's Puppet Strings; mirrors
+    ChainsOfBindingPower)."""
+
+    id = "chains_of_binding"
+    name = "Chains of Binding"
+    power_type = PowerType.DEBUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._bound_played = False
+        self._afflicted_this_turn = 0
+
+    def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
+        if card.affliction is None and self._afflicted_this_turn < self.amount:
+            from .afflictions import BoundAffliction
+            from .cmds import CardCmd
+            CardCmd.afflict(card, BoundAffliction, self.amount)
+            self._afflicted_this_turn += 1
+
+    def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
+        from .afflictions import BoundAffliction
+        if isinstance(card.affliction, BoundAffliction) and self._bound_played:
+            return False
+        return True
+
+    def on_card_played(self, card: Card) -> None:
+        from .afflictions import BoundAffliction
+        if isinstance(card.affliction, BoundAffliction):
+            self._bound_played = True
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is not self.owner:
+            return
+        self._bound_played = False
+        self._afflicted_this_turn = 0
+        from .afflictions import BoundAffliction
+        from .cmds import CardCmd
+        for card in getattr(self.owner, "all_cards", ()):
+            if isinstance(card.affliction, BoundAffliction):
+                CardCmd.clear_affliction(card)
+
+
+class AdaptablePower(Power):
+    """The Test Subject cannot truly die while this power is present: a killing
+    blow instead makes it untargetable and forces its Respawn move, in which it
+    revives at its next form's HP (mirrors AdaptablePower + TestSubject)."""
+
+    id = "adaptable"
+    name = "Adaptable"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.is_reviving = False
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def should_die(self, creature: Creature) -> bool:
+        if creature is not self.owner:
+            return True
+        self.is_reviving = True
+        self.owner.trigger_dead_state()
+        return False
+
+    def should_allow_hitting(self, target: Creature) -> bool:
+        if target is self.owner and self.is_reviving:
+            return False
+        return True
+
+    def do_revive(self) -> None:
+        self.is_reviving = False
+
+
+class PainfulStabsPower(Power):
+    """Each of the owner's powered-attack hits that deals unblocked damage to
+    the player shuffles N Wounds into the player's discard (Test Subject phase
+    2; mirrors PainfulStabsPower.AfterAttack — N Wounds per hit == amount ×
+    hit-count)."""
+
+    id = "painful_stabs"
+    name = "Painful Stabs"
+    power_type = PowerType.BUFF
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .valueprops import is_powered_attack
+        if (
+            dealer is self.owner
+            and target.side == "player"
+            and amount > 0
+            and is_powered_attack(props)
+        ):
+            from .cards import WoundCard
+            from .cmds import CardPileCmd
+            for _ in range(self.amount):
+                CardPileCmd.add_to_discard(self.hooks, target, WoundCard())
+
+
+class NemesisPower(Power):
+    """At the end of every other enemy side turn, the owner gains Intangible 1;
+    on the turns in between it loses it (Test Subject phase 3; mirrors
+    NemesisPower.AfterSideTurnEnd)."""
+
+    id = "nemesis"
+    name = "Nemesis"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._should_apply = False
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def on_enemy_side_end(self) -> None:
+        if self.owner.is_dead:
+            return
+        self._should_apply = not self._should_apply
+        from .cmds import PowerCmd
+        if self._should_apply:
+            PowerCmd.apply(self.hooks, self.owner, IntangiblePower, 1)
+        elif "intangible" in self.owner.powers:
+            PowerCmd.remove(self.hooks, self.owner, "intangible")
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -2848,5 +3362,20 @@ ALL_POWERS: dict[str, type[Power]] = {
         CuriousPower,
         ImprovementPower,
         BattlewornDummyTimeLimitPower,
+        PaperCutsPower,
+        StockPower,
+        RampartPower,
+        GalvanicPower,
+        SoarPower,
+        PossessStrengthPower,
+        PossessSpeedPower,
+        DampenPower,
+        HexPower,
+        HighVoltagePower,
+        WitheringPresencePower,
+        ChainsOfBindingPower,
+        AdaptablePower,
+        PainfulStabsPower,
+        NemesisPower,
     ]
 }

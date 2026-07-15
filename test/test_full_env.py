@@ -46,12 +46,15 @@ def _masked_rollout(env, seed, max_steps=500):
 def test_spaces_declared():
     env = STS2FullCombatEnv()
     assert OBS_SCHEMA_VERSION == 2
-    assert env.observation_space.shape[0] == 5192   # hybrid, schema v2
+    # hybrid, schema v2. Grows with the enemy-identity one-hot (N_MONSTERS) and
+    # the power vocabulary (3×N_POWERS per enemy row): the Glory (Act 3) roster
+    # added both, taking this from 5224 to 5699.
+    assert env.observation_space.shape[0] == 5699
     assert env.action_space.n == env.n_actions == 79
 
 
 def test_features_mode_is_smaller():
-    assert STS2FullCombatEnv(card_obs="features").observation_space.shape[0] == 3802
+    assert STS2FullCombatEnv(card_obs="features").observation_space.shape[0] == 4279
 
 
 def test_obs_within_declared_space_at_reset():

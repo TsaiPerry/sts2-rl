@@ -34,6 +34,13 @@ from .cards.base import _CARD_CLASSES
 from .combat import CombatState
 from .potions import Potion, _POTION_CLASSES
 from .relics import ALL_RELICS, Relic, RelicRarity, make_relic
+from .rewards import (
+    TREASURE_GOLD,
+    CardRarityOdds,
+    CombatRewards,
+    PotionRewardOdds,
+    generate_combat_rewards,
+)
 
 if TYPE_CHECKING:
     from .actmap import ActMapConfig, MapPoint, StandardMap
@@ -48,6 +55,37 @@ _BAG_RARITIES = (RelicRarity.COMMON, RelicRarity.UNCOMMON, RelicRarity.RARE)
 # Rarities a transform can produce (GetFilteredTransformationOptions keeps
 # Common/Uncommon/Rare only).
 _TRANSFORM_RARITIES = (CardRarity.COMMON, CardRarity.UNCOMMON, CardRarity.RARE)
+
+# Default IRunState.CurrentActIndex per act, from each ActModel's Index:
+# Overgrowth and Underdocks are BOTH act 1 (index 0 — Underdocks is the
+# unlock-gated alternate Act 1, per Underdocks.cs Index=0/IsDefault=false),
+# Hive is act 2, Glory act 3. Used to gate map modifiers like Spoils Map
+# (SpoilsActIndex = 1) and the reward-card upgrade odds (act_index × 0.25).
+_DEFAULT_ACT_INDEX = {
+    "overgrowth": 0,
+    "underdocks": 0,
+    "hive": 1,
+    "glory": 2,
+}
+
+# The act at each index of a run (ModelDb.ActsByIndex, everything unlocked):
+# index 0 rolls uniformly between the default and alternate Act 1
+# (ActModel.GetRandomList → rng.NextItem over the unlocked acts at index 0).
+_ACTS_BY_INDEX: list[list[str]] = [
+    ["overgrowth", "underdocks"],
+    ["hive"],
+    ["glory"],
+]
+
+
+def roll_relic_rarity(rng: random.Random) -> RelicRarity:
+    """RelicFactory.RollRarity: <0.5 Common, <0.83 Uncommon, else Rare."""
+    roll = rng.random()
+    if roll < 0.5:
+        return RelicRarity.COMMON
+    if roll < 0.83:
+        return RelicRarity.UNCOMMON
+    return RelicRarity.RARE
 
 
 def ironclad_starting_deck() -> list[Card]:
@@ -86,7 +124,9 @@ class RunState:
         self.hp = hp if hp is not None else self.max_hp
         self.gold = gold if gold is not None else self.STARTING_GOLD
         self.relics: list[Relic] = list(relics or [])
-        self.potions: list[Potion] = list(potions or [])[: self.MAX_POTIONS]
+        # Potion belt size (Player.MaxPotionSlotCount); Phial Holster grows it.
+        self.max_potions = self.MAX_POTIONS
+        self.potions: list[Potion] = list(potions or [])[: self.max_potions]
         # Out-of-combat card chooser with the same signature as
         # CombatState.card_selector: (purpose, candidates, count) -> cards.
         # None = uniform random with the run RNG.
@@ -98,7 +138,31 @@ class RunState:
             if cls.rarity in _BAG_RARITIES
         ]
         self.rng.shuffle(self.relic_grab_bag)
+        # A separate bag of Shop-rarity relics (never in the normal grab bag)
+        # for the merchant's Shop-rarity slot (RelicFactory.PullNextRelicFromBack
+        # with RelicRarity.Shop). Built + shuffled lazily on first shop access
+        # so constructing a run consumes no extra RNG (seed parity with the
+        # existing tests, which never open a shop).
+        self._shop_relic_bag: list[str] | None = None
+        # Player.ExtraFields.CardShopRemovalsUsed — raises the removal price.
+        self.card_shop_removals_used = 0
+        # Per-run reward pity state (PlayerOdds in the source): the drifting
+        # card-rarity offset and the potion-drop threshold. Constructing them
+        # draws no RNG, so run-construction seed parity is preserved.
+        self.card_rarity_odds = CardRarityOdds(self.rng)
+        self.potion_reward_odds = PotionRewardOdds(self.rng)
+        # ── Run / act sequencing (populated by start_run) ────────────────
+        # The full act list, rolled once at run start (ActModel.GetRandomList);
+        # empty until start_run is called (single-act tests use start_act).
+        self.act_list: list[str] = []
+        # True once the final act's boss is beaten (RunManager's victory).
+        self.victory = False
         # ── Map / act state (populated by start_act) ─────────────────────
+        self.act_config: "ActMapConfig | None" = None
+        self.act_index = 0            # IRunState.CurrentActIndex
+        self.ascension = 0
+        self._is_final_act = False
+        self._has_second_boss = False
         self.map: StandardMap | None = None
         self.room_set: RoomSet | None = None
         self.unknown_odds: UnknownOdds | None = None
@@ -199,6 +263,20 @@ class RunState:
             return [c for c in chosen if c in candidates]
         return self.rng.sample(candidates, count)
 
+    def select_option(self, purpose: str, count: int) -> int:
+        """A generic pick-one-of-N choice that is not a card selection
+        (Scroll Boxes' choose-a-bundle screen). Delegates to
+        self.option_selector — a callable (purpose, count) -> index — when
+        installed; otherwise uniform random with the run RNG."""
+        if count <= 0:
+            raise ValueError("select_option needs at least one option")
+        selector = getattr(self, "option_selector", None)
+        if selector is not None:
+            idx = int(selector(purpose, count))
+            if 0 <= idx < count:
+                return idx
+        return self.rng.randrange(count)
+
     def transform_card(self, card: Card, into: Card | None = None) -> Card:
         """Transform a deck card (CardCmd.TransformToRandom / TransformTo).
 
@@ -222,7 +300,7 @@ class RunState:
 
     def add_potion(self, potion: Potion) -> bool:
         """Add a potion if a slot is free. Returns whether it was kept."""
-        if len(self.potions) >= self.MAX_POTIONS:
+        if len(self.potions) >= self.max_potions:
             return False
         self.potions.append(potion)
         return True
@@ -236,12 +314,37 @@ class RunState:
         )
         return self.rng.choice(pool)()
 
+    def random_potions(self, count: int, distinct: bool = False) -> list[Potion]:
+        """Several random potions from the reward pool (shop stock). With
+        `distinct`, avoid repeating a potion id while the pool allows it
+        (PotionFactory.CreateRandomPotionsOutOfCombat blacklists picks)."""
+        pool = sorted(
+            (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
+            key=lambda c: c.id,
+        )
+        if not pool:
+            return []
+        if not distinct:
+            return [self.rng.choice(pool)() for _ in range(count)]
+        chosen: list[Potion] = []
+        available = list(pool)
+        for _ in range(count):
+            if not available:
+                available = list(pool)
+            cls = self.rng.choice(available)
+            available.remove(cls)
+            chosen.append(cls())
+        return chosen
+
     # ── Relics ───────────────────────────────────────────────────────────
 
     def add_relic(self, relic: Relic | str) -> Relic:
         if isinstance(relic, str):
             relic = make_relic(relic)
         self.relics.append(relic)
+        # RelicCmd.Obtain → RelicModel.AfterObtained (out-of-combat pickup
+        # effect, e.g. Golden Compass regenerating the map).
+        relic.after_obtained(self)
         return relic
 
     def has_available_relics(self) -> bool:
@@ -256,32 +359,126 @@ class RunState:
         empty."""
         if not self.relic_grab_bag:
             return None
-        roll = self.rng.random()
-        rarity = (
-            RelicRarity.COMMON if roll < 0.5
-            else RelicRarity.UNCOMMON if roll < 0.83
-            else RelicRarity.RARE
-        )
+        rarity = roll_relic_rarity(self.rng)
         for relic_id in self.relic_grab_bag:
             if ALL_RELICS[relic_id].rarity == rarity:
                 self.relic_grab_bag.remove(relic_id)
                 return make_relic(relic_id)
         return make_relic(self.relic_grab_bag.pop(0))
 
+    def pull_relic_from_back(
+        self, rarity: RelicRarity, blacklist: set[str] | None = None
+    ) -> Relic | None:
+        """RelicFactory.PullNextRelicFromBack: pull the last shop-legal relic of
+        `rarity` (Shop rarity draws from the shop-relic bag, the rest from the
+        grab bag), skipping ids in `blacklist`. Used by the merchant; a pulled
+        relic never reappears this run. None if the matching bag is empty."""
+        blacklist = blacklist or set()
+        bag = (
+            self._get_shop_relic_bag()
+            if rarity == RelicRarity.SHOP
+            else self.relic_grab_bag
+        )
+        for relic_id in reversed(bag):
+            cls = ALL_RELICS[relic_id]
+            if (
+                cls.rarity == rarity
+                and cls.is_allowed_in_shops
+                and relic_id not in blacklist
+            ):
+                bag.remove(relic_id)
+                return make_relic(relic_id)
+        return None
+
+    def _get_shop_relic_bag(self) -> list[str]:
+        """The shuffled Shop-rarity relic bag, built on first use."""
+        if self._shop_relic_bag is None:
+            self._shop_relic_bag = [
+                relic_id for relic_id, cls in ALL_RELICS.items()
+                if cls.rarity == RelicRarity.SHOP and cls.is_allowed_in_shops
+            ]
+            self.rng.shuffle(self._shop_relic_bag)
+        return self._shop_relic_bag
+
     def obtain_relic_from_grab_bag(self) -> Relic | None:
         """Pull from the bag front and add it to the run's relics."""
         relic = self.pull_relic_from_front()
         if relic is not None:
-            self.relics.append(relic)
+            self.add_relic(relic)
         return relic
 
     # ── Map / travel (actmap.py + rooms.py) ──────────────────────────────
+
+    def start_run(
+        self,
+        acts: list[str] | None = None,
+        ascension: int = 0,
+    ) -> StandardMap:
+        """Roll the run's act list and enter its first act.
+
+        Mirrors StartRunLobby → ActModel.GetRandomList: the list is fixed at
+        run start; index 0 is a uniform pick between Overgrowth and the
+        unlocked alternate Underdocks, then Hive, then Glory. The default
+        list is trimmed to the acts wired into the run's room sequencing
+        (Glory's enemy roster is ported — monsters/glory — but it has no
+        rooms.py ActRooms yet, so a default run is boss-to-boss over acts
+        1–2); pass `acts` explicitly to override.
+        """
+        if acts is None:
+            from .rooms import act_has_rooms
+
+            acts = [self.rng.choice(options) for options in _ACTS_BY_INDEX]
+            while acts and not act_has_rooms(acts[-1]):
+                acts.pop()
+        if not acts:
+            raise ValueError("acts must name at least one act")
+        self.act_list = list(acts)
+        self.victory = False
+        return self.start_act(
+            self.act_list[0],
+            ascension=ascension,
+            is_final_act=len(self.act_list) == 1,
+            act_index=0,
+        )
+
+    @property
+    def current_act_number(self) -> int:
+        """1-based position in the act list (display; act_index is 0-based)."""
+        return self.act_index + 1
+
+    @property
+    def at_run_end(self) -> bool:
+        """The run is over: dead, or the final act's boss was beaten."""
+        return self.is_dead or self.victory
+
+    def advance_act(self) -> StandardMap:
+        """RunManager.EnterNextAct: move to the next act in the rolled list —
+        a fresh map and room queues, the "?"-odds reset to base (done in
+        start_act), and NO heal or boss-relic step in between. Call after the
+        current act's boss is beaten (at_act_end)."""
+        if not self.act_list:
+            raise RuntimeError("Call start_run before advance_act")
+        next_index = self.act_index + 1
+        if next_index >= len(self.act_list):
+            raise RuntimeError("Already in the final act")
+        return self.start_act(
+            self.act_list[next_index],
+            ascension=self.ascension,
+            is_final_act=next_index == len(self.act_list) - 1,
+            act_index=next_index,
+        )
+
+    def complete_run(self) -> None:
+        """Mark the run won (the final act's boss is beaten). The game rolls
+        into TheArchitect victory event; the sim just flags it."""
+        self.victory = True
 
     def start_act(
         self,
         act: str | ActMapConfig = "overgrowth",
         ascension: int = 0,
         is_final_act: bool = False,
+        act_index: int | None = None,
     ) -> StandardMap:
         """Generate the act's map and room queues and stand at the Ancient.
 
@@ -295,36 +492,88 @@ class RunState:
         map only via SwarmingElites (Asc 1+, 8 elites) and DoubleBoss (Asc
         10, a second boss). DoubleBoss applies only when `is_final_act` is
         set (RunManager adds the second boss to the last act only).
+
+        `act_index` is the run's CurrentActIndex (0-based), gating map
+        modifiers like Spoils Map; it defaults from the act name.
         """
-        from .actmap import ACT_MAP_CONFIGS, AscensionLevel, StandardMap
-        from .rooms import RoomSet, UnknownOdds, act_rooms
+        from .actmap import ACT_MAP_CONFIGS, AscensionLevel
 
         config = ACT_MAP_CONFIGS[act] if isinstance(act, str) else act
         self.act_config = config
         self.ascension = ascension
-        has_second_boss = is_final_act and ascension >= AscensionLevel.DOUBLE_BOSS
-        self.map = StandardMap(
-            rng=self.rng,
-            config=config,
-            ascension=ascension,
-            has_second_boss=has_second_boss,
+        self.act_index = (
+            act_index if act_index is not None
+            else _DEFAULT_ACT_INDEX.get(config.name, 0)
         )
-        rooms = act_rooms(config.name)
+        self._is_final_act = is_final_act
+        self._has_second_boss = (
+            is_final_act and ascension >= AscensionLevel.DOUBLE_BOSS
+        )
+        self.map = self._generate_map()
+        self._generate_rooms()
+        self.current_point = self.map.starting_point
+        self.map_history = []
+        self._last_room_types: list[RoomType] = []
+        return self.map
+
+    # ── Map generation pipeline (RunManager.GenerateMap) ─────────────────
+
+    def _map_listeners(self):
+        """AbstractModel hook listeners for map generation — the run's relics
+        and deck cards (mirrors IRunState.IterateHookListeners for this pass)."""
+        return [*self.relics, *self.deck]
+
+    def _generate_map(self):
+        """RunManager.GenerateMap: build the base act map, then run it through
+        the relic/card modifier pipeline (Spoils Map, Golden Compass)."""
+        from .actmap import StandardMap
+
+        base = StandardMap(
+            rng=self.rng,
+            config=self.act_config,
+            ascension=self.ascension,
+            has_second_boss=self._has_second_boss,
+        )
+        listeners = self._map_listeners()
+        act_map = base
+        for listener in listeners:  # Hook.ModifyGeneratedMap
+            act_map = listener.modify_generated_map(self, act_map, self.act_index)
+        for listener in listeners:  # Hook.ModifyGeneratedMapLate
+            act_map = listener.modify_generated_map_late(
+                self, act_map, self.act_index
+            )
+        for listener in listeners:  # Hook.AfterMapGenerated
+            listener.after_map_generated(self, act_map, self.act_index)
+        return act_map
+
+    def _generate_rooms(self) -> None:
+        """ActModel.GenerateRooms + UnknownMapPointOdds.ResetToBase."""
+        from .rooms import RoomSet, UnknownOdds, act_rooms
+
+        rooms = act_rooms(self.act_config.name)
         self.room_set = RoomSet.generate(
             rooms,
             self.rng,
-            config.num_rooms,
-            config.num_weak_encounters,
-            has_second_boss=has_second_boss,
+            self.act_config.num_rooms,
+            self.act_config.num_weak_encounters,
+            has_second_boss=self._has_second_boss,
         )
         if self.unknown_odds is None:
             self.unknown_odds = UnknownOdds()
         else:
             self.unknown_odds.reset_to_base()
+
+    def regenerate_map(self) -> None:
+        """RunManager.GenerateMap called mid-act (Golden Compass' pickup effect):
+        rebuild only the map through the modifier pipeline and return to the
+        Ancient. The room queues and "?"-odds are left intact, as in the source
+        (rooms are rolled once per act). No-op before an act has started."""
+        if self.act_config is None:
+            return
+        self.map = self._generate_map()
         self.current_point = self.map.starting_point
         self.map_history = []
-        self._last_room_types: list[RoomType] = []
-        return self.map
+        self._last_room_types = []
 
     @property
     def at_act_end(self) -> bool:
@@ -334,26 +583,31 @@ class RunState:
         return self.current_point is not None and not self.current_point.children
 
     def travelable_points(self) -> list[MapPoint]:
-        """MapTravel.GetTravelablePointsFrom: the current point's children
-        (no free-travel hook in the sim), in a stable order."""
+        """MapTravel.GetTravelablePointsFrom: the current point's children —
+        plus, while a relic grants free travel (Winged Boots'
+        ShouldAllowFreeTravel), every point on the next row — in a stable
+        order."""
         if self.current_point is None:
             raise RuntimeError("Call start_act before traveling")
-        return sorted(
-            self.current_point.children, key=lambda p: (p.col, p.row)
-        )
+        points = set(self.current_point.children)
+        if any(r.should_allow_free_travel() for r in self.relics):
+            points.update(self.map.points_in_row(self.current_point.row + 1))
+        return sorted(points, key=lambda p: (p.col, p.row))
 
     def enter_point(self, point: MapPoint) -> RoomResolution:
         """Travel to a child point and resolve its room (the sim's
         RunManager.EnterMapPointInternal).
 
         Combat rooms return the encounter to fight (drive it with
-        create_combat / finish_combat); event rooms return the built Event;
-        treasure auto-grants a grab-bag relic (approximation — the sim has
-        no reward screens); shops are no-op stubs; rest sites return bare
-        so the caller picks rest_heal() or an upgrade.
+        create_combat / finish_combat, then generate_combat_rewards); event
+        rooms return the built Event; treasure grants a grab-bag relic plus
+        42–52 gold (and any Spoils Map quest payout); shops return a stocked
+        MerchantInventory (resolution.shop) to buy from; rest sites return
+        bare so the caller picks rest_heal() or an upgrade.
         """
         from .events import make_event
         from .rooms import (
+            MapPointType,
             RoomResolution,
             RoomType,
             build_room_type_blacklist,
@@ -362,21 +616,38 @@ class RunState:
 
         if self.current_point is None or self.room_set is None:
             raise RuntimeError("Call start_act before traveling")
-        if point not in self.current_point.children:
+        if point not in self.travelable_points():
             raise ValueError(f"{point} is not reachable from {self.current_point}")
+        # Travel to a non-child point consumes a free-travel charge
+        # (Winged Boots; the source detects it in AfterRoomEntered).
+        if point not in self.current_point.children:
+            for relic in self.relics:
+                if relic.should_allow_free_travel():
+                    relic.on_free_travel_used(self)
+                    break
 
         # Blacklist is computed from the point being left: its rooms and
         # its children (RunManager builds it before moving).
         blacklist = build_room_type_blacklist(
             self._last_room_types, self.current_point.children
         )
+        allowed = (
+            self._unknown_allowed_room_types(blacklist)
+            if point.point_type == MapPointType.UNKNOWN
+            else None
+        )
         room_type = roll_room_type(
-            point.point_type, self.unknown_odds, self.rng, blacklist
+            point.point_type, self.unknown_odds, self.rng, blacklist, allowed
         )
         self.current_point = point
+        self.total_floor += 1  # IRunState.TotalFloor: rooms entered this run
         resolution = RoomResolution(
             point=point, map_point_type=point.point_type, room_type=room_type
         )
+        # RelicModel.AfterRoomEntered fires as the room is entered, before its
+        # contents resolve (Silver Crucible counts treasure rooms here).
+        for relic in list(self.relics):
+            relic.after_room_entered(self, point, room_type)
         if room_type == RoomType.MONSTER:
             resolution.encounter = self.room_set.next_normal_encounter
         elif room_type == RoomType.ELITE:
@@ -390,15 +661,60 @@ class RunState:
                 resolution.event = make_event(event_id, self)
                 self.visited_event_ids.add(event_id)
         elif room_type == RoomType.TREASURE:
-            resolution.relic = self.obtain_relic_from_grab_bag()
+            # Treasure chest (OneOffSynchronizer): a grab-bag relic plus
+            # 42–52 gold, both granted on entry, plus any Spoils Map payout.
+            # Hook.ShouldGenerateTreasure can suppress the chest entirely
+            # (Silver Crucible's first treasure room).
+            if all(r.should_generate_treasure(self) for r in self.relics):
+                resolution.relic = self.obtain_relic_from_grab_bag()
+                treasure_gold = self.rng.randint(*TREASURE_GOLD)
+                self.gain_gold(treasure_gold)
+                resolution.gold = treasure_gold
+            resolution.gold += self._complete_map_point_quests(point)
+        elif room_type == RoomType.SHOP:
+            from .shop import MerchantInventory
+
+            resolution.shop = MerchantInventory.create(self)
         self.room_set.mark_visited(room_type)
         self._last_room_types = [room_type]
         self.map_history.append((point, room_type))
         return resolution
 
+    def _unknown_allowed_room_types(self, blacklist) -> set:
+        """The room types a "?" node may roll into after every relic/card's
+        ModifyUnknownMapPointRoomTypes (Golden Compass narrows this to Event)."""
+        from .rooms import RoomType
+
+        room_types = {
+            RoomType.MONSTER,
+            RoomType.ELITE,
+            RoomType.TREASURE,
+            RoomType.SHOP,
+            RoomType.EVENT,
+        } - set(blacklist)
+        for listener in self._map_listeners():
+            room_types = set(
+                listener.modify_unknown_map_point_room_types(self, room_types)
+            )
+        return room_types
+
+    def _complete_map_point_quests(self, point) -> int:
+        """Trigger any quests attached to a just-entered point (Spoils Map's
+        treasure payout). Returns the gold granted."""
+        gold = 0
+        for quest in list(getattr(point, "quests", [])):
+            on_complete = getattr(quest, "on_quest_complete", None)
+            if on_complete is not None:
+                gold += on_complete(self)
+        return gold
+
     def rest_heal(self) -> int:
-        """Take the rest site's heal option (30% of max HP, truncated)."""
-        return self.heal(self.rest_site_heal_amount())
+        """Take the rest site's heal option (30% of max HP, truncated), then
+        fire Hook.AfterRestSiteHeal over the relics (Stone Humidifier)."""
+        healed = self.heal(self.rest_site_heal_amount())
+        for relic in list(self.relics):
+            relic.after_rest_site_heal(self)
+        return healed
 
     def rest_upgrade(self) -> Card | None:
         """Take the rest site's smith option: upgrade one card chosen via
@@ -426,17 +742,41 @@ class RunState:
             potions=self.potions,
             relics=self.relics,
             card_selector=kwargs.pop("card_selector", self.card_selector),
+            max_potions=kwargs.pop("max_potions", self.max_potions),
             max_hp=self.max_hp,
             current_hp=self.hp,
             **kwargs,
         )
 
-    def finish_combat(self, combat: CombatState) -> None:
+    def finish_combat(self, combat: CombatState, room_type: RoomType | None = None) -> None:
         """Sync a finished combat back into the run: HP, max HP (Feed), and
-        remaining potions."""
+        remaining potions. Rewards are a separate step — call
+        generate_combat_rewards(room_type) after a won fight.
+
+        When `room_type` is passed and the player survived, fires
+        RelicModel.AfterCombatEnd over the relics (Fishing Rod's every-3rd-
+        monster-combat upgrade)."""
         self.max_hp = combat.player.max_hp
         self.hp = max(0, combat.player.hp)
         self.potions = list(combat.player.potions)
+        if room_type is not None and not self.is_dead:
+            for relic in list(self.relics):
+                relic.after_combat_end(self, room_type)
+
+    def generate_combat_rewards(
+        self, room_type: RoomType, gold_proportion: float = 1.0
+    ) -> CombatRewards:
+        """The post-combat reward screen (RewardsSet.WithRewardsFromRoom):
+        gold and any elite relic are granted immediately; the 3-card choice
+        and the potion are left on the result for the caller to offer.
+        See rewards.py for the ported mechanics."""
+        return generate_combat_rewards(self, room_type, gold_proportion)
+
+    @property
+    def is_final_act(self) -> bool:
+        """Whether the current act is the run's last (its boss ends the run
+        with no rewards). Set via start_act(is_final_act=True)."""
+        return self._is_final_act
 
     def __repr__(self) -> str:
         return (

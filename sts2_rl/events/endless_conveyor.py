@@ -63,7 +63,7 @@ class EndlessConveyor(Event):
             ("JELLY_LIVER", 3.0, self._jelly_liver),
             ("FRIED_EEL", 3.0, self._fried_eel),
         ]
-        if len(self.run.potions) < self.run.MAX_POTIONS:
+        if len(self.run.potions) < self.run.max_potions:
             dishes.append(("SUSPICIOUS_CONDIMENT", 3.0, self._suspicious_condiment))
         if self.run.hp != self.run.max_hp:
             dishes.append(("CLAM_ROLL", 6.0, self._clam_roll))
@@ -103,7 +103,7 @@ class EndlessConveyor(Event):
             self.run.add_card(card)
 
     def _suspicious_condiment(self) -> None:
-        if len(self.run.potions) < self.run.MAX_POTIONS:
+        if len(self.run.potions) < self.run.max_potions:
             self.run.add_potion(self.run.random_potion())
 
     def _clam_roll(self) -> None:

@@ -11,6 +11,7 @@ from .strike import StrikeCard
 from .defend import DefendCard
 from .burn import BurnCard
 from .wound import WoundCard
+from .wither import WitherCard
 from .breakthrough import BreakthroughCard
 from .sweep import SweepCard
 from .slimed import SlimedCard
@@ -51,6 +52,8 @@ from .trash_heap_cards import (
     StackCard,
 )
 from .mad_science import MadScienceCard
+from .neows_fury import NeowsFuryCard
+from .spoils_map import SpoilsMapCard
 
 # ── Ironclad attacks ──────────────────────────────────────────────────────
 from .anger import AngerCard
@@ -178,6 +181,7 @@ __all__ = [
     "DefendCard",
     "BurnCard",
     "WoundCard",
+    "WitherCard",
     "BreakthroughCard",
     "SweepCard",
     "SlimedCard",
@@ -212,6 +216,7 @@ __all__ = [
     "RipAndTearCard",
     "StackCard",
     "MadScienceCard",
+    "SpoilsMapCard",
     # Ironclad attacks
     "AngerCard",
     "AshenStrikeCard",

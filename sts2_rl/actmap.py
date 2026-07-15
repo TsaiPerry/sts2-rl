@@ -111,10 +111,24 @@ class MapPoint:
         # StandardActMap.AssignPointTypes marks forced rows immutable so
         # later systems (repair, map-editing effects) leave them alone.
         self.can_be_modified = True
+        # Models attached to this point (MapPoint.Quests). The Spoils Map
+        # card attaches itself to the treasure node so entering it pays out
+        # (AddQuest / RemoveQuest in the source).
+        self.quests: list = []
 
     @property
     def coord(self) -> tuple[int, int]:
         return (self.col, self.row)
+
+    def add_quest(self, model) -> None:
+        """MapPoint.AddQuest."""
+        if model not in self.quests:
+            self.quests.append(model)
+
+    def remove_quest(self, model) -> None:
+        """MapPoint.RemoveQuest."""
+        if model in self.quests:
+            self.quests.remove(model)
 
     def add_child(self, child: MapPoint) -> None:
         self.children.add(child)
@@ -930,3 +944,226 @@ def golden_path_map(
     fixed.grid[3][fixed.row_count - 1].add_child(fixed.boss_point)
     fixed.starting_point.add_child(fixed.grid[3][1])
     return fixed
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Spoils map (SpoilsActMap.cs) — the hourglass map the Spoils Map card forces
+# in Act 2: every path is funnelled through one centered treasure node, then
+# fans back out. Generated from scratch (the source keeps it separate from
+# StandardActMap because the converging topology can't come from post-
+# processing). The placement legality rules are identical to StandardMap's,
+# so this subclass reuses them; only carving and forced-row assignment differ,
+# and there is NO cosmetic post-processing (it would break the hourglass).
+# ═════════════════════════════════════════════════════════════════════════
+
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(value, hi))
+
+
+def _sign(value: int) -> int:
+    return (value > 0) - (value < 0)
+
+
+class SpoilsActMap(StandardMap):
+    """SpoilsActMap.cs — the Spoils Map card's hourglass map.
+
+    Reuses StandardMap's grid access, legality checks, queue assignment, and
+    the MapPathPruning port; overrides only the carving (converging paths) and
+    the forced-row assignment (the treasure is a single centered node placed
+    during carving, not a whole row).
+    """
+
+    def __init__(
+        self,
+        rng: random.Random,
+        config: ActMapConfig = UNDERDOCKS_MAP,
+        counts: MapPointTypeCounts | None = None,
+        ascension: int = 0,
+    ) -> None:
+        self.rng = rng
+        self.config = config
+        self.ascension = ascension
+        self.map_length = config.num_rooms + 1
+        self.grid = [[None] * self.map_length for _ in range(_MAP_WIDTH)]
+        if counts is not None:
+            self.counts = counts
+        else:
+            rolled = config.roll_counts(rng)
+            if ascension >= AscensionLevel.SWARMING_ELITES:
+                rolled = replace(rolled, elites=_SWARMING_ELITE_COUNT)
+            self.counts = rolled
+        self.replace_treasure_with_elites = False
+        # SpoilsActMap: _treasureRow = GetRowCount() - 7 (same as the forced
+        # treasure row of a standard act).
+        self._treasure_row = self.row_count - 7
+        self.boss_point = MapPoint(_MAP_WIDTH // 2, self.row_count)
+        self.second_boss_point = None
+        self.starting_point = MapPoint(_MAP_WIDTH // 2, 0)
+        self.start_points = set()
+
+        self._generate_hourglass()
+        self._assign_point_types_spoils()
+        prune_and_repair(self)
+
+    # ── Hourglass carving ────────────────────────────────────────────────
+
+    def _generate_hourglass(self) -> None:
+        """SpoilsActMap.GenerateHourglassMap."""
+        center = _MAP_WIDTH // 2
+        if self._treasure_row <= 0 or self._treasure_row >= self.row_count:
+            raise ValueError("Treasure row is out of bounds for SpoilsActMap")
+        for i in range(_NUM_PATHS):
+            start = self._get_or_create(self.rng.randrange(_MAP_WIDTH), 1)
+            if i == 1:
+                while start in self.start_points:
+                    start = self._get_or_create(
+                        self.rng.randrange(_MAP_WIDTH), 1
+                    )
+            self.start_points.add(start)
+            self._path_generate_spoils(start)
+        treasure = self._get_or_create(center, self._treasure_row)
+        treasure.point_type = MapPointType.TREASURE
+        treasure.can_be_modified = False
+        for point in list(self.points_in_row(self._treasure_row)):
+            if point is not treasure:
+                self._redirect_to_treasure(point, treasure)
+        self._connect_row_to_boss()
+        self._connect_row_to_start()
+
+    def _path_generate_spoils(self, start: MapPoint) -> None:
+        current = start
+        while current.row < self.map_length - 1:
+            col, row = self._next_coord_spoils(current)
+            nxt = self._get_or_create(col, row)
+            current.add_child(nxt)
+            current = nxt
+
+    def _next_coord_spoils(self, current: MapPoint) -> tuple[int, int]:
+        """SpoilsActMap.GenerateNextCoord: bias toward the center column while
+        approaching the treasure row (so paths converge), stay within the
+        hourglass's per-row column window, and cap parents/children at 3."""
+        row = current.row + 1
+        min_col, max_col = self._allowed_columns_for_row(row)
+        center = _MAP_WIDTH // 2
+        dist = self._treasure_row - current.row
+        if dist > 3 or dist <= 0:
+            offsets = stable_shuffle([-1, 0, 1], self.rng)
+        else:
+            offsets = _centered_priority_list(current.col, center)
+        for offset in offsets:
+            next_col = _next_column(current.col, offset)
+            if (
+                next_col < min_col
+                or next_col > max_col
+                or self._has_invalid_crossover(current, next_col)
+            ):
+                continue
+            point = self.get_point(next_col, row)
+            parents_ok = (
+                point is None
+                or current in point.parents
+                or len(point.parents) < 3
+            )
+            children_ok = (
+                current is self.starting_point
+                or len(current.children) < 3
+                or (point is not None and point in current.children)
+            )
+            if parents_ok and children_ok:
+                return next_col, row
+        # Fallback: step toward center within the allowed window.
+        col = _clamp(center, min_col, max_col)
+        if abs(col - current.col) > 1:
+            col = _clamp(
+                current.col + _sign(col - current.col), min_col, max_col
+            )
+        if self._has_invalid_crossover(current, col):
+            col = _clamp(current.col, min_col, max_col)
+        return col, row
+
+    def _allowed_columns_for_row(self, row: int) -> tuple[int, int]:
+        """SpoilsActMap.GetAllowedColumnsForRow: the column window narrows to
+        the center at the treasure row and near the top, widening elsewhere."""
+        center = _MAP_WIDTH // 2
+        to_treasure = abs(row - self._treasure_row)
+        to_top = self.map_length - 1 - row
+        cap = min(center, max(0, to_top) + 1)
+        half_width = min(center, min(to_treasure, cap))
+        return max(0, center - half_width), min(_MAP_WIDTH - 1, center + half_width)
+
+    def _redirect_to_treasure(
+        self, stray: MapPoint, treasure: MapPoint
+    ) -> None:
+        """SpoilsActMap.RedirectToTreasure: rewire a stray treasure-row node's
+        edges through the single treasure node, then drop it from the grid."""
+        for parent in list(stray.parents):
+            parent.remove_child(stray)
+            parent.add_child(treasure)
+        for child in list(stray.children):
+            stray.remove_child(child)
+            treasure.add_child(child)
+        self.grid[stray.col][stray.row] = None
+
+    def _connect_row_to_boss(self) -> None:
+        top = self.row_count - 1
+        for col in range(_MAP_WIDTH):
+            point = self.grid[col][top]
+            if point is not None and self.boss_point not in point.children:
+                point.add_child(self.boss_point)
+
+    def _connect_row_to_start(self) -> None:
+        for col in range(_MAP_WIDTH):
+            point = self.grid[col][1]
+            if point is not None and point not in self.starting_point.children:
+                self.starting_point.add_child(point)
+
+    # ── Point types ──────────────────────────────────────────────────────
+
+    def _assign_point_types_spoils(self) -> None:
+        """SpoilsActMap.AssignPointTypes: force the top rest row and the row-1
+        monsters (the treasure node was fixed during carving), then run the
+        same queue placement as a standard act."""
+        for point in self.points_in_row(self.row_count - 1):
+            point.point_type = MapPointType.REST_SITE
+            point.can_be_modified = False
+        for point in self.points_in_row(1):
+            point.point_type = MapPointType.MONSTER
+            point.can_be_modified = False
+        queue: list[MapPointType] = (
+            [MapPointType.REST_SITE] * self.counts.rests
+            + [MapPointType.SHOP] * self.counts.shops
+            + [MapPointType.ELITE] * self.counts.elites
+            + [MapPointType.UNKNOWN] * self.counts.unknowns
+        )
+        self._assign_queue_to_random_points(queue)
+        for point in self.all_points():
+            if point.point_type == MapPointType.UNASSIGNED:
+                point.point_type = MapPointType.MONSTER
+        self.boss_point.point_type = MapPointType.BOSS
+        self.starting_point.point_type = MapPointType.ANCIENT
+
+
+def _centered_priority_list(current_col: int, center_col: int) -> list[int]:
+    """SpoilsActMap.BuildCenteredPriorityList: try the center-ward step first,
+    then straight, then away, filling in any missing ±1 offsets."""
+    result: list[int] = []
+    toward = _sign(center_col - current_col)
+    if toward != 0:
+        result.append(toward)
+    result.append(0)
+    if toward != 0:
+        result.append(-toward)
+    if -1 not in result:
+        result.append(-1)
+    if 1 not in result:
+        result.append(1)
+    return result
+
+
+def _next_column(current_col: int, direction: int) -> int:
+    """SpoilsActMap.GetNextColumn."""
+    if direction == -1:
+        return max(0, current_col - 1)
+    if direction == 1:
+        return min(_MAP_WIDTH - 1, current_col + 1)
+    return current_col

@@ -1,9 +1,11 @@
-"""Raw-PyTorch masked PPO for STS2FullCombatEnv (no stable-baselines).
+"""Raw-PyTorch masked PPO for STS2FullCombatEnv / STS2RunEnv (no stable-baselines).
 
-    py train_torch.py                                       # Act-1 pool; auto-resumes runs/sts2_torch.pt if present
+    py train_torch.py                                       # combat env, Act-1 pool; auto-resumes runs/sts2_torch.pt if present
     py train_torch.py --fresh                               # ignore any existing checkpoint, start over
     py train_torch.py --encounter fuzzy_wurm_weak --timesteps 500000
     py train_torch.py --resume runs/other.pt                # continue from a specific checkpoint
+    py train_torch.py --env run                             # full-run env (map/events/shops/rewards + combat);
+                                                            # saves runs/sts2_run_torch.pt by default
 
 By default a run *continues* the checkpoint at ``--save`` if the file already
 exists (so re-running ``py train_torch.py`` trains the same model further instead
@@ -49,9 +51,18 @@ from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     # experiment
+    ap.add_argument("--env", choices=["combat", "run"], default="combat",
+                    help="combat = STS2FullCombatEnv (single fights); "
+                         "run = STS2RunEnv (whole runs: map, events, shops, "
+                         "rewards, every decision policy-controlled)")
+    ap.add_argument("--acts", nargs="+", default=None,
+                    help="run env only: the act list (default: rolled per "
+                         "episode over the ported acts, e.g. overgrowth|"
+                         "underdocks then hive)")
     ap.add_argument("--timesteps", type=int, default=1_000_000)
     ap.add_argument("--encounter", default=None,
-                    help="Overgrowth encounter key to fix (default: sample the whole act)")
+                    help="combat env only: Overgrowth encounter key to fix "
+                         "(default: sample the whole act)")
     ap.add_argument("--card-obs", choices=["hybrid", "features"], default="hybrid")
     ap.add_argument("--enemy-hp-reward", type=float, default=0.0,
                     help="dense damage-dealt reward weight (0 = HP-delta + win only)")
@@ -62,7 +73,9 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
                     help="cpu (default, usually fastest here), cuda, or auto")
-    ap.add_argument("--save", default="runs/sts2_torch.pt")
+    ap.add_argument("--save", default=None,
+                    help="checkpoint path (default: runs/sts2_torch.pt for "
+                         "--env combat, runs/sts2_run_torch.pt for --env run)")
     ap.add_argument("--resume", default=None,
                     help="continue from this checkpoint (default: auto-resume --save if it exists)")
     ap.add_argument("--fresh", action="store_true",
@@ -83,7 +96,14 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--target-kl", type=float, default=None,
                     help="early-stop the epoch loop if approx_kl exceeds this")
     ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
-    return ap.parse_args()
+    args = ap.parse_args()
+    if args.save is None:
+        args.save = "runs/sts2_torch.pt" if args.env == "combat" else "runs/sts2_run_torch.pt"
+    if args.env == "run" and args.encounter:
+        raise SystemExit("--encounter applies to --env combat only.")
+    if args.env == "combat" and args.acts:
+        raise SystemExit("--acts applies to --env run only.")
+    return args
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -116,13 +136,31 @@ def resolve_device(requested: str) -> torch.device:
     return device
 
 
-def make_env(args: argparse.Namespace) -> STS2FullCombatEnv:
+def make_env(args: argparse.Namespace):
+    if args.env == "run":
+        from sts2_rl.run_env import STS2RunEnv
+
+        return STS2RunEnv(
+            acts=args.acts,
+            card_obs=args.card_obs,
+            win_hp_bonus=args.win_hp_bonus,
+        )
     return STS2FullCombatEnv(
         encounter=OVERGROWTH[args.encounter] if args.encounter else None,
         card_obs=args.card_obs,
         enemy_hp_reward_scale=args.enemy_hp_reward,
         win_hp_bonus=args.win_hp_bonus,
     )
+
+
+def env_obs_schema(args: argparse.Namespace) -> int:
+    """The schema version stamped into / checked against checkpoints —
+    combat and run envs version their layouts independently."""
+    if args.env == "run":
+        from sts2_rl.run_env import RUN_OBS_SCHEMA_VERSION
+
+        return RUN_OBS_SCHEMA_VERSION
+    return OBS_SCHEMA_VERSION
 
 
 def main() -> None:
@@ -156,10 +194,14 @@ def main() -> None:
     start_iter = 0
     if resume_path:
         ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-        if ckpt.get("obs_schema") != OBS_SCHEMA_VERSION:
+        if ckpt.get("env_kind", "combat") != args.env:
+            raise SystemExit(
+                f"checkpoint was trained on the {ckpt.get('env_kind', 'combat')!r} env, "
+                f"this run uses {args.env!r}; pick the matching --save/--resume or --fresh.")
+        if ckpt.get("obs_schema") != env_obs_schema(args):
             raise SystemExit(
                 f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
-                f"{OBS_SCHEMA_VERSION}; the observation layout changed — retrain.")
+                f"{env_obs_schema(args)}; the observation layout changed — retrain.")
         # The checkpoint's architecture must match the env/args this run built;
         # a mismatch (different obs, action space, or --hidden) would surface as
         # a cryptic load_state_dict error, so check first with a clear message.
@@ -357,7 +399,8 @@ def save(agent: MaskedActorCritic, optimizer, iteration: int, args) -> None:
             "obs_dim": agent.obs_dim,
             "n_actions": agent.n_actions,
             "hidden": agent.hidden,
-            "obs_schema": OBS_SCHEMA_VERSION,
+            "obs_schema": env_obs_schema(args),
+            "env_kind": args.env,
         },
         args.save,
     )

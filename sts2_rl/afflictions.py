@@ -59,3 +59,27 @@ class TaintedAffliction(Affliction):
 
     id = "tainted"
     name = "Tainted"
+
+
+class GalvanizedAffliction(Affliction):
+    """Applied by GalvanicPower (Globe Head) to Power cards; playing a
+    Galvanized card deals N damage to the player."""
+
+    id = "galvanized"
+    name = "Galvanized"
+
+
+class HexedAffliction(Affliction):
+    """Applied by HexPower (Spectral Knight); while present the card is
+    Ethereal (exhausts if still in hand at turn end)."""
+
+    id = "hexed"
+    name = "Hexed"
+
+
+class BoundAffliction(Affliction):
+    """Applied by ChainsOfBindingPower (the Queen) to drawn cards; only one
+    Bound card may be played per turn."""
+
+    id = "bound"
+    name = "Bound"

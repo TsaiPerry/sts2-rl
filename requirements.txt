@@ -53,6 +53,10 @@
 gymnasium>=0.29
 numpy>=1.24
 
+# Engine suspension for the run-level env (run_env.py): the RunDriver parks
+# mid-resolution on a greenlet so every decision becomes a Gym step.
+greenlet>=3.0
+
 # Installed separately -- see the PyTorch section above. Listed here so a
 # torch-less environment is caught at install time rather than at import.
 torch>=2.0

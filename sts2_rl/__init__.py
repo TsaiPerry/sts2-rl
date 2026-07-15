@@ -150,6 +150,7 @@ from .actmap import (
     MapPointType,
     MapPointTypeCounts,
     StandardMap,
+    SpoilsActMap,
     golden_path_map,
     ACT_MAP_CONFIGS,
     OVERGROWTH_MAP,
@@ -164,6 +165,13 @@ from .rooms import (
     RoomType,
     UnknownOdds,
     act_rooms,
+)
+from .shop import (
+    MerchantInventory,
+    MerchantCardEntry,
+    MerchantRelicEntry,
+    MerchantPotionEntry,
+    MerchantCardRemovalEntry,
 )
 from .enchantments import (
     Enchantment,
@@ -304,6 +312,7 @@ __all__ = [
     "MapPointType",
     "MapPointTypeCounts",
     "StandardMap",
+    "SpoilsActMap",
     "golden_path_map",
     "ACT_MAP_CONFIGS",
     "OVERGROWTH_MAP",
@@ -316,6 +325,11 @@ __all__ = [
     "RoomType",
     "UnknownOdds",
     "act_rooms",
+    "MerchantInventory",
+    "MerchantCardEntry",
+    "MerchantRelicEntry",
+    "MerchantPotionEntry",
+    "MerchantCardRemovalEntry",
     "Enchantment",
     "SownEnchantment",
     "SlitherEnchantment",

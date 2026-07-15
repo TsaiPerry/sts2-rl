@@ -9,3 +9,4 @@ class BowlerHat(Relic):
     id = "bowler_hat"
     name = "Bowler Hat"
     rarity = RelicRarity.UNCOMMON
+    is_allowed_in_shops = False  # BowlerHat.IsAllowedInShops

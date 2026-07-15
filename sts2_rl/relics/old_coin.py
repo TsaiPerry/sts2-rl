@@ -11,3 +11,4 @@ class OldCoin(Relic):
     id = "old_coin"
     name = "Old Coin"
     rarity = RelicRarity.RARE
+    is_allowed_in_shops = False  # OldCoin.IsAllowedInShops

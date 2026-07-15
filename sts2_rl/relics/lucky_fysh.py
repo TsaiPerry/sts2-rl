@@ -11,3 +11,4 @@ class LuckyFysh(Relic):
     id = "lucky_fysh"
     name = "Lucky Fysh"
     rarity = RelicRarity.UNCOMMON
+    is_allowed_in_shops = False  # LuckyFysh.IsAllowedInShops

@@ -149,8 +149,15 @@ class TestRegistry:
         # Boot, Colossal Flower's Pollinous Core, Lost Wisp), and the 4 Act-3
         # (Glory) event relics (Grave of the Forgotten's Forgotten Soul, Hungry
         # for Mushrooms' Big / Fragrant Mushroom, Round Tea Party's Royal Poison)
-        # = 138, all constructible by id, and the original head is present.
-        assert len(ALL_RELICS) == 138
+        # = 138, plus the Golden Compass (Ancient relic; golden-paths its act's
+        # map) = 139, plus the 28 Ancient relics of the Neow run-start pool
+        # (neow_relics.py: 20 positive + 8 curse options) = 167, all
+        # constructible by id, and the original head is present.
+        assert len(ALL_RELICS) == 167
+        assert "golden_compass" in ALL_RELICS
+        for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
+                    "neows_bones", "silver_crucible"):
+            assert nid in ALL_RELICS
         assert "sword_of_stone" in ALL_RELICS
         for eid in ("lost_wisp", "the_boot", "pollinous_core", "darkstone_periapt",
                     "dream_catcher", "hand_drill", "maw_bank",

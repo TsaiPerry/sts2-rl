@@ -282,6 +282,320 @@ def _abs2(x: float) -> tuple[float, float]:
     return _clip01(x / ABS_SCALE), _clip01(x / ABS_SCALE_COARSE)
 
 
+# ── Combat action block (shared by STS2FullCombatEnv and the run driver /
+#    run env): 0 = end turn, then MAX_HAND×MAX_ENEMIES play actions, then
+#    per-slot potion actions. The play block is fixed-size, so decoding never
+#    depends on how many potion slots the caller exposes. ──────────────────
+
+COMBAT_PLAY_BASE = 1
+COMBAT_POTION_BASE = COMBAT_PLAY_BASE + MAX_HAND * MAX_ENEMIES   # 61
+
+
+def combat_action_count(max_potions: int = MAX_POTIONS) -> int:
+    """Size of the flat combat action block for a given potion-belt size
+    (79 at the base 3 slots)."""
+    return COMBAT_POTION_BASE + max_potions * MAX_ENEMIES
+
+
+def decode_combat_action(action: int) -> tuple[str, int, int | None]:
+    """Flat combat action → ("end"|"play"|"potion", slot, target)."""
+    if action <= 0:
+        return "end", 0, None
+    if action < COMBAT_POTION_BASE:
+        idx = action - COMBAT_PLAY_BASE
+        return "play", idx // MAX_ENEMIES, idx % MAX_ENEMIES
+    idx = action - COMBAT_POTION_BASE
+    return "potion", idx // MAX_ENEMIES, idx % MAX_ENEMIES
+
+
+def apply_combat_action(state: CombatState, action: int) -> None:
+    """Execute a flat combat action on a CombatState (illegal = no-op,
+    matching CombatState.play_card / use_potion semantics)."""
+    kind, a, b = decode_combat_action(int(action))
+    if kind == "end":
+        state.end_turn()
+    elif kind == "play":
+        state.play_card(a, b)
+    else:
+        state.use_potion(a, b)
+
+
+def combat_action_masks(
+    state: CombatState | None,
+    max_potions: int = MAX_POTIONS,
+) -> np.ndarray:
+    """Boolean legality mask over the flat combat block (for MaskablePPO and
+    the run driver). Guarantees at least one legal action: end turn (a
+    harmless no-op outside the player's turn)."""
+    mask = np.zeros(combat_action_count(max_potions), dtype=bool)
+    if state is None or state.phase != Phase.PLAYER_TURN:
+        mask[0] = True
+        return mask
+
+    mask[0] = True       # end turn is always legal on the player's turn
+    s = state
+    living = [i for i, e in enumerate(s.enemies) if not e.is_gone and i < MAX_ENEMIES]
+    first = living[0] if living else 0
+
+    for h, card in enumerate(s.player.hand[:MAX_HAND]):
+        if not card.is_playable or not s.hooks.should_play_card(card):
+            continue
+        if not card.energy_cost_x:
+            if s.hooks.modify_card_energy_cost(card, card.energy_cost) > s.player.energy:
+                continue
+        if card.target_type == TargetType.ANY_ENEMY:
+            for e in living:
+                mask[COMBAT_PLAY_BASE + h * MAX_ENEMIES + e] = True
+        else:
+            mask[COMBAT_PLAY_BASE + h * MAX_ENEMIES + first] = True
+
+    for p, potion in enumerate(s.player.potions[:max_potions]):
+        if potion.targeted:
+            for e in living:
+                mask[COMBAT_POTION_BASE + p * MAX_ENEMIES + e] = True
+        else:
+            mask[COMBAT_POTION_BASE + p * MAX_ENEMIES + first] = True
+
+    return mask
+
+
+# ── Combat observation builder (shared by STS2FullCombatEnv and the run
+#    env). Pure reads over a CombatState; layout documented segment-by-
+#    segment in obs_segments()/obs_slices() above. ─────────────────────────
+
+
+def _power_amt(creature, pid: str) -> float:
+    pw = creature.powers.get(pid)
+    return float(pw.amount) if pw is not None else 0.0
+
+
+def power_triples(creature) -> list[float]:
+    """Full power vocabulary: per power id, presence bit + signed amount at
+    a fine (±10) and a coarse (±50) scale. Signed so Strength/Dexterity
+    below zero stay representable; presence disambiguates 'absent' from
+    'present at 0'."""
+    out: list[float] = []
+    powers = creature.powers
+    for pid in POWER_IDS:
+        pw = powers.get(pid)
+        if pw is None:
+            out.extend((0.0, 0.5, 0.5))
+        else:
+            out.extend((1.0, _signed(pw.amount, 10), _signed(pw.amount, 50)))
+    return out
+
+
+def pile_composition(pile: list[Card]) -> list[float]:
+    """Order-agnostic histogram of a card pile, split by upgrade state.
+
+    Returns ``2 * N_CARDS`` normalized counts: the first ``N_CARDS`` are
+    base (unupgraded) copies per card id, the next ``N_CARDS`` are upgraded
+    copies. Splitting the histogram is what lets the policy tell a pile of
+    Strikes from a pile of Strike+ — upgrade is (currently) a single bit per
+    card, so a base/upgraded split captures it exactly; any card whose
+    ``upgrade_level`` climbs past 1 in future simply counts as upgraded."""
+    base = [0.0] * N_CARDS
+    upgraded = [0.0] * N_CARDS
+    for card in pile:
+        idx = CARD_INDEX[card.id]
+        if card.upgrade_level > 0:
+            upgraded[idx] += 1.0
+        else:
+            base[idx] += 1.0
+    return [_clip01(c / PILE_COUNT_CAP) for c in base] + [
+        _clip01(c / PILE_COUNT_CAP) for c in upgraded
+    ]
+
+
+def card_features(state: CombatState, card: Card | None) -> list[float]:
+    f = [0.0] * N_CARD_FEATURES
+    if card is None:
+        return f
+    s = state
+    # Effective cost: hook-modified (Corruption, Tangled, per-turn
+    # discounts via card.energy_cost); X-cost = all remaining energy.
+    effective_cost = preview_card_energy_cost(s, card)
+    f[0] = _clip01(effective_cost / 6.0)
+    f[1] = 1.0 if card.energy_cost_x else 0.0
+    for i, t in enumerate(_CARD_TYPES):
+        if card.card_type == t:
+            f[2 + i] = 1.0
+    for i, t in enumerate(_TARGET_TYPES):
+        if card.target_type == t:
+            f[7 + i] = 1.0
+    f[12] = 1.0 if card.exhausts else 0.0
+    f[13] = 1.0 if card.is_ethereal else 0.0
+    f[14] = 1.0 if card.is_playable else 0.0
+    affordable = card.energy_cost_x or effective_cost <= s.player.energy
+    f[15] = 1.0 if affordable else 0.0
+    f[16] = _clip01(card.upgrade_level / 5.0)
+    # Base numbers (upgrade-adjusted; dynamic cards like Body Slam /
+    # Perfected Strike report their current computed base).
+    base_dmg = card_base_damage(s, card, None)
+    if base_dmg is not None:
+        f[17], f[18] = _abs2(base_dmg)
+    f[19] = _clip01(card.base_hits / 10.0)
+    if card.base_block is not None:
+        f[20] = _clip01(card.base_block / ABS_SCALE)
+        eff_block = preview_card_block(s, card)
+        f[21] = _clip01(eff_block / ABS_SCALE)
+    f[22] = _clip01(card.base_hp_loss / ABS_SCALE)
+    magic = card.magic_number
+    f[23] = _clip01(magic / 20.0) if magic is not None else 0.0
+    return f
+
+
+def damage_matrix(state: CombatState) -> list[float]:
+    """MAX_HAND × MAX_ENEMIES effective per-hit damage previews, in the
+    shared absolute unit; 0 for empty slots, gone enemies, and cards that
+    deal no enemy damage."""
+    s = state
+    out: list[float] = []
+    for h in range(MAX_HAND):
+        card = s.player.hand[h] if h < len(s.player.hand) else None
+        for e_i in range(MAX_ENEMIES):
+            e = s.enemies[e_i] if e_i < len(s.enemies) else None
+            if card is None or e is None or e.is_gone:
+                out.append(0.0)
+                continue
+            dmg = preview_card_damage(s, card, e)
+            out.append(0.0 if dmg is None else _clip01(dmg / ABS_SCALE))
+    return out
+
+
+def enemy_row(state: CombatState, e) -> list[float]:
+    if e is None or e.is_gone:
+        return [0.0] * ENEMY_ROW_DIM
+    s = state
+    row: list[float] = [1.0]
+    row.append(_clip01(e.hp / max(1, e.max_hp)))
+    row.extend(_abs2(e.hp))
+    row.extend(_abs2(e.max_hp))
+    row.extend(_abs2(e.block))
+    row.append(_signed(e.strength, 30))
+
+    intent = e.current_intent
+    flags = [
+        intent.has(MoveType.ATTACK),
+        intent.has(MoveType.DEFEND),
+        intent.has(MoveType.BUFF),
+        intent.has(MoveType.DEBUFF) or intent.has(MoveType.DEBUFF_STRONG)
+        or intent.has(MoveType.CARD_DEBUFF),
+        intent.has(MoveType.STATUS_CARD),
+        intent.has(MoveType.SUMMON),
+        intent.has(MoveType.ESCAPE),
+        intent.has(MoveType.HEAL),
+        intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or e.stunned,
+    ]
+    row.extend(1.0 if x else 0.0 for x in flags)
+
+    # Telegraphed attack through the full modifier pipeline (what the
+    # game displays — see AttackIntent.GetSingleDamage), plus a post-block
+    # preview against the player's current block.
+    preview = preview_incoming_damage(s, e)
+    if preview is None:
+        row.extend((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+    else:
+        row.append(_clip01(preview.per_hit / ABS_SCALE))
+        row.append(_clip01(preview.hits / 10.0))
+        row.extend(_abs2(preview.total))
+        row.extend(_abs2(preview.post_block))
+
+    # Enemy identity one-hot (unknown classes stay all-zero).
+    hot = [0.0] * N_MONSTERS
+    idx = MONSTER_INDEX.get(e.__class__.__name__)
+    if idx is not None:
+        hot[idx] = 1.0
+    row.extend(hot)
+
+    row.extend(power_triples(e))
+    assert len(row) == ENEMY_ROW_DIM
+    return row
+
+
+def build_combat_obs(state: CombatState, card_obs: str = "hybrid") -> np.ndarray:
+    """The full combat observation (schema v2) for a CombatState — the body
+    of STS2FullCombatEnv._build_obs, reusable by the run env (which embeds
+    it as its combat block, zeroed outside combat)."""
+    s = state
+    p = s.player
+    o: list[float] = []
+
+    # ── Player vitals ────────────────────────────────────────────────
+    # [0] hp ratio, [1-2] hp abs, [3-4] max_hp abs, [5-6] block abs,
+    # [7] energy, [8] strength, [9] dexterity, [10-13] pile sizes,
+    # [14] turn, [15-16] telegraphed post-block incoming, [17-18] cards/
+    # attacks played this turn, [19-20] damage taken this combat, then
+    # the full power vocabulary.
+    o.append(_clip01(p.hp / max(1, p.max_hp)))
+    o.extend(_abs2(p.hp))
+    o.extend(_abs2(p.max_hp))
+    o.extend(_abs2(p.block))
+    o.append(_clip01(p.energy / 10.0))
+    o.append(_signed(p.strength, 30))
+    o.append(_signed(_power_amt(p, "dexterity"), 30))
+    o.append(_clip01(len(p.hand) / MAX_HAND))
+    o.append(_clip01(len(p.draw_pile) / 40.0))
+    o.append(_clip01(len(p.discard_pile) / 40.0))
+    o.append(_clip01(len(p.exhaust_pile) / 40.0))
+    o.append(_clip01(s.turn / 30.0))
+    # Total post-block HP telegraphed at the player this turn (block
+    # absorbed sequentially across enemies) — the end-turn decision number.
+    o.extend(_abs2(preview_total_incoming(s)))
+    # History scalars the deck can condition on (Stomp, Spite, ...).
+    cards_this_turn = sum(1 for _ in s.history.of_type(CardPlayedEntry, this_turn=True))
+    dmg_taken = sum(
+        e.amount for e in s.history.of_type(DamageReceivedEntry) if e.target is p
+    )
+    o.append(_clip01(cards_this_turn / 10.0))
+    o.append(_clip01(s.history.attack_plays_this_turn() / 10.0))
+    o.extend(_abs2(dmg_taken))
+    o.extend(power_triples(p))
+
+    # ── Hand rows ────────────────────────────────────────────────────
+    for h in range(MAX_HAND):
+        card = p.hand[h] if h < len(p.hand) else None
+        o.append(1.0 if card is not None else 0.0)
+        if card_obs == "hybrid":
+            onehot = [0.0] * N_CARDS
+            if card is not None:
+                onehot[CARD_INDEX[card.id]] = 1.0
+            o.extend(onehot)
+        o.extend(card_features(s, card))
+
+    # ── Enemy rows ───────────────────────────────────────────────────
+    for e_i in range(MAX_ENEMIES):
+        e = s.enemies[e_i] if e_i < len(s.enemies) else None
+        o.extend(enemy_row(s, e))
+
+    # ── Effective damage matrix (hand slot × enemy slot) ─────────────
+    # Aligned 1:1 with the play(h, e) actions: the fully modified per-hit
+    # damage card h would deal to enemy e (Strength, Weak, the target's
+    # Vulnerable — the number the game prints on the card face).
+    o.extend(damage_matrix(s))
+
+    # ── Potion rows ──────────────────────────────────────────────────
+    for pi in range(MAX_POTIONS):
+        potion = p.potions[pi] if pi < len(p.potions) else None
+        o.append(1.0 if potion is not None else 0.0)
+        hot = [0.0] * N_POTIONS
+        if potion is not None:
+            hot[POTION_INDEX[potion.id]] = 1.0
+        o.extend(hot)
+        o.append(1.0 if (potion is not None and potion.targeted) else 0.0)
+
+    # ── Pile composition (unordered; base vs upgraded copies per card) ─
+    # The hand is exposed positionally above; the draw/discard/exhaust
+    # piles are exposed as order-agnostic multisets so the agent can track
+    # remaining/spent cards (deck-cycling, discard synergies, shuffle math)
+    # without leaking the shuffled draw order it is not meant to see.
+    o.extend(pile_composition(p.draw_pile))
+    o.extend(pile_composition(p.discard_pile))
+    o.extend(pile_composition(p.exhaust_pile))
+
+    return np.asarray(o, dtype=np.float32)
+
+
 class STS2FullCombatEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
@@ -384,13 +698,7 @@ class STS2FullCombatEnv(gym.Env):
         hp_before = s.player.hp
         enemy_hp_before = self._total_enemy_hp()
 
-        kind, a, b = self._decode_action(int(action))
-        if kind == "end":
-            s.end_turn()
-        elif kind == "play":
-            s.play_card(a, b)          # a=hand slot, b=target; no-op if illegal
-        elif kind == "potion":
-            s.use_potion(a, b)         # a=potion slot, b=target
+        apply_combat_action(s, int(action))   # illegal actions are no-ops
 
         reward = self._hp_reward_scale * (s.player.hp - hp_before) / max(1, s.player.max_hp)
         if self._enemy_hp_reward_scale:
@@ -417,36 +725,7 @@ class STS2FullCombatEnv(gym.Env):
 
     def action_masks(self) -> np.ndarray:
         """Boolean legality mask over the flat action space (for MaskablePPO)."""
-        s = self._state
-        mask = np.zeros(self.n_actions, dtype=bool)
-        if s is None or s.phase != Phase.PLAYER_TURN:
-            mask[0] = True   # keep at least one legal action (a harmless no-op)
-            return mask
-
-        mask[0] = True       # end turn is always legal on the player's turn
-        living = [i for i, e in enumerate(s.enemies) if not e.is_gone and i < MAX_ENEMIES]
-        first = living[0] if living else 0
-
-        for h, card in enumerate(s.player.hand[:MAX_HAND]):
-            if not card.is_playable or not s.hooks.should_play_card(card):
-                continue
-            if not card.energy_cost_x:
-                if s.hooks.modify_card_energy_cost(card, card.energy_cost) > s.player.energy:
-                    continue
-            if card.target_type == TargetType.ANY_ENEMY:
-                for e in living:
-                    mask[self._play_base + h * MAX_ENEMIES + e] = True
-            else:
-                mask[self._play_base + h * MAX_ENEMIES + first] = True
-
-        for p, potion in enumerate(s.player.potions[:MAX_POTIONS]):
-            if potion.targeted:
-                for e in living:
-                    mask[self._potion_base + p * MAX_ENEMIES + e] = True
-            else:
-                mask[self._potion_base + p * MAX_ENEMIES + first] = True
-
-        return mask
+        return combat_action_masks(self._state)
 
     def render(self) -> None:
         if self.render_mode != "human" or self._state is None:
@@ -462,17 +741,11 @@ class STS2FullCombatEnv(gym.Env):
         print(f"Hand: {[repr(c) for c in p.hand]}")
 
     # ------------------------------------------------------------------
-    # Action decoding
+    # Action decoding (module-level decode_combat_action does the work)
     # ------------------------------------------------------------------
 
     def _decode_action(self, action: int) -> tuple[str, int, int | None]:
-        if action <= 0:
-            return "end", 0, None
-        if action < self._potion_base:
-            idx = action - self._play_base
-            return "play", idx // MAX_ENEMIES, idx % MAX_ENEMIES
-        idx = action - self._potion_base
-        return "potion", idx // MAX_ENEMIES, idx % MAX_ENEMIES
+        return decode_combat_action(int(action))
 
     # ------------------------------------------------------------------
     # Observation
@@ -481,229 +754,32 @@ class STS2FullCombatEnv(gym.Env):
     def _total_enemy_hp(self) -> int:
         return sum(e.hp for e in self._state.enemies if not e.is_gone)
 
+    # The observation is built by the module-level build_combat_obs (shared
+    # with the run env); these thin delegates keep the historical method
+    # surface for tests and subclasses.
+
     @staticmethod
     def _power_amt(creature, pid: str) -> float:
-        pw = creature.powers.get(pid)
-        return float(pw.amount) if pw is not None else 0.0
+        return _power_amt(creature, pid)
 
     @staticmethod
     def _power_triples(creature) -> list[float]:
-        """Full power vocabulary: per power id, presence bit + signed amount at
-        a fine (±10) and a coarse (±50) scale. Signed so Strength/Dexterity
-        below zero stay representable; presence disambiguates 'absent' from
-        'present at 0'."""
-        out: list[float] = []
-        powers = creature.powers
-        for pid in POWER_IDS:
-            pw = powers.get(pid)
-            if pw is None:
-                out.extend((0.0, 0.5, 0.5))
-            else:
-                out.extend((1.0, _signed(pw.amount, 10), _signed(pw.amount, 50)))
-        return out
+        return power_triples(creature)
 
     def _build_obs(self) -> np.ndarray:
-        s = self._state
-        p = s.player
-        o: list[float] = []
-
-        # ── Player vitals ────────────────────────────────────────────────
-        # [0] hp ratio, [1-2] hp abs, [3-4] max_hp abs, [5-6] block abs,
-        # [7] energy, [8] strength, [9] dexterity, [10-13] pile sizes,
-        # [14] turn, [15-16] telegraphed post-block incoming, [17-18] cards/
-        # attacks played this turn, [19-20] damage taken this combat, then
-        # the full power vocabulary.
-        o.append(_clip01(p.hp / max(1, p.max_hp)))
-        o.extend(_abs2(p.hp))
-        o.extend(_abs2(p.max_hp))
-        o.extend(_abs2(p.block))
-        o.append(_clip01(p.energy / 10.0))
-        o.append(_signed(p.strength, 30))
-        o.append(_signed(self._power_amt(p, "dexterity"), 30))
-        o.append(_clip01(len(p.hand) / MAX_HAND))
-        o.append(_clip01(len(p.draw_pile) / 40.0))
-        o.append(_clip01(len(p.discard_pile) / 40.0))
-        o.append(_clip01(len(p.exhaust_pile) / 40.0))
-        o.append(_clip01(s.turn / 30.0))
-        # Total post-block HP telegraphed at the player this turn (block
-        # absorbed sequentially across enemies) — the end-turn decision number.
-        o.extend(_abs2(preview_total_incoming(s)))
-        # History scalars the deck can condition on (Stomp, Spite, ...).
-        cards_this_turn = sum(1 for _ in s.history.of_type(CardPlayedEntry, this_turn=True))
-        dmg_taken = sum(
-            e.amount for e in s.history.of_type(DamageReceivedEntry) if e.target is p
-        )
-        o.append(_clip01(cards_this_turn / 10.0))
-        o.append(_clip01(s.history.attack_plays_this_turn() / 10.0))
-        o.extend(_abs2(dmg_taken))
-        o.extend(self._power_triples(p))
-
-        # ── Hand rows ────────────────────────────────────────────────────
-        for h in range(MAX_HAND):
-            card = p.hand[h] if h < len(p.hand) else None
-            o.append(1.0 if card is not None else 0.0)
-            if self._card_obs == "hybrid":
-                onehot = [0.0] * N_CARDS
-                if card is not None:
-                    onehot[CARD_INDEX[card.id]] = 1.0
-                o.extend(onehot)
-            o.extend(self._card_features(card))
-
-        # ── Enemy rows ───────────────────────────────────────────────────
-        for e_i in range(MAX_ENEMIES):
-            e = s.enemies[e_i] if e_i < len(s.enemies) else None
-            o.extend(self._enemy_row(e))
-
-        # ── Effective damage matrix (hand slot × enemy slot) ─────────────
-        # Aligned 1:1 with the play(h, e) actions: the fully modified per-hit
-        # damage card h would deal to enemy e (Strength, Weak, the target's
-        # Vulnerable — the number the game prints on the card face).
-        o.extend(self._damage_matrix())
-
-        # ── Potion rows ──────────────────────────────────────────────────
-        for pi in range(MAX_POTIONS):
-            potion = p.potions[pi] if pi < len(p.potions) else None
-            o.append(1.0 if potion is not None else 0.0)
-            hot = [0.0] * N_POTIONS
-            if potion is not None:
-                hot[POTION_INDEX[potion.id]] = 1.0
-            o.extend(hot)
-            o.append(1.0 if (potion is not None and potion.targeted) else 0.0)
-
-        # ── Pile composition (unordered; base vs upgraded copies per card) ─
-        # The hand is exposed positionally above; the draw/discard/exhaust
-        # piles are exposed as order-agnostic multisets so the agent can track
-        # remaining/spent cards (deck-cycling, discard synergies, shuffle math)
-        # without leaking the shuffled draw order it is not meant to see.
-        o.extend(self._pile_composition(p.draw_pile))
-        o.extend(self._pile_composition(p.discard_pile))
-        o.extend(self._pile_composition(p.exhaust_pile))
-
-        return np.asarray(o, dtype=np.float32)
+        return build_combat_obs(self._state, self._card_obs)
 
     def _pile_composition(self, pile: list[Card]) -> list[float]:
-        """Order-agnostic histogram of a card pile, split by upgrade state.
-
-        Returns ``2 * N_CARDS`` normalized counts: the first ``N_CARDS`` are
-        base (unupgraded) copies per card id, the next ``N_CARDS`` are upgraded
-        copies. Splitting the histogram is what lets the policy tell a pile of
-        Strikes from a pile of Strike+ — upgrade is (currently) a single bit per
-        card, so a base/upgraded split captures it exactly; any card whose
-        ``upgrade_level`` climbs past 1 in future simply counts as upgraded."""
-        base = [0.0] * N_CARDS
-        upgraded = [0.0] * N_CARDS
-        for card in pile:
-            idx = CARD_INDEX[card.id]
-            if card.upgrade_level > 0:
-                upgraded[idx] += 1.0
-            else:
-                base[idx] += 1.0
-        return [_clip01(c / PILE_COUNT_CAP) for c in base] + [
-            _clip01(c / PILE_COUNT_CAP) for c in upgraded
-        ]
+        return pile_composition(pile)
 
     def _card_features(self, card: Card | None) -> list[float]:
-        f = [0.0] * N_CARD_FEATURES
-        if card is None:
-            return f
-        s = self._state
-        # Effective cost: hook-modified (Corruption, Tangled, per-turn
-        # discounts via card.energy_cost); X-cost = all remaining energy.
-        effective_cost = preview_card_energy_cost(s, card)
-        f[0] = _clip01(effective_cost / 6.0)
-        f[1] = 1.0 if card.energy_cost_x else 0.0
-        for i, t in enumerate(_CARD_TYPES):
-            if card.card_type == t:
-                f[2 + i] = 1.0
-        for i, t in enumerate(_TARGET_TYPES):
-            if card.target_type == t:
-                f[7 + i] = 1.0
-        f[12] = 1.0 if card.exhausts else 0.0
-        f[13] = 1.0 if card.is_ethereal else 0.0
-        f[14] = 1.0 if card.is_playable else 0.0
-        affordable = card.energy_cost_x or effective_cost <= s.player.energy
-        f[15] = 1.0 if affordable else 0.0
-        f[16] = _clip01(card.upgrade_level / 5.0)
-        # Base numbers (upgrade-adjusted; dynamic cards like Body Slam /
-        # Perfected Strike report their current computed base).
-        base_dmg = card_base_damage(s, card, None)
-        if base_dmg is not None:
-            f[17], f[18] = _abs2(base_dmg)
-        f[19] = _clip01(card.base_hits / 10.0)
-        if card.base_block is not None:
-            f[20] = _clip01(card.base_block / ABS_SCALE)
-            eff_block = preview_card_block(s, card)
-            f[21] = _clip01(eff_block / ABS_SCALE)
-        f[22] = _clip01(card.base_hp_loss / ABS_SCALE)
-        magic = card.magic_number
-        f[23] = _clip01(magic / 20.0) if magic is not None else 0.0
-        return f
+        return card_features(self._state, card)
 
     def _damage_matrix(self) -> list[float]:
-        """MAX_HAND × MAX_ENEMIES effective per-hit damage previews, in the
-        shared absolute unit; 0 for empty slots, gone enemies, and cards that
-        deal no enemy damage."""
-        s = self._state
-        out: list[float] = []
-        for h in range(MAX_HAND):
-            card = s.player.hand[h] if h < len(s.player.hand) else None
-            for e_i in range(MAX_ENEMIES):
-                e = s.enemies[e_i] if e_i < len(s.enemies) else None
-                if card is None or e is None or e.is_gone:
-                    out.append(0.0)
-                    continue
-                dmg = preview_card_damage(s, card, e)
-                out.append(0.0 if dmg is None else _clip01(dmg / ABS_SCALE))
-        return out
+        return damage_matrix(self._state)
 
     def _enemy_row(self, e) -> list[float]:
-        if e is None or e.is_gone:
-            return [0.0] * ENEMY_ROW_DIM
-        s = self._state
-        row: list[float] = [1.0]
-        row.append(_clip01(e.hp / max(1, e.max_hp)))
-        row.extend(_abs2(e.hp))
-        row.extend(_abs2(e.max_hp))
-        row.extend(_abs2(e.block))
-        row.append(_signed(e.strength, 30))
-
-        intent = e.current_intent
-        flags = [
-            intent.has(MoveType.ATTACK),
-            intent.has(MoveType.DEFEND),
-            intent.has(MoveType.BUFF),
-            intent.has(MoveType.DEBUFF) or intent.has(MoveType.DEBUFF_STRONG)
-            or intent.has(MoveType.CARD_DEBUFF),
-            intent.has(MoveType.STATUS_CARD),
-            intent.has(MoveType.SUMMON),
-            intent.has(MoveType.ESCAPE),
-            intent.has(MoveType.HEAL),
-            intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or e.stunned,
-        ]
-        row.extend(1.0 if x else 0.0 for x in flags)
-
-        # Telegraphed attack through the full modifier pipeline (what the
-        # game displays — see AttackIntent.GetSingleDamage), plus a post-block
-        # preview against the player's current block.
-        preview = preview_incoming_damage(s, e)
-        if preview is None:
-            row.extend((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
-        else:
-            row.append(_clip01(preview.per_hit / ABS_SCALE))
-            row.append(_clip01(preview.hits / 10.0))
-            row.extend(_abs2(preview.total))
-            row.extend(_abs2(preview.post_block))
-
-        # Enemy identity one-hot (unknown classes stay all-zero).
-        hot = [0.0] * N_MONSTERS
-        idx = MONSTER_INDEX.get(e.__class__.__name__)
-        if idx is not None:
-            hot[idx] = 1.0
-        row.extend(hot)
-
-        row.extend(self._power_triples(e))
-        assert len(row) == ENEMY_ROW_DIM
-        return row
+        return enemy_row(self._state, e)
 
     # ------------------------------------------------------------------
 
@@ -712,6 +788,7 @@ class STS2FullCombatEnv(gym.Env):
         info: dict[str, Any] = {"turn": s.turn, "phase": s.phase.value}
         if s.is_over:
             info["is_success"] = bool(s.result.player_won)
+            info["hp_left"] = max(0, s.player.hp)
         return info
 
 

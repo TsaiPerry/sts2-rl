@@ -11,7 +11,7 @@ comes from the decompiled source** at `c:\Users\Perry\Desktop\Slay the Spire 2`.
 | Act 1 — Overgrowth | `src/Core/Models/Acts/Overgrowth.cs` | `sts2_rl/monsters/overgrowth/` | ✅ complete (22 encounters) |
 | Act 2 — Underdocks | `src/Core/Models/Acts/Underdocks.cs` | `sts2_rl/monsters/underdocks/` | ✅ complete (20 encounters) |
 | Act 2 — Hive (parallel Act 2; the game picks one) | `src/Core/Models/Acts/Hive.cs` | `sts2_rl/monsters/hive/` | ✅ complete (20 encounters) |
-| Act 3 — **Glory** | `src/Core/Models/Acts/Glory.cs` | — | ❌ not started (18 encounters) |
+| Act 3 — Glory | `src/Core/Models/Acts/Glory.cs` | `sts2_rl/monsters/glory/` | ✅ complete (18 encounters) |
 | Event encounters (no act pool) | `src/Core/Models/Encounters/*EventEncounter.cs` | partial | optional |
 
 ## Where to look in the source
@@ -63,27 +63,32 @@ act's port — the actual lineups differed from earlier guesses; always trust
   (`cards/knowledge_curses.py`, chosen via `select_cards` with purpose
   `"curse_of_knowledge"`).
 
-### Glory (Act 3) — target package `sts2_rl/monsters/glory/`
+### Glory (Act 3) — ✅ done, `sts2_rl/monsters/glory/`
 
-| Encounter (source file) | Monsters needed |
-|---|---|
-| DevotedSculptorWeak | DevotedSculptor |
-| ScrollsOfBitingWeak / ScrollsOfBitingNormal | ScrollOfBiting ×4 / ×5 |
-| TurretOperatorWeak | TurretOperator + LivingShield |
-| AxebotsNormal | Axebot ×2 |
-| ConstructMenagerieNormal | CubexConstruct + PunchConstruct — **both already implemented**; encounter-only work |
-| FabricatorNormal | Fabricator — summons Guardbot / Noisebot / Stabbot / Zapbot (4 extra monster classes, referenced only from `Fabricator.cs`) |
-| FrogKnightNormal | FrogKnight |
-| GlobeHeadNormal | GlobeHead |
-| OwlMagistrateNormal | OwlMagistrate |
-| SlimedBerserkerNormal | SlimedBerserker |
-| TheLostAndForgottenNormal | TheLost + TheForgotten |
-| KnightsElite | FlailKnight + MagiKnight + SpectralKnight |
-| MechaKnightElite | MechaKnight |
-| SoulNexusElite | SoulNexus |
-| AeonglassBoss | Aeonglass |
-| QueenBoss | Queen + TorchHeadAmalgam (also referenced from `Queen.cs` — likely summoned/revived; read both) |
-| TestSubjectBoss | TestSubject |
+All 18 encounters ported (tests in `test/test_glory.py`). Notes / corrections
+to the original guesses — always trust `GenerateMonsters()`:
+
+- ScrollsOfBiting is ×3 (weak) / ×4 (normal), not ×4/×5; each scroll's opening
+  move is staggered via `StarterMoveIdx` (a `_ScrollsEncounter` factory rolls
+  it from the combat RNG, and the normal fight's 4th scroll always opens on
+  More Teeth). AxebotsNormal is a single Axebot (not ×2) that respawns via Stock.
+- ConstructMenagerieNormal is PunchConstruct + CubexConstruct ×2 (reuses the
+  Act-1/Act-2 constructs); KnightsElite reuses the Hive act's FlailKnight.
+- QueenBoss is TorchHeadAmalgam (a minion) + Queen; the Queen switches from
+  Burn Bright to attacks once the amalgam dies (branch conditions read
+  `amalgam.is_gone`, since monsters are not hook listeners).
+- New powers live in powers.py (PaperCuts, Stock, Rampart, Galvanic, Soar,
+  PossessStrength/Speed, Dampen, Hex, HighVoltage, WitheringPresence,
+  ChainsOfBinding, Adaptable, PainfulStabs, Nemesis); new afflictions are
+  Galvanized/Hexed/Bound (afflictions.py); the new status card is Wither
+  (cards/wither.py). `CreatureCmd.lose_max_hp` was added for Paper Cuts.
+- Approximations (the sim lacks the card-keyword plumbing): Hex grants Ethereal
+  by setting each Hexed card's `is_ethereal` flag directly and restoring it when
+  the Hex lifts; the Queen's mid-turn Burn Bright→Enrage re-telegraph happens at
+  resolution rather than the instant the amalgam dies. Both documented inline.
+- The Test Subject is a three-phase boss: AdaptablePower prevents death and
+  forces its Respawn move (100 → 200 → 300 HP), gaining Painful Stabs then
+  Nemesis; its third death is final.
 
 ### Event encounters (optional, lower priority)
 

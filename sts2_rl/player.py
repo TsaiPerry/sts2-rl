@@ -34,6 +34,7 @@ class PlayerCombatState(Creature):
         rng: random.Random,
         hooks: HookSystem,
         potions: list[Potion] | None = None,
+        max_potions: int | None = None,
     ) -> None:
         super().__init__(max_hp)
         self.side = "player"
@@ -42,7 +43,10 @@ class PlayerCombatState(Creature):
         self.draw_pile: list[Card] = deck.copy()
         self.discard_pile: list[Card] = []
         self.exhaust_pile: list[Card] = []
-        self.potions: list[Potion] = list(potions or [])[: self.MAX_POTIONS]
+        # Belt size defaults to the base 3; runs pass their own (Phial
+        # Holster grows RunState.max_potions).
+        self.max_potions = max_potions if max_potions is not None else self.MAX_POTIONS
+        self.potions: list[Potion] = list(potions or [])[: self.max_potions]
         self._rng = rng
         self._hooks = hooks
         self._first_turn = True

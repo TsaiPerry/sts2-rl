@@ -215,4 +215,27 @@ class SoulsEnchantment(Enchantment):
             self.card.exhausts = False
 
 
+@register_enchantment
+class GlamEnchantment(Enchantment):
+    """Glam — the first time the enchanted card is played each combat, it is
+    played [amount] extra time(s).
+
+    Source: Glam.cs — EnchantPlayCount: original + Times(1) while not used;
+    AfterCardPlayed (own card): mark used, Status = Disabled. Granted by
+    Silken Tress on the first card reward's options.
+    """
+
+    id = "glam"
+    name = "Glam"
+
+    def modify_card_play_count(self, card: Card, target, count: int) -> int:
+        if card is self.card and not self.disabled:
+            return count + self.amount
+        return count
+
+    def on_card_played(self, card: Card) -> None:
+        if card is self.card:
+            self.disabled = True
+
+
 ALL_ENCHANTMENTS: dict[str, type[Enchantment]] = dict(_ENCHANTMENT_CLASSES)

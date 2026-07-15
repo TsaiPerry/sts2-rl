@@ -166,6 +166,12 @@ _ACT_ROOMS_FACTORIES = {
 }
 
 
+def act_has_rooms(name: str) -> bool:
+    """Whether the act's encounter roster is ported (Glory's isn't yet);
+    RunState.start_run trims its default act list with this."""
+    return name in _ACT_ROOMS_FACTORIES
+
+
 def act_rooms(name: str) -> ActRooms:
     """Room pools for an act. Raises KeyError for acts without a sim
     encounter roster (currently Glory)."""
@@ -353,11 +359,19 @@ class UnknownOdds:
         self,
         rng: random.Random,
         blacklist: frozenset[RoomType] | set[RoomType] = frozenset(),
+        allowed_room_types: frozenset[RoomType] | set[RoomType] | None = None,
     ) -> RoomType:
-        allowed = (set(self._current) | {RoomType.EVENT}) - set(blacklist)
+        # `allowed_room_types` is the set surviving ModifyUnknownMapPointRoomTypes
+        # (Golden Compass narrows it to {Event}); None = the default full set.
+        if allowed_room_types is None:
+            allowed = (set(self._current) | {RoomType.EVENT}) - set(blacklist)
+        else:
+            allowed = set(allowed_room_types) - set(blacklist)
         # Fallback if Event itself were blacklisted (never happens today).
         result = (
-            RoomType.EVENT if RoomType.EVENT in allowed else min(allowed)
+            RoomType.EVENT
+            if RoomType.EVENT in allowed or not allowed
+            else min(allowed)
         )
         threshold = rng.random()
         cumulative = 0.0
@@ -400,8 +414,13 @@ def roll_room_type(
     unknown_odds: UnknownOdds,
     rng: random.Random,
     blacklist: frozenset[RoomType] | set[RoomType] = frozenset(),
+    allowed_room_types: frozenset[RoomType] | set[RoomType] | None = None,
 ) -> RoomType:
-    """RunManager.RollRoomTypeFor: 1:1 mapping except Unknown."""
+    """RunManager.RollRoomTypeFor: 1:1 mapping except Unknown.
+
+    `allowed_room_types` (the set after ModifyUnknownMapPointRoomTypes) only
+    affects "?" nodes — Golden Compass passes {Event} to force events.
+    """
     mapping = {
         MapPointType.UNASSIGNED: RoomType.UNASSIGNED,
         MapPointType.SHOP: RoomType.SHOP,
@@ -413,7 +432,7 @@ def roll_room_type(
         MapPointType.ANCIENT: RoomType.EVENT,
     }
     if point_type == MapPointType.UNKNOWN:
-        return unknown_odds.roll(rng, blacklist)
+        return unknown_odds.roll(rng, blacklist, allowed_room_types)
     return mapping[point_type]
 
 
@@ -430,3 +449,7 @@ class RoomResolution:
     encounter: Encounter | None = None
     event: Event | None = None
     relic: Relic | None = None
+    # Shop rooms carry a stocked MerchantInventory to buy from (shop.py).
+    shop: "object | None" = None
+    # Gold granted by the room itself (Spoils Map's treasure quest payout).
+    gold: int = 0

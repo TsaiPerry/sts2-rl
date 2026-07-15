@@ -240,6 +240,30 @@ class Card(ABC):
     def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
         pass
 
+    # ── Run-level map hooks (AbstractModel map-generation callbacks) ──────
+    # Cards in the deck can rewrite the freshly generated act map, exactly
+    # like relics; RunState.start_act runs deck cards and relics through
+    # this pipeline (mirrors Hook.ModifyGeneratedMap / *Late /
+    # AfterMapGenerated / ModifyUnknownMapPointRoomTypes). Defaults are
+    # no-ops so only the Spoils Map card overrides them.
+
+    def modify_generated_map(self, run, act_map, act_index):
+        """AbstractModel.ModifyGeneratedMap: replace/edit the map, early pass."""
+        return act_map
+
+    def modify_generated_map_late(self, run, act_map, act_index):
+        """AbstractModel.ModifyGeneratedMapLate: second pass, after all early
+        modifiers have run (e.g. read a node the early pass created)."""
+        return act_map
+
+    def after_map_generated(self, run, act_map, act_index) -> None:
+        """AbstractModel.AfterMapGenerated: react once the map is final."""
+
+    def modify_unknown_map_point_room_types(self, run, room_types):
+        """AbstractModel.ModifyUnknownMapPointRoomTypes: restrict the room
+        types a "?" node may roll into."""
+        return room_types
+
     def __repr__(self) -> str:
         suffix = "+" * self.upgrade_level if self.upgrade_level > 0 else ""
         return f"{self.name}{suffix}"

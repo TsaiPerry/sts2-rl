@@ -11,3 +11,4 @@ class TheCourier(Relic):
     id = "the_courier"
     name = "The Courier"
     rarity = RelicRarity.RARE
+    is_allowed_in_shops = False  # TheCourier.IsAllowedInShops

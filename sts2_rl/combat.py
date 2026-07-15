@@ -77,8 +77,14 @@ class CombatState:
         card_selector=None,
         max_hp: int | None = None,
         current_hp: int | None = None,
+        room_type=None,
+        max_potions: int | None = None,
     ) -> None:
         self._rng = rng or random.Random()
+        # The run-layer RoomType this combat happens in (Monster/Elite/Boss),
+        # None for room-less combats (tests, the combat-only envs). Room-gated
+        # relic effects read it (Booming Conch fires in Elite rooms only).
+        self.room_type = room_type
 
         if starting_deck is None:
             starting_deck = [make_card("strike") for _ in range(5)] + [make_card("defend") for _ in range(4)]
@@ -93,6 +99,7 @@ class CombatState:
         self.player = PlayerCombatState(
             max_hp if max_hp is not None else self.PLAYER_MAX_HP,
             starting_deck, self._rng, self.hooks, potions=potions,
+            max_potions=max_potions,
         )
         if current_hp is not None:
             # Runs enter combats with carried-over HP (RunState.create_combat).

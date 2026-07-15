@@ -48,6 +48,19 @@ class RelicRarity(Enum):
     ANCIENT = "ancient"
 
 
+# RelicModel.MerchantCost by rarity (non-ascension values). Ancient/Starter/
+# Event relics are never shop-stocked, so their nominal price is astronomical.
+_MERCHANT_COST_BY_RARITY: dict[RelicRarity, int] = {
+    RelicRarity.COMMON: 175,
+    RelicRarity.UNCOMMON: 225,
+    RelicRarity.RARE: 275,
+    RelicRarity.SHOP: 200,
+    RelicRarity.ANCIENT: 999_999_999,
+    RelicRarity.STARTER: 999_999_999,
+    RelicRarity.EVENT: 999_999_999,
+}
+
+
 _RELIC_CLASSES: dict[str, type[Relic]] = {}
 
 
@@ -71,13 +84,88 @@ class Relic:
     id: str
     name: str
     rarity: RelicRarity
+    # RelicModel.IsAllowedInShops — a handful of relics (Amethyst Aubergine,
+    # Bowler Hat, Lucky Fysh, Old Coin, The Courier) opt out of shop stock.
+    is_allowed_in_shops: bool = True
 
     def __init__(self) -> None:
         self.combat: CombatState | None = None
 
+    @property
+    def merchant_cost(self) -> int:
+        """RelicModel.MerchantCost: base gold price before the shop's ±15%
+        jitter. Ancient/Starter/Event relics are effectively unbuyable."""
+        return _MERCHANT_COST_BY_RARITY[self.rarity]
+
+    def after_obtained(self, run) -> None:
+        """RelicModel.AfterObtained: out-of-combat pickup effect (default
+        no-op). RunState.add_relic invokes it. Golden Compass uses it to
+        regenerate the current act's map as a golden path."""
+
     def attach(self, combat: CombatState) -> None:
         self.combat = combat
         combat.hooks.register(self)
+
+    # RelicModel.IsAllowedAtNeow — Neow's positive/curse pools filter on this
+    # (Kaleidoscope needs other characters' card pools, Massive Scroll is
+    # multiplayer-only; both are never offerable in the single-character sim).
+    is_allowed_at_neow: bool = True
+
+    # ── Run-level reward / room hooks (duck-typed over run.relics, like the
+    #    map pipeline below; defaults mirror the AbstractModel no-ops) ──────
+
+    def should_force_potion_reward(self, run, room_type) -> bool:
+        """Hook.ShouldForcePotionReward — force a potion into combat rewards."""
+        return False
+
+    def modify_combat_rewards(self, run, rewards) -> None:
+        """Hook.ModifyRewards / TryModifyRewards — mutate a just-generated
+        CombatRewards (Lava Rock adds relics to the act-1 boss rewards)."""
+
+    def modify_card_reward_options(self, run, cards) -> None:
+        """Hook.TryModifyCardRewardOptionsLate — mutate a card reward's
+        options in place (Silver Crucible upgrades them, Silken Tress
+        enchants them)."""
+
+    def should_generate_treasure(self, run) -> bool:
+        """Hook.ShouldGenerateTreasure — Silver Crucible skips the chest in
+        the first treasure room entered."""
+        return True
+
+    def after_room_entered(self, run, point, room_type) -> None:
+        """RelicModel.AfterRoomEntered."""
+
+    def after_rest_site_heal(self, run) -> None:
+        """RelicModel.AfterRestSiteHeal (Stone Humidifier's +5 max HP)."""
+
+    def after_combat_end(self, run, room_type) -> None:
+        """RelicModel.AfterCombatEnd, dispatched by RunState.finish_combat
+        when the caller passes the room type (Fishing Rod's upgrade cycle)."""
+
+    def should_allow_free_travel(self) -> bool:
+        """RelicModel.ShouldAllowFreeTravel (Winged Boots)."""
+        return False
+
+    def on_free_travel_used(self, run) -> None:
+        """Consume a free-travel charge (the source detects non-child travel
+        in AfterRoomEntered; the sim tells the relic directly)."""
+
+    # ── Run-level map hooks (see Card for the mirrored pipeline) ──────────
+
+    def modify_generated_map(self, run, act_map, act_index):
+        """AbstractModel.ModifyGeneratedMap."""
+        return act_map
+
+    def modify_generated_map_late(self, run, act_map, act_index):
+        """AbstractModel.ModifyGeneratedMapLate."""
+        return act_map
+
+    def after_map_generated(self, run, act_map, act_index) -> None:
+        """AbstractModel.AfterMapGenerated."""
+
+    def modify_unknown_map_point_room_types(self, run, room_types):
+        """AbstractModel.ModifyUnknownMapPointRoomTypes."""
+        return room_types
 
     # ── Convenience reads ────────────────────────────────────────────────
 
