@@ -141,7 +141,15 @@ class MerchantEntry:
         """Buy this entry if stocked and affordable. Returns success."""
         if not self.is_stocked or not self.enough_gold:
             return False
-        return self._buy()
+        gold_spent = self.cost
+        if not self._buy():
+            return False
+        # Hook.AfterItemPurchased (MerchantEntry.OnTryPurchaseWrapper): fires
+        # for every successful purchase with the gold actually spent (Maw
+        # Bank deactivates the first time this is > 0).
+        for relic in list(self.run.relics):
+            relic.after_item_purchased(self.run, self, gold_spent)
+        return True
 
     def _buy(self) -> bool:
         raise NotImplementedError

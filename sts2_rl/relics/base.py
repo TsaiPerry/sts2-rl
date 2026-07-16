@@ -135,6 +135,12 @@ class Relic:
     def after_room_entered(self, run, point, room_type) -> None:
         """RelicModel.AfterRoomEntered."""
 
+    def after_item_purchased(self, run, entry, gold_spent) -> None:
+        """RelicModel.AfterItemPurchased — fires after any successful
+        merchant purchase (card, relic, potion, or card removal), with the
+        gold actually spent. `entry` is the sts2_rl.shop.MerchantEntry that
+        was bought (Maw Bank deactivates on the first `gold_spent > 0`)."""
+
     def after_rest_site_heal(self, run) -> None:
         """RelicModel.AfterRestSiteHeal (Stone Humidifier's +5 max HP)."""
 

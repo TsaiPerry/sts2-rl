@@ -17,6 +17,7 @@ from sts2_rl.monsters.overgrowth import ENCOUNTERS
 from sts2_rl.relics import ALL_RELICS, make_relic
 from sts2_rl.rooms import RoomType
 from sts2_rl.run import RunState
+from sts2_rl.shop import MerchantInventory
 
 
 def fresh_run(seed=0, **kwargs):
@@ -289,6 +290,40 @@ def test_winged_boots_free_travel():
     # Used up: back to children only.
     if not run.at_act_end:
         assert set(run.travelable_points()) == set(run.current_point.children)
+
+
+def test_maw_bank_gold_on_room_entry_and_shop_deactivation():
+    """MawBank.cs: AfterRoomEntered grants base.DynamicVars.Gold
+    (GoldVar(12)) whenever RunState.BaseRoom == the entered room and
+    !HasItemBeenBought. AfterItemPurchased sets HasItemBeenBought = true
+    (which sets RelicStatus.Disabled via IsUsedUp) the first time the
+    owning player spends > 0 gold on any merchant purchase."""
+    run = fresh_run(20)
+    run.add_relic("maw_bank")
+    maw_bank = run.relics[0]
+    run.start_act("overgrowth")
+
+    gold_before = run.gold
+    resolution = run.enter_point(run.travelable_points()[0])
+    assert run.gold == gold_before + 12 + resolution.gold
+    assert not maw_bank.has_item_been_bought
+
+    gold_before = run.gold
+    resolution = run.enter_point(run.travelable_points()[0])
+    assert run.gold == gold_before + 12 + resolution.gold
+
+    # Spending any gold on a merchant purchase deactivates the relic for
+    # the rest of the run.
+    run.gold = 10_000
+    inv = MerchantInventory.create(run)
+    entry = inv.card_entries[0]
+    assert entry.purchase() is True
+    assert maw_bank.has_item_been_bought
+
+    if not run.at_act_end:
+        gold_before = run.gold
+        resolution = run.enter_point(run.travelable_points()[0])
+        assert run.gold == gold_before + resolution.gold  # no Maw Bank gold
 
 
 def test_silver_crucible():
