@@ -19,3 +19,4 @@ sts2_full.zip
 monitor.csv
 tensorboard/
 runs/
+.worktrees/
