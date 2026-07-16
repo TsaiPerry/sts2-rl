@@ -12,6 +12,17 @@ models trained on v1 are invalid, retrain. Phases 3–4 on 2026-07-07 — no obs
 change, no retrain needed, but Phase 3 rollouts differ from the
 random-selector default).
 
+2026-07-16 addendum — schema v3: every vocabulary-keyed segment is now sized
+by the reserved capacities in `sts2_rl/vocab.py` (frozen append-only id
+ordering persisted in `vocab.json`), not the live registry counts. Sized to
+hold the complete game, so porting new content (cards, characters, relics,
+monsters) never changes the obs/action layout again — checkpoints fine-tune
+instead of retraining. One-time cost: hybrid 5699 → 17873 dims (features
+4279 → 11473); the padded tail is constant (zeros / absent-encodings) until
+content lands in those slots. References to "sorted" vocabularies below
+predate this: ordering is now frozen-then-appended, sorted only at first
+seed.
+
 Implementation notes (where Phase 1–2 landed):
 
 - `sts2_rl/previews.py` (new): pure-read preview helpers replaying DamageCmd/

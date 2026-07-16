@@ -6,6 +6,9 @@
     py train_torch.py --resume runs/other.pt                # continue from a specific checkpoint
     py train_torch.py --env run                             # full-run env (map/events/shops/rewards + combat);
                                                             # saves runs/sts2_run_torch.pt by default
+    py train_torch.py --env column                          # phase-1 curriculum: full runs on randomized
+                                                            # single-column maps, floor-only reward; its
+                                                            # checkpoint later resumes on --env run
 
 By default a run *continues* the checkpoint at ``--save`` if the file already
 exists (so re-running ``py train_torch.py`` trains the same model further instead
@@ -51,13 +54,17 @@ from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     # experiment
-    ap.add_argument("--env", choices=["combat", "run"], default="combat",
+    ap.add_argument("--env", choices=["combat", "run", "column"], default="column",
                     help="combat = STS2FullCombatEnv (single fights); "
                          "run = STS2RunEnv (whole runs: map, events, shops, "
-                         "rewards, every decision policy-controlled)")
+                         "rewards, every decision policy-controlled); "
+                         "column = STS2CurriculumRunEnv (whole runs on "
+                         "randomized single-column maps, floor-only reward — "
+                         "the phase-1 curriculum; checkpoints resume on "
+                         "--env run for phase 2)")
     ap.add_argument("--acts", nargs="+", default=None,
-                    help="run env only: the act list (default: rolled per "
-                         "episode over the ported acts, e.g. overgrowth|"
+                    help="run/column envs only: the act list (default: rolled "
+                         "per episode over the ported acts, e.g. overgrowth|"
                          "underdocks then hive)")
     ap.add_argument("--timesteps", type=int, default=1_000_000)
     ap.add_argument("--encounter", default=None,
@@ -75,7 +82,8 @@ def parse_args() -> argparse.Namespace:
                     help="cpu (default, usually fastest here), cuda, or auto")
     ap.add_argument("--save", default=None,
                     help="checkpoint path (default: runs/sts2_torch.pt for "
-                         "--env combat, runs/sts2_run_torch.pt for --env run)")
+                         "--env combat, runs/sts2_run_torch.pt for --env run, "
+                         "runs/sts2_column_torch.pt for --env column)")
     ap.add_argument("--resume", default=None,
                     help="continue from this checkpoint (default: auto-resume --save if it exists)")
     ap.add_argument("--fresh", action="store_true",
@@ -85,7 +93,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--n-envs", type=int, default=8)
     ap.add_argument("--n-steps", type=int, default=512, help="rollout length per env")
     ap.add_argument("--lr", type=float, default=3e-4)
-    ap.add_argument("--gamma", type=float, default=0.99)
+    ap.add_argument("--gamma", type=float, default=None,
+                    help="discount (default: 0.99 for --env combat, 0.999 for "
+                         "the run-scale envs — a full run is 1000+ steps, and "
+                         "floor-only reward needs deaths to stay visible from "
+                         "the HP loss that caused them)")
     ap.add_argument("--gae-lambda", type=float, default=0.95)
     ap.add_argument("--clip", type=float, default=0.2)
     ap.add_argument("--epochs", type=int, default=4)
@@ -98,11 +110,17 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
     args = ap.parse_args()
     if args.save is None:
-        args.save = "runs/sts2_torch.pt" if args.env == "combat" else "runs/sts2_run_torch.pt"
-    if args.env == "run" and args.encounter:
+        args.save = {
+            "combat": "runs/sts2_torch.pt",
+            "run": "runs/sts2_run_torch.pt",
+            "column": "runs/sts2_column_torch.pt",
+        }[args.env]
+    if args.gamma is None:
+        args.gamma = 0.99 if args.env == "combat" else 0.999
+    if args.env != "combat" and args.encounter:
         raise SystemExit("--encounter applies to --env combat only.")
     if args.env == "combat" and args.acts:
-        raise SystemExit("--acts applies to --env run only.")
+        raise SystemExit("--acts applies to the run-scale envs only.")
     return args
 
 
@@ -137,6 +155,15 @@ def resolve_device(requested: str) -> torch.device:
 
 
 def make_env(args: argparse.Namespace):
+    if args.env == "column":
+        from sts2_rl.curriculum_env import STS2CurriculumRunEnv
+
+        # Floor-only reward defaults live on the env class; --win-hp-bonus
+        # is deliberately not passed (it is HP shaping).
+        return STS2CurriculumRunEnv(
+            acts=args.acts,
+            card_obs=args.card_obs,
+        )
     if args.env == "run":
         from sts2_rl.run_env import STS2RunEnv
 
@@ -155,8 +182,9 @@ def make_env(args: argparse.Namespace):
 
 def env_obs_schema(args: argparse.Namespace) -> int:
     """The schema version stamped into / checked against checkpoints —
-    combat and run envs version their layouts independently."""
-    if args.env == "run":
+    combat and run-scale envs version their layouts independently (run and
+    column share one layout, hence one version)."""
+    if args.env in ("run", "column"):
         from sts2_rl.run_env import RUN_OBS_SCHEMA_VERSION
 
         return RUN_OBS_SCHEMA_VERSION
@@ -194,10 +222,17 @@ def main() -> None:
     start_iter = 0
     if resume_path:
         ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-        if ckpt.get("env_kind", "combat") != args.env:
+        ckpt_kind = ckpt.get("env_kind", "combat")
+        # run and column share the observation/action layout, and moving a
+        # checkpoint between them IS the curriculum plan's phase handoff.
+        run_scale = {"run", "column"}
+        if ckpt_kind != args.env and not ({ckpt_kind, args.env} <= run_scale):
             raise SystemExit(
-                f"checkpoint was trained on the {ckpt.get('env_kind', 'combat')!r} env, "
+                f"checkpoint was trained on the {ckpt_kind!r} env, "
                 f"this run uses {args.env!r}; pick the matching --save/--resume or --fresh.")
+        if ckpt_kind != args.env:
+            print(f"Curriculum handoff: continuing a {ckpt_kind!r}-env checkpoint "
+                  f"on the {args.env!r} env.")
         if ckpt.get("obs_schema") != env_obs_schema(args):
             raise SystemExit(
                 f"checkpoint obs schema {ckpt.get('obs_schema')} != current "

@@ -344,6 +344,43 @@ class CardCmd:
         """Remove a card's affliction if it has one (mirrors ClearAffliction)."""
         card.affliction = None
 
+    @staticmethod
+    def transform_to_random(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        card: Card,
+    ) -> Card | None:
+        """Transform a card mid-combat into a random other card (mirrors
+        CardCmd.TransformToRandom with isInCombat=true; Entropy).
+
+        The replacement is rolled from the original's transform options
+        (see cards.pool.transform_options_in_combat), takes the original's
+        place in whichever pile holds it, and becomes a hook listener; the
+        original leaves the combat entirely.
+        """
+        from .cards import make_card
+        from .cards.pool import transform_options_in_combat
+
+        options = transform_options_in_combat(card)
+        if not options:
+            return None
+        replacement = make_card(hooks.combat._rng.choice(options))
+        for pile in (
+            player.hand, player.draw_pile, player.discard_pile,
+            player.exhaust_pile,
+        ):
+            if card in pile:
+                pile[pile.index(card)] = replacement
+                break
+        else:
+            return None
+        try:
+            hooks.unregister(card)
+        except ValueError:
+            pass
+        CardPileCmd._enter_combat(hooks, replacement)
+        return replacement
+
 
 class CardPileCmd:
     @staticmethod

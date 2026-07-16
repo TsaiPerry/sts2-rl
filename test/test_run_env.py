@@ -51,7 +51,9 @@ def masked_random_episode(env, seed, max_steps=20_000):
 # ═════════════════════════════════════════════════════════════════════════
 
 def test_action_layout():
-    assert RUN_OBS_SCHEMA_VERSION == 1
+    # v2: capacity-padded frozen vocabularies; v3: the shop's Colorless
+    # section (SHOP_CARD_SLOTS 5 → 7).
+    assert RUN_OBS_SCHEMA_VERSION == 3
     # Combat block sized for a Phial-Holster belt: 1 + 10×6 + 4×6 = 85.
     assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 85
     assert CHOICE_BASE == 85
@@ -194,6 +196,49 @@ def test_combat_block_live_in_combat():
     combat = obs[slices["combat"]]
     assert combat.any()                        # live combat features
     assert obs[slices["phase"]][list(DecisionKind).index(DecisionKind.COMBAT)] == 1.0
+
+
+class _InvincibleRunEnv(STS2RunEnv):
+    """STS2RunEnv whose driver plays an effectively unkillable run, so a
+    masked-random policy can clear all three acts and exercise the env's
+    act-3 / final-boss-victory plumbing (a real policy dies long before)."""
+
+    def _make_run_state(self):
+        from sts2_rl.run import RunState
+
+        return RunState(rng=self._rng, max_hp=100_000, hp=100_000)
+
+
+def test_invincible_env_run_reaches_act3_and_wins():
+    # Sweep seeds for a masked-random invincible run that beats the Glory boss.
+    # A win must land in act 3 (act_index 2), report is_success, carry a
+    # positive terminal reward (the win bonus), and keep the act-3 one-hot lit
+    # with obs still in [0, 1] (floor normalization never saturates).
+    env = _InvincibleRunEnv()
+    slices = env.obs_slices()
+    rng = np.random.default_rng(0)
+    for seed in range(25):
+        obs, info = env.reset(seed=seed)
+        saw_act3_onehot = False
+        max_act = info["act"]
+        reward = 0.0
+        for _ in range(30_000):
+            mask = env.action_masks()
+            obs, reward, term, trunc, info = env.step(int(rng.choice(np.flatnonzero(mask))))
+            max_act = max(max_act, info["act"])
+            if info["act"] == 2:
+                onehot = obs[slices["run.act"]]
+                assert onehot[2] == 1.0 and onehot.sum() == 1.0
+                saw_act3_onehot = True
+            assert obs.min() >= 0.0 and obs.max() <= 1.0
+            if term or trunc:
+                break
+        if info.get("is_success"):
+            assert max_act == 2                    # a win means clearing Glory
+            assert saw_act3_onehot
+            assert reward > 0.0                    # includes the victory bonus
+            return
+    pytest.fail("no invincible env run won in 25 seeds")
 
 
 def test_select_phase_masks_pairs():

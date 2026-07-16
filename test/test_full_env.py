@@ -45,16 +45,19 @@ def _masked_rollout(env, seed, max_steps=500):
 
 def test_spaces_declared():
     env = STS2FullCombatEnv()
-    assert OBS_SCHEMA_VERSION == 2
-    # hybrid, schema v2. Grows with the enemy-identity one-hot (N_MONSTERS) and
-    # the power vocabulary (3×N_POWERS per enemy row): the Glory (Act 3) roster
-    # added both, taking this from 5224 to 5699.
-    assert env.observation_space.shape[0] == 5699
+    assert OBS_SCHEMA_VERSION == 3
+    # hybrid, schema v3: every vocabulary-keyed segment is sized by the
+    # reserved capacities in sts2_rl/vocab.py (cards 640, powers 288,
+    # monsters 144, potions 80), not the live registry counts — so porting
+    # new content no longer changes this number (5699 → 17873 was the
+    # one-time padding cost).
+    assert env.observation_space.shape[0] == 17873
     assert env.action_space.n == env.n_actions == 79
 
 
 def test_features_mode_is_smaller():
-    assert STS2FullCombatEnv(card_obs="features").observation_space.shape[0] == 4279
+    # schema v3 capacity padding took this from 4279 to 11473.
+    assert STS2FullCombatEnv(card_obs="features").observation_space.shape[0] == 11473
 
 
 def test_obs_within_declared_space_at_reset():

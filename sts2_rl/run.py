@@ -282,13 +282,28 @@ class RunState:
 
         With `into` set, the replacement is exact (Wood Carvings' Peck /
         Toric Toughness). Otherwise a random different Common/Uncommon/Rare
-        card from the character pool is rolled. The replacement takes the
+        card from the original's pool is rolled (GetDefaultTransformationOptions:
+        Colorless cards and Quest/Event/Ancient/Token cards roll from the
+        Colorless pool, Curses from the curse pool without the rarity filter,
+        everything else from the character pool). The replacement takes the
         original's place in the deck.
         """
         if into is None:
+            from .cards import COLORLESS_POOL, CURSE_POOL, CardType
+            pool, rarity_filter = IRONCLAD_POOL, True
+            if card.card_type == CardType.CURSE:
+                pool, rarity_filter = CURSE_POOL, False
+            elif (
+                card.id in COLORLESS_POOL
+                or card.card_type == CardType.QUEST
+                or card.rarity in
+                (CardRarity.EVENT, CardRarity.ANCIENT, CardRarity.TOKEN)
+            ):
+                pool = COLORLESS_POOL
             options = [
-                card_id for card_id in IRONCLAD_POOL
-                if _CARD_CLASSES[card_id].rarity in _TRANSFORM_RARITIES
+                card_id for card_id in pool
+                if (not rarity_filter
+                    or _CARD_CLASSES[card_id].rarity in _TRANSFORM_RARITIES)
                 and card_id != card.id
             ]
             into = make_card(self.rng.choice(options))
@@ -418,11 +433,10 @@ class RunState:
 
         Mirrors StartRunLobby → ActModel.GetRandomList: the list is fixed at
         run start; index 0 is a uniform pick between Overgrowth and the
-        unlocked alternate Underdocks, then Hive, then Glory. The default
-        list is trimmed to the acts wired into the run's room sequencing
-        (Glory's enemy roster is ported — monsters/glory — but it has no
-        rooms.py ActRooms yet, so a default run is boss-to-boss over acts
-        1–2); pass `acts` explicitly to override.
+        unlocked alternate Underdocks, then Hive, then Glory. All four acts
+        are wired into the run's room sequencing, so the default is the full
+        act 1 → 2 → 3 arc (the trailing-act trim is a no-op now but stays as a
+        guard for any future map-only act); pass `acts` explicitly to override.
         """
         if acts is None:
             from .rooms import act_has_rooms
@@ -759,6 +773,8 @@ class RunState:
         self.max_hp = combat.player.max_hp
         self.hp = max(0, combat.player.hp)
         self.potions = list(combat.player.potions)
+        # In-combat gold gains (Hand of Greed) credit the run's ledger.
+        self.gain_gold(combat.gold_gained)
         if room_type is not None and not self.is_dead:
             for relic in list(self.relics):
                 relic.after_combat_end(self, room_type)

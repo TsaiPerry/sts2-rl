@@ -7,8 +7,9 @@ stacking, Artifact interception of debuffs, and registration; `_tick` /
 `_tick_duration` handle duration decrement and `_expire` unregisters.
 
 Organised into sections: Buffs, Debuffs, Ironclad card powers, Overgrowth
-(Act 1) enemy powers, and Hive (Act 2) enemy powers, followed by the
-`ALL_POWERS` id→class registry at the bottom.
+(Act 1) enemy powers, Hive (Act 2) enemy powers, Glory (Act 3) powers, and
+Colorless card powers, followed by the `ALL_POWERS` id→class registry at
+the bottom.
 """
 from __future__ import annotations
 
@@ -1752,11 +1753,12 @@ class AsleepPower(Power):
 
 class VigorPower(Power):
     """The owner's next powered attack deals +N damage per hit; the stacks
-    held when the attack started are consumed once it finishes (Terror Eel;
-    mirrors VigorPower.BeforeAttack/ModifyDamageAdditive/AfterAttack).
+    held when the attack started are consumed once it finishes (Terror Eel,
+    Prep Time, Akabeko; mirrors VigorPower.BeforeAttack/ModifyDamageAdditive/
+    AfterAttack).
 
-    The attack boundary comes from Monster._execute_attack, so only monster
-    attacks consume Vigor — nothing in the sim grants the player Vigor."""
+    The attack boundary comes from Monster._execute_attack for monsters and
+    from CombatState._resolve_card_play for player Attack-card plays."""
 
     id = "vigor"
     name = "Vigor"
@@ -3264,6 +3266,412 @@ class NemesisPower(Power):
             PowerCmd.remove(self.hooks, self.owner, "intangible")
 
 
+# ── Colorless card powers ──────────────────────────────────────────────────
+
+
+class AutomationPower(Power):
+    """Every 10 cards drawn, gain N energy (mirrors AutomationPower's
+    internal cards-left counter; the counter resets to 10 after firing)."""
+
+    id = "automation"
+    name = "Automation"
+    power_type = PowerType.BUFF
+    CARDS_PER_TRIGGER = 10
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.cards_left = self.CARDS_PER_TRIGGER
+
+    def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
+        from .cmds import EnergyCmd
+        self.cards_left -= 1
+        if self.cards_left <= 0:
+            EnergyCmd.gain(self.hooks, self.owner, self.amount)
+            self.cards_left = self.CARDS_PER_TRIGGER
+
+
+class CalamityPower(Power):
+    """After the owner plays an Attack, add N random Attacks from the
+    character pool to the hand (with replacement, mirroring CalamityPower's
+    CardFactory.GetForCombat call)."""
+
+    id = "calamity"
+    name = "Calamity"
+    power_type = PowerType.BUFF
+
+    def on_card_played(self, card: Card) -> None:
+        from .cards import CardType
+        from .cards.pool import random_pool_cards
+        from .cmds import CardPileCmd
+        if card.card_type != CardType.ATTACK:
+            return
+        combat = self.hooks.combat
+        if combat is None or combat.is_over:
+            return
+        for new_card in random_pool_cards(combat._rng, self.amount, CardType.ATTACK):
+            CardPileCmd.add_to_hand(self.hooks, combat.player, new_card)
+
+
+class DarkShacklesPower(TemporaryStrengthPower):
+    """Temporary Strength LOSS from Dark Shackles: restored at the end of the
+    owner's side turn (the source subclasses TemporaryStrengthPower with
+    IsPositive=false, exactly like Mangle)."""
+
+    id = "dark_shackles"
+    name = "Dark Shackles"
+    power_type = PowerType.DEBUFF
+    _sign = -1
+
+
+class EntropyPower(Power):
+    """At the start of each of the owner's turns (after the draw), transform
+    N cards from the hand into random cards (mirrors EntropyPower's
+    AfterPlayerTurnStart hand selection + CardCmd.TransformToRandom)."""
+
+    id = "entropy"
+    name = "Entropy"
+    power_type = PowerType.BUFF
+
+    def on_player_turn_started(self, player: Creature) -> None:
+        from .cmds import CardCmd, CardSelectCmd
+        if player is not self.owner:
+            return
+        chosen = CardSelectCmd.from_hand(
+            self.hooks, player, "transform", count=self.amount
+        )
+        for card in chosen:
+            CardCmd.transform_to_random(self.hooks, player, card)
+
+
+class RetainHandPower(Power):
+    """The owner's hand is not discarded at the end of the turn for N turns
+    (Equilibrium / Salvo; mirrors RetainHandPower.ShouldFlush). The stack
+    ticks once per round — the game decrements at the player side's end,
+    after the flush decision; the sim's equivalent post-flush slot is the
+    enemy side's end."""
+
+    id = "retain_hand"
+    name = "Retain Hand"
+    power_type = PowerType.BUFF
+
+    def should_flush_hand(self) -> bool:
+        return False
+
+    def on_enemy_side_end(self) -> None:
+        self._tick()
+
+
+class FastenPower(Power):
+    """Block gained from Defend-tagged cards is raised by N (mirrors
+    FastenPower.ModifyBlockAdditive gating on CardTag.Defend; unpowered
+    block never reaches the additive pipeline)."""
+
+    id = "fasten"
+    name = "Fasten"
+    power_type = PowerType.BUFF
+
+    def modify_block_additive(
+        self, target: Creature, amount: int, card: Card | None
+    ) -> int:
+        if target is self.owner and card is not None and "defend" in card.tags:
+            return self.amount
+        return 0
+
+
+class MayhemPower(Power):
+    """At the start of the owner's turn (after the draw), auto-play the top
+    N cards of the draw pile (mirrors MayhemPower's
+    CardPileCmd.AutoPlayFromDrawPile in the auto pre-play phase)."""
+
+    id = "mayhem"
+    name = "Mayhem"
+    power_type = PowerType.BUFF
+
+    def on_player_turn_started(self, player: Creature) -> None:
+        if player is not self.owner:
+            return
+        combat = self.hooks.combat
+        for _ in range(self.amount):
+            if combat.is_over or player.is_dead:
+                return
+            if not player.draw_pile and player.discard_pile:
+                player.reshuffle_discard_into_draw()
+            if not player.draw_pile:
+                return
+            combat.auto_play_card(player.draw_pile[-1])
+
+
+class NostalgiaPower(Power):
+    """The first N Attacks or Skills played each turn return to the top of
+    the draw pile instead of the discard pile (mirrors NostalgiaPower's
+    ModifyCardPlayResultPileTypeAndPosition)."""
+
+    id = "nostalgia"
+    name = "Nostalgia"
+    power_type = PowerType.BUFF
+
+    def modify_card_play_result_pile(self, card: Card, pile: str) -> str:
+        from .cards import CardType
+        from .history import CardPlayedEntry
+        if pile != "discard" or card.card_type not in (
+            CardType.ATTACK, CardType.SKILL
+        ):
+            return pile
+        combat = self.hooks.combat
+        # Plays already finished this turn (the current play is recorded
+        # after this hook, so it is not counted against the allowance).
+        finished = sum(
+            1
+            for e in combat.history.of_type(CardPlayedEntry, this_turn=True)
+            if e.card.card_type in (CardType.ATTACK, CardType.SKILL)
+        )
+        if finished >= self.amount:
+            return pile
+        return "draw_top"
+
+
+class PanachePower(Power):
+    """Every 5 cards played after this power, deal N unpowered damage to ALL
+    enemies; the 5-count resets when it fires and at the end of the turn
+    (mirrors PanachePower — the Panache play itself is not counted)."""
+
+    id = "panache"
+    name = "Panache"
+    power_type = PowerType.BUFF
+    CARDS_PER_TRIGGER = 5
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.cards_left = self.CARDS_PER_TRIGGER
+        # The card play that applied this power fires on_card_played after
+        # registration; skip it (mirrors PanachePower's alreadyApplied flag).
+        self._already_applied = False
+
+    def on_card_played(self, card: Card) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        if not self._already_applied:
+            self._already_applied = True
+            return
+        self.cards_left -= 1
+        if self.cards_left > 0:
+            return
+        self.cards_left = self.CARDS_PER_TRIGGER
+        combat = self.hooks.combat
+        if combat is None or combat.is_over:
+            return
+        for enemy in [e for e in combat.enemies if not e.is_gone]:
+            DamageCmd.deal(
+                self.hooks, enemy, self.amount, dealer=self.owner,
+                props=DamageProps.NON_CARD_UNPOWERED,
+            )
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self.cards_left = self.CARDS_PER_TRIGGER
+
+
+class NoBlockPower(Power):
+    """The owner gains NO block from cards for N turns (Panic Button's
+    drawback; mirrors NoBlockPower.ModifyBlockMultiplicative returning 0 for
+    card-sourced block). Decrements at the end of the enemy side's turn —
+    the game uses PowerCmd.Decrement directly, so there is no first-tick
+    skip."""
+
+    id = "no_block"
+    name = "No Block"
+    power_type = PowerType.DEBUFF
+
+    def modify_block_multiplicative(
+        self, target: Creature, amount: int, card: Card | None
+    ) -> float:
+        if target is self.owner and card is not None:
+            return 0.0
+        return 1.0
+
+    def on_enemy_side_end(self) -> None:
+        self._tick()
+
+
+class PrepTimePower(Power):
+    """At the start of each of the owner's turns, gain N Vigor (mirrors
+    PrepTimePower.AfterSideTurnStart)."""
+
+    id = "prep_time"
+    name = "Prep Time"
+    power_type = PowerType.BUFF
+
+    def on_player_turn_started(self, player: Creature) -> None:
+        from .cmds import PowerCmd
+        if player is self.owner:
+            PowerCmd.apply(self.hooks, self.owner, VigorPower, self.amount)
+
+
+class RollingBoulderPower(Power):
+    """At the start of each of the owner's turns, deal N unpowered damage to
+    ALL enemies, then N grows by 5 (mirrors RollingBoulderPower's
+    AfterPlayerTurnStart damage + SetAmount)."""
+
+    id = "rolling_boulder"
+    name = "Rolling Boulder"
+    power_type = PowerType.BUFF
+    INCREMENT = 5
+
+    def on_player_turn_started(self, player: Creature) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        if player is not self.owner:
+            return
+        combat = self.hooks.combat
+        if combat is None or combat.is_over:
+            return
+        for enemy in [e for e in combat.enemies if not e.is_gone]:
+            DamageCmd.deal(
+                self.hooks, enemy, self.amount, dealer=self.owner,
+                props=DamageProps.NON_CARD_UNPOWERED,
+            )
+        if combat._all_enemies_dead() and not combat.is_over:
+            combat._end_combat(player_won=True)
+        self.amount += self.INCREMENT
+        self.hooks.on_power_amount_changed(self.id, self.owner, self.INCREMENT)
+
+
+class StratagemPower(Power):
+    """Whenever the discard pile is shuffled into the draw pile, choose N
+    cards from the draw pile and put them into the hand (mirrors
+    StratagemPower.AfterShuffle)."""
+
+    id = "stratagem"
+    name = "Stratagem"
+    power_type = PowerType.BUFF
+
+    def on_shuffle(self, player: Creature) -> None:
+        from .cmds import CardSelectCmd
+        chosen = CardSelectCmd.from_pile(
+            self.hooks, player.draw_pile, "from_draw", count=self.amount
+        )
+        for card in chosen:
+            if len(player.hand) >= player.MAX_HAND_SIZE:
+                break
+            player.draw_pile.remove(card)
+            player.hand.append(card)
+
+
+class TheBombPower(Power):
+    """After N turns, deal the stored damage to ALL enemies (mirrors
+    TheBombPower). The game instances the power (PowerInstanceType.Instanced)
+    so several bombs tick independently; the sim keeps a list of
+    (turns_left, damage) fuses inside one power, with `amount` showing the
+    shortest fuse."""
+
+    id = "the_bomb"
+    name = "The Bomb"
+    power_type = PowerType.BUFF
+    DEFAULT_DAMAGE = 40
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.bombs: list[list[int]] = [[amount, self.DEFAULT_DAMAGE]]
+
+    def on_stack(self, amount: int) -> None:
+        self.bombs.append([amount, self.DEFAULT_DAMAGE])
+        self.amount = min(turns for turns, _ in self.bombs)
+
+    def set_damage(self, damage: int) -> None:
+        """Set the newest bomb's damage (mirrors TheBombPower.SetDamage; the
+        card calls this right after applying the power)."""
+        self.bombs[-1][1] = damage
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        if player is not self.owner:
+            return
+        combat = self.hooks.combat
+        exploding = [b for b in self.bombs if b[0] <= 1]
+        self.bombs = [b for b in self.bombs if b[0] > 1]
+        for bomb in self.bombs:
+            bomb[0] -= 1
+        for _, damage in exploding:
+            if combat is None or combat.is_over:
+                break
+            for enemy in [e for e in combat.enemies if not e.is_gone]:
+                DamageCmd.deal(
+                    self.hooks, enemy, damage, dealer=self.owner,
+                    props=DamageProps.NON_CARD_UNPOWERED,
+                )
+            if combat._all_enemies_dead() and not combat.is_over:
+                combat._end_combat(player_won=True)
+        if not self.bombs:
+            self._expire()
+        else:
+            self.amount = min(turns for turns, _ in self.bombs)
+
+
+class TheGambitPower(Power):
+    """If the owner takes unblocked attack damage, they die (The Gambit's
+    drawback; mirrors TheGambitPower.AfterDamageReceived). Single stack."""
+
+    id = "the_gambit"
+    name = "The Gambit"
+    power_type = PowerType.DEBUFF
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def on_damage_received(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None = None,
+        card: Card | None = None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        from .cmds import CreatureCmd
+        from .valueprops import is_powered_attack
+        if target is not self.owner or amount <= 0 or not is_powered_attack(props):
+            return
+        self._expire()
+        CreatureCmd.kill(self.hooks, self.owner)
+
+
+class BlockNextTurnPower(Power):
+    """When the owner's block is next cleared, regain N block (unpowered)
+    and remove this power (Prolong; mirrors BlockNextTurnPower's
+    AfterBlockCleared)."""
+
+    id = "block_next_turn"
+    name = "Blocked Off"
+    power_type = PowerType.BUFF
+
+    def on_block_cleared(self, target: Creature) -> None:
+        from .cmds import BlockCmd
+        if target is not self.owner:
+            return
+        self._expire()
+        BlockCmd.apply(
+            self.hooks, self.owner, self.amount, props=ValueProp.UNPOWERED
+        )
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -3377,5 +3785,22 @@ ALL_POWERS: dict[str, type[Power]] = {
         AdaptablePower,
         PainfulStabsPower,
         NemesisPower,
+        # Colorless card powers
+        AutomationPower,
+        CalamityPower,
+        DarkShacklesPower,
+        EntropyPower,
+        RetainHandPower,
+        FastenPower,
+        MayhemPower,
+        NostalgiaPower,
+        PanachePower,
+        NoBlockPower,
+        PrepTimePower,
+        RollingBoulderPower,
+        StratagemPower,
+        TheBombPower,
+        TheGambitPower,
+        BlockNextTurnPower,
     ]
 }

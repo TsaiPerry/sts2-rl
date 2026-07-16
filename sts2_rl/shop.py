@@ -13,6 +13,10 @@ Inventory (single player):
     entry is On Sale (half price). Rarity is the shop roll; the card is a
     uniform pick of the rolled (rarity, type) from the Ironclad pool, deduped
     against the other card entries.
+  - 2 Colorless cards, rarities [Uncommon, Rare] (the rarity overload of
+    CardFactory.CreateForMerchant: exactly that rarity, uniform pick from the
+    Colorless pool, deduped against the other card entries). Colorless cards
+    cost 15% more (GetCost: RoundToInt(base × 1.15)).
   - 3 relics: two of a rolled rarity (Common/Uncommon/Rare) pulled from the
     back of the grab bag, one of Shop rarity from the shop-relic bag; all
     filtered by IsAllowedInShops.
@@ -21,8 +25,6 @@ Inventory (single player):
     raises this, not modeled — the sim uses non-ascension values).
 
 Deliberate deviations from the source (documented per the repo convention):
-  - no Colorless card section (the sim has no Colorless card pool), so the
-    shop stocks the 5 character cards only;
   - one shared run RNG instead of the game's per-player `PlayerRng.Shops`
     stream (the repo's one-RNG convention);
   - purchases resolve immediately (no reservation / UI); The Courier's
@@ -51,6 +53,12 @@ _COLORED_CARD_TYPES = (
     CardType.SKILL,
     CardType.SKILL,
     CardType.POWER,
+)
+
+# MerchantInventory._colorlessCardRarities — the 2 Colorless-card slots.
+_COLORLESS_CARD_RARITIES = (
+    CardRarity.UNCOMMON,
+    CardRarity.RARE,
 )
 
 def _next_float(rng: random.Random, lo: float, hi: float) -> float:
@@ -95,6 +103,22 @@ def _create_merchant_card(
     return make_card(run.rng.choice(matching)) if matching else None
 
 
+def _create_merchant_colorless_card(
+    run: "RunState", rarity: CardRarity, exclude_ids: set[str]
+) -> "Card | None":
+    """CardFactory.CreateForMerchant(rarity): the Colorless slots take the
+    given rarity as-is (no pity roll, no fallback walk) and pick uniformly
+    from the Colorless pool, deduped against the other card entries."""
+    from .cards import COLORLESS_POOL
+
+    matching = [
+        cid
+        for cid in COLORLESS_POOL
+        if _CARD_CLASSES[cid].rarity == rarity and cid not in exclude_ids
+    ]
+    return make_card(run.rng.choice(matching)) if matching else None
+
+
 # ── Entries ──────────────────────────────────────────────────────────────
 
 
@@ -125,7 +149,8 @@ class MerchantEntry:
 
 class MerchantCardEntry(MerchantEntry):
     """MerchantCardEntry.cs — a buyable card. GetCost: Rare 150, Uncommon 75,
-    else 50, times the ±5% jitter, halved when On Sale."""
+    else 50 (Colorless cards ×1.15, rounded), times the ±5% jitter, halved
+    when On Sale."""
 
     def __init__(
         self, run: "RunState", card_type: CardType, exclude_ids: set[str]
@@ -145,10 +170,16 @@ class MerchantCardEntry(MerchantEntry):
 
     @staticmethod
     def _base_cost(card: "Card") -> int:
-        return {
+        from .cards import COLORLESS_POOL
+
+        cost = {
             CardRarity.RARE: 150,
             CardRarity.UNCOMMON: 75,
         }.get(card.rarity, 50)
+        if card.id in COLORLESS_POOL:
+            # GetCost: card.Pool is ColorlessCardPool → RoundToInt(num × 1.15)
+            cost = round(cost * 1.15)
+        return cost
 
     def _calc_cost(self) -> None:
         if self.card is None:
@@ -162,6 +193,23 @@ class MerchantCardEntry(MerchantEntry):
         self.run.add_card(self.card)
         self.card = None
         return True
+
+
+class MerchantColorlessCardEntry(MerchantCardEntry):
+    """A Colorless card slot: stocked by rarity (Uncommon / Rare) from the
+    Colorless pool instead of by type from the character pool (mirrors the
+    MerchantCardEntry(cardRarity) constructor + PopulateColorlessCardEntries).
+    Never On Sale — the sale roll only covers the 5 character slots."""
+
+    def __init__(
+        self, run: "RunState", rarity: CardRarity, exclude_ids: set[str]
+    ) -> None:
+        MerchantEntry.__init__(self, run)
+        self.card: "Card | None" = _create_merchant_colorless_card(
+            run, rarity, exclude_ids
+        )
+        self.on_sale = False
+        self._calc_cost()
 
 
 class MerchantRelicEntry(MerchantEntry):
@@ -261,16 +309,23 @@ class MerchantInventory:
 
     def __init__(self, run: "RunState") -> None:
         self.run = run
-        self.card_entries: list[MerchantCardEntry] = []
+        self.character_card_entries: list[MerchantCardEntry] = []
+        self.colorless_card_entries: list[MerchantColorlessCardEntry] = []
         self.relic_entries: list[MerchantRelicEntry] = []
         self.potion_entries: list[MerchantPotionEntry] = []
         self.card_removal_entry: MerchantCardRemovalEntry | None = None
+
+    @property
+    def card_entries(self) -> list[MerchantCardEntry]:
+        """MerchantInventory.CardEntries: character then Colorless slots."""
+        return [*self.character_card_entries, *self.colorless_card_entries]
 
     @classmethod
     def create(cls, run: "RunState") -> "MerchantInventory":
         """MerchantInventory.CreateForNormalMerchant."""
         inv = cls(run)
         inv._populate_cards()
+        inv._populate_colorless_cards()
         inv._populate_relics()
         inv._populate_potions()
         inv.card_removal_entry = MerchantCardRemovalEntry(run)
@@ -294,9 +349,19 @@ class MerchantInventory:
             entry = MerchantCardEntry(self.run, card_type, exclude_ids)
             if entry.card is not None:
                 exclude_ids.add(entry.card.id)
-            self.card_entries.append(entry)
+            self.character_card_entries.append(entry)
             if i == on_sale_index:
                 entry.set_on_sale()
+
+    def _populate_colorless_cards(self) -> None:
+        """PopulateColorlessCardEntries: one Uncommon and one Rare Colorless
+        slot, deduped against every stocked card entry."""
+        for rarity in _COLORLESS_CARD_RARITIES:
+            exclude_ids = {
+                e.card.id for e in self.card_entries if e.card is not None
+            }
+            entry = MerchantColorlessCardEntry(self.run, rarity, exclude_ids)
+            self.colorless_card_entries.append(entry)
 
     def _populate_relics(self) -> None:
         from .run import roll_relic_rarity

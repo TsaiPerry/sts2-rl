@@ -208,12 +208,15 @@ def make_shop(seed: int = 1) -> tuple[RunState, MerchantInventory]:
 
 def test_shop_stock_shape():
     _, inv = make_shop()
-    assert len(inv.card_entries) == 5
+    assert len(inv.character_card_entries) == 5
+    assert len(inv.colorless_card_entries) == 2
+    assert len(inv.card_entries) == 7
     assert len(inv.relic_entries) == 3
     assert len(inv.potion_entries) == 3
     assert inv.card_removal_entry is not None
-    # Exactly one card is On Sale (half price).
-    assert sum(e.on_sale for e in inv.card_entries) == 1
+    # Exactly one card is On Sale (half price) — always a character slot.
+    assert sum(e.on_sale for e in inv.character_card_entries) == 1
+    assert not any(e.on_sale for e in inv.colorless_card_entries)
     assert all(e.is_stocked for e in inv.card_entries)
 
 
@@ -222,7 +225,7 @@ def test_shop_card_types_match_slots():
 
     _, inv = make_shop()
     expected = [CardType.ATTACK, CardType.ATTACK, CardType.SKILL, CardType.SKILL, CardType.POWER]
-    assert [e.card.card_type for e in inv.card_entries] == expected
+    assert [e.card.card_type for e in inv.character_card_entries] == expected
 
 
 def test_shop_on_sale_is_half_price():

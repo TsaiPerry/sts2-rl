@@ -83,6 +83,11 @@ class Card(ABC):
     # picked when a random curse is generated (CursedRun modifier, Neow's
     # Bones / Sere Talon relics all filter the curse pool by this).
     can_be_generated_by_modifiers: bool = True
+    # Mirrors CardModel.CanBeGeneratedInCombat: whether in-combat card
+    # generation (CardFactory.FilterForCombat — Infernal Blade, Discovery,
+    # Jack of All Trades, ...) may create this card. Out-of-run effects
+    # (Alchemize's potion, Hand of Greed's gold, Hidden Gem) opt out.
+    can_be_generated_in_combat: bool = True
     # Card tags (mirrors CardModel.Tags, e.g. "strike" for Perfected Strike).
     tags: frozenset[str] = frozenset()
     # Mirrors CardModel.MaxUpgradeLevel (0 for statuses/curses — they can
@@ -106,6 +111,10 @@ class Card(ABC):
         # EnergyCost.SetThisCombat, used by the Slither enchantment); cleared
         # by reset_combat_state at combat setup.
         self._cost_this_combat: int | None = None
+        # Extra plays granted for the rest of the combat (mirrors
+        # CardModel.BaseReplayCount, raised by Hidden Gem); seeds the play
+        # count alongside the enchantment replay hooks (Spiral/Glam).
+        self.base_replay_count: int = 0
         # At most one affliction per card (mirrors CardModel.Affliction).
         self.affliction: "Affliction | None" = None
         # At most one enchantment per card (mirrors CardModel.Enchantment).
@@ -217,6 +226,7 @@ class Card(ABC):
         a run reuses the same Card objects across combats)."""
         self._cost_this_combat = None
         self.captured_x = 0
+        self.base_replay_count = 0
         self.reset_turn_cost_modifiers()
 
     def add_cost_this_turn(self, delta: int) -> None:

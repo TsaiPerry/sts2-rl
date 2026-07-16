@@ -346,7 +346,7 @@ def test_roll_room_type_direct_mappings():
 # RoomSet: encounter ordering
 # ═════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.parametrize("act", ["overgrowth", "underdocks", "hive"])
+@pytest.mark.parametrize("act", ["overgrowth", "underdocks", "hive", "glory"])
 @pytest.mark.parametrize("seed", range(10))
 def test_room_set_ordering(act, seed):
     rooms = act_rooms(act)
@@ -397,9 +397,42 @@ def test_room_set_consumes_in_order():
     assert second.id == room_set.registry[room_set.normal_keys[1]].id
 
 
-def test_glory_rooms_not_available():
-    with pytest.raises(KeyError):
-        act_rooms("glory")
+def test_glory_rooms_available():
+    rooms = act_rooms("glory")
+    assert rooms.name == "glory"
+    # Full weak/normal/elite/boss splits (Glory.cs GenerateAllEncounters), and
+    # every key resolves in the act's ENCOUNTERS registry.
+    assert rooms.weak_keys and rooms.normal_keys
+    assert rooms.elite_keys and rooms.boss_keys
+    registry = rooms.encounters()
+    for key in (*rooms.weak_keys, *rooms.normal_keys,
+                *rooms.elite_keys, *rooms.boss_keys):
+        assert key in registry, key
+
+
+def test_glory_rooms_pinned_against_source():
+    """Exact Glory pools pinned to src/Core/Models/Acts/Glory.cs
+    GenerateAllEncounters, filtered by RoomType/IsWeak (ActModel.All*Encounters)
+    and kept in that source order (so grab-bag RNG draws stay faithful):
+    2 weak, 9 regular, 3 elite, 3 boss. EncounterTags transcribed from the
+    Glory Encounters (both Scrolls share Scrolls; Knights carries Knights;
+    everything else is untagged)."""
+    rooms = act_rooms("glory")
+    assert rooms.weak_keys == (
+        "devoted_sculptor", "scrolls_of_biting_weak", "turret_operator",
+    )
+    assert rooms.normal_keys == (
+        "axebots", "construct_menagerie", "fabricator", "frog_knight",
+        "globe_head", "owl_magistrate", "scrolls_of_biting_normal",
+        "slimed_berserker", "the_lost_and_forgotten",
+    )
+    assert rooms.elite_keys == ("knights", "mecha_knight", "soul_nexus")
+    assert rooms.boss_keys == ("aeonglass", "queen", "test_subject")
+    assert rooms.tags == {
+        "scrolls_of_biting_weak": ("scrolls",),
+        "scrolls_of_biting_normal": ("scrolls",),
+        "knights": ("knights",),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -489,11 +522,13 @@ def test_map_combat_round_trip():
     assert combat.enemies and all(e.hp > 0 for e in combat.enemies)
 
 
-def test_start_act_glory_map_only():
-    """Glory's map config exists but its rooms don't — start_act says so."""
+def test_start_act_glory():
+    """Glory's map config and rooms are both ported — start_act builds a
+    13-room act map (Glory.cs BaseNumberOfRooms) with a boss."""
     run = RunState(rng=random.Random(0))
-    with pytest.raises(KeyError):
-        run.start_act("glory")
+    act_map = run.start_act("glory")
+    assert act_map.map_length == 13 + 1
+    assert run.travelable_points()
 
 
 # ═════════════════════════════════════════════════════════════════════════

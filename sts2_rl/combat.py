@@ -134,6 +134,10 @@ class CombatState:
         # Accepted as a constructor arg because turn-1 effects (Gambling Chip)
         # can request a selection during __init__, before callers could set it.
         self.card_selector = card_selector
+        # Gold gained during combat (PlayerCmd.GainGold from Hand of Greed).
+        # The run has the gold ledger, so this accumulates and
+        # RunState.finish_combat credits it; standalone combats ignore it.
+        self.gold_gained = 0
         self.result: Optional[CombatResult] = None
 
         self.hooks.on_combat_start()
@@ -297,7 +301,11 @@ class CombatState:
             self.player.discard_pile.append(card)
 
         self.hooks.before_card_played(card)
-        play_count = self.hooks.modify_card_play_count(card, self.enemy, 1)
+        # BaseReplayCount (Hidden Gem) seeds the play count; enchantment
+        # replays (Spiral/Glam) stack on top via the hook.
+        play_count = self.hooks.modify_card_play_count(
+            card, self.enemy, 1 + card.base_replay_count
+        )
         # Attack plays are bracketed by the attack-command boundary (mirrors
         # AttackCommand firing BeforeAttack/AfterAttack) so "next attack"
         # powers on the player (Vigor from Akabeko) consume their stacks after
@@ -327,6 +335,14 @@ class CombatState:
             self.player.discard_pile.remove(card)
             self.player.exhaust_pile.append(card)
             self.hooks.on_card_exhausted(card)
+
+        # Result-pile redirect (ModifyCardPlayResultPileTypeAndPosition):
+        # Nostalgia sends the first Attack/Skill plays of the turn to the top
+        # of the draw pile instead of the discard pile.
+        if card in self.player.discard_pile:
+            if self.hooks.modify_card_play_result_pile(card, "discard") == "draw_top":
+                self.player.discard_pile.remove(card)
+                self.player.draw_pile.append(card)  # end of list = top of pile
 
         self.hooks.on_card_played(card)
 

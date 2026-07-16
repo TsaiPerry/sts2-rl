@@ -369,13 +369,14 @@ def test_neows_fury_card():
 # Run / act sequencing
 # ═════════════════════════════════════════════════════════════════════════
 
-def test_start_run_rolls_act1_variant_and_trims_glory():
+def test_start_run_rolls_act1_variant_over_full_arc():
     seen = set()
     for seed in range(20):
         run = fresh_run(seed)
         run.start_run()
         seen.add(run.act_list[0])
-        assert run.act_list[1:] == ["hive"]    # Glory trimmed (no roster yet)
+        # All acts are ported now, so the default is the full 1 → 2 → 3 arc.
+        assert run.act_list[1:] == ["hive", "glory"]
         assert run.act_index == 0
     assert seen == {"overgrowth", "underdocks"}
 
@@ -404,6 +405,30 @@ def test_advance_act_and_final_act_flags():
         run.advance_act()                      # already in the final act
     run.complete_run()
     assert run.victory and run.at_run_end
+
+
+def test_is_final_act_walk_over_full_glory_arc():
+    """A default full arc walked act-by-act: is_final_act is False through
+    acts 1 and 2 and flips True only on Glory (the last act keys off
+    len(act_list) - 1). Each advance_act carries no heal (RunManager.
+    EnterNextAct) and stands back at the fresh Ancient."""
+    run = fresh_run(3)
+    run.start_run(acts=["overgrowth", "hive", "glory"])
+    for idx, name in enumerate(["overgrowth", "hive", "glory"]):
+        assert run.act_index == idx and run.act_config.name == name
+        assert run.is_final_act == (name == "glory")
+        assert run.current_point is run.map.starting_point
+        if name == "glory":
+            break
+        while not run.at_act_end:
+            run.enter_point(run.rng.choice(run.travelable_points()))
+        hp_before = run.hp
+        run.advance_act()
+        assert run.hp == hp_before          # no heal on act transition
+    assert run.is_final_act                 # ended on Glory
+    with pytest.raises(RuntimeError):
+        run.advance_act()                   # already in the final act
+    assert run.generate_combat_rewards(RoomType.BOSS).is_empty
 
 
 def test_final_act_boss_rewards_empty_via_start_run():

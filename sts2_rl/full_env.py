@@ -88,6 +88,7 @@ from .player import PlayerCombatState
 from .potions import ALL_POTIONS, Potion, make_potion
 from .powers import ALL_POWERS
 from .selectors import scripted_card_selector
+from .vocab import capacity as vocab_capacity, frozen_ids
 from .previews import (
     card_base_damage,
     preview_card_block,
@@ -100,8 +101,10 @@ from .previews import (
 # Bump whenever the observation layout changes (any change invalidates saved
 # models — retrain). v2: absolute HP/block/damage encoding, pipeline-accurate
 # intent + card previews, full power vocabulary, enemy identity, history
-# scalars, dexterity fix.
-OBS_SCHEMA_VERSION = 2
+# scalars, dexterity fix. v3: capacity-padded frozen vocabularies (vocab.py) —
+# dims are reserved capacities, so future content additions no longer bump
+# this.
+OBS_SCHEMA_VERSION = 3
 
 # ── Fixed-size bounds (obs/action slots). Bump + retrain if an encounter or a
 #    relic ever exceeds these. ────────────────────────────────────────────────
@@ -121,22 +124,26 @@ ABS_SCALE_COARSE = 500.0
 # 10 comfortably covers realistic decks; bump if you train pathological stacks.
 PILE_COUNT_CAP = 10.0
 
-# Stable, sorted vocabularies (index = position). Importing .cards / .potions /
-# .monsters / .powers has already registered every class into these registries.
-CARD_IDS: list[str] = sorted(_CARD_CLASSES)
+# Stable vocabularies (index = position), frozen append-only via vocab.json
+# so ported content never shifts existing indices; every N_* layout constant
+# is the reserved *capacity* (padded slots stay zero/masked), so obs and
+# action dims survive new content — see sts2_rl/vocab.py.
+# Importing .cards / .potions / .monsters / .powers has already registered
+# every class into these registries.
+CARD_IDS: list[str] = frozen_ids("cards", _CARD_CLASSES)
 CARD_INDEX: dict[str, int] = {cid: i for i, cid in enumerate(CARD_IDS)}
-N_CARDS = len(CARD_IDS)
+N_CARDS = vocab_capacity("cards")
 
-POTION_IDS: list[str] = sorted(ALL_POTIONS)
+POTION_IDS: list[str] = frozen_ids("potions", ALL_POTIONS)
 POTION_INDEX: dict[str, int] = {pid: i for i, pid in enumerate(POTION_IDS)}
-N_POTIONS = len(POTION_IDS)
+N_POTIONS = vocab_capacity("potions")
 
 # The FULL power vocabulary (no curated subset: an unlisted power would be
 # silently invisible to the agent). Strength/dexterity also get dedicated
 # signed scalar slots for resolution, but stay in the vocabulary for
 # uniformity.
-POWER_IDS: list[str] = sorted(ALL_POWERS)
-N_POWERS = len(POWER_IDS)
+POWER_IDS: list[str] = frozen_ids("powers", ALL_POWERS)
+N_POWERS = vocab_capacity("powers")
 
 
 def _monster_classes() -> list[type[Monster]]:
@@ -153,9 +160,10 @@ def _monster_classes() -> list[type[Monster]]:
     return [seen[name] for name in sorted(seen)]
 
 
-MONSTER_IDS: list[str] = [cls.__name__ for cls in _monster_classes()]
+MONSTER_IDS: list[str] = frozen_ids(
+    "monsters", [cls.__name__ for cls in _monster_classes()])
 MONSTER_INDEX: dict[str, int] = {mid: i for i, mid in enumerate(MONSTER_IDS)}
-N_MONSTERS = len(MONSTER_IDS)
+N_MONSTERS = vocab_capacity("monsters")
 
 _CARD_TYPES = [CardType.ATTACK, CardType.SKILL, CardType.POWER, CardType.STATUS, CardType.CURSE]
 _TARGET_TYPES = [
@@ -382,6 +390,8 @@ def power_triples(creature) -> list[float]:
             out.extend((0.0, 0.5, 0.5))
         else:
             out.extend((1.0, _signed(pw.amount, 10), _signed(pw.amount, 50)))
+    # Reserved-capacity tail (vocab.py): same encoding as an absent power.
+    out.extend((0.0, 0.5, 0.5) * (N_POWERS - len(POWER_IDS)))
     return out
 
 

@@ -216,6 +216,18 @@ class HookSystem:
                 count = l.modify_card_play_count(card, target, count)
         return max(1, count)
 
+    def modify_card_play_result_pile(self, card: Card, pile: str) -> str:
+        """Chain-modify where a played card ends up once its play resolves
+        (mirrors ModifyCardPlayResultPileTypeAndPosition). pile is "discard"
+        by default; a listener may return "draw_top" to put the card on top
+        of the draw pile instead (Nostalgia). Consulted only for cards that
+        would land in the discard pile (exhausted cards and Powers never
+        reach it)."""
+        for l in list(self._listeners):
+            if hasattr(l, "modify_card_play_result_pile"):
+                pile = l.modify_card_play_result_pile(card, pile)
+        return pile
+
     def modify_orb_value(self, player: PlayerCombatState, value: int) -> int:
         """Chain-modify orb passive/evoke value (e.g. Defect relic bonuses)."""
         for l in list(self._listeners):

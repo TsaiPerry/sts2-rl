@@ -8,13 +8,11 @@ Ports the room side of the game's map feature:
   - RunManager.BuildRoomTypeBlacklist / RollRoomTypeFor →
     build_room_type_blacklist / roll_room_type
 
-Act coverage mirrors the sim: Overgrowth, Underdocks, and Hive have full
-encounter pools (weak/normal/elite/boss splits and the EncounterTag values
-transcribed from src/Core/Models/Encounters); only Overgrowth has an event
-pool, since Acts 2+ events aren't implemented yet — their unknown-node
-Event rolls resolve with `event_id=None` and the caller should treat that
-as a no-op room. Glory (Act 3) has a map config in actmap.py but no rooms
-config (its roster isn't started, per ENEMIES.md).
+Act coverage mirrors the sim: Overgrowth, Underdocks, Hive, and Glory all
+have full encounter pools (weak/normal/elite/boss splits and the EncounterTag
+values transcribed from src/Core/Models/Encounters) and full event pools
+(each act's AllEvents order, events/__init__.py) — every act ModelDb ships is
+wired into the run layer.
 
 Deviations from the source, documented per the repo convention: no shared
 (cross-act) events, no unlock/epoch gating, no tutorial first-run "?"
@@ -108,6 +106,8 @@ def _overgrowth_rooms() -> ActRooms:
 
 
 def _underdocks_rooms() -> ActRooms:
+    from .events import UNDERDOCKS_EVENTS
+
     return ActRooms(
         name="underdocks",
         weak_keys=(
@@ -127,11 +127,13 @@ def _underdocks_rooms() -> ActRooms:
             "seapunk_weak": ("seapunk",),
             "seapunk_normal": ("seapunk",),
         },
-        event_pool=(),  # Act-2 events not implemented in the sim yet
+        event_pool=UNDERDOCKS_EVENTS,
     )
 
 
 def _hive_rooms() -> ActRooms:
+    from .events import HIVE_EVENTS
+
     return ActRooms(
         name="hive",
         weak_keys=(
@@ -155,7 +157,34 @@ def _hive_rooms() -> ActRooms:
             "tunneler": ("burrower",),
             "chompers": ("chomper",),
         },
-        event_pool=(),  # Act-2 events not implemented in the sim yet
+        event_pool=HIVE_EVENTS,
+    )
+
+
+def _glory_rooms() -> ActRooms:
+    from .events import GLORY_EVENTS
+
+    return ActRooms(
+        name="glory",
+        weak_keys=(
+            "devoted_sculptor", "scrolls_of_biting_weak", "turret_operator",
+        ),
+        normal_keys=(
+            "axebots", "construct_menagerie", "fabricator", "frog_knight",
+            "globe_head", "owl_magistrate", "scrolls_of_biting_normal",
+            "slimed_berserker", "the_lost_and_forgotten",
+        ),
+        elite_keys=("knights", "mecha_knight", "soul_nexus"),
+        boss_keys=("aeonglass", "queen", "test_subject"),
+        # EncounterTag values from src/Core/Models/Encounters/*.cs: the two
+        # Scrolls of Biting variants share EncounterTag.Scrolls, Knights carries
+        # EncounterTag.Knights (everything else is untagged).
+        tags={
+            "scrolls_of_biting_weak": ("scrolls",),
+            "scrolls_of_biting_normal": ("scrolls",),
+            "knights": ("knights",),
+        },
+        event_pool=GLORY_EVENTS,
     )
 
 
@@ -163,18 +192,19 @@ _ACT_ROOMS_FACTORIES = {
     "overgrowth": _overgrowth_rooms,
     "underdocks": _underdocks_rooms,
     "hive": _hive_rooms,
+    "glory": _glory_rooms,
 }
 
 
 def act_has_rooms(name: str) -> bool:
-    """Whether the act's encounter roster is ported (Glory's isn't yet);
-    RunState.start_run trims its default act list with this."""
+    """Whether the act's encounter roster is ported (all four ModelDb acts
+    are); RunState.start_run trims its default act list with this."""
     return name in _ACT_ROOMS_FACTORIES
 
 
 def act_rooms(name: str) -> ActRooms:
     """Room pools for an act. Raises KeyError for acts without a sim
-    encounter roster (currently Glory)."""
+    encounter roster."""
     if name not in _ACT_ROOMS_FACTORIES:
         raise KeyError(
             f"No room pools for act {name!r} — its encounters aren't in the "

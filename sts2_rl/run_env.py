@@ -71,22 +71,29 @@ from .full_env import (
 )
 from .relics import ALL_RELICS
 from .run import RunState
+from .vocab import capacity as vocab_capacity, frozen_ids
 
 # Bump whenever the run-observation layout or action layout changes (any
-# change invalidates saved run-env models — retrain).
-RUN_OBS_SCHEMA_VERSION = 1
+# change invalidates saved run-env models — retrain). v2: capacity-padded
+# frozen vocabularies (vocab.py) — dims are reserved capacities, so future
+# content additions no longer bump this. v3: the shop's Colorless section
+# (SHOP_CARD_SLOTS 5 → 7, shifting the relic/potion/removal segments and
+# the SHOP decision's entry indices).
+RUN_OBS_SCHEMA_VERSION = 3
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
 # Potion belt headroom: base 3 slots + Phial Holster's +1.
 MAX_POTION_SLOTS = 4
 # Generic choice slots. Must cover every non-combat, non-select decision's
-# option count: map rows are ≤7 wide (free travel), shops have 12 entries +
-# leave, events assert ≤ CHOICE_SLOTS options at mask time.
+# option count: map rows are ≤7 wide (free travel), shops have 14 entries
+# (5 character + 2 Colorless cards, 3 relics, 3 potions, removal) + leave,
+# events assert ≤ CHOICE_SLOTS options at mask time.
 CHOICE_SLOTS = 16
 # Map row width (7-wide grid) — the most travel options free travel allows.
 MAP_SLOTS = 7
-# Shop stock layout (MerchantInventory.all_entries order).
-SHOP_CARD_SLOTS = 5
+# Shop stock layout (MerchantInventory.all_entries order): 5 character card
+# slots followed by the 2 Colorless slots (Uncommon, Rare).
+SHOP_CARD_SLOTS = 7
 SHOP_RELIC_SLOTS = 3
 SHOP_POTION_SLOTS = 3
 # Reward screen card choices (RewardsSet: always 3).
@@ -98,24 +105,25 @@ CHOICE_BASE = N_COMBAT_ACTIONS
 SELECT_BASE = CHOICE_BASE + CHOICE_SLOTS
 N_ACTIONS = SELECT_BASE + 2 * N_CARDS
 
-# ── Stable, sorted vocabularies ──────────────────────────────────────────
-RELIC_IDS: list[str] = sorted(ALL_RELICS)
+# ── Stable vocabularies (frozen append-only + capacity-padded; vocab.py) ──
+RELIC_IDS: list[str] = frozen_ids("relics", ALL_RELICS)
 RELIC_INDEX: dict[str, int] = {rid: i for i, rid in enumerate(RELIC_IDS)}
-N_RELICS = len(RELIC_IDS)
+N_RELICS = vocab_capacity("relics")
 
-EVENT_IDS: list[str] = sorted(ALL_EVENTS)
+EVENT_IDS: list[str] = frozen_ids("events", ALL_EVENTS)
 EVENT_INDEX: dict[str, int] = {eid: i for i, eid in enumerate(EVENT_IDS)}
-N_EVENTS = len(EVENT_IDS)
+N_EVENTS = vocab_capacity("events")
 
 # Every select_cards / select_option purpose in the engine (collected from
-# the source; unknown future purposes land in the trailing bucket).
-PURPOSE_IDS: list[str] = [
+# the source; unknown future purposes land in the "_unknown" bucket until
+# added here — the frozen registry pins each purpose's index once seen).
+PURPOSE_IDS: list[str] = frozen_ids("purposes", [
     "bundle", "card_reward", "curse_of_knowledge", "duplicate", "enchant",
-    "exhaust", "from_discard", "gambling_chip", "obtain", "remove",
-    "to_draw_top", "transform", "upgrade", "_unknown",
-]
+    "exhaust", "from_discard", "from_draw", "gambling_chip", "obtain",
+    "remove", "to_draw_top", "transform", "upgrade", "_unknown",
+])
 PURPOSE_INDEX: dict[str, int] = {p: i for i, p in enumerate(PURPOSE_IDS)}
-N_PURPOSES = len(PURPOSE_IDS)
+N_PURPOSES = vocab_capacity("purposes")
 
 # Phase vocabulary = DecisionKind in declaration order.
 PHASES: list[DecisionKind] = list(DecisionKind)
@@ -287,12 +295,17 @@ class STS2RunEnv(gym.Env):
     # gym interface
     # ------------------------------------------------------------------
 
+    def _make_run_state(self) -> RunState:
+        """Build the RunState the driver plays. Curriculum envs override this
+        to install a RunState subclass (e.g. curriculum_env.ColumnRunState)."""
+        return RunState(rng=self._rng)
+
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
         self._kill_driver()
         if seed is not None:
             self._rng = random.Random(seed)
-        self._run = RunState(rng=self._rng)
+        self._run = self._make_run_state()
         self._result = None
         self._steps = 0
 
@@ -366,7 +379,9 @@ class STS2RunEnv(gym.Env):
         if kind == DecisionKind.SELECT_CARDS:
             if request.skippable and action == CHOICE_BASE:
                 return len(request.candidates)
-            if SELECT_BASE <= action < SELECT_BASE + 2 * N_CARDS:
+            # len(CARD_IDS), not N_CARDS: actions in the reserved-capacity
+            # tail decode to no card and fall through to illegal (None).
+            if SELECT_BASE <= action < SELECT_BASE + 2 * len(CARD_IDS):
                 pair = action - SELECT_BASE
                 cid = CARD_IDS[pair // 2]
                 upgraded = pair % 2 == 1

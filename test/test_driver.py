@@ -46,15 +46,24 @@ def test_random_run_deterministic_under_seed():
 
 
 def test_invincible_random_run_reaches_victory():
-    # With effectively infinite HP, random play clears both ported acts:
-    # exercises Neow, travel, events, shops, rests, rewards, advance_act
-    # and the final-boss victory path end-to-end.
-    rng = random.Random(0)
-    run = RunState(rng=rng, max_hp=100000, hp=100000)
-    result = RunDriver(run, random_asker(rng)).play()
-    assert result.victory
-    assert result.act_index == 1          # died-or-won in the final act
-    assert run.at_run_end
+    # With effectively infinite HP, random play can clear all three ported
+    # acts: exercises Neow, travel, events, shops, rests, rewards, advance_act
+    # and the final-boss victory path end-to-end. HP alone doesn't guarantee a
+    # win — several bosses kill outright regardless of HP (The Insatiable's
+    # Sandpit via SandpitPower.AfterRemoved, etc.), so a run can end legally in
+    # ANY act, not just the last. Sweep seeds for a victorious run; every run
+    # must still terminate cleanly, and a victory can only happen in the final
+    # act (Glory, act index 2).
+    for seed in range(20):
+        rng = random.Random(seed)
+        run = RunState(rng=rng, max_hp=100000, hp=100000)
+        result = RunDriver(run, random_asker(rng)).play()
+        assert run.at_run_end                 # ended legally: dead or won
+        assert 0 <= result.act_index <= 2     # somewhere in the 3-act arc
+        if result.victory:
+            assert result.act_index == 2      # a win means clearing Glory
+            return
+    pytest.fail("no invincible random run won in 20 seeds")
 
 
 def test_driver_rejects_illegal_actions():

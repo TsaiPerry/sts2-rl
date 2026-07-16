@@ -207,6 +207,7 @@ def create_reward_cards(
     count: int = CARD_REWARD_COUNT,
     mutate_pity: bool = True,
     modify_hooks: bool = True,
+    pool: list[str] | None = None,
 ) -> list[Card]:
     """CardFactory.CreateForReward: `count` distinct pool cards, each from a
     rarity roll (escalated with wrapping when the pool lacks the rolled
@@ -217,9 +218,12 @@ def create_reward_cards(
     mutating Roll for CardCreationSource.Encounter).
     `modify_hooks=False` skips Hook.TryModifyCardRewardOptionsLate
     (CardCreationFlags.NoModifyHooks).
+    `pool` overrides the character pool (CardCreationOptions' explicit pool
+    list — Lead Paperweight passes the Colorless pool).
     """
     rng = run.rng
-    pool = pool_card_ids()  # Ironclad pool minus Basic/Ancient
+    if pool is None:
+        pool = pool_card_ids()  # Ironclad pool minus Basic/Ancient
     chosen_ids: list[str] = []
     cards: list[Card] = []
     for _ in range(count):

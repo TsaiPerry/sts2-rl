@@ -2,6 +2,7 @@
 the source models in src/Core/Models/Potions)."""
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -146,3 +147,14 @@ class GlowwaterPotion(Potion):
 
 
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)
+
+
+def random_potion(rng: random.Random) -> Potion:
+    """A uniformly random reward-pool potion (mirrors PotionFactory.
+    CreateRandomPotionInCombat for the sim's implemented pool; Alchemize).
+    Sorted by id so the pick is a pure function of the RNG state."""
+    pool = sorted(
+        (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
+        key=lambda c: c.id,
+    )
+    return rng.choice(pool)()
