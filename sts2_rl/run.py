@@ -730,6 +730,21 @@ class RunState:
             relic.after_rest_site_heal(self)
         return healed
 
+    def rest_heal_rewards(self) -> CombatRewards:
+        """HealRestSiteOption.ExecuteRestSiteHeal's Hook.ModifyRestSiteHealRewards
+        step: relics may add rewards to the screen offered after the heal
+        (Dream Catcher's 3-card choice, drawn from the Monster-room card pool
+        via CardCreationOptions.ForRoom — same odds table as a Monster-room
+        combat reward). Empty unless a relic populates it. Call after
+        rest_heal(); the caller (driver._run_rest) offers it the same way it
+        offers post-combat rewards."""
+        from .rooms import RoomType
+
+        rewards = CombatRewards(room_type=RoomType.MONSTER)
+        for relic in list(self.relics):
+            relic.modify_rest_site_heal_rewards(self, rewards)
+        return rewards
+
     def rest_upgrade(self) -> Card | None:
         """Take the rest site's smith option: upgrade one card chosen via
         the run's card selector (random without one)."""

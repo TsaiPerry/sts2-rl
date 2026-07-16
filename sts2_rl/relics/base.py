@@ -144,6 +144,12 @@ class Relic:
     def after_rest_site_heal(self, run) -> None:
         """RelicModel.AfterRestSiteHeal (Stone Humidifier's +5 max HP)."""
 
+    def modify_rest_site_heal_rewards(self, run, rewards) -> None:
+        """RelicModel.TryModifyRestSiteHealRewards — mutate the reward
+        screen offered after taking the rest site's heal option (Dream
+        Catcher's 3-card choice). `rewards` is a rewards.CombatRewards, like
+        modify_combat_rewards; RunState.rest_heal_rewards builds it."""
+
     def after_combat_end(self, run, room_type) -> None:
         """RelicModel.AfterCombatEnd, dispatched by RunState.finish_combat
         when the caller passes the room type (Fishing Rod's upgrade cycle)."""

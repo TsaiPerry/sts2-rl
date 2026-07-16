@@ -254,6 +254,29 @@ def test_stone_humidifier_rest_heal():
     assert run.max_hp == 90
 
 
+def test_dream_catcher_rest_heal_card_reward():
+    """DreamCatcher.cs TryModifyRestSiteHealRewards: taking the rest site's
+    heal option adds a 3-card choice from the Monster-room card pool
+    (CardCreationOptions.ForRoom(player, RoomType.Monster)) to the reward
+    screen offered after the heal (HealRestSiteOption.ExecuteRestSiteHeal ->
+    Hook.ModifyRestSiteHealRewards)."""
+    run = fresh_run(16)
+    run.add_relic("dream_catcher")
+    run.rest_heal()
+    rewards = run.rest_heal_rewards()
+    assert len(rewards.cards) == 3
+    assert rewards.potion is None
+    assert rewards.gold == 0
+    assert rewards.relics == []
+
+
+def test_dream_catcher_absent_no_rest_heal_reward():
+    run = fresh_run(16)
+    run.rest_heal()
+    rewards = run.rest_heal_rewards()
+    assert rewards.is_empty
+
+
 def test_fishing_rod_every_third_monster_combat():
     run = fresh_run(15)
     run.add_relic("fishing_rod")

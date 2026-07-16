@@ -339,6 +339,9 @@ class RunDriver:
         idx = self._ask(DecisionRequest(kind=DecisionKind.REST, run=self.run))
         if idx == REST_HEAL:
             self.run.rest_heal()
+            # HealRestSiteOption.ExecuteRestSiteHeal: relics may add a reward
+            # (Dream Catcher's 3-card choice) to the screen after the heal.
+            self._offer_rewards(self.run.rest_heal_rewards())
         elif idx == REST_SMITH:
             self.run.rest_upgrade()
         # REST_LEAVE: nothing.

@@ -202,6 +202,43 @@ def test_rest_choices():
     assert run.hp == hp
 
 
+def test_dream_catcher_rest_heal_offers_card_reward():
+    """DreamCatcher.cs TryModifyRestSiteHealRewards, wired through the rest
+    decision flow: choosing HEAL at a rest site with Dream Catcher surfaces a
+    skippable REWARD_CARD choice (same screen the driver uses for post-combat
+    rewards), and taking a card adds it to the deck."""
+    run = fresh_run(17)
+    run.add_relic("dream_catcher")
+    run.hp = 40
+    kinds = []
+
+    def scripted(request):
+        kinds.append(request.kind)
+        if request.kind == DecisionKind.REWARD_CARD:
+            return 0                       # take the first card
+        return 0 if request.kind == DecisionKind.REST else request.legal_actions()[0]
+
+    driver = RunDriver(run, scripted)
+    deck_before = len(run.deck)
+    driver._run_rest()
+    assert DecisionKind.REWARD_CARD in kinds
+    assert len(run.deck) == deck_before + 1
+
+
+def test_no_dream_catcher_no_reward_card_after_rest_heal():
+    run = fresh_run(17)
+    run.hp = 40
+    kinds = []
+
+    def scripted(request):
+        kinds.append(request.kind)
+        return 0 if request.kind == DecisionKind.REST else request.legal_actions()[0]
+
+    driver = RunDriver(run, scripted)
+    driver._run_rest()
+    assert DecisionKind.REWARD_CARD not in kinds
+
+
 def test_combat_rewards_offered_after_won_fight():
     from sts2_rl.monsters.overgrowth import ENCOUNTERS
 
