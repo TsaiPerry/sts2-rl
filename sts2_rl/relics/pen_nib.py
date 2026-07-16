@@ -27,7 +27,7 @@ class PenNib(Relic):
         self._attacks_played = 0
         self._card_to_double: Card | None = None
 
-    def before_card_played(self, card: Card) -> None:
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         if card.card_type != CardType.ATTACK:
             return
         self._attacks_played = (self._attacks_played + 1) % self.ATTACKS

@@ -825,17 +825,43 @@ class TestKaiserCrab:
 
     def test_back_attack_bonus_follows_facing(self):
         cs = fresh_encounter(KAISER_CRAB_BOSS)
-        crusher = cs.enemies[0]
         # Facing right initially: the Crusher back-attacks for 12 * 1.5 = 18,
         # the Rocket's reticle hits for its plain 3.
         cs.end_turn()
         assert cs.player.hp == 80 - 18 - 3
-        # Hitting the Crusher with a targeted card turns the player around.
-        DamageCmd.deal(cs.hooks, crusher, 6, dealer=cs.player, card=make_card("strike"))
+        # Playing a targeted card at the Crusher turns the player around
+        # (SurroundedPower.cs BeforeCardPlayed: cardPlay.Target != null).
+        strike = make_card("strike")
+        cs.player.hand.append(strike)
+        assert cs.play_card(cs.player.hand.index(strike), target_idx=0)
         assert cs.player.powers["surrounded"].facing == "left"
         cs.player.hp = 80
         cs.end_turn()  # ENLARGING 4 plain + PRECISION 18 * 1.5 = 27
         assert cs.player.hp == 80 - 4 - 27
+
+    def test_facing_flips_on_targeted_card_without_damage(self):
+        """SurroundedPower.cs BeforeCardPlayed flips facing on ANY targeted
+        card play (`cardPlay.Target != null`) — it is not conditioned on the
+        card dealing damage. Tremble (a Skill that only applies Vulnerable)
+        targeted at the Crusher must still turn the player around."""
+        cs = fresh_encounter(KAISER_CRAB_BOSS)
+        crusher = cs.enemies[0]
+        tremble = make_card("tremble")
+        cs.player.hand.append(tremble)
+        assert cs.player.powers["surrounded"].facing == "right"
+        assert cs.play_card(cs.player.hand.index(tremble), target_idx=0)
+        assert "vulnerable" in crusher.powers  # sanity: the card resolved
+        assert cs.player.powers["surrounded"].facing == "left"
+
+    def test_all_enemies_card_does_not_flip_facing(self):
+        """An untargeted (TargetType.ALL_ENEMIES) card play has no
+        `cardPlay.Target`, so it must not turn the player even though it
+        damages both arms (mirrors SurroundedPower.cs BeforeCardPlayed)."""
+        cs = fresh_encounter(KAISER_CRAB_BOSS)
+        dramatic_entrance = make_card("dramatic_entrance")
+        cs.player.hand.append(dramatic_entrance)
+        assert cs.play_card(cs.player.hand.index(dramatic_entrance))
+        assert cs.player.powers["surrounded"].facing == "right"
 
     def test_crab_rage_on_partner_death(self):
         cs = fresh_encounter(KAISER_CRAB_BOSS)

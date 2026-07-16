@@ -300,7 +300,17 @@ class CombatState:
         if card.card_type != CardType.POWER:
             self.player.discard_pile.append(card)
 
-        self.hooks.before_card_played(card)
+        # Resolve the single creature this play targeted (mirrors CardPlay.
+        # Target): only ANY_ENEMY cards resolve to one enemy up front; AoE/
+        # self/random-target cards have no single target (Target stays None
+        # in the game too). Consulted by SurroundedPower to flip Kaiser Crab
+        # facing on any targeted card play, not just damaging ones.
+        played_target = (
+            self._ctx().resolve_target(target_idx)
+            if card.target_type == TargetType.ANY_ENEMY
+            else None
+        )
+        self.hooks.before_card_played(card, played_target)
         # BaseReplayCount (Hidden Gem) seeds the play count; enchantment
         # replays (Spiral/Glam) stack on top via the hook.
         play_count = self.hooks.modify_card_play_count(

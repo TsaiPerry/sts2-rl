@@ -330,13 +330,18 @@ class HookSystem:
 
     # ── Event hooks — card lifecycle ─────────────────────────────────────
 
-    def before_card_played(self, card: Card) -> None:
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         """Fires before a card's on_play() resolves (mirrors BeforeCardPlayed).
         Used by relics that must act on the card before its effects (e.g. Pen
-        Nib marking the 10th Attack for doubling)."""
+        Nib marking the 10th Attack for doubling).
+
+        target is the single creature the card was played at (mirrors
+        CardPlay.Target) — set only for a resolved single-enemy target, None
+        for untargeted/AoE plays. Consulted by SurroundedPower to flip Kaiser
+        Crab facing on any targeted card play, not just damaging ones."""
         for l in list(self._listeners):
             if hasattr(l, "before_card_played"):
-                l.before_card_played(card)
+                l.before_card_played(card, target)
 
     def on_card_played(self, card: Card) -> None:
         """Fires after a card's on_play() resolves."""
