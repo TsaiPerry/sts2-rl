@@ -549,3 +549,18 @@ def test_darkstone_periapt_max_hp_on_curse_gain():
     assert run.hp == hp_before + 6  # GainMaxHp heals the gained amount
     run.add_card(make_card("strike"))
     assert run.max_hp == max_before + 6  # non-curse: no trigger
+
+
+def test_tungsten_rod_reduces_event_hp_loss():
+    """TungstenRod.cs ModifyHpLostAfterOsty: -1 HP loss (min 0) for the
+    owner. The game dispatches Hook.ModifyHpLost over the run state
+    (CreatureCmd.cs), so out-of-combat event HP loss (RunState.lose_hp) is
+    reduced too. BeatingRemnant's version guards CombatManager.IsInProgress
+    and stays combat-only."""
+    run = fresh_run(31)
+    run.add_relic("tungsten_rod")
+    hp = run.hp
+    run.lose_hp(5)
+    assert run.hp == hp - 4
+    run.lose_hp(1)
+    assert run.hp == hp - 4  # 1 - 1 -> 0

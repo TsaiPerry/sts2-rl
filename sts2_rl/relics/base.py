@@ -145,6 +145,14 @@ class Relic:
         """RelicModel.AfterCardChangedPiles, filtered to a card entering the
         run's deck pile (Darkstone Periapt's +6 Max HP on a gained Curse)."""
 
+    def modify_run_hp_loss(self, run, amount: int) -> int:
+        """RelicModel.ModifyHpLostAfterOsty for out-of-combat HP loss: the
+        game dispatches Hook.ModifyHpLost over the run state (CreatureCmd.cs),
+        so event damage (RunState.lose_hp) goes through relics too (Tungsten
+        Rod). Combat HP loss uses the combat-side modify_hp_lost hook.
+        Chain hook — return the new amount."""
+        return amount
+
     def after_rest_site_heal(self, run) -> None:
         """RelicModel.AfterRestSiteHeal (Stone Humidifier's +5 max HP)."""
 

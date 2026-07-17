@@ -187,8 +187,13 @@ class RunState:
 
     def lose_hp(self, amount: int) -> None:
         """Unblockable, unpowered event damage (CreatureCmd.Damage with
-        ValueProp.Unblockable | Unpowered). Can kill."""
-        self.hp -= int(amount)
+        ValueProp.Unblockable | Unpowered). Can kill. Relic HP-loss
+        modifiers (Tungsten Rod's ModifyHpLostAfterOsty) apply — the game's
+        Hook.ModifyHpLost dispatches over the run state."""
+        loss = int(amount)
+        for relic in list(self.relics):
+            loss = relic.modify_run_hp_loss(self, loss)
+        self.hp -= max(0, int(loss))
 
     def kill(self) -> None:
         self.hp = 0
