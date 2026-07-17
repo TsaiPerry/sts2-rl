@@ -1785,11 +1785,19 @@ class VigorPower(Power):
             return self.amount
         return 0
 
-    def before_attack(self, dealer: Creature) -> None:
-        if dealer is self.owner and self._amount_when_attack_started is None:
-            self._amount_when_attack_started = self.amount
+    def before_attack(self, dealer: Creature, card: Card | None = None) -> None:
+        if dealer is not self.owner or self._amount_when_attack_started is not None:
+            return
+        # Mirrors VigorPower.cs BeforeAttack's
+        # `if (!command.DamageProps.IsPoweredAttack()) return;` — an unpowered
+        # attack (card.is_unpowered) neither grants nor consumes Vigor. card
+        # is None for monster attacks, which are always powered (DamageProps.
+        # monsterMove == ValueProp.Move), so they fall through to tracking.
+        if card is not None and card.is_unpowered:
+            return
+        self._amount_when_attack_started = self.amount
 
-    def after_attack(self, dealer: Creature) -> None:
+    def after_attack(self, dealer: Creature, card: Card | None = None) -> None:
         if dealer is not self.owner or self._amount_when_attack_started is None:
             return
         consumed = self._amount_when_attack_started

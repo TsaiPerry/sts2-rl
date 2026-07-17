@@ -245,3 +245,42 @@ class TestEnvObservation:
         assert obs.shape == (OBS_DIM,)
         assert OBS_DIM == 17
         assert set(obs[12:17]).issubset({0.0, 1.0})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Attack-command boundary (before_attack / after_attack)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestAttackBoundary:
+    """The before_attack/after_attack boundary mirrors AttackCommand.Execute
+    (src/Core/Commands/Builders/AttackCommand.cs: Hook.BeforeAttack /
+    Hook.AfterAttack fire once per attack command, card- or monster-sourced).
+    Self-HP-loss card effects are plain damage commands in the game — never
+    AttackCommands — so they must not open the boundary; and Vigor's own
+    guard (VigorPower.cs BeforeAttack:
+    `if (!command.DamageProps.IsPoweredAttack()) return;`) means an
+    unpowered attack neither uses nor consumes Vigor."""
+
+    def test_self_hp_loss_skill_does_not_consume_vigor(self):
+        from sts2_rl.cards import make_card
+        from sts2_rl.powers import VigorPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, VigorPower, 8)
+        cs.player.hand.append(make_card("bloodletting"))
+        cs.player.energy = 10
+        assert cs.play_card(len(cs.player.hand) - 1)
+        assert cs.player.powers["vigor"].amount == 8
+
+    def test_unpowered_attack_neither_uses_nor_consumes_vigor(self):
+        from sts2_rl.cards import make_card
+        from sts2_rl.powers import VigorPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, VigorPower, 8)
+        strike = make_card("strike")
+        strike.is_unpowered = True  # Omnislice-echo-style unpowered attack
+        cs.player.hand.append(strike)
+        cs.player.energy = 10
+        hp = cs.enemy.hp
+        assert cs.play_card(len(cs.player.hand) - 1)
+        assert cs.enemy.hp == hp - 6  # base damage only: no Vigor bonus
+        assert cs.player.powers["vigor"].amount == 8  # and not consumed

@@ -323,7 +323,7 @@ class CombatState:
         is_attack = card.card_type == CardType.ATTACK
         for _ in range(play_count):
             if is_attack:
-                self.hooks.before_attack(self.player)
+                self.hooks.before_attack(self.player, card)
             if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
                 # Framework routes: call on_play once per living enemy.
                 for idx, e in enumerate(self.enemies):
@@ -336,7 +336,7 @@ class CombatState:
                 # Card handles its own routing (or doesn't need enemy iteration).
                 card.on_play(self._ctx(), target_idx)
             if is_attack:
-                self.hooks.after_attack(self.player)
+                self.hooks.after_attack(self.player, card)
             if self._all_enemies_dead() or self.player.is_dead:
                 break
 
