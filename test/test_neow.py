@@ -292,6 +292,41 @@ def test_fishing_rod_every_third_monster_combat():
     assert run.relics[0].combats_seen == 6
 
 
+def test_sword_of_stone_counts_elites_and_evolves_into_sword_of_jade():
+    """SwordOfStone.cs: AfterCombatVictory increments ElitesDefeated only when
+    room.RoomType == RoomType.Elite; at ElitesDefeated >= DynamicVars["Elites"]
+    (5), RelicCmd.Replace(this, SwordOfJade). SwordOfJade.cs then grants
+    DynamicVars.Strength (3) via PowerCmd.Apply<StrengthPower> in
+    AfterRoomEntered whenever the entered room is a CombatRoom (ported as
+    on_combat_start, since the sim's create_combat fires that hook for every
+    combat room type)."""
+    run = fresh_run(20)
+    run.add_relic("sword_of_stone")
+    enc = ENCOUNTERS["bygone_effigy"]
+
+    # Monster-room victories don't advance the elite counter.
+    combat = run.create_combat(ENCOUNTERS["fuzzy_wurm_weak"])
+    run.finish_combat(combat, room_type=RoomType.MONSTER)
+    assert run.relics[0].elites_defeated == 0
+    assert run.relics[0].id == "sword_of_stone"
+
+    # Four elite victories: counter advances, relic not yet replaced.
+    for i in range(1, 5):
+        combat = run.create_combat(enc)
+        run.finish_combat(combat, room_type=RoomType.ELITE)
+        assert run.relics[0].elites_defeated == i
+        assert run.relics[0].id == "sword_of_stone"
+
+    # 5th elite victory hits the threshold: replaced by Sword of Jade.
+    combat = run.create_combat(enc)
+    run.finish_combat(combat, room_type=RoomType.ELITE)
+    assert run.relics[0].id == "sword_of_jade"
+
+    # Sword of Jade grants 3 Strength at the start of the next combat.
+    combat = run.create_combat(ENCOUNTERS["fuzzy_wurm_weak"])
+    assert combat.player.powers["strength"].amount == 3
+
+
 def test_winged_boots_free_travel():
     run = fresh_run(16)
     run.add_relic("winged_boots")
