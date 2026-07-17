@@ -18,10 +18,12 @@ Faithful mechanics ported from the source:
   - gold amounts truncate toward zero and gains require amount > 0
     (PlayerCmd.GainGold/LoseGold `(int)amount` casts)
 
-Deliberate simplifications: no run-level hook dispatch (relics like Tungsten
-Rod don't reduce event HP loss), no unlock state (every implemented relic/
-potion/card is in its pool), and the game's Colorless transform pool for
-Quest/Event-rarity originals falls back to the character pool.
+Deliberate simplifications: run-level hook dispatch covers only the relic
+hooks the ported pool needs (reward/room hooks, after_item_purchased,
+after_card_added_to_deck, modify_run_hp_loss — Tungsten Rod does reduce
+event HP loss), no unlock state (every implemented relic/potion/card is in
+its pool), and the game's Colorless transform pool for Quest/Event-rarity
+originals falls back to the character pool.
 """
 from __future__ import annotations
 
