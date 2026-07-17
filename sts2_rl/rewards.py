@@ -274,6 +274,7 @@ class RewardExtraKind(Enum):
     RELIC = "relic"      # a specific relic instance
     POTION = "potion"    # a specific potion instance
     UPGRADE = "upgrade"  # an upgrade granted to a specific deck card
+    GOLD = "gold"        # GoldReward(wasGoldStolenBack) — stolen gold returned
 
 
 @dataclass
@@ -296,6 +297,7 @@ class RewardExtra:
     relic: "Relic | None" = None
     potion: "Potion | None" = None
     upgrade: "Card | None" = None
+    gold: int = 0
 
     @classmethod
     def of_card(cls, card: Card) -> "RewardExtra":
@@ -313,6 +315,12 @@ class RewardExtra:
         """A potion offer (PotionReward); None rolls a random potion at
         screen time, like the game's PotionReward(player)."""
         return cls(kind=RewardExtraKind.POTION, potion=potion)
+
+    @classmethod
+    def of_gold(cls, amount: int) -> "RewardExtra":
+        """Stolen gold returned on the reward screen (GoldReward with
+        wasGoldStolenBack — HeistPower.cs BeforeDeath)."""
+        return cls(kind=RewardExtraKind.GOLD, gold=amount)
 
 
 @dataclass
@@ -420,5 +428,10 @@ def generate_combat_rewards(
         elif extra.kind == RewardExtraKind.POTION:
             potion = extra.potion if extra.potion is not None else run.random_potion()
             rewards.special_potions.append(potion)
+        elif extra.kind == RewardExtraKind.GOLD and extra.gold > 0:
+            # Stolen gold returned (GoldReward wasGoldStolenBack): granted
+            # with the screen like the normal gold reward.
+            rewards.gold += extra.gold
+            run.gain_gold(extra.gold)
     run.pending_reward_extras.clear()
     return rewards

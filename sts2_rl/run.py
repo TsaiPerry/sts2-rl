@@ -777,6 +777,9 @@ class RunState:
         combat.deck_card_origins = {
             id(copy_): orig for copy_, orig in zip(deck_copy, self.deck)
         }
+        # The run's balance is what in-combat thefts (Gremlin Merc's
+        # Thievery) can take — the game reads Player.Gold live.
+        combat.player_gold = self.gold
         return combat
 
     def finish_combat(self, combat: CombatState, room_type: RoomType | None = None) -> None:
@@ -790,8 +793,12 @@ class RunState:
         self.max_hp = combat.player.max_hp
         self.hp = max(0, combat.player.hp)
         self.potions = list(combat.player.potions)
-        # In-combat gold gains (Hand of Greed) credit the run's ledger.
+        # In-combat gold gains (Hand of Greed) credit the run's ledger;
+        # in-combat thefts (Gremlin Merc's Thievery — PlayerCmd.LoseGold
+        # GoldLossType.Stolen) debit it. Steals are capped in-combat against
+        # the live balance, so the net never goes below 0.
         self.gain_gold(combat.gold_gained)
+        self.lose_gold(combat.gold_stolen)
         # Thieving Hopper: SwipePower.Steal calls CardPileCmd.RemoveFromDeck at
         # steal time, so a stolen card leaves the run deck permanently — the
         # kill only *offers* it back (SpecialCardReward is take-or-skip), and

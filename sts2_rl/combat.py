@@ -139,6 +139,13 @@ class CombatState:
         # The run has the gold ledger, so this accumulates and
         # RunState.finish_combat credits it; standalone combats ignore it.
         self.gold_gained = 0
+        # The player's gold as visible inside this combat: player_gold is the
+        # run's balance at entry (set by RunState.create_combat; 0 for
+        # standalone combats), and gold_stolen accumulates in-combat thefts
+        # (Gremlin Merc's Thievery — PlayerCmd.LoseGold GoldLossType.Stolen).
+        # finish_combat settles the ledger.
+        self.player_gold = 0
+        self.gold_stolen = 0
         # Pending post-combat "extras": reward entries a combat (or combat
         # event) appends during the fight for the reward screen to surface
         # afterwards (mirrors CombatRoom.AddExtraReward accumulating a room's
