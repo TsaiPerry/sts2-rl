@@ -35,10 +35,7 @@ class HungryForMushrooms(Event):
         self._finish("BIG_MUSHROOM")
 
     def _fragrant_mushroom(self) -> None:
+        # The HP loss + 2 upgrades are the relic's own pickup effect
+        # (FragrantMushroom.cs AfterObtained, fired via add_relic).
         self.run.add_relic(make_relic("fragrant_mushroom"))
-        self.run.lose_hp(_FRAGRANT_HP_LOSS)
-        upgradable = self.run.upgradable_cards()
-        count = min(_FRAGRANT_CARDS, len(upgradable))
-        for card in self.rng.sample(upgradable, count):
-            card.upgrade()
         self._finish("FRAGRANT_MUSHROOM")

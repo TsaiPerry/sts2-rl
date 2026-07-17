@@ -564,3 +564,15 @@ def test_tungsten_rod_reduces_event_hp_loss():
     assert run.hp == hp - 4
     run.lose_hp(1)
     assert run.hp == hp - 4  # 1 - 1 -> 0
+
+
+def test_fragrant_mushroom_pickup_effect_fires_on_obtain():
+    """FragrantMushroom.cs: AfterObtained deals HpLossVar(15) unblockable,
+    unpowered damage and upgrades CardsVar(2) random upgradable deck cards —
+    the relic's own pickup effect, so any grant path triggers it (the Hungry
+    for Mushrooms event just adds the relic)."""
+    run = fresh_run(32)
+    hp = run.hp
+    run.add_relic("fragrant_mushroom")
+    assert run.hp == hp - 15
+    assert sum(1 for c in run.deck if c.upgrade_level > 0) == 2

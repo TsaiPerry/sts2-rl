@@ -443,11 +443,15 @@ class HookSystem:
             if hasattr(l, "on_block_gained"):
                 l.on_block_gained(target, amount, card)
 
-    def on_block_broken(self, target: Creature) -> None:
-        """Fires when an attack deals more damage than the target's remaining block."""
+    def on_block_broken(self, target: Creature, dealer: Creature | None = None,
+                        card: Card | None = None) -> None:
+        """Fires when damage consumes the target's remaining block (mirrors
+        DamageResult.WasBlockBroken: Block <= 0 && blockedDamage > 0 — an
+        exact break counts, overflow is not required). dealer/card identify
+        the damage source (Hand Drill checks dealer == its owner)."""
         for l in list(self._listeners):
             if hasattr(l, "on_block_broken"):
-                l.on_block_broken(target)
+                l.on_block_broken(target, dealer, card)
 
     def on_block_cleared(self, target: Creature) -> None:
         """Fires when block is wiped at the start of a turn."""

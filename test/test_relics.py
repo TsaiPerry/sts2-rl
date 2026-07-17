@@ -1042,3 +1042,114 @@ class TestCombatEndRelics:
         while not cs.is_over:
             cs.play_card(0)
         assert cs.player.hp == 60
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Event-relic combat hooks (fidelity-debts A6)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestHandDrill:
+    def test_vulnerable_on_block_break(self):
+        """HandDrill.cs: AfterDamageGiven with result.WasBlockBroken (the
+        game counts an exact break: Block <= 0 && blockedDamage > 0) on a
+        non-player target -> apply PowerVar<VulnerablePower>(2)."""
+        cs = fresh(relics=[make_relic("hand_drill")], deck=strikes(9))
+        cs.enemy.block = 6
+        cs.play_card(0)  # strike 6: exact break
+        assert cs.enemy.block == 0
+        assert cs.enemy.powers["vulnerable"].amount == 2
+
+    def test_no_trigger_without_block(self):
+        cs = fresh(relics=[make_relic("hand_drill")], deck=strikes(9))
+        cs.play_card(0)
+        assert "vulnerable" not in cs.enemy.powers
+
+    def test_no_trigger_when_block_survives(self):
+        cs = fresh(relics=[make_relic("hand_drill")], deck=strikes(9))
+        cs.enemy.block = 10
+        cs.play_card(0)
+        assert cs.enemy.block == 4
+        assert "vulnerable" not in cs.enemy.powers
+
+
+class TestPetrifiedToad:
+    def test_procures_potion_shaped_rock_each_combat(self):
+        """PetrifiedToad.cs: BeforeCombatStartLate ->
+        PotionCmd.TryToProcure<PotionShapedRock> (fails silently when the
+        belt is full). PotionShapedRock.cs: combat-only targeted potion,
+        DamageVar(15, Unpowered)."""
+        cs = fresh(relics=[make_relic("petrified_toad")])
+        rocks = [p for p in cs.player.potions if p.id == "potion_shaped_rock"]
+        assert len(rocks) == 1
+        hp = cs.enemy.hp
+        assert cs.use_potion(cs.player.potions.index(rocks[0]), target_idx=0)
+        assert cs.enemy.hp == hp - 15
+
+    def test_procure_respects_full_belt(self):
+        from sts2_rl import BlockPotion
+        full = [BlockPotion(), BlockPotion(), BlockPotion()]
+        cs = fresh(relics=[make_relic("petrified_toad")], potions=full,
+                   max_potions=3)
+        assert all(p.id == "block_potion" for p in cs.player.potions)
+
+    def test_rock_is_unpowered(self):
+        from sts2_rl import StrengthPower, PowerCmd
+        cs = fresh(relics=[make_relic("petrified_toad")])
+        PowerCmd.apply(cs.hooks, cs.player, StrengthPower, 5)
+        hp = cs.enemy.hp
+        assert cs.use_potion(0, target_idx=0)
+        assert cs.enemy.hp == hp - 15  # Strength does not boost it
+
+
+class TestUnsettlingLamp:
+    def test_first_card_debuff_doubled_once_per_combat(self):
+        """UnsettlingLamp.cs: the first card play that applies a visible
+        Debuff to an enemy has that play's debuffs doubled
+        (ModifyPowerAmountGivenMultiplicative x2), once per combat."""
+        cs = fresh(relics=[make_relic("unsettling_lamp")])
+        cs.player.energy = 10
+        cs.player.hand.append(make_card("bash"))  # 8 dmg + 2 Vulnerable
+        assert cs.play_card(len(cs.player.hand) - 1, target_idx=0)
+        assert cs.enemy.powers["vulnerable"].amount == 4  # 2 doubled
+        cs.player.hand.append(make_card("bash"))
+        assert cs.play_card(len(cs.player.hand) - 1, target_idx=0)
+        assert cs.enemy.powers["vulnerable"].amount == 4 + 2  # not doubled
+
+    def test_self_buffs_do_not_trigger(self):
+        cs = fresh(relics=[make_relic("unsettling_lamp")])
+        cs.player.energy = 10
+        cs.player.hand.append(make_card("aggression"))  # self Power buff
+        assert cs.play_card(len(cs.player.hand) - 1)
+        assert cs.player.powers["aggression"].amount == 1  # not doubled
+        cs.player.hand.append(make_card("bash"))
+        assert cs.play_card(len(cs.player.hand) - 1, target_idx=0)
+        assert cs.enemy.powers["vulnerable"].amount == 4  # lamp still fresh
+
+
+class TestPollinousCore:
+    def test_every_fourth_turn_draws_two_extra(self):
+        """PollinousCore.cs: BeforeSideTurnStart counts the player's turns
+        (persisting across combats — AfterCombatEnd only resets the display);
+        when the counter reaches Turns(4), ModifyHandDraw adds Cards(2) and
+        resets it."""
+        relic = make_relic("pollinous_core")
+        cs = fresh(relics=[relic], deck=strikes(20))
+        assert len(cs.player.hand) == 5  # turn 1
+        for _ in range(2):
+            cs.end_turn()
+            assert len(cs.player.hand) == 5  # turns 2-3
+        cs.end_turn()  # turn 4: counter hits 4 -> +2 cards
+        assert len(cs.player.hand) == 7
+        assert relic.turns_seen == 0  # reset after the bonus
+        cs.end_turn()
+        assert len(cs.player.hand) == 5  # cycle restarts
+
+    def test_counter_persists_across_combats(self):
+        relic = make_relic("pollinous_core")
+        cs = fresh(relics=[relic], deck=strikes(20))
+        cs.end_turn()  # 2 turns seen
+        assert relic.turns_seen == 2
+        cs2 = fresh(relics=[relic], deck=strikes(20), seed=1)
+        assert relic.turns_seen == 3  # turn 1 of the next combat
+        cs2.end_turn()
+        assert len(cs2.player.hand) == 7  # 4th cumulative turn

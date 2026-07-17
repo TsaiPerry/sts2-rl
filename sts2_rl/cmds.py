@@ -75,8 +75,10 @@ class DamageCmd:
             absorbed = min(target.block, amount)
             target.block -= absorbed
             hp_lost -= absorbed
-            if target.block == 0 and hp_lost > 0:
-                hooks.on_block_broken(target)
+            # WasBlockBroken (CreatureCmd.cs): Block <= 0 && blockedDamage > 0
+            # — an exact break counts; overflow damage is not required.
+            if target.block == 0:
+                hooks.on_block_broken(target, dealer, card)
 
         # 5. HP-loss modifiers applied after block (e.g. Torii: cap at 1, Tungsten Rod: -1)
         if hp_lost > 0:

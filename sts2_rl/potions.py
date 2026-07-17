@@ -146,6 +146,33 @@ class GlowwaterPotion(Potion):
         DrawCmd.draw(ctx.player, self.DRAW)
 
 
+@register_potion
+class PotionShapedRock(Potion):
+    """Deal 15 damage to target enemy (unpowered).
+
+    Source: PotionShapedRock.cs — Token rarity, CombatOnly, TargetType
+    AnyEnemy, DamageVar(15, ValueProp.Unpowered). Procured each combat by
+    Petrified Toad (not part of the random reward pool)."""
+
+    id = "potion_shaped_rock"
+    name = "Potion Shaped Rock"
+    rarity = "token"
+    targeted = True
+    in_reward_pool = False
+    DAMAGE = 15
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        DamageCmd.deal(
+            ctx.hooks,
+            target or ctx.enemy,
+            self.DAMAGE,
+            dealer=ctx.player,
+            props=DamageProps.NON_CARD_UNPOWERED,
+        )
+
+
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)
 
 

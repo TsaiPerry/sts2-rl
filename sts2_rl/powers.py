@@ -2150,7 +2150,10 @@ class BurrowedPower(Power):
             return False
         return True
 
-    def on_block_broken(self, target: Creature) -> None:
+    def on_block_broken(
+        self, target: Creature, dealer: Creature | None = None,
+        card: Card | None = None,
+    ) -> None:
         if target is self.owner:
             self.owner.get_stunned()
             self._expire()

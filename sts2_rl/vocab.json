@@ -200,7 +200,8 @@
   "fire_potion",
   "glowwater",
   "strength_potion",
-  "weak_potion"
+  "weak_potion",
+  "potion_shaped_rock"
  ],
  "powers": [
   "adaptable",
