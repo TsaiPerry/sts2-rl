@@ -39,7 +39,7 @@ from .full_env import (
     apply_combat_action,
     combat_action_masks,
 )
-from .rewards import GOLD_REWARD_RANGES
+from .rewards import GOLD_REWARD_RANGES, CombatRewards
 from .rooms import RoomType
 
 if TYPE_CHECKING:
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
     from .combat import CombatState
     from .events.base import Event
     from .monsters import Encounter
-    from .rewards import CombatRewards
     from .run import RunState
     from .shop import MerchantInventory
 
@@ -304,6 +303,18 @@ class RunDriver:
             ))
             if idx < len(rewards.cards):
                 run.add_card(rewards.cards[idx])
+        # Extra single-card rewards queued during combat (Thieving Hopper's
+        # returned card; CombatRoom.ExtraRewards -> SpecialCardReward). Each
+        # is its own take-or-skip choice (SpecialCardReward.OnSelect adds it
+        # to the deck; skipping loses it), surfaced through the existing
+        # REWARD_CARD decision as a one-card offer.
+        for card in rewards.special_cards:
+            offer = CombatRewards(room_type=rewards.room_type, cards=[card])
+            idx = self._ask(DecisionRequest(
+                kind=DecisionKind.REWARD_CARD, run=run, rewards=offer,
+            ))
+            if idx == 0:
+                run.add_card(card)
         if rewards.potion is not None:
             take = self._ask(DecisionRequest(
                 kind=DecisionKind.REWARD_POTION, run=run, rewards=rewards,

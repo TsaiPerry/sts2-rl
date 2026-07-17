@@ -28,6 +28,7 @@ from .potions import Potion
 
 if TYPE_CHECKING:
     from .relics import Relic
+    from .rewards import RewardExtra
 
 
 class Phase(Enum):
@@ -138,6 +139,17 @@ class CombatState:
         # The run has the gold ledger, so this accumulates and
         # RunState.finish_combat credits it; standalone combats ignore it.
         self.gold_gained = 0
+        # Pending post-combat "extras": reward entries a combat (or combat
+        # event) appends during the fight for the reward screen to surface
+        # afterwards (mirrors CombatRoom.AddExtraReward accumulating a room's
+        # ExtraRewards). RunState.finish_combat drains these into the run.
+        # First consumer: Thieving Hopper's returned card (SwipePower).
+        self.pending_reward_extras: list["RewardExtra"] = []
+        # id(combat card) -> the run-deck card it was deep-copied from; the
+        # sim's analogue of CardModel.DeckVersion. Populated by
+        # RunState.create_combat; empty for room-less/standalone combats
+        # (which have no deck, like a card with DeckVersion == null).
+        self.deck_card_origins: dict[int, "Card"] = {}
         self.result: Optional[CombatResult] = None
 
         self.hooks.on_combat_start()

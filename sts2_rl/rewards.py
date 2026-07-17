@@ -261,6 +261,45 @@ def create_reward_cards(
     return cards
 
 
+class RewardExtraKind(Enum):
+    """Which payload a queued post-combat extra carries.
+
+    Source: a combat (or combat event) queues extra reward instances onto its
+    room via CombatRoom.AddExtraReward (src/Core/Rooms/CombatRoom.cs); the
+    reward screen folds them in via RewardsSet.WithRewardsFromRoom
+    (src/Core/Rewards/RewardsSet.cs). Each Reward subtype maps to a kind here.
+    """
+
+    CARD = "card"        # SpecialCardReward — a specific card added to the deck
+    RELIC = "relic"      # a specific relic instance
+    POTION = "potion"    # a specific potion instance
+    UPGRADE = "upgrade"  # an upgrade granted to a specific deck card
+
+
+@dataclass
+class RewardExtra:
+    """One "pending post-combat extra": a reward a combat appends during the
+    fight for the reward screen to surface afterwards. Exactly one payload
+    field is set, selected by `kind`.
+
+    Only the CARD kind is produced today — Thieving Hopper's returned card
+    (src/Core/Models/Powers/SwipePower.cs BeforeDeath -> SpecialCardReward).
+    The RELIC / POTION / UPGRADE kinds define the entry surface that
+    Workstream B follow-ups (Punch-Off, The Lantern Key, Battleworn Dummy,
+    Gremlin Merc) will populate; they are declared, not yet consumed."""
+
+    kind: RewardExtraKind
+    card: "Card | None" = None
+    relic: "Relic | None" = None
+    potion: "Potion | None" = None
+    upgrade: "Card | None" = None
+
+    @classmethod
+    def of_card(cls, card: Card) -> "RewardExtra":
+        """A returned/special card reward (SpecialCardReward)."""
+        return cls(kind=RewardExtraKind.CARD, card=card)
+
+
 @dataclass
 class CombatRewards:
     """One post-combat reward screen: gold and any relics are granted when the
@@ -274,6 +313,10 @@ class CombatRewards:
     # Relics granted with this screen: the elite's grab-bag relic, plus any
     # hook-added extras (Lava Rock's two on the act-1 boss).
     relics: "list[Relic]" = field(default_factory=list)
+    # Extra single-card rewards queued during combat (CombatRoom.ExtraRewards:
+    # Thieving Hopper's returned card). Unlike `cards` (a pick-one-of-N group),
+    # each is an independent take-or-skip SpecialCardReward.
+    special_cards: list[Card] = field(default_factory=list)
 
     @property
     def relic(self) -> "Relic | None":
@@ -287,6 +330,7 @@ class CombatRewards:
             and self.potion is None
             and not self.cards
             and not self.relics
+            and not self.special_cards
         )
 
 
@@ -333,4 +377,13 @@ def generate_combat_rewards(
     # branch above.
     for relic in list(run.relics):
         relic.modify_combat_rewards(run, rewards)
+
+    # Pending post-combat extras queued during the fight (CombatRoom's
+    # ExtraRewards, folded in by RewardsSet.WithRewardsFromRoom). Today only
+    # SpecialCardReward entries (Thieving Hopper) are produced; consume and
+    # clear the run's channel so each screen surfaces its own extras once.
+    for extra in run.pending_reward_extras:
+        if extra.kind == RewardExtraKind.CARD and extra.card is not None:
+            rewards.special_cards.append(extra.card)
+    run.pending_reward_extras.clear()
     return rewards

@@ -603,6 +603,75 @@ class TestThievingHopper:
         cs.end_turn()  # then it resumes with the rolled move (NAB 14)
         assert cs.player.hp == hp - 14
 
+    # ── Stolen-card return as a post-combat reward ───────────────────────
+    # Source anchors (decompiled game, read-only):
+    #   src/Core/Models/Powers/SwipePower.cs
+    #     Steal():       CardPileCmd.RemoveFromDeck — the theft is permanent.
+    #     BeforeDeath(): only when the owner dies; re-registers the card and
+    #                    CombatRoom.AddExtraReward(SpecialCardReward). If the
+    #                    hopper escapes instead, BeforeDeath never runs.
+    #   src/Core/Rooms/CombatRoom.cs  AddExtraReward / ExtraRewards
+    #   src/Core/Rewards/RewardsSet.cs WithRewardsFromRoom folds ExtraRewards
+    #                    into the reward screen.
+    #   src/Core/Rewards/SpecialCardReward.cs OnSelect adds it to the deck.
+
+    @staticmethod
+    def _hopper_run(seed: int = 3):
+        from sts2_rl.run import RunState
+        run = RunState(rng=random.Random(seed), max_hp=100000, hp=100000)
+        enc = Encounter("thieving_hopper", [ThievingHopper])
+        return run, enc
+
+    def test_killing_hopper_returns_stolen_card_as_reward(self):
+        from sts2_rl.rooms import RoomType
+        from sts2_rl.cmds import CreatureCmd
+
+        run, enc = self._hopper_run()
+        combat = run.create_combat(enc, room_type=RoomType.MONSTER)
+        combat.end_turn()  # THIEVERY: steal a card
+        hopper = combat.enemy
+        stolen_copy = hopper.powers["swipe"].stolen_cards[0]
+        CreatureCmd.kill(combat.hooks, hopper)  # BeforeDeath fires
+        deck_before = list(run.deck)
+        run.finish_combat(combat, room_type=RoomType.MONSTER)
+        removed = [c for c in deck_before if c not in run.deck]
+        assert len(removed) == 1               # the theft left the deck
+        rewards = run.generate_combat_rewards(RoomType.MONSTER)
+        # The reward is the deck version of the stolen card (the game queues
+        # SpecialCardReward(StolenCard.DeckVersion)), take-or-skip.
+        assert rewards.special_cards == removed
+        assert removed[0].id == stolen_copy.id
+        # Taking it (SpecialCardReward.OnSelect: CardPileCmd.Add to Deck)
+        # restores the deck.
+        run.add_card(rewards.special_cards[0])
+        assert len(run.deck) == len(deck_before)
+        # The channel drains: a second screen would not re-offer it.
+        assert not run.pending_reward_extras
+
+    def test_theft_removes_the_card_from_the_run_deck(self):
+        from sts2_rl.rooms import RoomType
+
+        run, enc = self._hopper_run()
+        deck_before = len(run.deck)
+        combat = run.create_combat(enc, room_type=RoomType.MONSTER)
+        combat.end_turn()  # THIEVERY: steal
+        run.finish_combat(combat, room_type=RoomType.MONSTER)
+        assert len(run.deck) == deck_before - 1
+
+    def test_escaped_hopper_gives_no_reward_and_keeps_card_lost(self):
+        from sts2_rl.rooms import RoomType
+
+        run, enc = self._hopper_run()
+        deck_before = len(run.deck)
+        combat = run.create_combat(enc, room_type=RoomType.MONSTER)
+        for _ in range(5):  # THIEVERY, FLUTTER, HAT_TRICK, NAB, ESCAPE
+            combat.end_turn()
+        assert combat.enemies[0].escaped
+        run.finish_combat(combat, room_type=RoomType.MONSTER)
+        rewards = run.generate_combat_rewards(RoomType.MONSTER)
+        assert not rewards.special_cards          # BeforeDeath never fired
+        assert len(run.deck) == deck_before - 1    # theft stays permanent
+
 
 # ═════════════════════════════════════════════════════════════════════════
 # Tunneler

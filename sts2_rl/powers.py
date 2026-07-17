@@ -2113,10 +2113,15 @@ class FlutterPower(Power):
 
 
 class SwipePower(Power):
-    """Holds the card(s) the Thieving Hopper stole. In the game, killing the
-    owner returns the stolen card to the deck as a combat reward; the sim has
-    no out-of-combat rewards, so the cards simply stay gone (they were removed
-    from the combat piles when stolen)."""
+    """Holds the card(s) the Thieving Hopper stole (SwipePower.cs).
+
+    Steal() removes the card from the run deck for good; BeforeDeath — only
+    when the *owner* dies, never on escape — queues the deck version of each
+    stolen card as a take-or-skip SpecialCardReward on the combat room
+    (CombatRoom.AddExtraReward). Here: on_death appends a RewardExtra card
+    entry to the combat's pending_reward_extras, carrying the run-deck origin
+    of the stolen combat copy (the DeckVersion analogue); cards with no deck
+    origin never come back (BeforeDeath's DeckVersion == null early-out)."""
 
     id = "swipe"
     name = "Swipe"
@@ -2131,6 +2136,18 @@ class SwipePower(Power):
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
         self.stolen_cards: list[Card] = []
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner:
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .rewards import RewardExtra
+        for card in self.stolen_cards:
+            origin = combat.deck_card_origins.get(id(card))
+            if origin is not None:
+                combat.pending_reward_extras.append(RewardExtra.of_card(origin))
 
 
 class BurrowedPower(Power):

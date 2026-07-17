@@ -39,6 +39,7 @@ from .rewards import (
     CardRarityOdds,
     CombatRewards,
     PotionRewardOdds,
+    RewardExtra,
     generate_combat_rewards,
 )
 
@@ -151,6 +152,12 @@ class RunState:
         # draws no RNG, so run-construction seed parity is preserved.
         self.card_rarity_odds = CardRarityOdds(self.rng)
         self.potion_reward_odds = PotionRewardOdds(self.rng)
+        # Post-combat "extras" carried out of the last finished combat, awaiting
+        # the reward screen (mirrors a CombatRoom's ExtraRewards being folded in
+        # by RewardsSet.WithRewardsFromRoom). finish_combat fills it;
+        # generate_combat_rewards drains it. First entry type: Thieving Hopper's
+        # returned card.
+        self.pending_reward_extras: list["RewardExtra"] = []
         # ── Run / act sequencing (populated by start_run) ────────────────
         # The full act list, rolled once at run start (ActModel.GetRandomList);
         # empty until start_run is called (single-act tests use start_act).
@@ -748,9 +755,15 @@ class RunState:
         cost changes) don't leak back — the game clones canonical cards into
         each combat the same way. Call finish_combat afterwards to sync the
         outcome back into the run.
+
+        Each combat card remembers which run-deck card it was copied from
+        (CombatState.deck_card_origins — the sim's CardModel.DeckVersion), so
+        effects that touch the deck itself (Thieving Hopper's steal) can be
+        reconciled by finish_combat.
         """
-        return CombatState(
-            starting_deck=copy.deepcopy(self.deck),
+        deck_copy = copy.deepcopy(self.deck)
+        combat = CombatState(
+            starting_deck=deck_copy,
             rng=self.rng,
             encounter=encounter,
             potions=self.potions,
@@ -761,6 +774,10 @@ class RunState:
             current_hp=self.hp,
             **kwargs,
         )
+        combat.deck_card_origins = {
+            id(copy_): orig for copy_, orig in zip(deck_copy, self.deck)
+        }
+        return combat
 
     def finish_combat(self, combat: CombatState, room_type: RoomType | None = None) -> None:
         """Sync a finished combat back into the run: HP, max HP (Feed), and
@@ -775,6 +792,22 @@ class RunState:
         self.potions = list(combat.player.potions)
         # In-combat gold gains (Hand of Greed) credit the run's ledger.
         self.gain_gold(combat.gold_gained)
+        # Thieving Hopper: SwipePower.Steal calls CardPileCmd.RemoveFromDeck at
+        # steal time, so a stolen card leaves the run deck permanently — the
+        # kill only *offers* it back (SpecialCardReward is take-or-skip), and
+        # an escaped hopper keeps it for good. The sim deep-copies the deck
+        # into each combat, so the removal is reconciled here through the
+        # deck_card_origins map. Source: src/Core/Models/Powers/SwipePower.cs
+        # (Steal / BeforeDeath).
+        for enemy in combat.enemies:
+            swipe = enemy.powers.get("swipe")
+            for stolen in getattr(swipe, "stolen_cards", ()):
+                origin = combat.deck_card_origins.get(id(stolen))
+                if origin is not None and origin in self.deck:
+                    self.deck.remove(origin)
+        # Carry any post-combat extras (a dead hopper's returned card) into
+        # the run for generate_combat_rewards to surface.
+        self.pending_reward_extras.extend(combat.pending_reward_extras)
         if room_type is not None and not self.is_dead:
             for relic in list(self.relics):
                 relic.after_combat_end(self, room_type)

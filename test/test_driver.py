@@ -227,6 +227,35 @@ def test_combat_rewards_offered_after_won_fight():
     assert run.gold >= gold_before + 10    # monster gold 10–20
 
 
+def test_special_card_rewards_offered_as_take_or_skip():
+    """A combat's pending extras (Thieving Hopper's returned card) surface as
+    their own one-card REWARD_CARD offers: take adds to the deck, skip loses
+    the card. Source: CombatRoom.ExtraRewards folded in by
+    RewardsSet.WithRewardsFromRoom; SpecialCardReward.OnSelect."""
+    from sts2_rl.cards import make_card
+    from sts2_rl.rewards import CombatRewards
+
+    for take, delta in ((True, 1), (False, 0)):
+        run = fresh_run(11)
+        special = make_card("strike")
+        rewards = CombatRewards(
+            room_type=RoomType.MONSTER, special_cards=[special],
+        )
+        offers = []
+
+        def scripted(request):
+            assert request.kind == DecisionKind.REWARD_CARD
+            offers.append(list(request.rewards.cards))
+            assert request.legal_actions() == [0, 1]  # take / skip
+            return 0 if take else 1
+
+        deck_before = len(run.deck)
+        RunDriver(run, scripted)._offer_rewards(rewards)
+        assert offers == [[special]]
+        assert len(run.deck) == deck_before + delta
+        assert (special in run.deck) is take
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # DecisionRequest legality
 # ═════════════════════════════════════════════════════════════════════════
