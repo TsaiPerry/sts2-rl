@@ -1153,3 +1153,30 @@ class TestPollinousCore:
         assert relic.turns_seen == 3  # turn 1 of the next combat
         cs2.end_turn()
         assert len(cs2.player.hand) == 7  # 4th cumulative turn
+
+
+class TestSlingOfCourage:
+    def test_two_strength_in_elite_combats_only(self):
+        """SlingOfCourage.cs: AfterRoomEntered with RoomType.Elite ->
+        PowerVar<StrengthPower>(2) on the owner (a combat power for that
+        fight). Gated on the combat's room type."""
+        from sts2_rl.rooms import RoomType
+        cs = fresh(relics=[make_relic("sling_of_courage")],
+                   room_type=RoomType.ELITE)
+        assert cs.player.powers["strength"].amount == 2
+        cs2 = fresh(relics=[make_relic("sling_of_courage")],
+                    room_type=RoomType.MONSTER)
+        assert "strength" not in cs2.player.powers
+
+
+class TestPantograph:
+    def test_heals_25_before_boss_combats_only(self):
+        """Pantograph.cs: BeforeCombatStart in a RoomType.Boss room ->
+        CreatureCmd.Heal(HealVar(25))."""
+        from sts2_rl.rooms import RoomType
+        cs = fresh(relics=[make_relic("pantograph")], room_type=RoomType.BOSS,
+                   max_hp=80, current_hp=40)
+        assert cs.player.hp == 65
+        cs2 = fresh(relics=[make_relic("pantograph")],
+                    room_type=RoomType.MONSTER, max_hp=80, current_hp=40)
+        assert cs2.player.hp == 40
