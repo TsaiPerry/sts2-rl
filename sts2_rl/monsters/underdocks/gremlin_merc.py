@@ -17,13 +17,15 @@ _DOUBLE_SMASH_HITS = 2
 _DOUBLE_SMASH_WEAK = 2
 _HEHE_DMG = 8
 _HEHE_STR = 2
+_THIEVERY_GOLD = 20  # ThieveryPower applied at 20 (GremlinMerc.AfterAddedToRoom)
 _SNEAKY_TACKLE_DMG = 9
 
 
 class GremlinMerc(MachineMonster):
-    """GIMME → DOUBLE_SMASH → HEHE → loop. Surprise: on death, a Sneaky
-    Gremlin and a Fat Gremlin jump out of the crate (SurprisePower). The
-    gold-stealing Thievery power is not ported — the sim has no gold."""
+    """GIMME → DOUBLE_SMASH → HEHE → loop, each move stealing up to 20 gold
+    after its attack (ThieveryPower.Steal — GremlinMerc.cs). Surprise: on
+    death, a Sneaky Gremlin and a Fat Gremlin jump out of the crate
+    (SurprisePower), the fat one carrying the stolen gold (HeistPower)."""
 
     min_hp = 47
     max_hp = 49
@@ -31,8 +33,14 @@ class GremlinMerc(MachineMonster):
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
-        from ...powers import SurprisePower
+        from ...powers import SurprisePower, ThieveryPower
         PowerCmd.apply(hooks, self, SurprisePower, 1)
+        PowerCmd.apply(hooks, self, ThieveryPower, _THIEVERY_GOLD)
+
+    def _steal(self) -> None:
+        thievery = self.powers.get("thievery")
+        if thievery is not None:
+            thievery.steal()
 
     def build_machine(self) -> MonsterMoveStateMachine:
         gimme = MoveState(
@@ -57,15 +65,18 @@ class GremlinMerc(MachineMonster):
 
     def _gimme(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _GIMME_DMG, _GIMME_HITS)
+        self._steal()
 
     def _double_smash(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _DOUBLE_SMASH_DMG, _DOUBLE_SMASH_HITS)
+        self._steal()
         from ...cmds import PowerCmd
         from ...powers import WeakPower
         PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, _DOUBLE_SMASH_WEAK)
 
     def _hehe(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _HEHE_DMG, 1)
+        self._steal()
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _HEHE_STR)

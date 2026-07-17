@@ -13,8 +13,10 @@ class TheLanternKey(Event):
     Source: TheLanternKey.cs
       RETURN_THE_KEY: gain 100 gold
       KEEP_THE_KEY → FIGHT: fight a Mysterious Knight (a Flail Knight with 6
-                     Strength and 6 Plating). The Lantern Key card reward and
-                     the map redirection it causes are not modelled.
+                     Strength and 6 Plating); the fight's reward screen offers
+                     the Lantern Key card as a take-or-skip SpecialCardReward
+                     (Fight()'s extraRewards). The map redirection the key
+                     causes is not modelled.
     """
 
     id = "the_lantern_key"
@@ -34,5 +36,10 @@ class TheLanternKey(Event):
         self._set_state("KEEP_THE_KEY", [EventOption("FIGHT", self._fight)])
 
     def _fight(self) -> None:
+        from ..cards import make_card
+        from ..rewards import RewardExtra
         self.pending_encounter = MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER
+        # TheLanternKey.cs Fight(): SpecialCardReward(new LanternKey) on the
+        # fight's reward screen.
+        self.pending_reward_extras = [RewardExtra.of_card(make_card("lantern_key"))]
         self._finish("KEEP_THE_KEY")

@@ -39,7 +39,7 @@ from .full_env import (
     apply_combat_action,
     combat_action_masks,
 )
-from .rewards import GOLD_REWARD_RANGES
+from .rewards import GOLD_REWARD_RANGES, CombatRewards
 from .rooms import RoomType
 
 if TYPE_CHECKING:
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
     from .combat import CombatState
     from .events.base import Event
     from .monsters import Encounter
-    from .rewards import CombatRewards
     from .run import RunState
     from .shop import MerchantInventory
 
@@ -278,7 +277,7 @@ class RunDriver:
         # TREASURE resolved inside enter_point (chest gold + relic); MAP is
         # a no-op in the sim.
 
-    def _run_combat(self, encounter: "Encounter", room_type) -> bool:
+    def _run_combat(self, encounter: "Encounter", room_type) -> "CombatState":
         run = self.run
         combat = run.create_combat(encounter, room_type=room_type)
         self._combat = combat
@@ -292,9 +291,10 @@ class RunDriver:
             self._combat = None
         run.finish_combat(combat, room_type=room_type)
         won = bool(combat.result and combat.result.player_won)
-        if won and room_type in GOLD_REWARD_RANGES:
+        if (won and room_type in GOLD_REWARD_RANGES
+                and encounter.should_give_rewards):
             self._offer_rewards(run.generate_combat_rewards(room_type))
-        return won
+        return combat
 
     def _offer_rewards(self, rewards: "CombatRewards") -> None:
         run = self.run
@@ -304,12 +304,39 @@ class RunDriver:
             ))
             if idx < len(rewards.cards):
                 run.add_card(rewards.cards[idx])
+        # Extra single-card rewards queued during combat (Thieving Hopper's
+        # returned card; CombatRoom.ExtraRewards -> SpecialCardReward). Each
+        # is its own take-or-skip choice (SpecialCardReward.OnSelect adds it
+        # to the deck; skipping loses it), surfaced through the existing
+        # REWARD_CARD decision as a one-card offer.
+        for card in rewards.special_cards:
+            offer = CombatRewards(room_type=rewards.room_type, cards=[card])
+            idx = self._ask(DecisionRequest(
+                kind=DecisionKind.REWARD_CARD, run=run, rewards=offer,
+            ))
+            if idx == 0:
+                run.add_card(card)
         if rewards.potion is not None:
             take = self._ask(DecisionRequest(
                 kind=DecisionKind.REWARD_POTION, run=run, rewards=rewards,
             )) == 0
             if take:
                 run.add_potion(rewards.potion)
+        # Extra potion offers (PotionReward extras: Punch-Off's fight purse).
+        # Each is its own take-or-skip decision, like the pity potion above.
+        for potion in rewards.special_potions:
+            self._offer_potion(potion, rewards.room_type)
+
+    def _offer_potion(self, potion, room_type) -> None:
+        """One take-or-skip potion offer (PotionReward / RewardsCmd.
+        OfferCustom), surfaced through the existing REWARD_POTION decision."""
+        run = self.run
+        offer = CombatRewards(room_type=room_type, potion=potion)
+        take = self._ask(DecisionRequest(
+            kind=DecisionKind.REWARD_POTION, run=run, rewards=offer,
+        )) == 0
+        if take:
+            run.add_potion(potion)
 
     def _run_event(self, event: "Event") -> None:
         event.begin()
@@ -320,10 +347,23 @@ class RunDriver:
             chosen = event.choose(idx)
             assert chosen, f"locked/unknown option {idx} slipped past the mask"
         if event.pending_encounter is not None:
-            # Event fights carry no room type: no post-combat rewards and no
-            # room-gated relic hooks (the sim leaves event-fight rewards
-            # unmodeled, per CLAUDE.md).
-            self._run_combat(event.pending_encounter, room_type=None)
+            # Event fights are real combat rooms (EventModel.
+            # EnterCombatWithoutExitingEvent builds a CombatRoom): every
+            # ported event encounter is RoomType.Monster, so victory shows
+            # the normal Monster reward screen unless the encounter opts out
+            # (EncounterModel.ShouldGiveRewards — Battleworn Dummy). The
+            # event's extra rewards ride that screen (extraRewards →
+            # CombatRoom.AddExtraReward).
+            run = self.run
+            run.pending_reward_extras.extend(event.pending_reward_extras)
+            combat = self._run_combat(event.pending_encounter, RoomType.MONSTER)
+            won = bool(combat.result and combat.result.player_won)
+            if won:
+                # EventModel.Resume (shouldResumeAfterCombat): the event
+                # grants its post-fight rewards; returned potions are
+                # take-or-skip offers (RewardsCmd.OfferCustom).
+                for potion in event.resume_after_combat(combat):
+                    self._offer_potion(potion, RoomType.MONSTER)
 
     def _run_shop(self, shop: "MerchantInventory") -> None:
         while True:

@@ -261,6 +261,68 @@ def create_reward_cards(
     return cards
 
 
+class RewardExtraKind(Enum):
+    """Which payload a queued post-combat extra carries.
+
+    Source: a combat (or combat event) queues extra reward instances onto its
+    room via CombatRoom.AddExtraReward (src/Core/Rooms/CombatRoom.cs); the
+    reward screen folds them in via RewardsSet.WithRewardsFromRoom
+    (src/Core/Rewards/RewardsSet.cs). Each Reward subtype maps to a kind here.
+    """
+
+    CARD = "card"        # SpecialCardReward — a specific card added to the deck
+    RELIC = "relic"      # a specific relic instance
+    POTION = "potion"    # a specific potion instance
+    UPGRADE = "upgrade"  # an upgrade granted to a specific deck card
+    GOLD = "gold"        # GoldReward(wasGoldStolenBack) — stolen gold returned
+
+
+@dataclass
+class RewardExtra:
+    """One "pending post-combat extra": a reward a combat appends during the
+    fight for the reward screen to surface afterwards. Exactly one payload
+    field is set, selected by `kind`.
+
+    Producers today: CARD — Thieving Hopper's returned card
+    (src/Core/Models/Powers/SwipePower.cs BeforeDeath -> SpecialCardReward)
+    and The Lantern Key's card (TheLanternKey.cs Fight); RELIC / POTION —
+    Punch-Off's fight purse (PunchOff.cs Fight: RelicReward + PotionReward,
+    rolled at screen time when the payload is None). UPGRADE is declared for
+    completeness but has no producer — Battleworn Dummy's upgrades are
+    granted directly on event resume (BattlewornDummy.cs Resume), not via
+    the reward screen."""
+
+    kind: RewardExtraKind
+    card: "Card | None" = None
+    relic: "Relic | None" = None
+    potion: "Potion | None" = None
+    upgrade: "Card | None" = None
+    gold: int = 0
+
+    @classmethod
+    def of_card(cls, card: Card) -> "RewardExtra":
+        """A returned/special card reward (SpecialCardReward)."""
+        return cls(kind=RewardExtraKind.CARD, card=card)
+
+    @classmethod
+    def of_relic(cls, relic: "Relic | None" = None) -> "RewardExtra":
+        """A relic reward (RelicReward); None rolls the grab bag at screen
+        time, like the game's RelicReward(player)."""
+        return cls(kind=RewardExtraKind.RELIC, relic=relic)
+
+    @classmethod
+    def of_potion(cls, potion: "Potion | None" = None) -> "RewardExtra":
+        """A potion offer (PotionReward); None rolls a random potion at
+        screen time, like the game's PotionReward(player)."""
+        return cls(kind=RewardExtraKind.POTION, potion=potion)
+
+    @classmethod
+    def of_gold(cls, amount: int) -> "RewardExtra":
+        """Stolen gold returned on the reward screen (GoldReward with
+        wasGoldStolenBack — HeistPower.cs BeforeDeath)."""
+        return cls(kind=RewardExtraKind.GOLD, gold=amount)
+
+
 @dataclass
 class CombatRewards:
     """One post-combat reward screen: gold and any relics are granted when the
@@ -274,6 +336,15 @@ class CombatRewards:
     # Relics granted with this screen: the elite's grab-bag relic, plus any
     # hook-added extras (Lava Rock's two on the act-1 boss).
     relics: "list[Relic]" = field(default_factory=list)
+    # Extra single-card rewards queued during combat (CombatRoom.ExtraRewards:
+    # Thieving Hopper's returned card, The Lantern Key's card). Unlike `cards`
+    # (a pick-one-of-N group), each is an independent take-or-skip
+    # SpecialCardReward.
+    special_cards: list[Card] = field(default_factory=list)
+    # Extra potion offers (PotionReward extras: Punch-Off's fight purse).
+    # Each is an independent take-or-skip offer, separate from the pity-rolled
+    # `potion` slot.
+    special_potions: "list[Potion]" = field(default_factory=list)
 
     @property
     def relic(self) -> "Relic | None":
@@ -287,6 +358,8 @@ class CombatRewards:
             and self.potion is None
             and not self.cards
             and not self.relics
+            and not self.special_cards
+            and not self.special_potions
         )
 
 
@@ -333,4 +406,32 @@ def generate_combat_rewards(
     # branch above.
     for relic in list(run.relics):
         relic.modify_combat_rewards(run, rewards)
+
+    # Pending post-combat extras queued during the fight or attached by a
+    # combat event (CombatRoom's ExtraRewards, folded in by
+    # RewardsSet.WithRewardsFromRoom). CARD = SpecialCardReward (Thieving
+    # Hopper's return, The Lantern Key's card): a take-or-skip offer. RELIC =
+    # RelicReward (Punch-Off's fight): payload-less entries roll the grab bag
+    # at screen time and are granted with the screen, like the elite branch
+    # above. POTION = PotionReward (Punch-Off's fight): payload-less entries
+    # roll a random potion at screen time; each is its own take-or-skip
+    # offer. Consume and clear the run's channel so each screen surfaces its
+    # own extras once.
+    for extra in run.pending_reward_extras:
+        if extra.kind == RewardExtraKind.CARD and extra.card is not None:
+            rewards.special_cards.append(extra.card)
+        elif extra.kind == RewardExtraKind.RELIC:
+            relic = extra.relic if extra.relic is not None else run.pull_relic_from_front()
+            if relic is not None:
+                run.add_relic(relic)
+                rewards.relics.append(relic)
+        elif extra.kind == RewardExtraKind.POTION:
+            potion = extra.potion if extra.potion is not None else run.random_potion()
+            rewards.special_potions.append(potion)
+        elif extra.kind == RewardExtraKind.GOLD and extra.gold > 0:
+            # Stolen gold returned (GoldReward wasGoldStolenBack): granted
+            # with the screen like the normal gold reward.
+            rewards.gold += extra.gold
+            run.gain_gold(extra.gold)
+    run.pending_reward_extras.clear()
     return rewards

@@ -1,8 +1,10 @@
 """Thieving Hopper (Hive). Sources: ThievingHopper.cs, ThievingHopperWeak.cs.
 
-The stolen card is removed from the combat piles for good — in the game it
-comes back as a post-combat reward when the hopper is killed, but the sim has
-no out-of-combat rewards (see SwipePower).
+The steal (SwipePower.cs Steal) removes the card from the run deck for good.
+Killing the hopper queues the stolen card's deck version as a take-or-skip
+post-combat reward (SwipePower.BeforeDeath -> CombatRoom.AddExtraReward with
+a SpecialCardReward); if the hopper escapes, BeforeDeath never runs and the
+card stays lost. See SwipePower.on_death and RunState.finish_combat.
 """
 from __future__ import annotations
 
@@ -75,6 +77,13 @@ class ThievingHopper(MachineMonster):
     def _thievery(self, ctx: CombatCtx) -> None:
         player = ctx.player
         candidates: list[Card] = list(player.draw_pile) + list(player.discard_pile)
+        # Only real deck cards can be stolen (ThieveryMove filters the piles
+        # on c.DeckVersion != null — combat-created cards like Slimed are
+        # never taken). Standalone combats have no deck (origins empty), so
+        # the filter only applies to run-backed combats.
+        origins = ctx.combat.deck_card_origins
+        if origins:
+            candidates = [c for c in candidates if id(c) in origins]
         for predicate in self._steal_priorities():
             subset = [c for c in candidates if predicate(c)]
             if subset:

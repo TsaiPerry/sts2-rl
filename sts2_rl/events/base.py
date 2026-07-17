@@ -29,7 +29,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    from ..combat import CombatState
     from ..monsters import Encounter
+    from ..potions import Potion
+    from ..rewards import RewardExtra
     from ..run import RunState
 
 
@@ -81,6 +84,11 @@ class Event:
         # Set when an option starts a combat (EnterCombatWithoutExitingEvent);
         # the caller enters it with run.create_combat(pending_encounter).
         self.pending_encounter: Encounter | None = None
+        # Extra rewards the event attaches to that fight's reward screen
+        # (EnterCombatWithoutExitingEvent's extraRewards; Punch-Off's
+        # relic + potion, The Lantern Key's card). The driver transfers them
+        # to run.pending_reward_extras when it runs the fight.
+        self.pending_reward_extras: list["RewardExtra"] = []
 
     # ── Subclass surface ─────────────────────────────────────────────────
 
@@ -96,6 +104,14 @@ class Event:
     def initial_options(self) -> list[EventOption]:
         """The INITIAL page's options (mirrors GenerateInitialOptions)."""
         raise NotImplementedError
+
+    def resume_after_combat(self, combat: "CombatState") -> "list[Potion]":
+        """Called by the driver after this event's pending_encounter fight is
+        won (mirrors EventModel.Resume for events entered with
+        shouldResumeAfterCombat). Grants any immediate rewards itself and
+        returns potions to surface as take-or-skip offers (RewardsCmd.
+        OfferCustom). Default: nothing (most combat events don't resume)."""
+        return []
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 

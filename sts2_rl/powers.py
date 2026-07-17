@@ -1574,11 +1574,66 @@ class SuckPower(Power):
             PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)
 
 
+class ThieveryPower(Power):
+    """The Gremlin Merc's gold theft (mirrors ThieveryPower.cs): after each
+    of his attacks he calls steal(), taking min(amount, the player's gold)
+    (PlayerCmd.LoseGold with GoldLossType.Stolen) and accumulating the total
+    on the power. The combat tracks the debit (CombatState.gold_stolen);
+    RunState.finish_combat settles the run's ledger. SurprisePower moves the
+    accumulated total onto the Fat Gremlin's HeistPower when the Merc dies."""
+
+    id = "thievery"
+    name = "Thievery"
+    power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self.gold_stolen = 0
+
+    def steal(self) -> None:
+        """ThieveryPower.cs Steal(): no-op if the target is dead or broke."""
+        combat = self.hooks.combat
+        if combat is None or combat.player.is_dead:
+            return
+        available = combat.player_gold + combat.gold_gained - combat.gold_stolen
+        amount = min(self.amount, available)
+        if amount <= 0:
+            return
+        combat.gold_stolen += amount
+        self.gold_stolen += amount
+
+
+class HeistPower(Power):
+    """Held by the Fat Gremlin that flees with the Merc's stolen gold
+    (mirrors HeistPower.cs): when the owner dies, the stolen amount is queued
+    as a reward-screen gold return (GoldReward with wasGoldStolenBack).
+    Escape never fires BeforeDeath — the gold stays lost."""
+
+    id = "heist"
+    name = "Heist"
+    power_type = PowerType.BUFF
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner or self.amount <= 0:
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .rewards import RewardExtra
+        combat.pending_reward_extras.append(RewardExtra.of_gold(self.amount))
+
+
 class SurprisePower(Power):
     """When the owner dies, a Sneaky Gremlin and a Fat Gremlin jump out of the
-    crate and join the fight (Gremlin Merc; mirrors SurprisePower.AfterDeath).
-    The stolen-gold transfer (Thievery/Heist) is not ported — the sim has no
-    gold."""
+    crate and join the fight (Gremlin Merc; mirrors SurprisePower.AfterDeath),
+    and the Merc's ThieveryPower total moves onto the Fat Gremlin as a
+    HeistPower — kill it before it flees to get the stolen gold back."""
 
     id = "surprise"
     name = "Surprise"
@@ -1587,11 +1642,15 @@ class SurprisePower(Power):
     def on_death(self, creature: Creature) -> None:
         if creature is not self.owner:
             return
-        from .cmds import CreatureCmd
+        from .cmds import CreatureCmd, PowerCmd
         from .monsters.underdocks.gremlin_merc import FatGremlin, SneakyGremlin
         rng = self.hooks.combat._rng
         CreatureCmd.add(self.hooks, SneakyGremlin(self.hooks, rng))
-        CreatureCmd.add(self.hooks, FatGremlin(self.hooks, rng))
+        fat = FatGremlin(self.hooks, rng)
+        CreatureCmd.add(self.hooks, fat)
+        thievery = self.owner.powers.get("thievery")
+        if thievery is not None and thievery.gold_stolen > 0:
+            PowerCmd.apply(self.hooks, fat, HeistPower, thievery.gold_stolen)
 
 
 class SmoggyPower(Power):
@@ -2113,10 +2172,15 @@ class FlutterPower(Power):
 
 
 class SwipePower(Power):
-    """Holds the card(s) the Thieving Hopper stole. In the game, killing the
-    owner returns the stolen card to the deck as a combat reward; the sim has
-    no out-of-combat rewards, so the cards simply stay gone (they were removed
-    from the combat piles when stolen)."""
+    """Holds the card(s) the Thieving Hopper stole (SwipePower.cs).
+
+    Steal() removes the card from the run deck for good; BeforeDeath — only
+    when the *owner* dies, never on escape — queues the deck version of each
+    stolen card as a take-or-skip SpecialCardReward on the combat room
+    (CombatRoom.AddExtraReward). Here: on_death appends a RewardExtra card
+    entry to the combat's pending_reward_extras, carrying the run-deck origin
+    of the stolen combat copy (the DeckVersion analogue); cards with no deck
+    origin never come back (BeforeDeath's DeckVersion == null early-out)."""
 
     id = "swipe"
     name = "Swipe"
@@ -2131,6 +2195,18 @@ class SwipePower(Power):
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
         self.stolen_cards: list[Card] = []
+
+    def on_death(self, creature: Creature) -> None:
+        if creature is not self.owner:
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        from .rewards import RewardExtra
+        for card in self.stolen_cards:
+            origin = combat.deck_card_origins.get(id(card))
+            if origin is not None:
+                combat.pending_reward_extras.append(RewardExtra.of_card(origin))
 
 
 class BurrowedPower(Power):

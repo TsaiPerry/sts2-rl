@@ -98,6 +98,9 @@ class Encounter:
 
     id: str
     monster_classes: list[type[Monster]]
+    # EncounterModel.ShouldGiveRewards — False suppresses the post-combat
+    # reward screen entirely (Battleworn Dummy's training fights).
+    should_give_rewards: bool = True
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
         return [cls(hooks, rng) for cls in self.monster_classes]

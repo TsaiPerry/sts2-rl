@@ -920,3 +920,65 @@ class TestRegistry:
             "sludge_spinner", "soul_fysh", "terror_eel", "toadpoles",
             "two_tailed_rats", "waterfall_giant",
         }
+
+
+class TestGremlinMercThievery:
+    """ThieveryPower.cs / HeistPower.cs / SurprisePower.cs: the Merc steals
+    min(20, the player's gold) after each of his attacks (GoldLossType.
+    Stolen); his death moves the stolen total onto a HeistPower on the Fat
+    Gremlin (SurprisePower.AfterDeath); killing that gremlin before it flees
+    queues the gold back as a reward-screen GoldReward (wasGoldStolenBack,
+    HeistPower.BeforeDeath); its escape keeps the gold lost."""
+
+    def _run_combat(self, gold, seed=0):
+        from sts2_rl.run import RunState
+        run = RunState(rng=random.Random(seed))
+        run.gold = gold
+        return run, run.create_combat(GREMLIN_MERC_NORMAL)
+
+    def test_steal_after_each_attack_settles_on_finish(self):
+        run, cs = self._run_combat(gold=100)
+        cs.end_turn()  # GIMME, then Steal()
+        assert cs.gold_stolen == 20
+        assert cs.enemy.powers["thievery"].gold_stolen == 20
+        cs.end_turn()  # DOUBLE_SMASH, then Steal()
+        assert cs.gold_stolen == 40
+        run.finish_combat(cs)
+        assert run.gold == 60
+
+    def test_steal_caps_at_available_gold(self):
+        run, cs = self._run_combat(gold=15)
+        cs.end_turn()
+        assert cs.gold_stolen == 15
+        cs.end_turn()
+        assert cs.gold_stolen == 15  # nothing left to take
+
+    def test_heist_returns_gold_when_fat_gremlin_dies(self):
+        from sts2_rl.rooms import RoomType
+        run, cs = self._run_combat(gold=100)
+        cs.end_turn()  # steal 20
+        DamageCmd.deal(cs.hooks, cs.enemies[0], 999, dealer=cs.player)
+        fat = cs.enemies[2]
+        assert fat.powers["heist"].amount == 20
+        DamageCmd.deal(cs.hooks, fat, 999, dealer=cs.player)
+        DamageCmd.deal(cs.hooks, cs.enemies[1], 999, dealer=cs.player)
+        run.finish_combat(cs, room_type=RoomType.MONSTER)
+        assert run.gold == 80  # the theft itself is settled
+        gold_before = run.gold
+        rewards = run.generate_combat_rewards(RoomType.MONSTER)
+        # The stolen 20 rides the reward screen on top of the normal
+        # Monster gold roll (10-20).
+        assert 30 <= rewards.gold <= 40
+        assert run.gold == gold_before + rewards.gold
+
+    def test_fled_fat_gremlin_keeps_gold_lost(self):
+        run, cs = self._run_combat(gold=100)
+        cs.end_turn()  # steal 20
+        DamageCmd.deal(cs.hooks, cs.enemies[0], 999, dealer=cs.player)
+        fat = cs.enemies[2]
+        cs.end_turn()  # gremlins wake up
+        cs.end_turn()  # sneaky tackles, fat flees
+        assert fat.escaped
+        assert cs.pending_reward_extras == []
+        run.finish_combat(cs)
+        assert run.gold == 80
