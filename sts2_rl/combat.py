@@ -319,7 +319,17 @@ class CombatState:
         if card.card_type != CardType.POWER:
             self.player.discard_pile.append(card)
 
-        self.hooks.before_card_played(card)
+        # Resolve the single creature this play targeted (mirrors CardPlay.
+        # Target): only ANY_ENEMY cards resolve to one enemy up front; AoE/
+        # self/random-target cards have no single target (Target stays None
+        # in the game too). Consulted by SurroundedPower to flip Kaiser Crab
+        # facing on any targeted card play, not just damaging ones.
+        played_target = (
+            self._ctx().resolve_target(target_idx)
+            if card.target_type == TargetType.ANY_ENEMY
+            else None
+        )
+        self.hooks.before_card_played(card, played_target)
         # BaseReplayCount (Hidden Gem) seeds the play count; enchantment
         # replays (Spiral/Glam) stack on top via the hook.
         play_count = self.hooks.modify_card_play_count(
@@ -332,7 +342,7 @@ class CombatState:
         is_attack = card.card_type == CardType.ATTACK
         for _ in range(play_count):
             if is_attack:
-                self.hooks.before_attack(self.player)
+                self.hooks.before_attack(self.player, card)
             if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
                 # Framework routes: call on_play once per living enemy.
                 for idx, e in enumerate(self.enemies):
@@ -345,7 +355,7 @@ class CombatState:
                 # Card handles its own routing (or doesn't need enemy iteration).
                 card.on_play(self._ctx(), target_idx)
             if is_attack:
-                self.hooks.after_attack(self.player)
+                self.hooks.after_attack(self.player, card)
             if self._all_enemies_dead() or self.player.is_dead:
                 break
 

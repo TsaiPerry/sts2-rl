@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .cards import Card
     from .combat import CombatState
+    from .creatures import Creature
 
 
 _ENCHANTMENT_CLASSES: dict[str, type[Enchantment]] = {}
@@ -86,7 +87,7 @@ class SownEnchantment(Enchantment):
     id = "sown"
     name = "Sown"
 
-    def before_card_played(self, card: Card) -> None:
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         if card is not self.card or self.disabled:
             return
         from .cmds import EnergyCmd

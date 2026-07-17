@@ -1844,11 +1844,19 @@ class VigorPower(Power):
             return self.amount
         return 0
 
-    def before_attack(self, dealer: Creature) -> None:
-        if dealer is self.owner and self._amount_when_attack_started is None:
-            self._amount_when_attack_started = self.amount
+    def before_attack(self, dealer: Creature, card: Card | None = None) -> None:
+        if dealer is not self.owner or self._amount_when_attack_started is not None:
+            return
+        # Mirrors VigorPower.cs BeforeAttack's
+        # `if (!command.DamageProps.IsPoweredAttack()) return;` — an unpowered
+        # attack (card.is_unpowered) neither grants nor consumes Vigor. card
+        # is None for monster attacks, which are always powered (DamageProps.
+        # monsterMove == ValueProp.Move), so they fall through to tracking.
+        if card is not None and card.is_unpowered:
+            return
+        self._amount_when_attack_started = self.amount
 
-    def after_attack(self, dealer: Creature) -> None:
+    def after_attack(self, dealer: Creature, card: Card | None = None) -> None:
         if dealer is not self.owner or self._amount_when_attack_started is None:
             return
         consumed = self._amount_when_attack_started
@@ -2467,10 +2475,15 @@ class CrabRagePower(Power):
 
 class SurroundedPower(Power):
     """Kaiser Crab: the player faces one arm; the other arm's attacks deal
-    50% more damage. Damaging a crab with a targeted card (or potion) turns
-    the player to face it; when an arm dies the player faces the survivor.
-    The game turns on any targeted card play — the sim approximates with
-    single-target card damage (mirrors SurroundedPower)."""
+    50% more damage. Playing ANY targeted card (or potion) at a crab turns
+    the player to face it — regardless of whether the card deals damage;
+    when an arm dies the player faces the survivor.
+
+    Source: SurroundedPower.cs — BeforeCardPlayed: `if (cardPlay.Target !=
+    null && cardPlay.Card.Owner == base.Owner.Player) await UpdateDirection
+    (cardPlay.Target);`. The trigger is the targeted card *play*, not
+    damage dealt — a non-damaging targeted Skill (e.g. Tremble) flips
+    facing just as an Attack does."""
 
     id = "surrounded"
     name = "Surrounded"
@@ -2510,20 +2523,11 @@ class SurroundedPower(Power):
         elif self.facing == "left" and "back_attack_right" in target.powers:
             self.facing = "right"
 
-    def on_damage_received(
-        self,
-        target: Creature,
-        amount: int,
-        dealer: Creature | None,
-        card: Card | None,
-        props: ValueProp = ValueProp.NONE,
-    ) -> None:
-        from .cards import TargetType
-        if (
-            dealer is self.owner
-            and card is not None
-            and card.target_type == TargetType.ANY_ENEMY
-        ):
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
+        # cardPlay.Card.Owner == base.Owner.Player is always true here: the
+        # sim is single-player and Surrounded is only ever applied to the
+        # player, so every played card belongs to this power's owner.
+        if target is not None:
             self._update_direction(target)
 
     def on_potion_used(self, potion, target: Creature | None) -> None:
@@ -2755,7 +2759,7 @@ class StranglePower(Power):
         # already past its BeforeCardPlayed — never triggers it on itself.
         self._amounts: dict[int, int] = {}
 
-    def before_card_played(self, card: Card) -> None:
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         self._amounts[id(card)] = self.amount
 
     def on_card_played(self, card: Card) -> None:

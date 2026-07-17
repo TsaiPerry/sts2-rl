@@ -315,28 +315,46 @@ class HookSystem:
             if hasattr(l, "on_enemy_side_end"):
                 l.on_enemy_side_end()
 
-    def before_attack(self, dealer: Creature) -> None:
-        """Fires before a monster attack command's hits (mirrors Hook.BeforeAttack)."""
+    def before_attack(self, dealer: Creature, card: Card | None = None) -> None:
+        """Fires before an attack command's hits — a monster attack move or a
+        player Attack-card play (mirrors Hook.BeforeAttack(AttackCommand),
+        which fires for every AttackCommand.Execute(), card- or monster-
+        sourced alike; AttackCommand.cs).
+
+        card is the source card for a player attack (mirrors AttackCommand.
+        ModelSource / FromCard), None for a monster attack (FromMonster never
+        sets ModelSource). Consulted by VigorPower to no-op on an unpowered
+        attack (mirrors VigorPower.cs BeforeAttack's
+        `if (!command.DamageProps.IsPoweredAttack()) return;` — no real
+        Attack card is unpowered today, but Vigor must not be worth tracking
+        one that is)."""
         for l in list(self._listeners):
             if hasattr(l, "before_attack"):
-                l.before_attack(dealer)
+                l.before_attack(dealer, card)
 
-    def after_attack(self, dealer: Creature) -> None:
-        """Fires after a monster attack command's last hit (mirrors Hook.AfterAttack);
-        powers that boost "the next attack" (Vigor) consume their stacks here."""
+    def after_attack(self, dealer: Creature, card: Card | None = None) -> None:
+        """Fires after an attack command's last hit (mirrors Hook.AfterAttack);
+        powers that boost "the next attack" (Vigor) consume their stacks here.
+
+        card mirrors before_attack's card param (AttackCommand.ModelSource)."""
         for l in list(self._listeners):
             if hasattr(l, "after_attack"):
-                l.after_attack(dealer)
+                l.after_attack(dealer, card)
 
     # ── Event hooks — card lifecycle ─────────────────────────────────────
 
-    def before_card_played(self, card: Card) -> None:
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         """Fires before a card's on_play() resolves (mirrors BeforeCardPlayed).
         Used by relics that must act on the card before its effects (e.g. Pen
-        Nib marking the 10th Attack for doubling)."""
+        Nib marking the 10th Attack for doubling).
+
+        target is the single creature the card was played at (mirrors
+        CardPlay.Target) — set only for a resolved single-enemy target, None
+        for untargeted/AoE plays. Consulted by SurroundedPower to flip Kaiser
+        Crab facing on any targeted card play, not just damaging ones."""
         for l in list(self._listeners):
             if hasattr(l, "before_card_played"):
-                l.before_card_played(card)
+                l.before_card_played(card, target)
 
     def on_card_played(self, card: Card) -> None:
         """Fires after a card's on_play() resolves."""
