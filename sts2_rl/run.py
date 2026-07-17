@@ -225,6 +225,10 @@ class RunState:
 
     def add_card(self, card: Card) -> Card:
         self.deck.append(card)
+        # RelicModel.AfterCardChangedPiles for the deck pile (Darkstone
+        # Periapt's Max HP on a gained Curse).
+        for relic in list(self.relics):
+            relic.after_card_added_to_deck(self, card)
         return card
 
     def remove_cards(self, cards: list[Card]) -> None:

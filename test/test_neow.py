@@ -534,3 +534,18 @@ def test_final_act_boss_rewards_empty_via_start_run():
 def test_start_run_requires_acts():
     with pytest.raises(ValueError):
         fresh_run(3).start_run(acts=[])
+
+
+def test_darkstone_periapt_max_hp_on_curse_gain():
+    """DarkstonePeriapt.cs: AfterCardChangedPiles — a Curse entering the deck
+    pile grants MaxHpVar(6) via CreatureCmd.GainMaxHp (raise + heal). Only
+    Curses trigger it."""
+    run = fresh_run(30)
+    run.add_relic("darkstone_periapt")
+    run.hp = 50
+    max_before, hp_before = run.max_hp, run.hp
+    run.add_card(make_card("injury"))
+    assert run.max_hp == max_before + 6
+    assert run.hp == hp_before + 6  # GainMaxHp heals the gained amount
+    run.add_card(make_card("strike"))
+    assert run.max_hp == max_before + 6  # non-curse: no trigger

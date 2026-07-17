@@ -141,6 +141,10 @@ class Relic:
         gold actually spent. `entry` is the sts2_rl.shop.MerchantEntry that
         was bought (Maw Bank deactivates on the first `gold_spent > 0`)."""
 
+    def after_card_added_to_deck(self, run, card) -> None:
+        """RelicModel.AfterCardChangedPiles, filtered to a card entering the
+        run's deck pile (Darkstone Periapt's +6 Max HP on a gained Curse)."""
+
     def after_rest_site_heal(self, run) -> None:
         """RelicModel.AfterRestSiteHeal (Stone Humidifier's +5 max HP)."""
 
