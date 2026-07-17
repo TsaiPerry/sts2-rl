@@ -18,8 +18,9 @@ class _BattleFriend(MachineMonster):
 
     Source: BattleFriendV1/2/3.cs — a single NOTHING_MOVE that loops, with
     AfterAddedToRoom applying BattlewornDummyTimeLimitPower(3). Fought in the
-    Battleworn Dummy event; the reward (potion / two upgrades / relic) is granted
-    post-combat only if the dummy is destroyed in time and is not modelled."""
+    Battleworn Dummy event; the reward (potion / two upgrades / relic) is
+    granted by the event's resume_after_combat only if the dummy is destroyed
+    before it flees (BattlewornDummy.cs Resume)."""
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -57,13 +58,18 @@ class BattleFriendV3(_BattleFriend):
 
 
 # The three encounters selected by the event's difficulty settings
-# (BattlewornDummyEventEncounter.cs picks the dummy by Setting).
+# (BattlewornDummyEventEncounter.cs picks the dummy by Setting; its
+# ShouldGiveRewards=false suppresses the normal reward screen — the event's
+# Resume grants the setting's reward instead).
 BATTLEWORN_DUMMY_SETTING_1 = Encounter(
-    id="battleworn_dummy_setting_1", monster_classes=[BattleFriendV1]
+    id="battleworn_dummy_setting_1", monster_classes=[BattleFriendV1],
+    should_give_rewards=False,
 )
 BATTLEWORN_DUMMY_SETTING_2 = Encounter(
-    id="battleworn_dummy_setting_2", monster_classes=[BattleFriendV2]
+    id="battleworn_dummy_setting_2", monster_classes=[BattleFriendV2],
+    should_give_rewards=False,
 )
 BATTLEWORN_DUMMY_SETTING_3 = Encounter(
-    id="battleworn_dummy_setting_3", monster_classes=[BattleFriendV3]
+    id="battleworn_dummy_setting_3", monster_classes=[BattleFriendV3],
+    should_give_rewards=False,
 )

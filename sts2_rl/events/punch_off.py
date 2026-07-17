@@ -43,8 +43,10 @@ class PunchOff(Event):
     Source: PunchOff.cs
       IsAllowed: TotalFloor >= 6
       NAB:        add an Injury curse, obtain a relic
-      I_CAN_TAKE_THEM → FIGHT: fight two Punch Constructs (relic + potion
-                        rewards, not resumed afterwards)
+      I_CAN_TAKE_THEM → FIGHT: fight two Punch Constructs; the fight's reward
+                        screen carries a RelicReward + PotionReward on top of
+                        the normal Monster rewards (Fight()'s extraRewards →
+                        EnterCombatWithoutExitingEvent; not resumed afterwards)
     """
 
     id = "punch_off"
@@ -73,5 +75,9 @@ class PunchOff(Event):
         self._set_state("I_CAN_TAKE_THEM", [EventOption("FIGHT", self._fight)])
 
     def _fight(self) -> None:
+        from ..rewards import RewardExtra
         self.pending_encounter = PUNCH_OFF_EVENT_ENCOUNTER
+        # PunchOff.cs Fight(): RelicReward + PotionReward ride the fight's
+        # reward screen (both rolled at screen time).
+        self.pending_reward_extras = [RewardExtra.of_relic(), RewardExtra.of_potion()]
         self._finish("I_CAN_TAKE_THEM")

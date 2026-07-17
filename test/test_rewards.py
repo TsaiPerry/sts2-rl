@@ -313,3 +313,20 @@ def test_treasure_room_grants_gold_and_relic():
     assert res is not None, "walk never hit the treasure row"
     assert res.relic is not None
     assert 42 <= res.gold <= 52
+
+
+def test_reward_extras_relic_and_potion_drain():
+    """RELIC/POTION extras (RewardsSet.cs WithRewardsFromRoom folding in
+    CombatRoom.ExtraRewards; RelicReward/PotionReward roll their payload at
+    screen time): a payload-less relic extra pulls from the grab bag and is
+    granted with the screen; a payload-less potion extra becomes a
+    take-or-skip offer on special_potions."""
+    from sts2_rl.rewards import RewardExtra
+    run = RunState(rng=random.Random(21))
+    run.pending_reward_extras = [RewardExtra.of_relic(), RewardExtra.of_potion()]
+    relics_before = len(run.relics)
+    rewards = run.generate_combat_rewards(RoomType.MONSTER)
+    assert len(run.relics) == relics_before + 1
+    assert rewards.relics, "relic extra should be granted with the screen"
+    assert len(rewards.special_potions) == 1
+    assert run.pending_reward_extras == []

@@ -158,8 +158,9 @@ def test_event_combat_path():
     driver = RunDriver(run, scripted)
     driver._run_event(make_event("dense_vegetation", run))
     assert combat_requests, "the event fight never asked for combat actions"
-    # Event fights carry no room type → no reward screen was generated.
-    assert all(req.combat.room_type is None for req in combat_requests)
+    # Event fights are real Monster combat rooms (see
+    # test_event_fight_gives_normal_monster_rewards for the reward screen).
+    assert all(req.combat.room_type is RoomType.MONSTER for req in combat_requests)
 
 
 def test_shop_purchase_and_leave():
@@ -303,3 +304,128 @@ def test_combat_request_uses_shared_mask():
     expected = [int(i) for i in combat_action_masks(combat, run.max_potions).nonzero()[0]]
     assert req.legal_actions() == expected
     assert 0 in expected                   # end turn always legal
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Combat-event rewards (PunchOff.cs / TheLanternKey.cs / BattlewornDummy.cs)
+# ═════════════════════════════════════════════════════════════════════════
+
+def _event_fight_asker(event_path, log):
+    """Walk event options by preferred key, play the first legal non-end-turn
+    combat action, take/first-pick every other decision."""
+    def ask(request):
+        log.append(request)
+        if request.kind == DecisionKind.EVENT:
+            keys = request.event.option_keys()
+            for wanted in event_path:
+                if wanted in keys:
+                    return keys.index(wanted)
+            return request.legal_actions()[0]
+        if request.kind == DecisionKind.COMBAT:
+            legal = request.legal_actions()
+            non_end = [a for a in legal if a != 0]
+            return non_end[0] if non_end else 0
+        return 0
+    return ask
+
+
+def test_event_fight_gives_normal_monster_rewards():
+    # In the game every event fight is a real CombatRoom whose encounter has
+    # RoomType.Monster (DenseVegetationEventEncounter.cs), so victory shows
+    # the normal Monster reward screen (RewardsSet.cs GenerateRewardsFor).
+    run = fresh_run(5, max_hp=100000, hp=100000)
+    log = []
+    driver = RunDriver(run, _event_fight_asker(("FIGHT", "REST"), log))
+    gold_before = run.gold
+    driver._run_event(make_event("dense_vegetation", run))
+    combat_reqs = [r for r in log if r.kind == DecisionKind.COMBAT]
+    assert combat_reqs, "the event fight never asked for combat actions"
+    assert all(r.combat.room_type is RoomType.MONSTER for r in combat_reqs)
+    assert any(r.kind == DecisionKind.REWARD_CARD for r in log)
+    assert run.gold - gold_before >= 10  # Monster gold 10-20
+
+
+def test_punch_off_fight_grants_relic_and_potion_extras():
+    # PunchOff.cs Fight(): extras = RelicReward + PotionReward on top of the
+    # normal Monster rewards (EnterCombatWithoutExitingEvent).
+    run = fresh_run(7, max_hp=100000, hp=100000)
+    log = []
+    driver = RunDriver(run, _event_fight_asker(("I_CAN_TAKE_THEM", "FIGHT"), log))
+    relics_before = len(run.relics)
+    driver._run_event(make_event("punch_off", run))
+    assert len(run.relics) == relics_before + 1  # RelicReward (grab bag)
+    assert any(r.kind == DecisionKind.REWARD_POTION for r in log)
+    assert any(r.kind == DecisionKind.REWARD_CARD for r in log)
+
+
+def test_lantern_key_fight_offers_the_key_card():
+    # TheLanternKey.cs Fight(): SpecialCardReward(LanternKey) — a one-card
+    # take-or-skip offer; taking adds the card to the deck.
+    run = fresh_run(3, max_hp=100000, hp=100000)
+    log = []
+    driver = RunDriver(run, _event_fight_asker(("KEEP_THE_KEY", "FIGHT"), log))
+    driver._run_event(make_event("the_lantern_key", run))
+    offers = [
+        r for r in log
+        if r.kind == DecisionKind.REWARD_CARD
+        and r.rewards is not None and len(r.rewards.cards) == 1
+        and r.rewards.cards[0].id == "lantern_key"
+    ]
+    assert offers, "the Lantern Key card was never offered"
+    assert any(c.id == "lantern_key" for c in run.deck)
+
+
+def test_battleworn_dummy_fight_rewards(monkeypatch):
+    # BattlewornDummyEventEncounter.cs: ShouldGiveRewards=false — no normal
+    # reward screen; BattlewornDummy.cs Resume grants the setting's reward
+    # (Setting1: a take-or-skip potion offer) only on a timely kill.
+    from sts2_rl.monsters.glory.battle_friend import BattleFriendV1
+    monkeypatch.setattr(BattleFriendV1, "min_hp", 1)
+    monkeypatch.setattr(BattleFriendV1, "max_hp", 1)
+    run = fresh_run(2, max_hp=100000, hp=100000)
+    log = []
+    driver = RunDriver(run, _event_fight_asker(("SETTING_1",), log))
+    gold_before = run.gold
+    driver._run_event(make_event("battleworn_dummy", run))
+    assert any(r.kind == DecisionKind.REWARD_POTION for r in log)
+    assert len(run.potions) == 1  # asker takes the offer
+    assert not any(r.kind == DecisionKind.REWARD_CARD for r in log)
+    assert run.gold == gold_before  # no normal rewards for the dummy fight
+
+
+def test_battleworn_dummy_resume_outcomes():
+    # BattlewornDummy.cs Resume: Setting2 upgrades 2 random deck cards,
+    # Setting3 obtains a grab-bag relic; a fled dummy (RanOutOfTime) grants
+    # nothing.
+    from sts2_rl.cmds import CreatureCmd, DamageCmd
+    from sts2_rl.events import make_event
+
+    # Setting 2 — two random upgrades
+    run = fresh_run(11)
+    event = make_event("battleworn_dummy", run).begin()
+    event.choose("SETTING_2")
+    combat = run.create_combat(event.pending_encounter, room_type=RoomType.MONSTER)
+    DamageCmd.deal(combat.hooks, combat.enemies[0], 10000)
+    offers = event.resume_after_combat(combat)
+    assert offers == []
+    assert sum(1 for c in run.deck if c.upgrade_level > 0) == 2
+
+    # Setting 3 — grab-bag relic
+    run = fresh_run(12)
+    event = make_event("battleworn_dummy", run).begin()
+    event.choose("SETTING_3")
+    combat = run.create_combat(event.pending_encounter, room_type=RoomType.MONSTER)
+    DamageCmd.deal(combat.hooks, combat.enemies[0], 10000)
+    relics_before = len(run.relics)
+    event.resume_after_combat(combat)
+    assert len(run.relics) == relics_before + 1
+
+    # Fled dummy — nothing
+    run = fresh_run(13)
+    event = make_event("battleworn_dummy", run).begin()
+    event.choose("SETTING_2")
+    combat = run.create_combat(event.pending_encounter, room_type=RoomType.MONSTER)
+    CreatureCmd.escape(combat.hooks, combat.enemies[0])
+    offers = event.resume_after_combat(combat)
+    assert offers == []
+    assert all(c.upgrade_level == 0 for c in run.deck)
