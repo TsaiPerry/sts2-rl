@@ -2661,6 +2661,52 @@ class FeedingFrenzyPower(TemporaryStrengthPower):
     power_type = PowerType.BUFF
 
 
+class DiamondDiademPower(Power):
+    """Powered attack damage against the owner is HALVED; removed after the
+    enemy side's turn ends (DiamondDiademPower.cs — granted by Diamond Diadem
+    when the owner ended their turn having played few cards)."""
+
+    id = "diamond_diadem"
+    name = "Diamond Diadem"
+    power_type = PowerType.BUFF
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None,
+        card: Card | None,
+    ) -> float:
+        # The powered-attack gate is applied by the damage pipeline caller
+        # (only is_powered_attack damage runs these hooks, DamageCmd).
+        if target is not self.owner:
+            return 1.0
+        return 0.5
+
+    def on_enemy_side_end(self) -> None:
+        self._expire()
+
+
+class DrawCardsNextTurnPower(Power):
+    """Draw N extra cards at the start of the owner's next turn, then remove
+    (Relax; mirrors DrawCardsNextTurnPower.ModifyHandDraw + the turn-start
+    removal). Counter-stacked, so replaying stacks the pending draws."""
+
+    id = "draw_cards_next_turn"
+    name = "Draw Cards Next Turn"
+    power_type = PowerType.BUFF
+
+    def modify_hand_draw(self, player: Creature, count: int) -> int:
+        if player is not self.owner:
+            return count
+        return count + self.amount
+
+    def on_player_turn_started(self, player: Creature) -> None:
+        # Post-draw turn start: the bonus has been drawn — expire.
+        if player is self.owner:
+            self._expire()
+
+
 class EnergyNextTurnPower(Power):
     """Gain N energy at the start of the owner's next turn, then remove
     (Outmaneuver; mirrors EnergyNextTurnPower.AfterEnergyReset → GainEnergy +
@@ -3846,6 +3892,8 @@ ALL_POWERS: dict[str, type[Power]] = {
         SlothPower,
         WasteAwayPower,
         FeedingFrenzyPower,
+        DiamondDiademPower,
+        DrawCardsNextTurnPower,
         EnergyNextTurnPower,
         ReboundPower,
         HelloWorldPower,

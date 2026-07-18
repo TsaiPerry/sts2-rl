@@ -61,6 +61,20 @@ _MERCHANT_COST_BY_RARITY: dict[RelicRarity, int] = {
 }
 
 
+class RestSiteOption:
+    """An extra rest-site action provided by a relic (mirrors RestSiteOption /
+    Hook.TryModifyRestSiteOptions — Pael's Growth's Clone, Pumpkin Candle's
+    Kindle, Meat Cleaver's Cook). `key` mirrors the source's OptionId;
+    `on_select(run)` performs the effect (RestSiteOption.OnSelect)."""
+
+    def __init__(self, key: str, on_select) -> None:
+        self.key = key
+        self.on_select = on_select
+
+    def __repr__(self) -> str:
+        return f"RestSiteOption({self.key})"
+
+
 _RELIC_CLASSES: dict[str, type[Relic]] = {}
 
 
@@ -87,9 +101,15 @@ class Relic:
     # RelicModel.IsAllowedInShops — a handful of relics (Amethyst Aubergine,
     # Bowler Hat, Lucky Fysh, Old Coin, The Courier) opt out of shop stock.
     is_allowed_in_shops: bool = True
+    # RelicModel.AddsPet — the relic brings an event pet (Pael's Legion).
+    # Player.HasEventPet gates Pael's Legion option at the Pael shrine.
+    adds_pet: bool = False
 
     def __init__(self) -> None:
         self.combat: CombatState | None = None
+        # RelicModel.IsWax (Toy Box): a wax copy of a relic; every 3rd combat
+        # Toy Box melts one (the sim removes it from the run's relics).
+        self.is_wax = False
 
     @property
     def merchant_cost(self) -> int:
@@ -135,6 +155,11 @@ class Relic:
     def after_room_entered(self, run, point, room_type) -> None:
         """RelicModel.AfterRoomEntered."""
 
+    def after_shop_entered(self, run, shop) -> None:
+        """Fired when a merchant room's inventory has been stocked (the
+        merchant branch of RelicModel.AfterRoomEntered — Lord's Parasol buys
+        the whole inventory). `shop` is the sts2_rl.shop.MerchantInventory."""
+
     def after_item_purchased(self, run, entry, gold_spent) -> None:
         """RelicModel.AfterItemPurchased — fires after any successful
         merchant purchase (card, relic, potion, or card removal), with the
@@ -155,6 +180,11 @@ class Relic:
 
     def after_rest_site_heal(self, run) -> None:
         """RelicModel.AfterRestSiteHeal (Stone Humidifier's +5 max HP)."""
+
+    def modify_rest_site_options(self, run, options: "list[RestSiteOption]") -> None:
+        """RelicModel.TryModifyRestSiteOptions — append extra rest-site
+        actions (Pael's Growth's Clone, Pumpkin Candle's Kindle, Meat
+        Cleaver's Cook). The driver surfaces them after Heal/Smith/Leave."""
 
     def modify_rest_site_heal_rewards(self, run, rewards) -> None:
         """RelicModel.TryModifyRestSiteHealRewards — mutate the reward

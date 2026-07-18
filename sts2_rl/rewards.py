@@ -345,6 +345,21 @@ class CombatRewards:
     # Each is an independent take-or-skip offer, separate from the pity-rolled
     # `potion` slot.
     special_potions: "list[Potion]" = field(default_factory=list)
+    # CardReward.CanReroll (Driftwood): the card choice may be rerolled once —
+    # the reroll regenerates the options through the same creation path and
+    # clears the flag (CardReward.Reroll).
+    can_reroll: bool = False
+    # Hook.TryModifyCardRewardAlternatives (Pael's Wing): the relic offering a
+    # SACRIFICE alternative on this card reward — choosing it forgoes the
+    # cards and calls relic.on_sacrifice(run) (every 2nd sacrifice pulls the
+    # next grab-bag relic).
+    sacrifice_relic: "Relic | None" = None
+
+    def reroll(self, run) -> None:
+        """CardReward.Reroll: one-shot — clear the flag and regenerate the
+        card options via the same room-typed creation path (Populate)."""
+        self.can_reroll = False
+        self.cards = create_reward_cards(run, ROOM_RARITY_ODDS[self.room_type])
 
     @property
     def relic(self) -> "Relic | None":

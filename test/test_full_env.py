@@ -130,7 +130,10 @@ def test_full_power_vocabulary_triples():
     from sts2_rl import CombatState, PowerCmd
     from sts2_rl.powers import ALL_POWERS, RitualPower
 
-    assert POWER_IDS == sorted(ALL_POWERS)                     # no curated subset
+    # No curated subset: every registered power has a vocab slot. (The frozen
+    # vocab is append-only — ids added after the first freeze land at the end,
+    # so the full list is no longer alphabetical; vocab.py's ordering rules.)
+    assert set(POWER_IDS) == set(ALL_POWERS)
     c = CombatState(rng=random.Random(0), encounter=DEFAULT_ENCOUNTERS[0])
     e = c.enemies[0]
     PowerCmd.apply(c.hooks, e, RitualPower, 3)

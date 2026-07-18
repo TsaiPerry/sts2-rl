@@ -153,9 +153,14 @@ class TestRegistry:
         # evolves into it after 5 elite wins, SwordOfStone.cs) = 139, plus the
         # Golden Compass (Ancient relic; golden-paths its act's map) = 140,
         # plus the 28 Ancient relics of the Neow run-start pool
-        # (neow_relics.py: 20 positive + 8 curse options) = 168, all
-        # constructible by id, and the original head is present.
-        assert len(ALL_RELICS) == 168
+        # (neow_relics.py: 20 positive + 8 curse options) = 168, plus the
+        # Act-2/3 Ancient-shrine pools as they land (Orobas: 10 relics +
+        # Black Blood, Pael: 10, Tezcatara: 8 new — Very Hot Cocoa and Golden
+        # Compass were already ported, Nonupeipe: 9 new — Looming Fruit was
+        # already ported) = 206, plus Tanx's 10 = 216, plus Vakuu's 10 = 226
+        # — the full Act-2/3 Ancient-shrine pools — all constructible by id,
+        # and the original head is present.
+        assert len(ALL_RELICS) == 226
         assert "golden_compass" in ALL_RELICS
         for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
                     "neows_bones", "silver_crucible"):

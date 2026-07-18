@@ -1,0 +1,62 @@
+"""Orobas — one of the three Act-2 (Hive) Ancients.
+
+Port of Orobas.cs GenerateInitialOptions: three relic options —
+
+  1. one of OptionPool1 (Electric Shrymp / Glass Eye / Sand Castle) plus a
+     rolled fourth entry: Prismatic Gem with odds 1/3, otherwise Sea Glass
+     (another character's pool; a documented stub in the single-character sim);
+  2. one of OptionPool2 (Alchemical Coffer / Driftwood / Radiant Pearl);
+  3. one of OptionPool3 — Touch of Orobas (gated on a starter relic being
+     present, SetupForPlayer) and/or Archaic Tooth (gated on the deck holding
+     a transcendence starter card, i.e. Bash). If both gates fail the slot is
+     the locked OPTION_POOL_3_LOCKED option.
+"""
+from __future__ import annotations
+
+from ..relics import ALL_RELICS  # noqa: F401  (parity with neow's imports)
+from .ancient import AncientEvent
+from .base import EventOption, register_event
+
+OPTION_POOL_1: tuple[str, ...] = ("electric_shrymp", "glass_eye", "sand_castle")
+OPTION_POOL_2: tuple[str, ...] = ("alchemical_coffer", "driftwood", "radiant_pearl")
+
+_PRISMATIC_ODDS = 1 / 3
+
+
+@register_event
+class OrobasEvent(AncientEvent):
+    id = "orobas"
+    name = "Orobas"
+
+    def initial_options(self) -> list[EventOption]:
+        rng = self.rng
+        run = self.run
+
+        pool1 = list(OPTION_POOL_1)
+        pool1.append(
+            "prismatic_gem" if rng.random() < _PRISMATIC_ODDS else "sea_glass"
+        )
+        first = rng.choice(pool1)
+
+        second = rng.choice(list(OPTION_POOL_2))
+
+        from ..relics.archaic_tooth import ArchaicTooth
+        from ..relics.base import RelicRarity
+        from ..relics.touch_of_orobas import TouchOfOrobas
+
+        pool3: list[str] = []
+        starter = next(
+            (r for r in run.relics if r.rarity == RelicRarity.STARTER), None
+        )
+        if starter is not None and starter.id in TouchOfOrobas.REFINEMENTS:
+            pool3.append("touch_of_orobas")
+        if any(c.id in ArchaicTooth.TRANSCENDENCE for c in run.deck):
+            pool3.append("archaic_tooth")
+
+        options = [self._relic_option(first), self._relic_option(second)]
+        if pool3:
+            options.append(self._relic_option(rng.choice(pool3)))
+        else:
+            # Orobas.cs: a locked placeholder option (null onChosen).
+            options.append(EventOption("OPTION_POOL_3_LOCKED", None))
+        return options

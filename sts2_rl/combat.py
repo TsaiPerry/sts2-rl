@@ -80,6 +80,7 @@ class CombatState:
         current_hp: int | None = None,
         room_type=None,
         max_potions: int | None = None,
+        player_gold: int = 0,
     ) -> None:
         self._rng = rng or random.Random()
         # The run-layer RoomType this combat happens in (Monster/Elite/Boss),
@@ -144,8 +145,13 @@ class CombatState:
         # standalone combats), and gold_stolen accumulates in-combat thefts
         # (Gremlin Merc's Thievery — PlayerCmd.LoseGold GoldLossType.Stolen).
         # finish_combat settles the ledger.
-        self.player_gold = 0
+        self.player_gold = player_gold
         self.gold_stolen = 0
+        # Gold voluntarily spent in combat (PlayerCmd.LoseGold with a normal
+        # loss type — Seal of Gold's 5-gold-per-turn). Settled by
+        # RunState.finish_combat like thefts, but kept separate so "stolen"
+        # keeps its meaning.
+        self.gold_spent = 0
         # Pending post-combat "extras": reward entries a combat (or combat
         # event) appends during the fight for the reward screen to surface
         # afterwards (mirrors CombatRoom.AddExtraReward accumulating a room's
@@ -310,6 +316,23 @@ class CombatState:
 
         return True
 
+    def auto_play(self, card: Card, target_idx: int | None = None) -> bool:
+        """Play a card outside the normal hand-index / energy flow (mirrors
+        CardCmd.AutoPlay): used by content that plays a card for free
+        (Imbued enchantment turn 1, Whispering Earring). The card is removed
+        from the hand if present; energy is NOT spent here (callers that must
+        pay spend it themselves). Returns False if not in the player turn."""
+        if self.phase != Phase.PLAYER_TURN:
+            return False
+        if card in self.player.hand:
+            self.player.hand.remove(card)
+        self._resolve_card_play(card, target_idx)
+        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=True)
+        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
+            self._end_combat(player_won=False)
+        return True
+
     def _resolve_card_play(self, card: Card, target_idx: int | None) -> None:
         """Shared card-play resolution: result pile placement, play-count loop,
         exhaust-keyword move, and the played hook. The card must already be
@@ -467,6 +490,16 @@ class CombatState:
     def end_turn(self) -> None:
         """Fire turn-end hooks, discard hand, run enemy turn, begin next player turn."""
         if self.phase != Phase.PLAYER_TURN:
+            return
+
+        # Hook.ShouldTakeExtraTurn (Pael's Eye): a listener may claim an extra
+        # player turn — the enemy side is skipped entirely and a fresh player
+        # turn starts (block clear → energy → hooks → draw). on_extra_turn
+        # lets the granter do its bookkeeping (exhaust the hand, mark used).
+        if self.hooks.should_take_extra_turn(self.player):
+            self.hooks.on_extra_turn(self.player)
+            self.turn += 1
+            self.player.start_turn()
             return
 
         self.hooks.on_player_turn_end(self.player)

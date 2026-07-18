@@ -113,9 +113,21 @@ class DecisionRequest:
             if self.run.upgradable_cards():
                 legal.append(REST_SMITH)
             legal.append(REST_LEAVE)
+            # Relic-provided extra options (Hook.TryModifyRestSiteOptions:
+            # Clone / Kindle / Cook) at indices 3+.
+            legal.extend(
+                REST_LEAVE + 1 + i
+                for i in range(len(self.run.rest_site_options()))
+            )
             return legal
         if kind == DecisionKind.REWARD_CARD:
-            return list(range(len(self.rewards.cards) + 1))  # last = skip
+            n = len(self.rewards.cards)
+            legal = list(range(n + 1))               # last = skip
+            if self.rewards.can_reroll:
+                legal.append(n + 1)                  # Driftwood: reroll
+            if self.rewards.sacrifice_relic is not None:
+                legal.append(n + 2)                  # Pael's Wing: sacrifice
+            return legal
         if kind == DecisionKind.REWARD_POTION:
             legal = []
             if len(self.run.potions) < self.run.max_potions:
@@ -159,6 +171,16 @@ class RunResult:
     decisions: int
 
 
+# The Ancient shrine(s) each act rolls at its starting node (ActModel.
+# GetUnlockedAncients). Act 1 (overgrowth/underdocks) is always Neow, fired at
+# run start; Act 2 (Hive) and Act 3 (Glory) roll one uniformly at act entry.
+# Source: Hive.cs / Glory.cs AllAncients.
+ACT_ANCIENTS: dict[str, tuple[str, ...]] = {
+    "hive": ("orobas", "pael", "tezcatara"),
+    "glory": ("nonupeipe", "tanx", "vakuu"),
+}
+
+
 class RunDriver:
     """Drives one full run over a RunState, asking `ask` for every decision."""
 
@@ -169,12 +191,14 @@ class RunDriver:
         acts: list[str] | None = None,
         ascension: int = 0,
         include_neow: bool = True,
+        include_ancients: bool = True,
     ) -> None:
         self.run = run
         self._ask_fn = ask
         self._acts = acts
         self._ascension = ascension
         self._include_neow = include_neow
+        self._include_ancients = include_ancients
         self.decisions = 0
         # The combat currently being resolved (context for SELECT_CARDS).
         self._combat: "CombatState | None" = None
@@ -250,6 +274,7 @@ class RunDriver:
                     run.complete_run()
                 else:
                     run.advance_act()
+                    self._maybe_run_ancient()
         return RunResult(
             victory=run.victory,
             hp=max(0, run.hp),
@@ -299,10 +324,21 @@ class RunDriver:
     def _offer_rewards(self, rewards: "CombatRewards") -> None:
         run = self.run
         if rewards.cards:
-            idx = self._ask(DecisionRequest(
-                kind=DecisionKind.REWARD_CARD, run=run, rewards=rewards,
-            ))
-            if idx < len(rewards.cards):
+            while True:
+                idx = self._ask(DecisionRequest(
+                    kind=DecisionKind.REWARD_CARD, run=run, rewards=rewards,
+                ))
+                if idx == len(rewards.cards) + 1:
+                    # Driftwood's reroll: regenerate the options (one-shot —
+                    # reroll() clears can_reroll) and re-ask.
+                    rewards.reroll(run)
+                    continue
+                break
+            if idx == len(rewards.cards) + 2:
+                # Pael's Wing: sacrifice the card reward
+                # (EndSelectionAndCompleteReward — no card is taken).
+                rewards.sacrifice_relic.on_sacrifice(run)
+            elif idx < len(rewards.cards):
                 run.add_card(rewards.cards[idx])
         # Extra single-card rewards queued during combat (Thieving Hopper's
         # returned card; CombatRoom.ExtraRewards -> SpecialCardReward). Each
@@ -365,6 +401,27 @@ class RunDriver:
                 for potion in event.resume_after_combat(combat):
                     self._offer_potion(potion, RoomType.MONSTER)
 
+    def _maybe_run_ancient(self) -> None:
+        """Fire the Ancient shrine at act entry for acts that roll one (Hive,
+        Glory). Act 1's Neow is fired at run start instead. The ancient is
+        rolled uniformly from the act's pool (ActModel.GetUnlockedAncients),
+        stands the player at the Ancient node, and offers relics."""
+        if not self._include_ancients:
+            return
+        pool = ACT_ANCIENTS.get(self.run.act_config.name)
+        if not pool:
+            return
+        from .events import ALL_EVENTS, make_event
+
+        # Mirror ActModel.GetUnlockedAncients: only ancients that exist in the
+        # sim are offerable (an unported ancient is treated as not-yet-unlocked,
+        # exactly like the epoch gating on Orobas/Neow). Falls away naturally
+        # once all six are implemented.
+        available = [a for a in pool if a in ALL_EVENTS]
+        if not available:
+            return
+        self._run_event(make_event(self.run.rng.choice(available), self.run))
+
     def _run_shop(self, shop: "MerchantInventory") -> None:
         while True:
             idx = self._ask(DecisionRequest(
@@ -384,6 +441,10 @@ class RunDriver:
             self._offer_rewards(self.run.rest_heal_rewards())
         elif idx == REST_SMITH:
             self.run.rest_upgrade()
+        elif idx > REST_LEAVE:
+            # A relic-provided option (Clone / Kindle / Cook).
+            options = self.run.rest_site_options()
+            options[idx - REST_LEAVE - 1].on_select(self.run)
         # REST_LEAVE: nothing.
 
 

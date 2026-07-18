@@ -239,4 +239,158 @@ class GlamEnchantment(Enchantment):
             self.disabled = True
 
 
+@register_enchantment
+class ImbuedEnchantment(Enchantment):
+    """Imbued — the enchanted Skill auto-plays itself on turn 1.
+
+    Source: Imbued.cs — CanEnchantCardType == Skill; AfterAutoPrePlayPhase-
+    Entered (turn ≤ 1) auto-plays the card. The sim fires it from the post-draw
+    turn-start slot (on_player_turn_started) on turn 1. Granted by Electric
+    Shrymp (Orobas). ShouldStartAtBottomOfDrawPile is cosmetic and not modeled.
+    """
+
+    id = "imbued"
+    name = "Imbued"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type == CardType.SKILL
+
+    def on_player_turn_started(self, player) -> None:
+        if (
+            self.card is not None
+            and self.combat.turn == 1
+            and self.card in player.hand
+        ):
+            self.combat.auto_play(self.card)
+
+
+@register_enchantment
+class GoopyEnchantment(Enchantment):
+    """Goopy — the enchanted Defend card gains Exhaust and, each time it is
+    played, permanently grants +1 additional Block on later plays.
+
+    Source: Goopy.cs — CanEnchant requires the Defend tag; OnEnchant adds
+    Exhaust; EnchantBlockAdditive returns Amount-1; AfterCardPlayed (own card)
+    Amount++. Granted by Pael's Claw (amount 1). The sim grows Amount within a
+    combat; run-level persistence of the growth (the game syncs DeckVersion)
+    is a documented simplification of the per-combat-cloned enchantment model.
+    """
+
+    id = "goopy"
+    name = "Goopy"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        return super().can_enchant(card) and "defend" in card.tags
+
+    def attach(self, card: Card) -> None:
+        super().attach(card)
+        card.exhausts = True
+
+    def reset(self) -> None:
+        super().reset()
+        if self.card is not None:
+            self.card.exhausts = True
+
+    def modify_block_additive(self, target, amount: int, card: Card | None) -> int:
+        if card is self.card:
+            return self.amount - 1
+        return 0
+
+    def on_card_played(self, card: Card) -> None:
+        if card is self.card:
+            self.amount += 1
+
+
+@register_enchantment
+class TezcatarasEmberEnchantment(Enchantment):
+    """Tezcatara's Ember — the enchanted card costs 0, gains Eternal, and deals
+    +3 damage on powered attacks.
+
+    Source: TezcatarasEmber.cs — OnEnchant sets cost to 0 and adds Eternal;
+    EnchantDamageAdditive returns DamageVar(3) on powered attacks. Granted by
+    Nutritious Soup on Basic Strikes.
+    """
+
+    id = "tezcataras_ember"
+    name = "Tezcatara's Ember"
+    damage = 3
+
+    def attach(self, card: Card) -> None:
+        super().attach(card)
+        card._energy_cost = 0
+        card.eternal = True
+
+    def reset(self) -> None:
+        super().reset()
+        if self.card is not None:
+            self.card._energy_cost = 0
+            self.card.eternal = True
+
+    def modify_damage_additive(self, target, amount: int, dealer, card: Card | None) -> int:
+        # DamageCmd only calls this hook for powered attacks.
+        if card is self.card:
+            return self.damage
+        return 0
+
+
+@register_enchantment
+class SwiftEnchantment(Enchantment):
+    """Swift — the first time the enchanted card is played each combat, draw
+    [amount] cards.
+
+    Source: Swift.cs — OnPlay: if Status Normal, Draw(Amount), Status Disabled.
+    Granted by Beautiful Bracelet (amount 3).
+    """
+
+    id = "swift"
+    name = "Swift"
+
+    def on_card_played(self, card: Card) -> None:
+        if card is self.card and not self.disabled:
+            from .cmds import DrawCmd
+
+            DrawCmd.draw(self.combat.player, self.amount)
+            self.disabled = True
+
+
+@register_enchantment
+class InstinctEnchantment(Enchantment):
+    """Instinct — the enchanted Attack deals double damage.
+
+    Source: Instinct.cs — CanEnchantCardType == Attack; EnchantDamage-
+    Multiplicative returns 2 on powered attacks. Granted by Tri-Boomerang.
+    """
+
+    id = "instinct"
+    name = "Instinct"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type == CardType.ATTACK
+
+    def modify_damage_multiplicative(
+        self, target, amount: int, dealer, card: Card | None
+    ) -> float:
+        # DamageCmd only calls this hook for powered attacks.
+        if card is self.card:
+            return 2
+        return 1
+
+
+@register_enchantment
+class CloneEnchantment(Enchantment):
+    """Clone — inert on its own; marks a card for the Clone rest-site option
+    (Pael's Growth) to duplicate. Source: Clone.cs (no combat behavior).
+    """
+
+    id = "clone"
+    name = "Clone"
+
+
 ALL_ENCHANTMENTS: dict[str, type[Enchantment]] = dict(_ENCHANTMENT_CLASSES)

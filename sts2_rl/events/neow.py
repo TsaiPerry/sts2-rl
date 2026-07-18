@@ -26,8 +26,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..relics import ALL_RELICS, make_relic
-from .base import Event, EventOption, register_event
+from ..relics import ALL_RELICS
+from .ancient import AncientEvent
+from .base import EventOption, register_event
 
 if TYPE_CHECKING:
     from ..run import RunState
@@ -72,7 +73,7 @@ def neow_relic_pool(run: "RunState") -> list[str]:
 
 
 @register_event
-class NeowEvent(Event):
+class NeowEvent(AncientEvent):
     id = "neow"
     name = "Neow"
 
@@ -94,10 +95,3 @@ class NeowEvent(Event):
         rng.shuffle(positives)
         offered = positives[:2] + [curse]
         return [self._relic_option(rid) for rid in offered]
-
-    def _relic_option(self, relic_id: str) -> EventOption:
-        def on_chosen() -> None:
-            self.run.add_relic(make_relic(relic_id))
-            self._finish("DONE")
-
-        return EventOption(relic_id, on_chosen)

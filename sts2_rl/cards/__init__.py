@@ -53,7 +53,16 @@ from .trash_heap_cards import (
     RipAndTearCard,
     StackCard,
 )
+from .apotheosis import ApotheosisCard
+from .apparition import ApparitionCard
+from .brightest_flame import BrightestFlameCard
+from .wish import WishCard
+from .luminesce import LuminesceCard
 from .mad_science import MadScienceCard
+from .maul import MaulCard
+from .whistle import WhistleCard
+from .relax import RelaxCard
+from .soot import SootCard
 from .neows_fury import NeowsFuryCard
 from .spoils_map import SpoilsMapCard
 

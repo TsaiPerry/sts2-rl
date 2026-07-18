@@ -610,6 +610,26 @@ class HookSystem:
                     return False
         return True
 
+    def should_take_extra_turn(self, player: PlayerCombatState) -> bool:
+        """True from any listener grants the player an extra turn instead of
+        the enemy side acting (Hook.ShouldTakeExtraTurn — Pael's Eye). Unlike
+        the other predicates this aggregates with ANY, mirroring the game's
+        `players.Any(ShouldTakeExtraTurn)` check in the turn driver."""
+        for l in list(self._listeners):
+            if hasattr(l, "should_take_extra_turn"):
+                if l.should_take_extra_turn(player):
+                    return True
+        return False
+
+    def on_extra_turn(self, player: PlayerCombatState) -> None:
+        """An extra player turn was just granted, before the fresh turn starts
+        (folds the game's BeforeSideTurnEndEarly hand-exhaust + the
+        AfterTakingExtraTurn bookkeeping into one notification — the sim has
+        no Early hook phases)."""
+        for l in list(self._listeners):
+            if hasattr(l, "on_extra_turn"):
+                l.on_extra_turn(player)
+
     def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
         """False from any listener prevents the card from being played (e.g. Ringing).
 

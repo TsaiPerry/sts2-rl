@@ -707,6 +707,11 @@ class RunState:
             from .shop import MerchantInventory
 
             resolution.shop = MerchantInventory.create(self)
+            # RelicModel.AfterRoomEntered's merchant branch needs the stocked
+            # inventory (Lord's Parasol buys everything), so the sim fires a
+            # dedicated hook once it exists.
+            for relic in list(self.relics):
+                relic.after_shop_entered(self, resolution.shop)
         self.room_set.mark_visited(room_type)
         self._last_room_types = [room_type]
         self.map_history.append((point, room_type))
@@ -739,6 +744,20 @@ class RunState:
             if on_complete is not None:
                 gold += on_complete(self)
         return gold
+
+    def rest_site_options(self):
+        """Hook.TryModifyRestSiteOptions over the run's relics: the extra
+        rest-site actions beyond Heal/Smith/Leave (Pael's Growth's Clone,
+        Pumpkin Candle's Kindle, Meat Cleaver's Cook)."""
+        options: list = []
+        for relic in list(self.relics):
+            relic.modify_rest_site_options(self, options)
+        return options
+
+    @property
+    def has_event_pet(self) -> bool:
+        """Player.HasEventPet — any relic with AddsPet (Pael's Legion)."""
+        return any(r.adds_pet for r in self.relics)
 
     def rest_heal(self) -> int:
         """Take the rest site's heal option (30% of max HP, truncated), then
@@ -798,14 +817,16 @@ class RunState:
             max_potions=kwargs.pop("max_potions", self.max_potions),
             max_hp=self.max_hp,
             current_hp=self.hp,
+            # The run's balance is what in-combat thefts (Gremlin Merc's
+            # Thievery) can take and Seal of Gold can spend — the game reads
+            # Player.Gold live, so it must be visible from turn 1 (which
+            # starts during construction).
+            player_gold=self.gold,
             **kwargs,
         )
         combat.deck_card_origins = {
             id(copy_): orig for copy_, orig in zip(deck_copy, self.deck)
         }
-        # The run's balance is what in-combat thefts (Gremlin Merc's
-        # Thievery) can take — the game reads Player.Gold live.
-        combat.player_gold = self.gold
         return combat
 
     def finish_combat(self, combat: CombatState, room_type: RoomType | None = None) -> None:
@@ -825,6 +846,7 @@ class RunState:
         # the live balance, so the net never goes below 0.
         self.gain_gold(combat.gold_gained)
         self.lose_gold(combat.gold_stolen)
+        self.lose_gold(combat.gold_spent)
         # Thieving Hopper: SwipePower.Steal calls CardPileCmd.RemoveFromDeck at
         # steal time, so a stolen card leaves the run deck permanently — the
         # kill only *offers* it back (SpecialCardReward is take-or-skip), and

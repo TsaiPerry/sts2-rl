@@ -137,12 +137,22 @@ class MerchantEntry:
     def enough_gold(self) -> bool:
         return self.cost <= self.run.gold
 
-    def purchase(self) -> bool:
-        """Buy this entry if stocked and affordable. Returns success."""
-        if not self.is_stocked or not self.enough_gold:
+    def purchase(self, ignore_cost: bool = False) -> bool:
+        """Buy this entry if stocked and affordable. Returns success.
+
+        ignore_cost mirrors OnTryPurchaseWrapper's ignoreCost (Lord's
+        Parasol): the entry is bought for free."""
+        if not self.is_stocked or (not ignore_cost and not self.enough_gold):
             return False
-        gold_spent = self.cost
-        if not self._buy():
+        gold_spent = 0 if ignore_cost else self.cost
+        saved_cost = self.cost
+        if ignore_cost:
+            self.cost = 0
+        try:
+            bought = self._buy()
+        finally:
+            self.cost = saved_cost
+        if not bought:
             return False
         # Hook.AfterItemPurchased (MerchantEntry.OnTryPurchaseWrapper): fires
         # for every successful purchase with the gold actually spent (Maw
