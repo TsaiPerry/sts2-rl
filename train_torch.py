@@ -15,6 +15,13 @@ exists (so re-running ``py train_torch.py`` trains the same model further instea
 of clobbering it); pass ``--fresh`` to start a new model, or ``--resume PATH`` to
 continue from a different checkpoint.
 
+Built for unattended multi-day runs: saves are atomic, each periodic save also
+drops an iter-stamped snapshot (``--keep-snapshots``) and updates
+``<stem>.best.pt`` (``--best-metric``) so a late policy collapse is
+recoverable, and every iteration appends a row to ``<stem>.csv``. Checkpoints
+carry ``global_step``, so a resume continues the step count, the CSV and the
+env seeds rather than replaying the original run's opening episodes.
+
 This is the baseline loop from the plan: a plain MLP torso (``sts2_rl.models``)
 trained with PPO. The one thing MaskablePPO did for us — applying
 ``env.action_masks()`` — we now do ourselves, at BOTH act-time and update-time,
@@ -37,6 +44,9 @@ before and after rather than assuming.
 from __future__ import annotations
 
 import argparse
+import csv
+import glob
+import math
 import os
 import time
 from collections import deque
@@ -48,6 +58,16 @@ import torch.nn as nn
 from sts2_rl import STS2FullCombatEnv, checkpoints
 from sts2_rl.checkpoints import ModelSpec
 from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
+
+# --lr's default lives here rather than in add_argument so the flag can stay
+# None when unset: on a resume that difference decides whether we keep the
+# optimizer's restored LR or override it.
+DEFAULT_LR = 3e-4
+
+# One row per iteration in <stem>.csv. CSV, not TensorBoard, on purpose: zero
+# dependencies, and a multi-day run's curve stays plottable from anything.
+CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
+              "ep_len", "pg", "v", "ent", "kl", "clipfrac", "lr"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,10 +113,23 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--fresh", action="store_true",
                     help="start a new model even if a checkpoint exists at --save")
     ap.add_argument("--save-every", type=int, default=50, help="iterations between checkpoints")
+    ap.add_argument("--keep-snapshots", type=int, default=5,
+                    help="how many iter-stamped snapshots (<stem>.iter000123.pt) "
+                         "to keep alongside the live checkpoint, so a late "
+                         "policy collapse can be rolled back (0 = none)")
+    ap.add_argument("--best-metric", choices=["win", "ep_ret", "none"], default=None,
+                    help="which 100-episode statistic <stem>.best.pt tracks "
+                         "(default: win for --env combat/run, ep_ret for the "
+                         "floor-only column curriculum). This is the exploring "
+                         "policy's own metric, not a greedy eval — treat it as "
+                         "a rollback candidate, not a leaderboard")
     # rollout / PPO
     ap.add_argument("--n-envs", type=int, default=8)
     ap.add_argument("--n-steps", type=int, default=512, help="rollout length per env")
-    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--lr", type=float, default=None,
+                    help=f"learning rate (default: {DEFAULT_LR:g}). Left as None "
+                         f"when unset so a resume can tell 'use the checkpoint's "
+                         f"restored LR' from an explicit override")
     ap.add_argument("--gamma", type=float, default=None,
                     help="discount (default: 0.99 for --env combat, 0.999 for "
                          "the run-scale envs — a full run is 1000+ steps, and "
@@ -121,6 +154,11 @@ def parse_args() -> argparse.Namespace:
         }[args.env]
     if args.gamma is None:
         args.gamma = 0.99 if args.env == "combat" else 0.999
+    if args.best_metric is None:
+        # The column curriculum's reward IS floors reached, and its win rate
+        # (a full three-act clear) stays 0 for most of training — ep_ret is
+        # the only statistic that moves there.
+        args.best_metric = "ep_ret" if args.env == "column" else "win"
     if args.env != "combat" and args.encounter:
         raise SystemExit("--encounter applies to --env combat only.")
     if args.env == "combat" and args.acts:
@@ -241,16 +279,30 @@ def main() -> None:
               f"(pass --fresh to start a new model).")
 
     agent = make_model(args, obs_dim, n_actions).to(device)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr, eps=1e-5)
+    optimizer = torch.optim.Adam(
+        agent.parameters(), lr=DEFAULT_LR if args.lr is None else args.lr, eps=1e-5)
 
     start_iter = 0
+    start_step = 0
+    best_score = -math.inf
     if resume_path:
         ckpt = torch.load(resume_path, map_location=device, weights_only=False)
         check_checkpoint(ckpt, args, obs_dim, n_actions)
         agent.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optim"])
         start_iter = ckpt.get("iteration", 0)
-        print(f"Resumed from {resume_path} at iteration {start_iter}")
+        # Pre-hardening checkpoints carry neither field; 0 / -inf just means
+        # "step count restarts here" and "no best on record yet".
+        start_step = ckpt.get("global_step", 0)
+        best_score = ckpt.get("best_score", -math.inf)
+        # load_state_dict restores the *saved* LR, so an explicit --lr on a
+        # resume would otherwise be silently ignored.
+        if args.lr is not None:
+            for group in optimizer.param_groups:
+                group["lr"] = args.lr
+            print(f"Overriding the checkpoint's learning rate with --lr {args.lr:g}")
+        print(f"Resumed from {resume_path} at iteration {start_iter} "
+              f"(step {start_step})")
 
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs
@@ -266,9 +318,12 @@ def main() -> None:
         return torch.as_tensor(
             np.array([e.action_masks() for e in envs]), dtype=torch.bool, device=device)
 
-    # initial state (distinct seed per env, then their RNG streams run on)
+    # Initial state: distinct seed per env, then their RNG streams run on.
+    # start_iter is folded in so a resumed run opens on fresh episodes instead
+    # of replaying the original run's first draws.
     next_obs = torch.as_tensor(
-        np.array([e.reset(seed=args.seed + i)[0] for i, e in enumerate(envs)]),
+        np.array([e.reset(seed=args.seed + start_iter * E + i)[0]
+                  for i, e in enumerate(envs)]),
         dtype=torch.float32, device=device)
     next_mask = stack_masks()
     next_done = torch.zeros(E, device=device)
@@ -283,7 +338,7 @@ def main() -> None:
     batch_size = N * E
     mb_size = batch_size // args.minibatches
     n_iters = args.timesteps // batch_size
-    global_step = 0
+    global_step = start_step
     t0 = time.time()
 
     for iteration in range(start_iter, start_iter + n_iters):
@@ -398,10 +453,14 @@ def main() -> None:
                 break
 
         # ── logging ─────────────────────────────────────────────────────────
-        sps = int(global_step / (time.time() - t0))
+        # sps measures THIS process's throughput, so a resume doesn't report
+        # the whole history's steps over this run's seconds.
+        elapsed = time.time() - t0
+        sps = int((global_step - start_step) / elapsed)
         ret = np.mean(ret_hist) if ret_hist else float("nan")
         wr = np.mean(win_hist) if win_hist else float("nan")
         eplen = np.mean(len_hist) if len_hist else float("nan")
+        lr = optimizer.param_groups[0]["lr"]
         print(
             f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
             f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
@@ -410,35 +469,122 @@ def main() -> None:
             f"clipfrac {np.mean(clipfracs):.3f}",
             flush=True,
         )
+        if args.save:
+            append_csv_row(csv_path(args.save), dict(
+                iter=iteration, global_step=global_step,
+                wall_seconds=round(elapsed, 3), sps=sps,
+                ep_ret=ret, win=wr, ep_len=eplen,
+                pg=pg_loss.item(), v=v_loss.item(), ent=ent_loss.item(),
+                kl=approx_kl.item(), clipfrac=float(np.mean(clipfracs)), lr=lr,
+            ))
 
+        # ── checkpointing ───────────────────────────────────────────────────
         if args.save and (iteration + 1) % args.save_every == 0:
-            save(agent, optimizer, iteration + 1, args)
+            score = {"win": wr, "ep_ret": ret}.get(args.best_metric, float("nan"))
+            if not math.isnan(score) and score > best_score:
+                best_score = float(score)
+                new_best = True
+            else:
+                new_best = False
+            payload = checkpoint_payload(
+                agent, optimizer, iteration + 1, args, global_step, best_score)
+            atomic_save(payload, args.save)
+            if args.keep_snapshots:
+                atomic_save(payload, snapshot_path(args.save, iteration + 1))
+                rotate_snapshots(args.save, args.keep_snapshots)
+            if new_best:
+                atomic_save(payload, best_path(args.save))
 
     if args.save:
-        save(agent, optimizer, start_iter + n_iters, args)
+        save(agent, optimizer, start_iter + n_iters, args,
+             global_step=global_step, best_score=best_score)
         print(f"Saved to {args.save}")
 
     for e in envs:
         e.close()
 
 
-def save(agent: nn.Module, optimizer, iteration: int, args) -> None:
-    import os
-    d = os.path.dirname(args.save)
+def _stem(save_path: str) -> str:
+    """``runs/x.pt`` -> ``runs/x`` — the prefix every sidecar file hangs off."""
+    return save_path[:-3] if save_path.endswith(".pt") else save_path
+
+
+def snapshot_path(save_path: str, iteration: int) -> str:
+    """Zero-padded so snapshots sort lexicographically by iteration."""
+    return f"{_stem(save_path)}.iter{iteration:06d}.pt"
+
+
+def best_path(save_path: str) -> str:
+    return f"{_stem(save_path)}.best.pt"
+
+
+def csv_path(save_path: str) -> str:
+    return f"{_stem(save_path)}.csv"
+
+
+def atomic_save(payload: dict, path: str) -> None:
+    """Serialize to ``<path>.tmp``, then rename over ``<path>``.
+
+    ``os.replace`` is atomic on both POSIX and Windows, so a crash or Ctrl-C
+    mid-write can only ever leave the *previous* checkpoint in place — never
+    a half-written one. Without this, an interrupted save destroys the only
+    file a long run can auto-resume from.
+    """
+    d = os.path.dirname(path)
     if d:
         os.makedirs(d, exist_ok=True)
-    torch.save(
-        {
-            "model": agent.state_dict(),
-            "optim": optimizer.state_dict(),
-            "iteration": iteration,
-            "obs_dim": agent.obs_dim,
-            "n_actions": agent.n_actions,
-            "hidden": agent.hidden,
-            "arch": args.arch,
-            "obs_schema": env_obs_schema(args),
-            "env_kind": args.env,
-        },
+    tmp = path + ".tmp"
+    try:
+        torch.save(payload, tmp)
+        os.replace(tmp, path)
+    except BaseException:               # incl. KeyboardInterrupt
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def rotate_snapshots(save_path: str, keep: int) -> None:
+    """Delete all but the ``keep`` most recent iter-stamped snapshots."""
+    snaps = sorted(glob.glob(f"{_stem(save_path)}.iter*.pt"))
+    for stale in snaps[:max(0, len(snaps) - keep)]:
+        os.remove(stale)
+
+
+def append_csv_row(path: str, row: dict) -> None:
+    """Append one iteration's stats, writing the header only for a new file
+    (so a resumed run continues the same CSV instead of restarting it)."""
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    fresh = not os.path.exists(path) or os.path.getsize(path) == 0
+    with open(path, "a", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=CSV_FIELDS)
+        if fresh:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def checkpoint_payload(agent: nn.Module, optimizer, iteration: int, args,
+                       global_step: int, best_score: float = -math.inf) -> dict:
+    return {
+        "model": agent.state_dict(),
+        "optim": optimizer.state_dict(),
+        "iteration": iteration,
+        "global_step": global_step,
+        "best_score": best_score,
+        "obs_dim": agent.obs_dim,
+        "n_actions": agent.n_actions,
+        "hidden": agent.hidden,
+        "arch": args.arch,
+        "obs_schema": env_obs_schema(args),
+        "env_kind": args.env,
+    }
+
+
+def save(agent: nn.Module, optimizer, iteration: int, args, *,
+         global_step: int = 0, best_score: float = -math.inf) -> None:
+    atomic_save(
+        checkpoint_payload(agent, optimizer, iteration, args, global_step, best_score),
         args.save,
     )
 
