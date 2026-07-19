@@ -10,6 +10,7 @@ class GoldenPearl(Relic):
     id = "golden_pearl"
     name = "Golden Pearl"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     GOLD = 150
 
     def after_obtained(self, run) -> None:

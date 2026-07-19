@@ -28,10 +28,10 @@ The training plan this implements (see RL.md for the base env's design):
      Events (Golden Compass semantics), so the sampled combat count is the
      actual combat count.
 
-Phase 2 is the unmodified STS2RunEnv with the same reward settings: the
-observation/action layout here is IDENTICAL (this class only overrides the
-RunState factory and reward defaults), so a checkpoint trained here resumes
-directly on --env run. Prefer annealing — mix real maps in gradually — over
+Phase 2 is the unmodified STS2RunEnv, whose reward defaults are these same
+floor-only settings: the observation/action layout here is IDENTICAL (this
+class only overrides the RunState factory), so a checkpoint trained here
+resumes directly on --env run. Prefer annealing — mix real maps in gradually — over
 a hard swap, since map *choices* never occur on a single column (the MAP
 decision each floor has exactly one option).
 
@@ -259,16 +259,17 @@ class ColumnRunState(RunState):
 class STS2CurriculumRunEnv(STS2RunEnv):
     """STS2RunEnv on randomized single-column maps with floor-only reward.
 
-    Same observation/action layout and RUN_OBS_SCHEMA_VERSION as the parent
-    — checkpoints move freely between this env and STS2RunEnv. Only the
-    RunState factory (column maps) and the reward defaults differ:
+    Same observation/action layout, RUN_OBS_SCHEMA_VERSION and reward
+    defaults as the parent (STS2RunEnv defaults to this curriculum's
+    floor-only reward:
 
       reward     = floor_reward × floors gained        (the metric)
                  + reward_win on final-boss victory    (a few floors' worth)
 
     hp/act shaping default to 0 — the critic derives HP's value from the
-    observation (see the module docstring). All parent kwargs (acts,
-    card_obs, max_steps, …) pass through.
+    observation; see the module docstring) — checkpoints move freely between
+    this env and STS2RunEnv. Only the RunState factory (column maps)
+    differs. All parent kwargs (acts, card_obs, max_steps, …) pass through.
     """
 
     def __init__(
@@ -277,23 +278,9 @@ class STS2CurriculumRunEnv(STS2RunEnv):
         column_rooms: int | None = None,
         room_weights: dict[str, float] | None = None,
         min_special_floor: int = 6,
-        floor_reward: float = 1.0,
-        reward_win: float = 3.0,
-        reward_loss: float = 0.0,
-        win_hp_bonus: float = 0.0,
-        hp_reward_scale: float = 0.0,
-        act_reward: float = 0.0,
         **kwargs,
     ) -> None:
-        super().__init__(
-            floor_reward=floor_reward,
-            reward_win=reward_win,
-            reward_loss=reward_loss,
-            win_hp_bonus=win_hp_bonus,
-            hp_reward_scale=hp_reward_scale,
-            act_reward=act_reward,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self._column_rooms = column_rooms
         self._room_weights = dict(room_weights) if room_weights is not None else None
         self._min_special_floor = min_special_floor

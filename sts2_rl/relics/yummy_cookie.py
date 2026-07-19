@@ -11,6 +11,7 @@ class YummyCookie(Relic):
     id = "yummy_cookie"
     name = "Yummy Cookie"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     CARDS = 4
 

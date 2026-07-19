@@ -11,6 +11,7 @@ class ElectricShrymp(Relic):
     id = "electric_shrymp"
     name = "Electric Shrymp"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
         from ..enchantments import ImbuedEnchantment, make_enchantment

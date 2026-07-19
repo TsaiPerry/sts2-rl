@@ -10,3 +10,4 @@ class DollysMirror(Relic):
     id = "dollys_mirror"
     name = "Dolly's Mirror"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

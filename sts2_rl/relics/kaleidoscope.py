@@ -14,4 +14,5 @@ class Kaleidoscope(Relic):
     id = "kaleidoscope"
     name = "Kaleidoscope"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     is_allowed_at_neow = False

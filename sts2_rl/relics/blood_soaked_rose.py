@@ -16,6 +16,7 @@ class BloodSoakedRose(Relic):
     id = "blood_soaked_rose"
     name = "Blood-Soaked Rose"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     ENERGY = 1
 

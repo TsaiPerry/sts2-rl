@@ -376,6 +376,23 @@ class TestCascade:
         play(cs, CascadeCard(), energy=1)
         assert cs.enemy.hp == before - 6
 
+    def test_stratagem_draining_the_reshuffled_pile_stops_the_pull(self):
+        # Stratagem's on-shuffle fetch can empty the just-reshuffled draw
+        # pile; Cascade then stops pulling (mirrors AutoPlayFromDrawPile's
+        # null check after ShuffleIfNecessary).
+        from sts2_rl.cmds import PowerCmd
+        from sts2_rl.powers import StratagemPower
+
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, StratagemPower, 1)
+        strike = StrikeCard()
+        cs.player.draw_pile.clear()
+        cs.player.discard_pile[:] = [strike]
+        before = cs.enemy.hp
+        play(cs, CascadeCard(), energy=1)
+        assert strike in cs.player.hand  # fetched by Stratagem, not played
+        assert cs.enemy.hp == before
+
     def test_upgraded_plays_x_plus_one(self):
         cs = fresh()
         cs.player.draw_pile.extend([StrikeCard(), StrikeCard()])

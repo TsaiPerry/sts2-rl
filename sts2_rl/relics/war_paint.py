@@ -11,3 +11,4 @@ class WarPaint(Relic):
     id = "war_paint"
     name = "War Paint"
     rarity = RelicRarity.COMMON
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

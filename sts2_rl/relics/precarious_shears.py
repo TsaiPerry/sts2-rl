@@ -10,6 +10,7 @@ class PrecariousShears(Relic):
     id = "precarious_shears"
     name = "Precarious Shears"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     CARDS = 2
     DAMAGE = 16
 

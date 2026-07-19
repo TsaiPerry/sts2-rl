@@ -42,12 +42,12 @@ Envs step in-process by default; ``--n-workers N`` moves them to N worker
 processes (``sts2_rl.vec_env``), which is currently worth only ~4% — the loop
 stays lockstep-synchronous and produces identical rollouts either way.
 
-Runs on CPU by default, and that is usually the *fast* choice: a 256x256 MLP
-over 8 Python-stepped envs is bottlenecked on env stepping and per-step
-host<->device copies, not on matmul, so a GPU tends to be slower here. SB3
-warns about the same thing for MlpPolicy PPO. ``--device cuda`` is there for
-when the torso grows big enough to pay for the transfers -- measure ``sps``
-before and after rather than assuming.
+Runs on CPU by default. For --arch mlp that is usually the fast choice: a
+256x256 MLP over 8 Python-stepped envs is bottlenecked on env stepping and
+per-step host<->device copies, not matmul. For --arch entity the balance
+flips: the PPO update dominates, and on this machine (RTX 3070)
+``--device cuda`` measured 1.5x the CPU sps at --n-envs 8 (2.4x at 16).
+Measure ``sps`` before and after on new hardware rather than assuming.
 """
 from __future__ import annotations
 
@@ -106,12 +106,15 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--enemy-hp-reward", type=float, default=0.0,
                     help="dense damage-dealt reward weight (0 = HP-delta + win only)")
     ap.add_argument("--win-hp-bonus", type=float, default=1.0,
-                    help="terminal win bonus scaled by final HP fraction: win reward is "
-                         "reward_win + win_hp_bonus*(hp/max_hp), so clean wins beat sloppy ones "
-                         "(0 = flat win bonus, the old behavior)")
+                    help="combat env only: terminal win bonus scaled by final HP fraction: "
+                         "win reward is reward_win + win_hp_bonus*(hp/max_hp), so clean wins "
+                         "beat sloppy ones (0 = flat win bonus, the old behavior). The "
+                         "run-scale envs use the floor-only reward (no HP shaping)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
-                    help="cpu (default, usually fastest here), cuda, or auto")
+                    help="cpu (default; fastest for --arch mlp), cuda "
+                         "(measured faster for --arch entity -- see the "
+                         "module docstring), or auto")
     ap.add_argument("--save", default=None,
                     help="checkpoint path (default: runs/sts2_torch.pt for "
                          "--env combat, runs/sts2_run_torch.pt for --env run, "
@@ -120,7 +123,7 @@ def parse_args() -> argparse.Namespace:
                     help="continue from this checkpoint (default: auto-resume --save if it exists)")
     ap.add_argument("--fresh", action="store_true",
                     help="start a new model even if a checkpoint exists at --save")
-    ap.add_argument("--save-every", type=int, default=50, help="iterations between checkpoints")
+    ap.add_argument("--save-every", type=int, default=10, help="iterations between checkpoints")
     ap.add_argument("--keep-snapshots", type=int, default=5,
                     help="how many iter-stamped snapshots (<stem>.iter000123.pt) "
                          "to keep alongside the live checkpoint, so a late "

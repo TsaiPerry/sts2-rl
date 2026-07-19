@@ -12,6 +12,7 @@ class SereTalon(Relic):
     id = "sere_talon"
     name = "Sere Talon"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     CURSES = 2
     WISHES = 3

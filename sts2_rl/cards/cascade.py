@@ -47,6 +47,10 @@ class CascadeCard(Card):
                     if not ctx.player.discard_pile:
                         break
                     ctx.player.reshuffle_discard_into_draw()
+                    # AfterShuffle hooks (e.g. Stratagem) can drain the
+                    # pile; AutoPlayFromDrawPile null-checks and stops.
+                    if not ctx.player.draw_pile:
+                        break
                 cards.append(ctx.player.draw_pile.pop())
             for card in cards:
                 if ctx.combat.is_over or ctx.player.is_dead:

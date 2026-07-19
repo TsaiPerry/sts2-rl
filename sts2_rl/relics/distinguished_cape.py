@@ -13,6 +13,7 @@ class DistinguishedCape(Relic):
     id = "distinguished_cape"
     name = "Distinguished Cape"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     CARDS = 3
     MAX_HP_LOSS = 9  # applied by the Vakuu option wrapper

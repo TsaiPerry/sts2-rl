@@ -24,6 +24,7 @@ class NeowsTalisman(Relic):
     id = "neows_talisman"
     name = "Neow's Talisman"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
         for tag in ("strike", "defend"):

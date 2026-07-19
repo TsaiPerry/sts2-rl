@@ -56,7 +56,7 @@ class EnvSpec:
     card_obs: str = "hybrid"
     encounter: str | None = None              # combat only
     enemy_hp_reward: float = 0.0              # combat only
-    win_hp_bonus: float = 1.0                 # combat/run only
+    win_hp_bonus: float = 1.0                 # combat only
 
 
 def build_env(spec: EnvSpec):
@@ -65,14 +65,14 @@ def build_env(spec: EnvSpec):
     if spec.kind == "column":
         from sts2_rl.curriculum_env import STS2CurriculumRunEnv
 
-        # Floor-only reward defaults live on the env class; win_hp_bonus is
-        # deliberately not passed (it is HP shaping).
+        # Floor-only reward defaults live on the env classes; win_hp_bonus
+        # is deliberately not passed to either run-scale env (it is HP
+        # shaping).
         return STS2CurriculumRunEnv(acts=acts, card_obs=spec.card_obs)
     if spec.kind == "run":
         from sts2_rl.run_env import STS2RunEnv
 
-        return STS2RunEnv(acts=acts, card_obs=spec.card_obs,
-                          win_hp_bonus=spec.win_hp_bonus)
+        return STS2RunEnv(acts=acts, card_obs=spec.card_obs)
     if spec.kind != "combat":
         raise ValueError(f"unknown env kind {spec.kind!r}")
 

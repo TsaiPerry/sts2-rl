@@ -10,6 +10,7 @@ class PhialHolster(Relic):
     id = "phial_holster"
     name = "Phial Holster"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     POTION_SLOTS = 1
     POTIONS = 2
 

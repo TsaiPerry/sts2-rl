@@ -16,6 +16,7 @@ class FragrantMushroom(Relic):
     id = "fragrant_mushroom"
     name = "Fragrant Mushroom"
     rarity = RelicRarity.EVENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     HP_LOSS = 15  # HpLossVar(15)
     CARDS = 2     # CardsVar(2)

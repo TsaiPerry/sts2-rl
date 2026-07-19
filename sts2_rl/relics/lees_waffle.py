@@ -11,3 +11,4 @@ class LeesWaffle(Relic):
     id = "lees_waffle"
     name = "Lee's Waffle"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

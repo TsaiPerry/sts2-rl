@@ -10,6 +10,7 @@ class NewLeaf(Relic):
     id = "new_leaf"
     name = "New Leaf"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
         for card in run.select_cards("transform", run.transformable_cards(), 1):

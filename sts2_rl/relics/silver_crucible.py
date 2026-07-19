@@ -18,6 +18,13 @@ class SilverCrucible(Relic):
         self.times_used = 0
         self.treasure_rooms_entered = 0
 
+    @property
+    def is_used_up(self) -> bool:
+        # IsUsedUp: all card-reward upgrades spent AND the chestless
+        # treasure room already paid for.
+        return (self.times_used >= self.CARD_REWARDS
+                and self.treasure_rooms_entered > 0)
+
     def modify_card_reward_options(self, run, cards) -> None:
         if self.times_used >= self.CARD_REWARDS:
             return

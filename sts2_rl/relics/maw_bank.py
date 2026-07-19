@@ -25,6 +25,10 @@ class MawBank(Relic):
         super().__init__()
         self.has_item_been_bought = False
 
+    @property
+    def is_used_up(self) -> bool:   # IsUsedUp => HasItemBeenBought
+        return self.has_item_been_bought
+
     def after_room_entered(self, run, point, room_type) -> None:
         if not self.has_item_been_bought:
             run.gain_gold(self.GOLD_PER_ROOM)

@@ -11,6 +11,7 @@ class LostCoffer(Relic):
     id = "lost_coffer"
     name = "Lost Coffer"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
         from ..rewards import RarityOddsType, create_reward_cards

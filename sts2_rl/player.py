@@ -124,6 +124,10 @@ class PlayerCombatState(Creature):
                 if not self.discard_pile:
                     break
                 self.reshuffle_discard_into_draw()
+                # AfterShuffle hooks (e.g. Stratagem) can drain the pile;
+                # the game re-checks after ShuffleIfNecessary and stops.
+                if not self.draw_pile:
+                    break
             card = self.draw_pile.pop()
             self.hand.append(card)
             self._hooks.on_card_drawn(card, from_hand_draw)

@@ -39,9 +39,13 @@ OBS_PLAN: shared /100+/500 absolute unit, named segments (run_obs_segments /
 run_obs_slices), sorted vocabularies (CARD_IDS/…/RELIC_IDS/EVENT_IDS/
 PURPOSE_IDS).
 
-Reward (configurable): per-step run-HP delta, small floor/act progress
-bonuses, terminal win/loss (+ optional HP-conserved bonus). info carries
-floor/act/phase and, at episode end, is_success + hp_left.
+Reward (configurable): floor-only by default — ``floor_reward`` per floor
+gained plus a terminal ``reward_win`` worth a few floors (the curriculum
+env's settings; see its module docstring for why HP shaping is off — the
+critic learns "low HP → fewer future floors" from the observation). HP-delta
+/ act-progress shaping and an HP-conserved win bonus remain available via
+``hp_reward_scale`` / ``act_reward`` / ``win_hp_bonus``, all defaulting to 0.
+info carries floor/act/phase and, at episode end, is_success + hp_left.
 """
 from __future__ import annotations
 
@@ -246,12 +250,12 @@ class STS2RunEnv(gym.Env):
         ascension: int = 0,
         include_neow: bool = True,
         card_obs: str = "hybrid",
-        reward_win: float = 1.0,
+        reward_win: float = 3.0,
         reward_loss: float = 0.0,
         win_hp_bonus: float = 0.0,
-        hp_reward_scale: float = 1.0,
-        floor_reward: float = 0.02,
-        act_reward: float = 0.25,
+        hp_reward_scale: float = 0.0,
+        floor_reward: float = 1.0,
+        act_reward: float = 0.0,
         max_steps: int = 10_000,
         render_mode: str | None = None,
     ) -> None:

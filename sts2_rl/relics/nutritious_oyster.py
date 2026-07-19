@@ -10,6 +10,7 @@ class NutritiousOyster(Relic):
     id = "nutritious_oyster"
     name = "Nutritious Oyster"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     MAX_HP = 11
 
     def after_obtained(self, run) -> None:

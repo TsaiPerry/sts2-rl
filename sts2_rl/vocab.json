@@ -678,7 +678,8 @@
   "throwing_axe",
   "tri_boomerang",
   "war_hammer",
-  "whispering_earring"
+  "whispering_earring",
+  "chosen_cheese"
  ],
  "events": [
   "abyssal_baths",
@@ -726,7 +727,15 @@
   "tezcatara",
   "nonupeipe",
   "tanx",
-  "vakuu"
+  "vakuu",
+  "brain_leech",
+  "ranwid_the_elder",
+  "relic_trader",
+  "room_full_of_cheese",
+  "slippery_bridge",
+  "the_future_of_potions",
+  "the_legends_were_true",
+  "this_or_that"
  ],
  "purposes": [
   "_unknown",

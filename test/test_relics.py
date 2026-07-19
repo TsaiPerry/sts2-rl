@@ -158,9 +158,10 @@ class TestRegistry:
         # Black Blood, Pael: 10, Tezcatara: 8 new — Very Hot Cocoa and Golden
         # Compass were already ported, Nonupeipe: 9 new — Looming Fruit was
         # already ported) = 206, plus Tanx's 10 = 216, plus Vakuu's 10 = 226
-        # — the full Act-2/3 Ancient-shrine pools — all constructible by id,
-        # and the original head is present.
-        assert len(ALL_RELICS) == 226
+        # — the full Act-2/3 Ancient-shrine pools — plus the shared-event
+        # relics as they land (Room Full of Cheese's Chosen Cheese) = 227
+        # — all constructible by id, and the original head is present.
+        assert len(ALL_RELICS) == 227
         assert "golden_compass" in ALL_RELICS
         for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
                     "neows_bones", "silver_crucible"):

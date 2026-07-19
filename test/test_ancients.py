@@ -58,6 +58,40 @@ def test_driver_include_ancients_false_fires_nothing():
     assert len(run.relics) == 0
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# Entering an ancient heals to full (AncientEventModel.BeforeEventStarted)
+# ═════════════════════════════════════════════════════════════════════════
+
+def test_ancient_entry_heals_to_full():
+    run = fresh_run(2)
+    run.start_run(acts=["overgrowth", "hive"])
+    run.advance_act()
+    run.hp = 17
+    make_event("orobas", run).begin()
+    assert run.hp == run.max_hp
+
+
+def test_neow_entry_heals_to_full():
+    # Neow zeroes HP first (the run-start revive), then heals MaxHp — at
+    # non-ascension the net effect is a full heal from any starting HP.
+    run = fresh_run(3)
+    run.start_run(acts=["overgrowth"])
+    run.hp = 5
+    make_event("neow", run).begin()
+    assert run.hp == run.max_hp
+
+
+def test_driver_act_entry_heal_via_ancient():
+    # End-to-end: a damaged player entering Hive is healed by the shrine.
+    run = fresh_run(4)
+    run.start_run(acts=["overgrowth", "hive"])
+    run.hp = 12
+    driver = RunDriver(run, lambda req: req.legal_actions()[0])
+    run.advance_act()
+    driver._maybe_run_ancient()
+    assert run.hp == run.max_hp
+
+
 def test_driver_act1_has_no_ancient_pool():
     run = fresh_run(2)
     run.start_run(acts=["overgrowth", "hive"])

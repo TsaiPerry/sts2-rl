@@ -11,3 +11,4 @@ class Orrery(Relic):
     id = "orrery"
     name = "Orrery"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

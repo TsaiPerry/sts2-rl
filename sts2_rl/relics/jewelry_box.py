@@ -10,6 +10,7 @@ class JewelryBox(Relic):
     id = "jewelry_box"
     name = "Jewelry Box"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
         from ..cards import make_card

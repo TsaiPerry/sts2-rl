@@ -11,4 +11,5 @@ class OldCoin(Relic):
     id = "old_coin"
     name = "Old Coin"
     rarity = RelicRarity.RARE
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     is_allowed_in_shops = False  # OldCoin.IsAllowedInShops

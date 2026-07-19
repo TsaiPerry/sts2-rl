@@ -21,6 +21,7 @@ class BigMushroom(Relic):
     id = "big_mushroom"
     name = "Big Mushroom"
     rarity = RelicRarity.EVENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     MAX_HP = 20
     DRAW_REDUCTION = 2

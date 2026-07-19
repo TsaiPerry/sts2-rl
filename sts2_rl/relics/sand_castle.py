@@ -10,6 +10,7 @@ class SandCastle(Relic):
     id = "sand_castle"
     name = "Sand Castle"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
         for card in run.deck:

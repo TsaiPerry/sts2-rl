@@ -11,3 +11,4 @@ class Pear(Relic):
     id = "pear"
     name = "Pear"
     rarity = RelicRarity.UNCOMMON
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

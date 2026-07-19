@@ -11,3 +11,4 @@ class Mango(Relic):
     id = "mango"
     name = "Mango"
     rarity = RelicRarity.RARE
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

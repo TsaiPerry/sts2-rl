@@ -11,3 +11,4 @@ class RoyalStamp(Relic):
     id = "royal_stamp"
     name = "Royal Stamp"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

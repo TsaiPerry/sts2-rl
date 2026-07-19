@@ -11,3 +11,4 @@ class PotionBelt(Relic):
     id = "potion_belt"
     name = "Potion Belt"
     rarity = RelicRarity.COMMON
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

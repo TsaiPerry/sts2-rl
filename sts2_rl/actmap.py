@@ -582,65 +582,133 @@ def find_matching_segments(
 ) -> list[list[list[MapPoint]]]:
     """Groups of non-overlapping segments that share a key (same start/end
     anchors and identical point-type sequence). Groups come back in sorted
-    key order (the source uses an ordinal SortedDictionary)."""
-    segments: dict[str, list[list[MapPoint]]] = {}
+    key order (the source uses an ordinal SortedDictionary).
+
+    This is the hot loop of map generation (rescanned after every prune
+    action), so it deviates from a line-by-line port for speed while staying
+    result-identical: segments are keyed on (anchor, type-bytes) tuples, and
+    the source's string key is only rebuilt for the few duplicate groups to
+    reproduce the SortedDictionary's ordinal order. The tuple and string
+    keys are injective images of each other, so grouping is unchanged."""
+    segments: dict[tuple, _SegmentGroup] = {}
+    processed: set[tuple[int, ...]] = set()
     for path in _find_all_paths(starting_point):
-        _add_segments(path, segments)
-    return [
-        group for _key, group in sorted(segments.items()) if len(group) > 1
+        _add_segments(path, segments, processed)
+    duplicates = [
+        (_ordinal_key(key), entry.group)
+        for key, entry in segments.items()
+        if len(entry.group) > 1
     ]
+    duplicates.sort(key=lambda item: item[0])
+    return [group for _key, group in duplicates]
 
 
 def _find_all_paths(current: MapPoint) -> list[list[MapPoint]]:
-    """FindAllPaths: every route from `current` to the boss."""
-    if current.point_type == MapPointType.BOSS:
-        return [[current]]
-    paths: list[list[MapPoint]] = []
-    for child in sorted(current.children, key=_sort_key):
-        for sub_path in _find_all_paths(child):
-            paths.append([current] + sub_path)
-    return paths
+    """FindAllPaths: every route from `current` to the boss.
+
+    Suffix path lists are memoized per invocation (the map is static within
+    one scan) — the plain recursion re-enumerates a node's subtree once per
+    route reaching that node. Output order is exactly the recursion's."""
+    memo: dict[MapPoint, list[list[MapPoint]]] = {}
+
+    def paths_from(node: MapPoint) -> list[list[MapPoint]]:
+        cached = memo.get(node)
+        if cached is not None:
+            return cached
+        if node.point_type == MapPointType.BOSS:
+            result = [[node]]
+        else:
+            result = [
+                [node] + suffix
+                for child in sorted(node.children, key=_sort_key)
+                for suffix in paths_from(child)
+            ]
+        memo[node] = result
+        return result
+
+    return paths_from(current)
+
+
+@dataclass
+class _SegmentGroup:
+    """One key's accepted segments plus the interior id tuples that make the
+    overlap scan cheap."""
+
+    group: list[list[MapPoint]]        # accepted segments, insertion order
+    interiors: list[tuple[int, ...]]   # their interior node ids, same order
 
 
 def _add_segments(
-    path: list[MapPoint], segments: dict[str, list[list[MapPoint]]]
+    path: list[MapPoint],
+    segments: dict[tuple, _SegmentGroup],
+    processed: set[tuple[int, ...]],
 ) -> None:
-    """AddSegmentsToDictionary: every junction-to-merge slice of a path."""
-    for i in range(len(path) - 1):
+    """AddSegmentsToDictionary: every junction-to-merge slice of a path.
+
+    Result-identical to the source, restructured for speed: point types,
+    node ids and the merge rows (valid segment ends) are precomputed per
+    path, and a candidate walk identical to one already processed this scan
+    — the overwhelmingly common case, since every path routing through a
+    physical segment re-enumerates it — is skipped via the scan-wide
+    ``processed`` set before any key is built. (An identical walk always
+    keys identically and is always rejected on re-encounter: it overlaps
+    whatever its twin overlapped, or its accepted twin itself, and groups
+    only ever grow.) The positional interior-overlap scan
+    (OverlappingSegment: ``a[i] is b[i]`` for interior i) runs only for
+    genuinely new walks, on precomputed id tuples."""
+    type_bytes = bytes(p.point_type for p in path)
+    path_ids = [id(p) for p in path]
+    n = len(path)
+    # Rows where paths merge back together (valid segment ends), ascending.
+    merge_idx = [k for k in range(2, n) if len(path[k].parents) >= 2]
+    if not merge_idx:
+        return
+    for i in range(n - 1):
         start = path[i]
         # Segments start at a fork (or the very bottom of the map).
         if len(start.children) <= 1 and start.row != 0:
             continue
-        for j in range(2, len(path) - i):
-            end = path[i + j]
-            # Segments end where paths merge back together.
-            if len(end.parents) < 2:
+        row0 = start.row == 0
+        for k in merge_idx:
+            if k < i + 2:
                 continue
-            segment = path[i : i + j + 1]
-            key = _segment_key(segment)
-            group = segments.setdefault(key, [])
-            if not group:
-                group.append(segment)
-            elif not any(_segments_overlap(existing, segment) for existing in group):
-                group.append(segment)
+            stop = k + 1
+            ids = tuple(path_ids[i:stop])
+            if ids in processed:
+                continue
+            processed.add(ids)
+            end = path[k]
+            # Row-0 starts key on the row alone (all bottom starts are
+            # interchangeable), mirroring GenerateSegmentKey.
+            if row0:
+                key = (0, end.col, end.row, type_bytes[i:stop])
+            else:
+                key = (1, start.col, start.row, end.col, end.row,
+                       type_bytes[i:stop])
+            entry = segments.get(key)
+            if entry is None:
+                segments[key] = _SegmentGroup(
+                    group=[path[i:stop]], interiors=[ids[1:-1]])
+                continue
+            interior = ids[1:-1]
+            if not any(
+                any(x == y for x, y in zip(existing, interior))
+                for existing in entry.interiors
+            ):
+                entry.group.append(path[i:stop])
+                entry.interiors.append(interior)
 
 
-def _segment_key(segment: list[MapPoint]) -> str:
-    """GenerateSegmentKey: anchors + the point-type int sequence. Row-0
-    starts key on the row alone (all bottom starts are interchangeable)."""
-    first, last = segment[0], segment[-1]
-    if first.row == 0:
-        prefix = f"{first.row}-{last.col},{last.row}-"
+def _ordinal_key(key: tuple) -> str:
+    """GenerateSegmentKey's string, rebuilt from the tuple key — needed only
+    for the few duplicate groups, to reproduce the ordinal sort order."""
+    if key[0] == 0:
+        _, last_col, last_row, type_bytes = key
+        prefix = f"0-{last_col},{last_row}-"
     else:
-        prefix = f"{first.col},{first.row}-{last.col},{last.row}-"
-    return prefix + ",".join(str(int(p.point_type)) for p in segment)
-
-
-def _segments_overlap(a: list[MapPoint], b: list[MapPoint]) -> bool:
-    """OverlappingSegment: share an interior node at the same position."""
-    if len(a) < 3 or len(b) < 3:
-        return False
-    return any(a[i] is b[i] for i in range(1, len(a) - 1))
+        _, first_col, first_row, last_col, last_row, type_bytes = key
+        prefix = f"{first_col},{first_row}-{last_col},{last_row}-"
+    return prefix + ",".join(map(str, type_bytes))
 
 
 def _prune_paths(

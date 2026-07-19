@@ -10,3 +10,4 @@ class GnarledHammer(Relic):
     id = "gnarled_hammer"
     name = "Gnarled Hammer"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

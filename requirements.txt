@@ -41,13 +41,12 @@
 #
 #   pip uninstall torch
 #
-# Before you reach for the GPU build: for this workload the CPU build is
-# probably the faster one. train_torch.py runs a 256x256 MLP over Python-stepped
-# envs, so it is bottlenecked on env stepping, not matmul, and the per-step
-# host<->device copies cost more than the GPU saves. SB3 warns about exactly
-# this for MlpPolicy PPO. train_torch.py, train.py and eval.py all default to
-# CPU on purpose. Take the CUDA wheel when the torso grows big enough to pay
-# for the transfers -- and compare the reported `sps` before and after.
+# Which build is faster depends on the arch (see train_torch.py --arch):
+# the mlp baseline is env-stepping-bound and runs best on CPU — SB3 warns
+# about exactly this for MlpPolicy PPO. The entity arch is update-bound;
+# on an RTX 3070 the CUDA build measured 1.5x CPU sps at --n-envs 8.
+# train_torch.py, train.py and eval.py all default to CPU on purpose; pass
+# --device cuda to opt in, and compare the reported `sps` before and after.
 # ---------------------------------------------------------------------------
 
 gymnasium>=0.29

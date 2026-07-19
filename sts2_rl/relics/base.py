@@ -104,6 +104,11 @@ class Relic:
     # RelicModel.AddsPet — the relic brings an event pet (Pael's Legion).
     # Player.HasEventPet gates Pael's Legion option at the Pael shrine.
     adds_pet: bool = False
+    # RelicModel.HasUponPickupEffect — the relic did its whole thing on
+    # pickup (Strawberry); mirrored per relic from the source's overrides.
+    has_upon_pickup_effect: bool = False
+    # RelicModel.SpawnsPets (Byrdpip) — pet-spawning relics.
+    spawns_pets: bool = False
 
     def __init__(self) -> None:
         self.combat: CombatState | None = None
@@ -116,6 +121,25 @@ class Relic:
         """RelicModel.MerchantCost: base gold price before the shop's ±15%
         jitter. Ancient/Starter/Event relics are effectively unbuyable."""
         return _MERCHANT_COST_BY_RARITY[self.rarity]
+
+    @property
+    def is_used_up(self) -> bool:
+        """RelicModel.IsUsedUp: a limited-use relic already spent (default
+        False; relics with uses override — Winged Boots, Lizard Tail, …)."""
+        return False
+
+    @property
+    def is_tradable(self) -> bool:
+        """RelicModel.IsTradable — eligible for the trade events (Ranwid the
+        Elder, Relic Trader): not used up, no upon-pickup effect, no pets,
+        and not Starter/Event/Ancient rarity. The source also excludes
+        melted wax copies; the sim removes melted relics from the run
+        entirely, so (like the game) unmelted wax copies stay tradable."""
+        if self.is_used_up or self.has_upon_pickup_effect or self.spawns_pets:
+            return False
+        return self.rarity not in (
+            RelicRarity.STARTER, RelicRarity.EVENT, RelicRarity.ANCIENT,
+        )
 
     def after_obtained(self, run) -> None:
         """RelicModel.AfterObtained: out-of-combat pickup effect (default

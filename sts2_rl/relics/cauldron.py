@@ -9,3 +9,4 @@ class Cauldron(Relic):
     id = "cauldron"
     name = "Cauldron"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

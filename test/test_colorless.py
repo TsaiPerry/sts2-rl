@@ -607,6 +607,20 @@ class TestColorlessPowers:
         DrawCmd.draw(player, 1)  # forces the reshuffle
         assert len(player.hand) == hand + 2  # 1 fetched + 1 drawn
 
+    def test_stratagem_draining_the_reshuffled_pile_stops_the_draw(self):
+        # If Stratagem's on-shuffle fetch empties the just-reshuffled draw
+        # pile, the draw stops instead of popping an empty pile (mirrors
+        # CardPileCmd.Draw re-checking after ShuffleIfNecessary).
+        cs = fresh()
+        play(cs, make_card("stratagem"))
+        player = cs.player
+        player.discard_pile[:] = [make_card("strike")]
+        player.draw_pile = []
+        hand = len(player.hand)
+        DrawCmd.draw(player, 1)
+        assert len(player.hand) == hand + 1  # the fetch; nothing left to draw
+        assert not player.draw_pile and not player.discard_pile
+
     def test_eternal_armor_grants_plating(self):
         cs = fresh()
         play(cs, make_card("eternal_armor"))

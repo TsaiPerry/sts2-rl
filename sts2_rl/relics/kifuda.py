@@ -10,3 +10,4 @@ class Kifuda(Relic):
     id = "kifuda"
     name = "Kifuda"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

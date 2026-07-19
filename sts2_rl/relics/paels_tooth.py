@@ -13,6 +13,7 @@ class PaelsTooth(Relic):
     id = "paels_tooth"
     name = "Pael's Tooth"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     CARDS = 5
     # Pael.cs GenerateInitialOptions' offer gate.

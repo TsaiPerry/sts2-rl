@@ -17,6 +17,10 @@ class SilkenTress(Relic):
         super().__init__()
         self.is_used = False
 
+    @property
+    def is_used_up(self) -> bool:   # IsUsedUp => IsUsed
+        return self.is_used
+
     def after_obtained(self, run) -> None:
         run.lose_gold(run.gold)
 

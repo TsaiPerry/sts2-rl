@@ -19,6 +19,7 @@ class GoldenCompass(Relic):
     id = "golden_compass"
     name = "Golden Compass"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def __init__(self) -> None:
         super().__init__()

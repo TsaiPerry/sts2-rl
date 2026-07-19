@@ -11,3 +11,4 @@ class Whetstone(Relic):
     id = "whetstone"
     name = "Whetstone"
     rarity = RelicRarity.COMMON
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

@@ -14,3 +14,4 @@ class SeaGlass(Relic):
     id = "sea_glass"
     name = "Sea Glass"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

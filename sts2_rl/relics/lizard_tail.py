@@ -28,6 +28,10 @@ class LizardTail(Relic):
         self._used = False
         self._heal_pending = False
 
+    @property
+    def is_used_up(self) -> bool:   # IsUsedUp => _wasUsed
+        return self._used
+
     def should_die(self, creature: Creature) -> bool:
         if creature is self.player and not self._used:
             self._used = True

@@ -11,3 +11,4 @@ class LoomingFruit(Relic):
     id = "looming_fruit"
     name = "Looming Fruit"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect

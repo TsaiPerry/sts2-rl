@@ -11,6 +11,7 @@ class HeftyTablet(Relic):
     id = "hefty_tablet"
     name = "Hefty Tablet"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
     CARDS = 3
 
     def after_obtained(self, run) -> None:

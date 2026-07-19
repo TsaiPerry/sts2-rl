@@ -11,6 +11,7 @@ class AlchemicalCoffer(Relic):
     id = "alchemical_coffer"
     name = "Alchemical Coffer"
     rarity = RelicRarity.ANCIENT
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     POTION_SLOTS = 4
 

@@ -21,6 +21,16 @@ from .base import Event, EventOption
 class AncientEvent(Event):
     """Base for act-start Ancient shrines (mirrors AncientEventModel)."""
 
+    def begin(self) -> Event:
+        # AncientEventModel.BeforeEventStarted: entering any Ancient heals
+        # the player to full (amount = MaxHp - CurrentHp via CreatureCmd.Heal)
+        # — this is the game's between-acts heal. Neow first zeroes HP (the
+        # run-start revive animation), which at non-ascension nets the same
+        # full heal, so the sim skips it; Weary Traveler (Asc 2) scales the
+        # heal to 80%, out of scope per the non-ascension convention.
+        self.run.heal(self.run.max_hp - self.run.hp)
+        return super().begin()
+
     def _relic_option(self, relic_id: str) -> EventOption:
         """An option whose key is the relic id; choosing it obtains the relic
         (AfterObtained runs via RunState.add_relic) and finishes the event —

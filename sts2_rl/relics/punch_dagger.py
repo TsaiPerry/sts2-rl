@@ -11,3 +11,4 @@ class PunchDagger(Relic):
     id = "punch_dagger"
     name = "Punch Dagger"
     rarity = RelicRarity.SHOP
+    has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
