@@ -31,8 +31,12 @@ agent acted under.
 Single-file, hand-vectorized over ``--n-envs`` synchronous envs. Everything the
 architecture plan cares about is swappable without touching this file: change
 the torso in ``models.py``; change the observation in ``full_env.py``. The loop
-only depends on ``reset`` / ``step`` / ``action_masks`` and the model's three
+only depends on the ``sts2_rl.vec_env`` interface and the model's three
 methods.
+
+Env stepping runs in worker processes by default (``--n-workers``, see
+``sts2_rl.vec_env``); the loop stays lockstep-synchronous either way, and
+``--n-workers 0`` puts it back in-process for debugging.
 
 Runs on CPU by default, and that is usually the *fast* choice: a 256x256 MLP
 over 8 Python-stepped envs is bottlenecked on env stepping and per-step
@@ -55,9 +59,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from sts2_rl import STS2FullCombatEnv, checkpoints
+from sts2_rl import checkpoints
 from sts2_rl.checkpoints import ModelSpec
-from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
+from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
 
 # --lr's default lives here rather than in add_argument so the flag can stay
 # None when unset: on a resume that difference decides whether we keep the
@@ -125,6 +129,13 @@ def parse_args() -> argparse.Namespace:
                          "a rollback candidate, not a leaderboard")
     # rollout / PPO
     ap.add_argument("--n-envs", type=int, default=8)
+    ap.add_argument("--n-workers", type=int, default=None,
+                    help="processes to step envs in (default: one per env, "
+                         "capped at cpu_count-1 so the parent keeps a core "
+                         "for torch). 0 steps them in-process on the serial "
+                         "path — slower, but the one to debug on. The layout "
+                         "is a runtime detail: seeding, rollouts and "
+                         "checkpoints are identical at any worker count")
     ap.add_argument("--n-steps", type=int, default=512, help="rollout length per env")
     ap.add_argument("--lr", type=float, default=None,
                     help=f"learning rate (default: {DEFAULT_LR:g}). Left as None "
@@ -196,28 +207,14 @@ def resolve_device(requested: str) -> torch.device:
     return device
 
 
-def make_env(args: argparse.Namespace):
-    if args.env == "column":
-        from sts2_rl.curriculum_env import STS2CurriculumRunEnv
-
-        # Floor-only reward defaults live on the env class; --win-hp-bonus
-        # is deliberately not passed (it is HP shaping).
-        return STS2CurriculumRunEnv(
-            acts=args.acts,
-            card_obs=args.card_obs,
-        )
-    if args.env == "run":
-        from sts2_rl.run_env import STS2RunEnv
-
-        return STS2RunEnv(
-            acts=args.acts,
-            card_obs=args.card_obs,
-            win_hp_bonus=args.win_hp_bonus,
-        )
-    return STS2FullCombatEnv(
-        encounter=OVERGROWTH[args.encounter] if args.encounter else None,
+def env_spec(args: argparse.Namespace) -> EnvSpec:
+    """This run's env flags, in the picklable form workers are built from."""
+    return EnvSpec(
+        kind=args.env,
+        acts=tuple(args.acts) if args.acts else None,
         card_obs=args.card_obs,
-        enemy_hp_reward_scale=args.enemy_hp_reward,
+        encounter=args.encounter,
+        enemy_hp_reward=args.enemy_hp_reward,
         win_hp_bonus=args.win_hp_bonus,
     )
 
@@ -259,9 +256,13 @@ def main() -> None:
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    envs = [make_env(args) for _ in range(args.n_envs)]
-    obs_dim = envs[0].observation_space.shape[0]
-    n_actions = envs[0].action_space.n
+    n_workers = resolve_n_workers(args.n_envs, args.n_workers)
+    envs = make_vec_env(env_spec(args), args.n_envs, n_workers)
+    print(f"{args.n_envs} envs across "
+          + (f"{envs.n_workers} worker processes" if envs.n_workers
+             else "the in-process serial path"), flush=True)
+    obs_dim = envs.obs_dim
+    n_actions = envs.n_actions
 
     # Resolve which checkpoint (if any) to continue from: an explicit --resume
     # wins; otherwise re-running auto-continues the checkpoint at --save so a
@@ -314,18 +315,14 @@ def main() -> None:
     done_buf = torch.zeros((N, E), device=device)
     val_buf = torch.zeros((N, E), device=device)
 
-    def stack_masks() -> torch.Tensor:
-        return torch.as_tensor(
-            np.array([e.action_masks() for e in envs]), dtype=torch.bool, device=device)
-
     # Initial state: distinct seed per env, then their RNG streams run on.
     # start_iter is folded in so a resumed run opens on fresh episodes instead
-    # of replaying the original run's first draws.
-    next_obs = torch.as_tensor(
-        np.array([e.reset(seed=args.seed + start_iter * E + i)[0]
-                  for i, e in enumerate(envs)]),
-        dtype=torch.float32, device=device)
-    next_mask = stack_masks()
+    # of replaying the original run's first draws. The seed is the env's GLOBAL
+    # index, so the worker layout can't shift which stream an env gets.
+    reset_obs, reset_mask = envs.reset(
+        [args.seed + start_iter * E + i for i in range(E)])
+    next_obs = torch.as_tensor(reset_obs, dtype=torch.float32, device=device)
+    next_mask = torch.as_tensor(reset_mask, dtype=torch.bool, device=device)
     next_done = torch.zeros(E, device=device)
 
     # episodic logging (raw env reward, not the training-time bootstrap fold-in)
@@ -341,167 +338,170 @@ def main() -> None:
     global_step = start_step
     t0 = time.time()
 
-    for iteration in range(start_iter, start_iter + n_iters):
-        # ── collect a rollout ───────────────────────────────────────────────
-        for t in range(N):
-            global_step += E
-            obs_buf[t] = next_obs
-            mask_buf[t] = next_mask
-            done_buf[t] = next_done
-            with torch.no_grad():
-                action, logp, _, value = agent.get_action_and_value(next_obs, next_mask)
-            val_buf[t] = value
-            act_buf[t] = action
-            logp_buf[t] = logp
+    # Workers are daemons, but close them explicitly so a Ctrl-C or a
+    # crash mid-run tears them down now rather than at interpreter exit.
+    try:
+        for iteration in range(start_iter, start_iter + n_iters):
+            # ── collect a rollout ───────────────────────────────────────────────
+            for t in range(N):
+                global_step += E
+                obs_buf[t] = next_obs
+                mask_buf[t] = next_mask
+                done_buf[t] = next_done
+                with torch.no_grad():
+                    action, logp, _, value = agent.get_action_and_value(next_obs, next_mask)
+                val_buf[t] = value
+                act_buf[t] = action
+                logp_buf[t] = logp
 
-            acts = action.cpu().numpy()
-            new_obs = np.empty((E, obs_dim), np.float32)
-            rewards = np.empty(E, np.float32)
-            dones = np.empty(E, np.float32)
-            for i, env in enumerate(envs):
-                o, r, term, trunc, info = env.step(int(acts[i]))
-                ep_ret_running[i] += r
-                ep_len_running[i] += 1
+                # The vec env auto-resets finished episodes, so `batch.obs` is
+                # already the observation to act from next step.
+                batch = envs.step(action.cpu().numpy())
+                ep_ret_running += batch.rewards          # raw reward, pre-bootstrap
+                ep_len_running += 1
+
+                rewards = batch.rewards.astype(np.float32).copy()
                 # Time-limit bootstrap: fold gamma*V(terminal obs) into the reward
                 # and mark done, so GAE treats truncation correctly without a
                 # separate terminal-value path (a natural termination bootstraps 0).
-                if trunc and not term:
+                # One forward per truncation rather than a batched one: truncations
+                # are rare, and this keeps the arithmetic bit-identical to the
+                # serial path.
+                for i, final_obs in batch.final_obs.items():
                     with torch.no_grad():
                         tv = agent.get_value(
-                            torch.as_tensor(o, dtype=torch.float32, device=device).unsqueeze(0))
-                    r = r + args.gamma * float(tv.item())
-                done = term or trunc
-                if done:
+                            torch.as_tensor(final_obs, dtype=torch.float32,
+                                            device=device).unsqueeze(0))
+                    rewards[i] += args.gamma * float(tv.item())
+
+                dones = batch.terminated | batch.truncated
+                for i in np.flatnonzero(dones):
                     ret_hist.append(float(ep_ret_running[i]))
                     len_hist.append(int(ep_len_running[i]))
-                    win_hist.append(1.0 if info.get("is_success") else 0.0)
+                    win_hist.append(1.0 if batch.successes[i] else 0.0)
                     ep_ret_running[i] = 0.0
                     ep_len_running[i] = 0
-                    o, _ = env.reset()
-                new_obs[i] = o
-                rewards[i] = r
-                dones[i] = float(done)
-            rew_buf[t] = torch.as_tensor(rewards, device=device)
-            next_obs = torch.as_tensor(new_obs, dtype=torch.float32, device=device)
-            next_mask = stack_masks()
-            next_done = torch.as_tensor(dones, device=device)
 
-        # ── GAE ─────────────────────────────────────────────────────────────
-        with torch.no_grad():
-            next_value = agent.get_value(next_obs)
-        advantages = torch.zeros_like(rew_buf)
-        lastgae = torch.zeros(E, device=device)
-        for t in reversed(range(N)):
-            if t == N - 1:
-                nonterminal = 1.0 - next_done
-                nextval = next_value
-            else:
-                nonterminal = 1.0 - done_buf[t + 1]
-                nextval = val_buf[t + 1]
-            delta = rew_buf[t] + args.gamma * nextval * nonterminal - val_buf[t]
-            lastgae = delta + args.gamma * args.gae_lambda * nonterminal * lastgae
-            advantages[t] = lastgae
-        returns = advantages + val_buf
+                rew_buf[t] = torch.as_tensor(rewards, device=device)
+                next_obs = torch.as_tensor(batch.obs, dtype=torch.float32, device=device)
+                next_mask = torch.as_tensor(batch.masks, dtype=torch.bool, device=device)
+                next_done = torch.as_tensor(dones.astype(np.float32), device=device)
 
-        # ── flatten and update ──────────────────────────────────────────────
-        b_obs = obs_buf.reshape(-1, obs_dim)
-        b_mask = mask_buf.reshape(-1, n_actions)
-        b_act = act_buf.reshape(-1)
-        b_logp = logp_buf.reshape(-1)
-        b_adv = advantages.reshape(-1)
-        b_ret = returns.reshape(-1)
-        b_val = val_buf.reshape(-1)
+            # ── GAE ─────────────────────────────────────────────────────────────
+            with torch.no_grad():
+                next_value = agent.get_value(next_obs)
+            advantages = torch.zeros_like(rew_buf)
+            lastgae = torch.zeros(E, device=device)
+            for t in reversed(range(N)):
+                if t == N - 1:
+                    nonterminal = 1.0 - next_done
+                    nextval = next_value
+                else:
+                    nonterminal = 1.0 - done_buf[t + 1]
+                    nextval = val_buf[t + 1]
+                delta = rew_buf[t] + args.gamma * nextval * nonterminal - val_buf[t]
+                lastgae = delta + args.gamma * args.gae_lambda * nonterminal * lastgae
+                advantages[t] = lastgae
+            returns = advantages + val_buf
 
-        idx = np.arange(batch_size)
-        approx_kl = torch.tensor(0.0)
-        clipfracs: list[float] = []
-        for _ in range(args.epochs):
-            np.random.shuffle(idx)
-            for start in range(0, batch_size, mb_size):
-                mb = idx[start:start + mb_size]
-                _, newlogp, entropy, newval = agent.get_action_and_value(
-                    b_obs[mb], b_mask[mb], b_act[mb])
-                logratio = newlogp - b_logp[mb]
-                ratio = logratio.exp()
-                with torch.no_grad():
-                    approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs.append(((ratio - 1.0).abs() > args.clip).float().mean().item())
+            # ── flatten and update ──────────────────────────────────────────────
+            b_obs = obs_buf.reshape(-1, obs_dim)
+            b_mask = mask_buf.reshape(-1, n_actions)
+            b_act = act_buf.reshape(-1)
+            b_logp = logp_buf.reshape(-1)
+            b_adv = advantages.reshape(-1)
+            b_ret = returns.reshape(-1)
+            b_val = val_buf.reshape(-1)
 
-                mb_adv = b_adv[mb]
-                mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
+            idx = np.arange(batch_size)
+            approx_kl = torch.tensor(0.0)
+            clipfracs: list[float] = []
+            for _ in range(args.epochs):
+                np.random.shuffle(idx)
+                for start in range(0, batch_size, mb_size):
+                    mb = idx[start:start + mb_size]
+                    _, newlogp, entropy, newval = agent.get_action_and_value(
+                        b_obs[mb], b_mask[mb], b_act[mb])
+                    logratio = newlogp - b_logp[mb]
+                    ratio = logratio.exp()
+                    with torch.no_grad():
+                        approx_kl = ((ratio - 1) - logratio).mean()
+                        clipfracs.append(((ratio - 1.0).abs() > args.clip).float().mean().item())
 
-                pg_loss = torch.max(
-                    -mb_adv * ratio,
-                    -mb_adv * torch.clamp(ratio, 1 - args.clip, 1 + args.clip),
-                ).mean()
+                    mb_adv = b_adv[mb]
+                    mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
-                # clipped value loss
-                v_unclipped = (newval - b_ret[mb]) ** 2
-                v_clip = b_val[mb] + torch.clamp(newval - b_val[mb], -args.clip, args.clip)
-                v_clipped = (v_clip - b_ret[mb]) ** 2
-                v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
+                    pg_loss = torch.max(
+                        -mb_adv * ratio,
+                        -mb_adv * torch.clamp(ratio, 1 - args.clip, 1 + args.clip),
+                    ).mean()
 
-                ent_loss = entropy.mean()
-                loss = pg_loss - args.ent_coef * ent_loss + args.vf_coef * v_loss
+                    # clipped value loss
+                    v_unclipped = (newval - b_ret[mb]) ** 2
+                    v_clip = b_val[mb] + torch.clamp(newval - b_val[mb], -args.clip, args.clip)
+                    v_clipped = (v_clip - b_ret[mb]) ** 2
+                    v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
 
-                optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
-                optimizer.step()
+                    ent_loss = entropy.mean()
+                    loss = pg_loss - args.ent_coef * ent_loss + args.vf_coef * v_loss
 
-            if args.target_kl is not None and approx_kl > args.target_kl:
-                break
+                    optimizer.zero_grad()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                    optimizer.step()
 
-        # ── logging ─────────────────────────────────────────────────────────
-        # sps measures THIS process's throughput, so a resume doesn't report
-        # the whole history's steps over this run's seconds.
-        elapsed = time.time() - t0
-        sps = int((global_step - start_step) / elapsed)
-        ret = np.mean(ret_hist) if ret_hist else float("nan")
-        wr = np.mean(win_hist) if win_hist else float("nan")
-        eplen = np.mean(len_hist) if len_hist else float("nan")
-        lr = optimizer.param_groups[0]["lr"]
-        print(
-            f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
-            f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
-            f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
-            f"ent {ent_loss.item():.3f}  kl {approx_kl.item():.4f}  "
-            f"clipfrac {np.mean(clipfracs):.3f}",
-            flush=True,
-        )
+                if args.target_kl is not None and approx_kl > args.target_kl:
+                    break
+
+            # ── logging ─────────────────────────────────────────────────────────
+            # sps measures THIS process's throughput, so a resume doesn't report
+            # the whole history's steps over this run's seconds.
+            elapsed = time.time() - t0
+            sps = int((global_step - start_step) / elapsed)
+            ret = np.mean(ret_hist) if ret_hist else float("nan")
+            wr = np.mean(win_hist) if win_hist else float("nan")
+            eplen = np.mean(len_hist) if len_hist else float("nan")
+            lr = optimizer.param_groups[0]["lr"]
+            print(
+                f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
+                f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
+                f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
+                f"ent {ent_loss.item():.3f}  kl {approx_kl.item():.4f}  "
+                f"clipfrac {np.mean(clipfracs):.3f}",
+                flush=True,
+            )
+            if args.save:
+                append_csv_row(csv_path(args.save), dict(
+                    iter=iteration, global_step=global_step,
+                    wall_seconds=round(elapsed, 3), sps=sps,
+                    ep_ret=ret, win=wr, ep_len=eplen,
+                    pg=pg_loss.item(), v=v_loss.item(), ent=ent_loss.item(),
+                    kl=approx_kl.item(), clipfrac=float(np.mean(clipfracs)), lr=lr,
+                ))
+
+            # ── checkpointing ───────────────────────────────────────────────────
+            if args.save and (iteration + 1) % args.save_every == 0:
+                score = {"win": wr, "ep_ret": ret}.get(args.best_metric, float("nan"))
+                if not math.isnan(score) and score > best_score:
+                    best_score = float(score)
+                    new_best = True
+                else:
+                    new_best = False
+                payload = checkpoint_payload(
+                    agent, optimizer, iteration + 1, args, global_step, best_score)
+                atomic_save(payload, args.save)
+                if args.keep_snapshots:
+                    atomic_save(payload, snapshot_path(args.save, iteration + 1))
+                    rotate_snapshots(args.save, args.keep_snapshots)
+                if new_best:
+                    atomic_save(payload, best_path(args.save))
+
         if args.save:
-            append_csv_row(csv_path(args.save), dict(
-                iter=iteration, global_step=global_step,
-                wall_seconds=round(elapsed, 3), sps=sps,
-                ep_ret=ret, win=wr, ep_len=eplen,
-                pg=pg_loss.item(), v=v_loss.item(), ent=ent_loss.item(),
-                kl=approx_kl.item(), clipfrac=float(np.mean(clipfracs)), lr=lr,
-            ))
-
-        # ── checkpointing ───────────────────────────────────────────────────
-        if args.save and (iteration + 1) % args.save_every == 0:
-            score = {"win": wr, "ep_ret": ret}.get(args.best_metric, float("nan"))
-            if not math.isnan(score) and score > best_score:
-                best_score = float(score)
-                new_best = True
-            else:
-                new_best = False
-            payload = checkpoint_payload(
-                agent, optimizer, iteration + 1, args, global_step, best_score)
-            atomic_save(payload, args.save)
-            if args.keep_snapshots:
-                atomic_save(payload, snapshot_path(args.save, iteration + 1))
-                rotate_snapshots(args.save, args.keep_snapshots)
-            if new_best:
-                atomic_save(payload, best_path(args.save))
-
-    if args.save:
-        save(agent, optimizer, start_iter + n_iters, args,
-             global_step=global_step, best_score=best_score)
-        print(f"Saved to {args.save}")
-
-    for e in envs:
-        e.close()
+            save(agent, optimizer, start_iter + n_iters, args,
+                 global_step=global_step, best_score=best_score)
+            print(f"Saved to {args.save}")
+    finally:
+        envs.close()
 
 
 def _stem(save_path: str) -> str:
