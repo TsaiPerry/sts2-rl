@@ -230,6 +230,49 @@ Landed (2026-07-07):
   accuracy for both. Running the actual training comparison is an on-demand
   experiment, not part of the test suite.
 
+## Architecture — the entity/embedding model (models.py) — DONE
+
+The flat obs is dominated by sparse one-hots over capacity-padded
+vocabularies (vocab.py: cards 640, relics 336, powers 288, monsters 144,
+potions 80, events 96, purposes 24 — live counts far smaller), so a flat MLP
+burns ~97% of its parameters on first-layer rows that rarely fire (column
+layout: 29,190 floats, 15.4M params). `EntityActorCritic`
+(`train_torch.py --arch entity`) replaces it, **model-side only** (strategy
+(a) of prompts/embedding-model.md): env obs layouts, schema versions, action
+spaces, and the PPO loop are all unchanged.
+
+- **Per-segment encoders over the unchanged flat obs.** The model is built
+  from the env's named layout (`obs_segments`; for the run-scale envs the
+  trainer expands the trailing combat block via `train_torch.
+  env_obs_segments`). `_SegmentEncoder` classifies each segment by name
+  suffix + width (`models._segment_plan`): vocabulary segments multiply into
+  embedding tables (a one-hot × table is a bias-free Linear over that slice;
+  histograms become sums of embeddings — the right set pooling), everything
+  else passes through raw. Column layout: 29,190 floats → 1,906 dense
+  features.
+- **One shared table per vocabulary kind**, `num rows = capacity(kind)`, so
+  row *i* means frozen vocab id *i* forever and porting content appends rows
+  without reshaping weights (same contract as the obs). The card table
+  serves hand one-hots, draw/discard/exhaust/deck/select histograms, and
+  shop/reward rows; base/upgraded status in the `2 × N_CARDS` histograms
+  enters as a 2-row modifier table. Powers use 3 rows per id, matching the
+  (presence, ±10, ±50) obs triples. Actor and critic keep fully separate
+  encoders + trunks, mirroring the MLP baseline.
+- **Checkpoints are arch-stamped** (`arch: "mlp" | "entity"`;
+  `train_torch.check_checkpoint`): a checkpoint trained on one arch is
+  refused by the other with a clear message — switching arch is a deliberate
+  full retrain, there is no weight migration.
+- **Measured (column layout, CPU):** 1.55M params vs 15.43M (first layer
+  1.06M vs 14.95M); minibatch fwd+bwd(B=512) 93 ms vs 138 ms; rollout
+  fwd(B=8) 8.2 ms vs 5.6 ms (per-segment Python overhead dominates at tiny
+  batches — rollout inference is ~7% of an iteration, env stepping ~79%).
+  Rollout obs buffers stay 29k floats by design; shrinking them is strategy
+  (b) (env-side integer obs, both schema bumps), only worth doing if
+  buffer/copy cost is ever the proven bottleneck.
+- Tests: `test/test_models.py` (shapes, mask correctness, table sizes ==
+  capacities, seed determinism, checkpoint round-trip + arch refusal).
+  A/B: `py train_torch.py --env column --arch mlp|entity --fresh --save ...`.
+
 ## Reward (minor, alongside training runs)
 
 - Enable a small `enemy_hp_reward_scale` for multi-encounter pools; normalize

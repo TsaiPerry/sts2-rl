@@ -11,13 +11,6 @@ full_env.py  →  models.py  →  train_torch.py
  masks, reward)   actor-critic)  + clipped update)
 ```
 
-> **Note on the training path.** `CLAUDE.md` still describes training as
-> **SB3 MaskablePPO** (`test/rl.py`, `sts2_ppo.zip`). That is now the *legacy
-> reference* path. The **current** training path is **raw-PyTorch PPO** —
-> `train_torch.py` + `sts2_rl/models.py` — which reimplements by hand the one
-> thing MaskablePPO gave us (applying `env.action_masks()`). The `CLAUDE.md`
-> commands section is stale on this point.
-
 ---
 
 ## Layer 1 — `full_env.py`: the environment

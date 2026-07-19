@@ -47,7 +47,7 @@ import torch.nn as nn
 
 from sts2_rl import STS2FullCombatEnv
 from sts2_rl.full_env import OBS_SCHEMA_VERSION
-from sts2_rl.models import MaskedActorCritic
+from sts2_rl.models import EntityActorCritic, MaskedActorCritic
 from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
 
 
@@ -71,6 +71,11 @@ def parse_args() -> argparse.Namespace:
                     help="combat env only: Overgrowth encounter key to fix "
                          "(default: sample the whole act)")
     ap.add_argument("--card-obs", choices=["hybrid", "features"], default="hybrid")
+    ap.add_argument("--arch", choices=["mlp", "entity"], default="mlp",
+                    help="mlp = MaskedActorCritic (flat trunks over the raw "
+                         "obs); entity = EntityActorCritic (per-segment "
+                         "embedding encoders over the same obs). Checkpoints "
+                         "are arch-stamped — switching arch is a full retrain")
     ap.add_argument("--enemy-hp-reward", type=float, default=0.0,
                     help="dense damage-dealt reward weight (0 = HP-delta + win only)")
     ap.add_argument("--win-hp-bonus", type=float, default=1.0,
@@ -191,6 +196,67 @@ def env_obs_schema(args: argparse.Namespace) -> int:
     return OBS_SCHEMA_VERSION
 
 
+def env_obs_segments(args: argparse.Namespace) -> list[tuple[str, int]]:
+    """The named (segment, width) layout of this run's observation — what the
+    entity model slices by. The run-scale envs report their trailing combat
+    block as one opaque segment, so expand it into the combat layout here."""
+    from sts2_rl.full_env import obs_segments
+
+    combat = obs_segments(args.card_obs)
+    if args.env in ("run", "column"):
+        from sts2_rl.run_env import run_obs_segments
+
+        return run_obs_segments(args.card_obs) + [
+            (f"combat.{name}", width) for name, width in combat]
+    return combat
+
+
+def make_model(args: argparse.Namespace, obs_dim: int, n_actions: int) -> nn.Module:
+    """Build the --arch-selected model for this run's env."""
+    if args.arch == "entity":
+        segments = env_obs_segments(args)
+        seg_dim = sum(w for _, w in segments)
+        if seg_dim != obs_dim:   # layout drift between env and segment map
+            raise SystemExit(
+                f"segment layout sums to {seg_dim} floats but the env emits "
+                f"{obs_dim}; env_obs_segments is out of sync with the env.")
+        return EntityActorCritic(segments, n_actions, hidden=tuple(args.hidden))
+    return MaskedActorCritic(obs_dim, n_actions, hidden=tuple(args.hidden))
+
+
+def check_checkpoint(ckpt: dict, args: argparse.Namespace,
+                     obs_dim: int, n_actions: int) -> None:
+    """Refuse a checkpoint that doesn't match this run's env/schema/model,
+    with a clear message instead of a cryptic load_state_dict error."""
+    ckpt_kind = ckpt.get("env_kind", "combat")
+    # run and column share the observation/action layout, and moving a
+    # checkpoint between them IS the curriculum plan's phase handoff.
+    run_scale = {"run", "column"}
+    if ckpt_kind != args.env and not ({ckpt_kind, args.env} <= run_scale):
+        raise SystemExit(
+            f"checkpoint was trained on the {ckpt_kind!r} env, "
+            f"this run uses {args.env!r}; pick the matching --save/--resume or --fresh.")
+    if ckpt_kind != args.env:
+        print(f"Curriculum handoff: continuing a {ckpt_kind!r}-env checkpoint "
+              f"on the {args.env!r} env.")
+    if ckpt.get("obs_schema") != env_obs_schema(args):
+        raise SystemExit(
+            f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
+            f"{env_obs_schema(args)}; the observation layout changed — retrain.")
+    ckpt_arch = ckpt.get("arch", "mlp")   # pre-stamp checkpoints are all MLP
+    if ckpt_arch != args.arch:
+        raise SystemExit(
+            f"checkpoint arch {ckpt_arch!r} != this run's --arch {args.arch!r}; "
+            f"there is no weight migration between architectures — pick the "
+            f"matching --arch or start --fresh.")
+    shape = (ckpt.get("obs_dim"), ckpt.get("n_actions"), tuple(ckpt.get("hidden", ())))
+    want = (obs_dim, n_actions, tuple(args.hidden))
+    if shape != want:
+        raise SystemExit(
+            f"checkpoint architecture {shape} != this run's {want} "
+            f"(obs_dim, n_actions, hidden); can't resume — match --hidden or use --fresh.")
+
+
 def main() -> None:
     args = parse_args()
     device = resolve_device(args.device)
@@ -216,36 +282,13 @@ def main() -> None:
         print(f"Auto-resuming existing checkpoint {args.save} "
               f"(pass --fresh to start a new model).")
 
-    agent = MaskedActorCritic(obs_dim, n_actions, hidden=tuple(args.hidden)).to(device)
+    agent = make_model(args, obs_dim, n_actions).to(device)
     optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr, eps=1e-5)
 
     start_iter = 0
     if resume_path:
         ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-        ckpt_kind = ckpt.get("env_kind", "combat")
-        # run and column share the observation/action layout, and moving a
-        # checkpoint between them IS the curriculum plan's phase handoff.
-        run_scale = {"run", "column"}
-        if ckpt_kind != args.env and not ({ckpt_kind, args.env} <= run_scale):
-            raise SystemExit(
-                f"checkpoint was trained on the {ckpt_kind!r} env, "
-                f"this run uses {args.env!r}; pick the matching --save/--resume or --fresh.")
-        if ckpt_kind != args.env:
-            print(f"Curriculum handoff: continuing a {ckpt_kind!r}-env checkpoint "
-                  f"on the {args.env!r} env.")
-        if ckpt.get("obs_schema") != env_obs_schema(args):
-            raise SystemExit(
-                f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
-                f"{env_obs_schema(args)}; the observation layout changed — retrain.")
-        # The checkpoint's architecture must match the env/args this run built;
-        # a mismatch (different obs, action space, or --hidden) would surface as
-        # a cryptic load_state_dict error, so check first with a clear message.
-        arch = (ckpt.get("obs_dim"), ckpt.get("n_actions"), tuple(ckpt.get("hidden", ())))
-        want = (obs_dim, n_actions, tuple(args.hidden))
-        if arch != want:
-            raise SystemExit(
-                f"checkpoint architecture {arch} != this run's {want} "
-                f"(obs_dim, n_actions, hidden); can't resume — match --hidden or use --fresh.")
+        check_checkpoint(ckpt, args, obs_dim, n_actions)
         agent.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optim"])
         start_iter = ckpt.get("iteration", 0)
@@ -421,7 +464,7 @@ def main() -> None:
         e.close()
 
 
-def save(agent: MaskedActorCritic, optimizer, iteration: int, args) -> None:
+def save(agent: nn.Module, optimizer, iteration: int, args) -> None:
     import os
     d = os.path.dirname(args.save)
     if d:
@@ -434,6 +477,7 @@ def save(agent: MaskedActorCritic, optimizer, iteration: int, args) -> None:
             "obs_dim": agent.obs_dim,
             "n_actions": agent.n_actions,
             "hidden": agent.hidden,
+            "arch": args.arch,
             "obs_schema": env_obs_schema(args),
             "env_kind": args.env,
         },
