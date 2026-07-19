@@ -46,6 +46,8 @@ floor/act/phase and, at episode end, is_success + hp_left.
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Callable
 
 import greenlet
@@ -65,6 +67,7 @@ from .full_env import (
     POTION_INDEX,
     _abs2,
     _clip01,
+    _write_pile_composition,
     build_combat_obs,
     combat_action_count,
     pile_composition,
@@ -194,6 +197,43 @@ def run_obs_slices(card_obs: str = "hybrid") -> dict[str, slice]:
         out[name] = slice(i, i + width)
         i += width
     return out
+
+
+@dataclass(frozen=True)
+class _RunLayout:
+    """Precomputed integer write-offsets for the run-specific observation
+    segments (the combat block is written separately, in place). Derived once
+    from ``run_obs_slices`` so it can never drift from the layout."""
+    run_dim: int
+    s: dict            # segment name -> start offset
+    pot_base: int
+    pot_stride: int
+    map_base: int
+    map_stride: int
+    sc_base: int
+    sc_stride: int
+    sr_base: int
+    sr_stride: int
+    sp_base: int
+    sp_stride: int
+    rc_base: int
+    rc_stride: int
+
+
+@lru_cache(maxsize=None)
+def _run_layout(card_obs: str) -> _RunLayout:
+    sl = run_obs_slices(card_obs)
+    run_dim = sum(w for _, w in run_obs_segments(card_obs))
+    s = {name: sli.start for name, sli in sl.items()}
+    return _RunLayout(
+        run_dim=run_dim, s=s,
+        pot_base=s["run.potion0"], pot_stride=s["run.potion1"] - s["run.potion0"],
+        map_base=s["map0"], map_stride=s["map1"] - s["map0"],
+        sc_base=s["shop.card0"], sc_stride=s["shop.card1"] - s["shop.card0"],
+        sr_base=s["shop.relic0"], sr_stride=s["shop.relic1"] - s["shop.relic0"],
+        sp_base=s["shop.potion0"], sp_stride=s["shop.potion1"] - s["shop.potion0"],
+        rc_base=s["reward.card0"], rc_stride=s["reward.card1"] - s["reward.card0"],
+    )
 
 
 class STS2RunEnv(gym.Env):
@@ -425,170 +465,175 @@ class STS2RunEnv(gym.Env):
     # ------------------------------------------------------------------
 
     def _build_obs(self) -> np.ndarray:
+        # Template + sparse writes: a zeroed buffer (every constant background
+        # in the run layout is 0) that we write only the live entries into —
+        # only the *active* phase's block does any work each step. The combat
+        # block is written in place (no .tolist()); outside combat it stays 0.
         run = self._run
         request = self._request
-        o: list[float] = []
+        L = _run_layout(self._card_obs)
+        S = L.s
+        buf = np.zeros(self.observation_space.shape[0], dtype=np.float32)
 
         # ── Phase one-hot (all zero at terminal) ─────────────────────────
-        phase = [0.0] * N_PHASES
         if request is not None:
-            phase[PHASE_INDEX[request.kind]] = 1.0
-        o.extend(phase)
+            buf[S["phase"] + PHASE_INDEX[request.kind]] = 1.0
 
         # ── Run vitals ───────────────────────────────────────────────────
         hp = max(0, run.hp)
-        o.append(_clip01(hp / max(1, run.max_hp)))
-        o.extend(_abs2(hp))
-        o.extend(_abs2(run.max_hp))
-        o.append(_clip01(run.gold / 100.0))
-        o.append(_clip01(run.gold / 1000.0))
-        act = [0.0] * _N_ACTS
+        buf[S["run.hp_ratio"]] = _clip01(hp / max(1, run.max_hp))
+        o = S["run.hp_abs"]; buf[o:o + 2] = _abs2(hp)
+        o = S["run.max_hp_abs"]; buf[o:o + 2] = _abs2(run.max_hp)
+        o = S["run.gold"]
+        buf[o] = _clip01(run.gold / 100.0)
+        buf[o + 1] = _clip01(run.gold / 1000.0)
         if 0 <= run.act_index < _N_ACTS:
-            act[run.act_index] = 1.0
-        o.extend(act)
-        o.append(_clip01(run.total_floor / 50.0))
+            buf[S["run.act"] + run.act_index] = 1.0
+        buf[S["run.floor"]] = _clip01(run.total_floor / 50.0)
 
         # ── Potion belt (run-level; combat exposes its own rows too) ─────
+        potions = run.potions
         for p in range(MAX_POTION_SLOTS):
-            potion = run.potions[p] if p < len(run.potions) else None
-            o.append(1.0 if potion is not None else 0.0)
-            hot = [0.0] * N_POTIONS
+            rb = L.pot_base + p * L.pot_stride
+            potion = potions[p] if p < len(potions) else None
             if potion is not None:
-                hot[POTION_INDEX[potion.id]] = 1.0
-            o.extend(hot)
-            o.append(1.0 if p < run.max_potions else 0.0)   # slot exists
+                buf[rb] = 1.0
+                buf[rb + 1 + POTION_INDEX[potion.id]] = 1.0
+            if p < run.max_potions:
+                buf[rb + 1 + N_POTIONS] = 1.0   # slot exists
 
         # ── Deck histogram + relic presence ──────────────────────────────
-        o.extend(pile_composition(run.deck))
-        relics = [0.0] * N_RELICS
+        _write_pile_composition(run.deck, buf, S["run.deck"])
+        relic_base = S["run.relics"]
         for relic in run.relics:
             idx = RELIC_INDEX.get(relic.id)
             if idx is not None:
-                relics[idx] = 1.0
-        o.extend(relics)
+                buf[relic_base + idx] = 1.0
 
         # ── Map block (filled during MAP; slots align with choice slots) ─
-        points = request.points if request is not None and request.kind == DecisionKind.MAP else []
-        for m in range(MAP_SLOTS):
-            point = points[m] if m < len(points) else None
-            o.append(1.0 if point is not None else 0.0)
-            type_hot = [0.0] * _N_POINT_TYPES
-            child_hist = [0.0] * _N_POINT_TYPES
-            if point is not None:
-                type_hot[_POINT_TYPE_INDEX[point.point_type]] = 1.0
+        if request is not None and request.kind == DecisionKind.MAP:
+            points = request.points
+            for m in range(min(MAP_SLOTS, len(points))):
+                point = points[m]
+                if point is None:
+                    continue
+                rb = L.map_base + m * L.map_stride
+                buf[rb] = 1.0
+                buf[rb + 1 + _POINT_TYPE_INDEX[point.point_type]] = 1.0
+                child_base = rb + 1 + _N_POINT_TYPES
+                counts: dict[int, int] = {}
                 for child in point.children:
-                    child_hist[_POINT_TYPE_INDEX[child.point_type]] += 1.0
-                child_hist = [_clip01(c / 3.0) for c in child_hist]
-            o.extend(type_hot)
-            o.extend(child_hist)
+                    ci = _POINT_TYPE_INDEX[child.point_type]
+                    counts[ci] = counts.get(ci, 0) + 1
+                for ci, c in counts.items():
+                    buf[child_base + ci] = _clip01(c / 3.0)
 
         # ── Event block ──────────────────────────────────────────────────
         event = request.event if request is not None and request.kind == DecisionKind.EVENT else None
-        o.append(1.0 if event is not None else 0.0)
-        hot = [0.0] * N_EVENTS
         if event is not None:
+            buf[S["event.present"]] = 1.0
             idx = EVENT_INDEX.get(event.id)
             if idx is not None:
-                hot[idx] = 1.0
-        o.extend(hot)
-        o.append(1.0 if (event is not None and event.page != "INITIAL") else 0.0)
-        opts = event.options if event is not None else []
-        for i in range(CHOICE_SLOTS):
-            if i < len(opts):
-                o.append(1.0)
-                o.append(1.0 if opts[i].locked else 0.0)
-            else:
-                o.extend((0.0, 0.0))
+                buf[S["event.identity"] + idx] = 1.0
+            if event.page != "INITIAL":
+                buf[S["event.page"]] = 1.0
+            opt_base = S["event.options"]
+            opts = event.options
+            for i in range(min(CHOICE_SLOTS, len(opts))):
+                buf[opt_base + 2 * i] = 1.0
+                if opts[i].locked:
+                    buf[opt_base + 2 * i + 1] = 1.0
 
         # ── Shop block ───────────────────────────────────────────────────
         shop = request.shop if request is not None and request.kind == DecisionKind.SHOP else None
-        card_entries = shop.card_entries if shop is not None else []
-        for c in range(SHOP_CARD_SLOTS):
-            entry = card_entries[c] if c < len(card_entries) else None
-            stocked = entry is not None and entry.is_stocked
-            o.append(1.0 if stocked else 0.0)
-            hot = [0.0] * N_CARDS
-            if stocked:
-                hot[CARD_INDEX[entry.card.id]] = 1.0
-            o.extend(hot)
-            o.append(_clip01(entry.cost / _COST_SCALE) if stocked else 0.0)
-            o.append(1.0 if stocked and entry.enough_gold else 0.0)
-            o.append(1.0 if stocked and entry.on_sale else 0.0)
-        relic_entries = shop.relic_entries if shop is not None else []
-        for r in range(SHOP_RELIC_SLOTS):
-            entry = relic_entries[r] if r < len(relic_entries) else None
-            stocked = entry is not None and entry.is_stocked
-            o.append(1.0 if stocked else 0.0)
-            hot = [0.0] * N_RELICS
-            if stocked:
-                hot[RELIC_INDEX[entry.relic.id]] = 1.0
-            o.extend(hot)
-            o.append(_clip01(entry.cost / _COST_SCALE) if stocked else 0.0)
-            o.append(1.0 if stocked and entry.enough_gold else 0.0)
-        potion_entries = shop.potion_entries if shop is not None else []
-        for p in range(SHOP_POTION_SLOTS):
-            entry = potion_entries[p] if p < len(potion_entries) else None
-            stocked = entry is not None and entry.is_stocked
-            o.append(1.0 if stocked else 0.0)
-            hot = [0.0] * N_POTIONS
-            if stocked:
-                hot[POTION_INDEX[entry.potion.id]] = 1.0
-            o.extend(hot)
-            o.append(_clip01(entry.cost / _COST_SCALE) if stocked else 0.0)
-            o.append(1.0 if stocked and entry.enough_gold else 0.0)
-        removal = shop.card_removal_entry if shop is not None else None
-        stocked = removal is not None and removal.is_stocked
-        o.append(1.0 if stocked else 0.0)
-        o.append(_clip01(removal.cost / _COST_SCALE) if stocked else 0.0)
-        o.append(1.0 if stocked and removal.enough_gold else 0.0)
+        if shop is not None:
+            card_entries = shop.card_entries
+            for c in range(min(SHOP_CARD_SLOTS, len(card_entries))):
+                entry = card_entries[c]
+                if entry is None or not entry.is_stocked:
+                    continue
+                rb = L.sc_base + c * L.sc_stride
+                buf[rb] = 1.0
+                buf[rb + 1 + CARD_INDEX[entry.card.id]] = 1.0
+                buf[rb + 1 + N_CARDS] = _clip01(entry.cost / _COST_SCALE)
+                if entry.enough_gold:
+                    buf[rb + 2 + N_CARDS] = 1.0
+                if entry.on_sale:
+                    buf[rb + 3 + N_CARDS] = 1.0
+            relic_entries = shop.relic_entries
+            for r in range(min(SHOP_RELIC_SLOTS, len(relic_entries))):
+                entry = relic_entries[r]
+                if entry is None or not entry.is_stocked:
+                    continue
+                rb = L.sr_base + r * L.sr_stride
+                buf[rb] = 1.0
+                buf[rb + 1 + RELIC_INDEX[entry.relic.id]] = 1.0
+                buf[rb + 1 + N_RELICS] = _clip01(entry.cost / _COST_SCALE)
+                if entry.enough_gold:
+                    buf[rb + 2 + N_RELICS] = 1.0
+            potion_entries = shop.potion_entries
+            for p in range(min(SHOP_POTION_SLOTS, len(potion_entries))):
+                entry = potion_entries[p]
+                if entry is None or not entry.is_stocked:
+                    continue
+                rb = L.sp_base + p * L.sp_stride
+                buf[rb] = 1.0
+                buf[rb + 1 + POTION_INDEX[entry.potion.id]] = 1.0
+                buf[rb + 1 + N_POTIONS] = _clip01(entry.cost / _COST_SCALE)
+                if entry.enough_gold:
+                    buf[rb + 2 + N_POTIONS] = 1.0
+            removal = shop.card_removal_entry
+            if removal is not None and removal.is_stocked:
+                rb = S["shop.removal"]
+                buf[rb] = 1.0
+                buf[rb + 1] = _clip01(removal.cost / _COST_SCALE)
+                if removal.enough_gold:
+                    buf[rb + 2] = 1.0
 
         # ── Reward block ─────────────────────────────────────────────────
         rewards = request.rewards if request is not None and request.kind in (
             DecisionKind.REWARD_CARD, DecisionKind.REWARD_POTION,
         ) else None
-        cards = rewards.cards if rewards is not None and request.kind == DecisionKind.REWARD_CARD else []
-        for c in range(REWARD_CARD_SLOTS):
-            card = cards[c] if c < len(cards) else None
-            o.append(1.0 if card is not None else 0.0)
-            hot = [0.0] * N_CARDS
-            if card is not None:
-                hot[CARD_INDEX[card.id]] = 1.0
-            o.extend(hot)
-            o.append(1.0 if (card is not None and card.upgrade_level > 0) else 0.0)
-        potion = rewards.potion if rewards is not None and request.kind == DecisionKind.REWARD_POTION else None
-        o.append(1.0 if potion is not None else 0.0)
-        hot = [0.0] * N_POTIONS
-        if potion is not None:
-            hot[POTION_INDEX[potion.id]] = 1.0
-        o.extend(hot)
+        if rewards is not None and request.kind == DecisionKind.REWARD_CARD:
+            cards = rewards.cards
+            for c in range(min(REWARD_CARD_SLOTS, len(cards))):
+                card = cards[c]
+                if card is None:
+                    continue
+                rb = L.rc_base + c * L.rc_stride
+                buf[rb] = 1.0
+                buf[rb + 1 + CARD_INDEX[card.id]] = 1.0
+                if card.upgrade_level > 0:
+                    buf[rb + 1 + N_CARDS] = 1.0
+        if rewards is not None and request.kind == DecisionKind.REWARD_POTION:
+            potion = rewards.potion
+            if potion is not None:
+                rb = S["reward.potion"]
+                buf[rb] = 1.0
+                buf[rb + 1 + POTION_INDEX[potion.id]] = 1.0
 
         # ── Select block ─────────────────────────────────────────────────
         selecting = request is not None and request.kind in (
             DecisionKind.SELECT_CARDS, DecisionKind.SELECT_OPTION,
         )
-        purpose_hot = [0.0] * N_PURPOSES
         if selecting:
-            purpose_hot[PURPOSE_INDEX.get(request.purpose, N_PURPOSES - 1)] = 1.0
-        o.extend(purpose_hot)
-        o.append(_clip01(request.count_remaining / 5.0) if selecting else 0.0)
-        o.append(1.0 if (selecting and request.skippable) else 0.0)
-        if selecting and request.kind == DecisionKind.SELECT_CARDS:
-            o.extend(pile_composition(request.candidates))
-        else:
-            o.extend([0.0] * (2 * N_CARDS))
+            buf[S["select.purpose"] + PURPOSE_INDEX.get(request.purpose, N_PURPOSES - 1)] = 1.0
+            buf[S["select.count"]] = _clip01(request.count_remaining / 5.0)
+            if request.skippable:
+                buf[S["select.skippable"]] = 1.0
+            if request.kind == DecisionKind.SELECT_CARDS:
+                _write_pile_composition(request.candidates, buf, S["select.candidates"])
 
-        # ── Combat block ─────────────────────────────────────────────────
+        # ── Combat block (written in place; zero outside combat) ─────────
         combat = request.combat if request is not None else None
         if combat is not None:
-            o.extend(build_combat_obs(combat, self._card_obs).tolist())
-        else:
-            o.extend([0.0] * self._combat_obs_dim)
+            start = self._run_obs_dim
+            build_combat_obs(combat, self._card_obs, out=buf[start:start + self._combat_obs_dim])
 
-        obs = np.asarray(o, dtype=np.float32)
-        assert obs.shape == self.observation_space.shape, (
-            f"obs dim drifted: {obs.shape} vs {self.observation_space.shape}"
+        assert buf.shape == self.observation_space.shape, (
+            f"obs dim drifted: {buf.shape} vs {self.observation_space.shape}"
         )
-        return obs
+        return buf
 
     # ------------------------------------------------------------------
 

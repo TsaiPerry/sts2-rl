@@ -20,15 +20,12 @@ import os
 import sys
 
 import numpy as np
-import torch
 
 # Allow ``py test/eval.py`` from the repo root without installing the package.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sts2_rl import STS2FullCombatEnv
-from sts2_rl.evaluation import evaluate_win_rate, masked_random_policy
-from sts2_rl.full_env import OBS_SCHEMA_VERSION
-from sts2_rl.models import MaskedActorCritic
+from sts2_rl.evaluation import evaluate_win_rate, load_torch_policy, masked_random_policy
 from sts2_rl.monsters.overgrowth import BOSS_ENCOUNTER_KEYS, ENCOUNTERS
 
 EPISODES = 50
@@ -40,29 +37,13 @@ def non_boss_encounters() -> dict:
 
 
 def load_model_policy(model_path: str, device: str = "cpu"):
-    """Reconstruct a MaskedActorCritic from a train_torch.py checkpoint and wrap
-    it as a deterministic ``(env, obs, mask) -> int`` policy (argmax of the
-    masked logits — the same distribution the agent acted under)."""
-    ckpt = torch.load(model_path, map_location=device, weights_only=False)
-    if ckpt.get("obs_schema") != OBS_SCHEMA_VERSION:
-        raise SystemExit(
-            f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
-            f"{OBS_SCHEMA_VERSION}; the observation layout changed — retrain.")
-
-    agent = MaskedActorCritic(
-        ckpt["obs_dim"], ckpt["n_actions"], hidden=tuple(ckpt["hidden"])
-    ).to(device)
-    agent.load_state_dict(ckpt["model"])
-    agent.eval()
-
-    def _policy(env, obs, mask) -> int:
-        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
-        mask_t = torch.as_tensor(mask, dtype=torch.bool, device=device).unsqueeze(0)
-        with torch.no_grad():
-            logits = agent.actor(obs_t).masked_fill(~mask_t, float("-inf"))
-        return int(logits.argmax(dim=-1).item())
-
-    return _policy
+    """A train_torch.py checkpoint as a deterministic ``(env, obs, mask) -> int``
+    policy — greedy over the masked logits. Arch dispatch, schema checking and
+    model construction all live in ``sts2_rl.evaluation`` / ``sts2_rl.checkpoints``,
+    shared with ``eval.py``."""
+    policy, _ckpt = load_torch_policy(
+        model_path, env_kind="combat", env=STS2FullCombatEnv(), device=device)
+    return policy
 
 
 def main() -> None:

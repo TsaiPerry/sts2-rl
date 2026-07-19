@@ -116,10 +116,38 @@ incompatible observation layout.
 
 ---
 
+## Layer 4 — `checkpoints.py` + `evaluation.py`: reloading and scoring
+
+Rebuilding a saved model needs the same three decisions the trainer made — env
+layout, architecture, hidden sizes. `sts2_rl/checkpoints.py` owns that as a
+`ModelSpec`, so the trainer (`--resume`) and the evaluator (`eval.py`) share
+one construction path instead of each keeping a copy of the rules:
+
+- `obs_schema_version` / `model_obs_segments` — the layout the checkpoint's
+  observation and the entity model's segment slicing must agree on;
+- `make_model` — `--arch` dispatch;
+- `check_checkpoint` — refuses a mismatched env kind, schema, arch or shape
+  with a message instead of a `load_state_dict` traceback. `run` and `column`
+  are deliberately interchangeable: that handoff *is* the curriculum's phase 2;
+- `load_agent` — checkpoint → eval-mode model, dispatching on the checkpoint's
+  own `arch` stamp so weights always reload as what they were trained as.
+
+`sts2_rl/evaluation.py` turns models into policies (`(env, obs, mask) -> int`)
+and scores them. `TorchPolicy` acts greedily — `argmax` over
+`model.action_logits`, the mode of the distribution the agent trained under —
+or samples from it under a seeded generator. Two evaluators sit on top:
+`evaluate_win_rate` + `evaluate_probes` for the combat envs, and
+`evaluate_run` for the run-scale ones, which reports max floor reached, acts
+reached, the death-floor distribution and decisions per episode. Win rate alone
+can't rank two run-scale checkpoints while both sit near zero; floors can.
+
+---
+
 ## The seam that makes it modular
 
 The loop only ever touches `env.reset / step / action_masks` and the model's
-three methods (`get_value`, `get_action_and_value`, and `_dist` internally).
+methods (`get_value`, `get_action_and_value`, plus `action_logits` for greedy
+evaluation).
 That is the deliberate design stated in both docstrings:
 
 > **Change the observation in `full_env.py`, change the torso in `models.py`,

@@ -45,9 +45,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from sts2_rl import STS2FullCombatEnv
-from sts2_rl.full_env import OBS_SCHEMA_VERSION
-from sts2_rl.models import EntityActorCritic, MaskedActorCritic
+from sts2_rl import STS2FullCombatEnv, checkpoints
+from sts2_rl.checkpoints import ModelSpec
 from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVERGROWTH
 
 
@@ -185,76 +184,35 @@ def make_env(args: argparse.Namespace):
     )
 
 
-def env_obs_schema(args: argparse.Namespace) -> int:
-    """The schema version stamped into / checked against checkpoints —
-    combat and run-scale envs version their layouts independently (run and
-    column share one layout, hence one version)."""
-    if args.env in ("run", "column"):
-        from sts2_rl.run_env import RUN_OBS_SCHEMA_VERSION
+def model_spec(args: argparse.Namespace) -> ModelSpec:
+    """This run's env/arch/hidden triple — the shared construction key that
+    ``sts2_rl.checkpoints`` (and therefore ``eval.py``) builds models from."""
+    return ModelSpec(
+        env_kind=args.env,
+        card_obs=args.card_obs,
+        arch=args.arch,
+        hidden=tuple(args.hidden),
+    )
 
-        return RUN_OBS_SCHEMA_VERSION
-    return OBS_SCHEMA_VERSION
+
+def env_obs_schema(args: argparse.Namespace) -> int:
+    return checkpoints.obs_schema_version(model_spec(args))
 
 
 def env_obs_segments(args: argparse.Namespace) -> list[tuple[str, int]]:
-    """The named (segment, width) layout of this run's observation — what the
-    entity model slices by. The run-scale envs report their trailing combat
-    block as one opaque segment, so expand it into the combat layout here."""
-    from sts2_rl.full_env import obs_segments
-
-    combat = obs_segments(args.card_obs)
-    if args.env in ("run", "column"):
-        from sts2_rl.run_env import run_obs_segments
-
-        return run_obs_segments(args.card_obs) + [
-            (f"combat.{name}", width) for name, width in combat]
-    return combat
+    return checkpoints.model_obs_segments(model_spec(args))
 
 
 def make_model(args: argparse.Namespace, obs_dim: int, n_actions: int) -> nn.Module:
     """Build the --arch-selected model for this run's env."""
-    if args.arch == "entity":
-        segments = env_obs_segments(args)
-        seg_dim = sum(w for _, w in segments)
-        if seg_dim != obs_dim:   # layout drift between env and segment map
-            raise SystemExit(
-                f"segment layout sums to {seg_dim} floats but the env emits "
-                f"{obs_dim}; env_obs_segments is out of sync with the env.")
-        return EntityActorCritic(segments, n_actions, hidden=tuple(args.hidden))
-    return MaskedActorCritic(obs_dim, n_actions, hidden=tuple(args.hidden))
+    return checkpoints.make_model(model_spec(args), obs_dim, n_actions)
 
 
 def check_checkpoint(ckpt: dict, args: argparse.Namespace,
                      obs_dim: int, n_actions: int) -> None:
     """Refuse a checkpoint that doesn't match this run's env/schema/model,
     with a clear message instead of a cryptic load_state_dict error."""
-    ckpt_kind = ckpt.get("env_kind", "combat")
-    # run and column share the observation/action layout, and moving a
-    # checkpoint between them IS the curriculum plan's phase handoff.
-    run_scale = {"run", "column"}
-    if ckpt_kind != args.env and not ({ckpt_kind, args.env} <= run_scale):
-        raise SystemExit(
-            f"checkpoint was trained on the {ckpt_kind!r} env, "
-            f"this run uses {args.env!r}; pick the matching --save/--resume or --fresh.")
-    if ckpt_kind != args.env:
-        print(f"Curriculum handoff: continuing a {ckpt_kind!r}-env checkpoint "
-              f"on the {args.env!r} env.")
-    if ckpt.get("obs_schema") != env_obs_schema(args):
-        raise SystemExit(
-            f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
-            f"{env_obs_schema(args)}; the observation layout changed — retrain.")
-    ckpt_arch = ckpt.get("arch", "mlp")   # pre-stamp checkpoints are all MLP
-    if ckpt_arch != args.arch:
-        raise SystemExit(
-            f"checkpoint arch {ckpt_arch!r} != this run's --arch {args.arch!r}; "
-            f"there is no weight migration between architectures — pick the "
-            f"matching --arch or start --fresh.")
-    shape = (ckpt.get("obs_dim"), ckpt.get("n_actions"), tuple(ckpt.get("hidden", ())))
-    want = (obs_dim, n_actions, tuple(args.hidden))
-    if shape != want:
-        raise SystemExit(
-            f"checkpoint architecture {shape} != this run's {want} "
-            f"(obs_dim, n_actions, hidden); can't resume — match --hidden or use --fresh.")
+    checkpoints.check_checkpoint(ckpt, model_spec(args), obs_dim, n_actions)
 
 
 def main() -> None:

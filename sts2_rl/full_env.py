@@ -71,6 +71,8 @@ targetable.
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Callable, Sequence
 
 import numpy as np
@@ -143,6 +145,7 @@ N_POTIONS = vocab_capacity("potions")
 # signed scalar slots for resolution, but stay in the vocabulary for
 # uniformity.
 POWER_IDS: list[str] = frozen_ids("powers", ALL_POWERS)
+POWER_INDEX: dict[str, int] = {pid: i for i, pid in enumerate(POWER_IDS)}
 N_POWERS = vocab_capacity("powers")
 
 
@@ -377,22 +380,58 @@ def _power_amt(creature, pid: str) -> float:
     return float(pw.amount) if pw is not None else 0.0
 
 
+# The constant power-vocabulary background: every slot as an *absent* power
+# (presence 0, signed amount 0.5/0.5 at both scales — the encoding of "not
+# present"). Baked into the obs template so a present power is a few sparse
+# overwrites instead of pushing 3·N_POWERS constants every build.
+_POWER_BG = np.empty(3 * N_POWERS, dtype=np.float32)
+_POWER_BG[0::3] = 0.0
+_POWER_BG[1::3] = 0.5
+_POWER_BG[2::3] = 0.5
+
+
+def _write_power_triples(creature, out: np.ndarray, base: int) -> None:
+    """Overwrite the present powers into ``out[base : base+3·N_POWERS]``,
+    which must already hold the ``_POWER_BG`` absent-power background. Only a
+    creature's actually-present powers (a handful) are written; every absent
+    slot and the reserved-capacity tail keep the (0, 0.5, 0.5) background."""
+    for pid, pw in creature.powers.items():
+        i = POWER_INDEX.get(pid)
+        if i is None:                      # power id outside the frozen vocab
+            continue
+        o = base + 3 * i
+        out[o] = 1.0
+        out[o + 1] = _signed(pw.amount, 10)
+        out[o + 2] = _signed(pw.amount, 50)
+
+
 def power_triples(creature) -> list[float]:
     """Full power vocabulary: per power id, presence bit + signed amount at
     a fine (±10) and a coarse (±50) scale. Signed so Strength/Dexterity
     below zero stay representable; presence disambiguates 'absent' from
-    'present at 0'."""
-    out: list[float] = []
-    powers = creature.powers
-    for pid in POWER_IDS:
-        pw = powers.get(pid)
-        if pw is None:
-            out.extend((0.0, 0.5, 0.5))
-        else:
-            out.extend((1.0, _signed(pw.amount, 10), _signed(pw.amount, 50)))
-    # Reserved-capacity tail (vocab.py): same encoding as an absent power.
-    out.extend((0.0, 0.5, 0.5) * (N_POWERS - len(POWER_IDS)))
-    return out
+    'present at 0'. Thin list-returning wrapper over ``_write_power_triples``
+    for legacy callers; the obs builders write in place. Computed in float64
+    so the returned list is bit-identical to the pre-vectorization API (the
+    observation itself is float32, exactly as before)."""
+    out = np.array(_POWER_BG, dtype=np.float64)
+    _write_power_triples(creature, out, 0)
+    return out.tolist()
+
+
+def _write_pile_composition(pile, out: np.ndarray, base: int) -> None:
+    """Write a pile's normalized base/upgraded histogram into
+    ``out[base : base+2·N_CARDS]`` (which must start zeroed). Loops the pile's
+    cards (tens) and writes only the distinct ids present — never scans the
+    2·N_CARDS slots or clips constants. Matches the reference exactly: counts
+    are ``count / PILE_COUNT_CAP`` clipped to 1.0."""
+    counts: dict[int, int] = {}
+    for card in pile:
+        idx = CARD_INDEX[card.id]
+        key = (N_CARDS + idx) if card.upgrade_level > 0 else idx
+        counts[key] = counts.get(key, 0) + 1
+    for key, c in counts.items():
+        v = c / PILE_COUNT_CAP
+        out[base + key] = 1.0 if v > 1.0 else v
 
 
 def pile_composition(pile: list[Card]) -> list[float]:
@@ -403,18 +442,12 @@ def pile_composition(pile: list[Card]) -> list[float]:
     copies. Splitting the histogram is what lets the policy tell a pile of
     Strikes from a pile of Strike+ — upgrade is (currently) a single bit per
     card, so a base/upgraded split captures it exactly; any card whose
-    ``upgrade_level`` climbs past 1 in future simply counts as upgraded."""
-    base = [0.0] * N_CARDS
-    upgraded = [0.0] * N_CARDS
-    for card in pile:
-        idx = CARD_INDEX[card.id]
-        if card.upgrade_level > 0:
-            upgraded[idx] += 1.0
-        else:
-            base[idx] += 1.0
-    return [_clip01(c / PILE_COUNT_CAP) for c in base] + [
-        _clip01(c / PILE_COUNT_CAP) for c in upgraded
-    ]
+    ``upgrade_level`` climbs past 1 in future simply counts as upgraded. Thin
+    list-returning wrapper (float64, bit-identical to the pre-vectorization
+    API); the obs builders write float32 in place."""
+    out = np.zeros(2 * N_CARDS, dtype=np.float64)
+    _write_pile_composition(pile, out, 0)
+    return out.tolist()
 
 
 def card_features(state: CombatState, card: Card | None) -> list[float]:
@@ -455,155 +488,285 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     return f
 
 
+def _write_damage_matrix(state: CombatState, out: np.ndarray, base: int) -> None:
+    """Write the MAX_HAND × MAX_ENEMIES per-hit damage previews into
+    ``out[base : base+MAX_HAND·MAX_ENEMIES]`` (zeroed). Only nonzero cells are
+    written; empty slots, gone enemies, and no-damage cards keep the zero
+    background (identical to the reference, which appended 0 for them)."""
+    s = state
+    hand = s.player.hand
+    enemies = s.enemies
+    ne = len(enemies)
+    for h in range(min(MAX_HAND, len(hand))):
+        card = hand[h]
+        rowbase = base + h * MAX_ENEMIES
+        for e_i in range(min(MAX_ENEMIES, ne)):
+            e = enemies[e_i]
+            if e.is_gone:
+                continue
+            dmg = preview_card_damage(s, card, e)
+            if dmg:
+                v = dmg / ABS_SCALE
+                out[rowbase + e_i] = 1.0 if v > 1.0 else v
+
+
 def damage_matrix(state: CombatState) -> list[float]:
     """MAX_HAND × MAX_ENEMIES effective per-hit damage previews, in the
     shared absolute unit; 0 for empty slots, gone enemies, and cards that
-    deal no enemy damage."""
-    s = state
-    out: list[float] = []
-    for h in range(MAX_HAND):
-        card = s.player.hand[h] if h < len(s.player.hand) else None
-        for e_i in range(MAX_ENEMIES):
-            e = s.enemies[e_i] if e_i < len(s.enemies) else None
-            if card is None or e is None or e.is_gone:
-                out.append(0.0)
-                continue
-            dmg = preview_card_damage(s, card, e)
-            out.append(0.0 if dmg is None else _clip01(dmg / ABS_SCALE))
-    return out
+    deal no enemy damage. Thin list-returning wrapper (float64, bit-identical
+    to the pre-vectorization API); obs builders write float32 in place."""
+    out = np.zeros(MAX_HAND * MAX_ENEMIES, dtype=np.float64)
+    _write_damage_matrix(state, out, 0)
+    return out.tolist()
 
 
-def enemy_row(state: CombatState, e) -> list[float]:
-    if e is None or e.is_gone:
-        return [0.0] * ENEMY_ROW_DIM
+# Intra-enemy-row byte offsets (relative to the row start), derived once from
+# the layout — enemy rows are identical in both card_obs modes.
+def _enemy_row_offsets() -> dict[str, int]:
+    sl = obs_slices("hybrid")
+    base = sl["enemy0.present"].start
+    return {
+        "hp_ratio": sl["enemy0.hp_ratio"].start - base,
+        "hp_abs": sl["enemy0.hp_abs"].start - base,
+        "max_hp": sl["enemy0.max_hp_abs"].start - base,
+        "block": sl["enemy0.block_abs"].start - base,
+        "strength": sl["enemy0.strength"].start - base,
+        "flags": sl["enemy0.intent_flags"].start - base,
+        "preview": sl["enemy0.intent_preview"].start - base,
+        "identity": sl["enemy0.identity"].start - base,
+        "powers": sl["enemy0.powers"].start - base,
+    }
+
+
+_ENEMY_E_OFF = _enemy_row_offsets()
+
+
+def _write_enemy_row(state: CombatState, e, out: np.ndarray, rb: int,
+                     off: dict[str, int]) -> None:
+    """Write a *living* enemy's row into ``out`` starting at ``rb``. The row's
+    scalar/identity region must be zeroed and its power sub-block must hold the
+    ``_POWER_BG`` background; only present features/powers are written."""
     s = state
-    row: list[float] = [1.0]
-    row.append(_clip01(e.hp / max(1, e.max_hp)))
-    row.extend(_abs2(e.hp))
-    row.extend(_abs2(e.max_hp))
-    row.extend(_abs2(e.block))
-    row.append(_signed(e.strength, 30))
+    out[rb] = 1.0
+    out[rb + off["hp_ratio"]] = _clip01(e.hp / max(1, e.max_hp))
+    o = rb + off["hp_abs"]; out[o:o + 2] = _abs2(e.hp)
+    o = rb + off["max_hp"]; out[o:o + 2] = _abs2(e.max_hp)
+    o = rb + off["block"]; out[o:o + 2] = _abs2(e.block)
+    out[rb + off["strength"]] = _signed(e.strength, 30)
 
     intent = e.current_intent
-    flags = [
-        intent.has(MoveType.ATTACK),
-        intent.has(MoveType.DEFEND),
-        intent.has(MoveType.BUFF),
-        intent.has(MoveType.DEBUFF) or intent.has(MoveType.DEBUFF_STRONG)
-        or intent.has(MoveType.CARD_DEBUFF),
-        intent.has(MoveType.STATUS_CARD),
-        intent.has(MoveType.SUMMON),
-        intent.has(MoveType.ESCAPE),
-        intent.has(MoveType.HEAL),
-        intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or e.stunned,
-    ]
-    row.extend(1.0 if x else 0.0 for x in flags)
+    fb = rb + off["flags"]
+    if intent.has(MoveType.ATTACK):
+        out[fb] = 1.0
+    if intent.has(MoveType.DEFEND):
+        out[fb + 1] = 1.0
+    if intent.has(MoveType.BUFF):
+        out[fb + 2] = 1.0
+    if (intent.has(MoveType.DEBUFF) or intent.has(MoveType.DEBUFF_STRONG)
+            or intent.has(MoveType.CARD_DEBUFF)):
+        out[fb + 3] = 1.0
+    if intent.has(MoveType.STATUS_CARD):
+        out[fb + 4] = 1.0
+    if intent.has(MoveType.SUMMON):
+        out[fb + 5] = 1.0
+    if intent.has(MoveType.ESCAPE):
+        out[fb + 6] = 1.0
+    if intent.has(MoveType.HEAL):
+        out[fb + 7] = 1.0
+    if intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or e.stunned:
+        out[fb + 8] = 1.0
 
     # Telegraphed attack through the full modifier pipeline (what the
     # game displays — see AttackIntent.GetSingleDamage), plus a post-block
     # preview against the player's current block.
     preview = preview_incoming_damage(s, e)
-    if preview is None:
-        row.extend((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
-    else:
-        row.append(_clip01(preview.per_hit / ABS_SCALE))
-        row.append(_clip01(preview.hits / 10.0))
-        row.extend(_abs2(preview.total))
-        row.extend(_abs2(preview.post_block))
+    if preview is not None:
+        pb = rb + off["preview"]
+        out[pb] = _clip01(preview.per_hit / ABS_SCALE)
+        out[pb + 1] = _clip01(preview.hits / 10.0)
+        out[pb + 2:pb + 4] = _abs2(preview.total)
+        out[pb + 4:pb + 6] = _abs2(preview.post_block)
 
     # Enemy identity one-hot (unknown classes stay all-zero).
-    hot = [0.0] * N_MONSTERS
     idx = MONSTER_INDEX.get(e.__class__.__name__)
     if idx is not None:
-        hot[idx] = 1.0
-    row.extend(hot)
+        out[rb + off["identity"] + idx] = 1.0
 
-    row.extend(power_triples(e))
-    assert len(row) == ENEMY_ROW_DIM
-    return row
+    _write_power_triples(e, out, rb + off["powers"])
 
 
-def build_combat_obs(state: CombatState, card_obs: str = "hybrid") -> np.ndarray:
-    """The full combat observation (schema v2) for a CombatState — the body
-    of STS2FullCombatEnv._build_obs, reusable by the run env (which embeds
-    it as its combat block, zeroed outside combat)."""
+def enemy_row(state: CombatState, e) -> list[float]:
+    """One enemy's observation row (thin list-returning wrapper; obs builders
+    write in place; float64, bit-identical to the pre-vectorization API).
+    Gone/absent enemies are an all-zero row."""
+    out = np.zeros(ENEMY_ROW_DIM, dtype=np.float64)
+    if e is not None and not e.is_gone:
+        pb = _ENEMY_E_OFF["powers"]
+        out[pb:pb + 3 * N_POWERS] = _POWER_BG
+        _write_enemy_row(state, e, out, 0, _ENEMY_E_OFF)
+    return out.tolist()
+
+
+@dataclass(frozen=True)
+class _CombatLayout:
+    """Precomputed integer write-offsets and the constant template for one
+    ``card_obs`` mode — derived once from ``obs_slices`` so it can never drift
+    from the layout. ``_write_combat_obs`` writes into a copy of ``template``."""
+    dim: int
+    template: np.ndarray
+    hybrid: bool
+    p: dict            # player segment name (sans "player.") -> start offset
+    p_powers: int
+    enemy_base: int
+    enemy_stride: int
+    e_off: dict
+    hand_base: int
+    hand_stride: int
+    h_onehot: int      # offset within a hand row, or -1 in "features" mode
+    h_feat: int
+    dmg_base: int
+    potion_base: int
+    potion_stride: int
+    po_onehot: int
+    po_targeted: int
+    draw: int
+    discard: int
+    exhaust: int
+
+
+@lru_cache(maxsize=None)
+def _combat_layout(card_obs: str) -> _CombatLayout:
+    sl = obs_slices(card_obs)
+    dim = sum(w for _, w in obs_segments(card_obs))
+
+    p = {name.split(".", 1)[1]: s.start for name, s in sl.items()
+         if name.startswith("player.")}
+    p_powers = sl["player.powers"].start
+
+    enemy_base = sl["enemy0.present"].start
+    enemy_stride = sl["enemy1.present"].start - enemy_base
+
+    hand_base = sl["hand0.present"].start
+    hand_stride = sl["hand1.present"].start - hand_base
+    hybrid = card_obs == "hybrid"
+    h_onehot = (sl["hand0.onehot"].start - hand_base) if hybrid else -1
+    h_feat = sl["hand0.features"].start - hand_base
+
+    potion_base = sl["potion0"].start
+    potion_stride = sl["potion1"].start - potion_base
+
+    template = np.zeros(dim, dtype=np.float32)
+    template[p_powers:p_powers + 3 * N_POWERS] = _POWER_BG
+    for e in range(MAX_ENEMIES):
+        b = enemy_base + e * enemy_stride + _ENEMY_E_OFF["powers"]
+        template[b:b + 3 * N_POWERS] = _POWER_BG
+
+    return _CombatLayout(
+        dim=dim, template=template, hybrid=hybrid, p=p, p_powers=p_powers,
+        enemy_base=enemy_base, enemy_stride=enemy_stride, e_off=_ENEMY_E_OFF,
+        hand_base=hand_base, hand_stride=hand_stride, h_onehot=h_onehot,
+        h_feat=h_feat, dmg_base=sl["damage_matrix"].start,
+        potion_base=potion_base, potion_stride=potion_stride,
+        po_onehot=1, po_targeted=1 + N_POTIONS,
+        draw=sl["draw_pile"].start, discard=sl["discard_pile"].start,
+        exhaust=sl["exhaust_pile"].start,
+    )
+
+
+def _write_combat_obs(state: CombatState, L: _CombatLayout, buf: np.ndarray) -> None:
+    """Sparse-write the live combat features into ``buf`` (which must already
+    hold ``L.template`` — the power backgrounds and zeros). Only the few dozen
+    nonzero entries per step are touched."""
     s = state
     p = s.player
-    o: list[float] = []
+    P = L.p
 
-    # ── Player vitals ────────────────────────────────────────────────
-    # [0] hp ratio, [1-2] hp abs, [3-4] max_hp abs, [5-6] block abs,
-    # [7] energy, [8] strength, [9] dexterity, [10-13] pile sizes,
-    # [14] turn, [15-16] telegraphed post-block incoming, [17-18] cards/
-    # attacks played this turn, [19-20] damage taken this combat, then
-    # the full power vocabulary.
-    o.append(_clip01(p.hp / max(1, p.max_hp)))
-    o.extend(_abs2(p.hp))
-    o.extend(_abs2(p.max_hp))
-    o.extend(_abs2(p.block))
-    o.append(_clip01(p.energy / 10.0))
-    o.append(_signed(p.strength, 30))
-    o.append(_signed(_power_amt(p, "dexterity"), 30))
-    o.append(_clip01(len(p.hand) / MAX_HAND))
-    o.append(_clip01(len(p.draw_pile) / 40.0))
-    o.append(_clip01(len(p.discard_pile) / 40.0))
-    o.append(_clip01(len(p.exhaust_pile) / 40.0))
-    o.append(_clip01(s.turn / 30.0))
-    # Total post-block HP telegraphed at the player this turn (block
-    # absorbed sequentially across enemies) — the end-turn decision number.
-    o.extend(_abs2(preview_total_incoming(s)))
+    # ── Player vitals (layout mirrors the player.* segments) ─────────
+    buf[P["hp_ratio"]] = _clip01(p.hp / max(1, p.max_hp))
+    o = P["hp_abs"]; buf[o:o + 2] = _abs2(p.hp)
+    o = P["max_hp_abs"]; buf[o:o + 2] = _abs2(p.max_hp)
+    o = P["block_abs"]; buf[o:o + 2] = _abs2(p.block)
+    buf[P["energy"]] = _clip01(p.energy / 10.0)
+    buf[P["strength"]] = _signed(p.strength, 30)
+    buf[P["dexterity"]] = _signed(_power_amt(p, "dexterity"), 30)
+    ps = P["pile_sizes"]
+    buf[ps] = _clip01(len(p.hand) / MAX_HAND)
+    buf[ps + 1] = _clip01(len(p.draw_pile) / 40.0)
+    buf[ps + 2] = _clip01(len(p.discard_pile) / 40.0)
+    buf[ps + 3] = _clip01(len(p.exhaust_pile) / 40.0)
+    buf[P["turn"]] = _clip01(s.turn / 30.0)
+    o = P["incoming_post_block"]; buf[o:o + 2] = _abs2(preview_total_incoming(s))
     # History scalars the deck can condition on (Stomp, Spite, ...).
     cards_this_turn = sum(1 for _ in s.history.of_type(CardPlayedEntry, this_turn=True))
     dmg_taken = sum(
         e.amount for e in s.history.of_type(DamageReceivedEntry) if e.target is p
     )
-    o.append(_clip01(cards_this_turn / 10.0))
-    o.append(_clip01(s.history.attack_plays_this_turn() / 10.0))
-    o.extend(_abs2(dmg_taken))
-    o.extend(power_triples(p))
+    buf[P["cards_played_this_turn"]] = _clip01(cards_this_turn / 10.0)
+    buf[P["attacks_this_turn"]] = _clip01(s.history.attack_plays_this_turn() / 10.0)
+    o = P["damage_taken"]; buf[o:o + 2] = _abs2(dmg_taken)
+    _write_power_triples(p, buf, L.p_powers)
 
-    # ── Hand rows ────────────────────────────────────────────────────
-    for h in range(MAX_HAND):
-        card = p.hand[h] if h < len(p.hand) else None
-        o.append(1.0 if card is not None else 0.0)
-        if card_obs == "hybrid":
-            onehot = [0.0] * N_CARDS
-            if card is not None:
-                onehot[CARD_INDEX[card.id]] = 1.0
-            o.extend(onehot)
-        o.extend(card_features(s, card))
+    # ── Hand rows (empty slots keep the zero template) ───────────────
+    hand = p.hand
+    for h in range(min(MAX_HAND, len(hand))):
+        card = hand[h]
+        rb = L.hand_base + h * L.hand_stride
+        buf[rb] = 1.0
+        if L.h_onehot >= 0:
+            buf[rb + L.h_onehot + CARD_INDEX[card.id]] = 1.0
+        fb = rb + L.h_feat
+        buf[fb:fb + N_CARD_FEATURES] = card_features(s, card)
 
-    # ── Enemy rows ───────────────────────────────────────────────────
+    # ── Enemy rows (gone/absent rows are zeroed to clear power bg) ────
+    enemies = s.enemies
+    ne = len(enemies)
     for e_i in range(MAX_ENEMIES):
-        e = s.enemies[e_i] if e_i < len(s.enemies) else None
-        o.extend(enemy_row(s, e))
+        rb = L.enemy_base + e_i * L.enemy_stride
+        e = enemies[e_i] if e_i < ne else None
+        if e is None or e.is_gone:
+            buf[rb:rb + L.enemy_stride] = 0.0
+            continue
+        _write_enemy_row(s, e, buf, rb, L.e_off)
 
-    # ── Effective damage matrix (hand slot × enemy slot) ─────────────
-    # Aligned 1:1 with the play(h, e) actions: the fully modified per-hit
-    # damage card h would deal to enemy e (Strength, Weak, the target's
-    # Vulnerable — the number the game prints on the card face).
-    o.extend(damage_matrix(s))
+    # ── Effective damage matrix (aligned 1:1 with play(h, e) actions) ─
+    _write_damage_matrix(s, buf, L.dmg_base)
 
     # ── Potion rows ──────────────────────────────────────────────────
-    for pi in range(MAX_POTIONS):
-        potion = p.potions[pi] if pi < len(p.potions) else None
-        o.append(1.0 if potion is not None else 0.0)
-        hot = [0.0] * N_POTIONS
-        if potion is not None:
-            hot[POTION_INDEX[potion.id]] = 1.0
-        o.extend(hot)
-        o.append(1.0 if (potion is not None and potion.targeted) else 0.0)
+    potions = p.potions
+    for pi in range(min(MAX_POTIONS, len(potions))):
+        potion = potions[pi]
+        rb = L.potion_base + pi * L.potion_stride
+        buf[rb] = 1.0
+        buf[rb + L.po_onehot + POTION_INDEX[potion.id]] = 1.0
+        if potion.targeted:
+            buf[rb + L.po_targeted] = 1.0
 
     # ── Pile composition (unordered; base vs upgraded copies per card) ─
-    # The hand is exposed positionally above; the draw/discard/exhaust
-    # piles are exposed as order-agnostic multisets so the agent can track
-    # remaining/spent cards (deck-cycling, discard synergies, shuffle math)
-    # without leaking the shuffled draw order it is not meant to see.
-    o.extend(pile_composition(p.draw_pile))
-    o.extend(pile_composition(p.discard_pile))
-    o.extend(pile_composition(p.exhaust_pile))
+    _write_pile_composition(p.draw_pile, buf, L.draw)
+    _write_pile_composition(p.discard_pile, buf, L.discard)
+    _write_pile_composition(p.exhaust_pile, buf, L.exhaust)
 
-    return np.asarray(o, dtype=np.float32)
+
+def build_combat_obs(
+    state: CombatState, card_obs: str = "hybrid", out: np.ndarray | None = None,
+) -> np.ndarray:
+    """The full combat observation (schema v3) for a CombatState — the body
+    of STS2FullCombatEnv._build_obs, reusable by the run env (which embeds it
+    as its combat block, zeroed outside combat).
+
+    Template + sparse writes: start from a precomputed constant template (all
+    zeros plus the absent-power backgrounds) and overwrite only the entries
+    that are nonzero this step. Pass ``out=`` a length-``dim`` array (e.g. a
+    slice of the run buffer) to write in place; with ``out=None`` a fresh
+    array is returned (an independent copy, safe for the caller to store)."""
+    L = _combat_layout(card_obs)
+    if out is None:
+        buf = L.template.copy()
+    else:
+        np.copyto(out, L.template)
+        buf = out
+    _write_combat_obs(state, L, buf)
+    return buf
 
 
 class STS2FullCombatEnv(gym.Env):

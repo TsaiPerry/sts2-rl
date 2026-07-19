@@ -51,13 +51,18 @@ from .probes import (
     run_probes,
 )
 from .evaluation import (
+    RunEvalReport,
+    TorchPolicy,
     WinRateReport,
     ablation_transform,
     evaluate_probes,
+    evaluate_run,
     evaluate_win_rate,
+    load_torch_policy,
     masked_random_policy,
     model_policy,
     probe_summary,
+    torch_policy,
 )
 
 # ── Cards ────────────────────────────────────────────────────────────────────
@@ -234,13 +239,18 @@ __all__ = [
     "probe_dummy",
     "run_probe",
     "run_probes",
+    "RunEvalReport",
+    "TorchPolicy",
     "WinRateReport",
     "ablation_transform",
     "evaluate_probes",
+    "evaluate_run",
     "evaluate_win_rate",
+    "load_torch_policy",
     "masked_random_policy",
     "model_policy",
     "probe_summary",
+    "torch_policy",
     # Cards
     "Card",
     "StrikeCard",

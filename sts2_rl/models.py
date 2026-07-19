@@ -77,10 +77,14 @@ class MaskedActorCritic(neural_network.Module):
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
         return self.critic(obs).squeeze(-1)
 
+    def action_logits(self, obs: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Policy logits with illegal actions driven to ~0 probability — the
+        distribution the agent acts under. ``argmax`` over these is the greedy
+        policy (sts2_rl.evaluation.torch_policy)."""
+        return self.actor(obs).masked_fill(~mask, _MASK_FILL)
+
     def _dist(self, obs: torch.Tensor, mask: torch.Tensor) -> Categorical:
-        logits = self.actor(obs)
-        logits = logits.masked_fill(~mask, _MASK_FILL)
-        return Categorical(logits=logits)
+        return Categorical(logits=self.action_logits(obs, mask))
 
     def get_action_and_value(
         self,
@@ -256,10 +260,13 @@ class EntityActorCritic(neural_network.Module):
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
         return self.critic(self.critic_encoder(obs)).squeeze(-1)
 
+    def action_logits(self, obs: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Masked policy logits — same contract as
+        ``MaskedActorCritic.action_logits``."""
+        return self.actor(self.actor_encoder(obs)).masked_fill(~mask, _MASK_FILL)
+
     def _dist(self, obs: torch.Tensor, mask: torch.Tensor) -> Categorical:
-        logits = self.actor(self.actor_encoder(obs))
-        logits = logits.masked_fill(~mask, _MASK_FILL)
-        return Categorical(logits=logits)
+        return Categorical(logits=self.action_logits(obs, mask))
 
     def get_action_and_value(
         self,
