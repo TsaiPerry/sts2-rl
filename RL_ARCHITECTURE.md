@@ -108,7 +108,11 @@ Standard CleanRL-style structure:
 3. **Update** — flatten the batch, then for `epochs` (4) × `minibatches` (8):
    recompute logprob / entropy / value **with the stored masks**, compute the
    clipped policy loss, a clipped value loss, minus entropy bonus. Per-minibatch
-   advantage normalization, gradient clipping, optional `target_kl` early-stop.
+   advantage normalization, gradient clipping, and a `target_kl` early-stop on
+   each epoch's *mean* approx_kl (default 0.02 for the run-scale envs, off for
+   `--env combat`). The LR (`--anneal-lr`) and entropy coefficient
+   (`--ent-coef-final`) can decay linearly across the invocation's iterations;
+   a resume restarts either schedule over its own `--timesteps` budget.
 
 Checkpoints stamp `OBS_SCHEMA_VERSION`, and `--resume` refuses to load if the
 schema changed — a guard against silently loading a model against an

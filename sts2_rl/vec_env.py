@@ -1,10 +1,13 @@
 """Vectorized env stepping for ``train_torch.py`` — in-process or subprocess.
 
 The trainer steps ``--n-envs`` envs per timestep. Model inference is already
-batched across them, but env stepping is pure Python and was single-core: with
-the observation builders vectorized (2026-07-18), the rollout phase is the
-remaining serial cost. This module hands whole envs to worker *processes* so
-that cost parallelizes.
+batched across them; env stepping is pure Python and single-core, and this
+module can hand whole envs to worker *processes* to parallelize it.
+
+**It is off by default, and usually should be** — see
+:func:`resolve_n_workers` for the numbers. Env stepping is a small slice of an
+iteration, so parallelizing it moves the needle ~4%. The machinery is here
+because the profile will shift, not because it currently pays.
 
 Two implementations behind one interface:
 
@@ -33,7 +36,6 @@ Semantics worth knowing:
 from __future__ import annotations
 
 import multiprocessing as mp
-import os
 import traceback
 from dataclasses import dataclass
 from typing import Any, NamedTuple, Sequence
@@ -308,14 +310,17 @@ class SubprocVecEnv:
 
 # ── selection ─────────────────────────────────────────────────────────────
 
-def resolve_n_workers(n_envs: int, requested: int | None) -> int:
-    """``--n-workers``: None = auto, 0 = in-process, N = that many processes.
+def resolve_n_workers(n_envs: int, requested: int) -> int:
+    """``--n-workers``: 0 = in-process (the default), N = that many processes.
 
-    Auto leaves one core for the parent (which does all the torch work) and
-    never asks for more workers than there are envs.
+    Workers default OFF because they don't pay for themselves: profiled
+    2026-07-18, env stepping is ~15% of an iteration (act-time inference 46%,
+    PPO update 39%), and 8 workers parallelize it only 1.51× — pipe transport
+    of the 117 KB observation eats the rest. That is ~4% end-to-end, against a
+    3.3s spawn cost and one engine copy per worker. Reach for this when the
+    balance shifts (cheaper inference, or much more expensive envs) — and
+    re-measure rather than assuming.
     """
-    if requested is None:
-        return max(1, min(n_envs, (os.cpu_count() or 2) - 1))
     if requested < 0:
         raise ValueError("--n-workers cannot be negative")
     return min(requested, n_envs)

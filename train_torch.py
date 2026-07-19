@@ -20,7 +20,11 @@ drops an iter-stamped snapshot (``--keep-snapshots``) and updates
 ``<stem>.best.pt`` (``--best-metric``) so a late policy collapse is
 recoverable, and every iteration appends a row to ``<stem>.csv``. Checkpoints
 carry ``global_step``, so a resume continues the step count, the CSV and the
-env seeds rather than replaying the original run's opening episodes.
+env seeds rather than replaying the original run's opening episodes. Two
+optimization guards go with that: ``--target-kl`` (on by default for the
+run-scale envs) early-stops an epoch loop whose mean approx_kl says the update
+moved the policy too far, and ``--anneal-lr`` decays the LR to 0 over the
+invocation so an open-ended run doesn't sit at its warm-up LR forever.
 
 This is the baseline loop from the plan: a plain MLP torso (``sts2_rl.models``)
 trained with PPO. The one thing MaskablePPO did for us — applying
@@ -34,9 +38,9 @@ the torso in ``models.py``; change the observation in ``full_env.py``. The loop
 only depends on the ``sts2_rl.vec_env`` interface and the model's three
 methods.
 
-Env stepping runs in worker processes by default (``--n-workers``, see
-``sts2_rl.vec_env``); the loop stays lockstep-synchronous either way, and
-``--n-workers 0`` puts it back in-process for debugging.
+Envs step in-process by default; ``--n-workers N`` moves them to N worker
+processes (``sts2_rl.vec_env``), which is currently worth only ~4% — the loop
+stays lockstep-synchronous and produces identical rollouts either way.
 
 Runs on CPU by default, and that is usually the *fast* choice: a 256x256 MLP
 over 8 Python-stepped envs is bottlenecked on env stepping and per-step
@@ -129,13 +133,13 @@ def parse_args() -> argparse.Namespace:
                          "a rollback candidate, not a leaderboard")
     # rollout / PPO
     ap.add_argument("--n-envs", type=int, default=8)
-    ap.add_argument("--n-workers", type=int, default=None,
-                    help="processes to step envs in (default: one per env, "
-                         "capped at cpu_count-1 so the parent keeps a core "
-                         "for torch). 0 steps them in-process on the serial "
-                         "path — slower, but the one to debug on. The layout "
-                         "is a runtime detail: seeding, rollouts and "
-                         "checkpoints are identical at any worker count")
+    ap.add_argument("--n-workers", type=int, default=0,
+                    help="processes to step envs in (default 0: in-process). "
+                         "Env stepping is ~15%% of an iteration and workers "
+                         "parallelize it ~1.5x, so this is worth ~4%% today — "
+                         "measure before turning it on. The layout is a "
+                         "runtime detail: seeding, rollouts and checkpoints "
+                         "are identical at any worker count")
     ap.add_argument("--n-steps", type=int, default=512, help="rollout length per env")
     ap.add_argument("--lr", type=float, default=None,
                     help=f"learning rate (default: {DEFAULT_LR:g}). Left as None "
@@ -151,10 +155,24 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--minibatches", type=int, default=8)
     ap.add_argument("--ent-coef", type=float, default=0.01)
+    ap.add_argument("--ent-coef-final", type=float, default=None,
+                    help="anneal the entropy bonus linearly from --ent-coef to "
+                         "this over the run (default: equal to --ent-coef, "
+                         "i.e. constant)")
     ap.add_argument("--vf-coef", type=float, default=0.5)
     ap.add_argument("--max-grad-norm", type=float, default=0.5)
+    ap.add_argument("--anneal-lr", action="store_true",
+                    help="linearly decay the learning rate from --lr to 0 over "
+                         "this invocation's iterations (off by default). A "
+                         "resume RESTARTS the schedule over the new "
+                         "--timesteps budget, and ignores the LR restored from "
+                         "the checkpoint — the sane behavior for open-ended "
+                         "resume-based training")
     ap.add_argument("--target-kl", type=float, default=None,
-                    help="early-stop the epoch loop if approx_kl exceeds this")
+                    help="early-stop the epoch loop when an epoch's mean "
+                         "approx_kl exceeds this (default: 0.02 for --env "
+                         "run/column, off for --env combat; pass 0 to turn it "
+                         "off explicitly)")
     ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
     args = ap.parse_args()
     if args.save is None:
@@ -165,6 +183,16 @@ def parse_args() -> argparse.Namespace:
         }[args.env]
     if args.gamma is None:
         args.gamma = 0.99 if args.env == "combat" else 0.999
+    if args.target_kl is None:
+        # The run-scale envs are long-horizon and high-variance, where one
+        # destructive update costs hours to recover from; measured KL on a
+        # healthy column run is ~0.01, comfortably under this. --env combat
+        # keeps the old off-by-default behavior.
+        args.target_kl = None if args.env == "combat" else 0.02
+    elif args.target_kl <= 0:
+        args.target_kl = None                # explicit opt-out
+    if args.ent_coef_final is None:
+        args.ent_coef_final = args.ent_coef
     if args.best_metric is None:
         # The column curriculum's reward IS floors reached, and its win rate
         # (a full three-act clear) stays 0 for most of training — ep_ret is
@@ -175,6 +203,35 @@ def parse_args() -> argparse.Namespace:
     if args.env == "combat" and args.acts:
         raise SystemExit("--acts applies to the run-scale envs only.")
     return args
+
+
+def anneal_fraction(iteration: int, start_iter: int, n_iters: int) -> float:
+    """How far through THIS invocation's iterations we are: 0.0 on the first,
+    ``(n_iters - 1) / n_iters`` on the last.
+
+    Deliberately counted from ``start_iter`` rather than from 0, so a resumed
+    run runs a fresh schedule over its own ``--timesteps`` budget instead of
+    inheriting a decayed tail from the checkpoint's original run.
+    """
+    return (iteration - start_iter) / n_iters if n_iters > 0 else 0.0
+
+
+def anneal(start_value: float, end_value: float, fraction: float) -> float:
+    """Linear interpolation from ``start_value`` to ``end_value``."""
+    return start_value + (end_value - start_value) * fraction
+
+
+def kl_exceeded(kls: list[float], epoch_start: int, target_kl: float | None) -> bool:
+    """Should the epoch loop stop after the epoch whose minibatch KLs start at
+    ``epoch_start``? True when their MEAN exceeds ``target_kl``.
+
+    The mean, not the last minibatch's value: with 8 minibatches the tail
+    value swings enough to both abort a perfectly healthy update and wave
+    through an epoch that really did move the policy too far.
+    """
+    if target_kl is None or len(kls) <= epoch_start:
+        return False
+    return float(np.mean(kls[epoch_start:])) > target_kl
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -280,8 +337,8 @@ def main() -> None:
               f"(pass --fresh to start a new model).")
 
     agent = make_model(args, obs_dim, n_actions).to(device)
-    optimizer = torch.optim.Adam(
-        agent.parameters(), lr=DEFAULT_LR if args.lr is None else args.lr, eps=1e-5)
+    base_lr = DEFAULT_LR if args.lr is None else args.lr
+    optimizer = torch.optim.Adam(agent.parameters(), lr=base_lr, eps=1e-5)
 
     start_iter = 0
     start_step = 0
@@ -342,6 +399,17 @@ def main() -> None:
     # crash mid-run tears them down now rather than at interpreter exit.
     try:
         for iteration in range(start_iter, start_iter + n_iters):
+            # ── schedules ───────────────────────────────────────────────────────
+            # Both run over this invocation's iterations (see anneal_fraction).
+            # The LR has to be re-set every iteration, and here rather than at
+            # resume time: optimizer.load_state_dict above restored the
+            # checkpoint's LR into the param groups.
+            frac = anneal_fraction(iteration, start_iter, n_iters)
+            if args.anneal_lr:
+                for group in optimizer.param_groups:
+                    group["lr"] = anneal(base_lr, 0.0, frac)
+            ent_coef = anneal(args.ent_coef, args.ent_coef_final, frac)
+
             # ── collect a rollout ───────────────────────────────────────────────
             for t in range(N):
                 global_step += E
@@ -414,9 +482,10 @@ def main() -> None:
             b_val = val_buf.reshape(-1)
 
             idx = np.arange(batch_size)
-            approx_kl = torch.tensor(0.0)
+            kls: list[float] = []
             clipfracs: list[float] = []
             for _ in range(args.epochs):
+                epoch_start = len(kls)
                 np.random.shuffle(idx)
                 for start in range(0, batch_size, mb_size):
                     mb = idx[start:start + mb_size]
@@ -425,7 +494,7 @@ def main() -> None:
                     logratio = newlogp - b_logp[mb]
                     ratio = logratio.exp()
                     with torch.no_grad():
-                        approx_kl = ((ratio - 1) - logratio).mean()
+                        kls.append(float(((ratio - 1) - logratio).mean()))
                         clipfracs.append(((ratio - 1.0).abs() > args.clip).float().mean().item())
 
                     mb_adv = b_adv[mb]
@@ -443,15 +512,19 @@ def main() -> None:
                     v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
 
                     ent_loss = entropy.mean()
-                    loss = pg_loss - args.ent_coef * ent_loss + args.vf_coef * v_loss
+                    loss = pg_loss - ent_coef * ent_loss + args.vf_coef * v_loss
 
                     optimizer.zero_grad()
                     loss.backward()
                     nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                     optimizer.step()
 
-                if args.target_kl is not None and approx_kl > args.target_kl:
+                # Early-stop on the epoch's MEAN approx_kl. The last
+                # minibatch's value alone is noisy enough to both stop a
+                # healthy update and miss a genuinely destructive one.
+                if kl_exceeded(kls, epoch_start, args.target_kl):
                     break
+            approx_kl = float(np.mean(kls)) if kls else float("nan")
 
             # ── logging ─────────────────────────────────────────────────────────
             # sps measures THIS process's throughput, so a resume doesn't report
@@ -466,7 +539,7 @@ def main() -> None:
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
                 f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
-                f"ent {ent_loss.item():.3f}  kl {approx_kl.item():.4f}  "
+                f"ent {ent_loss.item():.3f}  kl {approx_kl:.4f}  "
                 f"clipfrac {np.mean(clipfracs):.3f}",
                 flush=True,
             )
@@ -476,7 +549,7 @@ def main() -> None:
                     wall_seconds=round(elapsed, 3), sps=sps,
                     ep_ret=ret, win=wr, ep_len=eplen,
                     pg=pg_loss.item(), v=v_loss.item(), ent=ent_loss.item(),
-                    kl=approx_kl.item(), clipfrac=float(np.mean(clipfracs)), lr=lr,
+                    kl=approx_kl, clipfrac=float(np.mean(clipfracs)), lr=lr,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────

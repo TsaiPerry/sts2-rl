@@ -68,10 +68,9 @@ def test_split_is_even_and_total_preserving():
 
 
 def test_resolve_n_workers():
-    assert resolve_n_workers(8, 0) == 0            # explicit serial path
+    assert resolve_n_workers(8, 0) == 0            # the default: serial path
     assert resolve_n_workers(8, 4) == 4
     assert resolve_n_workers(4, 99) == 4           # never more workers than envs
-    assert 1 <= resolve_n_workers(8, None) <= 8    # auto
     with pytest.raises(ValueError):
         resolve_n_workers(8, -1)
 
