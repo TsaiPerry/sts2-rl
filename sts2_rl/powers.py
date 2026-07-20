@@ -3801,6 +3801,31 @@ class BlockNextTurnPower(Power):
         )
 
 
+class ConfusedPower(Power):
+    """Whenever the owner draws a card, that card's cost becomes a random
+    0-3 for the rest of the combat. Does not stack.
+
+    Source: ConfusedPower.cs — AfterCardDrawn sets EnergyCost.SetThisCombat
+    (NextInt(4)), skipping X-cost cards (EnergyCost.Canonical < 0). Applied
+    by Snecko Eye at the start of every combat.
+    """
+
+    id = "confused"
+    name = "Confused"
+    power_type = PowerType.DEBUFF
+
+    def on_stack(self, amount: int) -> None:
+        pass  # PowerStackType.Single
+
+    def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
+        if card.energy_cost_x:      # EnergyCost.Canonical < 0
+            return
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        card.set_cost_this_combat(combat._rng.randrange(4))
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -3933,5 +3958,6 @@ ALL_POWERS: dict[str, type[Power]] = {
         TheBombPower,
         TheGambitPower,
         BlockNextTurnPower,
+        ConfusedPower,
     ]
 }

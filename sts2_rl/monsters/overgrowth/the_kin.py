@@ -111,7 +111,10 @@ class KinPriest(Monster):
 @dataclass
 class TheKinEncounter(Encounter):
     """KinFollower (dance start) + KinFollower + KinPriest."""
-    monster_classes: list = field(default_factory=list)
+    # Declared for metadata consumers (the run obs' boss identity);
+    # create_monsters below overrides instantiation for the dance start.
+    monster_classes: list = field(
+        default_factory=lambda: [KinFollower, KinFollower, KinPriest])
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
         return [

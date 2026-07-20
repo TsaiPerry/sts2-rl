@@ -1,5 +1,21 @@
 # Shared (cross-act) events — port plan
 
+> **STATUS (2026-07-19): 16 of 18 shared events shipped, plus the shared
+> ancient Darv.** Waves 1–3 (15 events), the SHARED_EVENTS queue wiring, and
+> wave 4's Darv + Fake Merchant are done and green (2103 tests).
+>
+> **Deferred by decision, not by accident:**
+> - **Crystal Sphere** — its whole payout is the 11×11 reveal minigame
+>   (`Events/Custom/CrystalSphereEvent/`). Any headless form is an invented
+>   abstraction rather than a port, so it was left out instead of guessed at.
+> - **War Historian Repy** — `IsAllowed => false` in the source; it is reached
+>   only by carrying a Lantern Key card into its room, via a quest/room hook
+>   the sim does not model. Porting the event without that hook would add
+>   unreachable code.
+>
+> Everything below is the original plan; the per-wave notes stand as the
+> record of what was built.
+
 **Goal:** port `ModelDb.AllSharedEvents` (18 events available in every act's
 event queue, ModelDb.cs:135) and `AllSharedAncients` (Darv), closing the
 "no shared (cross-act) events" deviation documented in rooms.py.

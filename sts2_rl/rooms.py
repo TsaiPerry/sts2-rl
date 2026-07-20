@@ -11,13 +11,13 @@ Ports the room side of the game's map feature:
 Act coverage mirrors the sim: Overgrowth, Underdocks, Hive, and Glory all
 have full encounter pools (weak/normal/elite/boss splits and the EncounterTag
 values transcribed from src/Core/Models/Encounters) and full event pools
-(each act's AllEvents order, events/__init__.py) — every act ModelDb ships is
+(each act's AllEvents order, events/__init__.py) plus the cross-act
+SHARED_EVENTS pool every act's queue carries — every act ModelDb ships is
 wired into the run layer.
 
-Deviations from the source, documented per the repo convention: no shared
-(cross-act) events, no unlock/epoch gating, no tutorial first-run "?"
-overrides, no boss discovery-order override, and no run-level hooks on the
-unknown-odds rolls.
+Deviations from the source, documented per the repo convention: no
+unlock/epoch gating, no tutorial first-run "?" overrides, no boss
+discovery-order override, and no run-level hooks on the unknown-odds rolls.
 """
 from __future__ import annotations
 
@@ -273,8 +273,14 @@ class RoomSet:
         has_second_boss: bool = False,
     ) -> RoomSet:
         """ActModel.GenerateRooms (+ RunManager's DoubleBoss second boss)."""
+        from .events import SHARED_EVENTS
+
         room_set = cls(rooms, rooms.encounters())
-        room_set.event_ids = list(rooms.event_pool)
+        # AllEvents.Concat(ModelDb.AllSharedEvents), then shuffle: the shared
+        # (cross-act) pool rides every act's queue, and each shared event's
+        # own IsAllowed gate — applied by ensure_next_event_is_valid — is what
+        # keeps it out of the acts it doesn't belong in.
+        room_set.event_ids = list(rooms.event_pool) + list(SHARED_EVENTS)
         rng.shuffle(room_set.event_ids)
         bag: list[str] = []
         for _ in range(num_weak):

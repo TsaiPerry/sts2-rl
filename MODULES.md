@@ -125,8 +125,12 @@ be played this turn; Entangled raises an Attack card's energy cost.
 
 ### `potions.py` â€” `Potion` + `ALL_POTIONS`
 Potion base plus the implemented potions (Fire / Block / Strength / Blood /
-Weak), values verified against the source models. Registered via
-`@register_potion` and built by id with `make_potion`.
+Weak, plus the event-only Glowwater, Potion-Shaped Rock and Foul Potion),
+values verified against the source models. Registered via `@register_potion`
+and built by id with `make_potion`. `in_reward_pool=False` keeps the
+event-only ones out of random potion rolls; the Foul Potion is the shared
+Fake Merchant event's key, and in combat it damages **every** creature —
+the thrower included (`CombatState.Creatures`).
 
 ### `history.py` â€” `CombatHistory` + entry types
 The combat event log, mirroring `CombatManager.History`. Records typed entries

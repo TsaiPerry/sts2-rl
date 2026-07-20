@@ -324,6 +324,14 @@ def _ref_run_build_obs(env: STS2RunEnv) -> np.ndarray:
             relics[idx] = 1.0
     o.extend(relics)
 
+    boss = [0.0] * RE.N_MONSTERS
+    if run.room_set is not None and run.room_set.boss_key:
+        for cls in run.room_set.next_boss_encounter.monster_classes:
+            idx = RE.MONSTER_INDEX.get(getattr(cls, "__name__", ""))
+            if idx is not None:
+                boss[idx] = 1.0
+    o.extend(boss)
+
     points = request.points if request is not None and request.kind == DecisionKind.MAP else []
     for m in range(RE.MAP_SLOTS):
         point = points[m] if m < len(points) else None
@@ -337,6 +345,30 @@ def _ref_run_build_obs(env: STS2RunEnv) -> np.ndarray:
             child_hist = [_ref_clip01(c / 3.0) for c in child_hist]
         o.extend(type_hot)
         o.extend(child_hist)
+
+    grid = [0.0] * (RE.MAP_GRID_ROWS * 7 * RE.MAP_GRID_NODE)
+    meta = [0.0, 0.0]
+    act_map = run.map
+    if act_map is not None:
+        for row in range(1, min(RE.MAP_GRID_ROWS, act_map.map_length - 1) + 1):
+            for point in act_map.points_in_row(row):
+                nb = ((row - 1) * 7 + point.col) * RE.MAP_GRID_NODE
+                grid[nb] = 1.0
+                grid[nb + 1 + RE._POINT_TYPE_INDEX[point.point_type]] = 1.0
+                for child in point.children:
+                    if child.row < act_map.map_length and 0 <= child.col < 7:
+                        grid[nb + 1 + RE._N_POINT_TYPES + child.col] = 1.0
+        cp = run.current_point
+        if cp is not None:
+            if cp is act_map.starting_point:
+                meta[0] = 1.0
+            elif cp is act_map.boss_point or cp is act_map.second_boss_point:
+                meta[1] = 1.0
+            elif 1 <= cp.row <= RE.MAP_GRID_ROWS and 0 <= cp.col < 7:
+                grid[((cp.row - 1) * 7 + cp.col) * RE.MAP_GRID_NODE
+                     + RE.MAP_GRID_NODE - 1] = 1.0
+    o.extend(grid)
+    o.extend(meta)
 
     event = request.event if request is not None and request.kind == DecisionKind.EVENT else None
     o.append(1.0 if event is not None else 0.0)

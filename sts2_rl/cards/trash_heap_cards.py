@@ -157,6 +157,7 @@ class EntrenchCard(Card):
     OnUpgrade cost -1.
     """
     id = "entrench"
+    gains_block = True  # CardModel.GainsBlock
     name = "Entrench"
     card_type = CardType.SKILL
     rarity = CardRarity.EVENT
@@ -298,6 +299,7 @@ class StackCard(Card):
     counted (it resolves out of the discard pile).
     """
     id = "stack"
+    gains_block = True  # CardModel.GainsBlock
     name = "Stack"
     card_type = CardType.SKILL
     rarity = CardRarity.EVENT

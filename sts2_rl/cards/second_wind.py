@@ -18,6 +18,7 @@ class SecondWindCard(Card):
       OnUpgrade: block +2 (→ 7)
     """
     id = "second_wind"
+    gains_block = True  # CardModel.GainsBlock
     name = "Second Wind"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON

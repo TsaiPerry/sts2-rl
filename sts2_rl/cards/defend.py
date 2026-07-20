@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 @register_card
 class DefendCard(Card):
     id = "defend"
+    gains_block = True  # CardModel.GainsBlock
     name = "Defend"
     card_type = CardType.SKILL
     rarity = CardRarity.BASIC

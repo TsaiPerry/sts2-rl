@@ -273,6 +273,32 @@ spaces, and the PPO loop are all unchanged.
   capacities, seed determinism, checkpoint round-trip + arch refusal).
   A/B: `py train_torch.py --env column --arch mlp|entity --fresh --save ...`.
 
+Landed (2026-07-19) — run-obs schema v4 (whole map + boss):
+
+- **`run.boss.identity`** (144 = monsters capacity): multi-hot of the act
+  boss encounter's monster classes, written every step from
+  `room_set.next_boss_encounter` — the engine always knew the boss from act
+  entry (as the game's `NTopBarBossIcon` shows the player); the obs just
+  never exposed it. Ends in `.identity` so `models._segment_plan` routes it
+  through the shared monsters embedding table: the entity arch reads it with
+  the same embeddings combat already trained, zero new parameters.
+- **`run.map.grid`** (15 rows × 7 cols × 18) + **`run.map.meta`** (2): the
+  whole act map every step — per node: present, `MapPointType` one-hot,
+  child-column mask (exact edge topology), current-position bit; meta flags
+  the off-grid Ancient/boss positions. Replaces nothing: the 7 `map{m}`
+  slots stay as the action-aligned 1-ply view of the live MAP decision.
+  Before v4 the policy saw only those slots — one exact ply plus a children
+  type histogram — so multi-floor routing (reaching a shop with gold banked,
+  dodging an elite chain, lining up the pre-boss rest) was unlearnable on
+  `--env run`. Static per map, so `_build_obs` caches the block per map
+  object and does one vectorized copy + 3 writes per step.
+- **v3 checkpoints migrate instead of retraining**
+  (`checkpoints.migrate_checkpoint`, `py migrate_ckpt.py old.pt new.pt`):
+  feature-only additions splice zero columns into each trunk's first layer
+  (entity: at encoder-output offsets) and into the matching Adam moments —
+  function-preserving, bit-identical outputs at load, verified by
+  `test/test_map_obs_and_migration.py`.
+
 ## Reward (minor, alongside training runs)
 
 - Enable a small `enemy_hp_reward_scale` for multi-encounter pools; normalize

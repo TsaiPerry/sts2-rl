@@ -19,6 +19,7 @@ class ColossusCard(Card):
       OnUpgrade: block +3 (→ 8)
     """
     id = "colossus"
+    gains_block = True  # CardModel.GainsBlock
     name = "Colossus"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON

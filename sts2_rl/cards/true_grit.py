@@ -20,6 +20,7 @@ class TrueGritCard(Card):
       OnUpgrade: block +2 (→ 9), selection instead of random
     """
     id = "true_grit"
+    gains_block = True  # CardModel.GainsBlock
     name = "True Grit"
     card_type = CardType.SKILL
     rarity = CardRarity.COMMON

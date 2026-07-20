@@ -17,6 +17,7 @@ class ShrugItOffCard(Card):
       OnUpgrade: block +3 (→ 11)
     """
     id = "shrug_it_off"
+    gains_block = True  # CardModel.GainsBlock
     name = "Shrug It Off"
     card_type = CardType.SKILL
     rarity = CardRarity.COMMON

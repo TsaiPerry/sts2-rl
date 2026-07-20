@@ -1,6 +1,7 @@
 """Cards granted only by events — not part of any reward pool.
 
-Sources: ByrdonisEgg.cs (Byrdonis Nest), Peck.cs and ToricToughness.cs
+Sources: ByrdonisEgg.cs and ByrdSwoop.cs (Byrdonis Nest's Hatch, granted by
+the Byrdpip relic — see relics/byrdpip.py), Peck.cs and ToricToughness.cs
 (Wood Carvings), plus the Act-2 (Underdocks / Hive) event cards —
 UltimateStrike/UltimateDefend (Amalgamator), Exterminate/Squash (Bugslayer),
 Metamorphosis (Spirit Grafter), Enlightenment (Zen Weaver), FeedingFrenzy
@@ -12,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .base import Card, CardRarity, CardType, TargetType, register_card
+from ..rest_site import RestSiteOption
 
 if TYPE_CHECKING:
     from ..combat import CombatCtx
@@ -19,9 +21,10 @@ if TYPE_CHECKING:
 
 @register_card
 class ByrdonisEggCard(Card):
-    """Quest — Unplayable. Taken from the Byrdonis Nest event; in the game it
-    adds a "Hatch" rest-site option (pet). The sim has no rest sites, so in
-    combat it is simply an unplayable card clogging the deck.
+    """Quest — Unplayable. Taken from the Byrdonis Nest event. Adds a HATCH
+    rest-site option (ByrdonisEgg.cs TryModifyRestSiteOptions): selecting it
+    grants the Byrdpip relic, which transforms every Byrdonis Egg in the
+    deck into ByrdSwoop (see relics/byrdpip.py).
 
     Source: ByrdonisEgg.cs
       Cost -1 | Quest | Quest | TargetType.None | Unplayable | MaxUpgradeLevel 0
@@ -41,6 +44,37 @@ class ByrdonisEggCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
+
+    def modify_rest_site_options(self, run, options) -> None:
+        options.append(RestSiteOption("HATCH", lambda run: run.add_relic("byrdpip")))
+
+
+@register_card
+class ByrdSwoopCard(Card):
+    """Attack (Event, 0E) — deal 14 damage. Granted by Byrdpip transforming
+    every Byrdonis Egg in the deck (Hatch).
+
+    Source: ByrdSwoop.cs — Damage 14 (Move), OnUpgrade +4.
+    """
+    id = "byrd_swoop"
+    name = "Byrd Swoop"
+    card_type = CardType.ATTACK
+    rarity = CardRarity.EVENT
+    target_type = TargetType.ANY_ENEMY
+
+    def _init_vars(self) -> None:
+        self._energy_cost = 0
+        self._damage = 14
+
+    def _on_upgrade(self) -> None:
+        self._damage += 4
+
+    def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
+        from ..cmds import DamageCmd
+        DamageCmd.deal(
+            ctx.hooks, ctx.resolve_target(target_idx), self._damage,
+            dealer=ctx.player, card=self,
+        )
 
 
 @register_card
@@ -89,6 +123,7 @@ class ToricToughnessCard(Card):
     Granted by Wood Carvings (Torus), transforming a Basic card.
     """
     id = "toric_toughness"
+    gains_block = True  # CardModel.GainsBlock
     name = "Toric Toughness"
     card_type = CardType.SKILL
     rarity = CardRarity.EVENT
@@ -151,6 +186,7 @@ class UltimateDefendCard(Card):
     Amalgamator event (Combine Defends).
     """
     id = "ultimate_defend"
+    gains_block = True  # CardModel.GainsBlock
     name = "Ultimate Defend"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON

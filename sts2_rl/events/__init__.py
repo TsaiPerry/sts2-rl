@@ -41,6 +41,9 @@ globals().update({cls.__name__: cls for cls in ALL_EVENTS.values()})
 from .dense_vegetation import DENSE_VEGETATION_EVENT_ENCOUNTER  # noqa: E402
 from .punch_off import PUNCH_OFF_EVENT_ENCOUNTER  # noqa: E402
 from .the_lantern_key import MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER  # noqa: E402
+from ..monsters.fake_merchant import (  # noqa: E402
+    FAKE_MERCHANT_EVENT_ENCOUNTER,
+)
 from ..monsters.glory import (  # noqa: E402
     BATTLEWORN_DUMMY_SETTING_1,
     BATTLEWORN_DUMMY_SETTING_2,
@@ -104,6 +107,30 @@ GLORY_EVENTS: tuple[str, ...] = (
     "tinker_time",
 )
 
+# The cross-act pool in the source's order (ModelDb.AllSharedEvents), which
+# ActModel.GenerateRooms appends to EVERY act's event queue. Each event's own
+# IsAllowed gate is what keeps it out of the acts it doesn't belong in (see
+# RoomSet.ensure_next_event_is_valid). Ported so far; the rest of the 18 land
+# with their waves (docs/superpowers/plans/2026-07-19-shared-events.md).
+SHARED_EVENTS: tuple[str, ...] = (
+    "brain_leech",
+    "doll_room",
+    "fake_merchant",
+    "potion_courier",
+    "ranwid_the_elder",
+    "relic_trader",
+    "room_full_of_cheese",
+    "self_help_book",
+    "slippery_bridge",
+    "stone_of_all_time",
+    "symbiote",
+    "tea_master",
+    "the_future_of_potions",
+    "the_legends_were_true",
+    "this_or_that",
+    "welcome_to_wongos",
+)
+
 
 def allowed_events(
     run: RunState,
@@ -126,10 +153,12 @@ __all__ = [
     "UNDERDOCKS_EVENTS",
     "HIVE_EVENTS",
     "GLORY_EVENTS",
+    "SHARED_EVENTS",
     "allowed_events",
     "DENSE_VEGETATION_EVENT_ENCOUNTER",
     "PUNCH_OFF_EVENT_ENCOUNTER",
     "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
+    "FAKE_MERCHANT_EVENT_ENCOUNTER",
     "BATTLEWORN_DUMMY_SETTING_1",
     "BATTLEWORN_DUMMY_SETTING_2",
     "BATTLEWORN_DUMMY_SETTING_3",

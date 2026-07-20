@@ -1265,3 +1265,53 @@ def test_jeweled_mask_free_power_turn_one():
     # Either it was in the natural draw (5/12 chance) or the mask moved it.
     assert inflame is not None
     assert inflame._free_this_turn or len(combat.player.hand) == 6
+
+
+def test_girya_lift_option():
+    run = fresh_run(53)
+    run.add_relic("girya")
+    girya = run.relics[0]
+    for expected in (1, 2, 3):
+        options = run.rest_site_options()
+        assert [o.key for o in options] == ["LIFT"]
+        options[0].on_select(run)
+        assert girya.times_lifted == expected
+    # Maxed out at 3 lifts: the option disappears.
+    assert run.rest_site_options() == []
+
+
+def test_shovel_dig_option():
+    run = fresh_run(53)
+    run.add_relic("shovel")
+    bag_before = len(run.relic_grab_bag)
+    relics_before = len(run.relics)
+    options = run.rest_site_options()
+    assert [o.key for o in options] == ["DIG"]
+    options[0].on_select(run)
+    assert len(run.relic_grab_bag) == bag_before - 1
+    assert len(run.relics) == relics_before + 1
+    # Empty bag: the option disappears.
+    run.relic_grab_bag.clear()
+    assert run.rest_site_options() == []
+
+
+def test_eternal_feather_heals_on_rest_entry():
+    run = fresh_run(53)
+    run.add_relic("eternal_feather")
+    run.hp = 40
+    relic = run.relics[0]
+    groups = len(run.deck) // 5
+    relic.after_room_entered(run, None, RoomType.REST_SITE)
+    assert run.hp == 40 + 3 * groups
+    # Not a rest site: no heal.
+    hp = run.hp
+    relic.after_room_entered(run, None, RoomType.MONSTER)
+    assert run.hp == hp
+
+
+def test_miniature_tent_disables_hook_returns_false():
+    run = fresh_run(1)
+    run.add_relic("miniature_tent")
+    assert run.should_disable_remaining_rest_site_options() is False
+    run2 = fresh_run(1)
+    assert run2.should_disable_remaining_rest_site_options() is True

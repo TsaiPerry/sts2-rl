@@ -206,6 +206,7 @@ class EquilibriumCard(Card):
     block +3.
     """
     id = "equilibrium"
+    gains_block = True  # CardModel.GainsBlock
     name = "Equilibrium"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON
@@ -232,6 +233,7 @@ class FinesseCard(Card):
     Source: Finesse.cs — Block 4 (Move), Draw 1, OnUpgrade block +3.
     """
     id = "finesse"
+    gains_block = True  # CardModel.GainsBlock
     name = "Finesse"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON
@@ -391,6 +393,7 @@ class PanicButtonCard(Card):
     block +10.
     """
     id = "panic_button"
+    gains_block = True  # CardModel.GainsBlock
     name = "Panic Button"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON
@@ -722,6 +725,7 @@ class TheGambitCard(Card):
     block +25.
     """
     id = "the_gambit"
+    gains_block = True  # CardModel.GainsBlock
     name = "The Gambit"
     card_type = CardType.SKILL
     rarity = CardRarity.RARE

@@ -15,6 +15,7 @@ class RelaxCard(Card):
     Pael's Horn."""
 
     id = "relax"
+    gains_block = True  # CardModel.GainsBlock
     name = "Relax"
     card_type = CardType.SKILL
     rarity = CardRarity.ANCIENT

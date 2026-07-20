@@ -18,6 +18,7 @@ class BloodWallCard(Card):
       OnUpgrade: block +4 (→ 20)
     """
     id = "blood_wall"
+    gains_block = True  # CardModel.GainsBlock
     name = "Blood Wall"
     card_type = CardType.SKILL
     rarity = CardRarity.COMMON

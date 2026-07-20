@@ -21,6 +21,7 @@ class EvilEyeCard(Card):
       OnUpgrade: block +3 (→ 11)
     """
     id = "evil_eye"
+    gains_block = True  # CardModel.GainsBlock
     name = "Evil Eye"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON

@@ -172,10 +172,19 @@ def parse_args() -> argparse.Namespace:
                          "the checkpoint — the sane behavior for open-ended "
                          "resume-based training")
     ap.add_argument("--target-kl", type=float, default=None,
-                    help="early-stop the epoch loop when an epoch's mean "
-                         "approx_kl exceeds this (default: 0.02 for --env "
+                    help="early-stop the epoch loop when the running mean of "
+                         "the current epoch's approx_kl exceeds this, checked "
+                         "after every minibatch (default: 0.02 for --env "
                          "run/column, off for --env combat; pass 0 to turn it "
                          "off explicitly)")
+    ap.add_argument("--critic-warmup", type=int, default=0,
+                    help="train the VALUE HEAD ONLY for this many iterations "
+                         "at the start of this invocation, leaving the policy "
+                         "bit-identical. Use it when resuming after a change "
+                         "that moves the return distribution (a new reward "
+                         "term, an env rule like a per-act heal): the critic "
+                         "is stale, its advantages are mis-signed, and a "
+                         "full-LR resume spends them wrecking a good policy")
     ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
     args = ap.parse_args()
     if args.save is None:
@@ -224,17 +233,29 @@ def anneal(start_value: float, end_value: float, fraction: float) -> float:
     return start_value + (end_value - start_value) * fraction
 
 
-def kl_exceeded(kls: list[float], epoch_start: int, target_kl: float | None) -> bool:
-    """Should the epoch loop stop after the epoch whose minibatch KLs start at
-    ``epoch_start``? True when their MEAN exceeds ``target_kl``.
+def kl_exceeded(kls: list[float], epoch_start: int, target_kl: float | None,
+                min_samples: int = 2) -> bool:
+    """Should the epoch loop stop? True when the MEAN of the current epoch's
+    minibatch KLs SO FAR (those from ``epoch_start`` on) exceeds ``target_kl``.
 
     The mean, not the last minibatch's value: with 8 minibatches the tail
     value swings enough to both abort a perfectly healthy update and wave
     through an epoch that really did move the policy too far.
+
+    Scored after EVERY minibatch, not only at the epoch boundary. A boundary-
+    only check bounds nothing: the obs-v4 resume put a full epoch through at
+    mean KL 0.13 — 30x a healthy iteration and 6x the target — and that single
+    epoch cost the policy 4 reward points it never recovered. ``min_samples``
+    keeps the mean-not-last-value rationale intact by refusing to fire on one
+    noisy minibatch; callers with fewer minibatches than that must lower it or
+    the guard never fires at all.
     """
-    if target_kl is None or len(kls) <= epoch_start:
+    if target_kl is None:
         return False
-    return float(np.mean(kls[epoch_start:])) > target_kl
+    seen = kls[epoch_start:]
+    if len(seen) < max(1, min_samples):
+        return False
+    return float(np.mean(seen)) > target_kl
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -487,7 +508,18 @@ def main() -> None:
             idx = np.arange(batch_size)
             kls: list[float] = []
             clipfracs: list[float] = []
+            # A stale critic's advantages are mis-signed, so spend the first
+            # --critic-warmup iterations fitting the value head alone. The
+            # actor's parameters are disjoint from the critic's (separate
+            # trunks, and separate encoders for --arch entity), so dropping
+            # the policy and entropy terms leaves the actor out of the graph
+            # entirely: zero_grad() sets its grads to None and Adam skips it,
+            # momentum included. The policy comes out bit-identical.
+            critic_only = iteration < start_iter + args.critic_warmup
+            stop_epochs = False
             for _ in range(args.epochs):
+                if stop_epochs:
+                    break
                 epoch_start = len(kls)
                 np.random.shuffle(idx)
                 for start in range(0, batch_size, mb_size):
@@ -515,18 +547,24 @@ def main() -> None:
                     v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
 
                     ent_loss = entropy.mean()
-                    loss = pg_loss - ent_coef * ent_loss + args.vf_coef * v_loss
+                    if critic_only:
+                        loss = args.vf_coef * v_loss
+                    else:
+                        loss = pg_loss - ent_coef * ent_loss + args.vf_coef * v_loss
 
                     optimizer.zero_grad()
                     loss.backward()
                     nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                     optimizer.step()
 
-                # Early-stop on the epoch's MEAN approx_kl. The last
-                # minibatch's value alone is noisy enough to both stop a
-                # healthy update and miss a genuinely destructive one.
-                if kl_exceeded(kls, epoch_start, args.target_kl):
-                    break
+                    # Checked here rather than at the epoch boundary so a
+                    # destructive update costs a minibatch or two, not a whole
+                    # epoch. During the warm-up the policy cannot move, so the
+                    # KLs are 0 and this never fires.
+                    if kl_exceeded(kls, epoch_start, args.target_kl,
+                                   min_samples=min(2, args.minibatches)):
+                        stop_epochs = True
+                        break
             approx_kl = float(np.mean(kls)) if kls else float("nan")
 
             # ── logging ─────────────────────────────────────────────────────────
@@ -543,7 +581,11 @@ def main() -> None:
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
                 f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
                 f"ent {ent_loss.item():.3f}  kl {approx_kl:.4f}  "
-                f"clipfrac {np.mean(clipfracs):.3f}",
+                f"clipfrac {np.mean(clipfracs):.3f}"
+                # pg/ent are still reported during the warm-up (they say how
+                # stale the advantages are) but were not applied — mark it so
+                # a flat ep_ret here doesn't read as a stalled run.
+                + ("  [critic-warmup]" if critic_only else ""),
                 flush=True,
             )
             if args.save:

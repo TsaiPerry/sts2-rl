@@ -19,6 +19,7 @@ class FlameBarrierCard(Card):
       OnUpgrade: block +4 (→ 16), damage back +2 (→ 6)
     """
     id = "flame_barrier"
+    gains_block = True  # CardModel.GainsBlock
     name = "Flame Barrier"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON

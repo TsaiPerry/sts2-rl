@@ -18,6 +18,7 @@ class TauntCard(Card):
       OnUpgrade: block +1 (→ 8), Vulnerable +1 (→ 2)
     """
     id = "taunt"
+    gains_block = True  # CardModel.GainsBlock
     name = "Taunt"
     card_type = CardType.SKILL
     rarity = CardRarity.UNCOMMON

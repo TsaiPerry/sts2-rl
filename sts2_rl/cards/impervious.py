@@ -17,6 +17,7 @@ class ImperviousCard(Card):
       OnUpgrade: block +10 (→ 40)
     """
     id = "impervious"
+    gains_block = True  # CardModel.GainsBlock
     name = "Impervious"
     card_type = CardType.SKILL
     rarity = CardRarity.RARE

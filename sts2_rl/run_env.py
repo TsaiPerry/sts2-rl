@@ -31,7 +31,9 @@ Action space (flat Discrete, three blocks):
 
 Observation (flat Box, probe-verified at construction): a run block (phase
 one-hot, vitals, gold, act/floor, potion belt, deck histogram, relic
-presence), phase-specific blocks (map slots with 1-ply lookahead, event
+presence, the act boss's identity, and the whole act map grid with
+topology and current position — both visible every step, as the game shows
+the player), phase-specific blocks (map slots with 1-ply lookahead, event
 identity+option slots, shop stock with prices/affordability, reward slots,
 select purpose+candidate histogram), then the full combat block of
 full_env.build_combat_obs (zeroed outside combat). Conventions follow
@@ -59,14 +61,16 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .actmap import MapPointType
+from .actmap import ACT_MAP_CONFIGS, MapPointType, _MAP_WIDTH
 from .combat import CombatState
 from .driver import DecisionKind, DecisionRequest, RunDriver, RunResult
 from .events import ALL_EVENTS
 from .full_env import (
     CARD_IDS,
     CARD_INDEX,
+    MONSTER_INDEX,
     N_CARDS,
+    N_MONSTERS,
     N_POTIONS,
     POTION_INDEX,
     _abs2,
@@ -81,12 +85,15 @@ from .run import RunState
 from .vocab import capacity as vocab_capacity, frozen_ids
 
 # Bump whenever the run-observation layout or action layout changes (any
-# change invalidates saved run-env models — retrain). v2: capacity-padded
-# frozen vocabularies (vocab.py) — dims are reserved capacities, so future
-# content additions no longer bump this. v3: the shop's Colorless section
-# (SHOP_CARD_SLOTS 5 → 7, shifting the relic/potion/removal segments and
-# the SHOP decision's entry indices).
-RUN_OBS_SCHEMA_VERSION = 3
+# change invalidates saved run-env models — retrain, or migrate where a
+# migration exists). v2: capacity-padded frozen vocabularies (vocab.py) —
+# dims are reserved capacities, so future content additions no longer bump
+# this. v3: the shop's Colorless section (SHOP_CARD_SLOTS 5 → 7, shifting
+# the relic/potion/removal segments and the SHOP decision's entry indices).
+# v4: run.boss.identity + run.map.grid/meta (the act boss and the whole act
+# map, matching what the game shows the player all act) — v3 checkpoints
+# migrate losslessly via migrate_ckpt.py (checkpoints.migrate_checkpoint).
+RUN_OBS_SCHEMA_VERSION = 4
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
 # Potion belt headroom: base 3 slots + Phial Holster's +1.
@@ -98,6 +105,17 @@ MAX_POTION_SLOTS = 4
 CHOICE_SLOTS = 16
 # Map row width (7-wide grid) — the most travel options free travel allows.
 MAP_SLOTS = 7
+# Full-map grid (run.map.grid): playable rows 1..MAP_GRID_ROWS × the 7-wide
+# grid. Sized to the longest act (Overgrowth/Underdocks, 15 rooms); shorter
+# acts leave their top rows zero. The Ancient (row 0) and boss rows live
+# outside the grid, exactly as in actmap.StandardMap — run.map.meta flags
+# cover standing on them, run.boss.identity names the boss.
+MAP_GRID_ROWS = 15
+assert MAP_GRID_ROWS == max(c.num_rooms for c in ACT_MAP_CONFIGS.values())
+# Per grid node: present, MapPointType one-hot, child-column mask (bit c =
+# an edge to column c of the next row; edges to the off-grid boss point are
+# omitted — every top-row node has one), and a "current position" bit.
+MAP_GRID_NODE = 1 + len(MapPointType) + _MAP_WIDTH + 1
 # Shop stock layout (MerchantInventory.all_entries order): 5 character card
 # slots followed by the 2 Colorless slots (Uncommon, Rare).
 SHOP_CARD_SLOTS = 7
@@ -165,8 +183,18 @@ def run_obs_segments(card_obs: str = "hybrid") -> list[tuple[str, int]]:
         segs.append((f"run.potion{p}", 1 + N_POTIONS + 1))
     segs.append(("run.deck", 2 * N_CARDS))
     segs.append(("run.relics", N_RELICS))
+    # The act boss, known from act entry like the game's top-bar boss icon
+    # (NTopBarBossIcon): a multi-hot of the boss encounter's monster classes
+    # over the shared monsters vocabulary. The ".identity" suffix routes it
+    # through the entity arch's monsters embedding table (models._segment_plan).
+    segs.append(("run.boss.identity", N_MONSTERS))
     for m in range(MAP_SLOTS):
         segs.append((f"map{m}", 1 + _N_POINT_TYPES + _N_POINT_TYPES))
+    # The whole act map, visible every step like the game's map screen — the
+    # map{m} slots above stay the action-aligned 1-ply view of the current
+    # MAP decision's options.
+    segs.append(("run.map.grid", MAP_GRID_ROWS * _MAP_WIDTH * MAP_GRID_NODE))
+    segs.append(("run.map.meta", 2))   # [at Ancient, at boss] (off-grid rows)
     segs.extend([
         ("event.present", 1),
         ("event.identity", N_EVENTS),
@@ -222,6 +250,29 @@ class _RunLayout:
     sp_stride: int
     rc_base: int
     rc_stride: int
+
+
+def _map_grid_block(act_map) -> np.ndarray:
+    """The static part of ``run.map.grid`` for one act map — present flags,
+    node types and edge topology; the per-step current-position bit is
+    written by ``_build_obs``. Built once per map object and cached (the map
+    only changes at act entry or a Golden Compass regeneration). Rows past
+    MAP_GRID_ROWS (a ``column_rooms`` override taller than any real act) are
+    clipped."""
+    block = np.zeros(MAP_GRID_ROWS * _MAP_WIDTH * MAP_GRID_NODE, dtype=np.float32)
+    child_base = 1 + _N_POINT_TYPES
+    top = min(MAP_GRID_ROWS, act_map.map_length - 1)
+    for row in range(1, top + 1):
+        for point in act_map.points_in_row(row):
+            nb = ((row - 1) * _MAP_WIDTH + point.col) * MAP_GRID_NODE
+            block[nb] = 1.0
+            block[nb + 1 + _POINT_TYPE_INDEX[point.point_type]] = 1.0
+            for child in point.children:
+                # Off-grid children (the boss point) carry no routing info —
+                # every top-row node connects to the boss.
+                if child.row < act_map.map_length and 0 <= child.col < _MAP_WIDTH:
+                    block[nb + child_base + child.col] = 1.0
+    return block
 
 
 @lru_cache(maxsize=None)
@@ -292,6 +343,9 @@ class STS2RunEnv(gym.Env):
         self._request: DecisionRequest | None = None
         self._result: RunResult | None = None
         self._steps = 0
+        # (map object, static run.map.grid block) — rebuilt when the run's
+        # map is a different object (act entry / Golden Compass).
+        self._map_grid_cache: tuple[Any, np.ndarray] | None = None
 
     # ------------------------------------------------------------------
     # Named layout (pin tests)
@@ -352,6 +406,7 @@ class STS2RunEnv(gym.Env):
         self._run = self._make_run_state()
         self._result = None
         self._steps = 0
+        self._map_grid_cache = None
 
         run = self._run
 
@@ -514,6 +569,17 @@ class STS2RunEnv(gym.Env):
             if idx is not None:
                 buf[relic_base + idx] = 1.0
 
+        # ── Boss identity (known from act entry, like the boss icon) ─────
+        room_set = run.room_set
+        if room_set is not None and room_set.boss_key:
+            boss_base = S["run.boss.identity"]
+            # next_boss_encounter switches to the second boss under
+            # DoubleBoss once the first falls, matching the icon.
+            for cls in room_set.next_boss_encounter.monster_classes:
+                idx = MONSTER_INDEX.get(getattr(cls, "__name__", ""))
+                if idx is not None:
+                    buf[boss_base + idx] = 1.0
+
         # ── Map block (filled during MAP; slots align with choice slots) ─
         if request is not None and request.kind == DecisionKind.MAP:
             points = request.points
@@ -531,6 +597,25 @@ class STS2RunEnv(gym.Env):
                     counts[ci] = counts.get(ci, 0) + 1
                 for ci, c in counts.items():
                     buf[child_base + ci] = _clip01(c / 3.0)
+
+        # ── Whole-map grid (visible every step, like the map screen) ─────
+        act_map = run.map
+        if act_map is not None:
+            cache = self._map_grid_cache
+            if cache is None or cache[0] is not act_map:
+                cache = (act_map, _map_grid_block(act_map))
+                self._map_grid_cache = cache
+            gb = S["run.map.grid"]
+            buf[gb:gb + cache[1].shape[0]] = cache[1]
+            point = run.current_point
+            if point is not None:
+                if point is act_map.starting_point:
+                    buf[S["run.map.meta"]] = 1.0
+                elif point is act_map.boss_point or point is act_map.second_boss_point:
+                    buf[S["run.map.meta"] + 1] = 1.0
+                elif 1 <= point.row <= MAP_GRID_ROWS and 0 <= point.col < _MAP_WIDTH:
+                    buf[gb + ((point.row - 1) * _MAP_WIDTH + point.col)
+                        * MAP_GRID_NODE + MAP_GRID_NODE - 1] = 1.0
 
         # ── Event block ──────────────────────────────────────────────────
         event = request.event if request is not None and request.kind == DecisionKind.EVENT else None

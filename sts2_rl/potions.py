@@ -173,6 +173,46 @@ class PotionShapedRock(Potion):
         )
 
 
+@register_potion
+class FoulPotion(Potion):
+    """Deal 12 damage to EVERY creature — enemies and yourself.
+
+    Source: FoulPotion.cs — Event rarity, AnyTime usage. OnUse in combat
+    damages `CombatState.Creatures` (all creatures on all sides, pets
+    excepted — the sim has no pets) for DamageVar(12, Unpowered), so the
+    thrower takes 12 too; the AllEnemies TargetType is display-only.
+
+    Out of combat the potion is the shop/Fake Merchant "throw it at the
+    merchant" tool: at a real shop it pays GoldVar(100) and drives the
+    merchant off (`RunState.merchant_driven_off`), and at the Fake Merchant
+    event it starts that fight. Granted by the Potion Courier event, and by
+    the merchant himself as a Fake Merchant prerequisite.
+    """
+
+    id = "foul_potion"
+    name = "Foul Potion"
+    rarity = "event"
+    in_reward_pool = False       # Event rarity: never a random reward roll
+    DAMAGE = 12
+    GOLD = 100
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+
+        # CombatState.Creatures = all creatures on all sides.
+        for creature in [*ctx.enemies, ctx.player]:
+            if creature.is_gone:
+                continue
+            DamageCmd.deal(
+                ctx.hooks,
+                creature,
+                self.DAMAGE,
+                dealer=ctx.player,
+                props=DamageProps.NON_CARD_UNPOWERED,
+            )
+
+
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)
 
 

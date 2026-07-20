@@ -52,8 +52,9 @@ def masked_random_episode(env, seed, max_steps=20_000):
 
 def test_action_layout():
     # v2: capacity-padded frozen vocabularies; v3: the shop's Colorless
-    # section (SHOP_CARD_SLOTS 5 → 7).
-    assert RUN_OBS_SCHEMA_VERSION == 3
+    # section (SHOP_CARD_SLOTS 5 → 7); v4: run.boss.identity +
+    # run.map.grid/meta (boss + whole-map visibility).
+    assert RUN_OBS_SCHEMA_VERSION == 4
     # Combat block sized for a Phial-Holster belt: 1 + 10×6 + 4×6 = 85.
     assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 85
     assert CHOICE_BASE == 85

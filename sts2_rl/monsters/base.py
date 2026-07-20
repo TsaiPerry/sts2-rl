@@ -101,6 +101,11 @@ class Encounter:
     # EncounterModel.ShouldGiveRewards — False suppresses the post-combat
     # reward screen entirely (Battleworn Dummy's training fights).
     should_give_rewards: bool = True
+    # EncounterModel.MinGoldReward/MaxGoldReward are virtual: an encounter may
+    # override the room type's default range (the Fake Merchant pins 300).
+    # None on both = use the room-type range (rewards.GOLD_REWARD_RANGES).
+    min_gold: int | None = None
+    max_gold: int | None = None
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
         return [cls(hooks, rng) for cls in self.monster_classes]

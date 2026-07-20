@@ -82,6 +82,75 @@ def test_kl_early_stop_ignores_an_empty_epoch():
     assert train_torch.kl_exceeded([0.5], 1, 0.02) is False
 
 
+def test_kl_early_stop_fires_mid_epoch_not_only_at_its_boundary():
+    """The obs-v4 resume put a whole 8-minibatch epoch through at ~30x the
+    target before the boundary check could fire, and that one epoch cost the
+    policy 4 reward points permanently. Scoring the running mean after every
+    minibatch has to catch it while most of the epoch is still unspent."""
+    destructive = [0.13, 0.13]
+    assert train_torch.kl_exceeded(destructive, 0, 0.02) is True
+
+
+def test_kl_early_stop_waits_for_two_minibatches_before_it_can_fire():
+    """One hot minibatch is noise, not a destructive update — the mean-not-
+    last-value rationale still holds, it just no longer waits a whole epoch."""
+    assert train_torch.kl_exceeded([0.13], 0, 0.02) is False
+    assert train_torch.kl_exceeded([0.13], 0, 0.02, min_samples=1) is True
+
+
+def test_kl_early_stop_degrades_to_the_epoch_boundary_for_one_minibatch():
+    """With --minibatches 1 the caller lowers min_samples so the guard still
+    has effect instead of silently never firing."""
+    assert train_torch.kl_exceeded([0.13], 0, 0.02, min_samples=min(2, 1)) is True
+
+
+# ── critic warm-up ───────────────────────────────────────────────────────
+
+def test_critic_warmup_loss_leaves_the_policy_bit_identical():
+    """After an env change moves the return distribution, the critic is stale
+    and its advantages are mis-signed — so the warm-up trains the value head
+    ALONE. Actor and critic parameters are disjoint (separate trunks, and for
+    --arch entity separate encoders), so a value-only loss must leave every
+    actor parameter untouched even through Adam's momentum: zero_grad(
+    set_to_none=True) leaves actor grads None and Adam skips them.
+    """
+    import torch
+    from torch import nn
+
+    from sts2_rl.models import MaskedActorCritic
+
+    torch.manual_seed(0)
+    agent = MaskedActorCritic(obs_dim=12, n_actions=4, hidden=(16, 16))
+    optimizer = torch.optim.Adam(agent.parameters(), lr=1e-3)
+
+    obs = torch.randn(32, 12)
+    mask = torch.ones(32, 4, dtype=torch.bool)
+    act = torch.randint(0, 4, (32,))
+    ret = torch.randn(32)
+
+    before = {n: p.detach().clone() for n, p in agent.named_parameters()}
+    # Two steps: one is enough to populate Adam's momentum, the second proves
+    # that momentum doesn't leak into the actor on a later warm-up step.
+    for _ in range(2):
+        _, _, _, newval = agent.get_action_and_value(obs, mask, act)
+        loss = 0.5 * ((newval - ret) ** 2).mean()
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
+        optimizer.step()
+
+    for name, param in agent.named_parameters():
+        if name.startswith("actor"):
+            assert torch.equal(param, before[name]), f"{name} moved during warm-up"
+        else:
+            assert not torch.equal(param, before[name]), f"{name} did not train"
+
+
+def test_critic_warmup_is_off_by_default_and_scoped_to_this_invocation(monkeypatch):
+    assert parsed(monkeypatch, "--env", "run").critic_warmup == 0
+    assert parsed(monkeypatch, "--env", "run", "--critic-warmup", "20").critic_warmup == 20
+
+
 # ── defaults ─────────────────────────────────────────────────────────────
 
 def test_target_kl_defaults_on_for_run_scale_envs(monkeypatch):

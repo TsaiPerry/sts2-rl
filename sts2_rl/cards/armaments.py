@@ -21,6 +21,7 @@ class ArmamentsCard(Card):
       OnUpgrade: no value change (behavior switch only)
     """
     id = "armaments"
+    gains_block = True  # CardModel.GainsBlock
     name = "Armaments"
     card_type = CardType.SKILL
     rarity = CardRarity.COMMON

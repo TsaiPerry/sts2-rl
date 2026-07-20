@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..afflictions import Affliction
     from ..combat import CombatCtx
+    from ..rest_site import RestSiteOption
 
 
 class CardType(Enum):
@@ -61,6 +62,11 @@ class Card(ABC):
     is_ethereal: bool = False
     has_turn_end_in_hand_effect: bool = False
     is_unpowered: bool = False
+    # CardModel.GainsBlock — declared per card in the source (NOT derivable
+    # from `base_block`: Entrench/Fisticuffs gain block with no printed
+    # number, and Feel No Pain's number belongs to its power, not the card).
+    # Nimble's CanEnchant gates on it.
+    gains_block: bool = False
     # Exhaust keyword: the card goes to the exhaust pile instead of the
     # discard pile after being played (mirrors CardKeyword.Exhaust).
     exhausts: bool = False
@@ -273,6 +279,15 @@ class Card(ABC):
         """AbstractModel.ModifyUnknownMapPointRoomTypes: restrict the room
         types a "?" node may roll into."""
         return room_types
+
+    # ── Run-level rest-site hook (mirrors Relic.modify_rest_site_options) ──
+    # A deck-resident quest card can add a rest-site option the same way a
+    # relic does (Byrdonis Egg's Hatch). RunState.rest_site_options() scans
+    # the deck before the relics (mirrors IterateHookListeners's order).
+
+    def modify_rest_site_options(self, run, options: "list[RestSiteOption]") -> None:
+        """AbstractModel.TryModifyRestSiteOptions: append an extra rest-site
+        action (default no-op)."""
 
     def __repr__(self) -> str:
         suffix = "+" * self.upgrade_level if self.upgrade_level > 0 else ""

@@ -46,6 +46,7 @@ from .cards.pool import pool_card_ids
 from .rooms import RoomType
 
 if TYPE_CHECKING:
+    from .monsters import Encounter
     from .potions import Potion
     from .relics import Relic
     from .run import RunState
@@ -189,11 +190,18 @@ class PotionRewardOdds:
 
 
 def roll_gold_reward(
-    rng: random.Random, room_type: RoomType, proportion: float = 1.0
+    rng: random.Random,
+    room_type: RoomType,
+    proportion: float = 1.0,
+    gold_range: tuple[int, int] | None = None,
 ) -> int:
     """GoldReward.Populate: NextInt(min, max+1) on the room type's range,
-    with the Monster range scaled by the encounter's GoldProportion."""
-    lo, hi = GOLD_REWARD_RANGES[room_type]
+    with the Monster range scaled by the encounter's GoldProportion.
+
+    `gold_range` overrides the room-type default with an encounter's own
+    Min/MaxGoldReward (both are virtual on EncounterModel — the Fake Merchant
+    pins 300)."""
+    lo, hi = gold_range if gold_range is not None else GOLD_REWARD_RANGES[room_type]
     if room_type == RoomType.MONSTER:
         lo, hi = round(lo * proportion), round(hi * proportion)
     if hi <= 0:
@@ -382,6 +390,7 @@ def generate_combat_rewards(
     run: "RunState",
     room_type: RoomType,
     gold_proportion: float = 1.0,
+    encounter: "Encounter | None" = None,
 ) -> CombatRewards:
     """RewardsSet.WithRewardsFromRoom + GenerateRewardsFor for a combat room.
 
@@ -389,6 +398,8 @@ def generate_combat_rewards(
     (both are pure gains); the 3-card choice and the potion are left on the
     returned CombatRewards for the caller to offer. The final act's boss
     yields nothing (the run is over).
+
+    `encounter` supplies its Min/MaxGoldReward override when it has one.
     """
     rewards = CombatRewards(room_type=room_type)
     if room_type not in GOLD_REWARD_RANGES:
@@ -396,8 +407,12 @@ def generate_combat_rewards(
     if room_type == RoomType.BOSS and run.is_final_act:
         return rewards
 
+    gold_range = None
+    if encounter is not None and encounter.min_gold is not None:
+        gold_range = (encounter.min_gold, encounter.max_gold)
     if not (room_type == RoomType.MONSTER and gold_proportion <= 0.0):
-        rewards.gold = roll_gold_reward(run.rng, room_type, gold_proportion)
+        rewards.gold = roll_gold_reward(
+            run.rng, room_type, gold_proportion, gold_range)
         run.gain_gold(rewards.gold)
 
     # Hook.ShouldForcePotionReward over the run's relics.

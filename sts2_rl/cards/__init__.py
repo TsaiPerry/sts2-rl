@@ -30,6 +30,7 @@ from .knowledge_curses import (
 )
 from .event_cards import (
     ByrdonisEggCard,
+    ByrdSwoopCard,
     PeckCard,
     ToricToughnessCard,
     UltimateStrikeCard,
@@ -267,6 +268,7 @@ __all__ = [
     "WasteAwayCard",
     # Event cards
     "ByrdonisEggCard",
+    "ByrdSwoopCard",
     "PeckCard",
     "ToricToughnessCard",
     "UltimateStrikeCard",

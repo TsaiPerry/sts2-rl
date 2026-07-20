@@ -384,6 +384,127 @@ class InstinctEnchantment(Enchantment):
 
 
 @register_enchantment
+class SharpEnchantment(Enchantment):
+    """Sharp — the enchanted Attack deals +[amount] damage.
+
+    Source: Sharp.cs — CanEnchantCardType == Attack; EnchantDamageAdditive
+    returns Amount on powered attacks. Granted by the Self Help Book event
+    (amount 2).
+    """
+
+    id = "sharp"
+    name = "Sharp"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type == CardType.ATTACK
+
+    def modify_damage_additive(self, target, amount: int, dealer, card: Card | None) -> int:
+        # DamageCmd only calls this hook for powered attacks.
+        if card is self.card:
+            return self.amount
+        return 0
+
+
+@register_enchantment
+class NimbleEnchantment(Enchantment):
+    """Nimble — the enchanted card gains +[amount] Block.
+
+    Source: Nimble.cs — CanEnchant additionally requires CardModel.GainsBlock
+    (an explicit per-card declaration in the source, mirrored as
+    `Card.gains_block`); EnchantBlockAdditive returns Amount. Granted by the
+    Self Help Book event (amount 2).
+    """
+
+    id = "nimble"
+    name = "Nimble"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        return super().can_enchant(card) and card.gains_block
+
+    def modify_block_additive(self, target, amount: int, card: Card | None) -> int:
+        if card is self.card:
+            return self.amount
+        return 0
+
+
+@register_enchantment
+class VigorousEnchantment(Enchantment):
+    """Vigorous — the FIRST play of the enchanted Attack deals +[amount]
+    damage; afterwards the bonus is spent for the rest of the combat.
+
+    Source: Vigorous.cs — CanEnchantCardType == Attack; EnchantDamageAdditive
+    returns Amount only while Status == Normal and the attack is powered;
+    AfterCardPlayed (own card) sets Status = Disabled. Granted by the Stone
+    of All Time event (amount 8).
+    """
+
+    id = "vigorous"
+    name = "Vigorous"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type == CardType.ATTACK
+
+    def modify_damage_additive(self, target, amount: int, dealer, card: Card | None) -> int:
+        # DamageCmd only calls this hook for powered attacks.
+        if card is self.card and not self.disabled:
+            return self.amount
+        return 0
+
+    def on_card_played(self, card: Card) -> None:
+        if card is self.card:
+            self.disabled = True
+
+
+@register_enchantment
+class CorruptedEnchantment(Enchantment):
+    """Corrupted — the enchanted Attack deals 1.5x damage, but playing it
+    costs you 2 HP.
+
+    Source: Corrupted.cs — CanEnchantCardType == Attack;
+    EnchantDamageMultiplicative returns 1.5 on powered attacks; OnPlay deals
+    2 Unblockable|Unpowered|Move damage to the card's owner. Granted by the
+    Symbiote event (amount 1).
+    """
+
+    id = "corrupted"
+    name = "Corrupted"
+    self_damage = 2
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type == CardType.ATTACK
+
+    def modify_damage_multiplicative(
+        self, target, amount: int, dealer, card: Card | None
+    ) -> float:
+        # DamageCmd only calls this hook for powered attacks.
+        if card is self.card:
+            return 1.5
+        return 1
+
+    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
+        if card is not self.card:
+            return
+        from .cmds import DamageCmd
+        from .valueprops import ValueProp
+
+        DamageCmd.deal(
+            self.combat.hooks, self.combat.player, self.self_damage,
+            props=ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED | ValueProp.MOVE,
+            card=card,
+        )
+
+
+@register_enchantment
 class CloneEnchantment(Enchantment):
     """Clone — inert on its own; marks a card for the Clone rest-site option
     (Pael's Growth) to duplicate. Source: Clone.cs (no combat behavior).

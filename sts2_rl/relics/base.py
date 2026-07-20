@@ -28,6 +28,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from ..rest_site import RestSiteOption
 from ..valueprops import ValueProp
 
 if TYPE_CHECKING:
@@ -59,20 +60,6 @@ _MERCHANT_COST_BY_RARITY: dict[RelicRarity, int] = {
     RelicRarity.STARTER: 999_999_999,
     RelicRarity.EVENT: 999_999_999,
 }
-
-
-class RestSiteOption:
-    """An extra rest-site action provided by a relic (mirrors RestSiteOption /
-    Hook.TryModifyRestSiteOptions — Pael's Growth's Clone, Pumpkin Candle's
-    Kindle, Meat Cleaver's Cook). `key` mirrors the source's OptionId;
-    `on_select(run)` performs the effect (RestSiteOption.OnSelect)."""
-
-    def __init__(self, key: str, on_select) -> None:
-        self.key = key
-        self.on_select = on_select
-
-    def __repr__(self) -> str:
-        return f"RestSiteOption({self.key})"
 
 
 _RELIC_CLASSES: dict[str, type[Relic]] = {}
@@ -116,10 +103,17 @@ class Relic:
         # Toy Box melts one (the sim removes it from the run's relics).
         self.is_wax = False
 
+    # RelicModel.MerchantCost is virtual: a relic may pin its own price
+    # regardless of rarity (the Fake Merchant's knock-offs are all 50).
+    merchant_cost_override: int | None = None
+
     @property
     def merchant_cost(self) -> int:
         """RelicModel.MerchantCost: base gold price before the shop's ±15%
-        jitter. Ancient/Starter/Event relics are effectively unbuyable."""
+        jitter. Ancient/Starter/Event relics are effectively unbuyable unless
+        the relic overrides the price itself."""
+        if self.merchant_cost_override is not None:
+            return self.merchant_cost_override
         return _MERCHANT_COST_BY_RARITY[self.rarity]
 
     @property
@@ -194,6 +188,16 @@ class Relic:
         """RelicModel.AfterCardChangedPiles, filtered to a card entering the
         run's deck pile (Darkstone Periapt's +6 Max HP on a gained Curse)."""
 
+    def modify_gold_gained(self, run, amount: float) -> float:
+        """RelicModel.ModifyGoldGained — chain-modify a gold gain before it
+        lands (Ectoplasm returns 0: you can never gain gold)."""
+        return amount
+
+    def should_procure_potion(self, run, potion) -> bool:
+        """RelicModel.ShouldProcurePotion — False refuses the potion outright
+        (Sozu)."""
+        return True
+
     def modify_run_hp_loss(self, run, amount: int) -> int:
         """RelicModel.ModifyHpLostAfterOsty for out-of-combat HP loss: the
         game dispatches Hook.ModifyHpLost over the run state (CreatureCmd.cs),
@@ -208,7 +212,14 @@ class Relic:
     def modify_rest_site_options(self, run, options: "list[RestSiteOption]") -> None:
         """RelicModel.TryModifyRestSiteOptions — append extra rest-site
         actions (Pael's Growth's Clone, Pumpkin Candle's Kindle, Meat
-        Cleaver's Cook). The driver surfaces them after Heal/Smith/Leave."""
+        Cleaver's Cook, Shovel's Dig, Girya's Lift). The driver surfaces
+        them after Heal/Smith/Leave."""
+
+    def should_disable_remaining_rest_site_options(self, run) -> bool:
+        """RelicModel.ShouldDisableRemainingRestSiteOptions — default True
+        (a rest-site visit ends after one action). Miniature Tent returns
+        False so the visit continues until Leave or the options run out."""
+        return True
 
     def modify_rest_site_heal_rewards(self, run, rewards) -> None:
         """RelicModel.TryModifyRestSiteHealRewards — mutate the reward

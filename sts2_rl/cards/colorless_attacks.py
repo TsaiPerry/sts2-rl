@@ -87,6 +87,7 @@ class FisticuffsCard(Card):
     TotalDamage + OverkillDamage, Move). OnUpgrade damage +2.
     """
     id = "fisticuffs"
+    gains_block = True  # CardModel.GainsBlock
     name = "Fisticuffs"
     card_type = CardType.ATTACK
     rarity = CardRarity.UNCOMMON

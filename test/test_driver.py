@@ -240,6 +240,26 @@ def test_no_dream_catcher_no_reward_card_after_rest_heal():
     assert DecisionKind.REWARD_CARD not in kinds
 
 
+def test_miniature_tent_allows_a_second_rest_site_action():
+    run = fresh_run(7)
+    run.add_relic("miniature_tent")
+    run.hp = 40
+
+    def scripted(request):
+        if request.kind == DecisionKind.REST:
+            if not request.rest_heal_used:
+                return 0                       # heal first
+            if not request.rest_smith_used:
+                return 1                       # then smith
+            return 2                           # leave
+        return request.legal_actions()[0]      # forced card selector
+
+    driver = RunDriver(run, scripted)
+    driver._run_rest()
+    assert run.hp == 64                          # healed
+    assert any(c.upgrade_level > 0 for c in run.deck)  # and smithed
+
+
 def test_combat_rewards_offered_after_won_fight():
     from sts2_rl.monsters.overgrowth import ENCOUNTERS
 

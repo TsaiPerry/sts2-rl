@@ -182,6 +182,32 @@ def test_byrdonis_egg_is_unplayable_in_combat():
     assert not combat.play_card(egg_idx)
 
 
+def test_byrdonis_egg_hatch_grants_byrdpip_and_transforms_egg():
+    run = fresh_run()
+    event = make_event("byrdonis_nest", run).begin()
+    event.choose("TAKE")
+    options = run.rest_site_options()
+    assert [o.key for o in options] == ["HATCH"]
+    options[0].on_select(run)
+    assert any(r.id == "byrdpip" for r in run.relics)
+    assert not any(c.id == "byrdonis_egg" for c in run.deck)
+    assert any(c.id == "byrd_swoop" for c in run.deck)
+    # The egg is gone, so Hatch no longer appears.
+    assert run.rest_site_options() == []
+
+
+def test_byrd_swoop_deals_damage():
+    deck = [make_card("byrd_swoop") for _ in range(5)]
+    combat = CombatState(starting_deck=deck, rng=random.Random(0))
+    enemy = combat.enemy
+    hp_before = enemy.hp
+    combat.play_card(0)
+    assert enemy.hp == hp_before - 14
+    swoop = make_card("byrd_swoop")
+    swoop.upgrade()
+    assert swoop._damage == 18
+
+
 # ── Dense Vegetation ───────────────────────────────────────────────────────
 
 

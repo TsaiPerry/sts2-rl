@@ -226,7 +226,11 @@ class RunState:
     # ── Gold ─────────────────────────────────────────────────────────────
 
     def gain_gold(self, amount: float) -> None:
-        """PlayerCmd.GainGold: truncate toward zero; no-op unless positive."""
+        """PlayerCmd.GainGold: truncate toward zero; no-op unless positive.
+
+        Hook.ModifyGoldGained runs first (Ectoplasm zeroes it)."""
+        for relic in list(self.relics):
+            amount = relic.modify_gold_gained(self, amount)
         gained = int(amount)
         if amount > 0:
             self.gold += gained
@@ -332,7 +336,11 @@ class RunState:
     # ── Potions ──────────────────────────────────────────────────────────
 
     def add_potion(self, potion: Potion) -> bool:
-        """Add a potion if a slot is free. Returns whether it was kept."""
+        """Add a potion if a slot is free. Returns whether it was kept.
+
+        Hook.ShouldProcurePotion gates it first (Sozu refuses every potion)."""
+        if not all(r.should_procure_potion(self, potion) for r in self.relics):
+            return False
         if len(self.potions) >= self.max_potions:
             return False
         self.potions.append(potion)
@@ -384,17 +392,28 @@ class RunState:
         """RelicGrabBag.HasAvailableRelics for this run."""
         return bool(self.relic_grab_bag)
 
-    def pull_relic_from_front(self) -> Relic | None:
+    def pull_relic_from_front(
+        self,
+        rarity: RelicRarity | None = None,
+        shop_legal: bool = False,
+    ) -> Relic | None:
         """RelicFactory.PullNextRelicFromFront: roll rarity (<0.5 Common,
         <0.83 Uncommon, else Rare), pull the first bag relic of that rarity.
         Falls back to the front of the bag when no relic matches the rolled
         rarity (the game substitutes a fallback relic); None if the bag is
-        empty."""
+        empty.
+
+        `rarity` pins the rarity instead of rolling it, and `shop_legal`
+        applies an IsAllowedInShops filter — together they are the source's
+        PullNextRelicFromFront(player, rarity, filter) overload, which
+        Welcome to Wongo's uses for its bargain-bin and featured relics."""
         if not self.relic_grab_bag:
             return None
-        rarity = roll_relic_rarity(self.rng)
+        if rarity is None:
+            rarity = roll_relic_rarity(self.rng)
         for relic_id in self.relic_grab_bag:
-            if ALL_RELICS[relic_id].rarity == rarity:
+            cls = ALL_RELICS[relic_id]
+            if cls.rarity == rarity and (not shop_legal or cls.is_allowed_in_shops):
                 self.relic_grab_bag.remove(relic_id)
                 return make_relic(relic_id)
         return make_relic(self.relic_grab_bag.pop(0))
@@ -746,13 +765,26 @@ class RunState:
         return gold
 
     def rest_site_options(self):
-        """Hook.TryModifyRestSiteOptions over the run's relics: the extra
-        rest-site actions beyond Heal/Smith/Leave (Pael's Growth's Clone,
-        Pumpkin Candle's Kindle, Meat Cleaver's Cook)."""
+        """Hook.TryModifyRestSiteOptions over the run's deck cards then
+        relics (mirrors IterateHookListeners's order): the extra rest-site
+        actions beyond Heal/Smith/Leave (Byrdonis Egg's Hatch, Pael's
+        Growth's Clone, Pumpkin Candle's Kindle, Meat Cleaver's Cook,
+        Shovel's Dig, Girya's Lift)."""
         options: list = []
+        for card in list(self.deck):
+            card.modify_rest_site_options(self, options)
         for relic in list(self.relics):
             relic.modify_rest_site_options(self, options)
         return options
+
+    def should_disable_remaining_rest_site_options(self) -> bool:
+        """Hook.ShouldDisableRemainingRestSiteOptions: True (end the visit
+        after one action) unless a relic says otherwise (Miniature Tent),
+        in which case the visit continues."""
+        return all(
+            relic.should_disable_remaining_rest_site_options(self)
+            for relic in self.relics
+        )
 
     @property
     def has_event_pet(self) -> bool:
@@ -868,13 +900,18 @@ class RunState:
                 relic.after_combat_end(self, room_type)
 
     def generate_combat_rewards(
-        self, room_type: RoomType, gold_proportion: float = 1.0
+        self,
+        room_type: RoomType,
+        gold_proportion: float = 1.0,
+        encounter: "Encounter | None" = None,
     ) -> CombatRewards:
         """The post-combat reward screen (RewardsSet.WithRewardsFromRoom):
         gold and any elite relic are granted immediately; the 3-card choice
         and the potion are left on the result for the caller to offer.
+        `encounter` carries its Min/MaxGoldReward override when it has one.
         See rewards.py for the ported mechanics."""
-        return generate_combat_rewards(self, room_type, gold_proportion)
+        return generate_combat_rewards(
+            self, room_type, gold_proportion, encounter)
 
     @property
     def is_final_act(self) -> bool:

@@ -18,6 +18,7 @@ class IronWaveCard(Card):
       OnUpgrade: damage +2 (→ 7), block +2 (→ 7)
     """
     id = "iron_wave"
+    gains_block = True  # CardModel.GainsBlock
     name = "Iron Wave"
     card_type = CardType.ATTACK
     rarity = CardRarity.COMMON

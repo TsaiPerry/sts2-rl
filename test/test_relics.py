@@ -159,9 +159,15 @@ class TestRegistry:
         # Compass were already ported, Nonupeipe: 9 new — Looming Fruit was
         # already ported) = 206, plus Tanx's 10 = 216, plus Vakuu's 10 = 226
         # — the full Act-2/3 Ancient-shrine pools — plus the shared-event
-        # relics as they land (Room Full of Cheese's Chosen Cheese) = 227
+        # relics as they land (Room Full of Cheese's Chosen Cheese = 227;
+        # Tea Master's Bone/Ember Tea + Tea of Discourtesy = 230; the Doll
+        # Room's Daughter of the Wind / Mr. Struggles / Bing Bong = 233;
+        # Wongo's Mystery Ticket + Customer Appreciation Badge = 235; Byrdonis
+        # Nest's Byrdpip, granted by Byrdonis Egg's HATCH rest-site option
+        # = 236; Darv's 12 = 248; the Fake Merchant's 9 knock-offs plus his
+        # Rug = 258)
         # — all constructible by id, and the original head is present.
-        assert len(ALL_RELICS) == 227
+        assert len(ALL_RELICS) == 258
         assert "golden_compass" in ALL_RELICS
         for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
                     "neows_bones", "silver_crucible"):

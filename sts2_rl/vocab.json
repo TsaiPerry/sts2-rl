@@ -201,7 +201,8 @@
   "maul",
   "whistle",
   "apparition",
-  "wish"
+  "wish",
+  "byrd_swoop"
  ],
  "potions": [
   "block_potion",
@@ -210,7 +211,8 @@
   "glowwater",
   "strength_potion",
   "weak_potion",
-  "potion_shaped_rock"
+  "potion_shaped_rock",
+  "foul_potion"
  ],
  "powers": [
   "adaptable",
@@ -338,7 +340,8 @@
   "weak",
   "withering_presence",
   "draw_cards_next_turn",
-  "diamond_diadem"
+  "diamond_diadem",
+  "confused"
  ],
  "monsters": [
   "Aeonglass",
@@ -450,7 +453,8 @@
   "Wriggler",
   "Zapbot",
   "_BattleFriend",
-  "_Cultist"
+  "_Cultist",
+  "FakeMerchantMonster"
  ],
  "relics": [
   "akabeko",
@@ -679,7 +683,38 @@
   "tri_boomerang",
   "war_hammer",
   "whispering_earring",
-  "chosen_cheese"
+  "chosen_cheese",
+  "bing_bong",
+  "bone_tea",
+  "daughter_of_the_wind",
+  "ember_tea",
+  "mr_struggles",
+  "tea_of_discourtesy",
+  "wongo_customer_appreciation_badge",
+  "wongos_mystery_ticket",
+  "byrdpip",
+  "astrolabe",
+  "black_star",
+  "calling_bell",
+  "dusty_tome",
+  "ectoplasm",
+  "empty_cage",
+  "fake_anchor",
+  "fake_blood_vial",
+  "fake_happy_flower",
+  "fake_lees_waffle",
+  "fake_mango",
+  "fake_merchants_rug",
+  "fake_orichalcum",
+  "fake_snecko_eye",
+  "fake_strike_dummy",
+  "fake_venerable_tea_set",
+  "pandoras_box",
+  "philosophers_stone",
+  "runic_pyramid",
+  "snecko_eye",
+  "sozu",
+  "velvet_choker"
  ],
  "events": [
   "abyssal_baths",
@@ -735,7 +770,16 @@
   "slippery_bridge",
   "the_future_of_potions",
   "the_legends_were_true",
-  "this_or_that"
+  "this_or_that",
+  "doll_room",
+  "potion_courier",
+  "self_help_book",
+  "stone_of_all_time",
+  "symbiote",
+  "tea_master",
+  "welcome_to_wongos",
+  "darv",
+  "fake_merchant"
  ],
  "purposes": [
   "_unknown",

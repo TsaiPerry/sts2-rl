@@ -204,8 +204,15 @@ from .glory import (
     BATTLEWORN_DUMMY_SETTING_3,
 )
 
+# Shared-event monsters belong to no act (their events ride every act's queue).
+from .fake_merchant import (  # noqa: E402
+    FAKE_MERCHANT_EVENT_ENCOUNTER,
+    FakeMerchantMonster,
+)
+
 __all__ = [
     "MoveType", "Intent", "Monster", "Encounter",
+    "FakeMerchantMonster", "FAKE_MERCHANT_EVENT_ENCOUNTER",
     "BygoneEffigy", "Byrdonis", "CeremonialBeast", "CubexConstruct",
     "EyeWithTeeth", "Flyconid", "Fogmog", "FuzzyWurmCrawler",
     "Inklet", "KinFollower", "KinPriest", "Mawler", "Nibbit",

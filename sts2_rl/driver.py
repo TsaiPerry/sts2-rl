@@ -91,6 +91,9 @@ class DecisionRequest:
     count_remaining: int = 0                     # SELECT_CARDS (multi-pick)
     skippable: bool = False                      # SELECT_CARDS
     n_options: int = 0                           # SELECT_OPTION
+    rest_options: "list | None" = None           # REST: this visit's option snapshot
+    rest_heal_used: bool = False                 # REST
+    rest_smith_used: bool = False                # REST
 
     def legal_actions(self) -> list[int]:
         kind = self.kind
@@ -109,15 +112,21 @@ class DecisionRequest:
             legal.append(len(entries))           # leaving is always legal
             return legal
         if kind == DecisionKind.REST:
-            legal = [REST_HEAL]
-            if self.run.upgradable_cards():
+            legal = []
+            if not self.rest_heal_used:
+                legal.append(REST_HEAL)
+            if not self.rest_smith_used and self.run.upgradable_cards():
                 legal.append(REST_SMITH)
             legal.append(REST_LEAVE)
-            # Relic-provided extra options (Hook.TryModifyRestSiteOptions:
-            # Clone / Kindle / Cook) at indices 3+.
+            # Card/relic-provided extra options (Hook.TryModifyRestSiteOptions:
+            # Byrdonis Egg's Hatch, Pael's Growth's Clone, Pumpkin Candle's
+            # Kindle, Meat Cleaver's Cook, Shovel's Dig, Girya's Lift) at
+            # indices 3+, drawn from this visit's snapshot (`rest_options`)
+            # rather than recomputed, so a used-up option can't reappear
+            # mid-visit (Miniature Tent).
             legal.extend(
                 REST_LEAVE + 1 + i
-                for i in range(len(self.run.rest_site_options()))
+                for i in range(len(self.rest_options or []))
             )
             return legal
         if kind == DecisionKind.REWARD_CARD:
@@ -180,6 +189,14 @@ ACT_ANCIENTS: dict[str, tuple[str, ...]] = {
     "glory": ("nonupeipe", "tanx", "vakuu"),
 }
 
+# UnlockState.SharedAncients — shrines that belong to no single act. At run
+# start RunManager.GenerateRooms shuffles this list and hands each act after
+# the first a random prefix of what's left (`NextInt(count + 1)` per act, in
+# order), so a shared ancient can appear in at most one act of a run — see
+# RunDriver._roll_shared_ancients. Each act then rolls its shrine uniformly
+# from its own ancients plus its subset (ActModel.GenerateRooms).
+SHARED_ANCIENTS: tuple[str, ...] = ("darv",)
+
 
 class RunDriver:
     """Drives one full run over a RunState, asking `ask` for every decision."""
@@ -200,6 +217,9 @@ class RunDriver:
         self._include_neow = include_neow
         self._include_ancients = include_ancients
         self.decisions = 0
+        # act name -> the shared ancients allotted to it this run (filled by
+        # play() via _roll_shared_ancients, mirroring GenerateRooms).
+        self._shared_ancient_subsets: dict[str, tuple[str, ...]] = {}
         # The combat currently being resolved (context for SELECT_CARDS).
         self._combat: "CombatState | None" = None
         # Route every mid-resolution selection through the ask seam.
@@ -256,6 +276,7 @@ class RunDriver:
     def play(self) -> RunResult:
         run = self.run
         run.start_run(acts=self._acts, ascension=self._ascension)
+        self._roll_shared_ancients()
         if self._include_neow:
             from .events import make_event
 
@@ -318,7 +339,8 @@ class RunDriver:
         won = bool(combat.result and combat.result.player_won)
         if (won and room_type in GOLD_REWARD_RANGES
                 and encounter.should_give_rewards):
-            self._offer_rewards(run.generate_combat_rewards(room_type))
+            self._offer_rewards(
+                run.generate_combat_rewards(room_type, encounter=encounter))
         return combat
 
     def _offer_rewards(self, rewards: "CombatRewards") -> None:
@@ -401,15 +423,36 @@ class RunDriver:
                 for potion in event.resume_after_combat(combat):
                     self._offer_potion(potion, RoomType.MONSTER)
 
+    def _roll_shared_ancients(self) -> None:
+        """RunManager.GenerateRooms: shuffle UnlockState.SharedAncients, then
+        walk the acts AFTER the first handing each one a random prefix of
+        what's left (`NextInt(remaining + 1)`), consuming as it goes — so a
+        shared ancient shows up in at most one act of a run, and often none."""
+        self._shared_ancient_subsets = {}
+        if not self._include_ancients:
+            return
+        from .events import ALL_EVENTS
+
+        remaining = [a for a in SHARED_ANCIENTS if a in ALL_EVENTS]
+        self.run.rng.shuffle(remaining)
+        for act_name in self.run.act_list[1:]:
+            take = self.run.rng.randrange(len(remaining) + 1)
+            self._shared_ancient_subsets[act_name] = tuple(remaining[:take])
+            remaining = remaining[take:]
+
     def _maybe_run_ancient(self) -> None:
         """Fire the Ancient shrine at act entry for acts that roll one (Hive,
         Glory). Act 1's Neow is fired at run start instead. The ancient is
-        rolled uniformly from the act's pool (ActModel.GetUnlockedAncients),
-        stands the player at the Ancient node, and offers relics."""
+        rolled uniformly from the act's own pool PLUS the shared ancients
+        allotted to this act (ActModel.GenerateRooms:
+        `NextItem(GetUnlockedAncients() ∪ _sharedAncientSubset)`), stands the
+        player at the Ancient node, and offers relics."""
         if not self._include_ancients:
             return
-        pool = ACT_ANCIENTS.get(self.run.act_config.name)
-        if not pool:
+        act_name = self.run.act_config.name
+        pool = ACT_ANCIENTS.get(act_name, ())
+        shared = self._shared_ancient_subsets.get(act_name, ())
+        if not pool and not shared:
             return
         from .events import ALL_EVENTS, make_event
 
@@ -417,7 +460,7 @@ class RunDriver:
         # sim are offerable (an unported ancient is treated as not-yet-unlocked,
         # exactly like the epoch gating on Orobas/Neow). Falls away naturally
         # once all six are implemented.
-        available = [a for a in pool if a in ALL_EVENTS]
+        available = [a for a in (*pool, *shared) if a in ALL_EVENTS]
         if not available:
             return
         self._run_event(make_event(self.run.rng.choice(available), self.run))
@@ -433,19 +476,41 @@ class RunDriver:
             entries[idx].purchase()
 
     def _run_rest(self) -> None:
-        idx = self._ask(DecisionRequest(kind=DecisionKind.REST, run=self.run))
-        if idx == REST_HEAL:
-            self.run.rest_heal()
-            # HealRestSiteOption.ExecuteRestSiteHeal: relics may add a reward
-            # (Dream Catcher's 3-card choice) to the screen after the heal.
-            self._offer_rewards(self.run.rest_heal_rewards())
-        elif idx == REST_SMITH:
-            self.run.rest_upgrade()
-        elif idx > REST_LEAVE:
-            # A relic-provided option (Clone / Kindle / Cook).
-            options = self.run.rest_site_options()
-            options[idx - REST_LEAVE - 1].on_select(self.run)
-        # REST_LEAVE: nothing.
+        """RestSiteOption.Generate + RestSiteSynchronizer.ChooseOption: a
+        visit takes one snapshot of the extra options up front (so a used-up
+        one — e.g. Meat Cleaver's Cook — can't be picked twice even if its
+        precondition would still allow it), then loops asking for an action
+        until Leave or Hook.ShouldDisableRemainingRestSiteOptions says the
+        visit is over (default: after the first action; Miniature Tent lets
+        it continue)."""
+        run = self.run
+        options = run.rest_site_options()
+        heal_used = False
+        smith_used = False
+        while True:
+            idx = self._ask(DecisionRequest(
+                kind=DecisionKind.REST, run=run,
+                rest_options=options,
+                rest_heal_used=heal_used,
+                rest_smith_used=smith_used,
+            ))
+            if idx == REST_LEAVE:
+                return
+            if idx == REST_HEAL:
+                run.rest_heal()
+                # HealRestSiteOption.ExecuteRestSiteHeal: relics may add a
+                # reward (Dream Catcher's 3-card choice) after the heal.
+                self._offer_rewards(run.rest_heal_rewards())
+                heal_used = True
+            elif idx == REST_SMITH:
+                run.rest_upgrade()
+                smith_used = True
+            else:
+                # A card/relic-provided option (Hatch / Clone / Kindle /
+                # Cook / Dig / Lift), picked from this visit's snapshot.
+                options.pop(idx - REST_LEAVE - 1).on_select(run)
+            if run.should_disable_remaining_rest_site_options():
+                return
 
 
 def play_random_run(
