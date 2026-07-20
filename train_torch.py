@@ -72,6 +72,13 @@ from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
 # optimizer's restored LR or override it.
 DEFAULT_LR = 3e-4
 
+# --n-envs/--n-steps default here for the same reason: their product is the
+# effective batch, and it lives outside the model, so a resume that silently
+# reverts it keeps training the same weights at a different batch size — a
+# config error that reads as a mysterious reward regression.
+DEFAULT_N_ENVS = 32
+DEFAULT_N_STEPS = 512
+
 # One row per iteration in <stem>.csv. CSV, not TensorBoard, on purpose: zero
 # dependencies, and a multi-day run's curve stays plottable from anything.
 CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
@@ -135,7 +142,10 @@ def parse_args() -> argparse.Namespace:
                          "policy's own metric, not a greedy eval — treat it as "
                          "a rollback candidate, not a leaderboard")
     # rollout / PPO
-    ap.add_argument("--n-envs", type=int, default=8)
+    ap.add_argument("--n-envs", type=int, default=None,
+                    help=f"parallel envs (default: {DEFAULT_N_ENVS}). Left as "
+                         f"None when unset so a resume keeps the checkpoint's "
+                         f"rollout geometry instead of silently reverting it")
     ap.add_argument("--n-workers", type=int, default=0,
                     help="processes to step envs in (default 0: in-process). "
                          "Env stepping is ~15%% of an iteration and workers "
@@ -143,7 +153,9 @@ def parse_args() -> argparse.Namespace:
                          "measure before turning it on. The layout is a "
                          "runtime detail: seeding, rollouts and checkpoints "
                          "are identical at any worker count")
-    ap.add_argument("--n-steps", type=int, default=512, help="rollout length per env")
+    ap.add_argument("--n-steps", type=int, default=None,
+                    help=f"rollout length per env (default: {DEFAULT_N_STEPS}); "
+                         f"None when unset, like --n-envs")
     ap.add_argument("--lr", type=float, default=None,
                     help=f"learning rate (default: {DEFAULT_LR:g}). Left as None "
                          f"when unset so a resume can tell 'use the checkpoint's "
@@ -185,6 +197,15 @@ def parse_args() -> argparse.Namespace:
                          "term, an env rule like a per-act heal): the critic "
                          "is stale, its advantages are mis-signed, and a "
                          "full-LR resume spends them wrecking a good policy")
+    ap.add_argument("--zero-segments", nargs="+", default=[], metavar="SEGMENT",
+                    help="hold the first-layer columns fed by these obs "
+                         "segments at zero in BOTH heads, so the model behaves "
+                         "as if the segment were absent (--arch entity only). "
+                         "Diagnostic: a segment spliced in by a checkpoint "
+                         "migration starts at exactly zero, and zeroing it "
+                         "again reproduces the pre-migration model exactly, "
+                         "which isolates whether that segment is what "
+                         "destabilised a resume")
     ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
     args = ap.parse_args()
     if args.save is None:
@@ -319,6 +340,39 @@ def env_obs_segments(args: argparse.Namespace) -> list[tuple[str, int]]:
     return checkpoints.model_obs_segments(model_spec(args))
 
 
+def segment_spans(agent: nn.Module, names: list[str]) -> list[tuple[int, int]]:
+    """First-layer column spans fed by the named obs segments.
+
+    Raises on an unknown name rather than silently masking nothing — a typo'd
+    segment would otherwise make a null experiment look like a real result.
+    """
+    if not names:
+        return []
+    if not hasattr(agent, "actor_encoder"):
+        raise SystemExit("--zero-segments needs --arch entity (no segment "
+                         "encoder to take column spans from)")
+    spans = agent.actor_encoder.out_spans
+    unknown = [n for n in names if n not in spans]
+    if unknown:
+        raise SystemExit(f"--zero-segments: unknown segment(s) {unknown}. "
+                         f"Known: {sorted(spans)}")
+    return [spans[n] for n in names]
+
+
+def apply_zero_segments(agent: nn.Module, spans: list[tuple[int, int]]) -> None:
+    """Re-zero the masked columns in both trunks' first Linear.
+
+    Called after every optimizer.step() rather than via a gradient hook:
+    Adam carries momentum, so a column with a zero gradient still drifts if
+    its exp_avg is non-zero. Overwriting the weight is the only version of
+    this that is actually airtight.
+    """
+    with torch.no_grad():
+        for start, stop in spans:
+            agent.actor[0].weight[:, start:stop].zero_()
+            agent.critic[0].weight[:, start:stop].zero_()
+
+
 def make_model(args: argparse.Namespace, obs_dim: int, n_actions: int) -> nn.Module:
     """Build the --arch-selected model for this run's env."""
     return checkpoints.make_model(model_spec(args), obs_dim, n_actions)
@@ -331,24 +385,29 @@ def check_checkpoint(ckpt: dict, args: argparse.Namespace,
     checkpoints.check_checkpoint(ckpt, model_spec(args), obs_dim, n_actions)
 
 
+def resolve_rollout_geometry(args, ckpt: dict | None) -> tuple[int, int]:
+    """(n_envs, n_steps), resolved explicit flag > checkpoint > default.
+
+    Each field falls back independently, so a pre-hardening checkpoint that
+    records neither still resumes at the defaults.
+    """
+    ckpt = ckpt or {}
+    n_envs = args.n_envs if args.n_envs is not None else ckpt.get("n_envs", DEFAULT_N_ENVS)
+    n_steps = args.n_steps if args.n_steps is not None else ckpt.get("n_steps", DEFAULT_N_STEPS)
+    return n_envs, n_steps
+
+
 def main() -> None:
     args = parse_args()
     device = resolve_device(args.device)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    n_workers = resolve_n_workers(args.n_envs, args.n_workers)
-    envs = make_vec_env(env_spec(args), args.n_envs, n_workers)
-    print(f"{args.n_envs} envs across "
-          + (f"{envs.n_workers} worker processes" if envs.n_workers
-             else "the in-process serial path"), flush=True)
-    obs_dim = envs.obs_dim
-    n_actions = envs.n_actions
-
     # Resolve which checkpoint (if any) to continue from: an explicit --resume
     # wins; otherwise re-running auto-continues the checkpoint at --save so a
     # bare `py train_torch.py` trains the same model further. --fresh forces a
-    # new model even when one exists.
+    # new model even when one exists. This runs before the envs are built
+    # because the checkpoint carries the rollout geometry they are sized from.
     resume_path = None
     if args.fresh:
         if args.resume:
@@ -360,6 +419,19 @@ def main() -> None:
         print(f"Auto-resuming existing checkpoint {args.save} "
               f"(pass --fresh to start a new model).")
 
+    ckpt = (torch.load(resume_path, map_location=device, weights_only=False)
+            if resume_path else None)
+    args.n_envs, args.n_steps = resolve_rollout_geometry(args, ckpt)
+
+    n_workers = resolve_n_workers(args.n_envs, args.n_workers)
+    envs = make_vec_env(env_spec(args), args.n_envs, n_workers)
+    print(f"{args.n_envs} envs x {args.n_steps} steps "
+          f"(batch {args.n_envs * args.n_steps}) across "
+          + (f"{envs.n_workers} worker processes" if envs.n_workers
+             else "the in-process serial path"), flush=True)
+    obs_dim = envs.obs_dim
+    n_actions = envs.n_actions
+
     agent = make_model(args, obs_dim, n_actions).to(device)
     base_lr = DEFAULT_LR if args.lr is None else args.lr
     optimizer = torch.optim.Adam(agent.parameters(), lr=base_lr, eps=1e-5)
@@ -368,7 +440,6 @@ def main() -> None:
     start_step = 0
     best_score = -math.inf
     if resume_path:
-        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
         check_checkpoint(ckpt, args, obs_dim, n_actions)
         agent.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optim"])
@@ -385,6 +456,17 @@ def main() -> None:
             print(f"Overriding the checkpoint's learning rate with --lr {args.lr:g}")
         print(f"Resumed from {resume_path} at iteration {start_iter} "
               f"(step {start_step})")
+
+    # After the resume, so this masks the loaded weights rather than the fresh
+    # ones the load would overwrite.
+    zero_spans = segment_spans(agent, args.zero_segments)
+    if zero_spans:
+        apply_zero_segments(agent, zero_spans)
+        masked = sum(stop - start for start, stop in zero_spans)
+        print(f"Holding {masked} first-layer columns at zero for "
+              f"{', '.join(args.zero_segments)} "
+              f"({100 * masked / agent.actor[0].weight.shape[1]:.1f}% of the "
+              f"trunk's input)")
 
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs
@@ -556,6 +638,8 @@ def main() -> None:
                     loss.backward()
                     nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                     optimizer.step()
+                    if zero_spans:
+                        apply_zero_segments(agent, zero_spans)
 
                     # Checked here rather than at the epoch boundary so a
                     # destructive update costs a minibatch or two, not a whole
@@ -696,6 +780,10 @@ def checkpoint_payload(agent: nn.Module, optimizer, iteration: int, args,
         "arch": args.arch,
         "obs_schema": env_obs_schema(args),
         "env_kind": args.env,
+        # Not part of the model — recorded so a resume reproduces the batch
+        # that trained these weights, and so the file says which one that was.
+        "n_envs": args.n_envs,
+        "n_steps": args.n_steps,
     }
 
 

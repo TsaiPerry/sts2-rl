@@ -151,6 +151,84 @@ def test_critic_warmup_is_off_by_default_and_scoped_to_this_invocation(monkeypat
     assert parsed(monkeypatch, "--env", "run", "--critic-warmup", "20").critic_warmup == 20
 
 
+# ── zeroed segments ──────────────────────────────────────────────────────
+
+def _entity_agent(segments, n_actions=4):
+    from sts2_rl.models import EntityActorCritic
+    import torch
+
+    torch.manual_seed(0)
+    return EntityActorCritic(segments, n_actions=n_actions, hidden=(16, 16))
+
+
+def test_out_spans_cover_the_first_layer_exactly_once():
+    """The spans index trunk-input columns, so they must tile [0, out_dim)
+    with no gap or overlap — an off-by-one here masks the wrong feature and
+    the experiment silently answers a different question."""
+    from sts2_rl.models import N_CARDS
+
+    segments = [("run.floor", 4), ("combat.hand0.onehot", N_CARDS), ("run.map.grid", 90)]
+    agent = _entity_agent(segments)
+    spans = agent.actor_encoder.out_spans
+
+    assert [spans[name] for name, _ in segments] == sorted(spans.values())
+    assert spans[segments[0][0]][0] == 0
+    assert spans[segments[-1][0]][1] == agent.actor_encoder.out_dim
+    for (_, prev_stop), (next_start, _) in zip(
+            sorted(spans.values()), sorted(spans.values())[1:]):
+        assert prev_stop == next_start
+    # the raw grid keeps its full width; the card one-hot contracts
+    assert spans["run.map.grid"][1] - spans["run.map.grid"][0] == 90
+    assert spans["combat.hand0.onehot"][1] - spans["combat.hand0.onehot"][0] < N_CARDS
+
+
+def test_zeroed_segment_stays_zero_through_adam_momentum():
+    """A gradient hook is not enough: Adam keeps momentum, so a column with a
+    zero gradient still drifts. Several steps with a live loss must leave the
+    masked columns bit-zero while every other column trains."""
+    import torch
+    from torch import nn
+
+    segments = [("run.floor", 4), ("run.map.grid", 90)]
+    agent = _entity_agent(segments)
+    spans = train_torch.segment_spans(agent, ["run.map.grid"])
+    train_torch.apply_zero_segments(agent, spans)
+    (gs, ge), = spans
+
+    optimizer = torch.optim.Adam(agent.parameters(), lr=1e-2)
+    obs = torch.randn(32, 94)
+    mask = torch.ones(32, 4, dtype=torch.bool)
+    act = torch.randint(0, 4, (32,))
+
+    before = agent.actor[0].weight.detach().clone()
+    for _ in range(3):
+        _, logp, _, val = agent.get_action_and_value(obs, mask, act)
+        (logp.mean() + val.mean()).backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        train_torch.apply_zero_segments(agent, spans)
+
+    for head in (agent.actor[0].weight, agent.critic[0].weight):
+        assert torch.count_nonzero(head[:, gs:ge]) == 0
+    # the unmasked columns must still be learning, or the test proves nothing
+    assert not torch.equal(agent.actor[0].weight[:, :gs], before[:, :gs])
+
+
+def test_zero_segments_rejects_an_unknown_name():
+    """A typo'd segment must fail loudly — masking nothing would look exactly
+    like a clean experimental result."""
+    agent = _entity_agent([("run.floor", 4), ("run.map.grid", 90)])
+    with pytest.raises(SystemExit, match="unknown segment"):
+        train_torch.segment_spans(agent, ["run.map.gird"])
+    assert train_torch.segment_spans(agent, []) == []
+
+
+def test_zero_segments_is_off_by_default(monkeypatch):
+    assert parsed(monkeypatch, "--env", "run").zero_segments == []
+    assert parsed(monkeypatch, "--env", "run", "--zero-segments",
+                  "run.map.grid").zero_segments == ["run.map.grid"]
+
+
 # ── defaults ─────────────────────────────────────────────────────────────
 
 def test_target_kl_defaults_on_for_run_scale_envs(monkeypatch):

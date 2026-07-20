@@ -193,9 +193,16 @@ class _SegmentEncoder(neural_network.Module):
 
         # (kind, start, stop) in layout order; out_dim accumulates as we go.
         self._plan: list[tuple[str, int, int]] = []
+        # Each segment's [start, stop) span in the ENCODED vector — i.e. the
+        # columns of the following trunk's first Linear that this segment
+        # feeds. Encoded, not raw: vocabulary segments contract to an
+        # embedding, so the two layouts differ (run.map.grid is 6% of the flat
+        # obs but 50% of the columns, because it stays raw).
+        self.out_spans: dict[str, tuple[int, int]] = {}
         self.out_dim = 0
         offset = 0
         for name, width in segments:
+            out_start = self.out_dim
             for kind, w in _segment_plan(name, width):
                 self._plan.append((kind, offset, offset + w))
                 offset += w
@@ -206,6 +213,7 @@ class _SegmentEncoder(neural_network.Module):
                     if kind == "cards2":
                         table("card_upgrade")
                     self.out_dim += dims["cards" if kind == "cards2" else kind]
+            self.out_spans[name] = (out_start, self.out_dim)
         self.in_dim = offset
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:

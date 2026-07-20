@@ -27,6 +27,7 @@ def combat_args(tmp_path, **over) -> Namespace:
     args = Namespace(
         env="combat", arch="mlp", card_obs="hybrid", hidden=[8],
         save=str(tmp_path / "ckpt.pt"),
+        n_envs=train_torch.DEFAULT_N_ENVS, n_steps=train_torch.DEFAULT_N_STEPS,
     )
     for k, v in over.items():
         setattr(args, k, v)
@@ -152,3 +153,61 @@ def test_lr_flag_is_none_unless_passed(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "sys.argv", ["train_torch.py", "--env", "combat", "--lr", "1e-4"])
     assert train_torch.parse_args().lr == pytest.approx(1e-4)
+
+
+# ── rollout geometry across a resume ─────────────────────────────────────
+
+def test_rollout_flags_are_none_unless_passed(monkeypatch):
+    """Same contract as --lr: 'not passed' must be distinguishable from the
+    default value, or a resume cannot tell 'keep the checkpoint's batch' from
+    'the user asked for 32'."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run"])
+    args = train_torch.parse_args()
+    assert args.n_envs is None and args.n_steps is None
+    assert train_torch.DEFAULT_N_ENVS == 32
+    assert train_torch.DEFAULT_N_STEPS == 512
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--n-envs", "4", "--n-steps", "128"])
+    args = train_torch.parse_args()
+    assert (args.n_envs, args.n_steps) == (4, 128)
+
+
+def test_fresh_run_uses_the_rollout_defaults():
+    args = Namespace(n_envs=None, n_steps=None)
+    assert train_torch.resolve_rollout_geometry(args, None) == (32, 512)
+
+
+def test_resume_restores_the_checkpoints_rollout_geometry():
+    """The bug this exists for: n_envs x n_steps is the effective batch, but
+    it lives outside the model, so a bare --resume used to silently revert it
+    and quietly train the same weights at a different batch size."""
+    args = Namespace(n_envs=None, n_steps=None)
+    ckpt = {"n_envs": 8, "n_steps": 256}
+    assert train_torch.resolve_rollout_geometry(args, ckpt) == (8, 256)
+
+
+def test_explicit_rollout_flags_beat_the_checkpoint():
+    args = Namespace(n_envs=4, n_steps=128)
+    ckpt = {"n_envs": 8, "n_steps": 256}
+    assert train_torch.resolve_rollout_geometry(args, ckpt) == (4, 128)
+
+
+def test_rollout_geometry_falls_back_per_field():
+    """A checkpoint may record one field and not the other (or neither, for
+    pre-hardening files) — each resolves independently."""
+    args = Namespace(n_envs=None, n_steps=None)
+    assert train_torch.resolve_rollout_geometry(args, {}) == (32, 512)
+    assert train_torch.resolve_rollout_geometry(args, {"n_envs": 8}) == (8, 512)
+
+    half = Namespace(n_envs=2, n_steps=None)
+    assert train_torch.resolve_rollout_geometry(half, {"n_envs": 8, "n_steps": 256}) == (2, 256)
+
+
+def test_checkpoint_records_the_rollout_geometry(tmp_path):
+    """Without this the file carries no record of the batch that produced it,
+    which is what made a shrunken batch so hard to rule out after the fact."""
+    args = combat_args(tmp_path, n_envs=8, n_steps=256)
+    model, optimizer = make_pair()
+    payload = train_torch.checkpoint_payload(model, optimizer, 1, args, 0)
+    assert payload["n_envs"] == 8 and payload["n_steps"] == 256

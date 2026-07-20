@@ -135,6 +135,7 @@ def _combat_args(tmp_path, arch: str) -> Namespace:
     return Namespace(
         env="combat", arch=arch, card_obs="hybrid",
         hidden=[32], save=str(tmp_path / "ckpt.pt"),
+        n_envs=train_torch.DEFAULT_N_ENVS, n_steps=train_torch.DEFAULT_N_STEPS,
     )
 
 
