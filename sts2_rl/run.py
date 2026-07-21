@@ -198,6 +198,13 @@ class RunState:
         # The full act list, rolled once at run start (ActModel.GetRandomList);
         # empty until start_run is called (single-act tests use start_act).
         self.act_list: list[str] = []
+        # Parity (SP2): every act's rooms pre-rolled on the UpFront stream at
+        # run start (RunManager.GenerateRooms), indexed by act — start_act just
+        # retrieves this act's set. None on the legacy path, where start_act
+        # rolls each act's rooms lazily on self.rng. Filled by
+        # _generate_all_act_rooms, alongside the shared-ancient subsets it deals.
+        self._act_room_sets: "list[RoomSet] | None" = None
+        self._shared_ancient_subsets: dict[str, tuple[str, ...]] = {}
         # True once the final act's boss is beaten (RunManager's victory).
         self.victory = False
         # ── Map / act state (populated by start_act) ─────────────────────
@@ -519,12 +526,61 @@ class RunState:
             raise ValueError("acts must name at least one act")
         self.act_list = list(acts)
         self.victory = False
+        if self.rng_set is not None:
+            self._generate_all_act_rooms(ascension)
         return self.start_act(
             self.act_list[0],
             ascension=ascension,
             is_final_act=len(self.act_list) == 1,
             act_index=0,
         )
+
+    def _generate_all_act_rooms(self, ascension: int) -> None:
+        """RunManager.GenerateRooms — pre-roll every act's rooms on the UpFront
+        stream at run start (parity path only).
+
+        Shuffle UnlockState.SharedAncients, hand each act after the first a
+        random prefix of what's left (`NextInt(remaining + 1)`), then generate
+        each act's RoomSet in order; the final act also draws its DoubleBoss
+        second boss (Asc 10) from the same stream. This is UpFront's second
+        consumer after the relic grab bags, landing its counter where run.save
+        records it at the first floor boundary (e.g. 413 for 89U21BV1TZ).
+        start_act then retrieves these sets by act index (_generate_rooms).
+        """
+        from .actmap import ACT_MAP_CONFIGS, AscensionLevel
+        from .rooms import SHARED_ANCIENTS, RoomSet, act_rooms
+
+        up = self.rng_set.up_front
+        remaining = list(SHARED_ANCIENTS)
+        up.shuffle(remaining)
+        self._shared_ancient_subsets = {}
+        for name in self.act_list[1:]:
+            take = up.next_int(len(remaining) + 1)
+            self._shared_ancient_subsets[name] = tuple(remaining[:take])
+            remaining = remaining[take:]
+
+        double_boss = ascension >= AscensionLevel.DOUBLE_BOSS
+        last = len(self.act_list) - 1
+        self._act_room_sets = []
+        for i, name in enumerate(self.act_list):
+            rooms = act_rooms(name)
+            cfg = ACT_MAP_CONFIGS[name]
+            ancient_pool = (
+                *rooms.ancient_keys,
+                *self._shared_ancient_subsets.get(name, ()),
+            )
+            room_set = RoomSet.generate(
+                rooms, up, cfg.num_rooms, cfg.num_weak_encounters,
+                ancient_pool=ancient_pool,
+            )
+            if i == last and double_boss:
+                # RunManager.GenerateRooms rolls the second boss here, not in
+                # ActModel.GenerateRooms: NextItem over the boss pool minus the
+                # primary (the RoomSet parity path leaves SecondBoss unset).
+                others = [k for k in rooms.boss_keys if k != room_set.boss_key]
+                if others:
+                    room_set.second_boss_key = up.next_item(others)
+            self._act_room_sets.append(room_set)
 
     @property
     def current_act_number(self) -> int:
@@ -650,17 +706,25 @@ class RunState:
         return act_map
 
     def _generate_rooms(self) -> None:
-        """ActModel.GenerateRooms + UnknownMapPointOdds.ResetToBase."""
+        """ActModel.GenerateRooms + UnknownMapPointOdds.ResetToBase.
+
+        Parity runs pre-roll every act on the UpFront stream at start_run
+        (_generate_all_act_rooms), so here we simply retrieve this act's set.
+        The legacy path rolls it lazily on the shared run RNG.
+        """
         from .rooms import RoomSet, UnknownOdds, act_rooms
 
-        rooms = act_rooms(self.act_config.name)
-        self.room_set = RoomSet.generate(
-            rooms,
-            self.rng,
-            self.act_config.num_rooms,
-            self.act_config.num_weak_encounters,
-            has_second_boss=self._has_second_boss,
-        )
+        if self._act_room_sets is not None:
+            self.room_set = self._act_room_sets[self.act_index]
+        else:
+            rooms = act_rooms(self.act_config.name)
+            self.room_set = RoomSet.generate(
+                rooms,
+                self.rng,
+                self.act_config.num_rooms,
+                self.act_config.num_weak_encounters,
+                has_second_boss=self._has_second_boss,
+            )
         if self.unknown_odds is None:
             self.unknown_odds = UnknownOdds()
         else:

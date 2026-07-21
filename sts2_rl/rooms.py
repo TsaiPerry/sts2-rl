@@ -64,6 +64,10 @@ class ActRooms:
     boss_keys: tuple[str, ...]
     tags: dict[str, tuple[str, ...]] = field(default_factory=dict)
     event_pool: tuple[str, ...] = ()
+    # The act's own AncientEventModel pool (ActModel.AllAncients): the shrine
+    # rolled at its starting node, uniformly from these plus any shared
+    # ancients the run allotted this act. Act-1 acts always roll Neow.
+    ancient_keys: tuple[str, ...] = ()
 
     def encounters(self) -> dict[str, Encounter]:
         """The act's ENCOUNTERS registry (imported lazily)."""
@@ -71,6 +75,13 @@ class ActRooms:
 
         module = importlib.import_module(f"sts2_rl.monsters.{self.name}")
         return module.ENCOUNTERS
+
+
+# UnlockState.SharedAncients — shrines belonging to no single act. At run start
+# RunManager.GenerateRooms shuffles this list and hands each act after the first
+# a random prefix of what's left, so a shared ancient can appear in at most one
+# act of a run (RunState._generate_all_act_rooms / RunDriver._roll_shared_ancients).
+SHARED_ANCIENTS: tuple[str, ...] = ("darv",)
 
 
 def _overgrowth_rooms() -> ActRooms:
@@ -106,6 +117,7 @@ def _overgrowth_rooms() -> ActRooms:
             "snapping_jaxfruit": ("mushroom",),
         },
         event_pool=OVERGROWTH_EVENTS,
+        ancient_keys=("neow",),
     )
 
 
@@ -132,6 +144,7 @@ def _underdocks_rooms() -> ActRooms:
             "seapunk_normal": ("seapunk",),
         },
         event_pool=UNDERDOCKS_EVENTS,
+        ancient_keys=("neow",),
     )
 
 
@@ -162,6 +175,7 @@ def _hive_rooms() -> ActRooms:
             "chompers": ("chomper",),
         },
         event_pool=HIVE_EVENTS,
+        ancient_keys=("orobas", "pael", "tezcatara"),
     )
 
 
@@ -189,6 +203,7 @@ def _glory_rooms() -> ActRooms:
             "knights": ("knights",),
         },
         event_pool=GLORY_EVENTS,
+        ancient_keys=("nonupeipe", "tanx", "vakuu"),
     )
 
 

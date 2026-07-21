@@ -94,6 +94,47 @@ class MapPointType(IntEnum):
     ANCIENT = 8
 
 
+class _OrderedSet:
+    """A minimal insertion-ordered set (dict-backed) that still compares equal
+    to plain sets. MapPoint.children uses it so FindAllPaths enumerates
+    children in link order — matching the game's HashSet iteration (insertion
+    order, as generation only ever adds children), which drives
+    duplicate-segment pruning — while every existing set-style use (``in``,
+    ``len``, iteration, ``== {..}``) keeps working unchanged."""
+
+    __slots__ = ("_d",)
+
+    def __init__(self, iterable=()) -> None:
+        self._d = dict.fromkeys(iterable)
+
+    def add(self, item) -> None:
+        self._d[item] = None
+
+    def discard(self, item) -> None:
+        self._d.pop(item, None)
+
+    def __contains__(self, item) -> bool:
+        return item in self._d
+
+    def __iter__(self):
+        return iter(self._d)
+
+    def __len__(self) -> int:
+        return len(self._d)
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, _OrderedSet):
+            return self._d.keys() == other._d.keys()
+        if isinstance(other, (set, frozenset)):
+            return set(self._d) == other
+        return NotImplemented
+
+    __hash__ = None
+
+    def __repr__(self) -> str:
+        return "{" + ", ".join(repr(k) for k in self._d) + "}"
+
+
 class MapPoint:
     """A node on the act map (MapPoint.cs).
 
@@ -106,7 +147,9 @@ class MapPoint:
         self.col = col
         self.row = row
         self.parents: set[MapPoint] = set()
-        self.children: set[MapPoint] = set()
+        # Insertion-ordered so FindAllPaths matches the game's child iteration
+        # (see _OrderedSet / _find_all_paths).
+        self.children: _OrderedSet = _OrderedSet()
         self.point_type = MapPointType.UNASSIGNED
         # StandardActMap.AssignPointTypes marks forced rows immutable so
         # later systems (repair, map-editing effects) leave them alone.
@@ -620,7 +663,7 @@ def _find_all_paths(current: MapPoint) -> list[list[MapPoint]]:
         else:
             result = [
                 [node] + suffix
-                for child in sorted(node.children, key=_sort_key)
+                for child in node.children  # insertion order == game HashSet order
                 for suffix in paths_from(child)
             ]
         memo[node] = result

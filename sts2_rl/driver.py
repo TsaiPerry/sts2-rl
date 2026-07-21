@@ -40,7 +40,7 @@ from .full_env import (
     combat_action_masks,
 )
 from .rewards import GOLD_REWARD_RANGES, CombatRewards
-from .rooms import RoomType
+from .rooms import SHARED_ANCIENTS, RoomType
 
 if TYPE_CHECKING:
     from .actmap import MapPoint
@@ -189,13 +189,11 @@ ACT_ANCIENTS: dict[str, tuple[str, ...]] = {
     "glory": ("nonupeipe", "tanx", "vakuu"),
 }
 
-# UnlockState.SharedAncients — shrines that belong to no single act. At run
-# start RunManager.GenerateRooms shuffles this list and hands each act after
-# the first a random prefix of what's left (`NextInt(count + 1)` per act, in
-# order), so a shared ancient can appear in at most one act of a run — see
-# RunDriver._roll_shared_ancients. Each act then rolls its shrine uniformly
-# from its own ancients plus its subset (ActModel.GenerateRooms).
-SHARED_ANCIENTS: tuple[str, ...] = ("darv",)
+# UnlockState.SharedAncients (`SHARED_ANCIENTS`, imported from rooms) is shuffled
+# and dealt to the acts after the first at run start; each act then rolls its
+# shrine uniformly from its own ancients plus its subset (ActModel.GenerateRooms).
+# The parity path pre-rolls all of this on UpFront in RunState._generate_all_act_rooms;
+# the legacy path below rolls it on self.rng in _roll_shared_ancients.
 
 
 class RunDriver:
@@ -431,6 +429,12 @@ class RunDriver:
         self._shared_ancient_subsets = {}
         if not self._include_ancients:
             return
+        if self.run.rng_set is not None:
+            # Parity: start_run already shuffled + dealt the subsets on UpFront
+            # (RunState._generate_all_act_rooms) and folded each act's ancient
+            # into its pre-rolled RoomSet — nothing to draw on the legacy RNG.
+            self._shared_ancient_subsets = dict(self.run._shared_ancient_subsets)
+            return
         from .events import ALL_EVENTS
 
         remaining = [a for a in SHARED_ANCIENTS if a in ALL_EVENTS]
@@ -449,12 +453,21 @@ class RunDriver:
         player at the Ancient node, and offers relics."""
         if not self._include_ancients:
             return
+        from .events import ALL_EVENTS, make_event
+
+        if self.run.rng_set is not None:
+            # Parity: the shrine was pre-rolled into this act's RoomSet on the
+            # UpFront stream (ActModel.GenerateRooms); fire exactly that one.
+            room_set = self.run.room_set
+            ancient = room_set.ancient_key if room_set is not None else None
+            if ancient is not None:
+                self._run_event(make_event(ancient, self.run))
+            return
         act_name = self.run.act_config.name
         pool = ACT_ANCIENTS.get(act_name, ())
         shared = self._shared_ancient_subsets.get(act_name, ())
         if not pool and not shared:
             return
-        from .events import ALL_EVENTS, make_event
 
         # Mirror ActModel.GetUnlockedAncients: only ancients that exist in the
         # sim are offerable (an unported ancient is treated as not-yet-unlocked,

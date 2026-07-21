@@ -8,9 +8,165 @@ using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Entities.Rngs;
+using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Acts;
+using System.Runtime.CompilerServices;
 
 static class Program
 {
+    // A bit-exact oracle for the generated act map: build the real
+    // StandardActMap from sts2.dll for a seed+act and dump the grid
+    // (coords + types + edges + the map_N Rng counter). Used to fix the
+    // Python actmap.py port to exact column/adjacency parity.
+    static ActModel MakeAct(string act)
+    {
+        System.Type t = act switch
+        {
+            "overgrowth" => typeof(Overgrowth),
+            "underdocks" => typeof(Underdocks),
+            "hive" => typeof(Hive),
+            "glory" => typeof(Glory),
+            _ => throw new ArgumentException($"unknown act {act}"),
+        };
+        // GetNumberOfRooms (BaseNumberOfRooms constant) + GetMapPointTypes
+        // (pure Rng) are all StandardActMap needs; skip the ctor entirely.
+        return (ActModel)RuntimeHelpers.GetUninitializedObject(t);
+    }
+
+    static object DumpMap(string seedStr, int actIndex, string act, int eliteCount, bool prune = true)
+    {
+        uint runSeed = (uint)StringHelper.GetDeterministicHashCode(seedStr);
+        var mapRng = new Rng(runSeed, $"act_{actIndex + 1}_map");
+        // GetMapPointTypes draw order (Overgrowth/Underdocks): rest gaussian
+        // THEN unknown gaussian. Replicate manually so we can pin NumOfElites
+        // (SwarmingElites at Asc 1+ makes it 8) without a booted RunManager.
+        int restCount = mapRng.NextGaussianInt(7, 1, 6, 7);
+        int unknownCount = MapPointTypeCounts.StandardRandomUnknownCount(mapRng);
+        var counts = new MapPointTypeCounts(unknownCount, restCount) { NumOfElites = eliteCount };
+        var map = new StandardActMap(mapRng, MakeAct(act), false, false, false, counts, prune);
+        var points = new List<object>();
+        foreach (MapPoint p in map.GetAllMapPoints())
+        {
+            var kids = p.Children.OrderBy(c => c.coord.col).ThenBy(c => c.coord.row)
+                .Select(c => new[] { c.coord.col, c.coord.row }).ToList();
+            points.Add(new
+            {
+                col = p.coord.col, row = p.coord.row,
+                type = p.PointType.ToString(), children = kids,
+            });
+        }
+        points.Sort((a, b) =>
+        {
+            dynamic da = a, db = b;
+            return da.row != db.row ? da.row - db.row : da.col - db.col;
+        });
+        var startKids = map.StartingMapPoint.Children
+            .OrderBy(c => c.coord.col).ThenBy(c => c.coord.row)
+            .Select(c => new[] { c.coord.col, c.coord.row }).ToList();
+        return new
+        {
+            seed = seedStr, act, act_index = actIndex,
+            elite_count = eliteCount, rest_count = restCount, unknown_count = unknownCount,
+            start = new[] { map.StartingMapPoint.coord.col, map.StartingMapPoint.coord.row },
+            start_children = startKids,
+            boss = new[] { map.BossMapPoint.coord.col, map.BossMapPoint.coord.row },
+            counter_after = mapRng.Counter,
+            points,
+        };
+    }
+
+    static string TypeCounts(StandardActMap map)
+    {
+        var c = new SortedDictionary<string, int>();
+        foreach (var p in map.GetAllMapPoints())
+        {
+            string k = p.PointType.ToString();
+            c[k] = c.GetValueOrDefault(k) + 1;
+        }
+        return string.Join(" ", c.Select(kv => $"{kv.Key[..4]}={kv.Value}"));
+    }
+
+    static void PruneTrace(string seedStr, int actIndex, string act, int eliteCount)
+    {
+        uint runSeed = (uint)StringHelper.GetDeterministicHashCode(seedStr);
+        var mapRng = new Rng(runSeed, $"act_{actIndex + 1}_map");
+        int restCount = mapRng.NextGaussianInt(7, 1, 6, 7);
+        int unknownCount = MapPointTypeCounts.StandardRandomUnknownCount(mapRng);
+        var counts = new MapPointTypeCounts(unknownCount, restCount) { NumOfElites = eliteCount };
+        var actModel = MakeAct(act);
+        int mapLength = actModel.GetNumberOfRooms(false) + 1;
+
+        var t = typeof(StandardActMap);
+        var map = (StandardActMap)RuntimeHelpers.GetUninitializedObject(t);
+        const BindingFlags BF = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
+        void Set(Type owner, string field, object val) => owner.GetField(field, BF)!.SetValue(map, val);
+        var grid = new MapPoint[7, mapLength];
+        Set(t, "<Grid>k__BackingField", grid);
+        Set(t, "_rng", mapRng);
+        Set(t, "_mapLength", mapLength);
+        Set(t, "_pointTypeCounts", counts);
+        Set(t, "<ShouldReplaceTreasureWithElites>k__BackingField", false);
+        Set(t, "<StartingMapPoint>k__BackingField", new MapPoint(3, 0));
+        Set(t, "<BossMapPoint>k__BackingField", new MapPoint(3, mapLength));
+        Set(t, "<SecondBossMapPoint>k__BackingField", null!);
+        typeof(ActMap).GetField("startMapPoints", BF)!.SetValue(map, new HashSet<MapPoint>());
+
+        t.GetMethod("GenerateMap", BF)!.Invoke(map, null);
+        t.GetMethod("AssignPointTypes", BF)!.Invoke(map, null);
+        Console.WriteLine($"[{seedStr} {act} e{eliteCount}] pre-prune counter={mapRng.Counter}");
+
+        var startField = typeof(ActMap).GetField("startMapPoints", BF)!;
+        Func<MapPointType, MapPoint, bool> isValid = map.IsValidPointType;
+
+        // Dump the initial duplicate groups (before any pruning) for diffing.
+        var groups0 = MapPathPruning.FindMatchingSegments(map.StartingMapPoint);
+        Console.WriteLine($"  round0 groups={groups0.Count}");
+        for (int g = 0; g < groups0.Count; g++)
+        {
+            var segs = groups0[g].Select(seg =>
+                "[" + string.Join(" ", seg.Select(p => $"{p.coord.col},{p.coord.row}")) + "]");
+            Console.WriteLine($"    g{g}: {string.Join(" | ", segs)}");
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            int b = mapRng.Counter;
+            var start = (HashSet<MapPoint>)startField.GetValue(map)!;
+            MapPathPruning.PruneDuplicateSegments(grid, start, map.StartingMapPoint, mapRng);
+            int ap = mapRng.Counter;
+            string afterPrune = TypeCounts(map);
+            bool repaired = MapPathPruning.RepairPrunedPointTypes(map, counts, mapRng, isValid);
+            int ar = mapRng.Counter;
+            Console.WriteLine($"  round {i}: prune_draws={ap - b} [{afterPrune}] repair_draws={ar - ap} [{TypeCounts(map)}] repaired={repaired}");
+            if (!repaired) break;
+        }
+        Console.WriteLine($"  final counter={mapRng.Counter}");
+    }
+
+    static void MapMain()
+    {
+        if (Environment.GetCommandLineArgs().Contains("prunetrace"))
+        {
+            PruneTrace("89U21BV1TZ", 0, "overgrowth", 8);
+            return;
+        }
+        // seed -> act-1 act name (89U21BV1TZ etc. are Overgrowth/Underdocks).
+        var jobs = new (string seed, int idx, string act, int elites, bool prune)[]
+        {
+            ("89U21BV1TZ", 0, "overgrowth", 8, true),   // asc-1 (SwarmingElites), full pipeline
+        };
+        var outMaps = new List<object>();
+        foreach (var (seed, idx, act, elites, prune) in jobs)
+            outMaps.Add(DumpMap(seed, idx, act, elites, prune));
+        string outPath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "test", "data", "map_golden.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
+        File.WriteAllText(outPath, JsonSerializer.Serialize(outMaps,
+            new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine($"Wrote {outPath}");
+    }
+
     static object MegaBlock(uint seed)
     {
         List<string> u = new(); var m = new MegaRandom(seed);
@@ -32,8 +188,9 @@ static class Program
         };
     }
 
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "map") { MapMain(); return; }
         // splitmix64 seed-0 state (read s0..s3 after Reinitialise via reflection).
         var mr = new MegaRandom(0);
         var f = typeof(MegaRandom);

@@ -4,8 +4,10 @@ The run.save serializes the *sequence of map-point types the player walked*
 (``map_point_history[act]``) but not per-node coordinates, so the strongest
 oracle the save supports is structural: the map the sim carves from the
 parity ``act_N_map`` stream must contain, at each row the player passed
-through, a node of the recorded type. (A bit-exact per-node check would need
-a map grid dumped from sts2.dll — a follow-up.)
+through, a node of the recorded type. For 89U21BV1TZ this is now backed by a
+bit-exact per-node oracle (``test/data/map_golden.json``) dumped from the real
+``StandardActMap`` in sts2.dll via ``tools/rng_dump`` (run
+``RngDump.exe map``) — every node's coord, type, and edges match the game.
 
 Act 1 is checked here because its map is generated with zero relics/cards in
 play (Neow fires after the first act's map is built), so its layout is a
@@ -73,6 +75,36 @@ def test_act1_map_layout_matches_recording(seed: str):
         if oracle[r] not in rows.get(r, set())
     ]
     assert not missing, f"{seed} act1 rows without the recorded type: {missing}"
+
+
+_GOLDEN = Path(__file__).resolve().parent / "data" / "map_golden.json"
+
+
+@pytest.mark.skipif(not _GOLDEN.exists(), reason="map_golden.json not generated")
+def test_act1_map_bit_exact_matches_dll_golden():
+    """The sim's act-1 map reproduces the real StandardActMap node-for-node
+    (coords + types + edges), not just per-row types. The golden is dumped
+    from sts2.dll (tools/rng_dump). This locks the MapPathPruning parity fix:
+    children are enumerated in link (insertion) order, matching the game's
+    HashSet, so duplicate-segment pruning removes the same nodes."""
+    golden = json.loads(_GOLDEN.read_text())[0]
+    seed = golden["seed"]
+    save = _load_save(seed)
+    act_map = _act1_map(seed, save)
+
+    sim = {(p.col, p.row): p for p in act_map.all_points()}
+    gold = {(g["col"], g["row"]): g for g in golden["points"]}
+    assert set(sim) == set(gold), "node coordinates differ from the dll oracle"
+    for coord, g in gold.items():
+        point = sim[coord]
+        assert point.point_type.name.lower().replace("_", "") == g["type"].lower(), coord
+        sim_kids = sorted((c.col, c.row) for c in point.children)
+        gold_kids = sorted((c[0], c[1]) for c in g["children"])
+        assert sim_kids == gold_kids, f"edges at {coord}"
+
+    sim_start = sorted((c.col, c.row) for c in act_map.starting_point.children)
+    gold_start = sorted((c[0], c[1]) for c in golden["start_children"])
+    assert sim_start == gold_start
 
 
 def test_act1_map_oracle_discriminates():

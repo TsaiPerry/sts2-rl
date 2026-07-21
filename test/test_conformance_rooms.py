@@ -87,6 +87,60 @@ def test_generated_rooms_match_save(seed):
         assert event_game_id(rs.ancient_key) == exp["ancient"]
 
 
+@pytest.mark.parametrize("seed", SEEDS)
+def test_start_run_pregenerates_rooms_on_upfront(seed):
+    """Task 8f production wiring: RunState.start_run pre-rolls every act on the
+    UpFront stream, reproducing the save room lists and consuming exactly the
+    same UpFront draws as the standalone GenerateRooms replay above."""
+    o = parse_save(REC / seed / "floor_18" / "run.save")
+    act_names = [ACT_SIM_NAME[a] for a in o.acts]
+
+    # The standalone replay fixes the reference post-generation UpFront counter.
+    ref = RunState(string_seed=seed)
+    _generate_run_rooms(ref, act_names)
+    ref_counter = ref.rng_set.up_front.counter
+
+    run = RunState(string_seed=seed)
+    run.start_run(acts=act_names, ascension=0)
+    # Map generation rides its own act_N_map stream, so start_run leaves the
+    # UpFront counter exactly where GenerateRooms did.
+    assert run.rng_set.up_front.counter == ref_counter
+    for i, name in enumerate(act_names):
+        exp = o.encounter_ids_by_act[i]
+        rs = run.room_set
+        assert [encounter_game_id(k) for k in rs.normal_keys] == exp["normal"]
+        assert [encounter_game_id(k) for k in rs.elite_keys] == exp["elite"]
+        assert [event_game_id(k) for k in rs.event_ids] == exp["event"]
+        assert encounter_game_id(rs.boss_key) == exp["boss"]
+        assert event_game_id(rs.ancient_key) == exp["ancient"]
+        if i < len(act_names) - 1:
+            run.advance_act()
+
+
+def test_double_boss_adds_second_boss_on_upfront():
+    """Asc-10 DoubleBoss: the final act's second boss is a distinct boss from
+    the same pool, drawn with NextItem on UpFront right after that act's rooms
+    (RunManager.GenerateRooms) — exactly one extra draw versus the asc-0 run."""
+    from sts2_rl.actmap import AscensionLevel
+
+    acts = ["overgrowth", "hive", "glory"]
+    seed = "DOUBLEBOSSTEST"
+
+    base = RunState(string_seed=seed)
+    base.start_run(acts=list(acts), ascension=0)
+    assert base._act_room_sets[-1].second_boss_key is None
+    base_counter = base.rng_set.up_front.counter
+
+    db = RunState(string_seed=seed)
+    db.start_run(acts=list(acts), ascension=AscensionLevel.DOUBLE_BOSS)
+    final = db._act_room_sets[-1]
+    assert final.second_boss_key is not None
+    assert final.second_boss_key != final.boss_key
+    assert final.second_boss_key in act_rooms("glory").boss_keys
+    # The only extra UpFront consumer is that single NextItem roll.
+    assert db.rng_set.up_front.counter == base_counter + 1
+
+
 def test_overgrowth_pools_in_game_encounter_order():
     """Guard the reorder: Overgrowth weak/normal follow AllEncounters
     (alphabetical-by-class), not the first-run discovery-swap order."""
