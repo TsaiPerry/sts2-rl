@@ -35,6 +35,7 @@ from .cards import Card, CardRarity, IRONCLAD_POOL, make_card
 from .cards.base import _CARD_CLASSES
 from .combat import CombatState
 from .potions import Potion, _POTION_CLASSES
+from .relic_pools import populate_relic_grab_bags
 from .relics import ALL_RELICS, Relic, RelicRarity, make_relic
 from .rng import PlayerRngSet, RunRngSet
 from .rewards import (
@@ -160,6 +161,20 @@ class RunState:
             if cls.rarity in _BAG_RARITIES
         ]
         self.rng.shuffle(self.relic_grab_bag)
+        # ── SP2 parity relic grab bags (Task 8d) ─────────────────────────
+        # RunManager.InitializeNewRun shuffles the shared + player relic grab
+        # bags on the UpFront stream at run start — UpFront's very first
+        # consumer, landing its counter at 230 for a fully-unlocked Ironclad
+        # run (before the shared-ancient subset rolls, Task 8f). These
+        # game-complete per-rarity deques (relic_pools.py) supersede the legacy
+        # merged bag above for reward pulls once Task 9 rewires them; for now
+        # they exist so the UpFront draw count is game-exact. Gated on rng_set
+        # so the legacy (non-parity) path keeps its exact random.Random draws.
+        self.shared_relic_bag: dict[str, list[str]] | None = None
+        self.player_relic_bag: dict[str, list[str]] | None = None
+        if self.rng_set is not None:
+            self.shared_relic_bag, self.player_relic_bag = populate_relic_grab_bags(
+                self.rng_set.up_front)
         # A separate bag of Shop-rarity relics (never in the normal grab bag)
         # for the merchant's Shop-rarity slot (RelicFactory.PullNextRelicFromBack
         # with RelicRarity.Shop). Built + shuffled lazily on first shop access

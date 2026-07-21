@@ -78,14 +78,18 @@ def _overgrowth_rooms() -> ActRooms:
 
     return ActRooms(
         name="overgrowth",
+        # Game order: AllEncounters (Overgrowth.GenerateAllEncounters,
+        # alphabetical-by-class) filtered by RoomType/IsWeak. The first-run
+        # ApplyActDiscoveryOrderModifications swap order is deliberately NOT
+        # used (tutorial mods are off for real runs — see the module docstring).
         weak_keys=(
-            "nibbits_weak", "slimes_weak", "shrinker_beetle_weak",
-            "fuzzy_wurm_weak",
+            "fuzzy_wurm_weak", "nibbits_weak", "shrinker_beetle_weak",
+            "slimes_weak",
         ),
         normal_keys=(
-            "nibbits_normal", "slimes_normal", "inklets_normal",
-            "mawler_normal", "cubex_construct", "flyconid", "fogmog",
-            "overgrowth_crawlers", "ruby_raiders", "slithering_strangler",
+            "cubex_construct", "flyconid", "fogmog", "inklets_normal",
+            "mawler_normal", "nibbits_normal", "overgrowth_crawlers",
+            "ruby_raiders", "slimes_normal", "slithering_strangler",
             "snapping_jaxfruit", "vine_shambler",
         ),
         elite_keys=("bygone_effigy", "byrdonis", "phrog_parasite"),
@@ -255,6 +259,10 @@ class RoomSet:
         self.elite_keys: list[str] = []
         self.event_ids: list[str] = []
         self.boss_key: str = ""
+        # The Ancient shrine this act rolls (ActModel.GenerateRooms:
+        # `NextItem(GetUnlockedAncients ∪ sharedAncientSubset)`). Only the
+        # parity path fills it — the legacy path rolls ancients in the driver.
+        self.ancient_key: str | None = None
         # DoubleBoss (Asc 10): the second boss on the final act, drawn as a
         # different encounter from the same pool (RoomSet.SecondBoss).
         self.second_boss_key: str | None = None
@@ -267,13 +275,25 @@ class RoomSet:
     def generate(
         cls,
         rooms: ActRooms,
-        rng: random.Random,
+        rng,
         num_rooms: int,
         num_weak: int,
         has_second_boss: bool = False,
+        ancient_pool: tuple[str, ...] = (),
     ) -> RoomSet:
-        """ActModel.GenerateRooms (+ RunManager's DoubleBoss second boss)."""
+        """ActModel.GenerateRooms (+ RunManager's DoubleBoss second boss).
+
+        Two draw models share the event-pool shuffle but split on the encounter
+        grab. A game ``Rng`` (SP2 parity path, `rng_set.up_front`) reproduces
+        the run.save room lists via ``GrabBag.GrabAndRemove``'s reject-and-redraw
+        and ``NextItem`` boss/ancient rolls, consuming exactly the game's
+        ``UpFront`` draw count. A legacy ``random.Random`` keeps the pre-SP2
+        single-``choice`` behavior (its non-faithful draw count is irrelevant to
+        RL training and untouched here). ``ancient_pool`` (parity only) is the
+        act's ``GetUnlockedAncients ∪ sharedAncientSubset`` — see
+        RunManager.GenerateRooms."""
         from .events import SHARED_EVENTS
+        from .rng import Rng
 
         room_set = cls(rooms, rooms.encounters())
         # AllEvents.Concat(ModelDb.AllSharedEvents), then shuffle: the shared
@@ -282,30 +302,90 @@ class RoomSet:
         # keeps it out of the acts it doesn't belong in.
         room_set.event_ids = list(rooms.event_pool) + list(SHARED_EVENTS)
         rng.shuffle(room_set.event_ids)
+        if isinstance(rng, Rng):
+            room_set._generate_parity(rng, num_rooms, num_weak, ancient_pool)
+        else:
+            room_set._generate_legacy(
+                rng, num_rooms, num_weak, has_second_boss
+            )
+        return room_set
+
+    def _generate_parity(
+        self, rng, num_rooms: int, num_weak: int,
+        ancient_pool: tuple[str, ...],
+    ) -> None:
+        """ActModel.GenerateRooms on a game ``Rng`` (`UpFront`): faithful
+        ``GrabBag.GrabAndRemove`` rejection draws for encounters and ``NextItem``
+        boss/ancient rolls. The DoubleBoss second boss is a separate post-pass
+        in RunManager.GenerateRooms, not part of this method, so it is not
+        rolled here."""
+        rooms = self.rooms
         bag: list[str] = []
         for _ in range(num_weak):
             if not bag:
                 bag = list(rooms.weak_keys)
-            _add_without_repeating_tags(room_set.normal_keys, bag, rooms, rng)
+            self._grab_without_repeating_tags(self.normal_keys, bag, rng)
         bag = []
         for _ in range(num_weak, num_rooms):
             if not bag:
                 bag = list(rooms.normal_keys)
-            _add_without_repeating_tags(room_set.normal_keys, bag, rooms, rng)
+            self._grab_without_repeating_tags(self.normal_keys, bag, rng)
         bag = []
-        for _ in range(cls.MAX_ELITES):
+        for _ in range(self.MAX_ELITES):
             if not bag:
                 bag = list(rooms.elite_keys)
-            _add_without_repeating_tags(room_set.elite_keys, bag, rooms, rng)
-        room_set.boss_key = rng.choice(rooms.boss_keys)
+            self._grab_without_repeating_tags(self.elite_keys, bag, rng)
+        self.boss_key = rng.next_item(list(rooms.boss_keys))
+        if ancient_pool:
+            self.ancient_key = rng.next_item(list(ancient_pool))
+
+    def _grab_without_repeating_tags(
+        self, target: list[str], bag: list[str], rng,
+    ) -> None:
+        """ActModel.AddWithoutRepeatingTags: grab a tag-safe, non-repeat pick
+        from the bag; if the predicate excludes everything, fall back to any
+        grab (both via GrabBag.GrabAndRemove's rejection model)."""
+        from .rng import grab_and_remove
+
+        last = target[-1] if target else None
+        pick = grab_and_remove(
+            bag, rng,
+            lambda k: k != last and not _shares_tags(self.rooms, k, last),
+        )
+        if pick is None:
+            pick = grab_and_remove(bag, rng)
+        if pick is not None:
+            target.append(pick)
+
+    def _generate_legacy(
+        self, rng: random.Random, num_rooms: int, num_weak: int,
+        has_second_boss: bool,
+    ) -> None:
+        """Pre-SP2 room generation on a shared ``random.Random`` (RL path)."""
+        rooms = self.rooms
+        bag: list[str] = []
+        for _ in range(num_weak):
+            if not bag:
+                bag = list(rooms.weak_keys)
+            _add_without_repeating_tags(self.normal_keys, bag, rooms, rng)
+        bag = []
+        for _ in range(num_weak, num_rooms):
+            if not bag:
+                bag = list(rooms.normal_keys)
+            _add_without_repeating_tags(self.normal_keys, bag, rooms, rng)
+        bag = []
+        for _ in range(self.MAX_ELITES):
+            if not bag:
+                bag = list(rooms.elite_keys)
+            _add_without_repeating_tags(self.elite_keys, bag, rooms, rng)
+        self.boss_key = rng.choice(rooms.boss_keys)
         if has_second_boss:
             # SetSecondBossEncounter: a different boss from the same pool
             # (falls back to the first if the pool has only one).
-            others = [k for k in rooms.boss_keys if k != room_set.boss_key]
-            room_set.second_boss_key = (
-                rng.choice(others) if others else room_set.boss_key
+            others = [k for k in rooms.boss_keys if k != self.boss_key]
+            self.second_boss_key = (
+                rng.choice(others) if others else self.boss_key
             )
-        return room_set
 
     # ── Next-room accessors (consume with mark_visited) ─────────────────
 
