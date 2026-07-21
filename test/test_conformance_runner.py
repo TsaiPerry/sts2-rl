@@ -1,13 +1,24 @@
 """SP2 Task 10: the conformance runner replays a recording through the
 parity-sim with a force-win combat stub and diffs the walk + RNG counters.
 
-Scope note: Task 10 lands before the economy streams are wired (Task 9), so
-the runner verifies what is live now — the exact map walk (every
-``MoveToMapCoord`` lands on the recorded node type) and the ``UpFront`` counter
-(413 at the act-1 boss). The ``UnknownMapPoint`` / ``Rewards`` / ``Shops``
-counters still read 0 (they draw on the legacy RNG until Task 9); the runner
-reports them as pending divergences, asserted here so the expected-state is
-explicit and flips to a hard match once Task 9 wires the economy streams."""
+Task 9 wired the four SP2 RNG streams onto the parity RNG:
+  - ``UpFront`` — run/room generation (8f), 413 at the act-1 boss.
+  - ``UnknownMapPoint`` — "?"-node resolution (RunOddsSet), 3.
+  - ``Rewards`` — combat/treasure reward generation (gold, potion pity+drop,
+    cards, elite relic rarity), 141.
+  - ``Shops`` — merchant generation (on-sale index, card/potion picks, cost
+    jitter), 56. (Merchant card/relic rarity + upgrade rolls draw on the
+    *Rewards* stream, as in the source.)
+
+The full act-1 walk of 89U21BV1TZ (Ironclad) reproduces all four counters
+exactly with zero divergences.
+
+Cross-seed note: ``Shops`` / ``UnknownMapPoint`` / ``UpFront`` match all five
+RunReplays recordings; ``Rewards`` matches every seed whose act-1 events award
+nothing on the reward stream. Two seeds (DJDCSAQZNR, QRWCVDPZN5) walk through
+events (brain_leech, self_help_book, …) whose per-event reward-draw counts the
+Ironclad-only sim doesn't yet reproduce — an event-fidelity gap distinct from
+the reward/shop wiring, tracked separately."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,13 +35,9 @@ pytestmark = pytest.mark.skipif(not REC.exists(), reason="RunReplays recordings 
 
 SEED = "89U21BV1TZ"  # floor_18 = act 1 only (no Hive act-2 map divergence)
 
-# Streams whose counters are wired to the parity RNG today (pre-Task-9).
-_WIRED = frozenset({RunRngType.UP_FRONT})
-# Streams Task 9 still has to route onto the parity RNG.
-_PENDING_LABELS = frozenset(
-    {RunRngType.UNKNOWN_MAP_POINT.value,
-     PlayerRngType.REWARDS.value, PlayerRngType.SHOPS.value}
-)
+# Every SP2 stream + its expected floor-18 counter for the Ironclad seed.
+_EXPECTED_RUN = {RunRngType.UP_FRONT: 413, RunRngType.UNKNOWN_MAP_POINT: 3}
+_EXPECTED_PLAYER = {PlayerRngType.REWARDS: 141, PlayerRngType.SHOPS: 56}
 
 
 def _run(seed: str, floor: str = "floor_18"):
@@ -51,23 +58,24 @@ def test_runner_reproduces_act1_walk():
     assert not map_or_nav, map_or_nav
 
 
-def test_runner_matches_upfront_counter():
+def test_runner_matches_run_counters():
     result, oracle = _run(SEED)
-    # UpFront is fully wired (8f): room generation lands it at the save value
-    # and the force-win walk adds no in-run UpFront draws for this seed.
-    assert result.run_counters[RunRngType.UP_FRONT] == \
-        oracle.run_counters[RunRngType.UP_FRONT] == 413
-    assert not any(
-        d.stream == RunRngType.UP_FRONT.value for d in result.divergences)
+    # UpFront (room generation) and UnknownMapPoint ("?"-node resolution) both
+    # land at the save value with no in-run divergence.
+    for stream, expected in _EXPECTED_RUN.items():
+        assert result.run_counters[stream] == oracle.run_counters[stream] == expected
 
 
-def test_runner_economy_streams_pending_task9():
-    """Until Task 9 routes them onto the parity RNG, the economy streams read
-    0 and are the *only* remaining divergences. This test documents that state
-    and must be tightened (to a hard counter match) when Task 9 lands."""
+def test_runner_matches_economy_counters():
+    result, oracle = _run(SEED)
+    # Rewards (combat/treasure reward generation) and Shops (merchant
+    # generation) reproduce the save counters exactly.
+    for stream, expected in _EXPECTED_PLAYER.items():
+        assert result.player_counters[stream] == \
+            oracle.player_counters[stream] == expected
+
+
+def test_runner_has_no_divergences():
     result, _ = _run(SEED)
-    pending = {d.stream for d in result.divergences}
-    assert pending == _PENDING_LABELS, result.divergences
-    assert result.run_counters[RunRngType.UNKNOWN_MAP_POINT] == 0
-    assert result.player_counters[PlayerRngType.REWARDS] == 0
-    assert result.player_counters[PlayerRngType.SHOPS] == 0
+    # All four SP2 streams + the whole map/room-type walk agree with the save.
+    assert result.ok, [str(d) for d in result.divergences]

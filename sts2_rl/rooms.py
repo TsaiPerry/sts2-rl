@@ -504,7 +504,11 @@ class UnknownOdds:
             if RoomType.EVENT in allowed or not allowed
             else min(allowed)
         )
-        threshold = rng.random()
+        # UnknownMapPointOdds.Roll draws a single float. The parity path uses a
+        # game ``Rng`` (Rng.NextFloat, float32); the legacy RL path uses
+        # random.Random.random(). Each "?" node consumes exactly one draw.
+        from .rng import Rng
+        threshold = rng.next_float() if isinstance(rng, Rng) else rng.random()
         cumulative = 0.0
         for room_type, odds in self._current.items():
             if room_type in allowed and odds >= 0.0:

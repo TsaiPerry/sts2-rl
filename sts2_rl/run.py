@@ -83,9 +83,13 @@ _ACTS_BY_INDEX: list[list[str]] = [
 ]
 
 
-def roll_relic_rarity(rng: random.Random) -> RelicRarity:
-    """RelicFactory.RollRarity: <0.5 Common, <0.83 Uncommon, else Rare."""
-    roll = rng.random()
+def roll_relic_rarity(rng) -> RelicRarity:
+    """RelicFactory.RollRarity: <0.5 Common, <0.83 Uncommon, else Rare. The SP2
+    parity path passes a game ``Rng`` (``NextFloat``); the legacy RL path a
+    ``random.Random`` (``random()``)."""
+    from .rng import Rng
+
+    roll = rng.next_float() if isinstance(rng, Rng) else rng.random()
     if roll < 0.5:
         return RelicRarity.COMMON
     if roll < 0.83:
@@ -184,10 +188,14 @@ class RunState:
         # Player.ExtraFields.CardShopRemovalsUsed — raises the removal price.
         self.card_shop_removals_used = 0
         # Per-run reward pity state (PlayerOdds in the source): the drifting
-        # card-rarity offset and the potion-drop threshold. Constructing them
-        # draws no RNG, so run-construction seed parity is preserved.
-        self.card_rarity_odds = CardRarityOdds(self.rng)
-        self.potion_reward_odds = PotionRewardOdds(self.rng)
+        # card-rarity offset and the potion-drop threshold. Both roll on the
+        # per-player Rewards stream in the SP2 parity path (PlayerOddsSet seeds
+        # CardRarityOdds/PotionRewardOdds with PlayerRng.Rewards); the legacy RL
+        # path keeps them on the shared run.rng. Constructing them draws no RNG,
+        # so run-construction seed parity is preserved.
+        odds_rng = self.player_rng.rewards if self.player_rng is not None else self.rng
+        self.card_rarity_odds = CardRarityOdds(odds_rng)
+        self.potion_reward_odds = PotionRewardOdds(odds_rng)
         # Post-combat "extras" carried out of the last finished combat, awaiting
         # the reward screen (mirrors a CombatRoom's ExtraRewards being folded in
         # by RewardsSet.WithRewardsFromRoom). finish_combat fills it;
@@ -222,6 +230,20 @@ class RunState:
         # Event ids seen this run (RunState.VisitedEventIds) — feeds
         # RoomSet.EnsureNextEventIsValid.
         self.visited_event_ids: set[str] = set()
+
+    # ── Economy RNG streams (SP2 parity) ─────────────────────────────────
+
+    @property
+    def rewards_rng(self):
+        """The per-player Rewards stream (reward gold/cards/potions/relic-rarity
+        rolls) in the SP2 parity path, else the shared legacy run.rng."""
+        return self.player_rng.rewards if self.player_rng is not None else self.rng
+
+    @property
+    def shops_rng(self):
+        """The per-player Shops stream (merchant on-sale/card-pick/cost-jitter/
+        potion rolls) in the SP2 parity path, else the shared legacy run.rng."""
+        return self.player_rng.shops if self.player_rng is not None else self.rng
 
     # ── HP ───────────────────────────────────────────────────────────────
 
@@ -803,8 +825,17 @@ class RunState:
             if point.point_type == MapPointType.UNKNOWN
             else None
         )
+        # "?"-node resolution draws on the run's UnknownMapPoint stream in the
+        # SP2 parity path (RunOddsSet's dedicated Rng), else the legacy RNG.
+        # Only Unknown points consume it, so passing it for every point is
+        # harmless (roll_room_type ignores rng for fixed types).
+        room_type_rng = (
+            self.rng_set.unknown_map_point
+            if self.rng_set is not None
+            else self.rng
+        )
         room_type = roll_room_type(
-            point.point_type, self.unknown_odds, self.rng, blacklist, allowed
+            point.point_type, self.unknown_odds, room_type_rng, blacklist, allowed
         )
         self.current_point = point
         self.total_floor += 1  # IRunState.TotalFloor: rooms entered this run
@@ -834,7 +865,15 @@ class RunState:
             # (Silver Crucible's first treasure room).
             if all(r.should_generate_treasure(self) for r in self.relics):
                 resolution.relic = self.obtain_relic_from_grab_bag()
-                treasure_gold = self.rng.randint(*TREASURE_GOLD)
+                # OneOffSynchronizer.DoTreasureRoomRewards: the chest gold is
+                # NextInt(42, 53) on the per-player Rewards stream (parity), else
+                # the legacy run.rng. (The relic itself is picked on the
+                # uncompared TreasureRoomRelics stream — left on run.rng.)
+                lo, hi = TREASURE_GOLD
+                if self.rng_set is not None:
+                    treasure_gold = self.rewards_rng.next_int_range(lo, hi + 1)
+                else:
+                    treasure_gold = self.rng.randint(lo, hi)
                 self.gain_gold(treasure_gold)
                 resolution.gold = treasure_gold
             resolution.gold += self._complete_map_point_quests(point)

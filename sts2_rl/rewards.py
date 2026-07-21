@@ -52,6 +52,23 @@ if TYPE_CHECKING:
     from .run import RunState
 
 
+def _uniform(rng) -> float:
+    """One uniform [0,1) draw. In the SP2 parity path ``rng`` is a game ``Rng``
+    (``NextFloat``, the primitive the source's odds/upgrade rolls use); the
+    legacy RL path is a ``random.Random`` (``random()``)."""
+    from .rng import Rng
+
+    return rng.next_float() if isinstance(rng, Rng) else rng.random()
+
+
+def _draw_choice(rng, seq):
+    """Uniform pick from a sequence: ``Rng.NextItem`` (parity) or
+    ``random.Random.choice`` (legacy)."""
+    from .rng import Rng
+
+    return rng.next_item(seq) if isinstance(rng, Rng) else rng.choice(seq)
+
+
 class RarityOddsType(Enum):
     """CardRarityOddsType — which base-odds table a card roll uses."""
 
@@ -148,7 +165,7 @@ class CardRarityOdds:
         if offset is None:
             offset = self.current_value
         rare, uncommon, _ = _BASE_RARITY_ODDS[odds_type]
-        roll = self._rng.random()
+        roll = _uniform(self._rng)
         rare_threshold = rare + offset
         if roll < rare_threshold:
             return CardRarity.RARE
@@ -161,7 +178,7 @@ class CardRarityOdds:
         Note the source compares against the raw uncommon band here (not
         rare+uncommon) — transcribed as-is."""
         rare, uncommon, _ = _BASE_RARITY_ODDS[odds_type]
-        roll = self._rng.random()
+        roll = _uniform(self._rng)
         if roll < rare:
             return CardRarity.RARE
         if roll < uncommon:
@@ -184,7 +201,7 @@ class PotionRewardOdds:
         """Whether this room's rewards include a potion. Mutates the pity."""
         bonus = self.ELITE_BONUS if room_type == RoomType.ELITE else 0.0
         threshold = self.current_value + bonus * 0.5
-        hit = force or self._rng.random() < threshold
+        hit = force or _uniform(self._rng) < threshold
         self.current_value += -self.STEP if hit else self.STEP
         return hit
 
@@ -201,11 +218,17 @@ def roll_gold_reward(
     `gold_range` overrides the room-type default with an encounter's own
     Min/MaxGoldReward (both are virtual on EncounterModel — the Fake Merchant
     pins 300)."""
+    from .rng import Rng
+
     lo, hi = gold_range if gold_range is not None else GOLD_REWARD_RANGES[room_type]
     if room_type == RoomType.MONSTER:
         lo, hi = round(lo * proportion), round(hi * proportion)
     if hi <= 0:
         return 0
+    # GoldReward.Populate: NextInt(min, max+1) on the parity Rewards stream, else
+    # the legacy random.Random.randint (inclusive).
+    if isinstance(rng, Rng):
+        return rng.next_int_range(lo, hi + 1)
     return rng.randint(lo, hi)
 
 
@@ -229,7 +252,9 @@ def create_reward_cards(
     `pool` overrides the character pool (CardCreationOptions' explicit pool
     list — Lead Paperweight passes the Colorless pool).
     """
-    rng = run.rng
+    # CardFactory.CreateForReward draws on the per-player Rewards stream in the
+    # SP2 parity path (rng_set present); the legacy RL path stays on run.rng.
+    rng = run.rewards_rng
     if pool is None:
         pool = pool_card_ids()  # Ironclad pool minus Basic/Ancient
     chosen_ids: list[str] = []
@@ -249,11 +274,11 @@ def create_reward_cards(
         if rarity is None:
             break
         matching = [cid for cid in options if _CARD_CLASSES[cid].rarity == rarity]
-        card = make_card(rng.choice(matching))
+        card = make_card(_draw_choice(rng, matching))
         chosen_ids.append(card.id)
         # RollForUpgrade: the draw happens for every reward card; only
         # upgradable non-rares get the act-scaled chance (rares stay at 0).
-        upgrade_roll = rng.random()
+        upgrade_roll = _uniform(rng)
         if card.is_upgradable:
             odds = 0.0
             if card.rarity != CardRarity.RARE:
@@ -410,25 +435,54 @@ def generate_combat_rewards(
     gold_range = None
     if encounter is not None and encounter.min_gold is not None:
         gold_range = (encounter.min_gold, encounter.max_gold)
-    if not (room_type == RoomType.MONSTER and gold_proportion <= 0.0):
-        rewards.gold = roll_gold_reward(
-            run.rng, room_type, gold_proportion, gold_range)
-        run.gain_gold(rewards.gold)
 
     # Hook.ShouldForcePotionReward over the run's relics.
     force = any(
         relic.should_force_potion_reward(run, room_type) for relic in run.relics
     )
-    if run.potion_reward_odds.roll(room_type, force=force):
-        rewards.potion = run.random_potion()
+    give_gold = not (room_type == RoomType.MONSTER and gold_proportion <= 0.0)
 
-    rewards.cards = create_reward_cards(run, ROOM_RARITY_ODDS[room_type])
-
-    if room_type == RoomType.ELITE:
-        relic = run.pull_relic_from_front()
-        if relic is not None:
-            run.add_relic(relic)
-            rewards.relics.append(relic)
+    if run.rng_set is not None:
+        # SP2 parity: reproduce RewardsSet's exact draw order on the per-player
+        # Rewards stream. The potion-drop *pity* is rolled during reward
+        # generation (RollForPotionAndAddTo), before any reward Populate — so it
+        # precedes the gold draw — while the potion itself is generated later
+        # (PotionReward.Populate runs after GoldReward.Populate in list order).
+        rew = run.rewards_rng
+        got_potion = run.potion_reward_odds.roll(room_type, force=force)
+        if give_gold:
+            rewards.gold = roll_gold_reward(
+                rew, room_type, gold_proportion, gold_range)
+            run.gain_gold(rewards.gold)
+        if got_potion:
+            from .potion_pools import generate_random_potion
+            rewards.potion = generate_random_potion(rew)
+        rewards.cards = create_reward_cards(run, ROOM_RARITY_ODDS[room_type])
+        if room_type == RoomType.ELITE:
+            # RelicReward.Populate -> PullNextRelicFromFront(player): the rarity
+            # roll is the only Rewards draw (the bag pull consumes none). Roll on
+            # the reward stream for counter parity, then pull the implemented
+            # relic from the sim's bag.
+            from .run import roll_relic_rarity
+            rarity = roll_relic_rarity(rew)
+            relic = run.pull_relic_from_front(rarity=rarity)
+            if relic is not None:
+                run.add_relic(relic)
+                rewards.relics.append(relic)
+    else:
+        # Legacy RL path (pre-SP2 draw order on the shared run.rng).
+        if give_gold:
+            rewards.gold = roll_gold_reward(
+                run.rng, room_type, gold_proportion, gold_range)
+            run.gain_gold(rewards.gold)
+        if run.potion_reward_odds.roll(room_type, force=force):
+            rewards.potion = run.random_potion()
+        rewards.cards = create_reward_cards(run, ROOM_RARITY_ODDS[room_type])
+        if room_type == RoomType.ELITE:
+            relic = run.pull_relic_from_front()
+            if relic is not None:
+                run.add_relic(relic)
+                rewards.relics.append(relic)
 
     # Hook.ModifyRewards over the run's relics (Lava Rock adds two relic
     # rewards to the first act's boss screen). A hook that appends to

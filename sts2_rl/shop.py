@@ -61,9 +61,22 @@ _COLORLESS_CARD_RARITIES = (
     CardRarity.RARE,
 )
 
-def _next_float(rng: random.Random, lo: float, hi: float) -> float:
-    """Rng.NextFloat(lo, hi)."""
+def _next_float(rng, lo: float, hi: float) -> float:
+    """Rng.NextFloat(lo, hi): the game primitive (parity Shops stream) or the
+    equivalent random.Random expression (legacy RL path)."""
+    from .rng import Rng
+
+    if isinstance(rng, Rng):
+        return rng.next_float(lo, hi)
     return lo + (hi - lo) * rng.random()
+
+
+def _roll_merchant_card_upgrade(run: "RunState") -> None:
+    """CardFactory.RollForUpgrade(card, -999999999): every merchant card draws
+    one upgrade roll (NextFloat) on the Rewards stream that never upgrades it.
+    Parity path only — the legacy RL path never drew this."""
+    if run.rng_set is not None:
+        run.rewards_rng.next_float()
 
 
 def _create_merchant_card(
@@ -71,10 +84,11 @@ def _create_merchant_card(
 ) -> "Card | None":
     """CardFactory.CreateForMerchant(type): roll the shop rarity (reading the
     run's drifting pity offset without advancing it, per
-    RollWithoutChangingFutureOdds), drop to the next rarity that actually has
-    a card of this type, then pick uniformly."""
+    RollWithoutChangingFutureOdds — on the Rewards stream), drop to the next
+    rarity that actually has a card of this type, pick uniformly (Shops stream),
+    then roll for upgrade (Rewards stream, never upgrades)."""
     from .cards import IRONCLAD_POOL
-    from .rewards import RarityOddsType, next_allowed_card_rarity
+    from .rewards import RarityOddsType, _draw_choice, next_allowed_card_rarity
 
     options = [
         cid
@@ -100,23 +114,33 @@ def _create_merchant_card(
         if _CARD_CLASSES[c].rarity == rarity
         and _CARD_CLASSES[c].card_type == card_type
     ]
-    return make_card(run.rng.choice(matching)) if matching else None
+    if not matching:
+        return None
+    card = make_card(_draw_choice(run.shops_rng, matching))
+    _roll_merchant_card_upgrade(run)
+    return card
 
 
 def _create_merchant_colorless_card(
     run: "RunState", rarity: CardRarity, exclude_ids: set[str]
 ) -> "Card | None":
     """CardFactory.CreateForMerchant(rarity): the Colorless slots take the
-    given rarity as-is (no pity roll, no fallback walk) and pick uniformly
-    from the Colorless pool, deduped against the other card entries."""
+    given rarity as-is (no pity roll, no fallback walk), pick uniformly from the
+    Colorless pool (Shops stream) deduped against the other card entries, then
+    roll for upgrade (Rewards stream)."""
     from .cards import COLORLESS_POOL
+    from .rewards import _draw_choice
 
     matching = [
         cid
         for cid in COLORLESS_POOL
         if _CARD_CLASSES[cid].rarity == rarity and cid not in exclude_ids
     ]
-    return make_card(run.rng.choice(matching)) if matching else None
+    if not matching:
+        return None
+    card = make_card(_draw_choice(run.shops_rng, matching))
+    _roll_merchant_card_upgrade(run)
+    return card
 
 
 # ── Entries ──────────────────────────────────────────────────────────────
@@ -202,7 +226,7 @@ class MerchantCardEntry(MerchantEntry):
     def _calc_cost(self) -> None:
         if self.card is None:
             return
-        self.cost = round(self._base_cost(self.card) * _next_float(self.run.rng, 0.95, 1.05))
+        self.cost = round(self._base_cost(self.card) * _next_float(self.run.shops_rng, 0.95, 1.05))
         if self.on_sale:
             self.cost //= 2
 
@@ -248,7 +272,7 @@ class MerchantRelicEntry(MerchantEntry):
     def _calc_cost(self) -> None:
         if self.relic is None:
             return
-        self.cost = round(self.relic.merchant_cost * _next_float(self.run.rng, 0.85, 1.15))
+        self.cost = round(self.relic.merchant_cost * _next_float(self.run.shops_rng, 0.85, 1.15))
 
     def _buy(self) -> bool:
         self.run.lose_gold(self.cost)
@@ -277,7 +301,7 @@ class MerchantPotionEntry(MerchantEntry):
     def _calc_cost(self) -> None:
         if self.potion is None:
             return
-        self.cost = round(self._base_cost(self.potion) * _next_float(self.run.rng, 0.95, 1.05))
+        self.cost = round(self._base_cost(self.potion) * _next_float(self.run.shops_rng, 0.95, 1.05))
 
     def _buy(self) -> bool:
         # PotionCmd.TryToProcure fails when the potion belt is full.
@@ -361,7 +385,13 @@ class MerchantInventory:
         return entries
 
     def _populate_cards(self) -> None:
-        on_sale_index = self.run.rng.randrange(len(_COLORED_CARD_TYPES))
+        # MerchantInventory.PopulateCharacterCardEntries: the On Sale slot is a
+        # Shops-stream NextInt over the 5 character slots.
+        from .rng import Rng
+
+        srng = self.run.shops_rng
+        n = len(_COLORED_CARD_TYPES)
+        on_sale_index = srng.next_int(n) if isinstance(srng, Rng) else srng.randrange(n)
         exclude_ids: set[str] = set()
         for i, card_type in enumerate(_COLORED_CARD_TYPES):
             entry = MerchantCardEntry(self.run, card_type, exclude_ids)
@@ -384,9 +414,11 @@ class MerchantInventory:
     def _populate_relics(self) -> None:
         from .run import roll_relic_rarity
 
+        # PopulateRelicEntries: two rolled rarities (RollRarity on the Rewards
+        # stream, like RelicFactory.RollRarity(player)) plus a fixed Shop slot.
         rarities = [
-            roll_relic_rarity(self.run.rng),
-            roll_relic_rarity(self.run.rng),
+            roll_relic_rarity(self.run.rewards_rng),
+            roll_relic_rarity(self.run.rewards_rng),
             RelicRarity.SHOP,
         ]
         blacklist: set[str] = set()
@@ -397,5 +429,13 @@ class MerchantInventory:
             self.relic_entries.append(entry)
 
     def _populate_potions(self) -> None:
-        for potion in self.run.random_potions(3, distinct=True):
+        # PopulatePotionEntries: 3 potions via PotionFactory on the Shops stream
+        # (parity), else the legacy uniform helper.
+        if self.run.rng_set is not None:
+            from .potion_pools import generate_random_potions
+
+            potions = generate_random_potions(self.run.shops_rng, 3)
+        else:
+            potions = self.run.random_potions(3, distinct=True)
+        for potion in potions:
             self.potion_entries.append(MerchantPotionEntry(self.run, potion))
