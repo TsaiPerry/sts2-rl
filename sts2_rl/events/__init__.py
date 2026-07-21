@@ -107,13 +107,16 @@ GLORY_EVENTS: tuple[str, ...] = (
     "tinker_time",
 )
 
-# The cross-act pool in the source's order (ModelDb.AllSharedEvents), which
-# ActModel.GenerateRooms appends to EVERY act's event queue. Each event's own
-# IsAllowed gate is what keeps it out of the acts it doesn't belong in (see
-# RoomSet.ensure_next_event_is_valid). Ported so far; the rest of the 18 land
-# with their waves (docs/superpowers/plans/2026-07-19-shared-events.md).
+# The cross-act pool in the source's order (ModelDb.AllSharedEvents, all 18),
+# which ActModel.GenerateRooms appends to EVERY act's event queue before the
+# shuffle. Each event's own IsAllowed gate is what keeps it out of the acts it
+# doesn't belong in (see RoomSet.ensure_next_event_is_valid). crystal_sphere
+# and war_historian_repy are pool stubs (is_allowed=False, never surfaced) —
+# carried here so the shuffle spans all 18 ids and the UpFront event-shuffle
+# draw count/order matches the game (SP2 parity).
 SHARED_EVENTS: tuple[str, ...] = (
     "brain_leech",
+    "crystal_sphere",
     "doll_room",
     "fake_merchant",
     "potion_courier",
@@ -128,6 +131,7 @@ SHARED_EVENTS: tuple[str, ...] = (
     "the_future_of_potions",
     "the_legends_were_true",
     "this_or_that",
+    "war_historian_repy",
     "welcome_to_wongos",
 )
 

@@ -4,6 +4,7 @@ Random/*.cs and src/Core/Helpers/StringHelper.cs. Validated against
 test/data/rng_golden.json (dumped from sts2.dll)."""
 from __future__ import annotations
 
+import math
 from enum import Enum
 import numpy as np
 
@@ -180,6 +181,37 @@ class Rng:
         self.counter += 1
         return self._random.next_double() * (mx - mn) + mn
 
+    def next_gaussian_double(self, mean=0.0, std_dev=1.0, mn=0.0, mx=1.0) -> float:
+        # Rng.NextGaussianDouble: Box-Muller with COS, reject until the
+        # standard-normal draw lands in [0,1], then scale to [mn,mx]. Two
+        # next_double() per rejection-loop iteration (counter parity).
+        if mn > mx:
+            raise ValueError("Minimum must not be higher than maximum.")
+        while True:
+            d = 1.0 - self.next_double()
+            num = 1.0 - self.next_double()
+            z = math.sqrt(-2.0 * math.log(d)) * math.cos(2.0 * math.pi * num)
+            v = mean + z * std_dev
+            if 0.0 <= v <= 1.0:
+                break
+        return v * (mx - mn) + mn
+
+    def next_gaussian_float(self, mean=0.0, std_dev=1.0, mn=0.0, mx=1.0) -> float:
+        return float(np.float32(self.next_gaussian_double(mean, std_dev, mn, mx)))
+
+    def next_gaussian_int(self, mean: int, std_dev: int, mn: int, mx: int) -> int:
+        # Rng.NextGaussianInt: Box-Muller with SIN (note: not Cos, unlike
+        # NextGaussianDouble), round (C# Math.Round = banker's rounding, which
+        # Python round() matches), reject until the rounded int is in [mn,mx].
+        # No (mx-mn) scaling. Two next_double() per iteration.
+        while True:
+            d = 1.0 - self.next_double()
+            num = 1.0 - self.next_double()
+            z = math.sqrt(-2.0 * math.log(d)) * math.sin(2.0 * math.pi * num)
+            n = round(mean + std_dev * z)
+            if mn <= n <= mx:
+                return n
+
     def next_item(self, items):
         seq = list(items)
         if not seq:
@@ -206,6 +238,67 @@ class Rng:
         for i in range(len(lst) - 1, 0, -1):
             j = self.next_int(i + 1)
             lst[i], lst[j] = lst[j], lst[i]
+
+
+class GameRandomAdapter:
+    """A `random.Random`-shaped facade over a single game `Rng` stream.
+
+    The map generator (actmap.py) is already a draw-order-faithful port of
+    StandardActMap.cs — it just calls the `random.Random` methods instead of
+    the game's `Rng`. This adapter lets that exact code draw game-correct
+    values by routing each `random.Random` call to the game primitive it
+    mirrors (verified 1:1 against the C# source):
+
+      - ``random()``        -> ``Rng.next_double()``   (one draw; feeds the
+                               Box-Muller in actmap.gaussian_int, matching
+                               Rng.NextGaussianInt draw-for-draw)
+      - ``randrange(n)``    -> ``Rng.next_int_range(0, n)``  (== NextInt(0, n))
+      - ``randrange(a, b)`` -> ``Rng.next_int_range(a, b)``  (== NextInt(a, b))
+      - ``shuffle(list)``   -> ``Rng.shuffle(list)``   (top-down Fisher-Yates,
+                               NextInt(i+1); == ListExtensions.UnstableShuffle)
+
+    Only the methods actmap.py exercises are provided; anything else the map
+    pipeline never calls is intentionally absent so an accidental new draw
+    site surfaces loudly rather than silently diverging.
+    """
+
+    def __init__(self, rng: "Rng") -> None:
+        self.rng = rng
+
+    def random(self) -> float:
+        return self.rng.next_double()
+
+    def randrange(self, start: int, stop: int | None = None) -> int:
+        if stop is None:
+            start, stop = 0, start
+        return self.rng.next_int_range(start, stop)
+
+    def shuffle(self, seq: list) -> None:
+        self.rng.shuffle(seq)
+
+    def choice(self, seq):
+        # Rng.NextItem: one NextInt(0, len) draw. (== seq[rng.next_int(len)];
+        # NextItem uses NextInt(0,len) which is the same value + one counter.)
+        return self.rng.next_item(seq)
+
+
+def grab_and_remove(bag: list, rng: "Rng", predicate=None):
+    """GrabBag.GrabAndRemove for a uniform (weight-1.0) bag (GrabBag.cs).
+
+    Every encounter enters the game's GrabBag with weight 1.0, so
+    ``GrabIndex(rng) == int(NextDouble()*count) == rng.next_int(count)`` — one
+    draw over the FULL current bag. With a predicate the game first checks
+    ``_entries.Any(predicate)``: if nothing matches it returns -1 consuming
+    **zero** draws (this is how ActModel.AddWithoutRepeatingTags detects the
+    "no tag-safe pick" case and falls back to a no-predicate grab). Otherwise
+    it redraws over the full bag until the predicate passes, then removes the
+    pick.  ``rng`` is a game ``Rng`` (uses ``.next_int``)."""
+    if predicate is not None and not any(predicate(x) for x in bag):
+        return None
+    while True:
+        i = rng.next_int(len(bag))
+        if predicate is None or predicate(bag[i]):
+            return bag.pop(i)
 
 
 class RunRngSet:
@@ -246,3 +339,40 @@ class RunRngSet:
     niche = property(lambda self: self._rngs[RunRngType.NICHE])
     combat_orbs = property(lambda self: self._rngs[RunRngType.COMBAT_ORBS])
     treasure_room_relics = property(lambda self: self._rngs[RunRngType.TREASURE_ROOM_RELICS])
+
+
+class PlayerRngType(str, Enum):
+    REWARDS = "Rewards"
+    SHOPS = "Shops"
+    TRANSFORMATIONS = "Transformations"
+
+
+class PlayerRngSet:
+    """The 3 per-player RNG streams (PlayerRngSet.cs). Single-player seed ==
+    run seed: (uint)(GetDeterministicHashCode(string_seed) + slot 0)."""
+
+    def __init__(self, seed: int) -> None:
+        self.seed = seed & _UMASK32
+        self._rngs: dict[PlayerRngType, Rng] = {
+            t: Rng(self.seed, name=snake_case(t.value)) for t in PlayerRngType
+        }
+
+    def get(self, t: PlayerRngType) -> Rng:
+        return self._rngs[t]
+
+    def counters(self) -> dict[PlayerRngType, int]:
+        return {t: r.counter for t, r in self._rngs.items()}
+
+    def load_counters(self, counters: dict[PlayerRngType, int]) -> None:
+        for t, target in counters.items():
+            r = self._rngs[t]
+            if target < r.counter:
+                r = Rng(self.seed, name=snake_case(t.value))
+                r.fast_forward_counter(target)
+                self._rngs[t] = r
+            else:
+                r.fast_forward_counter(target)
+
+    rewards = property(lambda self: self._rngs[PlayerRngType.REWARDS])
+    shops = property(lambda self: self._rngs[PlayerRngType.SHOPS])
+    transformations = property(lambda self: self._rngs[PlayerRngType.TRANSFORMATIONS])

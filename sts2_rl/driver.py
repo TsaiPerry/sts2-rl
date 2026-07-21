@@ -516,12 +516,17 @@ class RunDriver:
 def play_random_run(
     seed: int = 0,
     acts: list[str] | None = None,
+    string_seed: str | None = None,
     **driver_kwargs,
 ) -> RunResult:
-    """One full run with a masked-random policy (smoke tests / baselines)."""
+    """One full run with a masked-random policy (smoke tests / baselines).
+
+    `string_seed` additionally seats the game's parity RNG streams on the
+    RunState (SP2); it does not affect the legacy random.Random decisions.
+    """
     from .run import RunState
 
     rng = random.Random(seed)
-    run = RunState(rng=rng)
+    run = RunState(rng=rng, string_seed=string_seed)
     driver = RunDriver(run, random_asker(rng), acts=acts, **driver_kwargs)
     return driver.play()

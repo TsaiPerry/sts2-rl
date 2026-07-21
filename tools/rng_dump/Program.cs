@@ -91,6 +91,45 @@ static class Program
 
         var ff = new Rng(777, 5).NextInt(1000);
 
+        // --- Gaussians (Rng.NextGaussianInt/Double/Float). Data-dependent
+        // counter (rejection loop): dump the resulting Counter alongside the
+        // values so the Python port's counter accounting can be asserted. ---
+        var gi = new Rng(12345); var giVals = new List<int>();
+        for (int i = 0; i < 8; i++) giVals.Add(gi.NextGaussianInt(12, 1, 10, 14));
+        var gr = new Rng(12345); var grVals = new List<int>();
+        for (int i = 0; i < 8; i++) grVals.Add(gr.NextGaussianInt(7, 1, 6, 7));
+        var gd = new Rng(12345); var gdVals = new List<double>();
+        for (int i = 0; i < 8; i++) gdVals.Add(gd.NextGaussianDouble(0.0, 1.0, 0.0, 1.0));
+        var gf = new Rng(12345); var gfVals = new List<double>();
+        for (int i = 0; i < 8; i++) gfVals.Add(gf.NextGaussianFloat(0f, 1f, 0f, 1f));
+        var gaussian = new
+        {
+            next_gaussian_int_12_1_10_14 = new { values = giVals, counter_after = gi.Counter },
+            next_gaussian_int_7_1_6_7 = new { values = grVals, counter_after = gr.Counter },
+            next_gaussian_double = new { values = gdVals, counter_after = gd.Counter },
+            next_gaussian_float = new { values = gfVals, counter_after = gf.Counter },
+        };
+
+        // --- PlayerRngSet: single-player slot-0 seed == run seed. Probe each
+        // stream from a fresh set so first draw is measured from counter 0. ---
+        uint playerSeed = (uint)StringHelper.GetDeterministicHashCode("89U21BV1TZ");
+        var playerStreams = new Dictionary<string, object>();
+        foreach (var nm in new[] { "Rewards", "Shops", "Transformations" })
+        {
+            var pset = new PlayerRngSet(playerSeed);
+            Rng pr = nm switch
+            {
+                "Rewards" => pset.Rewards,
+                "Shops" => pset.Shops,
+                _ => pset.Transformations,
+            };
+            playerStreams[nm] = new { seed = pr.Seed, first_next_int_1000 = pr.NextInt(1000) };
+        }
+        var playerRngset = new
+        {
+            seed_str = "89U21BV1TZ", player_seed = playerSeed, streams = playerStreams,
+        };
+
         var root = new Dictionary<string, object>
         {
             ["splitmix64_seed0_state"] = state,
@@ -109,6 +148,8 @@ static class Program
             ["snake_case"] = snake,
             ["runrngset"] = new { seed_str = "ABCDEFGHIJ", run_seed = set.Seed, streams = streams },
             ["fast_forward"] = new { seed_777_to_5_then_next_int_1000 = ff },
+            ["gaussian"] = gaussian,
+            ["player_rngset"] = playerRngset,
         };
 
         string outPath = Path.GetFullPath(Path.Combine(

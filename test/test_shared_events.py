@@ -55,8 +55,9 @@ def test_shared_events_are_all_registered():
 
 def test_stocked_act2_run_makes_the_shared_pool_eligible():
     """End-to-end gate check: in a real act-2 position with gold, potions and
-    tradable relics, every shared event is eligible except the act-1-only
-    one — i.e. the pool really is live in a run, not just in the queue."""
+    tradable relics, every shared event is eligible except the act-1-only one
+    and the two never-eligible pool stubs — i.e. the pool really is live in a
+    run, not just in the queue."""
     from sts2_rl.events import ALL_EVENTS, SHARED_EVENTS
     from sts2_rl.potions import make_potion
     from sts2_rl.relics import make_relic
@@ -72,7 +73,10 @@ def test_stocked_act2_run_makes_the_shared_pool_eligible():
         run.add_relic(make_relic(rid))
 
     eligible = {e for e in SHARED_EVENTS if ALL_EVENTS[e].is_allowed(run)}
-    assert eligible == set(SHARED_EVENTS) - {"the_legends_were_true"}
+    # the_legends_were_true is act-1-only; crystal_sphere / war_historian_repy
+    # are deferred pool stubs (is_allowed=False — see their event modules).
+    assert eligible == set(SHARED_EVENTS) - {
+        "the_legends_were_true", "crystal_sphere", "war_historian_repy"}
 
 
 def test_act_gated_shared_event_is_skipped_in_act1():

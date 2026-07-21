@@ -36,6 +36,7 @@ from .cards.base import _CARD_CLASSES
 from .combat import CombatState
 from .potions import Potion, _POTION_CLASSES
 from .relics import ALL_RELICS, Relic, RelicRarity, make_relic
+from .rng import PlayerRngSet, RunRngSet
 from .rewards import (
     TREASURE_GOLD,
     CardRarityOdds,
@@ -116,8 +117,26 @@ class RunState:
         potions: list[Potion] | None = None,
         card_selector: Callable[[str, list[Card], int], list[Card]] | None = None,
         total_floor: int = 0,
+        string_seed: str | None = None,
     ) -> None:
         self.rng = rng or random.Random()
+        # ── Parity RNG (SP2) ─────────────────────────────────────────────
+        # With a string seed, seat the game's separated streams: the 12
+        # per-run streams (RunRngSet) and the 3 per-player streams
+        # (PlayerRngSet). Single-player slot 0 => the player seed equals the
+        # run seed (deterministic_hash_code(string_seed) & 0xFFFFFFFF). These
+        # are seeded independently of `self.rng`, so seating them consumes
+        # none of the legacy random.Random's draws — map/economy call sites
+        # migrate onto them incrementally (Tasks 7-9) while combat stays on
+        # `self.rng`. Absent (None) when no string seed is given, leaving the
+        # pre-SP2 draw sequence untouched.
+        self.string_seed = string_seed
+        if string_seed is not None:
+            self.rng_set = RunRngSet(string_seed)
+            self.player_rng = PlayerRngSet(self.rng_set.seed)
+        else:
+            self.rng_set = None
+            self.player_rng = None
         # How many rooms have been entered this run (IRunState.TotalFloor).
         # Used by event gates like Punch-Off (>= 6); the sim has no map, so the
         # caller sets this when it matters.
@@ -574,13 +593,31 @@ class RunState:
         and deck cards (mirrors IRunState.IterateHookListeners for this pass)."""
         return [*self.relics, *self.deck]
 
+    def _map_rng(self):
+        """The RNG the act's map layout is carved from.
+
+        Parity path (SP2): StandardActMap.CreateFor seeds a fresh transient
+        `new Rng(runState.Rng.Seed, $"act_{CurrentActIndex + 1}_map")` per
+        generation — independent of every other stream and NOT serialized in
+        run.save (so map layout is verified structurally, not by a counter).
+        The GameRandomAdapter presents this stream through the random.Random
+        API the faithful actmap.py port already speaks. Without a string seed,
+        fall back to the legacy shared random.Random (pre-SP2 behavior)."""
+        if self.rng_set is None:
+            return self.rng
+        from .rng import GameRandomAdapter, Rng
+
+        return GameRandomAdapter(
+            Rng(self.rng_set.seed, name=f"act_{self.act_index + 1}_map")
+        )
+
     def _generate_map(self):
         """RunManager.GenerateMap: build the base act map, then run it through
         the relic/card modifier pipeline (Spoils Map, Golden Compass)."""
         from .actmap import StandardMap
 
         base = StandardMap(
-            rng=self.rng,
+            rng=self._map_rng(),
             config=self.act_config,
             ascension=self.ascension,
             has_second_boss=self._has_second_boss,

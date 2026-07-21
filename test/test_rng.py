@@ -76,6 +76,30 @@ def test_rng_counter_increments():
 def test_rng_fast_forward():
     assert Rng(777, 5).next_int(1000) == GOLDEN["fast_forward"]["seed_777_to_5_then_next_int_1000"]
 
+def test_rng_next_gaussian_int():
+    g = GOLDEN["gaussian"]["next_gaussian_int_12_1_10_14"]
+    r = Rng(12345)
+    assert [r.next_gaussian_int(12, 1, 10, 14) for _ in range(8)] == g["values"]
+    assert r.counter == g["counter_after"]
+
+def test_rng_next_gaussian_int_rest_counts():
+    g = GOLDEN["gaussian"]["next_gaussian_int_7_1_6_7"]
+    r = Rng(12345)
+    assert [r.next_gaussian_int(7, 1, 6, 7) for _ in range(8)] == g["values"]
+    assert r.counter == g["counter_after"]
+
+def test_rng_next_gaussian_double_and_float():
+    gd = GOLDEN["gaussian"]["next_gaussian_double"]
+    r = Rng(12345)
+    assert [r.next_gaussian_double(0.0, 1.0, 0.0, 1.0) for _ in range(8)] == pytest.approx(
+        gd["values"], rel=0, abs=0)
+    assert r.counter == gd["counter_after"]
+    gf = GOLDEN["gaussian"]["next_gaussian_float"]
+    r = Rng(12345)
+    got = [r.next_gaussian_float(0.0, 1.0, 0.0, 1.0) for _ in range(8)]
+    assert got == pytest.approx(gf["values"], rel=0, abs=0)
+    assert r.counter == gf["counter_after"]
+
 from sts2_rl.rng import deterministic_hash_code, snake_case, RunRngType
 
 def test_deterministic_hash_code():
@@ -127,6 +151,32 @@ def test_public_exports():
     assert sts2_rl.RunRngSet is RunRngSet
     assert sts2_rl.RunRngType is RunRngType
 
+from sts2_rl.rng import PlayerRngSet, PlayerRngType
+
+def test_player_rngset_seed_and_streams():
+    pr = GOLDEN["player_rngset"]
+    seed = deterministic_hash_code(pr["seed_str"]) & ((1 << 32) - 1)
+    assert seed == pr["player_seed"]
+    ps = PlayerRngSet(seed)
+    for name, exp in pr["streams"].items():
+        stream = ps.get(PlayerRngType(name))
+        assert stream.seed == exp["seed"], name
+        assert stream.next_int(1000) == exp["first_next_int_1000"], name
+
+def test_player_rngset_snake_names():
+    for member in PlayerRngType:
+        # names have no consecutive-uppercase runs; snake_case == lowercased
+        assert snake_case(member.value) == member.value.lower()
+
+def test_player_rngset_counters_roundtrip():
+    ps = PlayerRngSet(2221240958)
+    ps.rewards.next_int(10); ps.rewards.next_int(10); ps.shops.next_int(10)
+    c = ps.counters()
+    assert c[PlayerRngType.REWARDS] == 2 and c[PlayerRngType.SHOPS] == 1
+    ps2 = PlayerRngSet(2221240958)
+    ps2.load_counters(c)
+    assert ps2.counters() == c
+
 def test_rng_next_float_bounded():
     r = Rng(12345)
     got = [r.next_float(0.85, 1.15) for _ in range(5)]
@@ -147,3 +197,46 @@ def test_rng_float_double_min_gt_max_guard():
     with pytest.raises(ValueError):
         r.next_float(1.0, 0.0)
     assert r.counter == 0
+
+
+# ── Task 8a: grab primitives (GrabBag.cs / Rng.NextItem) ──────────────────
+
+def test_game_random_adapter_choice_matches_next_item():
+    from sts2_rl.rng import GameRandomAdapter
+    seq = ["x", "y", "z", "w"]
+    a = GameRandomAdapter(Rng(99))
+    b = Rng(99)
+    # .choice == Rng.NextItem (one draw over NextInt(0,len)).
+    assert a.choice(seq) == b.next_item(seq)
+    assert a.rng.counter == 1 == b.counter
+
+def test_grab_and_remove_no_predicate_one_draw():
+    from sts2_rl.rng import grab_and_remove
+    bag = ["a", "b", "c", "d"]
+    r = Rng(42)
+    picked = grab_and_remove(bag, r)
+    # One weighted draw over the full bag == NextInt(len); removes the pick.
+    assert r.counter == 1
+    assert picked not in bag and len(bag) == 3
+
+def test_grab_and_remove_empty_predicate_no_draw():
+    from sts2_rl.rng import grab_and_remove
+    bag = ["a", "b"]
+    r = Rng(42)
+    # GrabIndex's `_entries.Any(predicate)` guard: no match => -1, zero draws.
+    assert grab_and_remove(bag, r, predicate=lambda x: False) is None
+    assert r.counter == 0 and bag == ["a", "b"]
+
+def test_grab_and_remove_rejection_redraws():
+    from sts2_rl.rng import grab_and_remove
+    bag = ["a", "b", "c", "d", "e"]
+    # A fresh Rng(7) draws this index first over the full length-5 bag.
+    first_idx = Rng(7).next_int(len(bag))
+    first_item = bag[first_idx]
+    r = Rng(7)
+    # Predicate rejects the first-drawn item: the redraw loop must consume
+    # >= 2 draws over the still-full bag (no removal until a pick passes).
+    picked = grab_and_remove(bag, r, predicate=lambda x: x != first_item)
+    assert picked != first_item
+    assert r.counter >= 2
+    assert picked not in bag and len(bag) == 4
