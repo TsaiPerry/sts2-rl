@@ -1,0 +1,248 @@
+"""Bit-exact port of the game's RNG stack (see docs/superpowers/specs/
+2026-07-20-sim-to-replay-design.md). Ground truth: Slay the Spire 2/src/Core/
+Random/*.cs and src/Core/Helpers/StringHelper.cs. Validated against
+test/data/rng_golden.json (dumped from sts2.dll)."""
+from __future__ import annotations
+
+from enum import Enum
+import numpy as np
+
+_UMASK64 = (1 << 64) - 1
+_UMASK32 = (1 << 32) - 1
+_2POW53 = 1.0 / (1 << 53)   # MegaRandom._incrDouble = 1.1102230246251565e-16
+_2POW24 = np.float32(1.0) / np.float32(1 << 24)  # _incrFloat = 5.9604645e-08f
+
+
+def _rotl(x: int, k: int) -> int:
+    x &= _UMASK64
+    return ((x << k) | (x >> (64 - k))) & _UMASK64
+
+
+def snake_case(s: str) -> str:
+    """StringHelper.SnakeCase — insert '_' before each interior uppercase, lowercase.
+    (The game's regex also splits consecutive-uppercase runs; the RunRngType names
+    have none, and this matches SnakeCase for every stream name — asserted in tests.)"""
+    s = s.strip()
+    out = []
+    for i, ch in enumerate(s):
+        if ch.isupper() and i > 0:
+            out.append("_")
+        out.append(ch)
+    return "".join(out).lower()
+
+
+def deterministic_hash_code(s: str) -> int:
+    """StringHelper.GetDeterministicHashCode — two-accumulator int32 hash."""
+    def i32(x: int) -> int:                      # wrap to signed 32-bit
+        x &= _UMASK32
+        return x - (1 << 32) if x & (1 << 31) else x
+    num = 352654597
+    num2 = num
+    i, n = 0, len(s)
+    while i < n:
+        num = i32(((num << 5) + num) ^ ord(s[i]))
+        if i == n - 1:
+            break
+        num2 = i32(((num2 << 5) + num2) ^ ord(s[i + 1]))
+        i += 2
+    return i32(num + i32(num2 * 1566083941))
+
+
+class RunRngType(str, Enum):
+    UP_FRONT = "UpFront"
+    SHUFFLE = "Shuffle"
+    UNKNOWN_MAP_POINT = "UnknownMapPoint"
+    COMBAT_CARD_GENERATION = "CombatCardGeneration"
+    COMBAT_POTION_GENERATION = "CombatPotionGeneration"
+    COMBAT_CARD_SELECTION = "CombatCardSelection"
+    COMBAT_ENERGY_COSTS = "CombatEnergyCosts"
+    COMBAT_TARGETS = "CombatTargets"
+    MONSTER_AI = "MonsterAi"
+    NICHE = "Niche"
+    COMBAT_ORBS = "CombatOrbs"
+    TREASURE_ROOM_RELICS = "TreasureRoomRelics"
+
+
+class MegaRandom:
+    """Xoshiro256** with splitmix64 seeding (MegaRandom.cs)."""
+
+    def __init__(self, seed: int = 0) -> None:
+        self.reinitialise(seed)
+
+    @staticmethod
+    def splitmix64(x: int) -> tuple[int, int]:
+        x = (x + 0x9E3779B97F4A7C15) & _UMASK64
+        z = x
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & _UMASK64
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & _UMASK64
+        z = z ^ (z >> 31)
+        return x, z
+
+    def reinitialise(self, seed: int) -> None:
+        seed &= _UMASK64
+        seed, self._s0 = self.splitmix64(seed)
+        seed, self._s1 = self.splitmix64(seed)
+        seed, self._s2 = self.splitmix64(seed)
+        seed, self._s3 = self.splitmix64(seed)
+
+    def next_ulong(self) -> int:
+        s0, s1, s2, s3 = self._s0, self._s1, self._s2, self._s3
+        result = (_rotl((s1 * 5) & _UMASK64, 7) * 9) & _UMASK64
+        t = (s1 << 17) & _UMASK64
+        s2 ^= s0
+        s3 ^= s1
+        s1 ^= s2
+        s0 ^= s3
+        s2 ^= t
+        s3 = _rotl(s3, 45)
+        self._s0, self._s1, self._s2, self._s3 = s0, s1, s2, s3
+        return result
+
+    def next_double(self) -> float:
+        return (self.next_ulong() >> 11) * _2POW53
+
+    def next_int_full(self) -> int:            # NextInt() — inclusive of int.MaxValue
+        return self.next_ulong() >> 33
+
+    def next_float(self) -> float:             # 32-bit float math, matching C#
+        return float((np.float32(self.next_ulong() >> 40) * _2POW24))
+
+    def next(self, max_value: int) -> int:     # Next(maxValue) — NextInner
+        if max_value < 1:
+            raise ValueError("maxValue must be > 0")
+        return int(self.next_double() * max_value)
+
+    def next_range(self, min_value: int, max_value: int) -> int:  # Next(min,max)
+        if min_value >= max_value:
+            raise ValueError("maxValue must be > minValue")
+        return int(self.next_double() * (max_value - min_value)) + min_value
+
+
+class Rng:
+    """Counter-wrapping RNG (Rng.cs). One `MegaRandom` per stream."""
+
+    def __init__(self, seed: int = 0, counter: int = 0, name: str | None = None) -> None:
+        if name is not None:
+            seed = (seed + (deterministic_hash_code(name) & _UMASK32)) & _UMASK32
+        self.seed = seed & _UMASK32
+        self.counter = 0
+        self._random = MegaRandom(self.seed)
+        self.fast_forward_counter(counter)
+
+    def fast_forward_counter(self, target: int) -> None:
+        if self.counter > target:
+            raise ValueError(
+                f"Cannot fast-forward counter down (current={self.counter}, target={target})")
+        while self.counter < target:
+            self.counter += 1
+            self._random.next_int_full()
+
+    def next_bool(self) -> bool:
+        self.counter += 1
+        return self._random.next(2) == 0
+
+    def next_int(self, max_exclusive: int = 0x7FFFFFFF) -> int:
+        self.counter += 1
+        return self._random.next(max_exclusive)
+
+    def next_int_range(self, min_inclusive: int, max_exclusive: int) -> int:
+        if min_inclusive >= max_exclusive:
+            raise ValueError("Minimum must be lower than maximum.")
+        self.counter += 1
+        return self._random.next_range(min_inclusive, max_exclusive)
+
+    def next_unsigned_int(self, min_inclusive: int = 0, max_exclusive: int = _UMASK32) -> int:
+        if min_inclusive >= max_exclusive:
+            raise ValueError("Minimum must be lower than maximum.")
+        self.counter += 1
+        num = self._random.next_double()
+        return (min_inclusive + int(num * (max_exclusive - min_inclusive))) & _UMASK32
+
+    def next_float(self, mn: float = 0.0, mx: float = 1.0) -> float:
+        # Rng.NextFloat(float min, float max): the params are 32-bit floats, so
+        # (max - min) is evaluated in float32 before widening to double, and the
+        # whole expression is cast back to float32 — matching
+        #   (float)(_random.NextDouble() * (double)(max - min) + (double)min)
+        mn32 = np.float32(mn)
+        mx32 = np.float32(mx)
+        if mn32 > mx32:
+            raise ValueError("Minimum must not be higher than maximum.")
+        self.counter += 1
+        return float(np.float32(
+            self._random.next_double() * float(np.float32(mx32 - mn32)) + float(mn32)))
+
+    def next_double(self, mn: float | None = None, mx: float | None = None) -> float:
+        if mn is None:
+            self.counter += 1
+            return self._random.next_double()
+        if mn > mx:
+            raise ValueError("Minimum must not be higher than maximum.")
+        self.counter += 1
+        return self._random.next_double() * (mx - mn) + mn
+
+    def next_item(self, items):
+        seq = list(items)
+        if not seq:
+            return None
+        return seq[self.next_int_range(0, len(seq))]
+
+    def weighted_next_item(self, items, weight_fetcher):
+        # TODO(later SP): C# WeightedNextItem uses float32 for the weight sum and
+        # per-item accumulation (Enumerable.Sum(Func<T,float>) -> double -> (float),
+        # then float subtraction). This does it in double, which can pick a different
+        # item on a boundary-straddling weight set. No consumer exists in the decompiled
+        # source yet; fix to float32 + add a golden vector when the first caller is ported.
+        seq = list(items)
+        rand_input = self.next_float()
+        total = sum(weight_fetcher(x) for x in seq)
+        acc = rand_input * total
+        for item in seq:
+            acc -= weight_fetcher(item)
+            if acc <= 0.0:
+                return item
+        return None
+
+    def shuffle(self, lst: list) -> None:
+        for i in range(len(lst) - 1, 0, -1):
+            j = self.next_int(i + 1)
+            lst[i], lst[j] = lst[j], lst[i]
+
+
+class RunRngSet:
+    """The 12 named per-run RNG streams (RunRngSet.cs)."""
+
+    def __init__(self, string_seed: str) -> None:
+        self.string_seed = string_seed
+        self.seed = deterministic_hash_code(string_seed) & _UMASK32
+        self._rngs: dict[RunRngType, Rng] = {
+            t: Rng(self.seed, name=snake_case(t.value)) for t in RunRngType
+        }
+
+    def get(self, t: RunRngType) -> Rng:
+        return self._rngs[t]
+
+    def counters(self) -> dict[RunRngType, int]:
+        return {t: r.counter for t, r in self._rngs.items()}
+
+    def load_counters(self, counters: dict[RunRngType, int]) -> None:
+        for t, target in counters.items():
+            r = self._rngs[t]
+            if target < r.counter:
+                r = Rng(self.seed, name=snake_case(t.value))
+                r.fast_forward_counter(target)
+                self._rngs[t] = r
+            else:
+                r.fast_forward_counter(target)
+
+    up_front = property(lambda self: self._rngs[RunRngType.UP_FRONT])
+    shuffle = property(lambda self: self._rngs[RunRngType.SHUFFLE])
+    unknown_map_point = property(lambda self: self._rngs[RunRngType.UNKNOWN_MAP_POINT])
+    combat_card_generation = property(lambda self: self._rngs[RunRngType.COMBAT_CARD_GENERATION])
+    combat_potion_generation = property(lambda self: self._rngs[RunRngType.COMBAT_POTION_GENERATION])
+    combat_card_selection = property(lambda self: self._rngs[RunRngType.COMBAT_CARD_SELECTION])
+    combat_energy_costs = property(lambda self: self._rngs[RunRngType.COMBAT_ENERGY_COSTS])
+    combat_targets = property(lambda self: self._rngs[RunRngType.COMBAT_TARGETS])
+    monster_ai = property(lambda self: self._rngs[RunRngType.MONSTER_AI])
+    niche = property(lambda self: self._rngs[RunRngType.NICHE])
+    combat_orbs = property(lambda self: self._rngs[RunRngType.COMBAT_ORBS])
+    treasure_room_relics = property(lambda self: self._rngs[RunRngType.TREASURE_ROOM_RELICS])

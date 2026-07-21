@@ -24,6 +24,9 @@ from .hooks import HookSystem
 from .cmds import DamageCmd, BlockCmd, StrengthCmd, PowerCmd, CreatureCmd
 from .valueprops import ValueProp, DamageProps
 
+# ── RNG parity (bit-exact port of the game's RNG stack) ──────────────────────
+from .rng import MegaRandom, Rng, RunRngSet, RunRngType
+
 # ── Previews (pure reads of the numbers the game displays) ───────────────────
 from .previews import (
     AttackPreview,
@@ -216,6 +219,11 @@ __all__ = [
     "CreatureCmd",
     "ValueProp",
     "DamageProps",
+    # RNG parity
+    "MegaRandom",
+    "Rng",
+    "RunRngSet",
+    "RunRngType",
     # Previews
     "AttackPreview",
     "preview_incoming_damage",
