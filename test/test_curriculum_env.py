@@ -160,6 +160,80 @@ def test_default_column_length_follows_the_act():
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Branch annealing (branch_prob)
+# ═════════════════════════════════════════════════════════════════════════
+
+def column_types(act_map, n_rooms=16):
+    return [next(iter(act_map.points_in_row(r))).point_type.name
+            for r in range(1, n_rooms + 1)]
+
+
+def is_branching(act_map) -> bool:
+    """Real StandardMaps fork; a sampled column has exactly one point per row."""
+    return any(len(list(act_map.points_in_row(r))) > 1
+               for r in range(1, act_map.map_length))
+
+
+# Captured from the pre-annealing column env. branch_prob=0.0 must draw no
+# extra randomness, so stage 1 of the anneal is a bit-identical continuation
+# of the column curriculum that has already been validated — not a variant
+# that merely resembles it.
+_SEED_21_COLUMN = [
+    "MONSTER", "UNKNOWN", "MONSTER", "UNKNOWN", "MONSTER", "MONSTER",
+    "REST_SITE", "MONSTER", "MONSTER", "TREASURE", "MONSTER", "MONSTER",
+    "ELITE", "UNKNOWN", "MONSTER", "REST_SITE",
+]
+
+
+@pytest.mark.parametrize("kwargs", [{}, {"branch_prob": 0.0}])
+def test_branch_prob_zero_leaves_the_rng_stream_untouched(kwargs):
+    rs = ColumnRunState(rng=random.Random(21), column_rooms=16, **kwargs)
+    assert column_types(rs.start_act("overgrowth")) == _SEED_21_COLUMN
+
+
+def test_branch_prob_one_generates_real_branching_maps():
+    rs = ColumnRunState(rng=random.Random(22), branch_prob=1.0)
+    assert is_branching(rs.start_act("overgrowth"))
+
+
+def test_branch_prob_one_restores_the_real_unknown_room_types():
+    # "?" is pinned to Event on a column so the sampled combat count is the
+    # actual one; a branching episode must use the game's real resolution.
+    column = ColumnRunState(rng=random.Random(23), branch_prob=0.0)
+    branching = ColumnRunState(rng=random.Random(23), branch_prob=1.0)
+    column.start_act("overgrowth")
+    branching.start_act("overgrowth")
+    assert column._unknown_allowed_room_types(set()) == {RoomType.EVENT}
+    assert branching._unknown_allowed_room_types(set()) != {RoomType.EVENT}
+
+
+def test_regime_is_drawn_once_and_holds_for_every_act():
+    # Per-episode granularity: all three acts share one regime, so an
+    # episode return is never a blend of both map distributions.
+    for seed in range(30):
+        rs = ColumnRunState(rng=random.Random(seed), branch_prob=0.5)
+        first = is_branching(rs.start_act("overgrowth"))
+        for act in ("hive", "glory"):
+            assert is_branching(rs.start_act(act)) is first, f"seed {seed}"
+
+
+def test_branch_prob_mixes_the_two_regimes():
+    branching = sum(
+        is_branching(ColumnRunState(rng=random.Random(s), branch_prob=0.5)
+                     .start_act("overgrowth"))
+        for s in range(200)
+    )
+    assert 60 < branching < 140          # ~100 expected
+
+
+def test_env_passes_branch_prob_through_to_the_run_state():
+    env = STS2CurriculumRunEnv(branch_prob=1.0)
+    env.reset(seed=12)
+    assert isinstance(env._run, ColumnRunState)
+    assert is_branching(env._run.map)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Environment
 # ═════════════════════════════════════════════════════════════════════════
 

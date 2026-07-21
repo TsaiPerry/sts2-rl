@@ -155,6 +155,28 @@ def test_lr_flag_is_none_unless_passed(tmp_path, monkeypatch):
     assert train_torch.parse_args().lr == pytest.approx(1e-4)
 
 
+# ── branch annealing ─────────────────────────────────────────────────────
+
+def test_branch_prob_flag_reaches_the_env_spec(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "column"])
+    args = train_torch.parse_args()
+    assert args.branch_prob == 0.0
+    assert train_torch.env_spec(args).branch_prob == 0.0
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "column",
+                                     "--branch-prob", "0.25"])
+    assert train_torch.env_spec(train_torch.parse_args()).branch_prob == 0.25
+
+
+def test_branch_prob_is_rejected_outside_the_column_env(monkeypatch):
+    """On --env run every map already branches, so a non-zero --branch-prob
+    there is a misunderstanding of the knob, not a no-op worth honouring."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--branch-prob", "0.5"])
+    with pytest.raises(SystemExit, match="branch-prob"):
+        train_torch.parse_args()
+
+
 # ── rollout geometry across a resume ─────────────────────────────────────
 
 def test_rollout_flags_are_none_unless_passed(monkeypatch):

@@ -226,13 +226,25 @@ class ColumnRunState(RunState):
         column_rooms: int | None = None,
         room_weights: dict[str, float] | None = None,
         min_special_floor: int = 6,
+        branch_prob: float = 0.0,
     ) -> None:
         super().__init__(rng=rng)
         self._column_rooms = column_rooms
         self._room_weights = room_weights
         self._min_special_floor = min_special_floor
+        self._branch_prob = branch_prob
+        # Per-episode regime decision: the branch_prob > 0.0 short-circuit
+        # is load-bearing — it means stage 1 (branch_prob=0.0) draws no
+        # extra RNG and is therefore bit-identical to the pre-annealing
+        # column env.  Your existing seeded curriculum tests keep passing.
+        self._branching = (
+            branch_prob > 0.0 and rng is not None and rng.random() < branch_prob
+        )
 
     def _generate_map(self):
+        if self._branching:
+            # Real StandardMap + relic/card modifier pipeline.
+            return super()._generate_map()
         # column_rooms=None follows the act's real room count (Overgrowth/
         # Underdocks 15, Hive 14, Glory 13) like a real run does.
         n_rooms = (
@@ -249,6 +261,8 @@ class ColumnRunState(RunState):
         return column_map(self.rng, self.act_config, types)
 
     def _unknown_allowed_room_types(self, blacklist) -> set:
+        if self._branching:
+            return super()._unknown_allowed_room_types(blacklist)
         from .rooms import RoomType
 
         return {RoomType.EVENT}
@@ -278,12 +292,14 @@ class STS2CurriculumRunEnv(STS2RunEnv):
         column_rooms: int | None = None,
         room_weights: dict[str, float] | None = None,
         min_special_floor: int = 6,
+        branch_prob: float = 0.0,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._column_rooms = column_rooms
         self._room_weights = dict(room_weights) if room_weights is not None else None
         self._min_special_floor = min_special_floor
+        self._branch_prob = branch_prob
 
     def _make_run_state(self) -> RunState:
         return ColumnRunState(
@@ -291,4 +307,5 @@ class STS2CurriculumRunEnv(STS2RunEnv):
             column_rooms=self._column_rooms,
             room_weights=self._room_weights,
             min_special_floor=self._min_special_floor,
+            branch_prob=self._branch_prob,
         )

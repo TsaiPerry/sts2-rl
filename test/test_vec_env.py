@@ -128,6 +128,19 @@ def test_run_env_rollouts_are_identical_serial_vs_workers():
         workers.close()
 
 
+def test_branch_prob_reaches_the_built_column_env():
+    """The anneal knob has to survive the pickle to a spawn worker, so it
+    lives on EnvSpec rather than being set on the env after construction."""
+    import pickle
+
+    from sts2_rl.vec_env import build_env
+
+    spec = EnvSpec(kind="column", branch_prob=0.75)
+    assert pickle.loads(pickle.dumps(spec)) == spec
+    assert build_env(spec)._branch_prob == 0.75
+    assert build_env(EnvSpec(kind="column"))._branch_prob == 0.0
+
+
 def test_workers_exit_with_close():
     venv = SubprocVecEnv(EnvSpec(kind="combat"), n_envs=2, n_workers=2)
     procs = list(venv._procs)

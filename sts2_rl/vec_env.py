@@ -57,6 +57,7 @@ class EnvSpec:
     encounter: str | None = None              # combat only
     enemy_hp_reward: float = 0.0              # combat only
     win_hp_bonus: float = 1.0                 # combat only
+    branch_prob: float = 0.0                  # column only: anneal knob
 
 
 def build_env(spec: EnvSpec):
@@ -68,7 +69,10 @@ def build_env(spec: EnvSpec):
         # Floor-only reward defaults live on the env classes; win_hp_bonus
         # is deliberately not passed to either run-scale env (it is HP
         # shaping).
-        return STS2CurriculumRunEnv(acts=acts, card_obs=spec.card_obs)
+        return STS2CurriculumRunEnv(
+            acts=acts, card_obs=spec.card_obs,
+            branch_prob=spec.branch_prob,
+        )
     if spec.kind == "run":
         from sts2_rl.run_env import STS2RunEnv
 

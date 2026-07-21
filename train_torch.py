@@ -117,6 +117,11 @@ def parse_args() -> argparse.Namespace:
                          "win reward is reward_win + win_hp_bonus*(hp/max_hp), so clean wins "
                          "beat sloppy ones (0 = flat win bonus, the old behavior). The "
                          "run-scale envs use the floor-only reward (no HP shaping)")
+    ap.add_argument("--branch-prob", type=float, default=0.0,
+                    help="column env only: probability that an episode uses a "
+                         "real branching StandardMap instead of a single column "
+                         "(0.0 = pure column, 1.0 = pure branching). Annealing "
+                         "this across stages eases the column→run transition")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
                     help="cpu (default; fastest for --arch mlp), cuda "
@@ -235,6 +240,9 @@ def parse_args() -> argparse.Namespace:
         raise SystemExit("--encounter applies to --env combat only.")
     if args.env == "combat" and args.acts:
         raise SystemExit("--acts applies to the run-scale envs only.")
+    if args.branch_prob and args.env != "column":
+        raise SystemExit(
+            f"--branch-prob applies to --env column only (got --env {args.env})")
     return args
 
 
@@ -318,6 +326,7 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         encounter=args.encounter,
         enemy_hp_reward=args.enemy_hp_reward,
         win_hp_bonus=args.win_hp_bonus,
+        branch_prob=args.branch_prob,
     )
 
 
