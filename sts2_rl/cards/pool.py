@@ -145,6 +145,49 @@ def random_pool_cards(
     return [make_card(card_id) for card_id in chosen]
 
 
+def get_for_combat_parity(
+    rng,
+    count: int,
+    card_type: CardType | None = None,
+    pool: tuple[str, ...] = IRONCLAD_POOL,
+) -> list[Card]:
+    """Parity port of ``CardFactory.GetForCombat`` (Stoke, Calamity, …).
+
+    ``count`` picks WITH replacement, each ``rng.NextItem(FilterForCombat(pool))``
+    — one CombatCardGeneration draw per card, in pool order. Distinct from
+    ``get_distinct_for_combat_parity`` (a single shuffle, no repeats) and from
+    the legacy ``random_pool_cards`` (shared ``random.Random``)."""
+    options = pool_card_ids(card_type, pool)
+    if not options:
+        return []
+    return [make_card(rng.choice(options)) for _ in range(count)]
+
+
+def get_distinct_for_combat_parity(
+    rng,
+    count: int,
+    card_type: CardType | None = None,
+    pool: tuple[str, ...] = IRONCLAD_POOL,
+) -> list[Card]:
+    """Parity port of ``CardFactory.GetDistinctForCombat``.
+
+    The game does ``FilterForCombat(pool.GetUnlockedCards()[.Where(type)])
+    .TakeRandom(count, rng)`` where ``TakeRandom(n) == list.ToList()
+    .UnstableShuffle(rng).Take(n)``. ``FilterForCombat`` (== ``pool_card_ids``
+    here) keeps generatable non-Basic/Ancient cards in pool order and is already
+    ``Distinct`` (the pool has no repeats), so a plain in-place shuffle of the
+    filtered id list, then the first ``count``, reproduces the game exactly.
+
+    ``rng`` is the combat ``card_gen`` accessor — in a parity run a
+    ``GameRandomAdapter`` over the ``CombatCardGeneration`` stream whose
+    ``.shuffle`` is the game's top-down Fisher-Yates ``UnstableShuffle``
+    (``NextInt(i+1)``). Distinct from the legacy ``random_pool_cards`` path,
+    which shuffles the shared ``random.Random`` via ``sample``."""
+    ids = pool_card_ids(card_type, pool)
+    rng.shuffle(ids)
+    return [make_card(card_id) for card_id in ids[:count]]
+
+
 # Transform rarities: everything except Basic/Ancient/Token/Event/... —
 # a normal transform lands on a Common/Uncommon/Rare card.
 _TRANSFORM_RARITIES = (CardRarity.COMMON, CardRarity.UNCOMMON, CardRarity.RARE)

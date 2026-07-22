@@ -177,6 +177,10 @@ class CombatState:
         # (which have no deck, like a card with DeckVersion == null).
         self.deck_card_origins: dict[int, "Card"] = {}
         self.result: Optional[CombatResult] = None
+        # Cards offered by a "choose a card" screen (Skill Potion, Discovery,
+        # …) awaiting the player's pick. The conformance driver resolves it from
+        # the recording's `SelectCardFromScreen N`; legacy resolves it inline.
+        self._pending_screen_cards: Optional[list["Card"]] = None
 
         self.hooks.on_combat_start()
         self.player.start_turn()
@@ -536,6 +540,27 @@ class CombatState:
         elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=False)
         return True
+
+    def offer_screen_selection(self, cards: list[Card]) -> None:
+        """Present a choose-a-card screen (mirrors CardSelectCmd.FromChooseA-
+        CardScreen). The cards are generated already; the pick is deferred to
+        the recording's `SelectCardFromScreen` (driver) or resolved inline in
+        legacy play."""
+        self._pending_screen_cards = list(cards)
+
+    def resolve_screen_selection(self, index: int | None) -> None:
+        """Resolve a pending choose-a-card screen: add the chosen generated card
+        to hand, free this turn (AddGeneratedCardToCombat). `index is None`
+        (a `SelectCardFromScreen skip`) takes nothing, as the game's canSkip
+        screens allow."""
+        cards = self._pending_screen_cards
+        self._pending_screen_cards = None
+        if not cards or index is None or index >= len(cards):
+            return
+        from .cmds import CardPileCmd
+        card = cards[index]
+        card.set_free_this_turn()
+        CardPileCmd.add_to_hand(self.hooks, self.player, card)
 
     def end_turn(self) -> None:
         """Fire turn-end hooks, discard hand, run enemy turn, begin next player turn."""

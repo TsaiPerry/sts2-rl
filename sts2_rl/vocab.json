@@ -212,7 +212,8 @@
   "strength_potion",
   "weak_potion",
   "potion_shaped_rock",
-  "foul_potion"
+  "foul_potion",
+  "skill_potion"
  ],
  "powers": [
   "adaptable",

@@ -213,6 +213,38 @@ class FoulPotion(Potion):
             )
 
 
+@register_potion
+class SkillPotion(Potion):
+    """Choose 1 of 3 generated Skills; add a free copy to your hand this turn.
+
+    Source: SkillPotion.cs — GetDistinctForCombat(CardPool.GetUnlockedCards()
+    .Where(Type == Skill), 3, Rng.CombatCardGeneration), then a canSkip
+    choose-a-card screen; the pick is SetToFreeThisTurn and added to hand.
+    Parity draws the three off the CombatCardGeneration stream (game
+    UnstableShuffle) and defers the pick to the recording's
+    `SelectCardFromScreen`; legacy adds the first candidate (the RL agent's own
+    choice is unmodeled — the potion was an inert placeholder before)."""
+
+    id = "skill_potion"
+    name = "Skill Potion"
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cards.base import CardType
+        from .cards.pool import get_distinct_for_combat_parity, random_pool_cards
+        from .cmds import CardPileCmd
+
+        combat = ctx.combat
+        crng = combat.combat_rng
+        if crng.is_parity:
+            cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.SKILL)
+            combat.offer_screen_selection(cards)
+        else:
+            cards = random_pool_cards(combat._rng, 3, CardType.SKILL, distinct=True)
+            if cards:
+                cards[0].set_free_this_turn()
+                CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])
+
+
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)
 
 

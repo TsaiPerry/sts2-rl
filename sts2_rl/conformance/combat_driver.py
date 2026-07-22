@@ -14,6 +14,11 @@ from __future__ import annotations
 from .comparators import Divergence
 
 _COMBAT_CMDS = {"PlayCard", "EndTurn", "UsePotion"}
+# Commands the driver consumes while a combat is live but which never *start* a
+# fight (so they stay out of _COMBAT_CMDS, which the runner uses to detect an
+# annotated fight). SelectCardFromScreen resolves a mid-combat choose-a-card
+# screen (Skill Potion, Discovery, …).
+_DRIVER_CMDS = _COMBAT_CMDS | {"SelectCardFromScreen"}
 
 
 def card_display_name(card) -> str:
@@ -75,7 +80,7 @@ class ReplayCombatDriver:
     def play(self) -> list[Divergence]:
         while not self.combat.is_over:
             cmd = self.cursor.peek()
-            if cmd is None or cmd.name not in _COMBAT_CMDS:
+            if cmd is None or cmd.name not in _DRIVER_CMDS:
                 break
             self._assert(cmd)
             try:
@@ -142,3 +147,9 @@ class ReplayCombatDriver:
             slot = int(cmd.args[0])
             target_idx = int(cmd.args[1]) - 1 if len(cmd.args) > 1 else None
             self.combat.use_potion(slot, target_idx=target_idx)
+        elif cmd.name == "SelectCardFromScreen":
+            # Resolve a mid-combat choose-a-card screen. The arg is the 0-based
+            # index into the offered cards, or a non-numeric "skip".
+            arg = cmd.args[0] if cmd.args else "skip"
+            idx = int(arg) if arg.lstrip("-").isdigit() else None
+            self.combat.resolve_screen_selection(idx)

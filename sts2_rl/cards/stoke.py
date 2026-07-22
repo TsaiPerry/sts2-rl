@@ -32,11 +32,17 @@ class StokeCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import CardPileCmd, ExhaustCmd
-        from .pool import random_pool_cards
+        from .pool import get_for_combat_parity, random_pool_cards
         hand = list(ctx.player.hand)
         for card in hand:
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, card)
-        new_cards = random_pool_cards(ctx.combat._rng, len(hand))
+        # GetForCombat(pool, exhaustCount) — parity draws one CombatCardGeneration
+        # NextItem per generated card; legacy keeps the shared-Random path.
+        crng = ctx.combat.combat_rng
+        if crng.is_parity:
+            new_cards = get_for_combat_parity(crng.card_gen, len(hand))
+        else:
+            new_cards = random_pool_cards(ctx.combat._rng, len(hand))
         for card in new_cards:
             if self.upgrade_level > 0:
                 card.upgrade()

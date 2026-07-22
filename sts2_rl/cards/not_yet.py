@@ -22,6 +22,9 @@ class NotYetCard(Card):
     rarity = CardRarity.RARE
     target_type = TargetType.SELF
     exhausts = True
+    # NotYet.cs: CanBeGeneratedInCombat => false — excluded from FilterForCombat
+    # (Skill/Attack/Colorless potions, Discovery, Vexing Puzzlebox, …).
+    can_be_generated_in_combat = False
 
     def _init_vars(self) -> None:
         self._energy_cost = 2
