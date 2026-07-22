@@ -75,7 +75,7 @@ class CorpseSlugsEncounter(Encounter):
     monster_classes: list = field(default_factory=list)
     count: int = 3
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         start = rng.randrange(3)
         return [
             CorpseSlug(hooks, rng, starter_move_idx=(start + i) % 3)

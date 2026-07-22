@@ -63,6 +63,7 @@ class Wriggler(Monster):
 class PhrogParasite(Monster):
     """INFECT (adds Infection cards) → LASH (multi-hit) → alternating.
     On death, InfestedPower spawns 4 stunned Wrigglers."""
+    name = "Phrog Parasite"
     min_hp = 61
     max_hp = 64
 

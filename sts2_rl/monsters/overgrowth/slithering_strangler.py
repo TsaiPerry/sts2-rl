@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..base import Encounter, Intent, Monster, MoveType
+from ..state_machine import weighted_branch_pick
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
@@ -39,13 +40,19 @@ class SlitheringStrangler(Monster):
         if self._move_key == "CONSTRICT":
             from ...powers import ConstrictPower
             PowerCmd.apply(ctx.hooks, ctx.player, ConstrictPower, _CONSTRICT_AMT, applier=self)
-            self._move_key = self._rng.choice(["THWACK", "LASH"])
         elif self._move_key == "THWACK":
             self._execute_attack(ctx, _THWACK_DMG, 1)
             BlockCmd.apply(ctx.hooks, self, _THWACK_BLOCK)
-            self._move_key = "CONSTRICT"
         else:
             self._execute_attack(ctx, _LASH_DMG, 1)
+        self.telegraph_next_move()
+
+    def telegraph_next_move(self) -> None:
+        if self._move_key == "CONSTRICT":
+            self._move_key = weighted_branch_pick(
+                self._hooks.combat.combat_rng.monster_ai, ["THWACK", "LASH"], [1, 1]
+            )
+        else:
             self._move_key = "CONSTRICT"
 
 
@@ -55,7 +62,7 @@ class SlitheringStranglerEncounter(Encounter):
     small slimes (independently picked, duplicates allowed) — then the Strangler."""
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         from .slimes import LeafSlimeM, LeafSlimeS, TwigSlimeM, TwigSlimeS
         from .snapping_jaxfruit import SnappingJaxfruit
         kind = rng.choice(["jaxfruit", "medium_slime", "small_slimes"])

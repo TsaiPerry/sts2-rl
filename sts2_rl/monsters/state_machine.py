@@ -28,6 +28,38 @@ if TYPE_CHECKING:
     from ..hooks import HookSystem
 
 
+def _weighted_roll(rng: random.Random, total: float) -> float:
+    """RandomBranchState.GetNextState's exact primitive (RandomBranchState.cs:118):
+    ``float num = rng.NextFloat(max)`` — ONE float32-precision draw scaled to
+    [0, total), NOT WeightedNextItem (that's a different call with a different
+    rounding path: NextFloat() then multiply, vs NextFloat(max) computing the
+    scale inside the single draw). In parity mode `rng` is a GameRandomAdapter
+    whose `.rng` is the raw game Rng, so route to its float32-exact
+    `next_float(0, total)`; in legacy mode `rng` is the shared `random.Random`
+    and we keep the existing `.random() * total` call (bit-identical to the
+    pre-SP3 code — legacy behavior is intentionally unchanged)."""
+    game_rng = getattr(rng, "rng", None)
+    if game_rng is not None:
+        return game_rng.next_float(0.0, total)
+    return rng.random() * total
+
+
+def weighted_branch_pick(rng: random.Random, items: list, weights: list[float]):
+    """Game-exact single-NextFloat(total) weighted pick (the RandomBranchState
+    primitive) for hand-rolled monsters not yet on the state machine. Mirrors
+    RandomBranchState.get_next_state's roll+walk exactly: one _weighted_roll
+    draw over the summed weights, then subtract-and-check-<=0 per item in
+    order, falling back to the last item (matches RandomBranchState.cs:118-131
+    byte-for-byte — same primitive the state-machine path uses)."""
+    total = float(sum(weights))
+    roll = _weighted_roll(rng, total)
+    for item, weight in zip(items, weights):
+        roll -= weight
+        if roll <= 0:
+            return item
+    return items[-1]
+
+
 class MoveRepeatType(Enum):
     CAN_REPEAT_FOREVER = "can_repeat_forever"
     CAN_REPEAT_X_TIMES = "can_repeat_x_times"
@@ -149,7 +181,7 @@ class RandomBranchState(MonsterState):
         total = sum(weights)
         if total <= 0:
             raise RuntimeError(f"No valid branch in RandomBranchState {self.id}")
-        roll = rng.random() * total
+        roll = _weighted_roll(rng, total)
         for branch, weight in zip(self._branches, weights):
             roll -= weight
             if roll <= 0:
@@ -266,10 +298,18 @@ class MachineMonster(Monster):
         super().__init__(hooks, rng)
         self._rng = rng
         self.machine = self.build_machine()
-        self._current_move: MoveState = self.machine.roll_move(self, rng)
+        self._current_move: MoveState = self.machine.roll_move(self, self._move_rng)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         raise NotImplementedError
+
+    @property
+    def _move_rng(self) -> random.Random:
+        # Move selection rolls happen on the MonsterAi stream (mirrors
+        # MonsterModel.RollMove(targets) => MoveStateMachine.RollMove(...,
+        # RunRng.MonsterAi)). self._rng (HP roll, and any non-move use a
+        # subclass makes of it) is untouched — only the move roll moves.
+        return self._hooks.combat.combat_rng.monster_ai
 
     @property
     def current_intent(self) -> Intent:
@@ -281,4 +321,10 @@ class MachineMonster(Monster):
         move = self._current_move
         move.perform(ctx)
         self.machine.on_move_performed(move)
-        self._current_move = self.machine.roll_move(self, self._rng)
+        self.telegraph_next_move()
+
+    def telegraph_next_move(self) -> None:
+        """Roll the next move now (mirrors Creature.PrepareForNextTurn, which
+        the game calls for every enemy at player-turn-start regardless of
+        whether that enemy acted — including one stunned this round)."""
+        self._current_move = self.machine.roll_move(self, self._move_rng)

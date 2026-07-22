@@ -82,7 +82,7 @@ class SlumberingBeetleEncounter(Encounter):
 
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         from .bowlbugs import BowlbugRock, BowlbugSilk
         return [
             BowlbugRock(hooks, rng),

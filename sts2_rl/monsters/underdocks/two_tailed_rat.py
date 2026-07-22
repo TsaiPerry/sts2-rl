@@ -143,7 +143,7 @@ class TwoTailedRatsEncounter(Encounter):
 
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         start = rng.randrange(3)
         return [
             TwoTailedRat(hooks, rng, starter_move_idx=(start + i) % 3)

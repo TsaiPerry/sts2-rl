@@ -17,7 +17,7 @@ class _WrigglerNestEncounter(Encounter):
     """DenseVegetationEventEncounter.cs: four Wrigglers (not start-stunned) in
     slots wriggler1..4 — odd slots open with Nasty Bite, even with Wriggle."""
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         return [
             Wriggler(hooks, rng, start_stunned=False, slot=slot)
             for slot in range(1, 5)

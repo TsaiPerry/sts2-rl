@@ -38,6 +38,19 @@ SP2_PLAYER_STREAMS: tuple[PlayerRngType, ...] = (
     PlayerRngType.SHOPS,
 )
 
+# The seven RNG streams combat draws from (SP3). Diffed separately from the SP2
+# run/player streams so a report says which subsystem diverged: a combat-stream
+# mismatch means an un-ported combat draw, not a map/economy gap.
+SP3_COMBAT_STREAMS: tuple[RunRngType, ...] = (
+    RunRngType.SHUFFLE,
+    RunRngType.MONSTER_AI,
+    RunRngType.COMBAT_CARD_GENERATION,
+    RunRngType.COMBAT_CARD_SELECTION,
+    RunRngType.COMBAT_TARGETS,
+    RunRngType.COMBAT_ENERGY_COSTS,
+    RunRngType.COMBAT_POTION_GENERATION,
+)
+
 
 def node_type_name(t: MapPointType) -> str:
     """Reverse of NODE_TYPE_BY_NAME (falls back to the enum name)."""

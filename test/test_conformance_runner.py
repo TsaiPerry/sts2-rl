@@ -79,3 +79,18 @@ def test_runner_has_no_divergences():
     result, _ = _run(SEED)
     # All four SP2 streams + the whole map/room-type walk agree with the save.
     assert result.ok, [str(d) for d in result.divergences]
+
+
+def test_runner_combat_is_driven_not_forced_and_ids_resolve():
+    # SP3 Task 8: the runner now drives annotated fights through
+    # ReplayCombatDriver rather than force-winning them. Wiring the driver in
+    # must not regress the SP2 subsystem (map/economy `ok` still holds), every
+    # recorded PlayCard id must resolve (unresolved list empty), and the combat
+    # subsystem is diffed into its OWN bucket -- so a still-un-ported later
+    # fight surfaces in `combat_divergences` (Task 9's worklist) without
+    # touching the SP2 `divergences`/`ok`.
+    result, _ = _run(SEED)
+    assert result.ok, [str(d) for d in result.divergences]
+    assert result.unresolved_play_card_ids == [], result.unresolved_play_card_ids
+    # Not every fight is force-won any more: the driver replayed at least one.
+    assert result.forced_combats < result.rooms_walked

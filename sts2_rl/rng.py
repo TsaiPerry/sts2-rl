@@ -49,6 +49,39 @@ def deterministic_hash_code(s: str) -> int:
     return i32(num + i32(num2 * 1566083941))
 
 
+def make_encounter_rng(run_seed: int, total_floor: int, entry: str) -> "Rng":
+    """The per-encounter deterministic Rng the game builds to pick an
+    encounter's monster composition (EncounterModel.GenerateMonstersWithSlots):
+
+        uint seed = (uint)((int)runState.Rng.Seed + runState.TotalFloor
+                           + GetDeterministicHashCode(Id.Entry));
+        _rng = new Rng(seed);
+
+    `run_seed` is the base run seed (RunRngSet.Seed == deterministic_hash_code
+    of the string seed); `total_floor` is IRunState.TotalFloor at generation
+    time; `entry` is the encounter's slugified class name (Id.Entry, e.g.
+    "SLIMES_WEAK"). C# does the arithmetic in int32 and reinterprets as uint —
+    addition mod 2**32 is sign-agnostic, so a plain sum masked to 32 bits
+    reproduces it exactly."""
+    seed = (run_seed + total_floor + deterministic_hash_code(entry)) & _UMASK32
+    return Rng(seed=seed)
+
+
+def make_event_rng(run_seed: int, entry: str) -> "Rng":
+    """The per-event deterministic Rng the game builds for an event's random
+    draws (EventModel ctor):
+
+        Rng = new Rng((uint)((uint)((int)Owner.RunState.Rng.Seed
+              + (IsShared ? 0 : GetPlayerSlotIndex(Owner)))
+              + GetDeterministicHashCode(Id.Entry)));
+
+    In single player GetPlayerSlotIndex is 0, so the seed reduces to the base
+    run seed + the event's slug hash (NO TotalFloor, unlike the encounter Rng).
+    `entry` is the event's slugified class name (e.g. "TABLET_OF_TRUTH")."""
+    seed = (run_seed + deterministic_hash_code(entry)) & _UMASK32
+    return Rng(seed=seed)
+
+
 class RunRngType(str, Enum):
     UP_FRONT = "UpFront"
     SHUFFLE = "Shuffle"
@@ -280,6 +313,21 @@ class GameRandomAdapter:
         # Rng.NextItem: one NextInt(0, len) draw. (== seq[rng.next_int(len)];
         # NextItem uses NextInt(0,len) which is the same value + one counter.)
         return self.rng.next_item(seq)
+
+    def randint(self, a: int, b: int) -> int:
+        # random.randint is inclusive; game NextInt(a, b) is exclusive-max.
+        return self.rng.next_int_range(a, b + 1)
+
+    def choices(self, population, weights=None, k: int = 1):
+        # One weighted pick == Rng.WeightedNextItem (one NextFloat()). Combat
+        # sites use .choices(...)[0]; k>1 would be k independent draws, which no
+        # ported site needs — assert to surface a new pattern loudly.
+        if weights is None:
+            return [self.choice(population) for _ in range(k)]
+        assert k == 1, "weighted choices with k>1 has no ported game analogue"
+        weight_by_id = {id(item): w for item, w in zip(population, weights)}
+        return [self.rng.weighted_next_item(
+            population, lambda x: weight_by_id[id(x)])]
 
 
 def grab_and_remove(bag: list, rng: "Rng", predicate=None):

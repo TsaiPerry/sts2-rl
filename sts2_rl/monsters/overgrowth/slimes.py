@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..base import Encounter, Intent, Monster, MoveType
+from ..state_machine import weighted_branch_pick
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
@@ -15,13 +16,18 @@ if TYPE_CHECKING:
 
 class LeafSlimeS(Monster):
     """Random first move, then alternates TACKLE (damage) / GOOP (Slimed card)."""
+    name = "Leaf Slime (S)"
     min_hp = 11
     max_hp = 15
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         rng = rng or random.Random()
         super().__init__(hooks, rng)
-        self._move_key = rng.choice(["TACKLE", "GOOP"])
+        # Combat-start telegraph (mirrors LeafSlimeS's RandomBranchState roll,
+        # CannotRepeat on both branches — 50/50 with nothing logged yet).
+        self._move_key = weighted_branch_pick(
+            hooks.combat.combat_rng.monster_ai, ["TACKLE", "GOOP"], [1, 1]
+        )
 
     @property
     def current_intent(self) -> Intent:
@@ -32,16 +38,21 @@ class LeafSlimeS(Monster):
     def take_turn(self, ctx: CombatCtx) -> None:
         if self._move_key == "TACKLE":
             self._execute_attack(ctx, 3, 1)
-            self._move_key = "GOOP"
         else:
             from ...cards import SlimedCard
             from ...cmds import CardPileCmd
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, SlimedCard())
-            self._move_key = "TACKLE"
+        self.telegraph_next_move()
+
+    def telegraph_next_move(self) -> None:
+        # Both branches are CannotRepeat, so once one move has been logged
+        # the other is the only eligible one — a forced alternation.
+        self._move_key = "GOOP" if self._move_key == "TACKLE" else "TACKLE"
 
 
 class TwigSlimeS(Monster):
     """Always tackles."""
+    name = "Twig Slime (S)"
     min_hp = 7
     max_hp = 11
 
@@ -60,6 +71,7 @@ class TwigSlimeS(Monster):
 
 class LeafSlimeM(Monster):
     """STICKY_SHOT → CLUMP_SHOT alternating; starts with STICKY_SHOT."""
+    name = "Leaf Slime (M)"
     min_hp = 32
     max_hp = 35
 
@@ -87,6 +99,7 @@ class LeafSlimeM(Monster):
 
 class TwigSlimeM(Monster):
     """STICKY_SHOT start, then weighted random between POKEY_POUNCE and STICKY_SHOT (no repeats)."""
+    name = "Twig Slime (M)"
     min_hp = 26
     max_hp = 28
 
@@ -106,14 +119,20 @@ class TwigSlimeM(Monster):
             from ...cards import SlimedCard
             from ...cmds import CardPileCmd
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, SlimedCard())
-            # After STICKY_SHOT, can't repeat → always POKEY_POUNCE next
-            self._move_key = "POKEY_POUNCE"
         else:
             self._execute_attack(ctx, 11, 1)
+        self.telegraph_next_move()
+
+    def telegraph_next_move(self) -> None:
+        if self._move_key == "STICKY_SHOT":
+            # After STICKY_SHOT, can't repeat -> always POKEY_POUNCE next
+            self._move_key = "POKEY_POUNCE"
+        else:
             # weight 2 POKEY_POUNCE, weight 1 STICKY_SHOT (no repeat restriction after POKEY_POUNCE)
-            self._move_key = self._rng.choices(
-                ["POKEY_POUNCE", "STICKY_SHOT"], weights=[2, 1]
-            )[0]
+            self._move_key = weighted_branch_pick(
+                self._hooks.combat.combat_rng.monster_ai,
+                ["POKEY_POUNCE", "STICKY_SHOT"], [2, 1],
+            )
 
 
 # ── Encounter definitions ─────────────────────────────────────────────────
@@ -123,7 +142,19 @@ class SlimesNormalEncounter(Encounter):
     """TwigSlimeM + LeafSlimeM + 2 randomly-ordered small slimes."""
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
+        if selection_rng is not None:
+            # Parity (SlimesNormal.GenerateMonsters): one NextBool orders the two
+            # smalls; the two mediums are fixed at slots 0-1.
+            leaf_first = selection_rng.next_bool()
+            small0, small1 = (
+                (LeafSlimeS, TwigSlimeS) if leaf_first else (TwigSlimeS, LeafSlimeS))
+            return [
+                TwigSlimeM(hooks, rng),
+                LeafSlimeM(hooks, rng),
+                small0(hooks, rng),
+                small1(hooks, rng),
+            ]
         small = rng.sample([LeafSlimeS, TwigSlimeS], 2)
         return [
             TwigSlimeM(hooks, rng),
@@ -138,7 +169,18 @@ class SlimesWeakEncounter(Encounter):
     """One small + one medium + another small (randomly selected)."""
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
+        if selection_rng is not None:
+            # Parity (SlimesWeak.GenerateMonsters): pick small A, remove it and
+            # pick small B from the remaining single-element list (a NextItem on
+            # a 1-element list still consumes a draw), then pick the medium — a
+            # three-draw sequence, returned as [A, medium, B].
+            smalls = [LeafSlimeS, TwigSlimeS]
+            small_a = selection_rng.next_item(smalls)
+            smalls.remove(small_a)
+            small_b = selection_rng.next_item(smalls)
+            medium_cls = selection_rng.next_item([LeafSlimeM, TwigSlimeM])
+            return [small_a(hooks, rng), medium_cls(hooks, rng), small_b(hooks, rng)]
         smalls = rng.sample([LeafSlimeS, TwigSlimeS], 2)
         medium_cls = rng.choice([LeafSlimeM, TwigSlimeM])
         return [smalls[0](hooks, rng), medium_cls(hooks, rng), smalls[1](hooks, rng)]

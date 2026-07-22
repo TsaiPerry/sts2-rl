@@ -76,8 +76,16 @@ class Event:
     def __init__(self, run: RunState) -> None:
         self.run = run
         # The game gives each event its own RNG seeded from the run seed +
-        # event id; the sim keeps its single-RNG-stream convention.
+        # event id (EventModel ctor). The legacy path keeps the sim's single-
+        # RNG-stream convention (`self.rng`); the SP3 parity path also exposes
+        # the per-event game Rng as `self.event_rng` for events whose random
+        # draws must reproduce the recording (e.g. Tablet of Truth's upgrade
+        # pick). None in legacy runs.
         self.rng = run.rng
+        self.event_rng = None
+        if run.rng_set is not None:
+            from ..rng import make_event_rng
+            self.event_rng = make_event_rng(run.rng_set.seed, type(self).id.upper())
         self.page = "INITIAL"
         self.finished = False
         self._options: list[EventOption] = []

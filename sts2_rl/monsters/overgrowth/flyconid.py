@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..base import Encounter, Intent, Monster, MoveType
+from ..state_machine import weighted_branch_pick
 from .slimes import LeafSlimeM, TwigSlimeM
 
 if TYPE_CHECKING:
@@ -29,7 +30,9 @@ class Flyconid(Monster):
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         self._rng = rng or random.Random()
-        self._move_key = self._rng.choices(["FRAIL_SPORES", "SMASH"], weights=[2, 1])[0]
+        self._move_key = weighted_branch_pick(
+            hooks.combat.combat_rng.monster_ai, ["FRAIL_SPORES", "SMASH"], [2, 1]
+        )
 
     @property
     def current_intent(self) -> Intent:
@@ -53,10 +56,15 @@ class Flyconid(Monster):
             PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _FRAIL_SPORES_FRAIL)
         else:
             self._execute_attack(ctx, _SMASH_DMG, 1)
+        self.telegraph_next_move()
+
+    def telegraph_next_move(self) -> None:
         last = self._move_key
         candidates = [m for m in _MOVES if m != last]
         weights = [_WEIGHTS[_MOVES.index(m)] for m in candidates]
-        self._move_key = self._rng.choices(candidates, weights=weights)[0]
+        self._move_key = weighted_branch_pick(
+            self._hooks.combat.combat_rng.monster_ai, candidates, weights
+        )
 
 
 @dataclass
@@ -64,7 +72,13 @@ class FlyconidEncounter(Encounter):
     """Randomly picks LeafSlimeM or TwigSlimeM alongside a Flyconid."""
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
+        if selection_rng is not None:
+            # Parity (FlyconidNormal.GenerateMonsters): one NextItem over
+            # _mediumSlimes = [LeafSlimeM, TwigSlimeM] (that order), then a
+            # Flyconid in slot 1.
+            slime_cls = selection_rng.next_item([LeafSlimeM, TwigSlimeM])
+            return [slime_cls(hooks, rng), Flyconid(hooks, rng)]
         slime_cls = rng.choice([LeafSlimeM, TwigSlimeM])
         return [slime_cls(hooks, rng), Flyconid(hooks, rng)]
 

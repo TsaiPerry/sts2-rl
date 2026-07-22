@@ -38,7 +38,7 @@ class HavocCard(Card):
         if not player.draw_pile and player.discard_pile:
             player.draw_pile = player.discard_pile
             player.discard_pile = []
-            ctx.combat._rng.shuffle(player.draw_pile)
+            ctx.combat.combat_rng.shuffle.shuffle(player.draw_pile)
             ctx.hooks.on_shuffle(player)
         if not player.draw_pile:
             return

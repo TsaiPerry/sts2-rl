@@ -240,3 +240,45 @@ def test_grab_and_remove_rejection_redraws():
     assert picked != first_item
     assert r.counter >= 2
     assert picked not in bag and len(bag) == 4
+
+
+# ── Task 2: GameRandomAdapter randint + choices ────────────────────────────
+
+def test_adapter_randint_is_inclusive_next_int_range():
+    from sts2_rl.rng import GameRandomAdapter, Rng
+    a = GameRandomAdapter(Rng(123, name="shuffle"))
+    b = GameRandomAdapter(Rng(123, name="shuffle"))
+    # randint(lo, hi) == next_int_range(lo, hi+1): same value, same one draw
+    assert a.randint(0, 5) == b.rng.next_int_range(0, 6)
+    assert a.rng.counter == b.rng.counter == 1
+
+
+def test_adapter_choices_single_weighted_matches_weighted_next_item():
+    from sts2_rl.rng import GameRandomAdapter, Rng
+    pop = ["A", "B", "C"]
+    weights = [2, 1, 1]
+    a = GameRandomAdapter(Rng(7, name="monster_ai"))
+    b = GameRandomAdapter(Rng(7, name="monster_ai"))
+    got = a.choices(pop, weights=weights)[0]
+    exp = b.rng.weighted_next_item(pop, lambda x: weights[pop.index(x)])
+    assert got == exp
+    assert a.rng.counter == b.rng.counter == 1
+
+
+def test_adapter_choices_weights_are_positional_not_by_value():
+    from sts2_rl.rng import GameRandomAdapter, Rng
+
+    class V:
+        def __init__(self, tag): self.tag = tag
+        def __eq__(self, other): return isinstance(other, V) and self.tag == other.tag
+        def __hash__(self): return hash(self.tag)
+
+    pop = [V("s"), V("s"), V("s")]      # equal by value, distinct objects
+    weights = [1, 1, 8]                  # positional weights differ
+    a = GameRandomAdapter(Rng(3, name="card_gen"))
+    b = GameRandomAdapter(Rng(3, name="card_gen"))
+    got = a.choices(pop, weights=weights)[0]
+    pos = {id(item): w for item, w in zip(pop, weights)}
+    exp = b.rng.weighted_next_item(pop, lambda x: pos[id(x)])
+    assert got is exp                    # same object, positionally weighted
+    assert a.rng.counter == b.rng.counter == 1

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class AxeRubyRaider(Monster):
     """SWING_1 (attack+block) → SWING_2 (attack+block) → BIG_SWING → cycle."""
+    name = "Axe Raider"
     min_hp = 20
     max_hp = 22
 
@@ -42,6 +43,7 @@ class AxeRubyRaider(Monster):
 
 class AssassinRubyRaider(Monster):
     """Always KILLSHOT."""
+    name = "Assassin Raider"
     min_hp = 18
     max_hp = 23
 
@@ -58,6 +60,7 @@ class AssassinRubyRaider(Monster):
 
 class BruteRubyRaider(Monster):
     """BEAT → ROAR (3 Strength) → alternating."""
+    name = "Brute Raider"
     min_hp = 30
     max_hp = 33
 
@@ -85,6 +88,7 @@ class BruteRubyRaider(Monster):
 
 class CrossbowRubyRaider(Monster):
     """RELOAD (block) → FIRE (high damage) → alternating; starts with RELOAD."""
+    name = "Crossbow Raider"
     min_hp = 18
     max_hp = 21
 
@@ -110,6 +114,7 @@ class CrossbowRubyRaider(Monster):
 
 class TrackerRubyRaider(Monster):
     """TRACK (2 Frail) once, then HOUNDS (1×8) repeating."""
+    name = "Tracker Raider"
     min_hp = 21
     max_hp = 25
 
@@ -148,7 +153,18 @@ class RubyRaidersEncounter(Encounter):
     """Randomly selects 3 unique raiders from the pool of 5."""
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
+        if selection_rng is not None:
+            # Parity (RubyRaidersNormal.GenerateMonsters): three draws WITHOUT
+            # replacement (each raider's valid count is 1). Each draw's candidate
+            # list is the pool in declaration order minus the already-chosen, and
+            # base.Rng.NextItem picks one; the result order is the pick order.
+            # _ALL_RAIDERS matches _raiderValidCounts.Keys insertion order.
+            chosen: list = []
+            for _ in range(3):
+                items = [r for r in _ALL_RAIDERS if r not in chosen]
+                chosen.append(selection_rng.next_item(items))
+            return [cls(hooks, rng) for cls in chosen]
         chosen = rng.sample(_ALL_RAIDERS, 3)
         return [cls(hooks, rng) for cls in chosen]
 

@@ -116,7 +116,7 @@ class TheKinEncounter(Encounter):
     monster_classes: list = field(
         default_factory=lambda: [KinFollower, KinFollower, KinPriest])
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         return [
             KinFollower(hooks, rng, starts_with_dance=True),
             KinFollower(hooks, rng),

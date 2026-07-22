@@ -15,6 +15,7 @@ _WAKE_STR = 10
 
 
 class BygoneEffigy(Monster):
+    name = "Bygone Effigy"
     min_hp = 127
     max_hp = 127
 

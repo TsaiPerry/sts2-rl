@@ -5,6 +5,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from ..base import Encounter, Intent, Monster, MoveType
+from ..state_machine import weighted_branch_pick
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
@@ -50,12 +51,18 @@ class Inklet(Monster):
             self._execute_attack(ctx, _WHIRLWIND_DMG, _WHIRLWIND_HITS)
         else:
             self._execute_attack(ctx, _PIERCING_DMG, 1)
-        self._move_key = self._next_move(move)
+        self.telegraph_next_move()
+
+    def telegraph_next_move(self) -> None:
+        self._move_key = self._next_move(self._move_key)
 
     def _next_move(self, current: str) -> str:
         if current == "JAB":
             # 50/50 between PIERCING_GAZE and WHIRLWIND
-            return self._rng.choice(["WHIRLWIND", "PIERCING_GAZE"])
+            return weighted_branch_pick(
+                self._hooks.combat.combat_rng.monster_ai,
+                ["WHIRLWIND", "PIERCING_GAZE"], [1, 1],
+            )
         # WHIRLWIND and PIERCING_GAZE both return to JAB
         return "JAB"
 

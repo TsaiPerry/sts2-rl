@@ -29,6 +29,7 @@ from .potions import Potion
 if TYPE_CHECKING:
     from .relics import Relic
     from .rewards import RewardExtra
+    from .rng import RunRngSet
 
 
 class Phase(Enum):
@@ -72,6 +73,7 @@ class CombatState:
         self,
         starting_deck: list[Card] | None = None,
         rng: random.Random | None = None,
+        rng_set: "RunRngSet | None" = None,
         encounter: Encounter | None = None,
         potions: list[Potion] | None = None,
         relics: list[Relic] | None = None,
@@ -81,8 +83,14 @@ class CombatState:
         room_type=None,
         max_potions: int | None = None,
         player_gold: int = 0,
+        encounter_selection_rng=None,
     ) -> None:
         self._rng = rng or random.Random()
+        from .combat_rng import CombatRng
+        self.combat_rng = (
+            CombatRng.parity(rng_set) if rng_set is not None
+            else CombatRng.legacy(self._rng)
+        )
         # The run-layer RoomType this combat happens in (Monster/Elite/Boss),
         # None for room-less combats (tests, the combat-only envs). Room-gated
         # relic effects read it (Booming Conch fires in Elite rooms only).
@@ -100,7 +108,7 @@ class CombatState:
         self.hooks.register(self.history)
         self.player = PlayerCombatState(
             max_hp if max_hp is not None else self.PLAYER_MAX_HP,
-            starting_deck, self._rng, self.hooks, potions=potions,
+            starting_deck, self.combat_rng, self.hooks, potions=potions,
             max_potions=max_potions,
         )
         if current_hp is not None:
@@ -120,8 +128,13 @@ class CombatState:
                 card.enchantment.combat = self
                 self.hooks.register(card.enchantment)
         self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
-            self.hooks, self._rng
+            self.hooks, self._rng, encounter_selection_rng
         )
+        # Parity: monster max HP is a game RNG roll on the Niche stream, unique per
+        # side where possible (Creature.SetUniqueMonsterHpValue, CombatState.cs:240).
+        # Legacy mode keeps the monsters' own random.Random().randint roll untouched.
+        if rng_set is not None:
+            self._assign_parity_monster_hp(self.enemies, rng_set.niche)
         # Relics are hook listeners for the whole combat (mirrors RelicModel :
         # AbstractModel with ShouldReceiveCombatHooks); attach() sets the
         # combat back-reference and registers them.
@@ -180,6 +193,29 @@ class CombatState:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _assign_parity_monster_hp(enemies, niche) -> None:
+        """Port of Creature.SetUniqueMonsterHpValue over each enemy in creation
+        order, drawing from the Niche stream. Each enemy takes a HP value from its
+        [min_hp, max_hp] range not already used by an earlier sibling; if the range
+        is exhausted, fall back to a plain range roll (game: rng.NextInt(min,max+1))."""
+        assigned: list[int] = []
+        for e in enemies:
+            # Read the *class* bounds, not e.min_hp/e.max_hp: Monster.__init__
+            # already overwrote the instance's max_hp with its own (legacy,
+            # uncompared) random.Random().randint roll, so the instance
+            # attribute no longer reflects the declared [min_hp, max_hp] range.
+            cls = type(e)
+            lo, hi = cls.min_hp, cls.max_hp        # inclusive
+            taken = set(assigned)
+            candidates = [v for v in range(lo, hi + 1) if v not in taken]  # ascending
+            if candidates:
+                hp = candidates[niche.next_int_range(0, len(candidates))]
+            else:
+                hp = niche.next_int_range(lo, hi + 1)
+            e.hp = e.max_hp = hp
+            assigned.append(hp)
+
     def _ctx(self) -> CombatCtx:
         return CombatCtx(self, self.player, self.enemies, self.hooks)
 
@@ -222,6 +258,20 @@ class CombatState:
             # turn-end effects like Poison still fire on a stunned turn).
             if enemy.stunned:
                 enemy.stunned = False
+                # NOTE (SP3 Task 6): the game's Creature.PrepareForNextTurn
+                # rolls every enemy's next move here unconditionally, even one
+                # stunned this round (MonsterModel.RollMove always runs; stun
+                # only suppresses PerformMove). We do NOT replicate that here:
+                # some stun sources (e.g. FlutterPower) already pre-roll and
+                # splice in the follow-up move inline via
+                # MachineMonster.telegraph_next_move() at the moment they stun
+                # the creature (mirroring Creature.StunInternal's
+                # FollowUpStateId), and unconditionally re-rolling here would
+                # double-advance those. A monster whose ONLY roll site is the
+                # normal telegraph-after-perform path (no custom stun hook)
+                # will miss one MonsterAi draw while stunned; see task-6-report
+                # for the specific monsters this could affect and why it's
+                # deferred rather than fixed here.
             else:
                 enemy.take_turn(self._ctx())
             if self.player.is_dead:

@@ -78,6 +78,17 @@ class Monster(Creature):
     def take_turn(self, ctx: CombatCtx) -> None:
         raise NotImplementedError
 
+    def telegraph_next_move(self) -> None:
+        """Advance/roll the next move without performing anything this turn.
+
+        Mirrors Creature.PrepareForNextTurn, which the game calls for every
+        enemy at player-turn-start unconditionally — including one that was
+        stunned and skipped its own turn (MonsterModel.RollMove always runs;
+        stun only suppresses PerformMove). Monsters with a next-move roll
+        override this; the default is a no-op for monsters with nothing to
+        advance (fixed single-move loops, etc.)."""
+        pass
+
     def _execute_attack(self, ctx: CombatCtx, damage: int, hits: int) -> None:
         """Deal a multi-hit attack, stopping early if attacker or player dies.
 
@@ -107,5 +118,16 @@ class Encounter:
     min_gold: int | None = None
     max_gold: int | None = None
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    @property
+    def entry(self) -> str:
+        """The game's ModelId.Entry (StringHelper.Slugify of the encounter
+        class name — UPPER_SNAKE_CASE), used to seed the per-encounter monster-
+        selection Rng (EncounterModel.GenerateMonstersWithSlots). The sim's
+        lowercase `id` is that slug lowercased, so upper-casing recovers it for
+        every encounter whose id matches its class-name slug."""
+        return self.id.upper()
+
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
+        # Fixed composition draws no RNG, so the parity selection_rng (when
+        # present) is simply unused here.
         return [cls(hooks, rng) for cls in self.monster_classes]

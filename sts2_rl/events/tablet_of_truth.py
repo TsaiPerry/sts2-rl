@@ -74,4 +74,9 @@ class TabletOfTruth(Event):
             for card in upgradables:
                 card.upgrade()
         elif upgradables:
-            self.rng.choice(upgradables).upgrade()  # Rng.NextItem
+            # Rng.NextItem over the upgradable deck cards (deck order). Parity
+            # uses the per-event game Rng; legacy stays on the shared stream.
+            if self.event_rng is not None:
+                self.event_rng.next_item(upgradables).upgrade()
+            else:
+                self.rng.choice(upgradables).upgrade()

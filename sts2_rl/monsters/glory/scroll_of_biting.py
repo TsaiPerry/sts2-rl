@@ -92,7 +92,7 @@ class _ScrollsEncounter(Encounter):
         super().__init__(id=id, monster_classes=[ScrollOfBiting] * count)
         self._count = count
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         base = rng.randint(0, 2)
         idxs = [(base + i) % 3 for i in range(min(self._count, 3))]
         if self._count == 4:

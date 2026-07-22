@@ -994,10 +994,21 @@ class RunState:
         reconciled by finish_combat.
         """
         deck_copy = copy.deepcopy(self.deck)
+        # Parity: monster composition is picked from a per-encounter Rng seeded
+        # from the run seed + current floor + the encounter's slug
+        # (EncounterModel.GenerateMonstersWithSlots), NOT a shared stream. Legacy
+        # runs pass None and keep their random.Random composition draws.
+        encounter_selection_rng = None
+        if self.rng_set is not None:
+            from .rng import make_encounter_rng
+            encounter_selection_rng = make_encounter_rng(
+                self.rng_set.seed, self.total_floor, encounter.entry)
         combat = CombatState(
             starting_deck=deck_copy,
             rng=self.rng,
+            rng_set=self.rng_set,   # None in legacy runs → legacy CombatRng
             encounter=encounter,
+            encounter_selection_rng=encounter_selection_rng,
             potions=self.potions,
             relics=self.relics,
             card_selector=kwargs.pop("card_selector", self.card_selector),

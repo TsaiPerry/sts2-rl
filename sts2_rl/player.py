@@ -10,7 +10,6 @@ MAX_POTIONS) live here as class attributes.
 """
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING
 
 from .creatures import Creature
@@ -31,7 +30,7 @@ class PlayerCombatState(Creature):
         self,
         max_hp: int,
         deck: list[Card],
-        rng: random.Random,
+        combat_rng,
         hooks: HookSystem,
         potions: list[Potion] | None = None,
         max_potions: int | None = None,
@@ -47,10 +46,13 @@ class PlayerCombatState(Creature):
         # Holster grows RunState.max_potions).
         self.max_potions = max_potions if max_potions is not None else self.MAX_POTIONS
         self.potions: list[Potion] = list(potions or [])[: self.max_potions]
-        self._rng = rng
+        self._combat_rng = combat_rng
         self._hooks = hooks
         self._first_turn = True
-        rng.shuffle(self.draw_pile)
+        # Combat-start draw-pile randomization is CardPile.RandomizeOrderInternal
+        # -> UnstableShuffle (Fisher-Yates, NO stabilizing sort), unlike the
+        # mid-combat reshuffle which is a StableShuffle. Hence stable=False here.
+        self._shuffle_draw_pile(stable=False)
 
     @property
     def all_cards(self) -> list[Card]:
@@ -111,8 +113,44 @@ class PlayerCombatState(Creature):
         CardPileCmd.ShuffleIfNecessary's reshuffle step)."""
         self.draw_pile = self.discard_pile
         self.discard_pile = []
-        self._rng.shuffle(self.draw_pile)
+        # A mid-combat reshuffle is CardPileCmd.Shuffle -> StableShuffle.
+        self._shuffle_draw_pile(stable=True)
         self._hooks.on_shuffle(self)
+
+    def _shuffle_draw_pile(self, stable: bool) -> None:
+        """Shuffle the draw pile via the Shuffle stream.
+
+        The game has two draw-pile shuffles that both draw from the same
+        Shuffle stream but differ in one step:
+
+          - combat start: CardPile.RandomizeOrderInternal -> UnstableShuffle
+            (Fisher-Yates only), `stable=False`.
+          - reshuffle:    CardPileCmd.Shuffle -> StableShuffle, `stable=True`,
+            which SORTS the pile into a canonical order first so the result is
+            INDEPENDENT of the pile's incoming (play) order, THEN Fisher-Yates.
+
+        In parity mode we reproduce both. The stabilizing sort mirrors the
+        game's CardModel.CompareTo: first ModelId ordinal (Category.Entry) — the
+        sim card `id` is a lowercase slug whose ordinal order matches the game
+        Entry ordinal for the cards seen so far (bash < defend < strike, etc.)
+        — then, for cards of the same id, CurrentUpgradeLevel (CardModel.cs
+        CompareTo). The upgrade tiebreak matters whenever a pile holds both a
+        base and an upgraded copy of one card (e.g. Defend + Defend+): the game
+        sorts the upgraded copy AFTER the base regardless of their incoming
+        discard order, so which variant lands on top after the Fisher-Yates is
+        decided by upgrade level, not by play order. (A game-id override map can
+        be added later if a card whose slug diverges from its game Entry order
+        turns up.) Finally, the game stores the pile top-at-index-0 but the sim
+        draws off the END of the list (its top), so reverse to reproduce the
+        game's front-to-back draw order under the sim's top=end convention.
+
+        Legacy is byte-for-byte unchanged: the shared random.Random shuffles in
+        place with no sort and no reorientation."""
+        if stable and self._combat_rng.is_parity:
+            self.draw_pile.sort(key=lambda c: (c.id, c.upgrade_level))
+        self._combat_rng.shuffle.shuffle(self.draw_pile)
+        if self._combat_rng.is_parity:
+            self.draw_pile.reverse()
 
     def _draw(self, n: int, from_hand_draw: bool = False) -> None:
         for _ in range(n):
@@ -128,6 +166,6 @@ class PlayerCombatState(Creature):
                 # the game re-checks after ShuffleIfNecessary and stops.
                 if not self.draw_pile:
                     break
-            card = self.draw_pile.pop()
+            card = self.draw_pile.pop()  # end of list = top of pile
             self.hand.append(card)
             self._hooks.on_card_drawn(card, from_hand_draw)

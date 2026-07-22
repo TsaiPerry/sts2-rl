@@ -19,7 +19,7 @@ class _PunchOffEncounter(Encounter):
     """PunchOffEventEncounter.cs: two Punch Constructs — the left one opens with
     Fast Punch — each with its starting HP cut by NextInt(2, 10) (2..9)."""
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         monsters = []
         for i in range(2):
             m = PunchConstruct(hooks, rng, starts_with_fast_punch=(i == 0))

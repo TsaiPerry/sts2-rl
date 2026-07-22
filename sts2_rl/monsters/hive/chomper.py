@@ -66,7 +66,7 @@ class ChompersEncounter(Encounter):
 
     monster_classes: list = field(default_factory=list)
 
-    def create_monsters(self, hooks: HookSystem, rng: random.Random) -> list[Monster]:
+    def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         return [Chomper(hooks, rng), Chomper(hooks, rng, scream_first=True)]
 
 

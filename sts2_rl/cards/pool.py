@@ -4,33 +4,34 @@ import random
 
 from .base import Card, CardRarity, CardType, make_card, _CARD_CLASSES
 
-# The implemented portion of the Ironclad card pool (IroncladCardPool.cs).
-# Basics (Strike/Defend/Bash) and Ancients (Break/Corruption) are listed for
-# completeness but filtered out of in-combat generation, mirroring
-# CardFactory.FilterForCombat. Tokens/statuses/curses are not pool cards.
+# The implemented portion of the Ironclad card pool (IroncladCardPool.cs), in
+# the game's exact GenerateAllCards() declaration order (alphabetical by C#
+# class name). This ORDER is parity-critical: reward/transform generation does
+# `Rng.NextItem(pool.Where(rarity == r))`, indexing into the rarity-filtered
+# candidate list *in pool order* — a different order picks a different card for
+# the same RNG draw. The game's 87-card list minus the two cards
+# CardFactory.FilterForPlayerCount removes in single player (Tank, Demonic
+# Shield), which are therefore never in the single-player candidate set.
+# Basics (Strike/Defend/Bash) and Ancients (Break/Corruption) stay in the list
+# for completeness but are filtered out of generation (CardFactory.FilterForCombat
+# / the reward rarity roll). Tokens/statuses/curses are not pool cards.
 IRONCLAD_POOL: tuple[str, ...] = (
-    # Basics
-    "strike", "defend", "bash",
-    # Attacks
-    "anger", "ashen_strike", "bludgeon", "body_slam", "break", "breakthrough",
-    "bully", "cinder", "conflagration", "dismantle", "feed", "fiend_fire",
-    "fight_me", "headbutt", "hemokinesis", "howl_from_beyond", "iron_wave",
-    "mangle", "molten_fist", "pacts_end", "perfected_strike", "pillage",
-    "pommel_strike", "rampage", "setup_strike", "spite", "stomp",
-    "sword_boomerang", "tear_asunder", "thrash", "thunderclap", "twin_strike",
-    "unrelenting", "uppercut", "whirlwind",
-    # Skills
-    "armaments", "battle_trance", "blood_wall", "bloodletting", "brand",
-    "burning_pact", "cascade", "colossus", "dominate", "drum_of_battle",
-    "evil_eye", "expect_a_fight", "flame_barrier", "forgotten_ritual",
-    "havoc", "impervious", "infernal_blade", "not_yet", "offering",
-    "one_two_punch", "primal_force", "rage", "second_wind", "shrug_it_off",
-    "stoke", "taunt", "tremble", "true_grit",
-    # Powers
-    "aggression", "barricade", "corruption", "crimson_mantle", "cruelty",
-    "dark_embrace", "demon_form", "feel_no_pain", "hellraiser", "inferno",
-    "inflame", "juggernaut", "juggling", "pyre", "rupture", "stampede",
-    "stone_armor", "unmovable", "vicious",
+    "aggression", "anger", "armaments", "ashen_strike", "barricade", "bash",
+    "battle_trance", "blood_wall", "bloodletting", "bludgeon", "body_slam",
+    "brand", "break", "breakthrough", "bully", "burning_pact", "cascade",
+    "cinder", "colossus", "conflagration", "corruption", "crimson_mantle",
+    "cruelty", "dark_embrace", "defend", "demon_form", "dismantle", "dominate",
+    "drum_of_battle", "evil_eye", "expect_a_fight", "feed", "feel_no_pain",
+    "fiend_fire", "fight_me", "flame_barrier", "forgotten_ritual", "havoc",
+    "headbutt", "hellraiser", "hemokinesis", "howl_from_beyond", "impervious",
+    "infernal_blade", "inferno", "inflame", "iron_wave", "juggernaut",
+    "juggling", "mangle", "molten_fist", "not_yet", "offering", "one_two_punch",
+    "pacts_end", "perfected_strike", "pillage", "pommel_strike", "primal_force",
+    "pyre", "rage", "rampage", "rupture", "second_wind", "setup_strike",
+    "shrug_it_off", "spite", "stampede", "stoke", "stomp", "stone_armor",
+    "strike", "sword_boomerang", "taunt", "tear_asunder", "thrash",
+    "thunderclap", "tremble", "true_grit", "twin_strike", "unmovable",
+    "unrelenting", "uppercut", "vicious", "whirlwind",
 )
 
 
