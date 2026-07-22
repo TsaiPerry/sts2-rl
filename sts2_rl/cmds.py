@@ -417,9 +417,21 @@ class CardPileCmd:
     ) -> None:
         """Add a newly created card to a random position in the player's draw
         pile (mirrors AddGeneratedCardToCombat with PileType.Draw,
-        CardPilePosition.Random)."""
-        rng = hooks.combat._rng
-        player.draw_pile.insert(rng.randrange(len(player.draw_pile) + 1), card)
+        CardPilePosition.Random).
+
+        Parity (CardPileCmd.cs:514): the random slot is drawn from the SHUFFLE
+        stream — ``Rng.Shuffle.NextInt(Cards.Count + 1)`` — not the shared run
+        rng. The game pile counts index 0 = top (next drawn); the sim stores its
+        top at the END (the parity reshuffle reverses game order, player.py),
+        so a game index ``p`` lands at sim index ``count - p``. Legacy keeps its
+        byte-for-byte shared-rng insertion."""
+        crng = hooks.combat.combat_rng
+        count = len(player.draw_pile)
+        if crng.is_parity:
+            p = crng.shuffle.randrange(count + 1)   # game index, 0 = top
+            player.draw_pile.insert(count - p, card)
+        else:
+            player.draw_pile.insert(hooks.combat._rng.randrange(count + 1), card)
         CardPileCmd._enter_combat(hooks, card)
 
     @staticmethod
