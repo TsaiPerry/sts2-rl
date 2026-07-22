@@ -41,7 +41,7 @@ from ..driver import (
     RunDriver,
 )
 from ..rng import PlayerRngType, RunRngType
-from .combat_driver import _COMBAT_CMDS, ReplayCombatDriver
+from .combat_driver import _COMBAT_CMDS, _COMBAT_TAIL_CMDS, ReplayCombatDriver
 from .comparators import (
     SP3_COMBAT_STREAMS,
     Divergence,
@@ -221,7 +221,7 @@ class _ForceWinDriver(RunDriver):
                 # remaining combat commands so the post-combat reward (TakeCard)
                 # and the next room's decisions realign instead of the reward
                 # lookahead dead-ending on the stopped command.
-                self._cursor.skip_while(_COMBAT_CMDS)
+                self._cursor.skip_while(_COMBAT_TAIL_CMDS)
             if not combat.is_over:
                 # No combat annotations, or the replay diverged/stopped before
                 # the enemies died: force the win so the run keeps walking.

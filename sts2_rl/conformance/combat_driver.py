@@ -17,8 +17,15 @@ _COMBAT_CMDS = {"PlayCard", "EndTurn", "UsePotion"}
 # Commands the driver consumes while a combat is live but which never *start* a
 # fight (so they stay out of _COMBAT_CMDS, which the runner uses to detect an
 # annotated fight). SelectCardFromScreen resolves a mid-combat choose-a-card
-# screen (Skill Potion, Discovery, …).
+# screen (Skill Potion, Discovery, …). SelectGridCard is NOT a top-level driver
+# command: it resolves a card-selection screen a card effect opens *during* a
+# PlayCard (Headbutt's discard->draw pick, Armaments, …), so it is consumed by
+# the driver's card_selector mid-dispatch, not iterated here.
 _DRIVER_CMDS = _COMBAT_CMDS | {"SelectCardFromScreen"}
+# Every command that belongs to a live fight (used to drop a stopped fight's
+# unreplayed tail — including any pending in-combat selection screens — so the
+# cursor realigns on the post-combat reward/room boundary).
+_COMBAT_TAIL_CMDS = _DRIVER_CMDS | {"SelectGridCard"}
 
 
 def card_display_name(card) -> str:
@@ -57,6 +64,35 @@ class ReplayCombatDriver:
         self.unresolved_play_card_ids: list[int] = []
         # Set by _dispatch when a recorded card fails to resolve (stops the fight).
         self._stopped = False
+        # Route in-combat player card-selection screens (Headbutt's discard->draw
+        # pick, Armaments, …) to the recording's SelectGridCard command(s). The
+        # sim resolves these synchronously inside play_card, so the selector reads
+        # the choice straight off the cursor, which play() has already advanced
+        # past the current PlayCard.
+        combat.card_selector = self._grid_selector
+
+    def _grid_selector(self, purpose, candidates, count):
+        """Resolve a synchronous in-combat card selection.
+
+        Mirrors CardSelectCmd.FromCombatPile: when the choice isn't a genuine
+        over-count one (``num <= MinSelect``), the game auto-resolves — takes all
+        candidates in pile order with no screen, so the recording holds no
+        SelectGridCard. Only a real over-count choice shows a screen, which the
+        recording captures as a SelectGridCard whose arg is the picked index."""
+        if len(candidates) <= count:
+            return list(candidates)
+        chosen = []
+        for _ in range(count):
+            cmd = self.cursor.peek()
+            if cmd is None or cmd.name != "SelectGridCard":
+                break
+            self.cursor.advance()
+            arg = cmd.args[0] if cmd.args else None
+            if arg is not None and arg.lstrip("-").isdigit():
+                idx = int(arg)
+                if 0 <= idx < len(candidates):
+                    chosen.append(candidates[idx])
+        return chosen
 
     def enemy_by_target_id(self, tid: int):
         """1-based recording target id -> the `combat.enemies` slot it names."""
@@ -83,6 +119,11 @@ class ReplayCombatDriver:
             if cmd is None or cmd.name not in _DRIVER_CMDS:
                 break
             self._assert(cmd)
+            # Consume the command BEFORE dispatching: a card effect can open a
+            # selection screen mid-play (Headbutt) whose SelectGridCard the
+            # card_selector reads from the cursor, which must already sit past
+            # this PlayCard.
+            self.cursor.advance()
             try:
                 self._dispatch(cmd)
             except NotImplementedError as exc:
@@ -99,7 +140,6 @@ class ReplayCombatDriver:
                 break
             if self._stopped:
                 break
-            self.cursor.advance()
             self.db.refresh(self.combat)
         return self.divergences
 

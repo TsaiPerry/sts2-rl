@@ -206,6 +206,10 @@ class CreatureCmd:
         combat = hooks.combat
         if combat is None:
             return
+        # Parity: roll the spawn's unique HP on the Niche stream BEFORE it joins
+        # the enemy list, mirroring CombatState.CreateCreature (SetUniqueMonster-
+        # HpValue against the creatures already on the side) then AddCreature.
+        combat.assign_parity_hp(creature)
         combat.enemies.append(creature)
         hooks.on_creature_added(creature)
 

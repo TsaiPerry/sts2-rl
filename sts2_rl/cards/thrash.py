@@ -57,6 +57,13 @@ class ThrashCard(Card):
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
         attacks = [c for c in ctx.player.hand if c.card_type == CT.ATTACK]
         if attacks:
-            victim = ctx.combat._rng.choice(attacks)
+            # Thrash.cs: RunState.Rng.CombatCardSelection.NextItem over the
+            # hand's Attacks (a random one to exhaust and absorb). Parity routes
+            # to that stream; legacy keeps the shared random.Random pick.
+            crng = ctx.combat.combat_rng
+            if crng.is_parity:
+                victim = crng.card_selection.choice(attacks)
+            else:
+                victim = ctx.combat._rng.choice(attacks)
             self._damage += self._absorbed_damage(ctx, victim)
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, victim)

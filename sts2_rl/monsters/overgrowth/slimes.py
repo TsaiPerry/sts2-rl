@@ -45,9 +45,15 @@ class LeafSlimeS(Monster):
         self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
-        # Both branches are CannotRepeat, so once one move has been logged
-        # the other is the only eligible one — a forced alternation.
-        self._move_key = "GOOP" if self._move_key == "TACKLE" else "TACKLE"
+        # Both branches are CannotRepeat, so the just-performed move is
+        # ineligible (weight 0) and the other is forced — but RandomBranchState.
+        # GetNextState still draws ONE NextFloat on every transition (it rolls
+        # over the summed weights regardless of how many are non-zero), so roll
+        # even though the outcome is forced. Skipping it under-counted MonsterAi.
+        weights = [0, 1] if self._move_key == "TACKLE" else [1, 0]
+        self._move_key = weighted_branch_pick(
+            self._hooks.combat.combat_rng.monster_ai, ["TACKLE", "GOOP"], weights
+        )
 
 
 class TwigSlimeS(Monster):
@@ -125,8 +131,14 @@ class TwigSlimeM(Monster):
 
     def telegraph_next_move(self) -> None:
         if self._move_key == "STICKY_SHOT":
-            # After STICKY_SHOT, can't repeat -> always POKEY_POUNCE next
-            self._move_key = "POKEY_POUNCE"
+            # After STICKY_SHOT, CannotRepeat blocks STICKY (weight 0) so
+            # POKEY_POUNCE is forced — but RandomBranchState still draws one
+            # NextFloat every transition, so roll (over [POKEY, STICKY]) even
+            # though only POKEY is eligible, rather than assigning it directly.
+            self._move_key = weighted_branch_pick(
+                self._hooks.combat.combat_rng.monster_ai,
+                ["POKEY_POUNCE", "STICKY_SHOT"], [1, 0],
+            )
         else:
             # weight 2 POKEY_POUNCE, weight 1 STICKY_SHOT (no repeat restriction after POKEY_POUNCE)
             self._move_key = weighted_branch_pick(

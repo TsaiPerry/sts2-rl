@@ -133,8 +133,12 @@ class CombatState:
         # Parity: monster max HP is a game RNG roll on the Niche stream, unique per
         # side where possible (Creature.SetUniqueMonsterHpValue, CombatState.cs:240).
         # Legacy mode keeps the monsters' own random.Random().randint roll untouched.
-        if rng_set is not None:
-            self._assign_parity_monster_hp(self.enemies, rng_set.niche)
+        # The Niche stream (monster unique-HP rolls); None in legacy mode. Held
+        # so mid-combat spawns (Wrigglers, Axebot) can roll HP the same way the
+        # initial enemies do — CreateCreature -> SetUniqueMonsterHpValue.
+        self._niche = rng_set.niche if rng_set is not None else None
+        if self._niche is not None:
+            self._assign_parity_monster_hp(self.enemies, self._niche)
         # Relics are hook listeners for the whole combat (mirrors RelicModel :
         # AbstractModel with ShouldReceiveCombatHooks); attach() sets the
         # combat back-reference and registers them.
@@ -198,27 +202,45 @@ class CombatState:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _assign_parity_monster_hp(enemies, niche) -> None:
+    def _roll_parity_hp(creature, existing_hps, niche) -> int:
+        """Port of Creature.SetUniqueMonsterHpValue for ONE enemy on the Niche
+        stream: pick a HP from [min_hp, max_hp] not already used by a sibling
+        (ascending candidate order == the game's Range().ToHashSet() iteration);
+        if the range is exhausted, fall back to a plain range roll
+        (game: rng.NextInt(min, max+1))."""
+        # Read the *class* bounds, not creature.min_hp/max_hp: Monster.__init__
+        # already overwrote the instance's max_hp with its own (legacy,
+        # uncompared) random.Random().randint roll, so the instance attribute no
+        # longer reflects the declared [min_hp, max_hp] range.
+        cls = type(creature)
+        lo, hi = cls.min_hp, cls.max_hp        # inclusive
+        taken = set(existing_hps)
+        candidates = [v for v in range(lo, hi + 1) if v not in taken]  # ascending
+        if candidates:
+            hp = candidates[niche.next_int_range(0, len(candidates))]
+        else:
+            hp = niche.next_int_range(lo, hi + 1)
+        creature.hp = creature.max_hp = hp
+        return hp
+
+    @classmethod
+    def _assign_parity_monster_hp(cls, enemies, niche) -> None:
         """Port of Creature.SetUniqueMonsterHpValue over each enemy in creation
-        order, drawing from the Niche stream. Each enemy takes a HP value from its
-        [min_hp, max_hp] range not already used by an earlier sibling; if the range
-        is exhausted, fall back to a plain range roll (game: rng.NextInt(min,max+1))."""
+        order (each excludes earlier siblings' HP, mirroring the incremental
+        CreateCreature -> AddCreature loop)."""
         assigned: list[int] = []
         for e in enemies:
-            # Read the *class* bounds, not e.min_hp/e.max_hp: Monster.__init__
-            # already overwrote the instance's max_hp with its own (legacy,
-            # uncompared) random.Random().randint roll, so the instance
-            # attribute no longer reflects the declared [min_hp, max_hp] range.
-            cls = type(e)
-            lo, hi = cls.min_hp, cls.max_hp        # inclusive
-            taken = set(assigned)
-            candidates = [v for v in range(lo, hi + 1) if v not in taken]  # ascending
-            if candidates:
-                hp = candidates[niche.next_int_range(0, len(candidates))]
-            else:
-                hp = niche.next_int_range(lo, hi + 1)
-            e.hp = e.max_hp = hp
-            assigned.append(hp)
+            assigned.append(cls._roll_parity_hp(e, assigned, niche))
+
+    def assign_parity_hp(self, creature) -> None:
+        """Roll a mid-combat-spawned enemy's HP on the Niche stream, mirroring
+        CombatState.CreateCreature calling SetUniqueMonsterHpValue against the
+        creatures already on the enemy side (so its HP is unique vs current
+        siblings). No-op in legacy mode (no Niche stream)."""
+        if self._niche is None:
+            return
+        existing = [e.max_hp for e in self.enemies]
+        self._roll_parity_hp(creature, existing, self._niche)
 
     def _ctx(self) -> CombatCtx:
         return CombatCtx(self, self.player, self.enemies, self.hooks)

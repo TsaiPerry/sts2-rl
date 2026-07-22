@@ -39,9 +39,23 @@ class CombatCardDb:
         post-opening-draw sim state (see the module docstring): the opening
         hand (draw order) followed by the remaining draw pile reversed (the
         sim draws off the pile's END, so its front-to-back game order is the
-        reverse of the stored list)."""
+        reverse of the stored list).
+
+        Timing parity for turn-1 card generation: the game ids the shuffled deck
+        at StartCombat, which is BEFORE the opening turn's post-draw effects run
+        (AfterPlayerTurnStart — Vexing Puzzlebox, etc.). The sim, however, fires
+        `start_turn()` during combat construction, so a generated card is already
+        in hand by the time this db starts. Exclude those non-deck cards here so
+        they inherit their id from `refresh` (add order) AFTER the deck's 0..N-1,
+        exactly as the game assigns them. Deck cards are the ones with a
+        `deck_card_origins` entry (their CardModel.DeckVersion); standalone
+        combats have no origins map and no generation, so nothing is filtered."""
         p = combat.player
-        return list(p.hand) + list(reversed(p.draw_pile))
+        origins = combat.deck_card_origins
+        ordered = list(p.hand) + list(reversed(p.draw_pile))
+        if origins:
+            ordered = [c for c in ordered if id(c) in origins]
+        return ordered
 
     def _id_if_necessary(self, card) -> None:
         if id(card) not in self._card_to_id:
