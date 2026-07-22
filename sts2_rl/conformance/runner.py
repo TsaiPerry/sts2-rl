@@ -494,6 +494,16 @@ class ReplayRunner:
                     reason = f"reached act {run.act_index} boss"
                     break
                 run.advance_act()
+                # Every act begins on an Ancient starting node that the game
+                # records in MapPointHistory (the save shows act N's floor as an
+                # `ancient` entry — e.g. act 2 floor 18), so it counts toward
+                # IRunState.TotalFloor exactly like act 0's Neow node seeded
+                # above (total_floor = 1). The sim fires this shrine as an
+                # act-entry event (_maybe_run_ancient), never an enter_point that
+                # bumps total_floor, so count it here — otherwise every act-2+
+                # per-encounter Rng (make_encounter_rng seeds on TotalFloor) is
+                # one floor too low and picks the wrong monster composition.
+                run.total_floor += 1
                 driver._maybe_run_ancient()
                 reached_act_end = False
 

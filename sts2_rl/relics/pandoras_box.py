@@ -24,5 +24,9 @@ class PandorasBox(Relic):
             if c.rarity == CardRarity.BASIC
             and ("strike" in c.tags or "defend" in c.tags)
         ]
+        # PandorasBox.AfterObtained rolls each replacement on the Niche stream
+        # (CreateRandomCardForTransform(c, isInCombat: false, RunState.Rng.Niche)),
+        # one NextItem per card in deck order. Legacy runs keep the shared rng.
+        niche = run.rng_set.niche if run.rng_set is not None else None
         for card in targets:
-            run.transform_card(card)
+            run.transform_card(card, pick_rng=niche)

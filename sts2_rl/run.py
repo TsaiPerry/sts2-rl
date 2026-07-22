@@ -362,7 +362,9 @@ class RunState:
                 return idx
         return self.rng.randrange(count)
 
-    def transform_card(self, card: Card, into: Card | None = None) -> Card:
+    def transform_card(
+        self, card: Card, into: Card | None = None, *, pick_rng=None
+    ) -> Card:
         """Transform a deck card (CardCmd.TransformToRandom / TransformTo).
 
         With `into` set, the replacement is exact (Wood Carvings' Peck /
@@ -372,6 +374,13 @@ class RunState:
         Colorless pool, Curses from the curse pool without the rarity filter,
         everything else from the character pool). The replacement takes the
         original's place in the deck.
+
+        `pick_rng` is the game stream the replacement is rolled on
+        (`CreateRandomCardForTransform`'s Rng arg): the game routes different
+        transformers through different streams (Pandora's Box => Niche), so the
+        caller passes it and the roll is a game-faithful `NextItem` over the
+        pool-order options. None (legacy runs, or callers not yet parity-wired)
+        keeps the shared-rng `choice`.
         """
         if into is None:
             from .cards import COLORLESS_POOL, CURSE_POOL, CardType
@@ -391,7 +400,10 @@ class RunState:
                     or _CARD_CLASSES[card_id].rarity in _TRANSFORM_RARITIES)
                 and card_id != card.id
             ]
-            into = make_card(self.rng.choice(options))
+            if pick_rng is not None:
+                into = make_card(pick_rng.next_item(options))
+            else:
+                into = make_card(self.rng.choice(options))
         idx = self.deck.index(card)
         self.deck[idx] = into
         return into

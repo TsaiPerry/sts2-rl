@@ -35,6 +35,7 @@ class BowlbugRock(MachineMonster):
     """HEADBUTT (15) every turn — but Imbalanced: a fully blocked headbutt
     throws it off balance and it spends the next turn dizzy."""
 
+    name = "Bowlbug (Rock)"
     min_hp = 45
     max_hp = 48
 
@@ -68,6 +69,7 @@ class BowlbugRock(MachineMonster):
 class BowlbugEgg(MachineMonster):
     """BITE (7) then gain 7 block, every turn."""
 
+    name = "Bowlbug (Egg)"
     min_hp = 21
     max_hp = 22
 
@@ -88,6 +90,7 @@ class BowlbugEgg(MachineMonster):
 class BowlbugSilk(MachineMonster):
     """Opens with TOXIC_SPIT (Weak 1), then alternates THRASH (4x2) and SPIT."""
 
+    name = "Bowlbug (Silk)"
     min_hp = 40
     max_hp = 43
 
@@ -113,6 +116,7 @@ class BowlbugSilk(MachineMonster):
 class BowlbugNectar(MachineMonster):
     """THRASH (3), BUFF (+15 Strength), then THRASH forever."""
 
+    name = "Bowlbug (Nectar)"
     min_hp = 35
     max_hp = 38
 
@@ -147,7 +151,14 @@ class BowlbugsWeakEncounter(Encounter):
     monster_classes: list = field(default_factory=list)
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
-        worker_cls = rng.choice([BowlbugEgg, BowlbugNectar])
+        # Parity (BowlbugsWeak.GenerateMonsters): the second slot's worker is
+        # `base.Rng.NextItem(Bugs)` on the per-encounter Rng, Bugs in declaration
+        # order [Egg, Nectar]. Legacy keeps the shared-rng choice.
+        bugs = [BowlbugEgg, BowlbugNectar]
+        if selection_rng is not None:
+            worker_cls = selection_rng.next_item(bugs)
+        else:
+            worker_cls = rng.choice(bugs)
         return [BowlbugRock(hooks, rng), worker_cls(hooks, rng)]
 
 
@@ -160,10 +171,17 @@ class BowlbugsNormalEncounter(Encounter):
     monster_classes: list = field(default_factory=list)
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
+        # Parity (BowlbugsNormal.GenerateMonsters): two workers picked in turn
+        # via `base.Rng.NextItem(items)` where items = the valid-count keys
+        # (declaration order [Egg, Silk, Nectar]) minus any type already at its
+        # cap of 1. Legacy keeps the shared-rng choice.
         candidates = [BowlbugEgg, BowlbugSilk, BowlbugNectar]
         monsters: list[Monster] = [BowlbugRock(hooks, rng)]
         for _ in range(2):
-            worker_cls = rng.choice(candidates)
+            if selection_rng is not None:
+                worker_cls = selection_rng.next_item(candidates)
+            else:
+                worker_cls = rng.choice(candidates)
             candidates.remove(worker_cls)
             monsters.append(worker_cls(hooks, rng))
         return monsters

@@ -43,12 +43,27 @@ class DarvEvent(AncientEvent):
     name = "Darv"
 
     def initial_options(self) -> list[EventOption]:
-        rng = self.rng
-        picks = [
-            rng.choice(relics)
+        valid = [
+            relics
             for act_index, relics in _RELIC_SETS
             if act_index is None or act_index == self.run.act_index
         ]
+        if self.event_rng is not None:
+            # Parity (Darv.GenerateInitialOptions): one NextItem per valid relic
+            # set on the per-event Rng (`base.Rng`), UnstableShuffle the picks,
+            # then a NextBool coin flip => the first 2 (+ Dusty Tome) or first 3.
+            # (Single-relic sets still consume a NextInt(0,1) draw.) Legacy keeps
+            # the shared-rng choice below.
+            er = self.event_rng
+            picks = [er.next_item(list(relics)) for relics in valid]
+            er.shuffle(picks)              # ListExtensions.UnstableShuffle
+            if er.next_bool():
+                chosen = picks[:2]
+                tome = self._dusty_tome_option()
+                return [self._relic_option(rid) for rid in chosen] + [tome]
+            return [self._relic_option(rid) for rid in picks[:3]]
+        rng = self.rng
+        picks = [rng.choice(relics) for relics in valid]
         # UnstableShuffle over the picked relics, then take 2 or 3.
         rng.shuffle(picks)
         if rng.random() < 0.5:          # Rng.NextBool()
