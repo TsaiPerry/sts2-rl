@@ -24,7 +24,9 @@ class SaveOracle:
     current_act_index: int
     run_counters: dict[RunRngType, int]
     player_counters: dict[PlayerRngType, int]
-    encounter_ids_by_act: list[dict[str, list[str]]]
+    player_current_hp: int = 0
+    player_max_hp: int = 0
+    encounter_ids_by_act: list[dict[str, list[str]]] = field(default_factory=list)
     visited_coords: list = field(default_factory=list)
     map_history: list = field(default_factory=list)
 
@@ -34,7 +36,8 @@ def parse_save(path) -> SaveOracle:
     run_counters = {
         t: d["rng"]["counters"][snake_case(t.value)] for t in RunRngType
     }
-    prng = d["players"][0]["rng"]
+    player = d["players"][0]
+    prng = player["rng"]
     player_counters = {
         t: prng["counters"][snake_case(t.value)] for t in PlayerRngType
     }
@@ -57,6 +60,8 @@ def parse_save(path) -> SaveOracle:
         current_act_index=d.get("current_act_index", 0),
         run_counters=run_counters,
         player_counters=player_counters,
+        player_current_hp=player.get("current_hp", 0),
+        player_max_hp=player.get("max_hp", 0),
         encounter_ids_by_act=encs,
         visited_coords=d.get("visited_map_coords", []),
         map_history=d.get("map_point_history", []),

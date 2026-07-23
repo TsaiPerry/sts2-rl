@@ -119,7 +119,7 @@ def test_this_or_that_ornate_gives_relic_and_clumsy():
     deck0 = len(run.deck)
     event = make_event("this_or_that", run).begin()
     assert event.choose("ORNATE")
-    assert len(run.relics) == 1
+    assert len(run.relics) == 2          # starting relic + the event relic
     assert [c for c in run.deck if c.id == "clumsy"]
     assert len(run.deck) == deck0 + 1
 
@@ -346,7 +346,7 @@ def test_ranwid_relic_trade_gives_two():
     assert event.choose("RELIC")
     # anchor traded away, two grab-bag relics in.
     assert not [r for r in run.relics if r.id == "anchor"]
-    assert len(run.relics) == 2
+    assert len(run.relics) == 3          # starting relic + the two grab-bag relics
 
 
 def test_ranwid_starter_and_event_relics_not_tradable():
@@ -373,7 +373,7 @@ def test_relic_trader_swaps_one_of_three():
     assert event.choose("MIDDLE")
     assert shown[1] not in run.relics
     assert incoming[1] in run.relics
-    assert len(run.relics) == 5          # 5 - 1 + 1
+    assert len(run.relics) == 6          # burning_blood + (5 - 1 + 1)
     assert event.finished
 
 
@@ -582,7 +582,7 @@ def test_tea_master_purchases():
         "BONE_TEA", "EMBER_TEA", "TEA_OF_DISCOURTESY"]
     assert event.choose("EMBER_TEA")
     assert run.gold == 50
-    assert [r.id for r in run.relics] == ["ember_tea"]
+    assert [r.id for r in run.relics] == ["burning_blood", "ember_tea"]
 
 
 def test_tea_master_free_option():
@@ -592,7 +592,7 @@ def test_tea_master_free_option():
     event = make_event("tea_master", run).begin()
     assert event.choose("TEA_OF_DISCOURTESY")
     assert run.gold == 150
-    assert [r.id for r in run.relics] == ["tea_of_discourtesy"]
+    assert [r.id for r in run.relics] == ["burning_blood", "tea_of_discourtesy"]
 
 
 def test_bone_tea_upgrades_opening_hand_once():
@@ -677,7 +677,8 @@ def test_doll_room_random_is_free():
     assert event.option_keys() == ["RANDOM", "TAKE_SOME_TIME", "EXAMINE"]
     assert event.choose("RANDOM")
     assert run.hp == hp0
-    assert len(run.relics) == 1 and run.relics[0].id in DOLLS
+    # starting relic + the doll
+    assert len(run.relics) == 2 and run.relics[-1].id in DOLLS
     assert event.finished
 
 
@@ -691,7 +692,7 @@ def test_doll_room_take_some_time_offers_two():
     assert len(event.option_keys()) == 2
     assert set(event.option_keys()) <= DOLLS
     assert event.choose(event.option_keys()[0])
-    assert run.relics[0].id in DOLLS
+    assert run.relics[-1].id in DOLLS
     assert event.finished
 
 
@@ -779,7 +780,7 @@ def test_wongos_gate_and_purchases():
         "BARGAIN_BIN", "FEATURED_ITEM", "MYSTERY_BOX", "LEAVE"]
     assert event.choose("MYSTERY_BOX")
     assert run.gold == 200
-    assert [r.id for r in run.relics] == ["wongos_mystery_ticket"]
+    assert [r.id for r in run.relics] == ["burning_blood", "wongos_mystery_ticket"]
     assert run.wongo_points == 8
 
 

@@ -71,7 +71,7 @@ def test_buying_costs_50_and_keeps_the_stall_open():
     first = event.option_keys()[0]
     assert event.choose(first)
     assert run.gold == 250
-    assert [r.id for r in run.relics] == [first]
+    assert [r.id for r in run.relics] == ["burning_blood", first]
     assert not event.finished                   # still shopping
     assert first not in event.option_keys()     # sold out of that one
     assert len([k for k in event.option_keys() if k in STOCK]) == 5

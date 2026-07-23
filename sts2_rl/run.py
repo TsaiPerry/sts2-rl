@@ -570,6 +570,13 @@ class RunState:
         act 1 → 2 → 3 arc (the trailing-act trim is a no-op now but stays as a
         guard for any future map-only act); pass `acts` explicitly to override.
         """
+        # Character starting relics (CharacterModel.StartingRelics, granted at
+        # run init by Player.PopulateStartingRelics). This single-character sim
+        # is Ironclad, whose only starting relic is Burning Blood
+        # (Ironclad.cs:57). Granted in every run (the game always grants it);
+        # heals 6 HP after each won combat (relics/burning_blood.py).
+        if not any(r.id == "burning_blood" for r in self.relics):
+            self.add_relic("burning_blood")
         if acts is None:
             from .rooms import act_has_rooms
 

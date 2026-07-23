@@ -159,9 +159,20 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
         orig_init(self, *a, **kw)
         _wrap(self.rng)
 
+    # DETECTOR 3: per-act HP checkpoints from the sibling truncation saves.
+    _ACT_FLOORS = {0: "floor_18", 1: "floor_34", 2: "floor_49"}
+    checkpoints = {}
+    for act_index, fl in _ACT_FLOORS.items():
+        f = REC / seed / fl / "run.save"
+        if f.exists():
+            o = parse_save(f)
+            checkpoints[act_index] = (o.player_current_hp, o.player_max_hp)
+
     run_mod.RunState.__init__ = patched_init
     try:
-        result = runner.run(stop_after_act=stop_after_act)
+        result = runner.run(stop_after_act=stop_after_act,
+                            player_checkpoints=checkpoints,
+                            resync_player=True)
     finally:
         run_mod.RunState.__init__ = orig_init
 
@@ -189,6 +200,23 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
         for d in move_divs[:3]:
             print(f"  {d}")
 
+    # ---- DETECTOR 3: player-state deltas (HP / max-HP fidelity) ----
+    hp_divs = [d for d in result.divergences
+               if d.stream in ("player_hp", "player_max_hp")]
+    print(f"\n[DETECTOR 3] player-state deltas at act boundaries: {len(hp_divs)}")
+    _HP_SRC = {
+        "player_hp": "damage/heal pipeline (DamageCmd/BlockCmd, relic heals "
+                     "like BurningBlood on_combat_end, rest-site heal).",
+        "player_max_hp": "max-HP-changing content (max-HP events, rest-site, "
+                         "relics like Meat on the Bone / Black Blood).",
+    }
+    for d in hp_divs:
+        delta = (d.actual - d.expected) if isinstance(d.actual, int) else "?"
+        print(f"  act {d.command_index} {d.stream}: expected {d.expected} "
+              f"got {d.actual} (sim {'high' if isinstance(delta,int) and delta>0 else 'low'} "
+              f"by {abs(delta) if isinstance(delta,int) else delta})")
+        print(f"      -> {_HP_SRC[d.stream]}")
+
     # ---- DETECTOR 1: tripwire (wrong-stream / unseeded in-combat draws) ----
     bugs = {k: v for k, v in _hits.items() if k[2] != "__init__"}
     benign = {k: v for k, v in _hits.items() if k[2] == "__init__"}
@@ -201,7 +229,7 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
     print(f"\n  (benign constructor HP rolls, overwritten by Niche parity roll: "
           f"{len(benign)} site(s) / {sum(benign.values())} draws)")
 
-    clean = (not bugs and not stream_divs and not move_divs
+    clean = (not bugs and not stream_divs and not move_divs and not hp_divs
              and result.forced_combats == 0
              and not result.unresolved_play_card_ids)
     print(f"\n=== {'FULLY CONVERGED' if clean else 'DIVERGENCES REMAIN'} ===")

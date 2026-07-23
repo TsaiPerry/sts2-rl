@@ -55,7 +55,8 @@ def test_driver_include_ancients_false_fires_nothing():
     )
     run.advance_act()
     driver._maybe_run_ancient()
-    assert len(run.relics) == 0
+    # No ancient relic added: only the character's starting relic remains.
+    assert [r.id for r in run.relics] == ["burning_blood"]
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -97,7 +98,8 @@ def test_driver_act1_has_no_ancient_pool():
     run.start_run(acts=["overgrowth", "hive"])
     driver = RunDriver(run, lambda req: req.legal_actions()[0])
     driver._maybe_run_ancient()          # still in act 1 → no-op
-    assert len(run.relics) == 0
+    # No ancient fired: only the character's starting relic is present.
+    assert [r.id for r in run.relics] == ["burning_blood"]
 
 
 # ═════════════════════════════════════════════════════════════════════════

@@ -419,7 +419,30 @@ class ReplayRunner:
                     out.append(relic_key(choice["choice"]))
         return out
 
-    def run(self, stop_after_act: int = 0) -> ReplayResult:
+    def _check_player_state(self, run, divergences, act_index,
+                            player_checkpoints, resync_player) -> None:
+        """Assert sim HP/max-HP against the completed act's floor snapshot
+        (from the sibling run.save), then optionally resync so an act's bug
+        can't cascade. Parity oracle only — no effect when checkpoints omit
+        this act. Streams: player_hp / player_max_hp; command_index = act."""
+        if not player_checkpoints or act_index not in player_checkpoints:
+            return
+        exp_hp, exp_max = player_checkpoints[act_index]
+        if run.hp != exp_hp:
+            divergences.append(Divergence(
+                "player_hp", act_index, exp_hp, run.hp,
+                f"act {act_index} boundary"))
+        if run.max_hp != exp_max:
+            divergences.append(Divergence(
+                "player_max_hp", act_index, exp_max, run.max_hp,
+                f"act {act_index} boundary"))
+        if resync_player:
+            run.hp = exp_hp
+            run.max_hp = exp_max
+
+    def run(self, stop_after_act: int = 0,
+            player_checkpoints: "dict[int, tuple[int, int]] | None" = None,
+            resync_player: bool = False) -> ReplayResult:
         """Drive the recording through act index `stop_after_act` (inclusive)
         and report divergences + the live SP2 stream counters."""
         from ..run import RunState
@@ -490,6 +513,9 @@ class ReplayRunner:
                 break
             if run.at_act_end:
                 reached_act_end = True
+                self._check_player_state(
+                    run, divergences, run.act_index,
+                    player_checkpoints, resync_player)
                 if run.act_index >= stop_after_act:
                     reason = f"reached act {run.act_index} boss"
                     break

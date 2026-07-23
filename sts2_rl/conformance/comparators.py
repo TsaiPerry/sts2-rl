@@ -81,6 +81,12 @@ class Divergence:
         return f"{msg} ({self.detail})" if self.detail else msg
 
 
+# SP3 player-state parity: floor-boundary HP oracle (DETECTOR 3). command_index
+# carries the completed act index; expected/actual are (hp) or (max_hp) ints.
+PLAYER_HP_STREAM = "player_hp"
+PLAYER_MAX_HP_STREAM = "player_max_hp"
+
+
 def compare_node_type(
     room_index: int, recorded_type: str, sim_type: MapPointType
 ) -> Divergence | None:
