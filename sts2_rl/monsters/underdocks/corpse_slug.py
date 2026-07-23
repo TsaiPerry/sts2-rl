@@ -24,6 +24,7 @@ class CorpseSlug(MachineMonster):
     when a fellow slug dies, this one devours it — stunned for a turn and
     +4 Strength."""
 
+    name = "Corpse Slug"  # localization/eng/monsters.json CORPSE_SLUG.name
     min_hp = 25
     max_hp = 27
 

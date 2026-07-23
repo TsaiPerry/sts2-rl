@@ -83,23 +83,32 @@ def test_resync_lets_full_run_replay_without_cascade_death():
 
 SEEDS = ["89U21BV1TZ", "DJDCSAQZNR", "L081UMJX4M", "QRWCVDPZN5", "TZEKRYTSNT"]
 
-# Task 6 convergence gate. Each seed is xfail(strict=False) until its full
-# act-1+2 run reaches zero player-state divergence — that is gated on
-# per-seed combat-parity convergence (the ongoing SP3 Task 9 workstream), not
-# on this SP3 player-state infrastructure. As a seed converges, it flips to
-# XPASS; drop its mark then. Landscape captured 2026-07-22 (resync OFF):
+# Task 6 convergence gate. Only 89U21BV1TZ is an IRONCLAD run — the single
+# character this sim models (run.py: "This single-character sim is Ironclad";
+# start_run always grants burning_blood + ironclad_starting_deck()). It is
+# xfail(strict=False) until its full act-1+2 run reaches zero player-state
+# divergence, gated on per-seed combat-parity convergence (ongoing SP3 Task 9);
+# as it converges it flips to XPASS, drop its mark then.
+#
+# The other four seeds are DIFFERENT, un-ported characters (Regent / Silent /
+# Necrobinder / Defect). None of their starting cards or relics exist in the
+# sim, so every run replays with the wrong (Ironclad) deck: hands diverge from
+# turn 1, combats force-win, the map path desyncs, and the run stops early or
+# takes nonsense damage. These are NOT combat/map fidelity bugs — they cannot
+# converge without porting whole characters, so they stay permanently xfail
+# with the accurate reason. (See memory sp3-seeds-are-5-characters.)
 _XFAIL_CONVERGENCE = {
     "89U21BV1TZ": "reaches act-2 boss; HP deltas remain (act1 max-HP -16, "
                   "act2 hp/max-HP) + 4 combat-stream counter divs "
                   "(act-2 combat parity incomplete).",
-    "DJDCSAQZNR": "stops room 17 'unreachable map coord' (act1->2 transition "
-                  "col=1,row=1); combat diverges from room 11.",
-    "L081UMJX4M": "stops room 36 'unreachable map coord' (col=3,row=5); "
-                  "combat/HP deltas remain.",
-    "QRWCVDPZN5": "stops room 20 'no more MoveToMapCoord'; combat/HP deltas "
-                  "remain.",
-    "TZEKRYTSNT": "reaches act-2 boss; large HP deltas (sim under-takes combat "
-                  "damage; forced=22).",
+    "DJDCSAQZNR": "un-ported character (CHARACTER.REGENT); sim is Ironclad-only "
+                  "so the wrong starting deck/relics make the whole run diverge.",
+    "L081UMJX4M": "un-ported character (CHARACTER.SILENT); sim is Ironclad-only "
+                  "so the wrong starting deck/relics make the whole run diverge.",
+    "QRWCVDPZN5": "un-ported character (CHARACTER.NECROBINDER); sim is "
+                  "Ironclad-only so the wrong deck/relics make the run diverge.",
+    "TZEKRYTSNT": "un-ported character (CHARACTER.DEFECT); sim is Ironclad-only "
+                  "so the wrong starting deck/relics make the whole run diverge.",
 }
 
 

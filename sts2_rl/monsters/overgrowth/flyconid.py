@@ -17,21 +17,30 @@ _FRAIL_SPORES_DMG = 8
 _FRAIL_SPORES_FRAIL = 2
 _SMASH_DMG = 11
 
+# Source: Flyconid.cs GenerateMoveStateMachine. All three moves have base
+# weight 1; the "3/2/1" are COOLDOWNS (StateWeight.cooldown), not weights, and
+# every branch is CannotRepeat. A move is ineligible (weight 0) if it appears
+# in the last `cooldown` performed moves (SMASH's cooldown 0 → only its
+# CannotRepeat "not the immediately-previous move" applies). Branch add-order
+# (matters for the single-NextFloat walk): V_SPORES, FRAIL_SPORES, SMASH.
 _MOVES = ["V_SPORES", "FRAIL_SPORES", "SMASH"]
-_WEIGHTS = [3, 2, 1]
+_COOLDOWN = {"V_SPORES": 3, "FRAIL_SPORES": 2, "SMASH": 0}
 
 
 class Flyconid(Monster):
-    """Weighted random among 3 moves; no move can repeat consecutively.
-    First move is FRAIL_SPORES (weight 2) or SMASH (weight 1)."""
+    """Equal-weight random among 3 moves gated by per-move cooldowns (V_SPORES
+    3, FRAIL_SPORES 2, SMASH 0) + CannotRepeat. The INITIAL state offers only
+    FRAIL_SPORES / SMASH (both weight 1 → 50/50), never V_SPORES."""
     min_hp = 47
     max_hp = 49
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         self._rng = rng or random.Random()
+        self._log: list[str] = []  # performed moves, newest last (StateLog IsMove)
+        # INITIAL RandomBranchState: FRAIL_SPORES / SMASH only, both weight 1.
         self._move_key = weighted_branch_pick(
-            hooks.combat.combat_rng.monster_ai, ["FRAIL_SPORES", "SMASH"], [2, 1]
+            hooks.combat.combat_rng.monster_ai, ["FRAIL_SPORES", "SMASH"], [1, 1]
         )
 
     @property
@@ -56,14 +65,22 @@ class Flyconid(Monster):
             PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _FRAIL_SPORES_FRAIL)
         else:
             self._execute_attack(ctx, _SMASH_DMG, 1)
+        self._log.append(self._move_key)
         self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
-        last = self._move_key
-        candidates = [m for m in _MOVES if m != last]
-        weights = [_WEIGHTS[_MOVES.index(m)] for m in candidates]
+        # RAND state: all three moves weight 1, gated by cooldown + CannotRepeat.
+        # A move is eligible unless it appears within its cooldown window of the
+        # move log (SMASH cooldown 0 → CannotRepeat = not the last move only).
+        # One NextFloat(total) is drawn every transition regardless (MonsterAi
+        # counter unchanged), so roll over the full [V, FRAIL, SMASH] order.
+        weights = []
+        for m in _MOVES:
+            cd = _COOLDOWN[m]
+            window = self._log[-cd:] if cd > 0 else self._log[-1:]
+            weights.append(0 if m in window else 1)
         self._move_key = weighted_branch_pick(
-            self._hooks.combat.combat_rng.monster_ai, candidates, weights
+            self._hooks.combat.combat_rng.monster_ai, _MOVES, weights
         )
 
 

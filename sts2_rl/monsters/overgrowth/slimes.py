@@ -104,7 +104,11 @@ class LeafSlimeM(Monster):
 
 
 class TwigSlimeM(Monster):
-    """STICKY_SHOT start, then weighted random between POKEY_POUNCE and STICKY_SHOT (no repeats)."""
+    """STICKY_SHOT start; both moves branch back to one RandomBranchState that
+    picks POKEY_POUNCE (attack) or STICKY_SHOT (status). Source: TwigSlimeM.cs
+    GenerateMoveStateMachine — POKEY is ``AddBranch(state, 2)`` (CanRepeatXTimes,
+    max 2 in a row, base weight 1), STICKY is ``AddBranch(state, CannotRepeat)``
+    (base weight 1). So after one POKEY it's a true 50/50, not 2:1."""
     name = "Twig Slime (M)"
     min_hp = 26
     max_hp = 28
@@ -113,6 +117,7 @@ class TwigSlimeM(Monster):
         super().__init__(hooks, rng or random.Random())
         self._rng = rng or random.Random()
         self._move_key = "STICKY_SHOT"
+        self._pokey_streak = 0  # consecutive POKEY_POUNCE at the tail of the log
 
     @property
     def current_intent(self) -> Intent:
@@ -130,21 +135,23 @@ class TwigSlimeM(Monster):
         self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
-        if self._move_key == "STICKY_SHOT":
-            # After STICKY_SHOT, CannotRepeat blocks STICKY (weight 0) so
-            # POKEY_POUNCE is forced — but RandomBranchState still draws one
-            # NextFloat every transition, so roll (over [POKEY, STICKY]) even
-            # though only POKEY is eligible, rather than assigning it directly.
-            self._move_key = weighted_branch_pick(
-                self._hooks.combat.combat_rng.monster_ai,
-                ["POKEY_POUNCE", "STICKY_SHOT"], [1, 0],
-            )
-        else:
-            # weight 2 POKEY_POUNCE, weight 1 STICKY_SHOT (no repeat restriction after POKEY_POUNCE)
-            self._move_key = weighted_branch_pick(
-                self._hooks.combat.combat_rng.monster_ai,
-                ["POKEY_POUNCE", "STICKY_SHOT"], [2, 1],
-            )
+        # Mirror RandomBranchState.GetStateWeight for TwigSlimeM.cs's two
+        # branches (both FollowUp into the same RAND state):
+        #   POKEY_POUNCE: CanRepeatXTimes maxTimes=2, weight 1 -> weight 1
+        #     unless the last two moves were BOTH POKEY (then 0, forcing STICKY).
+        #   STICKY_SHOT:  CannotRepeat, weight 1 -> weight 1 unless the last
+        #     move was STICKY (then 0, forcing POKEY).
+        # GetNextState always draws exactly one NextFloat(total) per transition
+        # regardless of eligibility, so the MonsterAi counter is unchanged.
+        performed = self._move_key
+        self._pokey_streak = (
+            self._pokey_streak + 1 if performed == "POKEY_POUNCE" else 0)
+        pokey_w = 0 if self._pokey_streak >= 2 else 1
+        sticky_w = 0 if performed == "STICKY_SHOT" else 1
+        self._move_key = weighted_branch_pick(
+            self._hooks.combat.combat_rng.monster_ai,
+            ["POKEY_POUNCE", "STICKY_SHOT"], [pokey_w, sticky_w],
+        )
 
 
 # ── Encounter definitions ─────────────────────────────────────────────────
