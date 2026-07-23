@@ -19,6 +19,7 @@ class SpinyToad(MachineMonster):
     """Cycle: PROTRUDING_SPIKES (+5 Thorns) → SPIKE_EXPLOSION (23, spends the
     Thorns) → TONGUE_LASH (17)."""
 
+    name = "Spiny Toad"  # localization/eng/monsters.json SPINY_TOAD.name
     min_hp = 116
     max_hp = 119
 

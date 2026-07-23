@@ -36,6 +36,12 @@ class ToughEgg(MachineMonster):
     HATCHLING_MIN_HP = 19
     HATCHLING_MAX_HP = 22
 
+    @property
+    def name(self) -> str:
+        # ToughEgg.Title: "Tough Egg" until it hatches, "Hatchling" after
+        # (localization TOUGH_EGG.name / HATCHLING.name).
+        return "Hatchling" if self.is_hatched else "Tough Egg"
+
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         self.is_hatched = False
         super().__init__(hooks, rng or random.Random())
@@ -62,7 +68,15 @@ class ToughEgg(MachineMonster):
         from ...cmds import PowerCmd
         for power_id in [p for p in self.powers if p != "minion"]:
             PowerCmd.remove(ctx.hooks, self, power_id)
-        hp = self._rng.randint(self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
+        # HatchMove: RunRng.Niche.NextInt(HatchlingMinHp, HatchlingMaxHp) — an
+        # exclusive-max draw (19..21), NOT SetUniqueMonsterHpValue. Parity routes
+        # to the Niche stream; legacy keeps the shared inclusive randint.
+        crng = ctx.combat.combat_rng
+        if crng.is_parity:
+            hp = ctx.combat._niche.next_int_range(
+                self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
+        else:
+            hp = self._rng.randint(self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
         delta = hp - self.hp
         self.max_hp = hp
         self.hp = hp
@@ -112,6 +126,7 @@ class Ovicopter(MachineMonster):
     def _lay_eggs(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd, PowerCmd
         from ...powers import MinionPower
+        parity = ctx.combat.combat_rng.is_parity
         for _ in range(_EGGS_PER_LAY):
             live_eggs = sum(
                 1 for e in ctx.enemies if isinstance(e, ToughEgg) and not e.is_gone
@@ -119,7 +134,22 @@ class Ovicopter(MachineMonster):
             if live_eggs >= _EGG_SLOTS:
                 break
             egg = ToughEgg(ctx.hooks, self._rng)
-            CreatureCmd.add(ctx.hooks, egg)
+            # Game LayEggsMove: each egg fills `Slots.LastOrDefault(unoccupied)`,
+            # i.e. the slots just BEFORE the Ovicopter, filling backwards — so the
+            # newest egg sits furthest left and the display order is
+            # [egg3, egg2, egg1, Ovicopter]. Model that by inserting each egg
+            # before this Ovicopter and the eggs it has already laid (parity
+            # only; legacy keeps the byte-for-byte append order).
+            if parity:
+                idx = min(
+                    (i for i, c in enumerate(ctx.enemies)
+                     if c is self
+                     or (isinstance(c, ToughEgg) and not c.is_gone)),
+                    default=len(ctx.enemies),
+                )
+                CreatureCmd.add(ctx.hooks, egg, index=idx)
+            else:
+                CreatureCmd.add(ctx.hooks, egg)
             PowerCmd.apply(ctx.hooks, egg, MinionPower, 1, applier=self)
 
     def _smash(self, ctx: CombatCtx) -> None:

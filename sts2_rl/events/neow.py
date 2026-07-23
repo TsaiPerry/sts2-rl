@@ -78,20 +78,31 @@ class NeowEvent(AncientEvent):
     name = "Neow"
 
     def initial_options(self) -> list[EventOption]:
-        rng = self.rng
+        # Neow.cs GenerateInitialOptions draws on the per-event Rng (base.Rng):
+        # NextItem(curses), then for each pair a NextBool (true => the first,
+        # NextBool-true option: LavaRock / NutritiousOyster / NeowsTalisman),
+        # then UnstableShuffle(positives).Take(2) + the curse. Legacy keeps the
+        # shared run rng byte-for-byte.
+        er = self.event_rng
         curses = [rid for rid in CURSE_RELICS if ALL_RELICS[rid].is_allowed_at_neow]
-        curse = rng.choice(curses)
+        curse = er.next_item(curses) if er is not None else self.rng.choice(curses)
+
+        def coin() -> bool:                       # Rng.NextBool()
+            return er.next_bool() if er is not None else self.rng.random() < 0.5
 
         positives = [
             rid for rid in POSITIVE_RELICS if rid != _CURSE_EXCLUDES.get(curse)
         ]
         if curse != "large_capsule":
-            positives.append(_LAVA_ROCK_PAIR[0 if rng.random() < 0.5 else 1])
-        positives.append(_OYSTER_PAIR[0 if rng.random() < 0.5 else 1])
-        positives.append(_TALISMAN_PAIR[0 if rng.random() < 0.5 else 1])
+            positives.append(_LAVA_ROCK_PAIR[0 if coin() else 1])
+        positives.append(_OYSTER_PAIR[0 if coin() else 1])
+        positives.append(_TALISMAN_PAIR[0 if coin() else 1])
         positives = [
             rid for rid in positives if ALL_RELICS[rid].is_allowed_at_neow
         ]
-        rng.shuffle(positives)
+        if er is not None:
+            er.shuffle(positives)
+        else:
+            self.rng.shuffle(positives)
         offered = positives[:2] + [curse]
         return [self._relic_option(rid) for rid in offered]

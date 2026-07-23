@@ -28,7 +28,8 @@ class ParryingShield(Relic):
         if not living:
             return
         from ..cmds import DamageCmd
-        target = self.combat._rng.choice(living)
+        # ParryingShield.cs: RunState.Rng.CombatTargets.NextItem(HittableEnemies).
+        target = self.combat.combat_rng.targets.choice(living)
         DamageCmd.deal(
             self.hooks, target, self.DAMAGE,
             dealer=player, props=DamageProps.NON_CARD_UNPOWERED,

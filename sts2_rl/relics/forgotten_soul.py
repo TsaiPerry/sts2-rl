@@ -30,7 +30,8 @@ class ForgottenSoul(Relic):
             return
         from ..cmds import DamageCmd
         from ..valueprops import DamageProps
-        target = self.combat._rng.choice(living)
+        # ForgottenSoul.cs: RunState.Rng.CombatTargets.NextItem(HittableEnemies).
+        target = self.combat.combat_rng.targets.choice(living)
         DamageCmd.deal(
             self.hooks, target, self.DAMAGE,
             dealer=self.player, props=DamageProps.NON_CARD_UNPOWERED,

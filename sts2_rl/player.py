@@ -49,6 +49,12 @@ class PlayerCombatState(Creature):
         self._combat_rng = combat_rng
         self._hooks = hooks
         self._first_turn = True
+        # The card currently mid-OnPlay, if any. The game holds a card being
+        # played in PileType.Play (limbo), not the discard, so a reshuffle its
+        # own effect triggers must not shuffle it back into the draw pile
+        # (CardCmd.cs:116; see reshuffle_discard_into_draw). Set by
+        # Combat._resolve_card_play for the duration of the play.
+        self._playing_card: Card | None = None
         # Combat-start draw-pile randomization is CardPile.RandomizeOrderInternal
         # -> UnstableShuffle (Fisher-Yates, NO stabilizing sort), unlike the
         # mid-combat reshuffle which is a StableShuffle. Hence stable=False here.
@@ -111,8 +117,20 @@ class PlayerCombatState(Creature):
     def reshuffle_discard_into_draw(self) -> None:
         """Shuffle the discard pile into the empty draw pile (mirrors
         CardPileCmd.ShuffleIfNecessary's reshuffle step)."""
-        self.draw_pile = self.discard_pile
-        self.discard_pile = []
+        held = self._playing_card
+        if self._combat_rng.is_parity and held is not None and held in self.discard_pile:
+            # A card mid-OnPlay lives in PileType.Play (limbo), not the discard,
+            # so a reshuffle its own effect triggers (e.g. Pommel Strike drawing
+            # the draw pile empty) must NOT shuffle it into the draw pile — the
+            # game reshuffles discard+draw WITHOUT the being-played card, then
+            # the card lands in the (now-empty) discard as its result pile after
+            # OnPlay. Hold it back so the shuffled set matches the game exactly.
+            # Legacy keeps the old byte-for-byte behavior (whole discard).
+            self.draw_pile = [c for c in self.discard_pile if c is not held]
+            self.discard_pile = [held]
+        else:
+            self.draw_pile = self.discard_pile
+            self.discard_pile = []
         # A mid-combat reshuffle is CardPileCmd.Shuffle -> StableShuffle.
         self._shuffle_draw_pile(stable=True)
         self._hooks.on_shuffle(self)

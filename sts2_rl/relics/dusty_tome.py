@@ -39,7 +39,12 @@ class DustyTome(Relic):
     def setup_for_player(self, run) -> None:
         """SetupForPlayer: roll the Ancient card when the option is built."""
         options = self.candidates()
-        if options:
+        if not options:
+            return
+        # DustyTome.cs: AncientCard = PlayerRng.Rewards.NextItem(items).Id.
+        if run.rng_set is not None:
+            self.ancient_card = run.player_rng.rewards.next_item(options)
+        else:
             self.ancient_card = run.rng.choice(options)
 
     def after_obtained(self, run) -> None:

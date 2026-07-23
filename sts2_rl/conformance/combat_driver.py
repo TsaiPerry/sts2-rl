@@ -25,7 +25,7 @@ _DRIVER_CMDS = _COMBAT_CMDS | {"SelectCardFromScreen"}
 # Every command that belongs to a live fight (used to drop a stopped fight's
 # unreplayed tail — including any pending in-combat selection screens — so the
 # cursor realigns on the post-combat reward/room boundary).
-_COMBAT_TAIL_CMDS = _DRIVER_CMDS | {"SelectGridCard"}
+_COMBAT_TAIL_CMDS = _DRIVER_CMDS | {"SelectGridCard", "SelectHandCards"}
 
 
 def card_display_name(card) -> str:
@@ -72,15 +72,35 @@ class ReplayCombatDriver:
         combat.card_selector = self._grid_selector
 
     def _grid_selector(self, purpose, candidates, count):
-        """Resolve a synchronous in-combat card selection.
+        """Resolve a synchronous in-combat card selection from the recording.
 
-        Mirrors CardSelectCmd.FromCombatPile: when the choice isn't a genuine
-        over-count one (``num <= MinSelect``), the game auto-resolves — takes all
-        candidates in pile order with no screen, so the recording holds no
-        SelectGridCard. Only a real over-count choice shows a screen, which the
-        recording captures as a SelectGridCard whose arg is the picked index."""
+        When the choice isn't a genuine over-count one (``cards.Count <=
+        MinSelect``), the game auto-resolves — takes all candidates with no
+        screen (CardSelectCmd.cs:287/343), so the recording holds no selection
+        command. Otherwise the recording captures the picks in one of two forms:
+
+          - FromCombatPile (Headbutt discard→draw, random autoplay, …) → one
+            ``SelectGridCard N`` command per pick, N indexing the candidate grid.
+          - FromHand (Armaments upgrade, Burning Pact discard, …) → a single
+            ``SelectHandCards i j …`` command whose indices are positions in the
+            FULL hand (RunReplays SelectHandCardsCommand indexes
+            ``PlayerCombatState.Hand.Cards[idx]``), which we map to their
+            filtered candidates."""
         if len(candidates) <= count:
             return list(candidates)
+        cmd = self.cursor.peek()
+        if cmd is not None and cmd.name == "SelectHandCards":
+            # One command carries every picked hand index; map each into the
+            # full hand, then keep those that are selectable (in `candidates`).
+            self.cursor.advance()
+            hand = self.combat.player.hand
+            chosen = []
+            for arg in cmd.args:
+                if arg.lstrip("-").isdigit():
+                    idx = int(arg)
+                    if 0 <= idx < len(hand) and hand[idx] in candidates:
+                        chosen.append(hand[idx])
+            return chosen[:count]
         chosen = []
         for _ in range(count):
             cmd = self.cursor.peek()
@@ -94,9 +114,22 @@ class ReplayCombatDriver:
                     chosen.append(candidates[idx])
         return chosen
 
+    def _target_idx(self, tid: int) -> int:
+        """Recorded target CombatId -> its CURRENT index in `combat.enemies`.
+
+        The recording targets by CombatId (creation/attach order, enemies 1..N),
+        which is stable across enemy-list reordering (Ovicopter egg slots), so a
+        positional `tid - 1` breaks once spawns are inserted out of order. Match
+        by the stored `net_id`; fall back to `tid - 1` for combats that never
+        assigned ids (creation order == position there anyway)."""
+        for i, e in enumerate(self.combat.enemies):
+            if getattr(e, "net_id", None) == tid:
+                return i
+        return tid - 1
+
     def enemy_by_target_id(self, tid: int):
-        """1-based recording target id -> the `combat.enemies` slot it names."""
-        return self.combat.enemies[tid - 1]
+        """Recorded target CombatId -> the `combat.enemies` slot it names."""
+        return self.combat.enemies[self._target_idx(tid)]
 
     def _assert(self, cmd) -> None:
         ann = cmd.annotation
@@ -181,11 +214,11 @@ class ReplayCombatDriver:
                 self._stopped = True
                 return
             hand_idx = self.combat.player.hand.index(card)
-            target_idx = int(cmd.args[1]) - 1 if len(cmd.args) > 1 else None
+            target_idx = self._target_idx(int(cmd.args[1])) if len(cmd.args) > 1 else None
             self.combat.play_card(hand_idx, target_idx=target_idx)
         elif cmd.name == "UsePotion":
             slot = int(cmd.args[0])
-            target_idx = int(cmd.args[1]) - 1 if len(cmd.args) > 1 else None
+            target_idx = self._target_idx(int(cmd.args[1])) if len(cmd.args) > 1 else None
             self.combat.use_potion(slot, target_idx=target_idx)
         elif cmd.name == "SelectCardFromScreen":
             # Resolve a mid-combat choose-a-card screen. The arg is the 0-based

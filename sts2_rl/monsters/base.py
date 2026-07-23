@@ -70,6 +70,12 @@ class Monster(Creature):
         hp = rng.randint(self.min_hp, self.max_hp)
         super().__init__(hp)
         self._hooks = hooks
+        # Stable per-combat creature id (CombatState.CombatId; attach order,
+        # enemies numbered 1..N). Assigned by Combat/CreatureCmd.add; the
+        # recording targets cards by it (PlayCard <card> <CombatId>), so it must
+        # survive enemy-list reordering (e.g. Ovicopter egg slots). None until
+        # the creature joins a combat.
+        self.net_id: int | None = None
 
     @property
     def current_intent(self) -> Intent:

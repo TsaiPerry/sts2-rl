@@ -26,4 +26,8 @@ class FishingRod(Relic):
         if self.combats_seen % self.COMBATS == 0:
             upgradable = [c for c in run.deck if c.is_upgradable]
             if upgradable:
-                run.rng.choice(upgradable).upgrade()
+                # FishingRod.cs: RunState.Rng.Niche.NextItem(items).upgrade().
+                if run.rng_set is not None:
+                    run.rng_set.niche.next_item(upgradable).upgrade()
+                else:
+                    run.rng.choice(upgradable).upgrade()

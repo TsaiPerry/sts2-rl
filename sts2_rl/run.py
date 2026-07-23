@@ -372,8 +372,19 @@ class RunState:
         card from the original's pool is rolled (GetDefaultTransformationOptions:
         Colorless cards and Quest/Event/Ancient/Token cards roll from the
         Colorless pool, Curses from the curse pool without the rarity filter,
-        everything else from the character pool). The replacement takes the
-        original's place in the deck.
+        everything else from the character pool).
+
+        Deck placement: the game's `CardCmd.Transform` on a **Deck** pile REMOVES
+        the original and **appends** the replacement at the END of the deck
+        (`AddInternal(replacement)` with no index; `FloorAddedToDeck =
+        TotalFloor` — CardCmd.cs:437); only combat-pile transforms re-insert at
+        the original index, and every `transform_card` caller here is a
+        deck-level (out-of-combat) transform. Because the combat-start
+        `UnstableShuffle` is order-dependent, this end-placement is what keeps
+        the post-transform draw order in parity (Pandora's Box appends its 8
+        rolls after the deck's existing cards). The legacy RL path keeps the
+        in-place replace byte-for-byte (its shuffle order-depends on the deck
+        too, and its reward/transform sequence is the unchecked legacy stream).
 
         `pick_rng` is the game stream the replacement is rolled on
         (`CreateRandomCardForTransform`'s Rng arg): the game routes different
@@ -404,8 +415,17 @@ class RunState:
                 into = make_card(pick_rng.next_item(options))
             else:
                 into = make_card(self.rng.choice(options))
-        idx = self.deck.index(card)
-        self.deck[idx] = into
+        if self.rng_set is not None:
+            # Parity: remove the original (by identity — duplicate basics compare
+            # equal) and append the replacement at the deck's end.
+            for i, c in enumerate(self.deck):
+                if c is card:
+                    del self.deck[i]
+                    break
+            self.deck.append(into)
+        else:
+            idx = self.deck.index(card)
+            self.deck[idx] = into
         return into
 
     # ── Potions ──────────────────────────────────────────────────────────

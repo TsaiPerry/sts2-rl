@@ -28,8 +28,13 @@ class TezcataraEvent(AncientEvent):
     def initial_options(self) -> list[EventOption]:
         from ..cards import CardRarity
 
-        rng = self.rng
         run = self.run
+        # Tezcatara.cs: three base.Rng.NextItem picks on the per-event Rng.
+        # Legacy keeps the shared run rng (.choice).
+        er = self.event_rng
+
+        def pick(opts):
+            return er.next_item(opts) if er is not None else self.rng.choice(opts)
 
         pool1 = list(OPTION_POOL_1)
         if any(
@@ -37,7 +42,7 @@ class TezcataraEvent(AncientEvent):
             for c in run.deck
         ):
             pool1.append("nutritious_soup")
-        first = rng.choice(pool1)
-        second = rng.choice(list(OPTION_POOL_2))
-        third = rng.choice(list(OPTION_POOL_3))
+        first = pick(pool1)
+        second = pick(list(OPTION_POOL_2))
+        third = pick(list(OPTION_POOL_3))
         return [self._relic_option(rid) for rid in (first, second, third)]

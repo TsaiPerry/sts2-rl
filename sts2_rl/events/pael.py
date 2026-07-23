@@ -24,10 +24,15 @@ class PaelEvent(AncientEvent):
     name = "Pael"
 
     def initial_options(self) -> list[EventOption]:
-        rng = self.rng
         run = self.run
+        # Pael.cs GenerateInitialOptions: three base.Rng.NextItem picks on the
+        # per-event Rng. Legacy keeps the shared run rng (.choice).
+        er = self.event_rng
 
-        first = rng.choice(list(OPTION_POOL_1))
+        def pick(opts):
+            return er.next_item(opts) if er is not None else self.rng.choice(opts)
+
+        first = pick(list(OPTION_POOL_1))
 
         from ..enchantments import GoopyEnchantment
         from ..relics.paels_claw import PaelsClaw
@@ -43,11 +48,11 @@ class PaelEvent(AncientEvent):
             pool2.append("paels_tooth")
         pool2 = pool2 + pool2          # list.AddRange(list): double the weights
         pool2.append("paels_growth")
-        second = rng.choice(pool2)
+        second = pick(pool2)
 
         pool3 = ["paels_eye", "paels_blood"]
         if not run.has_event_pet:
             pool3.append("paels_legion")
-        third = rng.choice(pool3)
+        third = pick(pool3)
 
         return [self._relic_option(rid) for rid in (first, second, third)]

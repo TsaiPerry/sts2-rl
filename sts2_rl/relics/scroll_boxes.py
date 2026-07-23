@@ -25,17 +25,25 @@ class ScrollBoxes(Relic):
             cid for cid in pool_card_ids()
             if _CARD_CLASSES[cid].rarity == CardRarity.UNCOMMON
         ]
+        # ScrollBoxes.cs GenerateRandomBundles: per bundle, 2 Common then 1
+        # Uncommon via PlayerRng.Rewards.NextItem (the Defect-only NextInt(100)
+        # rare-swap never fires for Ironclad). Legacy keeps the shared rng.
+        rewards = run.player_rng.rewards if run.rng_set is not None else None
+
+        def draw(opts: list[str]) -> str:
+            return rewards.next_item(opts) if rewards is not None else run.rng.choice(opts)
+
         used: set[str] = set()
         bundles: list[list[str]] = []
         for _ in range(2):
             bundle: list[str] = []
             for _ in range(2):
                 options = [c for c in commons if c not in used]
-                pick = run.rng.choice(options)
+                pick = draw(options)
                 bundle.append(pick)
                 used.add(pick)
             options = [c for c in uncommons if c not in used]
-            pick = run.rng.choice(options)
+            pick = draw(options)
             bundle.append(pick)
             used.add(pick)
             bundles.append(bundle)

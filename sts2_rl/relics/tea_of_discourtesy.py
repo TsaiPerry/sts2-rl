@@ -30,9 +30,11 @@ class TeaOfDiscourtesy(Relic):
         from ..cards import make_card
 
         player = self.combat.player
-        # CardPilePosition.Random — shuffled into the draw pile.
+        # CardPilePosition.Random — CardPileCmd inserts at
+        # RunState.Rng.Shuffle.NextInt(Cards.Count + 1), recomputed per card.
         for _ in range(self.DAZED_COUNT):
             card = make_card("dazed")
             player.draw_pile.insert(
-                self.combat._rng.randrange(len(player.draw_pile) + 1), card)
+                self.combat.combat_rng.shuffle.randrange(len(player.draw_pile) + 1),
+                card)
         self.combats_left -= 1

@@ -117,6 +117,22 @@ def pool_card_ids(
     return ids
 
 
+def reward_pool_card_ids(pool: tuple[str, ...] = IRONCLAD_POOL) -> list[str]:
+    """Ids eligible for reward/out-of-combat card generation — the game's
+    ``CardPool.GetUnlockedCards()`` (``CardCreationOptions.GetPossibleCards``):
+    the full unlocked pool in declaration order.
+
+    Unlike ``pool_card_ids`` (``FilterForCombat``), this does NOT drop
+    ``CanBeGeneratedInCombat=False`` cards, nor Basic/Ancient — the combat-only
+    filter never applies to rewards. ``CardFactory.CreateForReward`` instead
+    filters by the rolled rarity (only ever Common/Uncommon/Rare), so Basic and
+    Ancient cards are never picked (they only join the ``allowedRarities`` set),
+    while Feed and NotYet (Rare, ``CanBeGeneratedInCombat=false``) ARE eligible
+    rewards. For non-ascension Ironclad every pool card is unlocked, so this
+    returns the pool as-is."""
+    return list(pool)
+
+
 def random_pool_cards(
     rng: random.Random,
     count: int,

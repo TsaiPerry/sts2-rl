@@ -130,6 +130,14 @@ class CombatState:
         self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
             self.hooks, self._rng, encounter_selection_rng
         )
+        # Stable creature ids (CombatState.CombatId): the player is 0, initial
+        # enemies get 1..N in creation order, mid-combat spawns continue the
+        # counter (CreatureCmd.add). The recording targets cards by this id, so
+        # it must survive enemy-list reordering (Ovicopter egg slots).
+        self._net_id_counter = 1
+        for _enemy in self.enemies:
+            _enemy.net_id = self._net_id_counter
+            self._net_id_counter += 1
         # Parity: monster max HP is a game RNG roll on the Niche stream, unique per
         # side where possible (Creature.SetUniqueMonsterHpValue, CombatState.cs:240).
         # Legacy mode keeps the monsters' own random.Random().randint roll untouched.
@@ -414,9 +422,15 @@ class CombatState:
         exhaust-keyword move, and the played hook. The card must already be
         removed from the hand (or whichever pile it was played from)."""
         # Power cards are removed from the combat entirely when played;
-        # everything else resolves from the discard pile.
+        # everything else resolves from the discard pile. The game actually
+        # holds the card in PileType.Play (a limbo pile) during OnPlay and only
+        # moves it to its result pile (discard) AFTER the effect resolves
+        # (CardCmd.cs:116). The sim keeps it in discard for simplicity, but
+        # marks it as "being played" so a reshuffle its own effect triggers
+        # excludes it (parity — see PlayerCombatState.reshuffle_discard_into_draw).
         if card.card_type != CardType.POWER:
             self.player.discard_pile.append(card)
+            self.player._playing_card = card
 
         # Resolve the single creature this play targeted (mirrors CardPlay.
         # Target): only ANY_ENEMY cards resolve to one enemy up front; AoE/
@@ -457,6 +471,10 @@ class CombatState:
                 self.hooks.after_attack(self.player, card)
             if self._all_enemies_dead() or self.player.is_dead:
                 break
+
+        # OnPlay resolved: the card leaves limbo (moves to its result pile), so
+        # later reshuffles include it normally again.
+        self.player._playing_card = None
 
         # Exhaust keyword: move the played card from discard to exhaust.
         if card.exhausts and card in self.player.discard_pile:

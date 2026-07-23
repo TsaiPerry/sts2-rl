@@ -17,5 +17,18 @@ class StoneCracker(Relic):
     def on_combat_start(self) -> None:
         upgradable = [c for c in self.player.draw_pile if c.is_upgradable]
         count = min(self.CARDS, len(upgradable))
-        for card in self.combat._rng.sample(upgradable, count):
+        crng = self.combat.combat_rng
+        if crng.is_parity:
+            # StoneCracker.cs: Draw-pile IsUpgradable cards,
+            # StableShuffle(Rng.CombatCardSelection).Take(count). StableShuffle
+            # sorts by ModelId (card id, then upgrade level) before the game
+            # UnstableShuffle, so the result is independent of pile order.
+            from ..actmap import stable_shuffle
+            chosen = stable_shuffle(
+                list(upgradable), crng.card_selection,
+                key=lambda c: (c.id, c.upgrade_level),
+            )[:count]
+        else:
+            chosen = self.combat._rng.sample(upgradable, count)
+        for card in chosen:
             card.upgrade()

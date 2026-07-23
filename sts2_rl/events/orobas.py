@@ -29,16 +29,23 @@ class OrobasEvent(AncientEvent):
     name = "Orobas"
 
     def initial_options(self) -> list[EventOption]:
-        rng = self.rng
         run = self.run
+        # Orobas.cs GenerateInitialOptions draws on the per-event Rng (base.Rng):
+        # a leading NextItem over OTHER unlocked characters (empty in the single-
+        # character sim, so NextItem short-circuits with zero draws), a NextFloat
+        # for the Prismatic/Sea Glass roll, then three NextItem picks. Legacy
+        # keeps the shared run rng.
+        er = self.event_rng
 
+        def pick(opts):
+            return er.next_item(opts) if er is not None else self.rng.choice(opts)
+
+        roll = er.next_float() if er is not None else self.rng.random()
         pool1 = list(OPTION_POOL_1)
-        pool1.append(
-            "prismatic_gem" if rng.random() < _PRISMATIC_ODDS else "sea_glass"
-        )
-        first = rng.choice(pool1)
+        pool1.append("prismatic_gem" if roll < _PRISMATIC_ODDS else "sea_glass")
+        first = pick(pool1)
 
-        second = rng.choice(list(OPTION_POOL_2))
+        second = pick(list(OPTION_POOL_2))
 
         from ..relics.archaic_tooth import ArchaicTooth
         from ..relics.base import RelicRarity
@@ -55,7 +62,7 @@ class OrobasEvent(AncientEvent):
 
         options = [self._relic_option(first), self._relic_option(second)]
         if pool3:
-            options.append(self._relic_option(rng.choice(pool3)))
+            options.append(self._relic_option(pick(pool3)))
         else:
             # Orobas.cs: a locked placeholder option (null onChosen).
             options.append(EventOption("OPTION_POOL_3_LOCKED", None))

@@ -34,7 +34,15 @@ class FurCoat(Relic):
             p for p in act_map.all_points()
             if p.point_type in (MapPointType.MONSTER, MapPointType.ELITE)
         ]
-        run.rng.shuffle(candidates)
+        # FurCoat.cs: new Rng(owner, Id).UnstableShuffle(points) — a per-relic
+        # deterministic stream = Rng(run seed + slot(0) + hash(relic Entry)),
+        # matching make_event_rng keyed on the relic id. Legacy keeps the
+        # shared run rng.
+        if run.rng_set is not None:
+            from ..rng import make_event_rng
+            make_event_rng(run.rng_set.seed, self.id.upper()).shuffle(candidates)
+        else:
+            run.rng.shuffle(candidates)
         self.marked_coords = {
             p.coord for p in candidates[: self.COMBATS]
         }

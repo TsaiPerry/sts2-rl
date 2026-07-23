@@ -27,7 +27,8 @@ class JeweledMask(Relic):
         ]
         if not powers:
             return
-        card = self.combat._rng.choice(powers)
+        # JeweledMask.cs: RunState.Rng.CombatCardSelection.NextItem(powers).
+        card = self.combat.combat_rng.card_selection.choice(powers)
         card.set_free_this_turn()
         player.draw_pile.remove(card)
         player.hand.append(card)

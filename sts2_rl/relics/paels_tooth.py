@@ -33,7 +33,11 @@ class PaelsTooth(Relic):
         # AfterCombatEnd: survivor + cards left → return one, upgraded.
         if run.is_dead or not self.stored_cards:
             return
-        card = run.rng.choice(self.stored_cards)
+        # PaelsTooth.cs: PlayerRng.Rewards.NextItem(SerializableCards).
+        if run.rng_set is not None:
+            card = run.player_rng.rewards.next_item(self.stored_cards)
+        else:
+            card = run.rng.choice(self.stored_cards)
         self.stored_cards.remove(card)
         if card.is_upgradable:
             card.upgrade()

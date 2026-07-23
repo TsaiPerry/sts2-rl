@@ -33,6 +33,18 @@ class GlassEye(Relic):
             count = min(self.CHOICES, len(matching))
             if count == 0:
                 continue
-            options = [make_card(cid) for cid in run.rng.sample(matching, count)]
+            # GlassEye.cs: CreateForReward(count) per rarity with Uniform odds =
+            # `count` sequential PlayerRng.Rewards.NextItem draws (the reward
+            # blacklist accumulates within each rarity's screen).
+            if run.rng_set is not None:
+                bl = list(matching)
+                picked = []
+                for _ in range(count):
+                    cid = run.player_rng.rewards.next_item(bl)
+                    bl.remove(cid)
+                    picked.append(cid)
+                options = [make_card(cid) for cid in picked]
+            else:
+                options = [make_card(cid) for cid in run.rng.sample(matching, count)]
             for card in run.select_cards("card_reward", options, 1):
                 run.add_card(card)

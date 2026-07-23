@@ -200,17 +200,35 @@ class CreatureCmd:
             combat._end_combat(player_won=True)
 
     @staticmethod
-    def add(hooks: HookSystem, creature: Creature) -> None:
+    def add(
+        hooks: HookSystem, creature: Creature, index: int | None = None
+    ) -> None:
         """Add a creature to combat mid-fight (mirrors CreatureCmd.Add), firing
-        the added-to-combat hook so powers can react."""
+        the added-to-combat hook so powers can react.
+
+        `index` is the enemy-list slot to insert at (mirrors the game placing a
+        spawn into a named Encounter slot — e.g. Ovicopter's eggs fill the slots
+        before it); None appends (the default for spawns with no slot rule)."""
         combat = hooks.combat
         if combat is None:
             return
         # Parity: roll the spawn's unique HP on the Niche stream BEFORE it joins
         # the enemy list, mirroring CombatState.CreateCreature (SetUniqueMonster-
         # HpValue against the creatures already on the side) then AddCreature.
+        # The HP roll excludes sibling MaxHps for uniqueness and so is
+        # insertion-order-independent (same existing enemy set either way).
         combat.assign_parity_hp(creature)
-        combat.enemies.append(creature)
+        # Stable creature id (CombatState.CombatId), continuing the combat's
+        # counter — assigned in ATTACH (creation) order regardless of the slot
+        # the creature is inserted at, so recorded targets stay valid.
+        counter = getattr(combat, "_net_id_counter", None)
+        if counter is not None:
+            creature.net_id = counter
+            combat._net_id_counter = counter + 1
+        if index is None:
+            combat.enemies.append(creature)
+        else:
+            combat.enemies.insert(index, creature)
         hooks.on_creature_added(creature)
 
 

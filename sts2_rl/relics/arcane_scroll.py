@@ -21,4 +21,11 @@ class ArcaneScroll(Relic):
             if _CARD_CLASSES[cid].rarity == CardRarity.RARE
         ]
         if rares:
-            run.add_card(make_card(run.rng.choice(rares)))
+            # ArcaneScroll.cs: CreateForReward with Uniform odds = one
+            # PlayerRng.Rewards.NextItem over the Rare pool (NoUpgradeRoll, so
+            # no rarity/upgrade draws).
+            if run.rng_set is not None:
+                pick = run.player_rng.rewards.next_item(rares)
+            else:
+                pick = run.rng.choice(rares)
+            run.add_card(make_card(pick))

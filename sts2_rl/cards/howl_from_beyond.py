@@ -23,7 +23,7 @@ class HowlFromBeyondCard(Card):
       OnUpgrade: damage +5 (→ 21)
     """
     id = "howl_from_beyond"
-    name = "Howl From Beyond"
+    name = "Howl from Beyond"  # localization cards.json HOWL_FROM_BEYOND.title
     card_type = CardType.ATTACK
     rarity = CardRarity.UNCOMMON
     target_type = TargetType.ALL_ENEMIES

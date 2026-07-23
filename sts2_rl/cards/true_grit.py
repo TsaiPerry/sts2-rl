@@ -42,6 +42,13 @@ class TrueGritCard(Card):
             chosen = CardSelectCmd.from_hand(ctx.hooks, ctx.player, "exhaust")
             victim = chosen[0] if chosen else None
         else:
-            victim = ctx.combat._rng.choice(ctx.player.hand)
+            # TrueGrit.cs (un-upgraded): RunState.Rng.CombatCardSelection
+            # .NextItem over the hand — a random card to exhaust. Parity routes
+            # to that stream; legacy keeps the shared random.Random pick.
+            crng = ctx.combat.combat_rng
+            if crng.is_parity:
+                victim = crng.card_selection.choice(ctx.player.hand)
+            else:
+                victim = ctx.combat._rng.choice(ctx.player.hand)
         if victim is not None:
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, victim)

@@ -24,7 +24,19 @@ class HeftyTablet(Relic):
             if _CARD_CLASSES[cid].rarity == CardRarity.RARE
         ]
         count = min(self.CARDS, len(rares))
-        options = [make_card(cid) for cid in run.rng.sample(rares, count)]
+        # HeftyTablet.cs: CreateForReward(count) with Uniform odds = `count`
+        # sequential PlayerRng.Rewards.NextItem draws, each excluding prior
+        # picks (the accumulating reward blacklist).
+        if run.rng_set is not None:
+            pool = list(rares)
+            picked = []
+            for _ in range(count):
+                cid = run.player_rng.rewards.next_item(pool)
+                pool.remove(cid)
+                picked.append(cid)
+            options = [make_card(cid) for cid in picked]
+        else:
+            options = [make_card(cid) for cid in run.rng.sample(rares, count)]
         for card in run.select_cards("obtain", options, 1):
             run.add_card(card)
         run.add_card(make_card("injury"))

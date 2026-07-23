@@ -25,4 +25,5 @@ class MummifiedHand(Relic):
         candidates = [c for c in self.player.hand if c.energy_cost > 0]
         if not candidates:
             return
-        self.combat._rng.choice(candidates).set_free_this_turn()
+        # MummifiedHand.cs: RunState.Rng.CombatCardSelection.NextItem(...).
+        self.combat.combat_rng.card_selection.choice(candidates).set_free_this_turn()

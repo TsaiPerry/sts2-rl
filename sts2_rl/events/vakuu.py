@@ -26,12 +26,21 @@ class VakuuEvent(AncientEvent):
     name = "Vakuu"
 
     def initial_options(self) -> list[EventOption]:
-        rng = self.rng
-        picks = (
-            rng.choice(list(POOL_1)),
-            rng.choice(list(POOL_2)),
-            rng.choice(list(POOL_3)),
-        )
+        er = self.event_rng
+        if er is not None:
+            # Vakuu.cs: UnstableShuffle each pool on the per-event Rng, take [0].
+            p1, p2, p3 = list(POOL_1), list(POOL_2), list(POOL_3)
+            er.shuffle(p1)
+            er.shuffle(p2)
+            er.shuffle(p3)
+            picks = (p1[0], p2[0], p3[0])
+        else:
+            rng = self.rng
+            picks = (
+                rng.choice(list(POOL_1)),
+                rng.choice(list(POOL_2)),
+                rng.choice(list(POOL_3)),
+            )
         options = []
         for rid in picks:
             if rid == "distinguished_cape":

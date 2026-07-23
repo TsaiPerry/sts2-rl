@@ -29,5 +29,7 @@ class TanxEvent(AncientEvent):
         )
         if eligible >= TriBoomerang.MIN_ELIGIBLE:
             pool.append("tri_boomerang")
-        self.rng.shuffle(pool)
+        # Tanx.cs: list.UnstableShuffle(base.Rng).Take(3) on the per-event Rng.
+        # Legacy keeps the shared run rng.
+        (self.event_rng if self.event_rng is not None else self.rng).shuffle(pool)
         return [self._relic_option(rid) for rid in pool[:3]]

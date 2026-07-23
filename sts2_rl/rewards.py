@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING
 
 from .cards import Card, CardRarity, make_card
 from .cards.base import _CARD_CLASSES
-from .cards.pool import pool_card_ids
+from .cards.pool import pool_card_ids, reward_pool_card_ids
 from .rooms import RoomType
 
 if TYPE_CHECKING:
@@ -256,7 +256,15 @@ def create_reward_cards(
     # SP2 parity path (rng_set present); the legacy RL path stays on run.rng.
     rng = run.rewards_rng
     if pool is None:
-        pool = pool_card_ids()  # Ironclad pool minus Basic/Ancient
+        # The game's reward pool is CardCreationOptions.GetPossibleCards ==
+        # CardPool.GetUnlockedCards() — the FULL unlocked pool, NOT
+        # FilterForCombat. In the SP2 parity path use it so Feed / NotYet
+        # (Rare, CanBeGeneratedInCombat=false) can be offered as rewards; the
+        # legacy RL path keeps the combat-filtered pool byte-for-byte.
+        pool = (
+            reward_pool_card_ids() if run.rng_set is not None
+            else pool_card_ids()  # Ironclad pool minus Basic/Ancient
+        )
     chosen_ids: list[str] = []
     cards: list[Card] = []
     for _ in range(count):

@@ -25,5 +25,16 @@ class FragrantMushroom(Relic):
         run.lose_hp(self.HP_LOSS)
         upgradable = run.upgradable_cards()
         count = min(self.CARDS, len(upgradable))
-        for card in run.rng.sample(upgradable, count):
+        # FragrantMushroom.cs: Deck IsUpgradable cards,
+        # StableShuffle(Rng.Niche).Take(count). StableShuffle sorts by ModelId
+        # (card id, then upgrade level) before the game UnstableShuffle.
+        if run.rng_set is not None:
+            from ..actmap import stable_shuffle
+            chosen = stable_shuffle(
+                list(upgradable), run.rng_set.niche,
+                key=lambda c: (c.id, c.upgrade_level),
+            )[:count]
+        else:
+            chosen = run.rng.sample(upgradable, count)
+        for card in chosen:
             card.upgrade()
