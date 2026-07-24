@@ -29,6 +29,7 @@ class FlailKnight(MachineMonster):
     cannot repeat), FLAIL (9×2, weight 2), and RAM (15, weight 2).
 
     Source: FlailKnight.cs (non-ascension values)."""
+    name = "Flail Knight"
 
     min_hp = 101
     max_hp = 101
@@ -76,6 +77,7 @@ class MysteriousKnight(FlailKnight):
 
     Source: MysteriousKnight.cs — AfterAddedToRoom applies StrengthPower 6 and
     PlatingPower 6. Fought in The Lantern Key event."""
+    name = "Mysterious Knight"
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())

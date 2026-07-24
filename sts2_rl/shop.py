@@ -79,6 +79,15 @@ def _roll_merchant_card_upgrade(run: "RunState") -> None:
         run.rewards_rng.next_float()
 
 
+def _apply_merchant_card_hooks(run: "RunState", card: "Card | None") -> "Card | None":
+    """Hook.ModifyMerchantCardCreationResults, run per entry right after the
+    card is created and BEFORE CalcCost (MerchantCardEntry.cs:92)."""
+    if card is not None:
+        for relic in list(run.relics):
+            relic.modify_merchant_card_results(run, [card])
+    return card
+
+
 def _create_merchant_card(
     run: "RunState", card_type: CardType, exclude_ids: set[str]
 ) -> "Card | None":
@@ -198,7 +207,8 @@ class MerchantCardEntry(MerchantEntry):
         self, run: "RunState", card_type: CardType, exclude_ids: set[str]
     ) -> None:
         super().__init__(run)
-        self.card: "Card | None" = _create_merchant_card(run, card_type, exclude_ids)
+        self.card: "Card | None" = _apply_merchant_card_hooks(
+            run, _create_merchant_card(run, card_type, exclude_ids))
         self.on_sale = False
         self._calc_cost()
 
@@ -247,9 +257,8 @@ class MerchantColorlessCardEntry(MerchantCardEntry):
         self, run: "RunState", rarity: CardRarity, exclude_ids: set[str]
     ) -> None:
         MerchantEntry.__init__(self, run)
-        self.card: "Card | None" = _create_merchant_colorless_card(
-            run, rarity, exclude_ids
-        )
+        self.card: "Card | None" = _apply_merchant_card_hooks(
+            run, _create_merchant_colorless_card(run, rarity, exclude_ids))
         self.on_sale = False
         self._calc_cost()
 

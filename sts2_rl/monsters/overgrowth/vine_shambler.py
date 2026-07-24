@@ -17,6 +17,7 @@ _CHOMP_DMG = 16
 
 
 class VineShambler(Monster):
+    name = "Vine Shambler"
     min_hp = 61
     max_hp = 61
 

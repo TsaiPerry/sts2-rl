@@ -26,6 +26,7 @@ class HunterKiller(MachineMonster):
     """Opens with TENDERIZING_GOOP (Tender 1: each card played costs the
     player 1 Strength and 1 Dexterity until end of turn), then rolls BITE (17,
     never twice in a row, weight 1) or PUNCTURE (7x3, weight 2)."""
+    name = "Hunter Killer"
 
     min_hp = 121
     max_hp = 121

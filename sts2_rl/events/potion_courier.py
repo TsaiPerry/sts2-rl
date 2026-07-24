@@ -20,10 +20,13 @@ class PotionCourier(Event):
       GRAB_POTIONS: offered 3 Foul Potions
       RANSACK:      offered 1 random UNCOMMON potion
 
-    RANSACK is a faithful port of a filter that currently matches nothing:
-    every potion ported so far is Common/Event/Token rarity (see potions.py),
-    and the source's `NextItem` over an empty sequence returns null and
-    offers nothing. It starts paying out as soon as Uncommon potions land.
+    RANSACK is `PlayerRng.Rewards.NextItem(<character pool + SharedPotionPool>
+    .Where(Rarity == Uncommon))` — ONE draw on the per-player Rewards stream
+    over the GAME's whole uncommon pool in pool order. The parity path uses
+    exactly that (unimplemented uncommons come back as pool placeholders, as
+    everywhere else the full pool is modelled); the legacy RL path keeps the
+    old shared-rng pick over the *implemented* uncommons so a training run
+    never puts an inert placeholder on the belt.
     """
 
     id = "potion_courier"
@@ -46,10 +49,17 @@ class PotionCourier(Event):
         self._finish("GRAB_POTIONS")
 
     def _ransack(self) -> None:
-        uncommon = sorted(
-            (cls for cls in ALL_POTIONS.values() if cls.rarity == "uncommon"),
-            key=lambda cls: cls.id,
-        )
-        if uncommon:
-            self.run.add_potion(self.rng.choice(uncommon)())
+        if self.run.rng_set is not None:
+            from ..potion_pools import POTION_POOL, _make
+            options = [pid for pid, r in POTION_POOL if r == "uncommon"]
+            pid = self.run.rewards_rng.next_item(options)
+            if pid is not None:
+                self.run.add_potion(_make(pid, "uncommon"))
+        else:
+            uncommon = sorted(
+                (cls for cls in ALL_POTIONS.values() if cls.rarity == "uncommon"),
+                key=lambda cls: cls.id,
+            )
+            if uncommon:
+                self.run.add_potion(self.rng.choice(uncommon)())
         self._finish("RANSACK")

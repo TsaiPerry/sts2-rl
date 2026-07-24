@@ -737,6 +737,24 @@ class TestDecimillipede:
                 "WRITHE_MOVE", "BULK_MOVE", "CONSTRICT_MOVE",
             }
 
+    def test_parity_hp_is_evened_and_deduped_after_the_niche_roll(self):
+        """DecimillipedeSegment.AfterAddedToRoom runs AFTER the creature's
+        Niche HP roll: it rounds MaxHp up to even, then adds 2 (wrapping
+        MaxInitialHp -> MinInitialHp) while a teammate already has that HP.
+        The parity path rolls HP on the Niche stream *after* the encounter
+        built its monsters, so the roll's raw value is what this pass must
+        clean up — otherwise segments keep odd/duplicate HP (933T39V18D's Hive
+        elite: the sim showed 42/46/41 where the game showed 42/46/44)."""
+        from sts2_rl.rng import RunRngSet
+
+        cs = CombatState(rng_set=RunRngSet("933T39V18D"),
+                         encounter=DECIMILLIPEDE_ELITE)
+        hps = [e.max_hp for e in cs.enemies]
+        assert all(hp % 2 == 0 for hp in hps), hps
+        assert len(set(hps)) == 3, hps
+        assert all(40 <= hp <= 46 for hp in hps), hps
+        assert all(e.hp == e.max_hp for e in cs.enemies)
+
     def test_first_turn_damage(self):
         cs = fresh_encounter(DECIMILLIPEDE_ELITE)
         cs.end_turn()  # writhe 5x2 + bulk 6 + constrict 8 (in some order)
@@ -761,6 +779,29 @@ class TestDecimillipede:
         cs.end_turn()  # REATTACH: back with 25 HP
         assert not reattach.is_reviving
         assert victim.hp == 25
+
+    def test_a_withered_segment_sits_at_zero_hp_and_keeps_taking_turns(self):
+        """ReattachPower does NOT prevent the death. CreatureCmd.cs:508 runs the
+        normal death path and only asks
+        ShouldCreatureBeRemovedFromCombatAfterDeath, which the power answers
+        False — so the segment is at **0** HP (not 1), stays in
+        CombatState.Enemies (the recording's Enemies annotation still lists it),
+        and keeps taking turns (Creature.TakeTurn has no IsDead guard), which is
+        how it ever reaches REATTACH."""
+        cs = fresh_encounter(DECIMILLIPEDE_ELITE)
+        victim = cs.enemies[0]
+        DamageCmd.deal(cs.hooks, victim, 999, dealer=cs.player)
+        assert victim.hp == 0
+        assert victim.retained_after_death
+        assert victim in cs.enemies
+        assert not cs.is_over
+        cs.player.hp = 80
+        cs.end_turn()                       # DEAD_MOVE, then telegraph REATTACH
+        assert victim.current_intent.move_type == MoveType.HEAL
+        cs.player.hp = 80
+        cs.end_turn()                       # REATTACH
+        assert victim.hp == 25
+        assert not victim.retained_after_death
 
     def test_killing_last_standing_segment_ends_the_fight(self):
         cs = fresh_encounter(DECIMILLIPEDE_ELITE)
@@ -818,6 +859,20 @@ class TestEntomancer:
         ento.block = 50
         DamageCmd.deal(cs.hooks, ento, 6, dealer=cs.player, card=strike)
         assert sum(1 for c in cs.player.draw_pile if c.id == "dazed") == 2
+
+    def test_hive_generates_no_dazed_on_killing_blow(self):
+        # A killing blow skips the victim's AfterDamageReceived
+        # (CreatureCmd.cs:392 `!WasTargetKilled || !IsDead`), so PersonalHive
+        # shuffles no Dazed on the hit that kills its owner.
+        cs = fresh_with(Entomancer)
+        ento = cs.enemy
+        strike = make_card("strike")
+        DamageCmd.deal(cs.hooks, ento, 6, dealer=cs.player, card=strike)
+        assert sum(1 for c in cs.player.draw_pile if c.id == "dazed") == 1
+        DamageCmd.deal(cs.hooks, ento, ento.hp, dealer=cs.player, card=strike)
+        assert ento.is_dead
+        # The lethal hit adds no Dazed — still 1 from the earlier non-lethal hit.
+        assert sum(1 for c in cs.player.draw_pile if c.id == "dazed") == 1
 
 
 # ═════════════════════════════════════════════════════════════════════════

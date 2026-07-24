@@ -28,6 +28,7 @@ class SlumberingBeetle(MachineMonster):
     """Sleeps behind Plating 15 for 3 turns (Slumber 3; unblocked damage also
     counts down a turn and wakes it stunned at 0). Awake it ROLLs OUT every
     turn: 16 damage + 2 self Strength."""
+    name = "Slumbering Beetle"
 
     min_hp = 86
     max_hp = 86

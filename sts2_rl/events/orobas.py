@@ -22,6 +22,15 @@ OPTION_POOL_2: tuple[str, ...] = ("alchemical_coffer", "driftwood", "radiant_pea
 
 _PRISMATIC_ODDS = 1 / 3
 
+# ModelDb.AllCharacters (ModelDb.cs:123), in source order. Orobas opens by
+# picking the Sea Glass character from the OTHER unlocked ones; the sim models
+# a fully-unlocked run (as the card/potion pools do), so that pick is a real
+# NextItem over these minus the player's own character (Ironclad).
+ALL_CHARACTERS: tuple[str, ...] = (
+    "ironclad", "silent", "regent", "necrobinder", "defect",
+)
+PLAYER_CHARACTER = "ironclad"
+
 
 @register_event
 class OrobasEvent(AncientEvent):
@@ -30,16 +39,20 @@ class OrobasEvent(AncientEvent):
 
     def initial_options(self) -> list[EventOption]:
         run = self.run
-        # Orobas.cs GenerateInitialOptions draws on the per-event Rng (base.Rng):
-        # a leading NextItem over OTHER unlocked characters (empty in the single-
-        # character sim, so NextItem short-circuits with zero draws), a NextFloat
-        # for the Prismatic/Sea Glass roll, then three NextItem picks. Legacy
-        # keeps the shared run rng.
+        # Orobas.cs GenerateInitialOptions draws on the per-event Rng (base.Rng),
+        # in this order: a NextItem over the OTHER unlocked characters (the Sea
+        # Glass owner), a NextFloat for the Prismatic/Sea Glass roll, then three
+        # NextItem picks. The recorded runs are fully unlocked, so the character
+        # pick draws over ModelDb.AllCharacters minus Ironclad — it is a real
+        # draw, and dropping it shifts all three relic picks. Legacy keeps the
+        # shared run rng.
         er = self.event_rng
 
         def pick(opts):
             return er.next_item(opts) if er is not None else self.rng.choice(opts)
 
+        others = [c for c in ALL_CHARACTERS if c != PLAYER_CHARACTER]
+        pick(others)  # the Sea Glass character; only its draw matters here
         roll = er.next_float() if er is not None else self.rng.random()
         pool1 = list(OPTION_POOL_1)
         pool1.append("prismatic_gem" if roll < _PRISMATIC_ODDS else "sea_glass")

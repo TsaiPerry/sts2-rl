@@ -63,6 +63,7 @@ class TheObscura(MachineMonster):
     """Opens with ILLUSION (summons a Parafright), then rolls PIERCING_GAZE
     (10), WAIL (+3 Strength to all allies), and HARDENING_STRIKE (6 + 6 block)
     — never the same move twice in a row."""
+    name = "The Obscura"
 
     min_hp = 123
     max_hp = 123

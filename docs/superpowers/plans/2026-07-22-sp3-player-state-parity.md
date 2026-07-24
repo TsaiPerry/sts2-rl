@@ -4,7 +4,7 @@
 
 **Goal:** Make player HP/max-HP a first-class asserted oracle in the conformance harness, grant the missing starting relic, and drive every recording's full run to completion with player state matching `run.save` at each floor boundary.
 
-**Architecture:** Three isolated additions plus one content fix. (1) `RunState.start_run` grants the character's starting relic (`burning_blood`) — the verified dominant HP bug. (2) `SaveOracle` parses the player's `current_hp`/`max_hp`. (3) The runner asserts player state at act boundaries against per-act checkpoints built from the sibling `floor_18/34/49` saves, with an opt-in parity-only resync that pins sim HP/max-HP after asserting so one act's bug can't cascade. (4) `converge_triage.py` prints these as DETECTOR 3. Then converge all 5 seeds in aggregate.
+**Architecture:** Three isolated additions plus one content fix. (1) `RunState.start_run` grants the character's starting relic (`burning_blood`) — the verified dominant HP bug. (2) `SaveOracle` parses the player's `current_hp`/`max_hp`. (3) The runner asserts player state at act boundaries against per-act checkpoints built from the sibling `floor_18/34/49` saves, with an opt-in parity-only resync that pins sim HP/max-HP after asserting so one act's bug can't cascade. (4) `converge_triage.py` prints these as DETECTOR 3. Then converge the **Ironclad** seeds (see the 2026-07-23 correction below — only those can converge).
 
 **Tech Stack:** Python 3, `pytest`, the `sts2_rl.conformance` harness (SP2/SP3), the `py` launcher. Decompiled game source at `c:\Users\Perry\Desktop\Slay the Spire 2\src` is ground truth.
 
@@ -15,7 +15,46 @@
 - **Legacy path stays byte-for-byte EXCEPT the deliberate starter-relic fidelity fix.** The starter relic is granted in ALL runs (Perry's decision 2026-07-22) because the game always grants it (`[[original-means-game-source]]`); update the legacy tests that encoded the relic-less start. Everything else in a no-`string_seed` run is unchanged. The harness resync is parity-only.
 - **Full suite command:** `py -m pytest test/ -q` (~3.5 min). **Baseline at HEAD: 2260 passed.** After Task 1 the count changes only by the starter-relic test updates; report the delta.
 - **Fidelity to source** (`Slay the Spire 2\src`) is the golden rule; when a fix changes sim behavior to match the game, update legacy tests to the game-correct behavior.
-- **Recordings live in** `c:\Users\Perry\Desktop\RunReplays\RunReplays\Resources\<SEED>\floor_{18,34,49}\{actions.sts2replay,run.save}` — 5 seeds × 3 floors. Each floor's `run.save` is that truncation's terminal snapshot (its `players[0].current_hp`/`max_hp` is the HP at that floor). Seeds: `89U21BV1TZ, DJDCSAQZNR, L081UMJX4M, QRWCVDPZN5, TZEKRYTSNT`.
+- **Recordings live in** `c:\Users\Perry\Desktop\RunReplays\RunReplays\Resources\<SEED>\floor_{18,34,49}\{actions.sts2replay,run.save}` — 3 floors per seed. Each floor's `run.save` is that truncation's terminal snapshot (its `players[0].current_hp`/`max_hp` is the HP at that floor). Seeds: `89U21BV1TZ, DJDCSAQZNR, L081UMJX4M, QRWCVDPZN5, TZEKRYTSNT`.
+
+---
+
+## ⚠️ Correction (2026-07-23): 4 of the 5 seeds are DIFFERENT CHARACTERS — ignore them
+
+**This plan was written on 2026-07-22 assuming all 5 seeds could be driven to
+green. That premise is wrong.** The 5 conformance recordings are runs of **5
+different characters**, and this sim models **only Ironclad** (`run.py`: "This
+single-character sim is Ironclad"; `start_run` always grants `burning_blood` +
+`ironclad_starting_deck()`).
+
+| Seed | Character | Convergeable? |
+|------|-----------|---------------|
+| `89U21BV1TZ` | **Ironclad** | ✅ yes — the original target |
+| `933T39V18D` | **Ironclad** | ✅ yes — added 2026-07-23 (2nd full run, Neow→victory) |
+| `DJDCSAQZNR` | Regent | ❌ no — un-ported character |
+| `L081UMJX4M` | Silent | ❌ no — un-ported character |
+| `QRWCVDPZN5` | Necrobinder | ❌ no — un-ported character |
+| `TZEKRYTSNT` | Defect | ❌ no — un-ported character |
+
+For the four non-Ironclad seeds, **none of their starting cards or relics exist
+in the sim**, so every run replays with the wrong (Ironclad) deck: hands diverge
+from turn 1, combats force-win, the map path desyncs, and the run stops early or
+takes nonsense damage. **These are NOT combat/map/HP fidelity bugs and must not
+be triaged as such** — they cannot converge without porting whole characters.
+
+**What this changes in this plan:**
+- Task 6's goal is **not** "all 5 seeds green". It is: the **Ironclad** seeds
+  green; the other four permanently `xfail(strict=False)` with an accurate
+  reason naming the un-ported character.
+- Any Task-6 step below that says "all 5 seeds" means "all Ironclad seeds"
+  (they are annotated inline).
+- The per-seed map-stop diagnoses in the Task-6 loop (L081 room 35, DJDC room
+  17, QRWC room 20) were **misdiagnoses** — symptoms of the wrong deck, not map
+  fidelity gaps. Do not spend time on them.
+
+See `[[sp3-seeds-are-5-characters]]` and, for the 2nd Ironclad seed,
+`[[sp3-second-ironclad-seed-933t39v18d]]` + the convergence prompt
+`docs/superpowers/prompts/2026-07-23-sp3-converge-933T39V18D.md`.
 
 ---
 
@@ -462,9 +501,13 @@ git add tools/converge_triage.py
 
 ---
 
-## Task 6: Convergence — drive all 5 seeds' player state to green (the loop)
+## Task 6: Convergence — drive the **Ironclad** seeds' player state to green (the loop)
 
-The long pole, in aggregate. With DETECTOR 3 and resync live, each act's HP/max-HP delta is isolated and reported for every seed in one pass. Fix each divergence class against source, re-run, repeat. This is a **repeatable procedure**, not a fixed code list — the recordings dictate which content diverges.
+> **Scope corrected 2026-07-23** (see the correction section above): this task targets the
+> Ironclad seeds only — `89U21BV1TZ` and `933T39V18D`. The other four seeds are
+> un-ported characters, stay permanently `xfail`, and must not be triaged.
+
+The long pole. With DETECTOR 3 and resync live, each act's HP/max-HP delta is isolated and reported per seed in one pass. Fix each divergence class against source, re-run, repeat. This is a **repeatable procedure**, not a fixed code list — the recordings dictate which content diverges.
 
 **Files:**
 - Modify: `test/test_conformance_player_state.py` (add the parametrized gate)
@@ -472,7 +515,7 @@ The long pole, in aggregate. With DETECTOR 3 and resync live, each act's HP/max-
 
 **The loop (repeat until green), priority order:**
 
-1. **Map/runner stops first** — a seed whose `stopped_reason` is `"unreachable map coord"` / `"no more MoveToMapCoord"` (L081 room 35, DJDC room 17, QRWC room 20) halts before the end, hiding its tail. Triage each: reproduce with `py tools/converge_triage.py <SEED> floor_49 2`, read the `[runner]`/map divergence, open the map/travel/act-transition code (`run.py` `enter_point`/`travelable_points`, `actmap.py`, `rooms.py`) and the source (`RunManager`/act models), fix the fidelity gap so the run travels the recorded coord. If it is genuinely unported content, flag it in the test with an `xfail(reason=...)`.
+1. **Map/runner stops first** — a seed whose `stopped_reason` is `"unreachable map coord"` / `"no more MoveToMapCoord"` halts before the end, hiding its tail. ⚠️ **2026-07-23:** the examples originally cited here (L081 room 35, DJDC room 17, QRWC room 20) were **misdiagnoses** — those are non-Ironclad seeds whose wrong starting deck desyncs the map path, not map fidelity gaps. Apply this step **only to Ironclad seeds**. Triage: reproduce with `py tools/converge_triage.py <SEED> floor_49 2`, read the `[runner]`/map divergence, open the map/travel/act-transition code (`run.py` `enter_point`/`travelable_points`, `actmap.py`, `rooms.py`) and the source (`RunManager`/act models), fix the fidelity gap so the run travels the recorded coord. If it is genuinely unported content, flag it in the test with an `xfail(reason=...)`.
 2. **max-HP deltas** (`player_max_hp`) — find the max-HP-changing content the sim misses/mis-applies. Candidate sources: max-HP events (search `events/` for `max_hp`), rest-site options, relics (`meat_on_the_bone`, `black_blood`, boss/act relics). Confirm the exact amount/trigger against the source file (CLAUDE.md fidelity table), fix, re-run.
 3. **current-HP deltas** (`player_hp`) — damage/heal-pipeline drift (sim takes too little damage / over-heals; several seeds end at full HP). Localize to the earliest diverging act (resync isolates acts). Inspect that act's combats: per-combat sim HP loss vs. the matched enemy intents; audit `DamageCmd`/`BlockCmd`/relic heals/`on_combat_end` against source. Fix earliest act first.
 
@@ -486,8 +529,26 @@ import pytest
 
 SEEDS = ["89U21BV1TZ", "DJDCSAQZNR", "L081UMJX4M", "QRWCVDPZN5", "TZEKRYTSNT"]
 
+# CORRECTED 2026-07-23: only the Ironclad seeds can converge. The other four are
+# un-ported characters (Regent / Silent / Necrobinder / Defect) — permanently
+# xfail with a reason naming the character, NOT a fidelity bug to chase.
+_XFAIL_CONVERGENCE = {
+    # Ironclad — temporary, drop the entry as each converges (XPASS -> PASS):
+    "89U21BV1TZ": "converging: <current divergence>",
+    # Un-ported characters — permanent:
+    "DJDCSAQZNR": "un-ported character (CHARACTER.REGENT); sim is Ironclad-only "
+                  "so the wrong starting deck/relics make the whole run diverge.",
+    "L081UMJX4M": "un-ported character (CHARACTER.SILENT); ...",
+    "QRWCVDPZN5": "un-ported character (CHARACTER.NECROBINDER); ...",
+    "TZEKRYTSNT": "un-ported character (CHARACTER.DEFECT); ...",
+}
 
-@pytest.mark.parametrize("seed", SEEDS)
+
+@pytest.mark.parametrize("seed", [
+    pytest.param(s, marks=pytest.mark.xfail(reason=_XFAIL_CONVERGENCE[s],
+                                            strict=False))
+    for s in SEEDS
+])
 def test_full_run_player_state_parity(seed):
     b = REC / seed / "floor_49"
     rec = parse_recording(b / "actions.sts2replay")
@@ -517,10 +578,10 @@ Expected: FAIL initially — map stops and HP deltas per the table. Use `py tool
 
 - [ ] **Step C: Fix one divergence (per the loop above), re-run, repeat.** Each iteration edits the minimal content/map/pipeline site, re-runs the single `-k "<seed>"` case then the parametrized gate. Stage after each fixed site.
 
-- [ ] **Step D: Green gate** — all 5 seeds pass `test_full_run_player_state_parity` with zero player-state divergences, no premature stop, and unregressed combat-stream counters.
+- [ ] **Step D: Green gate** — every **Ironclad** seed passes `test_full_run_player_state_parity` with zero player-state divergences, no premature stop, and unregressed combat-stream counters (drop its `xfail` mark + `_XFAIL_CONVERGENCE` entry as it flips XPASS→PASS). The four non-Ironclad seeds remain `xfail` — that is the **correct terminal state**, not an outstanding failure.
 
 Run: `py -m pytest test/test_conformance_player_state.py -q`
-Expected: PASS (all parametrized cases).
+Expected: PASS for the Ironclad cases, XFAIL for the four un-ported-character cases.
 
 ---
 
@@ -534,8 +595,8 @@ Expected: PASS — 2260 baseline (± the Task-1 legacy-test updates) + all new p
 - [ ] **Step 2: Confirm acceptance criteria (spec §Acceptance)**
   - `start_run` grants the starting relic; suite green. ✓ Step 1.
   - Harness asserts `player_hp`/`player_max_hp` at floor boundaries; `converge_triage.py` prints DETECTOR 3. ✓ Tasks 3, 5.
-  - With resync on, all 5 seeds replay every room to the recording's end (no `player died` / `unreachable map coord` / `no more MoveToMapCoord`). ✓ Task 6.
-  - `player_hp`/`player_max_hp` match `run.save` at floors 18/34/49 for all 5 seeds; combat-stream counters unregressed. ✓ Task 6 gate.
+  - With resync on, every **Ironclad** seed replays every room to the recording's end (no `player died` / `unreachable map coord` / `no more MoveToMapCoord`). ✓ Task 6. *(Corrected 2026-07-23 — the four non-Ironclad seeds cannot reach the end and are expected to stop early.)*
+  - `player_hp`/`player_max_hp` match `run.save` at floors 18/34/49 for every **Ironclad** seed; combat-stream counters unregressed. ✓ Task 6 gate. The four un-ported-character seeds stay `xfail` with an accurate reason.
 
 - [ ] **Step 3: Update docs**
   - `MODULES.md`: note `SaveOracle` now carries player HP; the runner asserts player state at act boundaries (DETECTOR 3).

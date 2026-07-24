@@ -23,6 +23,7 @@ class OwlMagistrate(MachineMonster):
     loop.
 
     Source: OwlMagistrate.cs (non-ascension values)."""
+    name = "Owl Magistrate"
 
     min_hp = 231
     max_hp = 231

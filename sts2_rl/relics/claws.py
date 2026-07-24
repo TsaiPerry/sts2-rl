@@ -7,7 +7,11 @@ from .base import Relic, RelicRarity, register_relic
 class Claws(Relic):
     """Claws.cs — upon pickup, choose up to 6 deck cards (CardsVar(6),
     skippable) and transform EACH into a Maul, carrying over upgrade and
-    enchantment (CreateMaulFromOriginal)."""
+    enchantment (CreateMaulFromOriginal).
+
+    The screen is `CardSelectorPrefs(prompt, 0, 6)` — MinSelect **0** with
+    RequireManualConfirmation — so confirming with fewer than 6 (or zero) cards
+    picked is legal; "transform_optional" is the skippable purpose for that."""
 
     id = "claws"
     name = "Claws"
@@ -19,7 +23,8 @@ class Claws(Relic):
         from ..cards import make_card
 
         candidates = run.removable_cards()
-        for original in run.select_cards("transform", candidates, self.CARDS):
+        for original in run.select_cards(
+                "transform_optional", candidates, self.CARDS):
             maul = make_card("maul")
             if original.upgrade_level > 0 and maul.is_upgradable:
                 maul.upgrade()

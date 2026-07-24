@@ -220,6 +220,25 @@ def test_shop_stock_shape():
     assert all(e.is_stocked for e in inv.card_entries)
 
 
+def test_toxic_egg_upgrades_the_merchants_skill_cards():
+    # MerchantCardEntry.cs:92 runs Hook.ModifyMerchantCardCreationResults on
+    # every stocked card, so an egg relic upgrades its type in the shop too —
+    # the recording buys "Shrug It Off+" off a shelf the sim stocked plain.
+    from sts2_rl.cards import CardType
+
+    run = fresh_run(1)
+    run.start_act("overgrowth")
+    run.add_relic("toxic_egg")
+    inv = MerchantInventory.create(run)
+    skills = [e.card for e in inv.card_entries
+              if e.card is not None and e.card.card_type == CardType.SKILL]
+    assert skills, "shop always stocks skill slots"
+    assert all(c.upgrade_level == 1 for c in skills)
+    others = [e.card for e in inv.card_entries
+              if e.card is not None and e.card.card_type != CardType.SKILL]
+    assert all(c.upgrade_level == 0 for c in others)
+
+
 def test_shop_card_types_match_slots():
     from sts2_rl.cards import CardType
 
@@ -326,3 +345,21 @@ def test_shop_room_resolves_via_enter_point():
                 assert res.shop.all_entries
                 return
     pytest.fail("no shop room encountered in 30 walks")
+
+
+def test_spoils_map_card_uses_the_dedicated_spoils_map_stream():
+    """SpoilsActMap's ctor seeds its own transient stream —
+    `_rng = new Rng(runState.Rng.Seed, "spoils_map")` (SpoilsActMap.cs:92) —
+    exactly like StandardActMap.CreateFor's `act_{N}_map`. Building it off the
+    shared run RNG instead makes a parity run's act-2 map (and every later
+    room, reward and fight) nondeterministic, since that RNG is unseeded in the
+    conformance harness."""
+    def act2_layout() -> list:
+        run = RunState(string_seed="933T39V18D")
+        run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
+        run.add_card(make_card("spoils_map"))
+        run.advance_act()
+        assert isinstance(run.map, SpoilsActMap)
+        return [(p.col, p.row, p.point_type) for p in run.map.all_points()]
+
+    assert act2_layout() == act2_layout()

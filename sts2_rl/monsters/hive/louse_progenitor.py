@@ -22,6 +22,7 @@ _GROW_STR = 5
 class LouseProgenitor(MachineMonster):
     """Spawns with Curl Up 14 (blocks when first hit). Cycle: WEB_CANNON
     (9 + Frail 2) → CURL_AND_GROW (14 block + 5 Strength) → POUNCE (14)."""
+    name = "Louse Progenitor"
 
     min_hp = 134
     max_hp = 136

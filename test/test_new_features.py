@@ -228,6 +228,51 @@ class TestPotions:
         assert cs.use_potion(0)  # WeakPotion shifted into slot 0
         assert cs.enemy.powers["weak"].amount == 3
 
+    def test_swift_potion_draws_three(self):
+        # SwiftPotion.cs — Common, CombatOnly, CardsVar(3);
+        # OnUse = CardPileCmd.Draw(3) on the target player.
+        from sts2_rl.potions import make_potion
+        cs = fresh(potions=[make_potion("swift_potion")])
+        before = len(cs.player.hand)
+        assert cs.use_potion(0)
+        assert len(cs.player.hand) == before + 3
+
+    def test_bottled_potential_recycles_the_hand_and_draws_five(self):
+        # BottledPotential.cs - Rare, CombatOnly, CardsVar(5). OnUse =
+        # CardPileCmd.Add(Hand.Cards, PileType.Draw) (Bottom, no rng),
+        # CardPileCmd.Shuffle (ONE StableShuffle of discard+draw on
+        # Rng.Shuffle), CardPileCmd.Draw(5). The hand is recycled, not
+        # discarded, so no card leaves the draw/hand cycle.
+        from sts2_rl.potions import make_potion
+        cs = fresh(potions=[make_potion("bottled_potential")])
+        cs.player.discard_pile.append(cs.player.draw_pile.pop())
+        total = (len(cs.player.hand) + len(cs.player.draw_pile)
+                 + len(cs.player.discard_pile))
+        assert cs.use_potion(0)
+        assert len(cs.player.hand) == 5
+        # Everything that was in the hand went back into the draw pile, and
+        # the discard pile was shuffled in too - nothing is left behind.
+        assert cs.player.discard_pile == []
+        assert len(cs.player.hand) + len(cs.player.draw_pile) == total
+
+    def test_cure_all_gains_energy_and_draws_two(self):
+        # CureAll.cs - Uncommon, CombatOnly, EnergyVar(1) + CardsVar(2);
+        # OnUse = PlayerCmd.GainEnergy(1) then CardPileCmd.Draw(2).
+        from sts2_rl.potions import make_potion
+        cs = fresh(potions=[make_potion("cure_all")])
+        hand, energy = len(cs.player.hand), cs.player.energy
+        assert cs.use_potion(0)
+        assert cs.player.energy == energy + 1
+        assert len(cs.player.hand) == hand + 2
+
+    def test_stable_serum_retains_the_hand_for_two_turns(self):
+        # StableSerum.cs - Uncommon, CombatOnly, RepeatVar(2); OnUse =
+        # PowerCmd.Apply<RetainHandPower>(2) on the target player.
+        from sts2_rl.potions import make_potion
+        cs = fresh(potions=[make_potion("stable_serum")])
+        assert cs.use_potion(0)
+        assert cs.player.powers["retain_hand"].amount == 2
+
     def test_invalid_slot_rejected(self):
         cs = fresh()
         assert not cs.use_potion(0)

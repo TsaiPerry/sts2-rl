@@ -29,6 +29,7 @@ class TurretOperator(MachineMonster):
     shielded by its Living Shield escort.
 
     Source: TurretOperator.cs (non-ascension values)."""
+    name = "Turret Operator"
 
     min_hp = 41
     max_hp = 41
@@ -63,6 +64,7 @@ class LivingShield(MachineMonster):
     Turret Operator ally at the start of the player's turn.
 
     Source: LivingShield.cs (non-ascension values)."""
+    name = "Living Shield"
 
     min_hp = 55
     max_hp = 55

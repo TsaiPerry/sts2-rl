@@ -20,6 +20,7 @@ _START_BLOCK = 13
 
 
 class CubexConstruct(Monster):
+    name = "Cubex Construct"
     min_hp = 65
     max_hp = 65
 

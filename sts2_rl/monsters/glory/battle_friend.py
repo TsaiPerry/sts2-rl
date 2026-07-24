@@ -38,6 +38,7 @@ class _BattleFriend(MachineMonster):
 
 class BattleFriendV1(_BattleFriend):
     """Setting 1 dummy — 75 HP (BattleFriendV1.cs). Victory offers a potion."""
+    name = "Battle Friend V1.0"
 
     min_hp = 75
     max_hp = 75
@@ -45,6 +46,7 @@ class BattleFriendV1(_BattleFriend):
 
 class BattleFriendV2(_BattleFriend):
     """Setting 2 dummy — 150 HP (BattleFriendV2.cs). Victory upgrades 2 cards."""
+    name = "Battle Friend V2.0"
 
     min_hp = 150
     max_hp = 150
@@ -52,6 +54,7 @@ class BattleFriendV2(_BattleFriend):
 
 class BattleFriendV3(_BattleFriend):
     """Setting 3 dummy — 300 HP (BattleFriendV3.cs). Victory grants a relic."""
+    name = "Battle Friend V3.0"
 
     min_hp = 300
     max_hp = 300

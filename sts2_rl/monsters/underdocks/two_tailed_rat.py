@@ -33,6 +33,7 @@ class TwoTailedRat(MachineMonster):
     3 summons per fight, 5 slots) to add another rat. The encounter staggers
     the three starting moves (starter_move_idx; -1 = roll randomly, used for
     summoned rats)."""
+    name = "Two-Tailed Rat"
 
     min_hp = 17
     max_hp = 21

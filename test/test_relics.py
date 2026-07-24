@@ -812,12 +812,35 @@ class TestTurnEndRelics:
         cs = fresh(relics=[relic])
         cs.player.block = 10
         before = cs.enemy.hp
-        relic.on_player_turn_end(cs.player)
+        relic.after_player_turn_end(cs.player)
         assert cs.enemy.hp == before - 6
         cs.player.block = 5
         again = cs.enemy.hp
-        relic.on_player_turn_end(cs.player)
+        relic.after_player_turn_end(cs.player)
         assert cs.enemy.hp == again
+
+    def test_parrying_shield_counts_block_gained_at_turn_end(self):
+        """ParryingShield.cs is AfterSideTurnEnd — the game raises
+        Hook.AfterTurnEnd for the player side AFTER DoTurnEnd and
+        FlushPlayerHand (CombatManager.cs:1307), so block a turn-end effect
+        adds (Plating) counts toward the 10. On BeforeTurnEnd it does not, and
+        933T39V18D's Hive boss came out 6 HP high for exactly that reason."""
+        from sts2_rl.cmds import PowerCmd
+        from sts2_rl.powers import PlatingPower
+
+        cs = fresh(relics=[ParryingShield()])
+        cs.player.block = 8
+        PowerCmd.apply(cs.hooks, cs.player, PlatingPower, 6)
+        before = cs.enemy.hp
+        cs.end_turn()                          # 8 + Plating's 6 = 14 >= 10
+        assert cs.enemy.hp == before - 6
+
+        # Control: 8 block and no turn-end top-up stays under the threshold.
+        cs2 = fresh(relics=[ParryingShield()])
+        cs2.player.block = 8
+        before2 = cs2.enemy.hp
+        cs2.end_turn()
+        assert cs2.enemy.hp == before2
 
     def test_screaming_flagon_empty_hand(self):
         relic = ScreamingFlagon()

@@ -403,6 +403,53 @@ def test_silver_crucible():
     assert crucible.should_generate_treasure(run)
 
 
+# ── The three egg relics (ToxicEgg / FrozenEgg / MoltenEgg) ──────────────
+# NOTE the sts2 type mapping differs from sts1: Toxic = Skill, Frozen = Power,
+# Molten = Attack (ToxicEgg.cs / FrozenEgg.cs / MoltenEgg.cs).
+
+
+@pytest.mark.parametrize("relic_id,card_id,other_id", [
+    ("toxic_egg", "impervious", "strike"),      # Skill  / Attack
+    ("frozen_egg", "dark_embrace", "strike"),   # Power  / Attack
+    ("molten_egg", "strike", "defend"),         # Attack / Skill
+])
+def test_egg_upgrades_its_card_type_added_to_the_deck(relic_id, card_id, other_id):
+    # Hook.ModifyCardBeingAddedToDeck (CardPileCmd.cs:501): the egg replaces a
+    # matching, upgradable card with an upgraded clone as it enters the deck.
+    run = fresh_run(3)
+    run.add_relic(relic_id)
+    got = run.add_card(make_card(card_id))
+    assert got.upgrade_level == 1
+    assert got in run.deck and run.deck[-1] is got
+    untouched = run.add_card(make_card(other_id))
+    assert untouched.upgrade_level == 0
+
+
+@pytest.mark.parametrize("relic_id,card_id", [
+    ("toxic_egg", "impervious"), ("frozen_egg", "dark_embrace"),
+    ("molten_egg", "strike"),
+])
+def test_egg_upgrades_its_card_type_in_the_reward_options(relic_id, card_id):
+    # TryModifyCardRewardOptionsLate -> EggRelicHelper.UpgradeValidCards: the
+    # OFFER itself shows upgraded, so a reward card arrives already upgraded.
+    run = fresh_run(4)
+    run.add_relic(relic_id)
+    cards = [make_card(card_id), make_card("bash")]
+    run.relics[-1].modify_card_reward_options(run, cards)
+    assert cards[0].upgrade_level == 1
+
+
+def test_molten_egg_leaves_an_already_upgraded_attack_alone():
+    # MoltenEgg.cs:56 has an extra `CurrentUpgradeLevel >= 1` guard the other
+    # two eggs do not (multi-upgrade Attacks stop at +1 from the egg).
+    run = fresh_run(5)
+    run.add_relic("molten_egg")
+    card = make_card("strike")
+    card.upgrade()
+    got = run.add_card(card)
+    assert got.upgrade_level == 1
+
+
 def test_lava_rock_act1_boss_only_once():
     run = fresh_run(18)
     run.start_act("overgrowth", act_index=0)

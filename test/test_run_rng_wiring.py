@@ -37,11 +37,36 @@ def test_no_string_seed_leaves_streams_absent():
 
 
 def test_string_seed_does_not_disturb_legacy_rng():
-    # Seating the parity streams must consume none of the legacy rng's draws:
-    # a run built with a string seed and one built from an equivalent
-    # random.Random shuffle the grab bag identically.
-    shared = random.Random(1234)
-    run = RunState(rng=random.Random(1234), string_seed=SEED)
-    reference_bag = list(run.relic_grab_bag)
-    plain = RunState(rng=shared)
-    assert plain.relic_grab_bag == reference_bag
+    # Seating the parity streams must consume none of the legacy rng's draws,
+    # so two runs built from equal random.Random states — one with a string
+    # seed, one without — leave those RNGs at the same position.
+    #
+    # The merged relic grab bag is no longer the probe for this: a parity run
+    # re-seats it from the UpFront-shuffled per-rarity deques (so pulls are a
+    # deterministic function of the seed instead of an unseeded shuffle), while
+    # the legacy run keeps its own random.Random order. The legacy shuffle
+    # still runs in both, which is what this asserts.
+    a, b = random.Random(1234), random.Random(1234)
+    RunState(rng=a, string_seed=SEED)
+    RunState(rng=b)
+    assert a.random() == b.random()
+    assert a.getstate() == b.getstate()
+
+
+def test_string_seed_seats_the_grab_bag_from_the_parity_deques():
+    # With parity streams the pull bag is the concatenation of the player
+    # grab bag's per-rarity deques, so `pull_relic_from_front` scanning it for
+    # the rolled rarity IS RelicGrabBag.PullFromFront — and the same seed always
+    # yields the same relics (an unseeded shuffle made every replay differ).
+    first = RunState(string_seed=SEED)
+    second = RunState(string_seed=SEED)
+    assert first.relic_grab_bag == second.relic_grab_bag
+    assert first.relic_grab_bag
+    expected = [
+        rid.split(".", 1)[-1].lower()
+        for deque in first.player_relic_bag.values()
+        for rid in deque
+    ]
+    # Every bag entry is a ported relic, in deque order (unported ids dropped).
+    assert first.relic_grab_bag == [r for r in expected
+                                    if r in set(first.relic_grab_bag)]

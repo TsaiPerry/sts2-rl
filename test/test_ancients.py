@@ -199,6 +199,21 @@ def test_alchemical_coffer_slots_and_potions():
     assert len(run.potions) == 4
 
 
+def test_alchemical_coffer_fills_on_the_combat_potion_generation_stream():
+    """AfterObtained calls `PotionFactory.CreateRandomPotionsOutOfCombat(
+    owner, 4, RunState.Rng.CombatPotionGeneration)` — the serialized
+    CombatPotionGeneration stream (2 draws per potion: a rarity NextFloat then
+    a NextItem), not the shared run RNG. On the shared RNG the potions the belt
+    ends up holding are unseeded, so a replayed `UsePotion N` resolves to a
+    different potion every run."""
+    run = RunState(string_seed="933T39V18D")
+    run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
+    before = run.rng_set.combat_potion_generation.counter
+    run.add_relic("alchemical_coffer")
+    assert len(run.potions) == 4
+    assert run.rng_set.combat_potion_generation.counter == before + 8
+
+
 def test_driftwood_reroll_flag_and_reroll():
     run = fresh_run(9)
     run.add_relic("driftwood")
@@ -1317,3 +1332,21 @@ def test_miniature_tent_disables_hook_returns_false():
     assert run.should_disable_remaining_rest_site_options() is False
     run2 = fresh_run(1)
     assert run2.should_disable_remaining_rest_site_options() is True
+
+
+def test_orobas_draws_the_other_character_pick_first():
+    """`GenerateInitialOptions` opens with
+    `base.Rng.NextItem(Owner.UnlockState.Characters.Where(c => c.Id != mine))`
+    — the Sea Glass character. The sim models a fully-unlocked run (as
+    potion_pools/cards do), so that is a draw over the OTHER 4 of
+    ModelDb.AllCharacters, not an empty short-circuit: skipping it shifts every
+    later Orobas pick by one draw. 933T39V18D's Hive shrine offered
+    RADIANT_PEARL in the second slot (its recorded `ChooseEventOption 1`)."""
+    run = RunState(string_seed="933T39V18D")
+    run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
+    event = make_event("orobas", run)
+    assert event.event_rng.counter == 0
+    event.begin()
+    # 1 character pick + 1 Prismatic/Sea Glass NextFloat + 3 NextItem picks.
+    assert event.event_rng.counter == 5
+    assert event.option_keys()[1] == "radiant_pearl"

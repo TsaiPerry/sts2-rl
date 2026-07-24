@@ -22,6 +22,7 @@ class SoulFysh(MachineMonster):
     """Underdocks boss. Fixed loop: BECKON (a Beckon status into the draw
     pile and one into the discard) → DE_GAS (16) → GAZE (7 + a Beckon into
     the discard) → FADE (Intangible 2) → SCREAM (13 + Vulnerable 3)."""
+    name = "Soul Fysh"
 
     min_hp = 211
     max_hp = 211

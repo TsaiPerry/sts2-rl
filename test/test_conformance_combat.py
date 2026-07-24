@@ -161,6 +161,70 @@ def test_enemy_by_target_id_maps_slots_and_names():
     assert enemy_display_name(driver.enemy_by_target_id(2)) == "Leaf Slime (M)"
 
 
+def test_auto_played_card_targets_on_the_combat_targets_stream():
+    # CardCmd.cs:77 — an AutoPlay with no target picks
+    # `Rng.CombatTargets.NextItem(HittableEnemies)`. On the sim's unseeded
+    # shared rng the pick is unreproducible and the CombatTargets counter stays
+    # flat (933T39V18D: expected 26, sim drew 3).
+    from sts2_rl.cards import make_card
+    from sts2_rl.monsters.overgrowth import SLIMES_NORMAL
+
+    rs = RunRngSet("auto-play-target")
+    combat = CombatState(rng_set=rs, encounter=SLIMES_NORMAL)
+    assert len(combat.enemies) > 1
+    before = rs.combat_targets.counter
+    combat.auto_play_card(make_card("strike"))
+    assert rs.combat_targets.counter == before + 1
+
+
+def test_enemies_annotation_keeps_a_retained_corpse():
+    # The game removes a dead creature from CombatState.Enemies unless a power
+    # says otherwise (ShouldCreatureBeRemovedFromCombatAfterDeath — the
+    # Decimillipede's ReattachPower), so a withered segment still shows in a
+    # recording's `Enemies:` list, at 0 HP. Ordinary corpses drop out.
+    from sts2_rl.conformance.combat_driver import ReplayCombatDriver
+    from sts2_rl.combat_card_db import CombatCardDb
+    from sts2_rl.cmds import DamageCmd
+    from sts2_rl.monsters.hive import DECIMILLIPEDE_ELITE
+
+    combat = CombatState(rng_set=RunRngSet("retained-corpse"),
+                         encounter=DECIMILLIPEDE_ELITE)
+    card_db = CombatCardDb()
+    card_db.start(combat)
+    driver = ReplayCombatDriver(combat, cursor=None, card_db=card_db)
+
+    victim = combat.enemies[1]
+    DamageCmd.deal(combat.hooks, victim, 999, dealer=combat.player)
+    assert victim.hp == 0
+    live = driver._live_enemy_states()
+    assert live == [(e.name, e.hp, e.max_hp) for e in combat.enemies]
+    assert live[1] == (victim.name, 0, victim.max_hp)
+
+    # A creature with no such power leaves the annotation entirely.
+    plain = CombatState(rng_set=RunRngSet("retained-corpse"),
+                        encounter=FUZZY_WURM_ENCOUNTER)
+    plain_driver = ReplayCombatDriver(plain, cursor=None, card_db=CombatCardDb())
+    DamageCmd.deal(plain.hooks, plain.enemies[0], 999, dealer=plain.player)
+    assert plain_driver._live_enemy_states() == []
+
+
+def test_enemy_name_match_tolerates_only_the_profile_counter_suffix():
+    # TestSubject.cs:72 builds its Title with
+    # `Count = SaveManager.Instance.Progress.TestSubjectKills + 8` - a
+    # PROFILE-lifetime counter, so the act-3 boss reads "Test Subject #C71" in
+    # 933T39V18D, "#C106" in DJDCSAQZNR and "#C114" in TZEKRYTSNT even though
+    # all three saves carry the same per-run test_subject_kills. No run seed
+    # can reproduce it, so the driver accepts the sim's un-numbered name for
+    # that suffix shape only.
+    from sts2_rl.conformance.combat_driver import ReplayCombatDriver as D
+
+    assert D._name_matches("Test Subject #C71", "Test Subject")
+    assert D._name_matches("Globe Head", "Globe Head")
+    # A real name gap (missing `name` attr, wrong spelling) still diverges.
+    assert not D._name_matches("Globe Head", "GlobeHead")
+    assert not D._name_matches("Test Subject", "Test Subject #C71")
+
+
 def test_driver_reports_unknown_card_id_instead_of_crashing():
     # A recorded PlayCard whose CombatCardDb id was never registered in the sim
     # (an upstream divergence, e.g. an un-ported card-generation effect) must be
@@ -340,3 +404,60 @@ def test_runner_drives_combat_first_fight_green_ids_resolve():
     from sts2_rl.conformance.recording import parse_recording
     rec = parse_recording(REC / "89U21BV1TZ" / "floor_18" / "actions.sts2replay")
     assert drive_first_fight(rec) == []
+
+
+def _recorded_enemy_names() -> set[str]:
+    """Every enemy display name any RunReplays recording ever showed."""
+    import re
+
+    names: set[str] = set()
+    for path in REC.glob("*/floor_49/actions.sts2replay"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = re.search(r"Enemies: \[(.*)\]", line)
+            if not m or not m.group(1):
+                continue
+            for entry in m.group(1).split(", "):
+                hit = re.match(r"(.+) \d+/\d+$", entry)
+                if hit:
+                    names.add(hit.group(1))
+    return names
+
+
+def _sim_monster_names() -> set[str]:
+    """Every display name the sim's monster classes can produce (static
+    `name` attributes; the dynamic ones are covered by _DYNAMIC_NAMES)."""
+    from sts2_rl.monsters.base import Monster
+    import sts2_rl.monsters  # noqa: F401  registers every subclass
+
+    out: set[str] = set()
+    stack = [Monster]
+    while stack:
+        cur = stack.pop()
+        for sub in cur.__subclasses__():
+            stack.append(sub)
+            declared = sub.__dict__.get("name")
+            out.add(declared if isinstance(declared, str) else sub.__name__)
+    return out
+
+
+# Names the sim builds per-instance rather than from a class attribute, so a
+# static scan can't see them: Ovicopter's eggs (Tough Egg / Hatchling, named
+# from their slot) and Test Subject, whose loc string is literally
+# "Test Subject #C{Count}" — the number is per-creature.
+_DYNAMIC_NAMES = {"Tough Egg", "Hatchling"}
+
+
+def test_monster_display_names_match_the_recordings():
+    """Enemy display names are the recording's own Enemies: annotations, so a
+    class whose `name` is left to default to its CamelCase class name shows up
+    as a per-command divergence in every fight it appears in ("VineShambler"
+    vs "Vine Shambler"). Names come from localization/eng/monsters.json
+    (`<MONSTER_ID>.name`); this pins every name the recorded runs actually
+    saw."""
+    if not REC.exists():
+        pytest.skip("RunReplays recordings not present")
+    recorded = _recorded_enemy_names()
+    assert recorded, "no enemy annotations found in the recordings"
+    missing = {n for n in recorded - _sim_monster_names()
+               if n not in _DYNAMIC_NAMES and not n.startswith("Test Subject #")}
+    assert missing == set(), sorted(missing)

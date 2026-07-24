@@ -26,6 +26,7 @@ class GremlinMerc(MachineMonster):
     after its attack (ThieveryPower.Steal — GremlinMerc.cs). Surprise: on
     death, a Sneaky Gremlin and a Fat Gremlin jump out of the crate
     (SurprisePower), the fat one carrying the stolen gold (HeistPower)."""
+    name = "Gremlin Merc"
 
     min_hp = 47
     max_hp = 49
@@ -85,6 +86,7 @@ class GremlinMerc(MachineMonster):
 class SneakyGremlin(MachineMonster):
     """Spends its spawn turn waking up (STUN intent, no-op), then TACKLEs
     every turn."""
+    name = "Sneaky Gremlin"
 
     min_hp = 10
     max_hp = 14
@@ -112,6 +114,7 @@ class SneakyGremlin(MachineMonster):
 class FatGremlin(MachineMonster):
     """Spends its spawn turn waking up, then flees the fight (escapes,
     counting as gone for the win condition)."""
+    name = "Fat Gremlin"
 
     min_hp = 13
     max_hp = 17

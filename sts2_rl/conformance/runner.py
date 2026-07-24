@@ -194,6 +194,11 @@ class _ForceWinDriver(RunDriver):
         self.combat_divergences: list[Divergence] = []
         self.unresolved_play_card_ids: list[int] = []
         self.forced_combats = 0
+        # The out-of-combat card-grid screen currently being served: the picks
+        # left over from its one `SelectGridCard` command, and the
+        # count_remaining its next ask will carry (see _answer_select_grid).
+        self._grid_picks: list = []
+        self._grid_open: int | None = None
         super().__init__(run, ask=self._ask_decision, include_neow=False, **kwargs)
 
     # ── replay recorded combat, else force-win to keep floors advancing ──
@@ -266,18 +271,51 @@ class _ForceWinDriver(RunDriver):
         return legal[0]
 
     def _answer_select_grid(self, request: DecisionRequest, legal: list[int]) -> int:
-        # `SelectGridCard N` names the N-th card in the grid as displayed. The
-        # game's grid is `Deck.Cards.Where(<filter>)` in deck order shown with
-        # SortingOrders.Ascending, which sorts by the list's own index (i.e. a
-        # no-op) — so N indexes straight into the request's candidates, which
-        # the driver builds from the same deck-order filtered list. No recorded
-        # SelectGridCard before the next room boundary means the screen was
-        # cancelled/auto-resolved: fall back to the first legal action.
-        cmd = self._cursor.take_before("SelectGridCard", _ROOM_BOUNDARY)
-        if cmd is None or not cmd.args:
-            return legal[0]
-        idx = int(cmd.args[0])
-        return idx if idx in legal else legal[0]
+        # `SelectGridCard i j k …` names the i-th, j-th, … card in the grid as
+        # displayed. The game's grid is `Deck.Cards.Where(<filter>)` in deck
+        # order shown with SortingOrders.Ascending, which sorts by the list's
+        # own index (i.e. a no-op) — so the indices point straight into the
+        # request's candidates, which the driver builds from the same
+        # deck-order filtered list.
+        #
+        # ONE command == ONE screen: RunReplays' DeckCardSelectRecordPatch
+        # collects every selected card's index into a single command
+        # ("multi-card selections … recorded atomically"), and each index is
+        # `selectable.IndexOf(card)` on the grid *as first shown*. The sim's
+        # driver, by contrast, asks one SELECT_CARDS request per pick against a
+        # candidate list that shrinks as picks are taken
+        # (`RunDriver._card_selector`). So we consume the command on the first
+        # ask, resolve all of its indices against that original grid, and serve
+        # the picks one at a time — a later index like the 8 in Claws'
+        # `SelectGridCard 0 1 2 3 8` must not be re-read against the
+        # four-shorter remainder.
+        #
+        # No recorded SelectGridCard before the next room boundary (or a screen
+        # confirmed with fewer picks than MaxSelect — Claws is MinSelect 0)
+        # means: stop. Skippable screens take their skip action; the rest fall
+        # back to the first legal action.
+        stop = legal[-1] if request.skippable else legal[0]
+        # `_grid_open` is the count_remaining the next ask of the screen we are
+        # already serving will carry (None = no screen open), so a fresh screen
+        # is never mistaken for a continuation and a continuation never re-scans
+        # the cursor.
+        if getattr(self, "_grid_open", None) != request.count_remaining:
+            self._grid_picks = []
+            cmd = self._cursor.take_before("SelectGridCard", _ROOM_BOUNDARY)
+            if cmd is not None:
+                self._grid_picks = [
+                    request.candidates[int(a)] for a in cmd.args
+                    if a.lstrip("-").isdigit()
+                    and 0 <= int(a) < len(request.candidates)
+                ]
+        while self._grid_picks:
+            card = self._grid_picks.pop(0)
+            for i, candidate in enumerate(request.candidates):
+                if candidate is card and i in legal:
+                    self._grid_open = request.count_remaining - 1
+                    return i
+        self._grid_open = None                # screen closed — nothing left
+        return stop
 
     def _answer_reward_card(self, request: DecisionRequest, legal: list[int]) -> int:
         # Follow the recording's card-reward pick so the deck evolves exactly
@@ -318,11 +356,18 @@ class _ForceWinDriver(RunDriver):
         # every later fight's hand) in sync.
         entries = request.shop.all_entries
         leave = len(entries)
-        cmd = self._cursor.take_first_of(_SHOP_CMDS, _ROOM_BOUNDARY)
-        if cmd is None:
-            return leave
-        idx = self._shop_entry_index(request.shop, entries, cmd)
-        return idx if idx is not None and idx in legal else leave
+        # A purchase the live inventory can't offer (the shop stocked a
+        # different relic — the grab-bag identities are not game-exact yet) is
+        # SKIPPED, not treated as "leave": the recording's later purchases in
+        # this same shop still have to land, because every later fight's hand
+        # depends on the cards that entered the deck here.
+        while True:
+            cmd = self._cursor.take_first_of(_SHOP_CMDS, _ROOM_BOUNDARY)
+            if cmd is None:
+                return leave
+            idx = self._shop_entry_index(request.shop, entries, cmd)
+            if idx is not None and idx in legal:
+                return idx
 
     def _shop_entry_index(self, shop, entries, cmd) -> int | None:
         from ..shop import (
@@ -350,7 +395,13 @@ class _ForceWinDriver(RunDriver):
         return None
 
     def _answer_rest(self, request: DecisionRequest, legal: list[int]) -> int:
-        cmd = self._cursor.take("ChooseRestSiteOption")
+        # Bounded to THIS room. A rest visit can ask more than once (Miniature
+        # Tent's ShouldDisableRemainingRestSiteOptions keeps it open) and the
+        # recording has no explicit "Leave" — the block just ends. An unbounded
+        # scan would then answer that last ask with the NEXT rest site's
+        # option, silently eating every command in between (the intervening
+        # rooms' MoveToMapCoord included) and desyncing the walk.
+        cmd = self._cursor.take_before("ChooseRestSiteOption", _ROOM_BOUNDARY)
         if cmd is not None and cmd.args:
             want = _REST_BY_KEY.get(cmd.args[0].upper())
             if want is not None and want in legal:
@@ -365,11 +416,13 @@ class ReplayRunner:
         self.recording = recording
         self.oracle = oracle
 
-    def _node_picked_relics(self, room_index: int) -> list[str]:
+    def _node_picked_relics(self, act_index: int, room_index: int) -> list[str]:
         """The relic ids the save says were actually picked at map node
-        `room_index` (relic_choices with was_picked). Node 0 (Neow) is handled
-        separately by _neow_relics; this serves the treasure/elite/boss nodes."""
-        hist = self.oracle.map_history[0] if self.oracle.map_history else []
+        (`act_index`, `room_index`) — relic_choices with was_picked. Each act's
+        node 0 (the Ancient/Neow start node) is handled separately (_neow_relics
+        / the shrine); this serves the treasure/elite/boss nodes of any act."""
+        history = self.oracle.map_history
+        hist = history[act_index] if act_index < len(history) else []
         if room_index >= len(hist):
             return []
         out: list[str] = []
@@ -379,9 +432,11 @@ class ReplayRunner:
                     out.append(relic_key(choice["choice"]))
         return out
 
-    def _reconcile_node_relics(self, run, room_index: int, n_before: int) -> None:
-        """Make the relics granted while resolving map node `room_index` match
-        the ones the save says were picked there, replacing the sim's RNG picks.
+    def _reconcile_node_relics(self, run, act_index: int, room_index: int,
+                               n_before: int) -> None:
+        """Make the relics granted while resolving map node (`act_index`,
+        `room_index`) match the ones the save says were picked there, replacing
+        the sim's RNG picks.
 
         The sim grants treasure/elite relics off the front of the grab bag on
         the (uncompared) TreasureRoomRelics stream, which isn't draw-order-
@@ -393,15 +448,19 @@ class ReplayRunner:
         save didn't pick, and add the picked ones it's missing. Only the relic
         list matters for combat parity. An unported picked relic is dropped
         without a replacement (better a missing relic than a wrong effect)."""
-        picked = set(self._node_picked_relics(room_index))
+        picked = set(self._node_picked_relics(act_index, room_index))
         granted = list(run.relics[n_before:])
         if not picked and not granted:
             return
         for relic in granted:
             if relic.id not in picked:
                 run.relics.remove(relic)
+                # Un-pick it properly: a max-HP relic (Mango, Pear, …) already
+                # ran its AfterObtained, and leaving that +MaxHp behind would
+                # read as a player-state divergence for the rest of the run.
+                relic.undo_after_obtained(run)
         owned = {r.id for r in run.relics}
-        for rid in self._node_picked_relics(room_index):
+        for rid in self._node_picked_relics(act_index, room_index):
             if rid not in owned and rid in _all_relic_ids():
                 run.add_relic(rid)
                 owned.add(rid)
@@ -418,6 +477,34 @@ class ReplayRunner:
                 if choice.get("was_picked") and choice.get("choice"):
                     out.append(relic_key(choice["choice"]))
         return out
+
+    def _consume_ancient_map_move(self, cursor, run, divergences) -> None:
+        """Eat the `MoveToMapCoord` that walks INTO a new act's Ancient node.
+
+        Act 0 begins standing on Neow's node, but every later act drops the
+        player on the map screen *above* the board, so the recording clicks the
+        Ancient start node as a real move before the shrine plays:
+
+            ProceedToNextAct / VoteForMapCoordAction / MoveToMapCoord <startCol>
+            / ChooseEventOption <shrine> / MoveToMapCoord <first room>
+
+        The save agrees — the live act's `visited_map_coords` starts at the
+        ancient's `(startCol, row 0)`. `start_act` already stands the sim on
+        `map.starting_point`, so this command must be consumed, not walked:
+        walking it makes the act's first room land on row 1 as row 2 and shifts
+        every later row by one, which desyncs the whole act's map path a few
+        rooms in ("unreachable map coord")."""
+        cmd = cursor.take("MoveToMapCoord")
+        if cmd is None or not cmd.args:
+            return
+        col = int(cmd.args[0])
+        start = run.current_point
+        if col != start.col or start.row != 0:
+            divergences.append(Divergence(
+                "runner", 0, f"(col={col}, row=0)",
+                f"(col={start.col}, row={start.row})",
+                "act-entry Ancient node move does not match the start point",
+            ))
 
     def _check_player_state(self, run, divergences, act_index,
                             player_checkpoints, resync_player) -> None:
@@ -471,7 +558,8 @@ class ReplayRunner:
 
         hist = self.oracle.map_history[0] if self.oracle.map_history else []
         divergences: list[Divergence] = []
-        room_index = 1  # hist[0] is the (injected) Neow start node
+        room_index = 1  # per-act; hist[0] is that act's Ancient start node
+        rooms_total = 0  # cumulative across acts (room_index resets per act)
         reached_act_end = False
         reason = "recording exhausted"
 
@@ -506,8 +594,10 @@ class ReplayRunner:
                 if d is not None:
                     divergences.append(d)
             driver._resolve_room(resolution)
-            self._reconcile_node_relics(run, room_index, n_relics_before)
+            self._reconcile_node_relics(
+                run, run.act_index, room_index, n_relics_before)
             room_index += 1
+            rooms_total += 1
             if run.is_dead:
                 reason = "player died"
                 break
@@ -530,7 +620,16 @@ class ReplayRunner:
                 # per-encounter Rng (make_encounter_rng seeds on TotalFloor) is
                 # one floor too low and picks the wrong monster composition.
                 run.total_floor += 1
+                self._consume_ancient_map_move(cursor, run, divergences)
                 driver._maybe_run_ancient()
+                # Switch the node-type/relic oracle to the new act's history and
+                # restart the per-act room index (hist[0] is that act's Ancient
+                # start node, entered as room_index 1 next). Without this both
+                # compare_node_type and _reconcile_node_relics stay pinned to
+                # act 0 and silently no-op for every act past the first.
+                hist = (self.oracle.map_history[run.act_index]
+                        if run.act_index < len(self.oracle.map_history) else [])
+                room_index = 1
                 reached_act_end = False
 
         run_counters = run.rng_set.counters()
@@ -550,7 +649,7 @@ class ReplayRunner:
             divergences=divergences,
             run_counters=run_counters,
             player_counters=player_counters,
-            rooms_walked=room_index - 1,
+            rooms_walked=rooms_total,
             reached_act_end=reached_act_end,
             stopped_reason=reason,
             combat_divergences=combat_divergences,

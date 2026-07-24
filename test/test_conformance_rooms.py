@@ -172,3 +172,31 @@ def test_legacy_random_path_unchanged():
     assert len(rs.elite_keys) == RoomSet.MAX_ELITES
     assert rs.boss_key in act_rooms("overgrowth").boss_keys
     assert rs.ancient_key is None
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_ancient_start_node_counts_as_an_event_room_visit(seed):
+    """The act's Ancient/Neow start node is an **EventRoom**, so entering it
+    bumps that act's `eventsVisited` — the first "?" event node therefore
+    serves `events[1]`, not `events[0]`.
+
+    RunManager.CreateRoom maps `MapPointType.Ancient` to an `EventRoom`
+    (`State.Act.PullAncient()`), and RunManager.cs:1129 calls
+    `State.Act.MarkRoomVisited(room.RoomType)` for **every** room entered —
+    RoomSet.MarkVisited then increments `eventsVisited` for `RoomType.Event`.
+    Only `PullNextEvent` (the "?" nodes) consumes `VisitedEventIds`, so the
+    ancient's bump is a pure queue skip.
+
+    The saves prove it: act 0 of 933T39V18D lists BRAIN_LEECH first yet the run
+    played WHISPERING_HOLLOW (events[1]) at its first event node, and its
+    `events_visited` counter ends one above the number of `events_seen`.
+    """
+    o = parse_save(REC / seed / "floor_18" / "run.save")
+    act_names = [ACT_SIM_NAME[a] for a in o.acts]
+    run = RunState(string_seed=seed)
+    run.start_run(acts=list(act_names), ascension=o.ascension)
+    for i in range(len(act_names)):
+        assert run.room_set.ancient_key is not None
+        assert run.room_set.events_visited == 1, f"act {i}"
+        if i < len(act_names) - 1:
+            run.advance_act()

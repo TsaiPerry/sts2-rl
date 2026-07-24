@@ -375,6 +375,19 @@ class TestInferno:
         assert cs.player.hp == hp0 - 1
         assert cs.enemy.hp == before - 6
 
+    def test_a_turn_start_burst_kill_ends_the_combat(self):
+        # CombatManager.cs:573 -- the game runs CheckWinCondition() right after
+        # the player's turn setup / auto-pre-play phase, so a kill landed by a
+        # turn-start effect (Inferno's burst here) ends the fight immediately
+        # instead of leaving the player in a turn with no living enemies.
+        cs = fresh()
+        play(cs, InfernoCard())
+        cs.enemy.hp = 4  # burst is 6: the turn-start tick is lethal
+        cs.end_turn()
+        assert cs.enemy.is_dead
+        assert cs.is_over
+        assert cs.result is not None and cs.result.player_won
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Juggernaut / Juggling / Vicious (trigger powers)

@@ -24,6 +24,7 @@ class MechaKnight(MachineMonster):
     Artifact 3.
 
     Source: MechaKnight.cs (non-ascension values)."""
+    name = "Mecha Knight"
 
     min_hp = 300
     max_hp = 300

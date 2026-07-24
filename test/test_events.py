@@ -504,6 +504,24 @@ def test_whispering_hollow_hug_transforms_and_hurts():
     assert run.hp == 71  # lose 9
 
 
+def test_whispering_hollow_rolls_on_the_event_rng():
+    """Both of Whispering Hollow's random draws come off the event's own Rng
+    (`base.Rng`), in this order: CalculateVars' gold variance
+    (`Rng.NextInt(-9, 10)`), then HUG's `CardCmd.TransformToRandom(item,
+    base.Rng)` pick. On the shared run RNG the transform result — and every
+    later fight's draw order — is wrong (933T39V18D act 0 rolled Spite, the sim
+    rolled Stomp)."""
+    run = RunState(string_seed="933T39V18D")
+    run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
+    target = run.deck[1]
+    run.card_selector = pick(target)
+    event = make_event("whispering_hollow", run).begin()
+    assert event.event_rng.counter == 1          # the gold-variance NextInt
+    event.choose("HUG")
+    assert event.event_rng.counter == 2          # + the transform NextItem
+    assert target not in run.deck
+
+
 # ── Wood Carvings ──────────────────────────────────────────────────────────
 
 

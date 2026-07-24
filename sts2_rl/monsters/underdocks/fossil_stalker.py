@@ -28,6 +28,7 @@ class FossilStalker(MachineMonster):
     """Starts with LATCH, then rolls each turn among TACKLE / LATCH / LASH with
     equal weight, none more than twice in a row. Suck: +3 Strength per hit
     that deals unblocked damage."""
+    name = "Fossil Stalker"
 
     min_hp = 51
     max_hp = 53

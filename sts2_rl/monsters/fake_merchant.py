@@ -42,6 +42,7 @@ class FakeMerchantMonster(MachineMonster):
     (RAND_ATTACK_MOVE has no Enrage branch).
 
     Source: FakeMerchantMonster.cs (non-ascension values)."""
+    name = "The Merchant???"
 
     min_hp = 165
     max_hp = 165

@@ -36,7 +36,15 @@ class WhisperingHollow(Event):
         return run.gold >= _MIN_GOLD
 
     def calculate_vars(self) -> None:
-        self.gold_cost = _BASE_GOLD + self.rng.randint(-_GOLD_VARIANCE, _GOLD_VARIANCE)
+        # `base.Rng.NextInt(-9, 10)` — the event's own Rng, not the shared run
+        # RNG. It is also the FIRST draw on that stream, so it shifts HUG's
+        # transform pick below; both must be parity-wired together.
+        if self.event_rng is not None:
+            variance = self.event_rng.next_int_range(
+                -_GOLD_VARIANCE, _GOLD_VARIANCE + 1)
+        else:
+            variance = self.rng.randint(-_GOLD_VARIANCE, _GOLD_VARIANCE)
+        self.gold_cost = _BASE_GOLD + variance
 
     def initial_options(self) -> list[EventOption]:
         return [
@@ -53,6 +61,8 @@ class WhisperingHollow(Event):
     def _hug(self) -> None:
         chosen = self.run.select_cards("transform", self.run.transformable_cards(), 1)
         for card in chosen:
-            self.run.transform_card(card)
+            # CardCmd.TransformToRandom(item, base.Rng): the replacement is
+            # rolled on the event's Rng (NextItem over the filtered pool).
+            self.run.transform_card(card, pick_rng=self.event_rng)
         self.run.lose_hp(_HP_LOSS)
         self._finish("HUG")

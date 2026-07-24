@@ -31,6 +31,7 @@ class PhantasmalGardener(MachineMonster):
     a different point based on its slot (first→FLAIL, second→BITE,
     third→LASH, fourth→ENLARGE). Skittish 6: the first card attack each turn
     that deals it unblocked damage grants 6 block."""
+    name = "Phantasmal Gardener"
 
     min_hp = 26
     max_hp = 31

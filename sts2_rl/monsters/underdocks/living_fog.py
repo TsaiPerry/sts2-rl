@@ -21,6 +21,7 @@ _BOMB_SLOTS = 5
 class GasBomb(MachineMonster):
     """Minion spawned by Living Fog; every turn it EXPLODEs — 8 damage to the
     player and it dies in the blast."""
+    name = "Gas Bomb"
 
     min_hp = 7
     max_hp = 7
@@ -49,6 +50,7 @@ class LivingFog(MachineMonster):
     """Opens with ADVANCED_GAS (8 damage + Smoggy: playing a Skill smogs your
     other Skills for the turn), then alternates BLOAT (spawn a Gas Bomb if a
     slot is free, then 5 damage) and SUPER_GAS_BLAST (8 damage)."""
+    name = "Living Fog"
 
     min_hp = 80
     max_hp = 80

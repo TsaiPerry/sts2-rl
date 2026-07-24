@@ -25,6 +25,7 @@ _RITUAL_STR = 2
 
 class KinFollower(Monster):
     """QUICK_SLASH → BOOMERANG → POWER_DANCE → cycle. StartsWithDance shifts start to POWER_DANCE."""
+    name = "Kin Follower"
     min_hp = 58
     max_hp = 59
 
@@ -65,6 +66,7 @@ class KinFollower(Monster):
 
 class KinPriest(Monster):
     """ORB_OF_FRAILTY → ORB_OF_WEAKNESS → BEAM → RITUAL → cycle."""
+    name = "Kin Priest"
     min_hp = 190
     max_hp = 190
 

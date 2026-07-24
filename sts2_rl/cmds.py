@@ -93,12 +93,24 @@ class DamageCmd:
             # 7. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
             if target.hp <= 0:
                 if hooks.should_die(target):
+                    # CreatureCmd.cs:508 — the death stands; a listener may
+                    # still keep the corpse in the combat rather than removing
+                    # it (Decimillipede's ReattachPower).
+                    target.retained_after_death = (
+                        not hooks.should_remove_from_combat_after_death(target)
+                    )
                     hooks.on_death(target)
                 else:
                     target.hp = 1
 
-        # 8. Post-damage events
-        hooks.on_damage_received(target, hp_lost, dealer, card, props)
+        # 8. Post-damage events. A killing blow skips the victim's
+        #    AfterDamageReceived (CreatureCmd.cs:392 — `!WasTargetKilled ||
+        #    !IsDead`): the hit that kills a creature does not trigger its
+        #    on-damage-received powers (e.g. PersonalHive shuffles no Dazed on
+        #    the hit that kills its owner). AfterDamageGiven (on_damage_dealt)
+        #    is not guarded and still fires on the kill.
+        if not target.is_dead:
+            hooks.on_damage_received(target, hp_lost, dealer, card, props)
         if dealer is not None and hp_lost > 0:
             hooks.on_damage_dealt(dealer, target, hp_lost, card)
 
@@ -166,6 +178,9 @@ class CreatureCmd:
         target.hp = 0
         hooks.on_hp_changed(target, -old_hp)
         if hooks.should_die(target):
+            target.retained_after_death = (
+                not hooks.should_remove_from_combat_after_death(target)
+            )
             hooks.on_death(target)
         else:
             target.hp = 1

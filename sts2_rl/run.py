@@ -179,6 +179,24 @@ class RunState:
         if self.rng_set is not None:
             self.shared_relic_bag, self.player_relic_bag = populate_relic_grab_bags(
                 self.rng_set.up_front)
+            # Re-seat the merged pull bag from those deques, in bucket-insertion
+            # order. `pull_relic_from_front` scans it for the first relic of the
+            # rolled rarity, which over a rarity-grouped list IS
+            # RelicGrabBag.PullFromFront (the front of that rarity's deque). It
+            # also replaces a `random.Random()` shuffle that, with no seed, made
+            # every parity replay hand out different chest/elite relics — a
+            # max-HP one (Mango, Pear, …) then moved the player's max HP even
+            # after the conformance runner reconciled the relic list.
+            # NOTE: only the ORDER source changes here. Reproducing the game's
+            # exact bucket order/identities is still open (relic_pools.py:
+            # "identities become a reward-pull oracle in Task 9"), so the relic
+            # a parity run pulls is deterministic but not yet game-exact.
+            self.relic_grab_bag = [
+                rid.split(".", 1)[-1].lower()
+                for deque in self.player_relic_bag.values()
+                for rid in deque
+                if rid.split(".", 1)[-1].lower() in ALL_RELICS
+            ]
         # A separate bag of Shop-rarity relics (never in the normal grab bag)
         # for the merchant's Shop-rarity slot (RelicFactory.PullNextRelicFromBack
         # with RelicRarity.Shop). Built + shuffled lazily on first shop access
@@ -305,6 +323,13 @@ class RunState:
     # ── Deck ─────────────────────────────────────────────────────────────
 
     def add_card(self, card: Card) -> Card:
+        # Hook.ModifyCardBeingAddedToDeck (CardPileCmd.cs:501) runs BEFORE the
+        # card joins the deck and may swap in a replacement — the egg relics
+        # substitute an upgraded clone for their card type.
+        for relic in list(self.relics):
+            replacement = relic.modify_card_being_added_to_deck(self, card)
+            if replacement is not None:
+                card = replacement
         self.deck.append(card)
         # RelicModel.AfterCardChangedPiles for the deck pile (Darkstone
         # Periapt's Max HP on a gained Curse).
@@ -491,6 +516,7 @@ class RunState:
         self,
         rarity: RelicRarity | None = None,
         shop_legal: bool = False,
+        rarity_rng=None,
     ) -> Relic | None:
         """RelicFactory.PullNextRelicFromFront: roll rarity (<0.5 Common,
         <0.83 Uncommon, else Rare), pull the first bag relic of that rarity.
@@ -501,11 +527,22 @@ class RunState:
         `rarity` pins the rarity instead of rolling it, and `shop_legal`
         applies an IsAllowedInShops filter — together they are the source's
         PullNextRelicFromFront(player, rarity, filter) overload, which
-        Welcome to Wongo's uses for its bargain-bin and featured relics."""
+        Welcome to Wongo's uses for its bargain-bin and featured relics.
+
+        `rarity_rng` is the stream the rarity NextFloat comes off — the game
+        picks it per caller, and the default overload is
+        `PullNextRelicFromFront(player)` -> `RollRarity(player)` ->
+        `player.PlayerRng.Rewards` (RelicFactory.cs:28/82), so an unspecified
+        stream means the Rewards one. Callers on another stream pass it (the
+        treasure chest's synchronizer is built with
+        `State.Rng.TreasureRoomRelics`). `rewards_rng` is itself the legacy
+        shared run RNG when there is no parity rng_set, so the RL path is
+        unchanged."""
         if not self.relic_grab_bag:
             return None
         if rarity is None:
-            rarity = roll_relic_rarity(self.rng)
+            rarity = roll_relic_rarity(
+                rarity_rng if rarity_rng is not None else self.rewards_rng)
         for relic_id in self.relic_grab_bag:
             cls = ALL_RELICS[relic_id]
             if cls.rarity == rarity and (not shop_legal or cls.is_allowed_in_shops):
@@ -547,9 +584,9 @@ class RunState:
             self.rng.shuffle(self._shop_relic_bag)
         return self._shop_relic_bag
 
-    def obtain_relic_from_grab_bag(self) -> Relic | None:
+    def obtain_relic_from_grab_bag(self, rarity_rng=None) -> Relic | None:
         """Pull from the bag front and add it to the run's relics."""
-        relic = self.pull_relic_from_front()
+        relic = self.pull_relic_from_front(rarity_rng=rarity_rng)
         if relic is not None:
             self.add_relic(relic)
         return relic
@@ -714,6 +751,21 @@ class RunState:
         self.map = self._generate_map()
         self._generate_rooms()
         self.current_point = self.map.starting_point
+        # Standing at the Ancient IS entering it: RunManager.CreateRoom turns a
+        # `MapPointType.Ancient` point into an **EventRoom** (PullAncient), and
+        # RunManager.cs:1129 marks *every* entered room visited, so RoomSet.
+        # MarkVisited(RoomType.Event) bumps this act's `eventsVisited` before
+        # any "?" node is walked. Only PullNextEvent (the "?" nodes) records
+        # VisitedEventIds, so the ancient's bump is a pure queue skip: the
+        # first event node serves `events[1]`. The shrine itself is fired by
+        # the driver (_maybe_run_ancient / the run-start Neow), which is why
+        # this can't live in enter_point. Acts with no ancient node
+        # (RoomSet.HasAncient false — the legacy path, where the driver rolls
+        # the shrine outside the room set) skip the bump.
+        if self.room_set is not None and self.room_set.ancient_key is not None:
+            from .rooms import RoomType as _RoomType
+
+            self.room_set.mark_visited(_RoomType.EVENT)
         self.map_history = []
         self._last_room_types: list[RoomType] = []
         return self.map
@@ -903,7 +955,12 @@ class RunState:
             # Hook.ShouldGenerateTreasure can suppress the chest entirely
             # (Silver Crucible's first treasure room).
             if all(r.should_generate_treasure(self) for r in self.relics):
-                resolution.relic = self.obtain_relic_from_grab_bag()
+                # TreasureRoomRelicSynchronizer rolls the chest relic's rarity
+                # on State.Rng.TreasureRoomRelics (RunManager.cs:413), one
+                # NextFloat per player, then pulls from the grab bag front.
+                resolution.relic = self.obtain_relic_from_grab_bag(
+                    rarity_rng=(self.rng_set.treasure_room_relics
+                                if self.rng_set is not None else None))
                 # OneOffSynchronizer.DoTreasureRoomRewards: the chest gold is
                 # NextInt(42, 53) on the per-player Rewards stream (parity), else
                 # the legacy run.rng. (The relic itself is picked on the

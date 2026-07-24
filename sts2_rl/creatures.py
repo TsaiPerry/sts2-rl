@@ -24,6 +24,11 @@ class Creature:
         self.stunned = False
         # Set by CreatureCmd.escape; the creature has left combat alive.
         self.escaped = False
+        # Set on death when Hook.ShouldCreatureBeRemovedFromCombatAfterDeath
+        # says no (CreatureCmd.cs:508): the corpse stays in CombatState.Enemies
+        # — it still shows in the UI/recording and still takes turns, which is
+        # how a withered Decimillipede segment reaches its REATTACH move.
+        self.retained_after_death = False
 
     @property
     def strength(self) -> int:

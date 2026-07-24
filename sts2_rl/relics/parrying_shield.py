@@ -21,7 +21,9 @@ class ParryingShield(Relic):
     BLOCK_THRESHOLD = 10
     DAMAGE = 6
 
-    def on_player_turn_end(self, player: PlayerCombatState) -> None:
+    def after_player_turn_end(self, player: PlayerCombatState) -> None:
+        # ParryingShield.cs is AfterSideTurnEnd, i.e. Hook.AfterTurnEnd — after
+        # the turn-end card effects, so block Plating just added counts.
         if player.block < self.BLOCK_THRESHOLD:
             return
         living = self.living_enemies()

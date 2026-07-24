@@ -56,8 +56,24 @@ class SpoilsMapCard(Card):
         from ..actmap import SpoilsActMap
 
         return SpoilsActMap(
-            rng=run.rng, config=run.act_config, ascension=run.ascension
+            rng=self._map_rng(run), config=run.act_config,
+            ascension=run.ascension,
         )
+
+    @staticmethod
+    def _map_rng(run):
+        """The stream SpoilsActMap carves its hourglass from.
+
+        Parity: the ctor seeds its own transient stream —
+        `_rng = new Rng(runState.Rng.Seed, "spoils_map")` (SpoilsActMap.cs:92),
+        the same shape as StandardActMap.CreateFor's `act_{N}_map` — so the
+        layout is a pure function of the run seed and no serialized counter
+        moves. The legacy path keeps the shared run RNG."""
+        if run.rng_set is None:
+            return run.rng
+        from ..rng import GameRandomAdapter, Rng
+
+        return GameRandomAdapter(Rng(run.rng_set.seed, name="spoils_map"))
 
     def modify_generated_map_late(self, run, act_map, act_index):
         if not self._active_in(run, act_index):

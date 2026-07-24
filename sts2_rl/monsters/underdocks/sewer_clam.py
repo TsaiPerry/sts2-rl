@@ -18,6 +18,7 @@ _PLATING = 8
 class SewerClam(MachineMonster):
     """Starts with Plating 8 (and its block); alternates JET (10) and
     PRESSURIZE (+4 Strength), starting with JET."""
+    name = "Sewer Clam"
 
     min_hp = 56
     max_hp = 56

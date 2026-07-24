@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from .base import Relic, RelicRarity, register_relic
+from ..cards import CardType
+from ._eggs import EggRelic
+from .base import register_relic
 
 
 @register_relic
-class ToxicEgg(Relic):
-    """Skill cards added to your deck are Upgraded — an out-of-combat deck edit,
-    so this is a no-op stub."""
+class ToxicEgg(EggRelic):
+    """ToxicEgg.cs — Skill cards added to your deck (and offered as card
+    rewards) arrive Upgraded."""
 
     id = "toxic_egg"
     name = "Toxic Egg"
-    rarity = RelicRarity.RARE
+    CARD_TYPE = CardType.SKILL

@@ -44,6 +44,7 @@ class _Cultist(MachineMonster):
 
 class CalcifiedCultist(_Cultist):
     """Hits harder, smaller Ritual."""
+    name = "Calcified Cultist"
 
     min_hp = 38
     max_hp = 41
@@ -53,6 +54,7 @@ class CalcifiedCultist(_Cultist):
 
 class DampCultist(_Cultist):
     """Hits for almost nothing, but Ritual 5 snowballs fast."""
+    name = "Damp Cultist"
 
     min_hp = 51
     max_hp = 53

@@ -39,8 +39,18 @@ class TinkerTime(Event):
     def initial_options(self) -> list[EventOption]:
         return [EventOption("CHOOSE_CARD_TYPE", self._choose_card_type)]
 
+    def _take_random_2(self, pool: list):
+        """`TakeRandom(2, base.Rng)` — `UnstableShuffle(rng).Take(2)`
+        (IEnumerableExtensions.cs:19): a full Fisher-Yates of the whole list on
+        the per-EVENT Rng, then the first two. NOT `sample`, whose draw count
+        and ordering both differ — and the offered order is what a recording's
+        `ChooseEventOption <n>` indexes into. Legacy keeps the shared run rng."""
+        pool = list(pool)
+        (self.event_rng if self.event_rng is not None else self.rng).shuffle(pool)
+        return pool[:2]
+
     def _choose_card_type(self) -> None:
-        types = self.rng.sample(list(_TYPE_RIDERS), 2)  # TakeRandom(2)
+        types = self._take_random_2(list(_TYPE_RIDERS))
         options = [
             EventOption(_TYPE_KEYS[t], self._make_type_chooser(t)) for t in types
         ]
@@ -53,7 +63,7 @@ class TinkerTime(Event):
         return choose
 
     def _choose_rider(self) -> None:
-        riders = self.rng.sample(_TYPE_RIDERS[self._chosen_type], 2)  # TakeRandom(2)
+        riders = self._take_random_2(_TYPE_RIDERS[self._chosen_type])
         options = [
             EventOption(rider.upper(), self._make_rider_chooser(rider)) for rider in riders
         ]

@@ -140,6 +140,15 @@ class Relic:
         no-op). RunState.add_relic invokes it. Golden Compass uses it to
         regenerate the current act's map as a golden path."""
 
+    def undo_after_obtained(self, run) -> None:
+        """Reverse `after_obtained` (default no-op). Has no counterpart in the
+        game — nothing there ever un-picks a relic. It exists for the
+        conformance runner, which lets the sim grant a node's relic and then
+        swaps it for the one the save says was really picked: without an undo,
+        a discarded max-HP relic (Mango, Pear, …) leaves its +MaxHp behind and
+        the player-state parity check reads high for the rest of the run. Only
+        relics whose pickup mutates run state outside `run.relics` need it."""
+
     def attach(self, combat: CombatState) -> None:
         self.combat = combat
         combat.hooks.register(self)
@@ -164,6 +173,18 @@ class Relic:
         """Hook.TryModifyCardRewardOptionsLate — mutate a card reward's
         options in place (Silver Crucible upgrades them, Silken Tress
         enchants them)."""
+
+    def modify_merchant_card_results(self, run, cards) -> None:
+        """Hook.ModifyMerchantCardCreationResults (MerchantCardEntry.cs:92) —
+        mutate the merchant's just-stocked card in place, before its price is
+        calculated (the egg relics upgrade their card type on the shelf)."""
+
+    def modify_card_being_added_to_deck(self, run, card):
+        """Hook.ModifyCardBeingAddedToDeck (CardPileCmd.cs:501) — runs just
+        before a card lands in the deck, whatever its source. Return a
+        replacement card (the egg relics hand back an upgraded one) or None to
+        leave it alone."""
+        return None
 
     def should_generate_treasure(self, run) -> bool:
         """Hook.ShouldGenerateTreasure — Silver Crucible skips the chest in

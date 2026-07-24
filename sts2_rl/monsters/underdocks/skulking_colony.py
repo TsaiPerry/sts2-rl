@@ -21,6 +21,7 @@ _HARDENED_SHELL = 20
 class SkulkingColony(MachineMonster):
     """Elite. Hardened Shell 20 caps its HP loss per side-turn; loops
     ZOOM (14) → ZOOM (14) → INERTIA (9 + self 2 Str) → PIERCING_STABS (7×2)."""
+    name = "Skulking Colony"
 
     min_hp = 75
     max_hp = 75

@@ -29,6 +29,7 @@ class FrogKnight(MachineMonster):
     resuming. Starts with Plating 15.
 
     Source: FrogKnight.cs (non-ascension values)."""
+    name = "Frog Knight"
 
     min_hp = 191
     max_hp = 191

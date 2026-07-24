@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from .base import Relic, RelicRarity, register_relic
+from ..cards import CardType
+from ._eggs import EggRelic
+from .base import register_relic
+
 
 @register_relic
-class FrozenEgg(Relic):
-    """Power cards added to your deck are Upgraded — out-of-combat, stub."""
+class FrozenEgg(EggRelic):
+    """FrozenEgg.cs — Power cards added to your deck (and offered as card
+    rewards) arrive Upgraded."""
 
     id = "frozen_egg"
     name = "Frozen Egg"
-    rarity = RelicRarity.RARE
+    CARD_TYPE = CardType.POWER

@@ -27,6 +27,7 @@ class InfestedPrism(MachineMonster):
     you take +2 attack damage that turn (stacks). Cycle: JAB (15) → RADIATE
     (11 + 11 block) → WHIRLWIND (5x3) → PULSATE (8 + 20 block + Vital Spark
     +2)."""
+    name = "Infested Prism"
 
     min_hp = 161
     max_hp = 161

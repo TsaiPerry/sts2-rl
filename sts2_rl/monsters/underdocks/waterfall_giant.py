@@ -28,6 +28,7 @@ class WaterfallGiant(MachineMonster):
     Eruption. Killing it flips it into ABOUT_TO_BLOW (a lost turn) and then
     EXPLODE: all banked Steam Eruption as one attack, and it dies in the
     blast."""
+    name = "Waterfall Giant"
 
     min_hp = 240
     max_hp = 240

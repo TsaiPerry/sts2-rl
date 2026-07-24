@@ -25,6 +25,7 @@ class GlobeHead(MachineMonster):
     player's Power cards with Galvanized (they zap the player for 6 when played).
 
     Source: GlobeHead.cs (non-ascension values)."""
+    name = "Globe Head"
 
     min_hp = 148
     max_hp = 148

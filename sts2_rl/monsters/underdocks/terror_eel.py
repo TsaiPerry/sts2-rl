@@ -23,6 +23,7 @@ class TerrorEel(MachineMonster):
     next CRASH). Shriek 70: the first unblocked hit that leaves it at or
     below 70 HP stuns it for a turn, after which it screams TERROR
     (Vulnerable 99) and resumes at CRASH."""
+    name = "Terror Eel"
 
     min_hp = 140
     max_hp = 140

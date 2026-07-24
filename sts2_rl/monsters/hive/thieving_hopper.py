@@ -30,6 +30,7 @@ class ThievingHopper(MachineMonster):
     """THIEVERY (steal a card + 17) → FLUTTER (Flutter 5: half damage until
     5 unblocked hits land) → HAT_TRICK (21) → NAB (14) → ESCAPE. Spawns with
     the Escape Artist countdown."""
+    name = "Thieving Hopper"
 
     min_hp = 79
     max_hp = 79

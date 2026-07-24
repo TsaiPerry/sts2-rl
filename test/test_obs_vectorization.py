@@ -613,7 +613,12 @@ def _drive_run_env_matching(env: STS2RunEnv, seeds, max_steps=20_000):
 
 def test_run_env_matches_reference_all_phases():
     env = STS2RunEnv()
-    seen = _drive_run_env_matching(env, range(100, 130))
+    # The range is a coverage sweep, not a fixture: it only has to be wide
+    # enough that a random walk lands on every DecisionKind below. Any change
+    # to what the legacy RNG is spent on (a newly ported potion joining the
+    # reward pool, say) reshuffles which seed reaches a rest site, so widen it
+    # rather than pinning the old width.
+    seen = _drive_run_env_matching(env, range(100, 145))
     # The sweep must actually exercise the phase-specific blocks.
     needed = {
         DecisionKind.MAP, DecisionKind.EVENT, DecisionKind.COMBAT,

@@ -65,6 +65,13 @@ POTION_POOL: tuple[tuple[str, str], ...] = tuple(
     (snake_case(name), rarity) for name, rarity in _RAW_POOL
 )
 
+# PotionModel.CanBeGeneratedInCombat => false — the three potions
+# CreateRandomPotionInCombat filters out (FairyInABottle / FruitJuice /
+# RegenPotion; the healing-adjacent ones). Everything else defaults to true.
+NOT_GENERATED_IN_COMBAT: frozenset[str] = frozenset(
+    {"fairy_in_a_bottle", "fruit_juice", "regen_potion"}
+)
+
 
 class _ParityPotion(Potion):
     """A pool-membership placeholder for a potion the sim doesn't implement.
@@ -107,6 +114,16 @@ def generate_random_potion(rng: Rng, blacklist: "set[str] | None" = None) -> Pot
     rarity = roll_potion_rarity(rng)
     options = [pid for pid, r in POTION_POOL if r == rarity and pid not in used]
     return _make(rng.next_item(options), rarity)
+
+
+def generate_random_potion_in_combat(
+    rng: Rng, blacklist: "set[str] | None" = None
+) -> Potion:
+    """PotionFactory.CreateRandomPotionInCombat: same two draws as the
+    out-of-combat form, over the pool minus the potions that cannot be
+    generated in combat."""
+    used = set(blacklist or ()) | NOT_GENERATED_IN_COMBAT
+    return generate_random_potion(rng, used)
 
 
 def generate_random_potions(

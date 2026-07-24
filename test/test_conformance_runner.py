@@ -94,3 +94,185 @@ def test_runner_combat_is_driven_not_forced_and_ids_resolve():
     assert result.unresolved_play_card_ids == [], result.unresolved_play_card_ids
     # Not every fight is force-won any more: the driver replayed at least one.
     assert result.forced_combats < result.rooms_walked
+
+
+def test_shop_skips_an_unstockable_purchase_instead_of_leaving():
+    """A recorded purchase the live inventory can't offer (the shop stocked a
+    different relic — grab-bag identities are not game-exact yet) must be
+    skipped, not read as "leave the shop": 933T39V18D's act-1 shop buys
+    Catastrophe+, Alchemize+, Parrying Shield, Brimstone, Shrug It Off+, and
+    bailing on the missing Brimstone dropped Shrug It Off+ from the deck,
+    desyncing every later fight's hand."""
+    from sts2_rl.conformance.runner import _CommandCursor, _ForceWinDriver
+    from sts2_rl.driver import DecisionKind
+    from sts2_rl.conformance.recording import Command
+
+    def cmd(name, *args):
+        return Command(name=name, args=list(args), comment="", annotation=None,
+                       lineno=0)
+
+    from sts2_rl.relics import make_relic
+    from sts2_rl.shop import MerchantRelicEntry
+
+    def entry(relic_id):
+        e = MerchantRelicEntry.__new__(MerchantRelicEntry)
+        e.relic = make_relic(relic_id)
+        return e
+
+    class _Shop:
+        card_removal_entry = None
+
+        def __init__(self):
+            self.all_entries = [entry("parrying_shield"), entry("orrery")]
+
+    shop = _Shop()
+
+    class _Req:
+        kind = DecisionKind.SHOP
+
+        def __init__(self):
+            self.shop = shop
+
+        def legal_actions(self):
+            return [0, 1, 2]
+
+    cursor = _CommandCursor([
+        cmd("BuyRelic", "Brimstone"),          # not stocked here — skip it
+        cmd("BuyRelic", "Parrying Shield"),    # …and still buy this one
+        cmd("MoveToMapCoord", "2"),
+    ])
+    driver = _ForceWinDriver.__new__(_ForceWinDriver)
+    driver._cursor = cursor
+    req = _Req()
+    assert driver._answer_shop(req, req.legal_actions()) == 0
+    # Nothing else to buy in this room: leave, next room's move intact.
+    assert driver._answer_shop(req, req.legal_actions()) == 2
+    nxt = cursor.peek()
+    assert nxt is not None and nxt.name == "MoveToMapCoord"
+
+
+def test_rest_site_lookahead_cannot_steal_the_next_rooms_move():
+    """A Miniature Tent rest site keeps offering options until the player
+    Leaves, but the recording writes no "Leave" command — the block simply
+    ends. The driver's extra ask must therefore find *nothing*: an unbounded
+    scan would run past the room and consume the NEXT rest site's option,
+    swallowing every command in between (933T39V18D act 1: the elite's
+    `MoveToMapCoord 3` vanished and the act desynced into "unreachable map
+    coord" four rooms later)."""
+    from sts2_rl.conformance.runner import _CommandCursor, _ForceWinDriver
+    from sts2_rl.driver import REST_HEAL, REST_LEAVE, REST_SMITH, DecisionKind
+    from sts2_rl.conformance.recording import Command
+
+    def cmd(name, *args):
+        return Command(name=name, args=list(args), comment="", annotation=None,
+                       lineno=0)
+
+    cursor = _CommandCursor([
+        cmd("ChooseRestSiteOption", "SMITH"),
+        cmd("ChooseRestSiteOption", "HEAL"),
+        cmd("MoveToMapCoord", "3"),              # the next room — must survive
+        cmd("ChooseRestSiteOption", "SMITH"),    # a LATER rest site
+    ])
+
+    class _Req:
+        kind = DecisionKind.REST
+
+        def legal_actions(self):
+            return [REST_HEAL, REST_SMITH, REST_LEAVE]
+
+    driver = _ForceWinDriver.__new__(_ForceWinDriver)
+    driver._cursor = cursor
+    req = _Req()
+    assert driver._answer_rest(req, req.legal_actions()) == REST_SMITH
+    assert driver._answer_rest(req, req.legal_actions()) == REST_HEAL
+    # Third ask (Miniature Tent keeps the visit open): nothing left in THIS
+    # room, so leave — and the next room's move is still on the cursor.
+    assert driver._answer_rest(req, req.legal_actions()) == REST_LEAVE
+    nxt = cursor.peek()
+    assert nxt is not None and nxt.name == "MoveToMapCoord" and nxt.args == ["3"]
+
+
+def test_multi_index_select_grid_is_one_screen_over_the_original_grid():
+    """`SelectGridCard i j k …` is ONE screen recorded atomically: RunReplays'
+    DeckCardSelectRecordPatch collects every selected card's index into a
+    single command, and each index is a position in the grid *as first shown*
+    (`selectable.IndexOf(card)` on the unchanged list).
+
+    The sim's driver asks one SELECT_CARDS request per pick against a
+    *shrinking* candidate list (`RunDriver._card_selector` pops each pick), so
+    the runner must consume the command once, resolve every index against the
+    original grid, and then serve the picks one at a time. Reading only
+    `args[0]` (and re-scanning for a further `SelectGridCard` that never
+    exists) makes picks 2..N fall back to `legal[0]` — which is what left
+    933T39V18D's act-2 deck wrong from the Claws transform onward
+    (`SelectGridCard 0 1 2 3 8`, floor_49 line 439)."""
+    from sts2_rl.conformance.recording import Command
+    from sts2_rl.conformance.runner import _CommandCursor, _ForceWinDriver
+    from sts2_rl.driver import DecisionKind
+
+    def cmd(name, *args):
+        return Command(name=name, args=list(args), comment="", annotation=None,
+                       lineno=0)
+
+    grid = [f"c{i}" for i in range(10)]
+
+    class _Req:
+        kind = DecisionKind.SELECT_CARDS
+        skippable = True
+
+        def __init__(self, candidates, count_remaining):
+            self.candidates = candidates
+            self.count_remaining = count_remaining
+
+        def legal_actions(self):
+            return list(range(len(self.candidates) + 1))  # + skip
+
+    cursor = _CommandCursor([
+        cmd("SelectGridCard", "0", "1", "2", "3", "8"),
+        cmd("ChooseEventOption", "-1"),
+        cmd("MoveToMapCoord", "1"),
+    ])
+    driver = _ForceWinDriver.__new__(_ForceWinDriver)
+    driver._cursor = cursor
+
+    remaining, picked, want = list(grid), [], 6
+    for i in range(want):
+        req = _Req(list(remaining), want - i)
+        idx = driver._answer_select_grid(req, req.legal_actions())
+        if idx == len(remaining):               # the screen was confirmed early
+            break
+        picked.append(remaining.pop(idx))
+    # Exactly the five recorded cards, in the recorded order — index 8 is the
+    # ORIGINAL grid position, not a position in the four-shorter remainder.
+    assert picked == ["c0", "c1", "c2", "c3", "c8"]
+    # MaxSelect was 6 but the player confirmed 5 (Claws' screen is MinSelect 0),
+    # so the sixth ask must stop, not steal the next room's command.
+    nxt = cursor.peek()
+    assert nxt is not None and nxt.name == "ChooseEventOption"
+
+
+def test_claws_transform_screen_is_optional():
+    """Claws.cs:24 builds `CardSelectorPrefs(prompt, 0, CardsVar(6))` — MinSelect
+    **0**, MaxSelect 6 — with `RequireManualConfirmation`, so the player may
+    confirm with fewer than 6 cards chosen (933T39V18D picked 5). The sim must
+    surface that screen as skippable; a forced 6-of-6 transform puts an extra
+    Maul in the deck and desyncs every later hand."""
+    import random
+
+    from sts2_rl.driver import SKIPPABLE_PURPOSES
+    from sts2_rl.run import RunState
+
+    seen: list[tuple[str, int]] = []
+
+    def selector(purpose, candidates, count):
+        seen.append((purpose, count))
+        return candidates[:2]
+
+    run = RunState(rng=random.Random(0), card_selector=selector)
+    run.add_relic("claws")
+    assert len(seen) == 1
+    purpose, count = seen[0]
+    assert count == 6
+    assert purpose in SKIPPABLE_PURPOSES, purpose
+    # Only the two cards the selector confirmed became Mauls.
+    assert len([c for c in run.deck if c.id == "maul"]) == 2

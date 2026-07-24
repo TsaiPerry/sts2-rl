@@ -39,8 +39,16 @@ class TestSubject(MachineMonster):
     Pounce 45 → Burning Growl [3 Burn + 2 Strength], with Nemesis granting
     Intangible every other turn). Its third death is final. Starts with Enrage 2.
 
-    Source: TestSubject.cs / AdaptablePower.cs (non-ascension values)."""
+    Source: TestSubject.cs / AdaptablePower.cs (non-ascension values).
 
+    Its displayed Title is "Test Subject #C{Count}" where TestSubject.cs:72
+    fills Count from `SaveManager.Instance.Progress.TestSubjectKills + 8` — a
+    PROFILE-lifetime counter, not run state, so no run seed can reproduce it
+    (the same encounter reads #C71 / #C106 / #C114 across the three recordings
+    that fight it). The sim carries the un-numbered name and the conformance
+    driver accepts the recorded suffix (combat_driver._name_matches)."""
+
+    name = "Test Subject"
     min_hp = _FIRST_FORM_HP
     max_hp = _FIRST_FORM_HP
 

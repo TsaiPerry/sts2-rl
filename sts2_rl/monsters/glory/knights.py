@@ -33,6 +33,7 @@ class MagiKnight(MachineMonster):
     Dampen is restored when the Magi Knight dies.
 
     Source: MagiKnight.cs (non-ascension values)."""
+    name = "Magi Knight"
 
     min_hp = 82
     max_hp = 82
@@ -88,6 +89,7 @@ class SpectralKnight(MachineMonster):
     Spectral Knight dies.
 
     Source: SpectralKnight.cs (non-ascension values)."""
+    name = "Spectral Knight"
 
     min_hp = 93
     max_hp = 93

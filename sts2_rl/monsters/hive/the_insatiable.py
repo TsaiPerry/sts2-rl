@@ -25,6 +25,7 @@ class TheInsatiable(MachineMonster):
     the player is eaten alive) and 6 Frantic Escape statuses (3 in the draw
     pile, 3 in the discard; playing one buys a turn). Then loops THRASH (8x2)
     → LUNGING_BITE (28) → SALIVATE (+2 Strength) → THRASH_2 (8x2) → THRASH."""
+    name = "The Insatiable"
 
     min_hp = 321
     max_hp = 321

@@ -86,6 +86,10 @@ class CombatState:
         encounter_selection_rng=None,
     ) -> None:
         self._rng = rng or random.Random()
+        # The run's serialized stream set (parity runs only). Kept so combat
+        # content that must draw on a RAW game `Rng` — the potion factory's
+        # NextFloat+NextItem pair (Alchemize) — can reach it.
+        self.rng_set = rng_set
         from .combat_rng import CombatRng
         self.combat_rng = (
             CombatRng.parity(rng_set) if rng_set is not None
@@ -239,6 +243,11 @@ class CombatState:
         assigned: list[int] = []
         for e in enemies:
             assigned.append(cls._roll_parity_hp(e, assigned, niche))
+        # MonsterModel.AfterAddedToRoom fires per creature once it is on the
+        # board, after its HP roll; the only porting monster reshapes MaxHp
+        # (Decimillipede's even-and-unique pass), so re-read the live values.
+        for e in enemies:
+            e.adjust_hp_after_added([o for o in enemies if o is not e])
 
     def assign_parity_hp(self, creature) -> None:
         """Roll a mid-combat-spawned enemy's HP on the Niche stream, mirroring
@@ -269,7 +278,11 @@ class CombatState:
 
     def _run_enemy_turns(self) -> None:
         for enemy in list(self.enemies):
-            if enemy.is_gone:
+            # ExecuteEnemyTurn iterates every creature still IN the combat
+            # (_state.ContainsCreature) and Creature.TakeTurn has no IsDead
+            # guard, so a corpse the combat retained (a withered Decimillipede
+            # segment) keeps taking turns — that is how it reaches REATTACH.
+            if enemy.is_gone and not enemy.retained_after_death:
                 continue
 
             # Clear block at the start of this enemy's turn.
@@ -283,7 +296,8 @@ class CombatState:
                 if self._all_enemies_dead():
                     self._end_combat(player_won=True)
                     return
-                continue
+                if not enemy.retained_after_death:
+                    continue
             if self.player.is_dead:
                 self._end_combat(player_won=False)
                 return
@@ -521,7 +535,8 @@ class CombatState:
             if not living:
                 self.player.discard_pile.append(card)
                 return
-            target_idx = self._rng.choice(living)
+            # CardCmd.cs:77 — Rng.CombatTargets.NextItem(HittableEnemies).
+            target_idx = self.combat_rng.targets.choice(living)
         if card.energy_cost_x:
             # AutoPlay captures X from current energy without spending it.
             card.captured_x = self.hooks.modify_x_value(card, self.player.energy)
@@ -626,13 +641,29 @@ class CombatState:
             return
         if self.hooks.should_flush_hand():
             self.player.discard_hand()
+        # Hook.AfterTurnEnd for the player side (CombatManager.cs:1307): after
+        # DoTurnEnd and FlushPlayerHand, still on the player's block.
+        self.hooks.after_player_turn_end(self.player)
+        if self.phase == Phase.COMBAT_OVER:
+            return
+        if self._all_enemies_dead():
+            self._end_combat(player_won=True)
+            return
         self._execute_enemy_turn()
 
         if self.phase != Phase.COMBAT_OVER:
             self.turn += 1
             self.player.start_turn()
-            if self.player.is_dead and self.phase != Phase.COMBAT_OVER:
-                self._end_combat(player_won=False)
+            # CheckWinCondition right after the player's turn setup /
+            # auto-pre-play phase (CombatManager.cs:573). A turn-start effect
+            # can land the killing blow (Inferno's burst, a Poison tick) or kill
+            # the player, and the game ends the fight there rather than handing
+            # back a turn with no living enemies.
+            if self.phase != Phase.COMBAT_OVER:
+                if self._all_enemies_dead():
+                    self._end_combat(player_won=True)
+                elif self.player.is_dead:
+                    self._end_combat(player_won=False)
 
     def valid_actions(self) -> list[int]:
         """0 = end turn, 1+ = play card at hand index (action - 1)."""

@@ -30,6 +30,7 @@ class ScrollOfBiting(MachineMonster):
     ``starter_move_idx`` (the encounter staggers the three/four scrolls).
 
     Source: ScrollOfBiting.cs (non-ascension values)."""
+    name = "Scroll of Biting"
 
     min_hp = 30
     max_hp = 37

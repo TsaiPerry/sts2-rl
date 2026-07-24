@@ -23,6 +23,7 @@ class SlimedBerserker(MachineMonster):
     + gain 3 Strength) → Smother (30) → loop.
 
     Source: SlimedBerserker.cs (non-ascension values)."""
+    name = "Slimed Berserker"
 
     min_hp = 261
     max_hp = 261

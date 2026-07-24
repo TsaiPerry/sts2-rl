@@ -113,3 +113,31 @@ def test_act0_event_shuffle_lands_after_relic_bag(seed):
     up.fast_forward_counter(RELIC_BAG_DRAWS + SUBSET_DRAWS)  # shared-ancient subset
     up.shuffle(pool)
     assert pool == oracle
+
+
+def test_treasure_chest_relic_rolls_on_the_treasure_room_relics_stream():
+    """The chest's rarity roll is `RelicFactory.RollRarity(_rng)` where `_rng`
+    is `State.Rng.TreasureRoomRelics` (RunManager.cs:413 builds the
+    TreasureRoomRelicSynchronizer with it; the synchronizer rolls one rarity
+    per player, then pulls from the front of the shared grab bag).
+
+    On the shared run RNG — unseeded in the conformance harness — the chest
+    hands out a different relic every replay, and a max-HP one (Mango, Pear, …)
+    silently moves the player's max HP even after the runner reconciles the
+    relic list against the save. Same seed must mean same chest."""
+    from sts2_rl.rng import RunRngSet
+    from sts2_rl.run import RunState
+
+    def chest():
+        run = RunState(string_seed="933T39V18D")
+        run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
+        before = run.rng_set.treasure_room_relics.counter
+        relic = run.obtain_relic_from_grab_bag(
+            rarity_rng=run.rng_set.treasure_room_relics)
+        after = run.rng_set.treasure_room_relics.counter
+        return relic.id, after - before
+
+    first = chest()
+    assert first == chest()          # deterministic from the seed alone
+    assert first[1] == 1             # exactly the one rarity NextFloat
+    assert isinstance(RunRngSet("x").treasure_room_relics.counter, int)

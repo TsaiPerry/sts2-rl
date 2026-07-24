@@ -20,6 +20,36 @@ if TYPE_CHECKING:
     from .potions import Potion
 
 
+def _compare_to_key(card: "Card") -> "tuple[str, int]":
+    """CardModel.CompareTo's sort key (CardModel.cs:2242): the ModelId first —
+    `string.Compare(Entry, other.Entry, StringComparison.Ordinal)`
+    (ModelId.cs:49) over the game's UPPERCASE entry — then CurrentUpgradeLevel.
+
+    Case matters: an ordinal compare puts `_` (0x5F) *after* the uppercase
+    letters but *before* the lowercase ones, so sorting the sim's lowercase
+    slugs orders `blood_wall`/`bloodletting` and
+    `jack_of_all_trades`/`jackpot` the opposite way round from the game.
+    Cards that compare equal keep their incoming order (Python's sort is
+    stable), so the caller must pass the pile in the GAME's orientation."""
+    return (card.id.upper(), card.upgrade_level)
+
+
+def stable_shuffled_cards(cards: "list[Card]", combat_rng) -> "list[Card]":
+    """`cards.ToList().StableShuffle(Rng.Shuffle)` — a shuffled COPY, in the
+    game's own orientation (index 0 is the game's `First()`).
+
+    Content that picks a card at random by shuffling a pile and taking the
+    front (Catastrophe) must burn the shuffle's N-1 draws, not one. The
+    stabilizing sort is the same CardModel.CompareTo key `_shuffle_draw_pile`
+    uses, and is parity-only for the same reason: legacy stays byte-for-byte.
+    """
+    out = list(cards)
+    if combat_rng.is_parity:
+        out.sort(key=_compare_to_key)
+    combat_rng.shuffle.shuffle(out)
+    return out
+
+
 class PlayerCombatState(Creature):
     ENERGY_PER_TURN = 3
     DRAW_PER_TURN = 5
@@ -135,6 +165,27 @@ class PlayerCombatState(Creature):
         self._shuffle_draw_pile(stable=True)
         self._hooks.on_shuffle(self)
 
+    def shuffle_draw_and_discard(self) -> None:
+        """CardPileCmd.Shuffle: shuffle the discard pile AND the whole current
+        draw pile into a new draw pile (Bottled Potential).
+
+        `reshuffle_discard_into_draw` is the ShuffleIfNecessary path, which only
+        ever runs with an empty draw pile; the explicit command shuffles both
+        piles together (`list = discard.ToList(); list.AddRange(drawPileCards);
+        list.StableShuffle(Rng.Shuffle)`), so the draw pile's contents survive
+        into the new order. Same PileType.Play limbo rule as the reshuffle: a
+        card mid-OnPlay is in neither pile."""
+        held = self._playing_card
+        discard = self.discard_pile
+        if self._combat_rng.is_parity and held is not None and held in discard:
+            discard = [c for c in discard if c is not held]
+            self.discard_pile = [held]
+        else:
+            self.discard_pile = []
+        self.draw_pile = discard + self.draw_pile
+        self._shuffle_draw_pile(stable=True)
+        self._hooks.on_shuffle(self)
+
     def _shuffle_draw_pile(self, stable: bool) -> None:
         """Shuffle the draw pile via the Shuffle stream.
 
@@ -165,7 +216,7 @@ class PlayerCombatState(Creature):
         Legacy is byte-for-byte unchanged: the shared random.Random shuffles in
         place with no sort and no reorientation."""
         if stable and self._combat_rng.is_parity:
-            self.draw_pile.sort(key=lambda c: (c.id, c.upgrade_level))
+            self.draw_pile.sort(key=_compare_to_key)
         self._combat_rng.shuffle.shuffle(self.draw_pile)
         if self._combat_rng.is_parity:
             self.draw_pile.reverse()

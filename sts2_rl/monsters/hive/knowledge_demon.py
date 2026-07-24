@@ -35,6 +35,7 @@ class KnowledgeDemon(MachineMonster):
     "curse_of_knowledge" (random unless a card_selector is installed); the
     chosen card's power is applied to the player immediately, mirroring
     KnowledgeDemon.IChoosable.OnChosen."""
+    name = "Knowledge Demon"
 
     min_hp = 379
     max_hp = 379

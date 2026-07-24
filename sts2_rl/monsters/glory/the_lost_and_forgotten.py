@@ -24,6 +24,7 @@ class TheLost(MachineMonster):
     to the player when it dies.
 
     Source: TheLost.cs (non-ascension values)."""
+    name = "The Lost"
 
     min_hp = 93
     max_hp = 93
@@ -63,6 +64,7 @@ class TheForgotten(MachineMonster):
     the player when it dies.
 
     Source: TheForgotten.cs (non-ascension values)."""
+    name = "The Forgotten"
 
     min_hp = 106
     max_hp = 106

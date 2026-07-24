@@ -34,6 +34,7 @@ class DecimillipedeSegment(MachineMonster):
     A killed segment withers instead of dying while another segment stands,
     then REATTACHes with 25 HP two of its turns later; the fight only ends
     when the last standing segment is killed (see ReattachPower)."""
+    name = "Decimillipede"
 
     min_hp = 40
     max_hp = 46
@@ -49,6 +50,22 @@ class DecimillipedeSegment(MachineMonster):
         from ...cmds import PowerCmd
         from ...powers import ReattachPower
         PowerCmd.apply(hooks, self, ReattachPower, _REATTACH_HP)
+
+    def adjust_hp_after_added(self, teammates) -> None:
+        """DecimillipedeSegment.AfterAddedToRoom (lines 120-142): round MaxHp up
+        to even, then keep adding 2 — wrapping MaxInitialHp back to
+        MinInitialHp — while a teammate already has that HP, and set current HP
+        to match. Runs after the creature's Niche HP roll, so in the parity path
+        it is what turns a raw roll into the game's even, distinct segment HP."""
+        hp = self.max_hp
+        if hp % 2 == 1:
+            hp += 1
+        taken = {t.max_hp for t in teammates}
+        while hp in taken:
+            hp += 2
+            if hp > DecimillipedeSegment.max_hp:
+                hp = DecimillipedeSegment.min_hp
+        self.max_hp = self.hp = hp
 
     def build_machine(self) -> MonsterMoveStateMachine:
         writhe = MoveState(

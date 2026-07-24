@@ -20,6 +20,7 @@ _STOMP_HITS = 3
 class HauntedShip(MachineMonster):
     """Opens with HAUNT (Weak 3 + 5 Dazed into the discard pile), then
     alternates SWIPE and STOMP forever."""
+    name = "Haunted Ship"
 
     min_hp = 63
     max_hp = 63

@@ -213,7 +213,17 @@
   "weak_potion",
   "potion_shaped_rock",
   "foul_potion",
-  "skill_potion"
+  "skill_potion",
+  "flex_potion",
+  "speed_potion",
+  "touch_of_insanity",
+  "swift_potion",
+  "explosive_ampoule",
+  "gamblers_brew",
+  "attack_potion",
+  "bottled_potential",
+  "cure_all",
+  "stable_serum"
  ],
  "powers": [
   "adaptable",

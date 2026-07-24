@@ -27,6 +27,7 @@ class SludgeSpinner(MachineMonster):
     """Opens with OIL_SPRAY (8 + Weak 1); afterwards picks uniformly among
     OIL_SPRAY / SLAM (11) / RAGE (6 + self 3 Str) without repeating the same
     move twice in a row."""
+    name = "Sludge Spinner"
 
     min_hp = 37
     max_hp = 39

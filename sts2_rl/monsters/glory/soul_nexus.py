@@ -30,6 +30,7 @@ class SoulNexus(MachineMonster):
     not just use.
 
     Source: SoulNexus.cs (non-ascension values)."""
+    name = "Soul Nexus"
 
     min_hp = 234
     max_hp = 234

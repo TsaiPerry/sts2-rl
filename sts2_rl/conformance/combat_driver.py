@@ -85,10 +85,18 @@ class ReplayCombatDriver:
             ``SelectHandCards i j …`` command whose indices are positions in the
             FULL hand (RunReplays SelectHandCardsCommand indexes
             ``PlayerCombatState.Hand.Cards[idx]``), which we map to their
-            filtered candidates."""
-        if len(candidates) <= count:
-            return list(candidates)
+            filtered candidates.
+
+        A recorded ``SelectHandCards`` sitting right here is checked FIRST,
+        before the auto-resolve shortcut: a screen with MinSelect 0 (Gambler's
+        Brew — "discard any number") is always shown even though every
+        candidate is selectable, so `candidates <= count` does not imply the
+        game auto-resolved. When the game *did* auto-resolve it emitted no
+        command at all, so this peek cannot steal a later screen's pick."""
         cmd = self.cursor.peek()
+        if cmd is None or cmd.name != "SelectHandCards":
+            if len(candidates) <= count:
+                return list(candidates)
         if cmd is not None and cmd.name == "SelectHandCards":
             # One command carries every picked hand index; map each into the
             # full hand, then keep those that are selectable (in `candidates`).
@@ -101,18 +109,22 @@ class ReplayCombatDriver:
                     if 0 <= idx < len(hand) and hand[idx] in candidates:
                         chosen.append(hand[idx])
             return chosen[:count]
+        # One `SelectGridCard` command == one screen, carrying EVERY picked
+        # index (RunReplays DeckCardSelectRecordPatch: "Collect all selected
+        # indices into a single command so that multi-card selections … are
+        # recorded atomically"), each index a position in the candidate grid as
+        # shown. Taking one command per pick would swallow the next screen's.
+        cmd = self.cursor.peek()
+        if cmd is None or cmd.name != "SelectGridCard":
+            return []
+        self.cursor.advance()
         chosen = []
-        for _ in range(count):
-            cmd = self.cursor.peek()
-            if cmd is None or cmd.name != "SelectGridCard":
-                break
-            self.cursor.advance()
-            arg = cmd.args[0] if cmd.args else None
-            if arg is not None and arg.lstrip("-").isdigit():
+        for arg in cmd.args:
+            if arg.lstrip("-").isdigit():
                 idx = int(arg)
                 if 0 <= idx < len(candidates):
                     chosen.append(candidates[idx])
-        return chosen
+        return chosen[:count]
 
     def _target_idx(self, tid: int) -> int:
         """Recorded target CombatId -> its CURRENT index in `combat.enemies`.
@@ -131,6 +143,35 @@ class ReplayCombatDriver:
         """Recorded target CombatId -> the `combat.enemies` slot it names."""
         return self.combat.enemies[self._target_idx(tid)]
 
+    def _live_enemy_states(self) -> list[tuple[str, int, int]]:
+        """The recording's `Enemies:` list — `CombatState.Enemies`, which drops
+        a creature once it dies UNLESS a power kept it (a withered
+        Decimillipede segment stays, showing 0 HP)."""
+        return [(enemy_display_name(e), e.hp, e.max_hp)
+                for e in self.combat.enemies
+                if not e.is_gone or e.retained_after_death]
+
+    @staticmethod
+    def _name_matches(recorded: str, live: str) -> bool:
+        """A recorded enemy name is the creature's localized Title, and one of
+        them carries a counter no run seed can reproduce: TestSubject.cs:72
+        appends `Count = SaveManager.Instance.Progress.TestSubjectKills + 8` — a
+        PROFILE-lifetime kill count, so the same act-3 boss reads
+        "Test Subject #C71" / "#C106" / "#C114" across the three recordings that
+        fight it (all three saves carry the same per-run `test_subject_kills`).
+        Accept the sim's un-numbered name for exactly that " #…" shape; every
+        other difference stays a real divergence."""
+        return recorded == live or recorded.startswith(live + " #")
+
+    @staticmethod
+    def _recorded_potion_id(cmd) -> str | None:
+        """`UsePotion 0 # POTION.SWIFT_POTION || …` -> "swift_potion" (the sim's
+        potion id, snake_case of the source class name). None when the recording
+        carries no identity comment."""
+        import re
+        m = re.search(r"POTION\.([A-Z0-9_]+)", cmd.comment or "")
+        return m.group(1).lower() if m else None
+
     def _assert(self, cmd) -> None:
         ann = cmd.annotation
         if ann is None:
@@ -140,10 +181,13 @@ class ReplayCombatDriver:
             if live != ann.hand:
                 self.divergences.append(Divergence("hand", cmd.lineno, ann.hand, live))
         if ann.enemies is not None:
-            live = [(enemy_display_name(e), e.hp, e.max_hp)
-                    for e in self.combat.enemies if not e.is_gone]
+            live = self._live_enemy_states()
             exp = [(e.name, e.hp, e.max_hp) for e in ann.enemies]  # EnemyState
-            if live != exp:
+            same = len(live) == len(exp) and all(
+                self._name_matches(e[0], l[0]) and e[1:] == l[1:]
+                for e, l in zip(exp, live)
+            )
+            if not same:
                 self.divergences.append(Divergence("enemies", cmd.lineno, exp, live))
 
     def play(self) -> list[Divergence]:
@@ -218,6 +262,28 @@ class ReplayCombatDriver:
             self.combat.play_card(hand_idx, target_idx=target_idx)
         elif cmd.name == "UsePotion":
             slot = int(cmd.args[0])
+            live = [p.id for p in self.combat.player.potions]
+            # `UsePotion N` names a BELT SLOT: the game's belt is a fixed-size
+            # slot array and a new potion lands in the FIRST EMPTY slot
+            # (Player.AddPotionInternal: `_potionSlots.IndexOf(null)`), so using
+            # a potion leaves a hole that the next pickup backfills. The sim
+            # keeps the belt dense (append + remove), which is behaviourally
+            # identical — slot layout drives no rng and no effect, and "belt
+            # full" is `len == max` either way — but it renumbers the potions.
+            # So resolve by the recorded IDENTITY (`# POTION.SWIFT_POTION`), as
+            # PlayCard resolves by db id rather than by hand index, and only
+            # report when the potion genuinely isn't held.
+            want = self._recorded_potion_id(cmd)
+            if want is not None:
+                if want not in live:
+                    self.divergences.append(Divergence(
+                        "potion", cmd.lineno, want, live,
+                        f"recorded potion (belt slot {slot}) not held",
+                    ))
+                    self._stopped = True
+                    return
+                if slot >= len(live) or live[slot] != want:
+                    slot = live.index(want)
             target_idx = self._target_idx(int(cmd.args[1])) if len(cmd.args) > 1 else None
             self.combat.use_potion(slot, target_idx=target_idx)
         elif cmd.name == "SelectCardFromScreen":

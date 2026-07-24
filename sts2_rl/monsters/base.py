@@ -66,6 +66,15 @@ class Monster(Creature):
     min_hp: int = 0
     max_hp: int = 0
 
+    def adjust_hp_after_added(self, teammates: "list[Monster]") -> None:
+        """MonsterModel.AfterAddedToRoom's HP fix-up, applied AFTER the parity
+        Niche roll has set this creature's max HP (CombatState.CreateCreature
+        rolls first, the room-add hook then reshapes the value).
+
+        Default: nothing. Overridden by monsters whose source hook rewrites
+        MaxHp (DecimillipedeSegment's even-and-unique pass). `teammates` are
+        the other enemies already on this side, with their final HP."""
+
     def __init__(self, hooks: HookSystem, rng: random.Random) -> None:
         hp = rng.randint(self.min_hp, self.max_hp)
         super().__init__(hp)

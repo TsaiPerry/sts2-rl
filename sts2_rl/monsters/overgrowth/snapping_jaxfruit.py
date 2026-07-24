@@ -14,6 +14,7 @@ _STR_GAIN = 2
 
 
 class SnappingJaxfruit(Monster):
+    name = "Snapping Jaxfruit"
     min_hp = 31
     max_hp = 33
 

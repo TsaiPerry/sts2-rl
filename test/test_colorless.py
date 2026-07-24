@@ -189,6 +189,31 @@ class TestColorlessAttacks:
         assert cs.enemy.hp == hp - 11
         assert entrance in cs.player.exhaust_pile
 
+    def test_alchemize_procures_on_the_combat_potion_generation_stream(self):
+        """Alchemize.cs: `PotionFactory.CreateRandomPotionInCombat(owner,
+        RunState.Rng.CombatPotionGeneration)` — two draws (a rarity NextFloat
+        then a NextItem) on the serialized stream, over the pool minus the
+        potions that cannot be generated in combat. The potion is created even
+        when the belt is full (PotionCmd.TryToProcure just drops it), so the
+        draws happen either way."""
+        from sts2_rl.rng import RunRngSet
+
+        rs = RunRngSet("933T39V18D")
+        cs = CombatState(rng_set=rs, max_potions=2)
+        before = rs.combat_potion_generation.counter
+        play(cs, make_card("alchemize"))
+        assert len(cs.player.potions) == 1
+        assert rs.combat_potion_generation.counter == before + 2
+        assert cs.player.potions[0].id not in (
+            "fairy_in_a_bottle", "fruit_juice", "regen_potion")
+
+        # A full belt still burns the two draws.
+        cs.player.potions.append(cs.player.potions[0])
+        before = rs.combat_potion_generation.counter
+        play(cs, make_card("alchemize"))
+        assert len(cs.player.potions) == 2
+        assert rs.combat_potion_generation.counter == before + 2
+
     def test_hand_of_greed_banks_gold_on_kill(self):
         cs = fresh()
         cs.enemy.hp = 5
@@ -487,6 +512,62 @@ class TestColorlessSkills:
         pile = len(cs.player.draw_pile)
         play(cs, make_card("catastrophe"))
         assert len(cs.player.draw_pile) == pile - 2
+
+    def test_catastrophe_breaks_duplicate_ties_by_the_games_pile_order(self):
+        """Catastrophe.cs shuffles `PileType.Draw.GetPile(owner).Cards` - the
+        game's pile, which is stored TOP FIRST - and takes `First()`. The sim
+        stores its draw pile bottom-first (top == end of the list), and
+        `StableShuffle`'s stabilizing `List.Sort` leaves cards that compare
+        EQUAL (same ModelId + CurrentUpgradeLevel, CardModel.cs:2242) in their
+        incoming order. So feeding the sim's orientation flips which of two
+        identical copies the pick lands on - and since it is the pick's
+        POSITION, not its identity, that decides what is left on top of the
+        pile, the very next draw diverges (933T39V18D floor_49 line 531: the
+        game's Catastrophe+ took the TOP Maul, leaving Feel No Pain to be drawn
+        next; the sim took a deeper Maul and drew a Maul)."""
+        from sts2_rl.rng import RunRngSet
+
+        def game_first(sim_pile, shuffle_rng):
+            """Catastrophe.cs's pick, straight off the source."""
+            pile = list(reversed(sim_pile))            # PileType.Draw: top first
+            pile.sort(key=lambda c: (c.id.upper(), c.upgrade_level))
+            for i in range(len(pile) - 1, 0, -1):      # UnstableShuffle
+                j = shuffle_rng.next_int(i + 1)
+                pile[i], pile[j] = pile[j], pile[i]
+            return pile[0]
+
+        rs = RunRngSet("tie-b")
+        probe = RunRngSet("tie-b")                     # same stream, read ahead
+        mauls = [make_card("maul") for _ in range(4)]  # identical: CompareTo ties
+        cs = CombatState(starting_deck=[make_card("strike")], rng_set=rs)
+        cs.player.hand, cs.player.discard_pile = [], []
+        cs.player.draw_pile = list(mauls)
+
+        first = game_first(cs.player.draw_pile, probe.shuffle)
+        rest = [c for c in cs.player.draw_pile if c is not first]
+        second = game_first(rest, probe.shuffle)
+
+        play(cs, make_card("catastrophe"))
+        left = [c for c in mauls if c is not first and c is not second]
+        assert [id(c) for c in cs.player.draw_pile] == [id(c) for c in left]
+
+    def test_catastrophe_picks_by_stable_shuffling_the_draw_pile(self):
+        """Catastrophe.cs picks each card with
+        `drawPile.Where(playable).ToList().StableShuffle(Rng.Shuffle).First()`
+        — a FULL shuffle of a COPY on the Shuffle stream per card, not a single
+        uniform pick. The draw count is what the conformance run compares, and a
+        one-draw `choice` left the Shuffle counter hundreds short."""
+        from sts2_rl.rng import RunRngSet
+
+        rs = RunRngSet("933T39V18D")
+        deck = [make_card("strike") for _ in range(12)]
+        cs = CombatState(starting_deck=deck, rng_set=rs)
+        n = len(cs.player.draw_pile)
+        before = rs.shuffle.counter
+        play(cs, make_card("catastrophe"))
+        # Two picks; each shuffles the whole (shrinking) playable pile.
+        assert rs.shuffle.counter - before == (n - 1) + (n - 2)
+        assert len(cs.player.draw_pile) == n - 2
 
 
 # ══════════════════════════════════════════════════════════════════════════

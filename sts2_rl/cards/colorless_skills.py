@@ -35,10 +35,23 @@ class AlchemizeCard(Card):
         self._energy_cost = max(0, self._energy_cost - 1)
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from ..potions import random_potion
+        # Alchemize.cs: the potion is CREATED first (two draws on the
+        # CombatPotionGeneration stream) and only then handed to
+        # PotionCmd.TryToProcure, which silently drops it if the belt is full —
+        # so a full belt still moves the stream.
         player = ctx.player
+        rng_set = ctx.combat.rng_set
+        if rng_set is not None:
+            from ..potion_pools import generate_random_potion_in_combat
+
+            potion = generate_random_potion_in_combat(
+                rng_set.combat_potion_generation)
+        else:
+            from ..potions import random_potion
+
+            potion = random_potion(ctx.combat._rng)
         if len(player.potions) < player.max_potions:
-            player.potions.append(random_potion(ctx.combat._rng))
+            player.potions.append(potion)
 
 
 @register_card
@@ -127,14 +140,29 @@ class CatastropheCard(Card):
         self._cards += 1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
+        # Catastrophe.cs picks each card by StableShuffle-ing a COPY of the
+        # playable draw pile on the Shuffle stream and taking First() — N-1
+        # draws per pick, not one uniform choice.
+        #
+        # The copy is `PileType.Draw.GetPile(owner).Cards`, which the game
+        # stores TOP FIRST while the sim stores it top LAST, and StableShuffle's
+        # stabilizing sort leaves cards that compare EQUAL (same ModelId +
+        # CurrentUpgradeLevel) in their incoming order — so the pile must be
+        # handed over in the game's orientation or the pick lands on the wrong
+        # one of two identical copies, which changes which POSITION leaves the
+        # pile and therefore what is drawn next.
+        from ..player import stable_shuffled_cards
+
         for _ in range(self._cards):
             if ctx.combat.is_over or ctx.player.is_dead:
                 break
-            playable = [c for c in ctx.player.draw_pile if c.is_playable]
-            options = playable or ctx.player.draw_pile
+            pile = list(reversed(ctx.player.draw_pile))   # game order: top first
+            playable = [c for c in pile if c.is_playable]
+            options = playable or pile
             if not options:
                 break
-            ctx.combat.auto_play_card(ctx.combat._rng.choice(options))
+            shuffled = stable_shuffled_cards(options, ctx.combat.combat_rng)
+            ctx.combat.auto_play_card(shuffled[0])
 
 
 @register_card

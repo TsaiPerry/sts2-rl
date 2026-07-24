@@ -96,6 +96,211 @@ class StrengthPotion(Potion):
 
 
 @register_potion
+class FlexPotion(Potion):
+    """Gain 5 temporary Strength (lost at end of turn).
+
+    Source: FlexPotion.cs — Common, CombatOnly, TargetType AnyPlayer,
+    PowerVar<StrengthPower>(5); OnUse applies FlexPotionPower (a
+    TemporaryStrengthPower) to the player."""
+
+    id = "flex_potion"
+    name = "Flex Potion"
+    STRENGTH = 5
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import PowerCmd
+        from .powers import FlexPotionPower
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, FlexPotionPower, self.STRENGTH, applier=ctx.player
+        )
+
+
+@register_potion
+class SpeedPotion(Potion):
+    """Gain 5 temporary Dexterity (lost at end of turn).
+
+    Source: SpeedPotion.cs — Common, CombatOnly, TargetType AnyPlayer,
+    PowerVar<DexterityPower>(5); OnUse applies SpeedPotionPower (a
+    TemporaryDexterityPower) to the player."""
+
+    id = "speed_potion"
+    name = "Speed Potion"
+    DEXTERITY = 5
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import PowerCmd
+        from .powers import SpeedPotionPower
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, SpeedPotionPower, self.DEXTERITY, applier=ctx.player
+        )
+
+
+@register_potion
+class TouchOfInsanity(Potion):
+    """Choose a card in your hand that costs energy; it costs 0 for the rest of
+    the combat.
+
+    Source: TouchOfInsanity.cs — Uncommon, CombatOnly, TargetType Self. OnUse =
+    CardSelectCmd.FromHand(1, filter: CostsEnergyOrStars) then
+    SetToFreeThisCombat on the pick (== EnergyCost.SetThisCombat(0)). The
+    recording captures the pick as a SelectHandCards command, resolved by the
+    combat driver's card_selector; a lone candidate auto-resolves (no command)."""
+
+    id = "touch_of_insanity"
+    name = "Touch of Insanity"
+    rarity = "uncommon"
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        combat = ctx.combat
+        # CostsEnergyOrStars: a non-X card whose cost is > 0 (the sim has no
+        # star costs) — i.e. skip cards that are already free.
+        candidates = [
+            c for c in ctx.player.hand
+            if not getattr(c, "energy_cost_x", False) and c.energy_cost > 0
+        ]
+        if not candidates:
+            return
+        for card in combat.select_cards("free_this_combat", candidates, 1):
+            card.set_cost_this_combat(0)
+
+
+@register_potion
+class ExplosiveAmpoule(Potion):
+    """Deal 10 damage to ALL enemies (unpowered).
+
+    Source: ExplosiveAmpoule.cs — Common, CombatOnly, TargetType AllEnemies,
+    DamageVar(10, ValueProp.Unpowered); OnUse damages
+    `CombatState.HittableEnemies` in order."""
+
+    id = "explosive_ampoule"
+    name = "Explosive Ampoule"
+    DAMAGE = 10
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        for enemy in [e for e in ctx.enemies if not e.is_gone]:
+            DamageCmd.deal(
+                ctx.hooks,
+                enemy,
+                self.DAMAGE,
+                dealer=ctx.player,
+                props=DamageProps.NON_CARD_UNPOWERED,
+            )
+
+
+@register_potion
+class GamblersBrew(Potion):
+    """Discard any number of cards, then draw that many.
+
+    Source: GamblersBrew.cs — Uncommon, CombatOnly, TargetType Self. OnUse =
+    `CardSelectCmd.FromHandForDiscard(prefs(min 0, max 999999999))` then
+    `CardCmd.DiscardAndDraw(picked, picked.Count)`. MinSelect 0 means the
+    screen is always shown (never auto-resolved), so the recording always
+    carries the pick as a `SelectHandCards` command; the discard hooks fire
+    per card before the draw (the source defers only Sly autoplay)."""
+
+    id = "gamblers_brew"
+    name = "Gambler's Brew"
+    rarity = "uncommon"
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        player = ctx.player
+        # MinSelect 0 / MaxSelect ~unbounded: "up to the whole hand".
+        chosen = ctx.combat.select_cards(
+            "discard_and_draw", list(player.hand), len(player.hand)
+        )
+        if not chosen:
+            return
+        for card in chosen:
+            player.hand.remove(card)
+            ctx.hooks.on_card_discarded(card)
+            player.discard_pile.append(card)
+        from .cmds import DrawCmd
+        DrawCmd.draw(player, len(chosen))
+
+
+@register_potion
+class SwiftPotion(Potion):
+    """Draw 3 cards.
+
+    Source: SwiftPotion.cs — Common, CombatOnly, TargetType AnyPlayer,
+    CardsVar(3); OnUse = `CardPileCmd.Draw(3, target.Player)`."""
+
+    id = "swift_potion"
+    name = "Swift Potion"
+    CARDS = 3
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DrawCmd
+        DrawCmd.draw(ctx.player, self.CARDS)
+
+
+@register_potion
+class StableSerum(Potion):
+    """Your hand is not discarded for the next 2 turns.
+
+    Source: StableSerum.cs — Uncommon, CombatOnly, TargetType AnyPlayer,
+    RepeatVar(2); OnUse = `PowerCmd.Apply<RetainHandPower>(2)` on the target."""
+
+    id = "stable_serum"
+    name = "Stable Serum"
+    rarity = "uncommon"
+    TURNS = 2
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import PowerCmd
+        from .powers import RetainHandPower
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, RetainHandPower, self.TURNS, applier=ctx.player
+        )
+
+
+@register_potion
+class CureAll(Potion):
+    """Gain 1 energy and draw 2 cards.
+
+    Source: CureAll.cs — Uncommon, CombatOnly, TargetType AnyPlayer,
+    EnergyVar(1) + CardsVar(2); OnUse = `PlayerCmd.GainEnergy(1)` then
+    `CardPileCmd.Draw(2)`."""
+
+    id = "cure_all"
+    name = "Cure All"
+    rarity = "uncommon"
+    ENERGY = 1
+    CARDS = 2
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DrawCmd, EnergyCmd
+        EnergyCmd.gain(ctx.hooks, ctx.player, self.ENERGY)
+        DrawCmd.draw(ctx.player, self.CARDS)
+
+
+@register_potion
+class BottledPotential(Potion):
+    """Put your hand into the draw pile, shuffle, then draw 5.
+
+    Source: BottledPotential.cs — Rare, CombatOnly, TargetType AnyPlayer,
+    CardsVar(5). OnUse = `CardPileCmd.Add(Hand.Cards, PileType.Draw)` (the
+    default CardPilePosition.Bottom, so no rng), `CardPileCmd.Shuffle` (ONE
+    StableShuffle of discard+draw on Rng.Shuffle) and `CardPileCmd.Draw(5)`.
+    The hand is *recycled*, not discarded — no on-discard hook fires."""
+
+    id = "bottled_potential"
+    name = "Bottled Potential"
+    rarity = "rare"
+    CARDS = 5
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cmds import DrawCmd
+        player = ctx.player
+        player.draw_pile.extend(player.hand)
+        player.hand = []
+        player.shuffle_draw_and_discard()
+        DrawCmd.draw(player, self.CARDS)
+
+
+@register_potion
 class BloodPotion(Potion):
     """Heal 20% of max HP."""
 
@@ -240,6 +445,35 @@ class SkillPotion(Potion):
             combat.offer_screen_selection(cards)
         else:
             cards = random_pool_cards(combat._rng, 3, CardType.SKILL, distinct=True)
+            if cards:
+                cards[0].set_free_this_turn()
+                CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])
+
+
+@register_potion
+class AttackPotion(Potion):
+    """Choose 1 of 3 generated Attacks; add a free copy to your hand this turn.
+
+    Source: AttackPotion.cs — the Skill Potion above with `Type == Attack`:
+    `GetDistinctForCombat(CardPool.GetUnlockedCards().Where(Type == Attack), 3,
+    Rng.CombatCardGeneration)`, a canSkip choose-a-card screen, then
+    SetToFreeThisTurn + add to hand."""
+
+    id = "attack_potion"
+    name = "Attack Potion"
+
+    def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .cards.base import CardType
+        from .cards.pool import get_distinct_for_combat_parity, random_pool_cards
+        from .cmds import CardPileCmd
+
+        combat = ctx.combat
+        crng = combat.combat_rng
+        if crng.is_parity:
+            cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.ATTACK)
+            combat.offer_screen_selection(cards)
+        else:
+            cards = random_pool_cards(combat._rng, 3, CardType.ATTACK, distinct=True)
             if cards:
                 cards[0].set_free_this_turn()
                 CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])

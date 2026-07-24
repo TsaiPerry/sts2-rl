@@ -283,6 +283,15 @@ class HookSystem:
             if hasattr(l, "on_player_turn_end"):
                 l.on_player_turn_end(player)
 
+    def after_player_turn_end(self, player: PlayerCombatState) -> None:
+        """Hook.AfterTurnEnd for the player side (CombatManager.cs:1307) —
+        fires AFTER the turn-end card effects and the hand flush, so block a
+        turn-end effect just added (Plating) is already on the player. Distinct
+        from `on_player_turn_end`, which is Hook.BeforeTurnEnd."""
+        for l in list(self._listeners):
+            if hasattr(l, "after_player_turn_end"):
+                l.after_player_turn_end(player)
+
     def on_energy_reset(self, player: PlayerCombatState) -> None:
         """Fires immediately after energy is set at turn start."""
         for l in list(self._listeners):
@@ -558,6 +567,16 @@ class HookSystem:
         for l in list(self._listeners):
             if hasattr(l, "should_die"):
                 if not l.should_die(creature):
+                    return False
+        return True
+
+    def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
+        """Hook.ShouldCreatureBeRemovedFromCombatAfterDeath — False from any
+        listener keeps the corpse in the combat (Decimillipede's Reattach).
+        This does NOT prevent the death; see `should_die` for that."""
+        for l in list(self._listeners):
+            if hasattr(l, "should_remove_from_combat_after_death"):
+                if not l.should_remove_from_combat_after_death(creature):
                     return False
         return True
 

@@ -38,6 +38,7 @@ class TorchHeadAmalgam(MachineMonster):
     not keep combat going once the Queen falls).
 
     Source: TorchHeadAmalgam.cs (non-ascension values)."""
+    name = "Torch Head Amalgam"
 
     min_hp = 199
     max_hp = 199

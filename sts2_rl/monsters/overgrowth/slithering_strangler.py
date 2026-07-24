@@ -18,6 +18,7 @@ _CONSTRICT_AMT = 3
 
 
 class SlitheringStrangler(Monster):
+    name = "Slithering Strangler"
     min_hp = 53
     max_hp = 55
 

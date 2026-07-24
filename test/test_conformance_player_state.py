@@ -81,7 +81,8 @@ def test_resync_lets_full_run_replay_without_cascade_death():
     assert result.rooms_walked >= 45
 
 
-SEEDS = ["89U21BV1TZ", "DJDCSAQZNR", "L081UMJX4M", "QRWCVDPZN5", "TZEKRYTSNT"]
+SEEDS = ["89U21BV1TZ", "933T39V18D",
+         "DJDCSAQZNR", "L081UMJX4M", "QRWCVDPZN5", "TZEKRYTSNT"]
 
 # Task 6 convergence gate. Only 89U21BV1TZ is an IRONCLAD run — the single
 # character this sim models (run.py: "This single-character sim is Ironclad";
@@ -98,9 +99,20 @@ SEEDS = ["89U21BV1TZ", "DJDCSAQZNR", "L081UMJX4M", "QRWCVDPZN5", "TZEKRYTSNT"]
 # converge without porting whole characters, so they stay permanently xfail
 # with the accurate reason. (See memory sp3-seeds-are-5-characters.)
 _XFAIL_CONVERGENCE = {
-    "89U21BV1TZ": "reaches act-2 boss; HP deltas remain (act1 max-HP -16, "
-                  "act2 hp/max-HP) + 4 combat-stream counter divs "
-                  "(act-2 combat parity incomplete).",
+    "89U21BV1TZ": "reaches act-2 boss; act-0 boundary green, all three max-HP "
+                  "checkpoints green except act 2 (-4, the deck's Feed never "
+                  "lands a kill while act-2 fights force-win). Remaining: "
+                  "act-1 hp +3, act-2 hp +74 (forced=9, act-2 combat parity "
+                  "incomplete), a Shops counter div (168/140, act-2 merchant) "
+                  "and 4 combat-stream counter divs.",
+    "933T39V18D": "2nd Ironclad run (ascension 0); acts 0 and 1 are FULLY "
+                  "green (forced=0, every SP2 + combat counter exact) and act "
+                  "2 is down to forced=1 (the Test Subject boss) with all "
+                  "max-HP checkpoints green. Earliest remaining divergence: "
+                  "the Mecha Knight elite's turn-4 boundary (floor_49 line "
+                  "578, enemy 151 vs 148 — Mercury Hourglass / InfernoPower "
+                  "turn-start ordering), which carries act-1 hp +5, act-2 hp "
+                  "+13 and 4 combat-stream counter divs.",
     "DJDCSAQZNR": "un-ported character (CHARACTER.REGENT); sim is Ironclad-only "
                   "so the wrong starting deck/relics make the whole run diverge.",
     "L081UMJX4M": "un-ported character (CHARACTER.SILENT); sim is Ironclad-only "

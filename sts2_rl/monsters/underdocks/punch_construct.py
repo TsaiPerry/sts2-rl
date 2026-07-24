@@ -21,6 +21,7 @@ class PunchConstruct(MachineMonster):
     """READY (10 block) → FAST_PUNCH (5×2 + Frail 1) → STRONG_PUNCH (14) →
     loop. Starts with Artifact 1. starts_with_fast_punch mirrors
     StartsWithFastPunch (used by the Punch-Off event, not the normal fight)."""
+    name = "Punch Construct"
 
     min_hp = 55
     max_hp = 55

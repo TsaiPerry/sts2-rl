@@ -137,9 +137,22 @@ class MadScienceCard(Card):
         elif self.rider == "wisdom":
             DrawCmd.draw(ctx.player, _WISDOM_CARDS)
         elif self.rider == "chaos":
-            from ..cards.pool import random_pool_cards
+            from ..cards.pool import (
+                get_distinct_for_combat_parity,
+                random_pool_cards,
+            )
             from ..cmds import CardPileCmd
-            for card in random_pool_cards(ctx.combat._rng, 1, distinct=True):
+            # MadScience.cs ExecuteRider/Chaos: one card from the character pool
+            # via GetDistinctForCombat(..., 1, Rng.CombatCardGeneration) — a
+            # single UnstableShuffle of the FilterForCombat'd pool, Take(1).
+            # Parity routes to the CombatCardGeneration stream; legacy keeps the
+            # shared-Random sample (byte-for-byte RL behaviour).
+            crng = ctx.combat.combat_rng
+            if crng.is_parity:
+                cards = get_distinct_for_combat_parity(crng.card_gen, 1)
+            else:
+                cards = random_pool_cards(ctx.combat._rng, 1, distinct=True)
+            for card in cards:
                 card.set_free_this_turn()
                 CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)
 

@@ -548,14 +548,42 @@ def test_potion_courier_gate_and_grab():
     assert len(run.potions) == 3
 
 
-def test_potion_courier_ransack_finds_no_uncommon_yet():
-    # Faithful port of a filter that matches nothing until Uncommon potions
-    # are ported (the source's NextItem over an empty sequence -> null).
+def test_potion_courier_ransack_offers_a_ported_uncommon():
+    # Legacy (no rng_set): RANSACK picks from the IMPLEMENTED uncommon pool on
+    # the shared run rng, so an RL run never lands on a parity placeholder.
+    from sts2_rl.potions import ALL_POTIONS
+
     run = hive_run(21)
     event = make_event("potion_courier", run).begin()
     assert event.choose("RANSACK")
-    assert len(run.potions) == 0
+    assert len(run.potions) == 1
+    got = run.potions[0]
+    assert ALL_POTIONS[got.id].rarity == "uncommon", got.id
     assert event.finished
+
+
+def test_potion_courier_ransack_parity_pool_and_stream():
+    """PotionCourier.cs Ransack: `PlayerRng.Rewards.NextItem(<character pool +
+    SharedPotionPool>.Where(Rarity == Uncommon))` - ONE draw on the per-player
+    Rewards stream over the GAME's full uncommon pool in pool order, not over
+    the handful of uncommons the sim happens to implement. Picking from the
+    implemented subset on the shared rng gave 933T39V18D a Touch of Insanity
+    where the run took Cure All (floor_49 line 519), and skipped a Rewards
+    draw."""
+    from sts2_rl.potion_pools import POTION_POOL
+    from sts2_rl.rng import PlayerRngType
+
+    run = RunState(string_seed="933T39V18D")
+    run.start_run(acts=["overgrowth", "hive"])
+    run.advance_act()
+    uncommon = [pid for pid, r in POTION_POOL if r == "uncommon"]
+    before = run.player_rng.counters()[PlayerRngType.REWARDS]
+
+    event = make_event("potion_courier", run).begin()
+    assert event.choose("RANSACK")
+    assert run.player_rng.counters()[PlayerRngType.REWARDS] == before + 1
+    assert len(run.potions) == 1
+    assert run.potions[0].id in uncommon
 
 
 def test_tea_master_gate_needs_150_gold_in_acts_1_2():

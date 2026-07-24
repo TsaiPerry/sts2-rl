@@ -30,6 +30,7 @@ _TRANSITIONS = {
 
 
 class CeremonialBeast(Monster):
+    name = "Ceremonial Beast"
     min_hp = 252
     max_hp = 252
 

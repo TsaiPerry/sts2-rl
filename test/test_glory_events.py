@@ -325,6 +325,35 @@ def test_tinker_time_builds_mad_science():
     assert made[0].card_type == CardType[type_key]
 
 
+def test_tinker_time_offers_the_games_shuffled_types_and_riders():
+    """TinkerTime.cs builds BOTH option screens with
+    `<list>.TakeRandom(2, base.Rng)` == `UnstableShuffle(rng).Take(2)`
+    (IEnumerableExtensions.cs:19) on the per-EVENT Rng (EventModel ctor: run
+    seed + the event id's deterministic hash). That is a full Fisher-Yates of
+    the 3-element list followed by the first two - a different draw count AND a
+    different order from `rng.sample`, so a recording's `ChooseEventOption 0`
+    otherwise lands on the wrong card type (933T39V18D floor_49 line 460 chose
+    POWER; the sim was offering SKILL first, and the resulting Mad Science was
+    a Skill - which the run's Toxic Egg then upgraded)."""
+    from sts2_rl.events.tinker_time import _TYPE_KEYS, _TYPE_RIDERS
+    from sts2_rl.rng import make_event_rng
+
+    run = RunState(string_seed="933T39V18D")
+    er = make_event_rng(run.rng_set.seed, "TINKER_TIME")
+
+    want_types = list(_TYPE_RIDERS)                  # Attack, Skill, Power
+    er.shuffle(want_types)
+    ev = make_event("tinker_time", run).begin()
+    ev.choose("CHOOSE_CARD_TYPE")
+    assert ev.option_keys() == [_TYPE_KEYS[t] for t in want_types[:2]]
+
+    chosen = want_types[0]
+    want_riders = list(_TYPE_RIDERS[chosen])
+    er.shuffle(want_riders)
+    ev.choose(_TYPE_KEYS[chosen])
+    assert ev.option_keys() == [r.upper() for r in want_riders[:2]]
+
+
 # ── Mad Science card in combat ────────────────────────────────────────────────
 
 

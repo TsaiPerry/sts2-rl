@@ -24,6 +24,7 @@ _HEADBUTT_DMG = 14
 class EyeWithTeeth(Monster):
     """Summoned illusion; adds 3 Dazed cards each turn. Cannot truly die —
     IllusionPower revives it to full HP on its next turn."""
+    name = "Eye with Teeth"
     min_hp = 6
     max_hp = 6
 

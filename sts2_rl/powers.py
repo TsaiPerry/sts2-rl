@@ -899,6 +899,62 @@ class ReptileTrinketPower(TemporaryStrengthPower):
     power_type = PowerType.BUFF
 
 
+class FlexPotionPower(TemporaryStrengthPower):
+    """Temporary Strength from Flex Potion: reverted at the end of the owner's
+    side turn. Source: FlexPotionPower.cs : TemporaryStrengthPower."""
+
+    id = "flex_potion"
+    name = "Flex Potion"
+    power_type = PowerType.BUFF
+
+
+class TemporaryDexterityPower(Power):
+    """Base for powers that grant Dexterity immediately and revert it at the end
+    of the owner's side turn (mirrors TemporaryDexterityPower). Subclasses set
+    _sign = -1 for temporary Dexterity loss."""
+
+    _sign = 1
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        from .cmds import PowerCmd
+        PowerCmd.apply(hooks, owner, DexterityPower, self._sign * amount)
+
+    def on_stack(self, amount: int) -> None:
+        super().on_stack(amount)
+        from .cmds import PowerCmd
+        PowerCmd.apply(self.hooks, self.owner, DexterityPower, self._sign * amount)
+
+    def _revert(self) -> None:
+        if not self.owner.is_dead:
+            from .cmds import PowerCmd
+            PowerCmd.apply(self.hooks, self.owner, DexterityPower, -self._sign * self.amount)
+        self._expire()
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._revert()
+
+    def on_enemy_side_end(self) -> None:
+        if self.owner.side == "enemy":
+            self._revert()
+
+
+class SpeedPotionPower(TemporaryDexterityPower):
+    """Temporary Dexterity from Speed Potion: reverted at the end of the owner's
+    side turn. Source: SpeedPotionPower.cs : TemporaryDexterityPower."""
+
+    id = "speed_potion"
+    name = "Speed Potion"
+    power_type = PowerType.BUFF
+
+
 class OneTwoPunchPower(Power):
     """The owner's next N Attacks this turn are played twice. Each affected
     play consumes one stack; removed at the end of the owner's turn."""
@@ -2275,19 +2331,25 @@ class ReattachPower(Power):
         ]
 
     def _all_others_down(self) -> bool:
-        return all(
-            s.is_dead or s.powers["reattach"].is_reviving
-            for s in self._other_segments()
-        )
+        # AreAllOtherSegmentsDead: a withered segment sits at 0 HP, so plain
+        # IsDead already covers it.
+        return all(s.is_dead for s in self._other_segments())
 
-    def should_die(self, creature: Creature) -> bool:
+    def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
+        # ShouldCreatureBeRemovedFromCombatAfterDeath — the segment's corpse
+        # never leaves the combat, so it can reattach later.
+        return creature is not self.owner
+
+    def on_death(self, creature: Creature) -> None:
+        # AfterDeath: the segment withers (hidden DEAD move, unhittable) unless
+        # every other segment is already down, in which case the death stands
+        # and the fight is over.
         if creature is not self.owner or self.is_reviving:
-            return True
+            return
         if self._all_others_down():
-            return True  # last segment standing: the death is real
+            return
         self.is_reviving = True
         self.owner.enter_dead_state()
-        return False
 
     def should_allow_hitting(self, target: Creature) -> bool:
         if target is self.owner and self.is_reviving:
@@ -2299,25 +2361,10 @@ class ReattachPower(Power):
         if self._all_others_down():
             return  # mirrors DoReattach's AreAllOtherSegmentsDead guard
         self.is_reviving = False
+        self.owner.retained_after_death = False
         delta = self.amount - self.owner.hp
         self.owner.hp = self.amount
         self.hooks.on_hp_changed(self.owner, delta)
-
-    def on_death(self, creature: Creature) -> None:
-        # The last standing segment died for real: withered segments die too.
-        if (
-            creature is self.owner
-            or not self.is_reviving
-            or self.owner.is_dead
-            or "reattach" not in creature.powers
-            or not self._all_others_down()
-        ):
-            return
-        self.is_reviving = False
-        old_hp = self.owner.hp
-        self.owner.hp = 0
-        self.hooks.on_hp_changed(self.owner, -old_hp)
-        self.hooks.on_death(self.owner)
 
 
 class PersonalHivePower(Power):

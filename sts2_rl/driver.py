@@ -70,7 +70,12 @@ N_REST_OPTIONS = 3
 
 # select_cards purposes where declining is a real choice (a card offer, not a
 # mandatory selection): the action index == len(candidates) means "skip".
-SKIPPABLE_PURPOSES = frozenset({"card_reward", "obtain"})
+# Selection purposes whose screen is genuinely optional — `CardSelectorPrefs`
+# with **MinSelect 0**, so the player may confirm having picked fewer cards than
+# MaxSelect (or none at all). `_card_selector` offers a skip action for these and
+# never auto-resolves them. `*_optional` names the up-to-N pickup screens
+# (Claws.cs:24 `CardSelectorPrefs(prompt, 0, CardsVar(6))`, RequireManualConfirmation).
+SKIPPABLE_PURPOSES = frozenset({"card_reward", "obtain", "transform_optional"})
 
 
 @dataclass

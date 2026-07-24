@@ -30,6 +30,7 @@ class LagavulinMatriarch(MachineMonster):
     until unblocked damage wakes her, which removes the Plating and costs her
     a turn waking up. Awake she loops SLASH (19) → DISEMBOWEL (9×2) → SLASH2
     (12 + 12 block) → SOUL_SIPHON (player -2 Str/-2 Dex, self +2 Str)."""
+    name = "Lagavulin Matriarch"
 
     min_hp = 222
     max_hp = 222

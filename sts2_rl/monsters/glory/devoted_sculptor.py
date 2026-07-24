@@ -19,6 +19,7 @@ class DevotedSculptor(MachineMonster):
     turn while its Strength snowballs.
 
     Source: DevotedSculptor.cs (non-ascension values)."""
+    name = "Devoted Sculptor"
 
     min_hp = 162
     max_hp = 162
