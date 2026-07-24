@@ -169,7 +169,7 @@ def test_legends_exit_costs_8_hp_and_offers_a_potion():
     assert event.choose("SLOWLY_FIND_AN_EXIT")
     assert run.hp == hp0 - 8
     # Potion offers auto-keep when a slot is free (sim convention).
-    assert len(run.potions) == 1
+    assert len(run.held_potions) == 1
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -268,7 +268,7 @@ def test_future_of_potions_trades_potion_for_upgraded_card():
     # One option per held potion (max 3), keyed POTION_0..n.
     assert event.option_keys() == ["POTION_0", "POTION_1"]
     assert event.choose("POTION_0")
-    assert len(run.potions) == 1         # the traded potion is gone
+    assert len(run.held_potions) == 1    # the traded potion is gone
     added = [c for c in run.deck if c.rarity.name == "COMMON"
              and c.upgrade_level > 0]
     assert len(run.deck) == deck0 + 1
@@ -451,7 +451,7 @@ def test_stone_of_all_time_lift_trades_potion_for_max_hp():
     event = make_event("stone_of_all_time", run).begin()
     assert event.option_keys() == ["LIFT", "PUSH"]
     assert event.choose("LIFT")
-    assert len(run.potions) == 0
+    assert len(run.held_potions) == 0
     assert run.max_hp == max0 + 10
     assert run.hp == hp0 + 10          # GainMaxHp heals the same amount
     assert event.finished
@@ -544,8 +544,8 @@ def test_potion_courier_gate_and_grab():
     assert event.option_keys() == ["GRAB_POTIONS", "RANSACK"]
     assert event.choose("GRAB_POTIONS")
     # 3 offered, but the belt only holds MAX_POTIONS.
-    assert [p.id for p in run.potions] == ["foul_potion"] * len(run.potions)
-    assert len(run.potions) == 3
+    assert [p.id for p in run.held_potions] == ["foul_potion"] * len(run.held_potions)
+    assert len(run.held_potions) == 3
 
 
 def test_potion_courier_ransack_offers_a_ported_uncommon():
@@ -556,8 +556,8 @@ def test_potion_courier_ransack_offers_a_ported_uncommon():
     run = hive_run(21)
     event = make_event("potion_courier", run).begin()
     assert event.choose("RANSACK")
-    assert len(run.potions) == 1
-    got = run.potions[0]
+    assert len(run.held_potions) == 1
+    got = run.held_potions[0]
     assert ALL_POTIONS[got.id].rarity == "uncommon", got.id
     assert event.finished
 
@@ -582,8 +582,8 @@ def test_potion_courier_ransack_parity_pool_and_stream():
     event = make_event("potion_courier", run).begin()
     assert event.choose("RANSACK")
     assert run.player_rng.counters()[PlayerRngType.REWARDS] == before + 1
-    assert len(run.potions) == 1
-    assert run.potions[0].id in uncommon
+    assert len(run.held_potions) == 1
+    assert run.held_potions[0].id in uncommon
 
 
 def test_tea_master_gate_needs_150_gold_in_acts_1_2():

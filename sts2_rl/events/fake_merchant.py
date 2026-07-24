@@ -55,7 +55,7 @@ class FakeMerchant(Event):
 
     @staticmethod
     def _has_foul_potion(run: RunState) -> bool:
-        return any(p.id == "foul_potion" for p in run.potions)
+        return any(p.id == "foul_potion" for p in run.held_potions)
 
     def calculate_vars(self) -> None:
         from ..relics import make_relic
@@ -91,8 +91,8 @@ class FakeMerchant(Event):
         from ..monsters.fake_merchant import FAKE_MERCHANT_EVENT_ENCOUNTER
         from ..relics import make_relic
 
-        potion = next(p for p in self.run.potions if p.id == "foul_potion")
-        self.run.potions.remove(potion)
+        potion = next(p for p in self.run.held_potions if p.id == "foul_potion")
+        self.run.discard_potion(potion)
         self.pending_encounter = FAKE_MERCHANT_EVENT_ENCOUNTER
         # FoulPotionThrown: the Rug, plus every relic still unsold.
         self.pending_reward_extras = [

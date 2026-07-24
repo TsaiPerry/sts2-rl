@@ -202,16 +202,18 @@ class TestColorlessAttacks:
         cs = CombatState(rng_set=rs, max_potions=2)
         before = rs.combat_potion_generation.counter
         play(cs, make_card("alchemize"))
-        assert len(cs.player.potions) == 1
+        assert len(cs.player.held_potions) == 1
         assert rs.combat_potion_generation.counter == before + 2
         assert cs.player.potions[0].id not in (
             "fairy_in_a_bottle", "fruit_juice", "regen_potion")
 
-        # A full belt still burns the two draws.
-        cs.player.potions.append(cs.player.potions[0])
+        # A full belt still burns the two draws (Player.cs's belt is a
+        # fixed-length list[Potion | None]; fill the remaining null slot
+        # rather than appending past its length).
+        assert cs.player.add_potion(cs.player.potions[0])
         before = rs.combat_potion_generation.counter
         play(cs, make_card("alchemize"))
-        assert len(cs.player.potions) == 2
+        assert len(cs.player.held_potions) == 2
         assert rs.combat_potion_generation.counter == before + 2
 
     def test_hand_of_greed_banks_gold_on_kill(self):
@@ -475,7 +477,7 @@ class TestColorlessSkills:
     def test_alchemize_procures_a_potion(self):
         cs = fresh()
         play(cs, make_card("alchemize"))
-        assert len(cs.player.potions) == 1
+        assert len(cs.player.held_potions) == 1
 
     def test_alchemize_does_nothing_with_a_full_belt(self):
         from sts2_rl.potions import make_potion
@@ -483,7 +485,7 @@ class TestColorlessSkills:
         potions = [make_potion("fire_potion") for _ in range(3)]
         cs = fresh(potions=potions)
         play(cs, make_card("alchemize"))
-        assert len(cs.player.potions) == 3
+        assert len(cs.player.held_potions) == 3
 
     def test_hidden_gem_grants_replays(self):
         cs = fresh()

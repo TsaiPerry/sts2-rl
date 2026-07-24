@@ -200,13 +200,32 @@ class TestStateMachine:
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestPotions:
+    def test_potion_use_nulls_its_slot_without_compacting(self):
+        # Player.cs: `_potionSlots` is a fixed-length List<PotionModel?>.
+        # DiscardPotionInternal (fired on use) sets the used slot to null in
+        # place -- it never shifts the other slots down. AddPotionInternal
+        # backfills the FIRST null slot: `slotIndex = _potionSlots.IndexOf(
+        # null)`.
+        from sts2_rl.potions import make_potion
+
+        cs = fresh(potions=[StrengthPotion(), WeakPotion()])
+        weak = cs.player.potions[1]
+        assert cs.use_potion(0)
+        assert cs.player.potions[0] is None
+        assert cs.player.potions[1] is weak       # slot 1 untouched, not shifted
+
+        third = make_potion("fire_potion")
+        assert cs.player.add_potion(third)
+        assert cs.player.potions[0] is third       # backfills the first empty slot
+        assert cs.player.potions[1] is weak
+
     def test_fire_potion_unpowered_damage(self):
         cs = fresh(potions=[FirePotion()])
         PowerCmd.apply(cs.hooks, cs.player, StrengthPower, 5)
         before = cs.enemy.hp
         assert cs.use_potion(0)
         assert cs.enemy.hp == before - FirePotion.DAMAGE  # not boosted
-        assert cs.player.potions == []
+        assert cs.player.held_potions == []
 
     def test_block_potion_ignores_frail_and_dex(self):
         from sts2_rl import DexterityPower
@@ -225,7 +244,10 @@ class TestPotions:
         cs = fresh(potions=[StrengthPotion(), WeakPotion()])
         assert cs.use_potion(0)
         assert cs.player.powers["strength"].amount == 2
-        assert cs.use_potion(0)  # WeakPotion shifted into slot 0
+        # WeakPotion keeps its own slot 1 -- Player.cs never compacts a used
+        # slot (DiscardPotionInternal nulls in place; see
+        # test_potion_use_nulls_its_slot_without_compacting).
+        assert cs.use_potion(1)
         assert cs.enemy.powers["weak"].amount == 3
 
     def test_swift_potion_draws_three(self):

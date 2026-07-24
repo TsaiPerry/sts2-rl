@@ -237,7 +237,7 @@ def test_sozu_gives_energy_but_refuses_potions():
     run = fresh_run(12)
     run.add_relic("sozu")
     assert not run.add_potion(make_potion("fire_potion"))
-    assert run.potions == []
+    assert run.held_potions == []
     combat = build(seed=4, relics=[make_relic("sozu")])
     assert combat.player.energy == 4
 

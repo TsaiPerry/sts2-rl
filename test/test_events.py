@@ -463,7 +463,7 @@ def test_wellspring_bottle_gives_potion():
     run = fresh_run(10)
     event = make_event("wellspring", run).begin()
     event.choose("BOTTLE")
-    assert len(run.potions) == 1
+    assert len(run.held_potions) == 1
 
 
 def test_wellspring_bathe_removes_card_adds_guilty():
@@ -491,7 +491,7 @@ def test_whispering_hollow_gold_buys_two_potions():
     assert 26 <= event.gold_cost <= 44  # 35 ± 9
     event.choose("GOLD")
     assert run.gold == 99 - event.gold_cost
-    assert len(run.potions) == 2
+    assert len(run.held_potions) == 2
 
 
 def test_whispering_hollow_hug_transforms_and_hurts():

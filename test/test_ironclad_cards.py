@@ -226,6 +226,21 @@ class TestCinder:
         assert cs.enemy.hp == before - 18
         assert defend in cs.player.exhaust_pile
 
+    def test_parity_routes_exhaust_pick_to_card_selection_stream(self):
+        # Cinder.cs:35: RunState.Rng.CombatCardSelection.NextItem(hand) —
+        # found via the RNG tripwire fuzz gate (test_rng_tripwire.py), which
+        # caught this drawing on the shared legacy rng instead.
+        from sts2_rl.rng import RunRngSet
+        rs = RunRngSet("89U21BV1TZ")
+        cs = CombatState(starting_deck=[CinderCard(), DefendCard()], rng_set=rs)
+        cinder = [c for c in cs.player.hand if isinstance(c, CinderCard)][0]
+        defend = [c for c in cs.player.hand if isinstance(c, DefendCard)][0]
+        before = rs.combat_card_selection.counter
+        cs.player.energy = 10
+        assert cs.play_card(cs.player.hand.index(cinder))
+        assert rs.combat_card_selection.counter == before + 1
+        assert defend in cs.player.exhaust_pile
+
 
 class TestConflagration:
     def test_hits_each_enemy_four_times(self):
@@ -412,6 +427,18 @@ class TestSwordBoomerang:
         before = cs.enemy.hp
         play(cs, SwordBoomerangCard())
         assert cs.enemy.hp == before - 9  # 3 × 3 on the only enemy
+
+    def test_parity_routes_per_hit_targeting_to_combat_targets_stream(self):
+        # AttackCommand.cs:601-602: each hit re-rolls Rng.CombatTargets
+        # .NextItem(validTargets) — found via the RNG tripwire fuzz gate
+        # (test_rng_tripwire.py), which caught this drawing on the shared
+        # legacy rng instead.
+        from sts2_rl.rng import RunRngSet
+        rs = RunRngSet("89U21BV1TZ")
+        cs = CombatState(rng_set=rs)
+        before = rs.combat_targets.counter
+        play(cs, SwordBoomerangCard())
+        assert rs.combat_targets.counter == before + 3  # one draw per hit
 
 
 class TestThrash:

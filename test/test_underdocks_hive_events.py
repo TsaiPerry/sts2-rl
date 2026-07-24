@@ -140,7 +140,7 @@ def test_abyssal_baths_abstain_heals():
 def test_drowning_beacon_bottle():
     run = fresh_run()
     make_event("drowning_beacon", run).begin().choose("BOTTLE")
-    assert [p.id for p in run.potions] == ["glowwater"]
+    assert [p.id for p in run.held_potions] == ["glowwater"]
 
 
 def test_drowning_beacon_climb():

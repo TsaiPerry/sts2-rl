@@ -361,6 +361,8 @@ def combat_action_masks(
             mask[COMBAT_PLAY_BASE + h * MAX_ENEMIES + first] = True
 
     for p, potion in enumerate(s.player.potions[:max_potions]):
+        if potion is None:
+            continue
         if potion.targeted:
             for e in living:
                 mask[COMBAT_POTION_BASE + p * MAX_ENEMIES + e] = True
@@ -735,6 +737,8 @@ def _write_combat_obs(state: CombatState, L: _CombatLayout, buf: np.ndarray) -> 
     potions = p.potions
     for pi in range(min(MAX_POTIONS, len(potions))):
         potion = potions[pi]
+        if potion is None:
+            continue
         rb = L.potion_base + pi * L.potion_stride
         buf[rb] = 1.0
         buf[rb + L.po_onehot + POTION_INDEX[potion.id]] = 1.0

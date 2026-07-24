@@ -139,8 +139,8 @@ def test_phial_holster():
     run = fresh_run(3)
     run.add_relic("phial_holster")
     assert run.max_potions == 4
-    assert len(run.potions) == 2
-    assert len({p.id for p in run.potions}) == 2   # distinct
+    assert len(run.held_potions) == 2
+    assert len({p.id for p in run.held_potions}) == 2   # distinct
 
 
 def test_large_capsule():
@@ -216,7 +216,7 @@ def test_lost_coffer():
     before = len(run.deck)
     run.add_relic("lost_coffer")
     assert len(run.deck) == before + 1   # one card kept from the choice
-    assert len(run.potions) == 1
+    assert len(run.held_potions) == 1
 
 
 def test_neows_bones():

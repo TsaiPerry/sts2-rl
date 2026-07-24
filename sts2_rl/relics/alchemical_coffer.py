@@ -16,7 +16,7 @@ class AlchemicalCoffer(Relic):
     POTION_SLOTS = 4
 
     def after_obtained(self, run) -> None:
-        run.max_potions += self.POTION_SLOTS
+        run.add_potion_slots(self.POTION_SLOTS)
         # Parity: `PotionFactory.CreateRandomPotionsOutOfCombat(owner, 4,
         # RunState.Rng.CombatPotionGeneration)` — two draws per potion (rarity
         # NextFloat + NextItem over that rarity's bucket) on the serialized

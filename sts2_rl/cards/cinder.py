@@ -34,5 +34,12 @@ class CinderCard(Card):
         from ..cmds import DamageCmd, ExhaustCmd
         DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)
         if ctx.player.hand:
-            victim = ctx.combat._rng.choice(ctx.player.hand)
+            # Cinder.cs:35: RunState.Rng.CombatCardSelection.NextItem(hand) —
+            # a random hand card to exhaust. Parity routes to that stream;
+            # legacy keeps the shared random.Random pick.
+            crng = ctx.combat.combat_rng
+            if crng.is_parity:
+                victim = crng.card_selection.choice(ctx.player.hand)
+            else:
+                victim = ctx.combat._rng.choice(ctx.player.hand)
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, victim)

@@ -21,5 +21,5 @@ class DelicateFrond(Relic):
             (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
             key=lambda c: c.id,
         )
-        while len(player.potions) < player.max_potions:
-            player.potions.append(self.combat._rng.choice(pool)())
+        while player.has_open_potion_slot:
+            player.add_potion(self.combat._rng.choice(pool)())

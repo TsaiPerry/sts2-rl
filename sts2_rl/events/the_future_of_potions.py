@@ -41,12 +41,12 @@ class TheFutureOfPotions(Event):
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:
-        return len(run.potions) >= 2
+        return len(run.held_potions) >= 2
 
     def calculate_vars(self) -> None:
         # PotionToCardType: one roll per held potion, in belt order.
         self._card_types: dict[int, CardType] = {}
-        for potion in self.run.potions:
+        for potion in self.run.held_potions:
             types = [CardType.ATTACK, CardType.SKILL, CardType.POWER]
             if potion.rarity in ("common", "token"):
                 types.remove(CardType.POWER)
@@ -54,7 +54,7 @@ class TheFutureOfPotions(Event):
 
     def initial_options(self) -> list[EventOption]:
         options = []
-        for i, potion in enumerate(self.run.potions[:3]):
+        for i, potion in enumerate(self.run.held_potions[:3]):
             options.append(EventOption(
                 f"POTION_{i}",
                 lambda p=potion: self._trade(p),
@@ -66,7 +66,7 @@ class TheFutureOfPotions(Event):
 
         target_rarity = _CARD_RARITY[potion.rarity]
         card_type = self._card_types[id(potion)]
-        self.run.potions.remove(potion)
+        self.run.discard_potion(potion)
         candidates = [
             cid for cid in IRONCLAD_POOL
             if _CARD_CLASSES[cid].rarity == target_rarity

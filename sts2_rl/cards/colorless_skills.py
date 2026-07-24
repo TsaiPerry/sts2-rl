@@ -50,8 +50,7 @@ class AlchemizeCard(Card):
             from ..potions import random_potion
 
             potion = random_potion(ctx.combat._rng)
-        if len(player.potions) < player.max_potions:
-            player.potions.append(potion)
+        player.add_potion(potion)
 
 
 @register_card

@@ -50,18 +50,30 @@ _DESKTOP = _REPO.parent                                # .../Desktop/
 from sts2_rl.conformance.recording import parse_recording
 from sts2_rl.conformance.runner import ReplayRunner
 from sts2_rl.conformance.save import parse_save
+from sts2_rl.conformance.tripwire import Tripwire
 
 REC = _DESKTOP / "RunReplays" / "RunReplays" / "Resources"
 SRC = _DESKTOP / "Slay the Spire 2" / "src"
 MON_SRC = SRC / "Core" / "Models" / "Monsters"
 
-# Public draw methods combat code calls directly (skip getrandbits/randbytes —
-# those are randint/randrange internals; a reentrancy guard counts top-level).
-_PUBLIC = ("random", "choice", "choices", "sample", "shuffle",
-           "randint", "randrange", "uniform")
-# Plumbing frames to skip so we name the code that *decided* to draw.
-_PLUMBING = ("\\rng.py", "\\combat_rng.py", "\\hooks.py",
-             "/rng.py", "/combat_rng.py", "/hooks.py")
+# Per-floor run.save directories (richer than Resources' 3 act boundaries).
+# 933T has all 49 floors in the capture backup; other seeds fall back to
+# whatever floor_N dirs exist under Resources (89U: 18/34/49).
+_FLOOR_DIRS = {
+    "933T39V18D": _DESKTOP / "sts2-run-backups" / "20260723-125401"
+                  / "933T39V18D-recording",
+}
+
+
+def load_floor_saves(seed: str) -> dict:
+    root = _FLOOR_DIRS.get(seed, REC / seed)
+    out = {}
+    for p in sorted(root.glob("floor_*")):
+        f = p / "run.save"
+        if f.exists():
+            out[int(p.name.split("_")[1])] = parse_save(f)
+    return out
+
 
 # stream -> (source of truth, the invariant to check the sim against)
 STREAM_SRC = {
@@ -83,58 +95,6 @@ STREAM_SRC = {
                       "Random ANY_ENEMY target for auto-played cards."),
 }
 
-_hits: dict[tuple, int] = {}          # (short_path, line, func, owner) -> n
-_depth = [0]                           # reentrancy guard
-
-
-def _innermost_combat_site():
-    """Innermost sts2_rl frame that isn't RNG/hook plumbing — the code that
-    actually decided to draw — but only when a combat.py frame is on the stack.
-    Also grabs the nearest monster/card `self` for the source cross-reference."""
-    import traceback
-    site = None
-    owner = ""
-    in_combat = False
-    for frame, lineno in traceback.walk_stack(None):
-        fn = frame.f_code.co_filename
-        if "\\combat.py" in fn or "/combat.py" in fn:
-            in_combat = True
-        if "sts2_rl" not in fn or any(p in fn for p in _PLUMBING):
-            continue
-        short = "sts2_rl" + fn.split("sts2_rl")[-1]
-        if site is None:
-            site = (short, lineno, frame.f_code.co_name)
-        this = frame.f_locals.get("self")
-        if not owner and this is not None:
-            if "sts2_rl\\monsters" in short or "sts2_rl/monsters" in short \
-               or "sts2_rl\\cards" in short or "sts2_rl/cards" in short:
-                owner = type(this).__name__
-    if site is None or not in_combat:
-        return None
-    return (*site, owner)
-
-
-def _wrap(rng):
-    for meth in _PUBLIC:
-        orig = getattr(rng, meth, None)
-        if orig is None:
-            continue
-
-        def make(orig):
-            def wrapper(*a, **kw):
-                if _depth[0] == 0:
-                    site = _innermost_combat_site()
-                    if site is not None:
-                        _hits[site] = _hits.get(site, 0) + 1
-                _depth[0] += 1
-                try:
-                    return orig(*a, **kw)
-                finally:
-                    _depth[0] -= 1
-            return wrapper
-        setattr(rng, meth, make(orig))
-
-
 def _mon_source(mon_name: str) -> str:
     if not mon_name:
         return ""
@@ -152,12 +112,13 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
     oracle = parse_save(base / "run.save")
 
     runner = ReplayRunner(rec, oracle)
+    tw = Tripwire()
     import sts2_rl.run as run_mod
     orig_init = run_mod.RunState.__init__
 
     def patched_init(self, *a, **kw):
         orig_init(self, *a, **kw)
-        _wrap(self.rng)
+        tw.install(self.rng)
 
     # DETECTOR 3: per-act HP checkpoints from the sibling truncation saves.
     _ACT_FLOORS = {0: "floor_18", 1: "floor_34", 2: "floor_49"}
@@ -168,11 +129,14 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
             o = parse_save(f)
             checkpoints[act_index] = (o.player_current_hp, o.player_max_hp)
 
+    floor_saves = load_floor_saves(seed)
     run_mod.RunState.__init__ = patched_init
     try:
         result = runner.run(stop_after_act=stop_after_act,
                             player_checkpoints=checkpoints,
-                            resync_player=True)
+                            resync_player=True,
+                            floor_saves=floor_saves,
+                            resync_floors=True)
     finally:
         run_mod.RunState.__init__ = orig_init
 
@@ -217,9 +181,28 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
               f"by {abs(delta) if isinstance(delta,int) else delta})")
         print(f"      -> {_HP_SRC[d.stream]}")
 
+    # ---- DETECTOR 4: per-floor full-state deltas (resynced => independent) --
+    floor_divs = [d for d in result.divergences
+                  if d.stream.startswith("floor_")]
+    by_floor: dict[int, list] = {}
+    for d in floor_divs:
+        by_floor.setdefault(d.command_index, []).append(d)
+    print(f"\n[DETECTOR 4] per-floor state deltas "
+          f"({len(floor_saves)} checkpoints, resync ON — each floor's deltas "
+          f"are INDEPENDENT bugs): {len(by_floor)} divergent floor(s)")
+    for floor in sorted(by_floor):
+        streams = ", ".join(d.stream.removeprefix("floor_")
+                            for d in by_floor[floor])
+        print(f"  floor {floor:2d}: {streams}")
+        for d in by_floor[floor][:4]:
+            print(f"      {d.stream}: expected {d.expected!r} "
+                  f"got {d.actual!r}")
+        if len(by_floor[floor]) > 4:
+            print(f"      ... +{len(by_floor[floor]) - 4} more (see streams above)")
+
     # ---- DETECTOR 1: tripwire (wrong-stream / unseeded in-combat draws) ----
-    bugs = {k: v for k, v in _hits.items() if k[2] != "__init__"}
-    benign = {k: v for k, v in _hits.items() if k[2] == "__init__"}
+    bugs = tw.bug_sites()
+    benign = {k: v for k, v in tw.hits.items() if k[2] == "__init__"}
     print(f"\n[DETECTOR 1] in-combat draws from the UNSEEDED shared rng "
           f"(wrong-stream bugs): {len(bugs)} site(s)")
     for (short, line, func, owner), n in sorted(bugs.items(), key=lambda kv: -kv[1]):
@@ -230,6 +213,7 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
           f"{len(benign)} site(s) / {sum(benign.values())} draws)")
 
     clean = (not bugs and not stream_divs and not move_divs and not hp_divs
+             and not floor_divs
              and result.forced_combats == 0
              and not result.unresolved_play_card_ids)
     print(f"\n=== {'FULLY CONVERGED' if clean else 'DIVERGENCES REMAIN'} ===")

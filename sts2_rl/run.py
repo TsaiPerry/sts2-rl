@@ -151,9 +151,25 @@ class RunState:
         self.hp = hp if hp is not None else self.max_hp
         self.gold = gold if gold is not None else self.STARTING_GOLD
         self.relics: list[Relic] = list(relics or [])
-        # Potion belt size (Player.MaxPotionSlotCount); Phial Holster grows it.
+        # Potion belt: Player.cs's `_potionSlots` is a FIXED-LENGTH
+        # List<PotionModel?> sized to MaxPotionCount, empty slots holding null
+        # (Player.cs:~20, MaxPotionCount => _potionSlots.Count). It is never
+        # compacted — using/discarding a potion nulls its slot in place
+        # (DiscardPotionInternal) and a new one fills the first null slot
+        # (AddPotionInternal: `slotIndex = _potionSlots.IndexOf(null)`).
+        # `potions` here mirrors PotionSlots (nulls preserved); `held_potions`
+        # below mirrors the null-filtered `Potions` property. A plain
+        # (gap-free) caller list is placed left-to-right starting at slot 0;
+        # a list that already carries `None` gaps (e.g. RunState.potions
+        # handed to create_combat, or a conformance resync) keeps those gaps
+        # at the same indices. Phial Holster / Alchemical Coffer grow the
+        # belt via add_potion_slots (SetMaxPotionCountInternal's grow path;
+        # its shrink path is unported — nothing in ported content shrinks the
+        # belt).
         self.max_potions = self.MAX_POTIONS
-        self.potions: list[Potion] = list(potions or [])[: self.max_potions]
+        self.potions: list[Potion | None] = [None] * self.max_potions
+        for i, p in enumerate(list(potions or [])[: self.max_potions]):
+            self.potions[i] = p
         # Out-of-combat card chooser with the same signature as
         # CombatState.card_selector: (purpose, candidates, count) -> cards.
         # None = uniform random with the run RNG.
@@ -456,15 +472,43 @@ class RunState:
     # ── Potions ──────────────────────────────────────────────────────────
 
     def add_potion(self, potion: Potion) -> bool:
-        """Add a potion if a slot is free. Returns whether it was kept.
+        """Fill the first open belt slot. Returns whether it was kept.
 
-        Hook.ShouldProcurePotion gates it first (Sozu refuses every potion)."""
+        Hook.ShouldProcurePotion gates it first (Sozu refuses every potion).
+        Mirrors Player.cs AddPotionInternal: `slotIndex =
+        _potionSlots.IndexOf(null)` — fails if no slot is null (belt full)."""
         if not all(r.should_procure_potion(self, potion) for r in self.relics):
             return False
-        if len(self.potions) >= self.max_potions:
+        if not self.has_open_potion_slot:
             return False
-        self.potions.append(potion)
+        self.potions[self.potions.index(None)] = potion
         return True
+
+    def discard_potion(self, potion: Potion) -> None:
+        """Null the potion's belt slot (Player.cs DiscardPotionInternal) — the
+        other slots keep their positions; the belt is never compacted."""
+        self.potions[self.potions.index(potion)] = None
+
+    def add_potion_slots(self, count: int) -> None:
+        """Grow the belt by `count` null slots (Player.cs
+        SetMaxPotionCountInternal's grow path — Phial Holster / Alchemical
+        Coffer). The shrink path is unported: nothing in ported content
+        shrinks the belt."""
+        self.max_potions += count
+        self.potions.extend([None] * count)
+
+    @property
+    def held_potions(self) -> list[Potion]:
+        """The potions actually held, in slot order, with empty slots
+        filtered out (Player.cs `Potions => _potionSlots.Where(p => p !=
+        null)`)."""
+        return [p for p in self.potions if p is not None]
+
+    @property
+    def has_open_potion_slot(self) -> bool:
+        """Mirrors Player.cs `HasOpenPotionSlots => _potionSlots.Any(p => p
+        == null)`."""
+        return None in self.potions
 
     def random_potion(self) -> Potion:
         """A uniformly random potion from the implemented pool (approximates
@@ -1133,6 +1177,8 @@ class RunState:
         monster-combat upgrade)."""
         self.max_hp = combat.player.max_hp
         self.hp = max(0, combat.player.hp)
+        # A plain list copy preserves slot identity/gaps 1:1 (both sides are
+        # the same fixed-length list[Potion | None] shape).
         self.potions = list(combat.player.potions)
         # In-combat gold gains (Hand of Greed) credit the run's ledger;
         # in-combat thefts (Gremlin Merc's Thievery — PlayerCmd.LoseGold
@@ -1185,5 +1231,5 @@ class RunState:
         return (
             f"RunState(hp={self.hp}/{self.max_hp}, gold={self.gold}, "
             f"deck={len(self.deck)} cards, relics={len(self.relics)}, "
-            f"potions={len(self.potions)})"
+            f"potions={len(self.held_potions)})"
         )

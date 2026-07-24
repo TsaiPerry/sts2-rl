@@ -144,7 +144,7 @@ class DecisionRequest:
             return legal
         if kind == DecisionKind.REWARD_POTION:
             legal = []
-            if len(self.run.potions) < self.run.max_potions:
+            if self.run.has_open_potion_slot:
                 legal.append(0)                  # take (needs a free slot)
             legal.append(1)                      # skip
             return legal

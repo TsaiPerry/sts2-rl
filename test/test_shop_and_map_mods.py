@@ -299,14 +299,16 @@ def test_shop_buy_relic():
 
 def test_shop_potion_purchase_respects_belt():
     run, inv = make_shop()
-    run.potions = []
+    # Player.cs's belt is a fixed-length list[Potion | None]; empty it out
+    # without shrinking it (null every slot, not `= []`).
+    run.potions = [None] * run.max_potions
     bought = 0
     for entry in inv.potion_entries:
         if entry.purchase():
             bought += 1
     # The belt holds 3 potions; all three purchases should fit.
     assert bought == 3
-    assert len(run.potions) == 3
+    assert len(run.held_potions) == 3
 
 
 def test_shop_card_removal_price_climbs():

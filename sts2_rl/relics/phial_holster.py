@@ -15,6 +15,6 @@ class PhialHolster(Relic):
     POTIONS = 2
 
     def after_obtained(self, run) -> None:
-        run.max_potions += self.POTION_SLOTS
+        run.add_potion_slots(self.POTION_SLOTS)
         for potion in run.random_potions(self.POTIONS, distinct=True):
             run.add_potion(potion)

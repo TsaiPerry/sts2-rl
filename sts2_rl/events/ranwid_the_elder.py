@@ -34,13 +34,14 @@ class RanwidTheElder(Event):
             run.act_index != 0
             and any(r.is_tradable for r in run.relics)
             and run.gold >= _GOLD_COST
-            and len(run.potions) > 0
+            and len(run.held_potions) > 0
         )
 
     def initial_options(self) -> list[EventOption]:
         options: list[EventOption] = []
         # Same roll order as GenerateInitialOptions: potion, then relic.
-        potion = self.rng.choice(self.run.potions) if self.run.potions else None
+        held = self.run.held_potions
+        potion = self.rng.choice(held) if held else None
         if potion is not None:
             options.append(EventOption(
                 "POTION", lambda p=potion: self._give_potion(p)))
@@ -63,7 +64,7 @@ class RanwidTheElder(Event):
                 self.run.add_relic(relic)
 
     def _give_potion(self, potion) -> None:
-        self.run.potions.remove(potion)
+        self.run.discard_potion(potion)
         self._obtain_grab_bag(1)
         self._finish("POTION")
 

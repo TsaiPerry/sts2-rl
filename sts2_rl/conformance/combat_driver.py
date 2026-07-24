@@ -262,28 +262,29 @@ class ReplayCombatDriver:
             self.combat.play_card(hand_idx, target_idx=target_idx)
         elif cmd.name == "UsePotion":
             slot = int(cmd.args[0])
-            live = [p.id for p in self.combat.player.potions]
-            # `UsePotion N` names a BELT SLOT: the game's belt is a fixed-size
-            # slot array and a new potion lands in the FIRST EMPTY slot
-            # (Player.AddPotionInternal: `_potionSlots.IndexOf(null)`), so using
-            # a potion leaves a hole that the next pickup backfills. The sim
-            # keeps the belt dense (append + remove), which is behaviourally
-            # identical — slot layout drives no rng and no effect, and "belt
-            # full" is `len == max` either way — but it renumbers the potions.
-            # So resolve by the recorded IDENTITY (`# POTION.SWIFT_POTION`), as
-            # PlayCard resolves by db id rather than by hand index, and only
-            # report when the potion genuinely isn't held.
+            # `UsePotion N` names a real BELT SLOT: the sim's belt is now a
+            # fixed-length list[Potion | None] like Player.cs's
+            # `_potionSlots` (using a potion nulls its slot rather than
+            # compacting; a new one backfills the first null slot —
+            # AddPotionInternal: `_potionSlots.IndexOf(null)`). Still resolve
+            # by the recorded IDENTITY (`# POTION.SWIFT_POTION`) rather than
+            # trusting `slot` outright — that's robustness against the
+            # OUT-OF-SCOPE potion-retention divergence (the sim holding a
+            # different potion than the game in that slot), not a belt-model
+            # workaround. Only report when the potion genuinely isn't held.
+            live = {i: p.id for i, p in enumerate(self.combat.player.potions)
+                    if p is not None}
             want = self._recorded_potion_id(cmd)
             if want is not None:
-                if want not in live:
+                if want not in live.values():
                     self.divergences.append(Divergence(
-                        "potion", cmd.lineno, want, live,
+                        "potion", cmd.lineno, want, list(live.values()),
                         f"recorded potion (belt slot {slot}) not held",
                     ))
                     self._stopped = True
                     return
-                if slot >= len(live) or live[slot] != want:
-                    slot = live.index(want)
+                if live.get(slot) != want:
+                    slot = next(i for i, pid in live.items() if pid == want)
             target_idx = self._target_idx(int(cmd.args[1])) if len(cmd.args) > 1 else None
             self.combat.use_potion(slot, target_idx=target_idx)
         elif cmd.name == "SelectCardFromScreen":

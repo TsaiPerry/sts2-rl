@@ -33,9 +33,17 @@ class SwordBoomerangCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd
+        # AttackCommand.cs:601-602 (TargetingRandomOpponents): one
+        # Rng.CombatTargets.NextItem(validTargets) per hit, re-rolled each
+        # time. Parity routes to that stream; legacy keeps the shared
+        # random.Random pick.
+        crng = ctx.combat.combat_rng
         for _ in range(self._hits):
             living = [e for e in ctx.enemies if not e.is_gone]
             if not living or ctx.player.is_dead:
                 break
-            target = ctx.combat._rng.choice(living)
+            if crng.is_parity:
+                target = crng.targets.choice(living)
+            else:
+                target = ctx.combat._rng.choice(living)
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)

@@ -17,6 +17,4 @@ class PetrifiedToad(Relic):
 
     def on_combat_start(self) -> None:
         from ..potions import PotionShapedRock
-        player = self.player
-        if len(player.potions) < player.max_potions:
-            player.potions.append(PotionShapedRock())
+        self.player.add_potion(PotionShapedRock())

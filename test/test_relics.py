@@ -1114,7 +1114,7 @@ class TestPetrifiedToad:
         belt is full). PotionShapedRock.cs: combat-only targeted potion,
         DamageVar(15, Unpowered)."""
         cs = fresh(relics=[make_relic("petrified_toad")])
-        rocks = [p for p in cs.player.potions if p.id == "potion_shaped_rock"]
+        rocks = [p for p in cs.player.held_potions if p.id == "potion_shaped_rock"]
         assert len(rocks) == 1
         hp = cs.enemy.hp
         assert cs.use_potion(cs.player.potions.index(rocks[0]), target_idx=0)

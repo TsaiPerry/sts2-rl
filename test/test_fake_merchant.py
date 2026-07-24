@@ -113,7 +113,7 @@ def test_throwing_starts_the_fight_and_queues_the_loot():
     assert event.choose(bought)                  # buy one first
     assert event.choose("THROW_POTION")
     assert event.finished
-    assert run.potions == []                     # the potion is spent
+    assert run.held_potions == []                # the potion is spent (slot nulled, not compacted)
     assert event.pending_encounter is FAKE_MERCHANT_EVENT_ENCOUNTER
     loot = [e.relic.id for e in event.pending_reward_extras]
     assert loot[0] == "fake_merchants_rug"

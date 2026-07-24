@@ -26,9 +26,16 @@ class SaveOracle:
     player_counters: dict[PlayerRngType, int]
     player_current_hp: int = 0
     player_max_hp: int = 0
+    gold: int = 0
+    # (game card id, upgrade level) in save order — order matters for parity
+    # (out-of-combat transforms APPEND, CardCmd.cs:437).
+    deck: list[tuple[str, int]] = field(default_factory=list)
+    relic_ids: list[str] = field(default_factory=list)   # game ids, save order
+    potion_slots: dict[int, str] = field(default_factory=dict)
     encounter_ids_by_act: list[dict[str, list[str]]] = field(default_factory=list)
     visited_coords: list = field(default_factory=list)
     map_history: list = field(default_factory=list)
+    events_seen: list[str] = field(default_factory=list)   # game ids, e.g. "EVENT.WHISPERING_HOLLOW"
 
 
 def parse_save(path) -> SaveOracle:
@@ -62,7 +69,14 @@ def parse_save(path) -> SaveOracle:
         player_counters=player_counters,
         player_current_hp=player.get("current_hp", 0),
         player_max_hp=player.get("max_hp", 0),
+        gold=player.get("gold", 0),
+        deck=[(c["id"], c.get("current_upgrade_level", 0))
+              for c in player.get("deck", [])],
+        relic_ids=[r["id"] for r in player.get("relics", [])],
+        potion_slots={p.get("slot_index", i): p["id"]
+                      for i, p in enumerate(player.get("potions", []))},
         encounter_ids_by_act=encs,
         visited_coords=d.get("visited_map_coords", []),
         map_history=d.get("map_point_history", []),
+        events_seen=d.get("events_seen", []),
     )

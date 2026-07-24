@@ -20,7 +20,7 @@ class BeltBuckle(Relic):
         self._applied = False
 
     def _apply_if_potionless(self) -> None:
-        if not self._applied and not self.player.potions:
+        if not self._applied and not self.player.held_potions:
             from ..cmds import PowerCmd
             from ..powers import DexterityPower
             self._applied = True

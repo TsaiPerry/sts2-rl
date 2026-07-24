@@ -73,9 +73,15 @@ class PlayerCombatState(Creature):
         self.discard_pile: list[Card] = []
         self.exhaust_pile: list[Card] = []
         # Belt size defaults to the base 3; runs pass their own (Phial
-        # Holster grows RunState.max_potions).
+        # Holster grows RunState.max_potions). Fixed-length list[Potion |
+        # None] mirroring Player.cs's `_potionSlots` — see RunState.potions
+        # for the full citation. A caller's plain (gap-free) list is placed
+        # left-to-right from slot 0; a list that already carries `None` gaps
+        # (RunState.potions handed in by create_combat) keeps them in place.
         self.max_potions = max_potions if max_potions is not None else self.MAX_POTIONS
-        self.potions: list[Potion] = list(potions or [])[: self.max_potions]
+        self.potions: list[Potion | None] = [None] * self.max_potions
+        for i, p in enumerate(list(potions or [])[: self.max_potions]):
+            self.potions[i] = p
         self._combat_rng = combat_rng
         self._hooks = hooks
         self._first_turn = True
@@ -95,6 +101,40 @@ class PlayerCombatState(Creature):
         """Every card the player owns in this combat, across all piles
         (mirrors STS2's PlayerCombatState.AllCards)."""
         return self.hand + self.draw_pile + self.discard_pile + self.exhaust_pile
+
+    # ── Potions ──────────────────────────────────────────────────────────
+
+    def add_potion(self, potion: Potion) -> bool:
+        """Fill the first open belt slot. Returns whether it was kept.
+
+        Mirrors Player.cs AddPotionInternal: `slotIndex =
+        _potionSlots.IndexOf(null)` — fails if no slot is null (belt full).
+        Combat-side procurement (Alchemize, Delicate Frond, Petrified Toad)
+        does not run the Hook.ShouldProcurePotion gate today (see
+        RunState.add_potion for the out-of-combat Sozu gate) — unchanged by
+        this fix, out of scope."""
+        if None not in self.potions:
+            return False
+        self.potions[self.potions.index(None)] = potion
+        return True
+
+    def discard_potion(self, potion: Potion) -> None:
+        """Null the potion's belt slot (Player.cs DiscardPotionInternal) — the
+        other slots keep their positions; the belt is never compacted."""
+        self.potions[self.potions.index(potion)] = None
+
+    @property
+    def held_potions(self) -> list[Potion]:
+        """The potions actually held, in slot order, with empty slots
+        filtered out (Player.cs `Potions => _potionSlots.Where(p => p !=
+        null)`)."""
+        return [p for p in self.potions if p is not None]
+
+    @property
+    def has_open_potion_slot(self) -> bool:
+        """Mirrors Player.cs `HasOpenPotionSlots => _potionSlots.Any(p => p
+        == null)`."""
+        return None in self.potions
 
     def start_turn(self) -> None:
         """Reset block/energy, fire turn-start hooks, then draw."""

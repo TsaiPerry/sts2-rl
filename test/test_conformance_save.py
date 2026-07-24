@@ -32,3 +32,15 @@ def test_all_saves_parse(d):
         o = parse_save(REC / d / floor / "run.save")
         assert len(o.run_counters) == 12 and len(o.player_counters) == 3
         assert o.run_seed == d
+
+
+def test_save_oracle_carries_full_player_state():
+    o = parse_save(S1)
+    assert o.gold > 0
+    assert len(o.deck) >= 10                      # starter deck + act-1 picks
+    assert all(cid.startswith("CARD.") for cid, _ in o.deck)
+    assert all(isinstance(up, int) for _, up in o.deck)
+    assert o.relic_ids and o.relic_ids[0] == "RELIC.BURNING_BLOOD"
+    assert all(isinstance(s, int) and pid.startswith("POTION.")
+               for s, pid in o.potion_slots.items())
+    assert all(eid.startswith("EVENT.") for eid in o.events_seen)

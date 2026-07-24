@@ -527,9 +527,205 @@ class ReplayRunner:
             run.hp = exp_hp
             run.max_hp = exp_max
 
+    def _is_stale_floor_save(self, floor: int, floor_saves) -> bool:
+        """Detect a `run.save` that RunReplays did not re-export after this
+        floor's room resolved (it is a byte-level-near-duplicate of the
+        PREVIOUS floor's export, just with fresh `save_time`/`start_time`/
+        `run_time` timestamps — everything else, including all 15 rng
+        counters, is unchanged).
+
+        Measured on the 933T39V18D recording (49 floors, 48 consecutive
+        pairs): 3 pairs are exact duplicates of every compared field
+        (gold/hp/deck/relics/potions/all 15 rng counters) — floor_1->floor_2,
+        floor_4->floor_5, floor_47->floor_48. floor_4->floor_5 is the
+        reviewer-confirmed case (the `Fasten` bought in room 4's shop is
+        missing from both saves; it only appears in floor_6). Comparing full
+        JSON confirmed the *only* bytes that differ between a stale pair are
+        the three timestamp fields — the export genuinely re-ran, it just
+        captured state from before this floor's room resolved.
+
+        The cheapest reliable signal for this — cheaper than diffing every
+        compared field, and robust even when nothing observable happened to
+        the compared player state — is `visited_coords`: it is the save's
+        record of map nodes entered THIS act, so a real per-room export must
+        grow it by exactly 1. A stale export leaves it unchanged from the
+        previous floor. Cross-checked against every floor of the 933T
+        recording: `visited_coords` is +1 on every one of the other 45
+        transitions and +0 on exactly the 3 stale ones above; it resets to 1
+        exactly at the two act boundaries (floor_18, floor_34), which
+        `current_act_index` distinguishes from a same-act staleness (a reset
+        is a legitimate act-entry Ancient-node move, not a duplicate)."""
+        oracle = floor_saves.get(floor)
+        prev = floor_saves.get(floor - 1)
+        if oracle is None or prev is None:
+            return False
+        return (oracle.current_act_index == prev.current_act_index
+                and len(oracle.visited_coords) == len(prev.visited_coords))
+
+    def _check_floor_state(self, run, divergences, floor_saves,
+                           resync_floors) -> None:
+        """Diff (and optionally resync) the FULL player state + all 15 stream
+        counters against this floor's run.save. Report-only for anything
+        unmapped — conformance reports, never raises.
+
+        Checkpoint offset: `run.total_floor` counts rooms entered (Neow's node
+        seeds it to 1; `enter_point` bumps it once per room), but the
+        RunReplays `floor_N` save directories are numbered one higher — e.g.
+        the room that lands `total_floor` at 17 (Thrash reward) is recorded as
+        `floor_18`, and that is also the pre-existing act-boundary checkpoint
+        used elsewhere in this file. Verified empirically against the 933T
+        seed (Task 3 Step 3): every TakeCard-driven deck change matches
+        `floor_N == total_floor + 1` exactly across acts 0-2 (battle_trance
+        floor_3, molten_fist floor_4, inferno floor_6, thrash floor_18,
+        dark_embrace floor_34, ...). A same-room shop purchase (BuyCard) does
+        NOT reliably show up until the following floor's save in this
+        recording — so the checkpoint intentionally does not attempt to
+        calibrate against shop-driven deck changes.
+
+        Stale-save guard (Critical fix, post-review): a `floor_saves` entry
+        that `_is_stale_floor_save` flags is skipped entirely — no diff is
+        recorded and no resync happens for this floor — exactly as if this
+        floor had no oracle at all. This is safe (not a hole): whatever a
+        stale floor's export missed (e.g. a shop-bought card) is *still
+        present in the live sim state*, so it is still checked at the next
+        NON-stale floor, which compares the FULL state again (not a delta) —
+        that next checkpoint is where a real divergence introduced during the
+        skipped floor would surface. Without this guard, resync treated the
+        stale (pre-room) oracle as ground truth and rolled back correct live
+        state one floor early, which is what fabricated the phantom
+        divergences/forced-combats this fix resolves."""
+        from ..rng import PlayerRngType, RunRngType
+        from . import idmap
+        from .comparators import Divergence
+
+        floor = run.total_floor + 1
+        oracle = floor_saves.get(floor)
+        if oracle is None or self._is_stale_floor_save(floor, floor_saves):
+            return
+
+        def diff(stream, expected, actual, note=""):
+            if expected != actual:
+                divergences.append(
+                    Divergence(stream, floor, expected, actual, note))
+                return True
+            return False
+
+        diff("floor_hp", oracle.player_current_hp, run.hp)
+        diff("floor_max_hp", oracle.player_max_hp, run.max_hp)
+        diff("floor_gold", oracle.gold, run.gold)
+
+        exp_deck = [(idmap.sim_card_id(cid), up) for cid, up in oracle.deck]
+        live_deck = [(c.id, c.upgrade_level) for c in run.deck]
+        deck_changed = diff("floor_deck", exp_deck, live_deck,
+             "ordered (save order == game deck order); None = unported id")
+
+        exp_relics = [idmap.sim_relic_id(r) for r in oracle.relic_ids]
+        diff("floor_relics", exp_relics, [r.id for r in run.relics])
+
+        exp_potions = {s: idmap.sim_potion_id(p)
+                       for s, p in oracle.potion_slots.items()}
+        # run.potions is a fixed-length list[Potion | None] (Player.cs
+        # `_potionSlots`) so the enumerate index IS the real belt slot; skip
+        # the empty ones the same way oracle.potion_slots omits them.
+        live_potions = {i: p.id for i, p in enumerate(run.potions) if p is not None}
+        potions_changed = diff("floor_potions", exp_potions, live_potions)
+
+        live_rc = run.rng_set.counters()
+        for t in RunRngType:
+            diff(f"floor_counter_{t.value}", oracle.run_counters[t], live_rc[t])
+        live_pc = run.player_rng.counters()
+        for t in PlayerRngType:
+            diff(f"floor_counter_{t.value}",
+                 oracle.player_counters[t], live_pc[t])
+
+        if not resync_floors:
+            return
+        run.hp = oracle.player_current_hp
+        run.max_hp = oracle.player_max_hp
+        run.gold = oracle.gold
+        run.rng_set.load_counters(oracle.run_counters)
+        run.player_rng.load_counters(oracle.player_counters)
+        # Deck/potions are rebuilt from scratch (fresh Card/Potion objects via
+        # make_card/make_potion) ONLY when the diff above actually found a
+        # mismatch. Measured on 933T: rebuilding unconditionally on every
+        # checkpointed floor — even the ~90% that already match — still
+        # forced_combats 1->7 vs the no-`floor_saves` baseline, churning fresh
+        # object identities every floor even when nothing changed. Gating the
+        # rebuild on the diff (a real content/order mismatch) restores
+        # forced_combats to the baseline's 1 (and combat_divergences to 9, one
+        # better than baseline's 10) with no loss of the resync's purpose —
+        # a no-op rebuild has no cascade to suppress in the first place.
+        # Relics don't need this guard: `_resync_relics` already only touches
+        # the delta (add/remove), never rebuilding relics that already match.
+        if deck_changed:
+            self._resync_deck(run, oracle)
+        self._resync_relics(run, oracle)
+        if potions_changed:
+            self._resync_potions(run, oracle)
+
+    def _resync_deck(self, run, oracle) -> None:
+        """Rebuild run.deck to the save's ordered contents. Unmapped ids are
+        skipped (reported by the floor_deck diff). Upgrades applied by level."""
+        from . import idmap
+        from ..cards import make_card
+
+        new_deck = []
+        for cid, up in oracle.deck:
+            sim_id = idmap.sim_card_id(cid)
+            if sim_id is None:
+                continue
+            card = make_card(sim_id)
+            for _ in range(up):
+                card.upgrade()
+            new_deck.append(card)
+        run.deck[:] = new_deck
+
+    def _resync_relics(self, run, oracle) -> None:
+        """Reconcile run.relics to the save's list, reusing the node-relic
+        pattern (undo_after_obtained on drops so max-HP side effects unwind —
+        harmless here because hp/max_hp are re-pinned right before this)."""
+        from . import idmap
+
+        want = [idmap.sim_relic_id(r) for r in oracle.relic_ids]
+        want_set = {w for w in want if w is not None}
+        for relic in list(run.relics):
+            if relic.id not in want_set:
+                run.relics.remove(relic)
+                relic.undo_after_obtained(run)
+        owned = {r.id for r in run.relics}
+        for rid in want:
+            if rid is not None and rid not in owned:
+                run.add_relic(rid)
+                owned.add(rid)
+        run.hp = oracle.player_current_hp      # re-pin after relic hooks
+        run.max_hp = oracle.player_max_hp
+
+    def _resync_potions(self, run, oracle) -> None:
+        """Rebuild run.potions to the save's real slot layout (slot_index ->
+        id), preserving empty slots. Player.cs's belt is a fixed-length
+        `List<PotionModel?>` and LoadPotions places each potion at its
+        serialized SlotIndex (see RunState.potions) — a dense rebuild would
+        collapse the gaps right back and immediately re-trip the
+        floor_potions diff on the very next checkpoint. Unmapped ids
+        (reported by the floor_potions diff) and slots beyond max_potions are
+        left/dropped empty."""
+        from . import idmap
+        from ..potions import make_potion
+
+        new_potions: list = [None] * run.max_potions
+        for slot, pid in oracle.potion_slots.items():
+            if slot >= run.max_potions:
+                continue
+            sim_id = idmap.sim_potion_id(pid)
+            if sim_id is not None:
+                new_potions[slot] = make_potion(sim_id)
+        run.potions[:] = new_potions
+
     def run(self, stop_after_act: int = 0,
             player_checkpoints: "dict[int, tuple[int, int]] | None" = None,
-            resync_player: bool = False) -> ReplayResult:
+            resync_player: bool = False,
+            floor_saves: "dict[int, SaveOracle] | None" = None,
+            resync_floors: bool = False) -> ReplayResult:
         """Drive the recording through act index `stop_after_act` (inclusive)
         and report divergences + the live SP2 stream counters."""
         from ..run import RunState
@@ -537,6 +733,12 @@ class ReplayRunner:
         rec = self.recording
         acts = [short_act_name(a) for a in rec.acts]
         run = RunState(string_seed=rec.seed)
+        # Determinism, not parity: the legacy shared rng (SP4 debt) is seeded
+        # so repeated triage runs are bit-identical and a post-fix delta is
+        # attributable to the fix ([[conformance-replay-determinism]] is now
+        # obsolete for conformance runs). Any in-combat draw from it is still
+        # a wrong-stream bug (DETECTOR 1 / Task 5's tripwire gate).
+        run.rng.seed(f"conformance:{rec.seed}")
         cursor = _CommandCursor(rec.commands)
         driver = _ForceWinDriver(run, cursor, acts=acts, ascension=rec.ascension)
 
@@ -596,6 +798,9 @@ class ReplayRunner:
             driver._resolve_room(resolution)
             self._reconcile_node_relics(
                 run, run.act_index, room_index, n_relics_before)
+            if floor_saves:
+                self._check_floor_state(
+                    run, divergences, floor_saves, resync_floors)
             room_index += 1
             rooms_total += 1
             if run.is_dead:

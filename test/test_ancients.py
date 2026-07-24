@@ -196,7 +196,7 @@ def test_alchemical_coffer_slots_and_potions():
     run = fresh_run(8)
     run.add_relic("alchemical_coffer")
     assert run.max_potions == 3 + 4
-    assert len(run.potions) == 4
+    assert len(run.held_potions) == 4
 
 
 def test_alchemical_coffer_fills_on_the_combat_potion_generation_stream():
@@ -210,7 +210,7 @@ def test_alchemical_coffer_fills_on_the_combat_potion_generation_stream():
     run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
     before = run.rng_set.combat_potion_generation.counter
     run.add_relic("alchemical_coffer")
-    assert len(run.potions) == 4
+    assert len(run.held_potions) == 4
     assert run.rng_set.combat_potion_generation.counter == before + 8
 
 
@@ -763,7 +763,11 @@ def test_delicate_frond_fills_potions():
         rng=random.Random(0), encounter=WURM,
         relics=[make_relic("delicate_frond")],
     )
-    assert len(combat.player.potions) == combat.player.max_potions
+    # DelicateFrond fills every open slot -- Player.cs's belt is a
+    # fixed-length list[Potion | None], so `len(potions)` alone would be
+    # trivially true whether or not the fill happened; assert every slot is
+    # actually occupied.
+    assert len(combat.player.held_potions) == combat.player.max_potions
 
 
 def test_diamond_diadem_power_on_quiet_turns():
@@ -1256,7 +1260,7 @@ def test_lords_parasol_buys_out_the_shop():
     from sts2_rl.rooms import RoomType as RT
 
     deck_before, relics_before = len(run.deck), len(run.relics)
-    potions_before = len(run.potions)
+    potions_before = len(run.held_potions)
     from sts2_rl.shop import MerchantInventory
 
     shop = MerchantInventory.create(run)
@@ -1264,7 +1268,7 @@ def test_lords_parasol_buys_out_the_shop():
         relic.after_shop_entered(run, shop)
     assert len(run.deck) > deck_before         # cards bought
     assert len(run.relics) > relics_before     # relics bought
-    assert len(run.potions) > potions_before   # potions bought
+    assert len(run.held_potions) > potions_before  # potions bought
     assert run.gold == 0                       # all free
 
 

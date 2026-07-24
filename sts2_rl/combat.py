@@ -574,7 +574,9 @@ class CombatState:
         return self._rng.sample(candidates, count)
 
     def use_potion(self, slot: int, target_idx: int | None = None) -> bool:
-        """Use the potion in the given slot (removed on use).
+        """Use the potion in the given slot. The slot is nulled, not removed
+        — Player.cs's belt is a fixed-length `List<PotionModel?>`, and using
+        a potion (DiscardPotionInternal) never shifts the other slots down.
 
         For targeted potions, target_idx selects the enemy (defaults to the
         first living enemy). Returns False if the action is invalid.
@@ -583,8 +585,11 @@ class CombatState:
             return False
         if slot < 0 or slot >= len(self.player.potions):
             return False
+        potion = self.player.potions[slot]
+        if potion is None:
+            return False
 
-        potion = self.player.potions.pop(slot)
+        self.player.potions[slot] = None
         ctx = self._ctx()
         target = ctx.resolve_target(target_idx) if potion.targeted else None
         potion.use(ctx, target)

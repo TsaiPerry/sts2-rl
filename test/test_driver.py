@@ -445,7 +445,7 @@ def test_battleworn_dummy_fight_rewards(monkeypatch):
     gold_before = run.gold
     driver._run_event(make_event("battleworn_dummy", run))
     assert any(r.kind == DecisionKind.REWARD_POTION for r in log)
-    assert len(run.potions) == 1  # asker takes the offer
+    assert len(run.held_potions) == 1  # asker takes the offer
     assert not any(r.kind == DecisionKind.REWARD_CARD for r in log)
     assert run.gold == gold_before  # no normal rewards for the dummy fight
 

@@ -36,11 +36,12 @@ class StoneOfAllTime(Event):
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:
-        return run.act_index == 1 and len(run.potions) > 0
+        return run.act_index == 1 and len(run.held_potions) > 0
 
     def initial_options(self) -> list[EventOption]:
         # GenerateInitialOptions rolls the potion first, then checks the deck.
-        potion = self.rng.choice(self.run.potions) if self.run.potions else None
+        held = self.run.held_potions
+        potion = self.rng.choice(held) if held else None
         lift = (
             EventOption("LIFT", lambda p=potion: self._lift(p))
             if potion is not None
@@ -57,7 +58,7 @@ class StoneOfAllTime(Event):
         return [c for c in self.run.deck if VigorousEnchantment.can_enchant(c)]
 
     def _lift(self, potion) -> None:
-        self.run.potions.remove(potion)
+        self.run.discard_potion(potion)
         self.run.gain_max_hp(_MAX_HP_GAIN)
         self.rng.randrange(100)          # Rng.NextInt(100), value unused
         self._finish("LIFT")
