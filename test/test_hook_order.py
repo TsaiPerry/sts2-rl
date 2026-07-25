@@ -11,7 +11,7 @@ import random
 
 import pytest
 
-from sts2_rl import CombatState, DamageCmd
+from sts2_rl import CombatState, DamageCmd, PowerCmd, ThornsPower, ValueProp, DamageProps
 from sts2_rl.cards import StrikeCard
 
 
@@ -98,3 +98,42 @@ class TestDamagePipelineOrder:
         DamageCmd.deal(cs.hooks, cs.enemy, 6, dealer=cs.player, card=StrikeCard())
         assert "should_die" in calls
         assert "on_damage_received" not in calls
+
+    def test_unblockable_skips_block_absorption(self):
+        """damage_pipeline audit, spec step 7 (CreatureCmd.cs:264-265,
+        Creature.cs:430-435): ValueProp.Unblockable damage bypasses
+        DamageBlockInternal entirely (blocked = 0 regardless of Block), so a
+        creature holding block still takes the full HP loss. Unlike
+        TestPoison.test_deals_unblockable_damage_on_enemy_turn_start (whose
+        block is confounded by the normal turn-start block-clear), this
+        calls DamageCmd.deal directly against a creature that still holds
+        block at call time."""
+        cs = fresh()
+        cs.enemy.block = 10
+        hp_before = cs.enemy.hp
+        DamageCmd.deal(
+            cs.hooks, cs.enemy, 5, dealer=cs.player,
+            props=DamageProps.NON_CARD_HP_LOSS,  # Unblockable | Unpowered
+        )
+        assert cs.enemy.hp == hp_before - 5  # block untouched, full HP loss
+        assert cs.enemy.block == 10
+
+    @pytest.mark.xfail(
+        reason="gap G1 (audits/seam/damage_pipeline.json): ThornsPower is "
+               "wired to on_damage_received, which cmds.py's killing-blow "
+               "guard skips entirely (`if not target.is_dead`). C#'s "
+               "ThornsPower overrides BeforeDamageReceived (ThornsPower.cs:"
+               "17-24), which CreatureCmd.Damage fires unconditionally "
+               "before block/HP/death are even resolved (CreatureCmd.cs:"
+               "263) -- so the real game reflects Thorns damage even on the "
+               "hit that kills the Thorns-bearer.",
+        strict=True,
+    )
+    def test_thorns_reflects_even_on_killing_blow(self):
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 3)
+        cs.player.hp = 1
+        enemy_hp_before = cs.enemy.hp
+        DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
+        assert cs.player.is_dead
+        assert cs.enemy.hp == enemy_hp_before - 3  # C# still reflects

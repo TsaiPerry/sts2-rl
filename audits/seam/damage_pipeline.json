@@ -1,0 +1,203 @@
+{
+  "unit": "seam/damage_pipeline",
+  "game_sources": [
+    {
+      "path": "src/Core/Commands/DamageCmd.cs",
+      "sha256": "27927f1fd54c37f51222ea587b24ec01895703bf5e8e9653bbf2f295bc58e6f3"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "d80c9dd72d97f90d5ec8d5f0d11426b5d6827f035d31e0ee1dd9ed67b2d3f309"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. Guard: dealer != null && dealer.IsDead -> zero-damage no-op for every target (CreatureCmd.cs:242-245)",
+      "verdict": "gap",
+      "issue": "DamageCmd.deal (cmds.py) has no equivalent backstop guard. See guard G5."
+    },
+    {
+      "what": "2. Guard: empty target list -> no results (CreatureCmd.cs:247-251)",
+      "verdict": "waiver",
+      "rationale": "sim's DamageCmd.deal takes a single Creature, not IEnumerable<Creature>; this batch-emptiness guard has no analogue by construction. See guard N2."
+    },
+    {
+      "what": "3. Per-target loop guard: originalTarget.IsDead -> skip this target entirely, no hooks fire (CreatureCmd.cs:256-259)",
+      "verdict": "gap",
+      "issue": "DamageCmd.deal has no target.is_dead guard at entry; a call against an already-dead target would run modify_damage_additive/multiplicative/cap, on_attacked, block absorption, and modify_hp_lost against it (only on_damage_received is guarded, via a separate later check). C# skips the target completely. See guard G5."
+    },
+    {
+      "what": "4. Hook.ModifyDamage: additive (sum) -> multiplicative (product) -> cap (min); floor at 0 (Hook.cs:1486-1569, 2511-2558)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 1-2 (modify_damage_additive/multiplicative gated on is_powered_attack) + step 2 cap (unconditional) + max(0, amount); order and cap-unconditionality match. Two lower-risk nuances recorded separately: the pipeline-level is_powered_attack gate (guard G3) and sequential-chain vs parallel-sum dispatch (guard N3)."
+    },
+    {
+      "what": "5. Event: AfterModifyingDamageAmount(modifiers) (CreatureCmd.cs:262; Hook.cs:694)",
+      "verdict": "gap",
+      "issue": "No sim counterpart exists at all -- modify_damage_additive/multiplicative/cap return aggregated values with no companion 'who actually changed this' event. See guard G2."
+    },
+    {
+      "what": "6. Event: BeforeDamageReceived, unconditional pre-block/pre-HP/pre-death (CreatureCmd.cs:263; Hook.cs:403-408)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 3 on_attacked, correctly positioned before block absorption and gated on amount>0 and MOVE-in-props. The mechanism/position is faithful; the one C# override of this hook (ThornsPower) is wired to a different sim hook entirely -- see guard G1."
+    },
+    {
+      "what": "7. Block absorption: DamageBlockInternal -- Unblockable => 0 blocked, else min(Block, amount) (CreatureCmd.cs:264-265; Creature.cs:430-435)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 4 (`if target.block > 0 and UNBLOCKABLE not in props: absorbed = min(target.block, amount)`) -- identical semantics."
+    },
+    {
+      "what": "8. Hook.ModifyHpLost, BeforeOsty phase (CreatureCmd.cs:266)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 5 modify_hp_lost -- the sim collapses the BeforeOsty/AfterOsty split into one call since Osty redirection is waived (guard N2/step 10)."
+    },
+    {
+      "what": "9. Event: AfterModifyingHpLostBeforeOsty(modifiers) (CreatureCmd.cs:267; Hook.cs:754)",
+      "verdict": "gap",
+      "issue": "No sim counterpart. See guard G2."
+    },
+    {
+      "what": "10. Osty pet-damage redirection: Hook.ModifyUnblockedDamageTarget (CreatureCmd.cs:268; Hook.cs:2048)",
+      "verdict": "waiver",
+      "rationale": "Osty is a pet/companion damage-sharing mechanic; the Ironclad-only, single-player sim has no pet-companion system, so this redirection path is unreachable in scope."
+    },
+    {
+      "what": "11. Hook.ModifyHpLost, AfterOsty phase, re-run on the (possibly redirected) target (CreatureCmd.cs:269)",
+      "verdict": "faithful",
+      "maps_to": "Collapsed into the single cmds.py step 5 modify_hp_lost call, same rationale as step 8 -- faithful given Osty redirection (step 10) is out of scope."
+    },
+    {
+      "what": "12. Event: AfterModifyingHpLostAfterOsty(modifiers) (CreatureCmd.cs:270; Hook.cs:769)",
+      "verdict": "gap",
+      "issue": "No sim counterpart. See guard G2."
+    },
+    {
+      "what": "13. Apply: Creature.LoseHpInternal mutates CurrentHp; computes UnblockedDamage/WasTargetKilled/OverkillDamage, WasTargetKilled evaluated before the subtraction (CreatureCmd.cs:271; Creature.cs:445-457)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 6 (`target.hp = max(0, target.hp - hp_lost)`) plus step 7's should_die check. The arithmetic-snapshot nature of WasTargetKilled and its downstream interaction with death prevention is recorded separately -- see guard G4."
+    },
+    {
+      "what": "14. WasBlockBroken = Block<=0 && blockedDamage>0; WasFullyBlocked = !Unblockable && (blockedDamage>0 || Block>0) && unblockedDamage==0 (CreatureCmd.cs:273-274)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 4 (`if target.block == 0: hooks.on_block_broken(...)`) -- an exact break counts, matching Block<=0 (Block cannot go negative given the min() absorption). Fires at a different pipeline position than C# -- see guard N5 (no current observable effect)."
+    },
+    {
+      "what": "15. Osty overkill split: second LoseHpInternal against the original target for OverkillDamage when the HP-loss target was redirected (CreatureCmd.cs:275-290)",
+      "verdict": "waiver",
+      "rationale": "Only reachable when Osty redirection (step 10) is active; same pet/companion out-of-scope rationale."
+    },
+    {
+      "what": "16. Per-result loop: VFX/SFX/history/screen-shake bookkeeping, no gameplay-logic hooks (CreatureCmd.cs:291-369)",
+      "verdict": "waiver",
+      "rationale": "Presentation-only (VFX/SFX/animation triggers); out of scope per the audit's presentation-machinery waiver."
+    },
+    {
+      "what": "17.1 Second loop, per result: Event AfterBlockBroken if WasBlockBroken, fires AFTER HP loss is applied (CreatureCmd.cs:376-379)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim fires on_block_broken during block absorption (step 7/14 above), before HP loss is applied, rather than after. See guard N5 -- neither currently-ported listener (StunPower via block-break, Hand Drill) reads HP/death state, so this produces no observable difference today."
+    },
+    {
+      "what": "17.2 Second loop: Event AfterCurrentHpChanged if UnblockedDamage > 0 (CreatureCmd.cs:380-383)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 6 (`if hp_lost > 0: ... hooks.on_hp_changed(...)`) -- same guard condition."
+    },
+    {
+      "what": "17.3 Second loop: dealer.Player.ExtraFields.DamageDealt stat bump (CreatureCmd.cs:384-387)",
+      "verdict": "waiver",
+      "rationale": "Run-level telemetry/stat tracking, not gameplay logic; out of scope."
+    },
+    {
+      "what": "17.4 Second loop: Event AfterDamageGiven (dealer side), fires whenever combatState != null regardless of WasTargetKilled -- BEFORE the killing-blow-guarded AfterDamageReceived (CreatureCmd.cs:388-391)",
+      "verdict": "gap",
+      "issue": "cmds.py fires on_damage_dealt (step 9, dealer side) AFTER on_damage_received (step 8, victim side) -- the reverse of C#'s AfterDamageGiven-before-AfterDamageReceived order. Currently dormant: no sim power implements on_damage_dealt yet (grep confirms zero listeners), so no observable divergence exists today, but the pipeline's own dispatch order is inverted from source."
+    },
+    {
+      "what": "17.5 Second loop: killing-blow guard -- if (!WasTargetKilled || !IsDead) AfterDamageReceived(...) else killedCreatures.Add(...); decided BEFORE Kill()/ShouldDie runs (CreatureCmd.cs:392-399)",
+      "verdict": "gap",
+      "issue": "The sim resolves should_die (and resets HP to 1 on a prevented death) BEFORE checking target.is_dead for the on_damage_received guard, so a prevented death does NOT skip on_damage_received. C# locks the skip decision to the pre-Kill() snapshot and never revisits it even if death is later prevented. See guard G4."
+    },
+    {
+      "what": "17.6 Second loop: VFX for fully-blocked hits (CreatureCmd.cs:400-407)",
+      "verdict": "waiver",
+      "rationale": "Presentation-only; out of scope."
+    },
+    {
+      "what": "18. Kill(killedCreatures), run after the whole batch's step 17: BeforeDeath -> ShouldDie (early) -> ShouldDieLate (late, e.g. LizardTail) -> death or AfterPreventingDeath; no generic HP reset in Kill() itself (CreatureCmd.cs:409, 489-572; Hook.cs:2229-2249)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py step 7 should_die + on_death/on_death-prevention handling. Core death processing (InvokeDiedEvent-equivalent on_death, corpse-retention via should_remove_from_combat_after_death) matches. Two narrower nuances recorded separately: the single-phase should_die vs C#'s ShouldDie/ShouldDieLate priority split (guard N4, currently inert) and the generic 'reset to 1 HP' fallback replacing each preventer's own AfterPreventingDeath restoration (guard G4)."
+    }
+  ],
+  "guards": [
+    {
+      "what": "G1: ThornsPower wired to on_damage_received (killing-blow-guarded, post-block) instead of on_attacked/BeforeDamageReceived-equivalent (unconditional, pre-block, pre-death)",
+      "verdict": "gap",
+      "issue": "C#'s ThornsPower.BeforeDamageReceived (ThornsPower.cs:17-24) fires unconditionally for every hit, including the hit that kills its owner, and is gated on `props.IsPoweredAttack() || cardSource is Omnislice`. The sim's ThornsPower (sts2_rl/powers.py:328-353) hooks on_damage_received instead, which cmds.py skips entirely on a killing blow (`if not target.is_dead`), and has no IsPoweredAttack/Omnislice gate at all. Observable consequences: (a) a Thorns-bearing creature does not reflect damage to the creature that lands the killing blow, though the real game does; (b) the sim would incorrectly reflect against Unpowered, dealer-attributed damage (e.g. a card explicitly marked Unpowered against a Thorns-bearer) that C# would not reflect against. Pinned with an xfail in test/test_hook_order.py::TestDamagePipelineOrder::test_thorns_reflects_even_on_killing_blow (part a)."
+    },
+    {
+      "what": "G2: no AfterModifyingXxx(modifiers) companion-event machinery anywhere in the sim's damage-modifier hooks",
+      "verdict": "gap",
+      "issue": "C#'s ModifyDamage/ModifyHpLost paths track which listeners actually changed the value and fire AfterModifyingDamageAmount/AfterModifyingHpLostBeforeOsty/AfterModifyingHpLostAfterOsty (steps 5, 9, 12) so those listeners can react only when they were an active modifier. The sim's modify_damage_additive/multiplicative/cap and modify_hp_lost hooks (sts2_rl/hooks.py) return a plain aggregated value with no such notification. This is real gameplay logic, not VFX flourish: C#'s BufferPower.AfterModifyingHpLostAfterOsty (BufferPower.cs:29-32) uses it to decrement its own stack only on the hit(s) where it actually reduced HP loss to 0. BufferPower is unported, so this is currently dormant, but the power cannot be ported faithfully without this machinery."
+    },
+    {
+      "what": "G3: pipeline-level is_powered_attack(props) gate around the entire modify_damage_additive/multiplicative dispatch, vs C#'s always-call-every-listener-and-self-gate architecture",
+      "verdict": "gap",
+      "issue": "cmds.py:56-58 skips calling modify_damage_additive/modify_damage_multiplicative for any listener at all when is_powered_attack(props) is false. C#'s ModifyDamageInternal (Hook.cs:2515-2538) always calls every listener's ModifyDamageAdditive/Multiplicative for every damage type, leaving the IsPoweredAttack self-check to each implementation. Strength/Vulnerable/Weak self-gate identically in both codebases (faithful for those three). But the already-ported SurroundedPower (Kaiser Crab back-attack multiplier, sts2_rl/powers.py:2523-2565, mirroring SurroundedPower.cs:46-72) does not self-gate on IsPoweredAttack in either source -- so an Unpowered, dealer-attributed hit against a Surrounded player would still receive the 1.5x multiplier in C# but the sim's pipeline-level gate would skip calling modify_damage_multiplicative entirely, silently dropping it. Currently dormant: Kaiser Crab's own attacks (Rocket.cs) never set the Unpowered flag on their damage."
+    },
+    {
+      "what": "G4: killing-blow post-damage-event skip decision is recomputed after death-prevention resolves in the sim, but is a locked pre-Kill() snapshot in C#",
+      "verdict": "gap",
+      "issue": "C# decides whether to fire AfterDamageReceived (CreatureCmd.cs:392-399) using WasTargetKilled/IsDead as they stood BEFORE Kill() (and therefore before any ShouldDie/ShouldDieLate listener) runs; a hit that was arithmetically lethal permanently skips AfterDamageReceived even if a listener like LizardTail.ShouldDieLate later prevents the death -- LizardTail instead restores HP via its own separate AfterPreventingDeath hook (LizardTail.cs:49-55), never via AfterDamageReceived. The sim resets HP to 1 first (inside DamageCmd.deal's own apply step) and only afterward checks target.is_dead to decide whether to fire on_damage_received (cmds.py step 7-8) -- so in the sim, a prevented death does NOT skip on_damage_received. Evidenced by the ported LizardTail (sts2_rl/relics/lizard_tail.py, whose own docstring documents relying on this on_damage_received re-fire to perform its heal) combined with any other on_damage_received-gated power active on the same creature at the moment of a prevented killing blow (e.g. the player's own Thorns, per G1, if granted this run) -- that power would incorrectly fire in the sim where C# would not fire the equivalent AfterDamageReceived at all."
+    },
+    {
+      "what": "G5: DamageCmd.deal has no dealer-is-dead or target-is-dead entry-guard backstop",
+      "verdict": "gap",
+      "issue": "C#'s CreatureCmd.Damage refuses to process any hit at all from an already-dead dealer (CreatureCmd.cs:242-245, spec step 1) and skips any already-dead target in its per-target loop (CreatureCmd.cs:256-259, spec step 3), both as hard backstops independent of caller discipline. The sim's DamageCmd.deal has neither guard; it relies entirely on call sites to check is_dead between hits of a multi-hit/multi-target attack (e.g. sts2_rl/monsters/base.py:114-117 `_execute_attack`, sts2_rl/cards/whirlwind.py:43-49, both of which currently do this correctly on spot-check). No concrete failure is demonstrated -- this records the structural absence of the pipeline-level backstop, not a proven exploit."
+    },
+    {
+      "what": "G6: dealer-side AfterDamageGiven fires before victim-side AfterDamageReceived in C#; the sim's on_damage_dealt fires after on_damage_received",
+      "verdict": "gap",
+      "issue": "CreatureCmd.cs:388-395 fires AfterDamageGiven (dealer side, unconditional) before the killing-blow-guarded AfterDamageReceived (victim side). cmds.py's DamageCmd.deal fires on_damage_received (step 8) before on_damage_dealt (step 9) -- the reverse order. Currently dormant: no sim power implements on_damage_dealt yet, so no observable divergence exists with current content, but the pipeline's dispatch order for these two event families is inverted from source and would matter for a dealer-side power/relic that needs to observe pre-victim-reaction state, or vice versa."
+    },
+    {
+      "what": "N1: sim-only should_allow_hitting pre-check has no single C# analogue inside CreatureCmd.Damage",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# excludes unhittable/reviving creatures upstream, via IsAlive-based target filtering in AttackCommand.GetPossibleTargets (AttackCommand.cs:544-546) plus real-death semantics for reviving Decimillipede-style segments, rather than a dedicated hook inside CreatureCmd.Damage itself. The sim's should_allow_hitting hook (used only by MockRevivePower/ReattachPower-family reviving-segment logic, sts2_rl/powers.py:1572-1575, 2354-2357, 3372-3375) re-architects this as an explicit pipeline predicate. Net effect is equivalent for the currently-ported content (Decimillipede); documented so a future audit doesn't mistake it for an unmapped C# hook."
+    },
+    {
+      "what": "N2: DamageCmd.deal takes a single Creature per call; CreatureCmd.Damage batches IEnumerable<Creature> and defers all targets' step-17/18 events until every target in the call has resolved blocking/HP-loss",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim's callers (card code, Monster._execute_attack) loop over multiple simultaneous targets themselves, each a fully independent DamageCmd.deal call including its own Kill() processing, rather than the pipeline batching them. For a C# attack that hits several creatures at once, every target's AfterDamageGiven/AfterDamageReceived-or-skip resolves before ANY of them is actually Kill()'d; in the sim, the first target's entire pipeline (including death processing) completes before the second target's begins. No concretely broken current interaction was found (the one candidate, Decimillipede's ReattachPower 'are all other segments dead' check, is evaluated on a segment's own later turn, well after any same-turn AOE has already fully resolved in both architectures), but this is a real structural difference. Cross-reference: primarily the concern of the creature_card_cmds seam (Task 7), which owns how cards orchestrate multi-target attacks; recorded here because it originates in DamageCmd.deal's own signature."
+    },
+    {
+      "what": "N3: additive/multiplicative dispatch is a parallel sum/product in the sim vs a sequential chain in C#",
+      "verdict": "deliberate-divergence",
+      "rationale": "Hook.cs:2515-2538 passes the RUNNING total (post-earlier-listeners) as the `amount` parameter to each successive ModifyDamageAdditive/Multiplicative call, so a listener whose contribution depends on the current amount would see a different value depending on hook-registration order. sts2_rl/hooks.py's modify_damage_additive/multiplicative (lines 52-78) instead pass every listener the SAME pre-step base and simply sum/multiply independent results. This includes card-enchantment bonuses (registered as regular hooks via combat.py:133, rather than C#'s explicit pre-step at Hook.cs:1490-1499) -- moot for the same reason. Currently safe: every ported additive/multiplicative implementation (Strength, Vulnerable, Weak, Pen Nib, Miniature Cannon, Strike Dummy, Fake Strike Dummy, SurroundedPower, enchantments) returns a value independent of the running `amount`, so sum/product order-independence holds. Would diverge for a hypothetical amount-dependent (e.g. percentage-of-current-damage) modifier."
+    },
+    {
+      "what": "N4: C#'s ShouldDie (early) / ShouldDieLate (late) two-phase death-prevention priority collapsed to a single flat pass in the sim",
+      "verdict": "waiver",
+      "rationale": "Hook.cs:2229-2249 runs all ShouldDie listeners first, then all ShouldDieLate listeners, so an early preventer always gets first refusal over a Late one (LizardTail is explicitly ShouldDieLate so other prevention effects trigger first, per its own doc comment). sts2_rl/hooks.py's should_die (line 565) has one flat pass. Not reachable in the current Ironclad-only sim: the only non-mock, non-potion ShouldDie/ShouldDieLate listener in the whole C# codebase is LizardTail itself (ShouldDieLate); FairyInABottle (ShouldDie) is a potion (out of scope). With a single listener, the two-phase ordering has no listener to order against."
+    },
+    {
+      "what": "N5: on_block_broken fires during block absorption (before HP loss is applied) in the sim; AfterBlockBroken fires after HP loss is applied in C#",
+      "verdict": "deliberate-divergence",
+      "rationale": "cmds.py step 4 fires on_block_broken immediately when block hits exactly 0 during absorption; CreatureCmd.cs:376-379 fires AfterBlockBroken later, in the second per-result loop, after LoseHpInternal has already mutated CurrentHp (step 13). Both fire unconditionally regardless of whether the same hit also kills the target. Currently ported listeners (StunPower-on-block-break in sts2_rl/powers.py:2293-2300, Hand Drill in sts2_rl/relics/hand_drill.py:21-29) read neither HP nor death state, so no observable difference exists today."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-25"
+}

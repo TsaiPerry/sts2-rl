@@ -174,7 +174,12 @@ def unported(kind: str, game_root: Path | None = None) -> list[str]:
 # not exist, locate the real one with a grep and fix this table.
 SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
     "damage_pipeline": (
-        ["src/Core/Commands/DamageCmd.cs"],
+        # DamageCmd.cs itself is just two AttackCommand-builder factory
+        # methods; the actual per-hit pipeline (block/modifier/kill order)
+        # lives in CreatureCmd.Damage, dispatched through the Hook static
+        # methods it calls (ModifyDamage, ModifyHpLost, ShouldDie, ...).
+        ["src/Core/Commands/DamageCmd.cs", "src/Core/Commands/CreatureCmd.cs",
+         "src/Core/Hooks/Hook.cs"],
         ["sts2_rl/cmds.py", "sts2_rl/valueprops.py"],
     ),
     "power_cmd": (
