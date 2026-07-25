@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tools.audit import harness
 
 FIXTURE_CS = """\
@@ -80,3 +82,26 @@ class TestRoster:
     def test_unported_returns_cs_filenames(self):
         names = harness.unported("relic")
         assert all(n.endswith(".cs") for n in names)
+
+    @pytest.mark.parametrize("kind", sorted(harness.GAME_MODEL_DIRS))
+    def test_roster_rows_have_expected_shape_for_all_kinds(self, kind):
+        rows = harness.roster(kind)
+        assert rows, f"{kind} roster should not be empty"
+        for row in rows:
+            assert set(row.keys()) == {
+                "unit", "sim_path", "game_path", "game_exists",
+            }
+
+
+class TestInterfaceContract:
+    """Pins the module-level names later tasks consume verbatim."""
+
+    def test_game_model_dirs_keys(self):
+        assert set(harness.GAME_MODEL_DIRS) == {
+            "relic", "power", "card", "monster", "event", "enchantment",
+        }
+
+    def test_verdicts_order(self):
+        assert harness.VERDICTS == (
+            "faithful", "waiver", "deliberate-divergence", "gap",
+        )

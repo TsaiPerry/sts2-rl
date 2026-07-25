@@ -171,9 +171,8 @@ def unported(kind: str, game_root: Path | None = None) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    r = ap_roster = sub.add_parser("roster", help="print the audit work queue")
+    ap_roster = sub.add_parser("roster", help="print the audit work queue")
     ap_roster.add_argument("kind", nargs="?", choices=sorted(GAME_MODEL_DIRS))
-    del r
     args = ap.parse_args(argv)
 
     if args.cmd == "roster":
