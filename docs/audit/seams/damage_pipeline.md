@@ -16,6 +16,23 @@ dispatched through the static `Hook.*` methods it calls
 (`src/Core/Hooks/Hook.cs`). The table was corrected to hash all three files;
 the corrected table is staged in this branch.
 
+### Scope boundary with `creature_card_cmds` (Task 7) — READ BEFORE TASK 7
+
+The correction leaves `CreatureCmd.cs` listed under **two** seams, so the file
+is split by region to keep the two audits from overlapping or contradicting
+each other:
+
+- **`damage_pipeline` (this record) owns `CreatureCmd.cs:240-572`** — the
+  per-hit damage pipeline (`Damage`) plus `Kill` /
+  `KillWithoutCheckingWinCondition`. Every numbered step below is drawn from
+  that region.
+- **`creature_card_cmds` (Task 7) should scope to the remainder of the file**
+  — the other creature verbs (heal, stun, escape, block, power application
+  helpers, …) — and should NOT re-audit the `Damage`/`Kill` region. If Task 7
+  finds a `Damage`/`Kill` behavior this record missed, it belongs here as an
+  amendment to `audits/seam/damage_pipeline.json`, not as a second verdict
+  under a different unit id.
+
 ## Sim entry point
 
 `sts2_rl.cmds.DamageCmd.deal(hooks, target, amount, dealer=None, card=None,
@@ -134,6 +151,18 @@ applies, matching C#), 3↔6 (`on_attacked`↔`BeforeDamageReceived`), 4↔7
 call — faithful, since Osty redirection is waived), 6↔13 (apply +
 `should_die`, collapsed with step 18's `Kill()`), 7↔17e/18 (post-damage
 events + kill, collapsed into a single guard `if not target.is_dead`).
+
+**Note added in review — step 3↔6's call-site gate is narrower than C#'s.**
+C# calls `BeforeDamageReceived` **unconditionally** (`CreatureCmd.cs:263`) and
+lets each listener self-gate; the sim gates the `on_attacked` call itself on
+`amount > 0 and ValueProp.MOVE in props` (`cmds.py` step 3). That is the same
+pipeline-level-filter shape as **G3**, applied to a different event. It stays
+`faithful` today only because Thorns is this event's sole listener anywhere,
+its own self-gate (`IsPoweredAttack() || cardSource is Omnislice`) is a strict
+subset of the sim's MOVE condition, and Omnislice's damage keeps the MOVE
+flag — so no ported content diverges. A future `BeforeDamageReceived`-
+equivalent listener that is *not* MOVE-gated would silently inherit this
+filter; re-check this step when porting one.
 
 **Gaps found** (full detail in the JSON `guards` entries; short form here):
 
