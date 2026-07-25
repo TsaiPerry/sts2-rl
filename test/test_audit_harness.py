@@ -105,3 +105,98 @@ class TestInterfaceContract:
         assert harness.VERDICTS == (
             "faithful", "waiver", "deliberate-divergence", "gap",
         )
+
+
+import json
+
+
+def _valid_record(harness, tmp_path):
+    """A minimal valid content record against a fixture C# file."""
+    cs = tmp_path / "FixtureRelic.cs"
+    cs.write_text(FIXTURE_CS, encoding="utf-8")
+    return {
+        "unit": "relic/fixture_relic",
+        "game_source": {"path": "FixtureRelic.cs", "sha256": harness.file_sha256(cs)},
+        "sim_source": {"path": "sts2_rl/relics/unsettling_lamp.py",
+                       "sha256": "0" * 64},
+        "hooks": {
+            "Rarity": {"maps_to": "rarity", "verdict": "faithful"},
+            "BeforeCombatStart": {"maps_to": "on_combat_start", "verdict": "faithful"},
+            "AfterDamageReceivedEarly": {
+                "maps_to": "", "verdict": "waiver",
+                "rationale": "Early hook phases not modeled"},
+            "ModifyPowerAmountGivenMultiplicative": {
+                "maps_to": "modify_power_amount", "verdict": "faithful"},
+        },
+        "guards": [],
+        "verdict": "waiver",
+        "audited": "2026-07-24",
+    }
+
+
+class TestValidateRecord:
+    def test_valid_record_passes(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        assert harness.validate_record(rec, game_root=tmp_path) == []
+
+    def test_missing_hook_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        del rec["hooks"]["BeforeCombatStart"]
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("BeforeCombatStart" in e for e in errs)
+
+    def test_bad_verdict_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["hooks"]["Rarity"]["verdict"] = "fine"
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("fine" in e for e in errs)
+
+    def test_waiver_without_rationale_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["hooks"]["AfterDamageReceivedEarly"]["rationale"] = ""
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("rationale" in e for e in errs)
+
+    def test_gap_without_issue_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["guards"] = [{"what": "power.IsVisible", "verdict": "gap"}]
+        rec["verdict"] = "gap"
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("issue" in e for e in errs)
+
+    def test_wrong_rollup_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["verdict"] = "faithful"  # but AfterDamageReceivedEarly is a waiver
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("rollup" in e for e in errs)
+
+    def test_seam_record_requires_steps(self, tmp_path):
+        rec = {
+            "unit": "seam/damage_pipeline",
+            "game_sources": [{"path": "FixtureRelic.cs", "sha256": "0" * 64}],
+            "sim_sources": [{"path": "sts2_rl/cmds.py", "sha256": "0" * 64}],
+            "steps": [],
+            "guards": [],
+            "verdict": "faithful",
+            "audited": "2026-07-24",
+        }
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("steps" in e for e in errs)
+
+
+class TestSkeleton:
+    def test_skeleton_lists_every_override(self, tmp_path):
+        (tmp_path / "src/Core/Models/Relics").mkdir(parents=True)
+        (tmp_path / "src/Core/Models/Relics/UnsettlingLamp.cs").write_text(
+            FIXTURE_CS, encoding="utf-8")
+        out = harness.skeleton("relic/unsettling_lamp",
+                               game_root=tmp_path,
+                               audits_dir=tmp_path / "audits")
+        rec = json.loads(out.read_text(encoding="utf-8"))
+        assert set(rec["hooks"]) == {
+            "Rarity", "BeforeCombatStart", "AfterDamageReceivedEarly",
+            "ModifyPowerAmountGivenMultiplicative",
+        }
+        assert rec["verdict"] == ""
+        assert rec["game_source"]["sha256"]
+        assert rec["sim_source"]["sha256"]
