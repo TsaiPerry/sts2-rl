@@ -34,10 +34,15 @@ class InfernalBladeCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import CardPileCmd
-        from .pool import random_pool_cards
-        cards = random_pool_cards(
-            ctx.combat._rng, 1, card_type=CardType.ATTACK, distinct=True
-        )
+        from .pool import get_distinct_for_combat_parity, random_pool_cards
+        crng = ctx.combat.combat_rng
+        if crng.is_parity:
+            # GetDistinctForCombat draws on Rng.CombatCardGeneration.
+            cards = get_distinct_for_combat_parity(crng.card_gen, 1, CardType.ATTACK)
+        else:
+            cards = random_pool_cards(
+                ctx.combat._rng, 1, card_type=CardType.ATTACK, distinct=True
+            )
         if cards:
             cards[0].set_free_this_turn()
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])

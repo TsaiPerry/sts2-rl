@@ -129,12 +129,29 @@ class HookSystem:
         amount: int,
         dealer: Creature | None = None,
         card: Card | None = None,
+        modifiers: list | None = None,
     ) -> int:
-        """Chain-modify HP loss after block absorption (e.g. Torii: cap at 1, Tungsten Rod: -1)."""
+        """Chain-modify HP loss after block absorption (e.g. Torii: cap at 1, Tungsten Rod: -1).
+
+        `modifiers` mirrors Hook.ModifyHpLost's `out modifiers`: when a list is
+        passed, every listener that actually changed the amount is appended to
+        it, so the caller can notify them via `after_modify_hp_lost`. Pure-read
+        callers (previews.py) pass nothing and so notify nobody.
+        """
         for l in list(self._listeners):
             if hasattr(l, "modify_hp_lost"):
+                before = amount
                 amount = l.modify_hp_lost(target, amount, dealer, card)
+                if modifiers is not None and amount != before:
+                    modifiers.append(l)
         return max(0, amount)
+
+    def after_modify_hp_lost(self, modifiers: list, target: Creature) -> None:
+        """Notify the listeners that changed an HP-loss amount (mirrors
+        Hook.AfterModifyingHpLostAfterOsty — Buffer decrements here)."""
+        for l in modifiers:
+            if hasattr(l, "after_modify_hp_lost"):
+                l.after_modify_hp_lost(target)
 
     # ── Modifier hooks — misc ────────────────────────────────────────────
 
@@ -562,13 +579,26 @@ class HookSystem:
 
     # ── Predicate hooks ──────────────────────────────────────────────────
 
-    def should_die(self, creature: Creature) -> bool:
-        """False from any listener prevents death (e.g. Fairy in a Bottle, Torii)."""
+    def should_die(self, creature: Creature, preventer: list | None = None) -> bool:
+        """False from any listener prevents death (e.g. Fairy in a Bottle, Torii).
+
+        `preventer` mirrors Hook.ShouldDie's `out preventer`: the vetoing
+        listener is appended to it, so the caller can hand it to
+        `after_preventing_death`."""
         for l in list(self._listeners):
             if hasattr(l, "should_die"):
                 if not l.should_die(creature):
+                    if preventer is not None:
+                        preventer.append(l)
                     return False
         return True
+
+    def after_preventing_death(self, preventer: list, creature: Creature) -> None:
+        """Notify the listener that vetoed a death (mirrors
+        Hook.AfterPreventingDeath — Fairy in a Bottle heals here)."""
+        for l in preventer:
+            if hasattr(l, "after_preventing_death"):
+                l.after_preventing_death(creature)
 
     def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
         """Hook.ShouldCreatureBeRemovedFromCombatAfterDeath — False from any

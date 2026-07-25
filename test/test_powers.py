@@ -788,3 +788,142 @@ class TestDebuffTickTiming:
         cs.hooks.on_enemy_side_end()
         for pid in self._IDS:
             assert pid not in cs.enemy.powers, f"enemy {pid} should have expired"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Potion powers (Clarity / Duplication / Gigantification / Buffer /
+# Radiance / Demise / Shackling Potion)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestPotionPowers:
+    """The seven powers whose only source is a potion (src/Core/Models/Powers)."""
+
+    def test_clarity_draws_one_extra_card_per_stack_turn(self):
+        # ClarityPower.cs: ModifyHandDraw +1 (flat, regardless of stacks) and
+        # AfterSideTurnStart decrements — the game's side-turn-start hook runs
+        # AFTER SetupPlayerTurn's draw (CombatManager.cs:522 vs :654).
+        from sts2_rl.powers import ClarityPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, ClarityPower, 2)
+        cs.end_turn()
+        assert len(cs.player.hand) == cs.player.DRAW_PER_TURN + 1
+        assert cs.player.powers["clarity"].amount == 1
+        cs.end_turn()
+        assert len(cs.player.hand) == cs.player.DRAW_PER_TURN + 1
+        assert "clarity" not in cs.player.powers
+        cs.end_turn()
+        assert len(cs.player.hand) == cs.player.DRAW_PER_TURN
+
+    def test_duplication_plays_the_next_card_twice_then_decrements(self):
+        # DuplicationPower.cs: ModifyCardPlayCount +1, AfterModifyingCardPlay-
+        # Count decrements (fires immediately after the modifier chain, before
+        # the plays), AfterSideTurnEnd removes what is left.
+        from sts2_rl.powers import DuplicationPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, DuplicationPower, 1)
+        cs.player.hand = [make_card("strike")]
+        cs.player.energy = 3
+        before = cs.enemy.hp
+        assert cs.play_card(0)
+        assert before - cs.enemy.hp == 12          # two Strikes, not one
+        assert "duplication" not in cs.player.powers
+
+    def test_duplication_is_removed_at_the_end_of_the_turn(self):
+        from sts2_rl.powers import DuplicationPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, DuplicationPower, 2)
+        cs.hooks.on_player_turn_end(cs.player)
+        assert "duplication" not in cs.player.powers
+
+    def test_gigantification_triples_the_next_attack_card(self):
+        # GigantificationPower.cs: the first powered Attack command from a card
+        # the owner plays is ×3 (ModifyDamageMultiplicative 3), then the power
+        # decrements at AfterAttack.
+        from sts2_rl.powers import GigantificationPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, GigantificationPower, 1)
+        cs.player.hand = [make_card("strike"), make_card("strike")]
+        cs.player.energy = 3
+        before = cs.enemy.hp
+        assert cs.play_card(0)
+        assert before - cs.enemy.hp == 18          # 6 × 3
+        assert "gigantification" not in cs.player.powers
+        before = cs.enemy.hp
+        assert cs.play_card(0)
+        assert before - cs.enemy.hp == 6           # back to normal
+
+    def test_gigantification_ignores_unpowered_damage(self):
+        # BeforeAttack/ModifyDamageMultiplicative both gate on
+        # DamageProps.IsPoweredAttack().
+        from sts2_rl import DamageProps
+        from sts2_rl.powers import GigantificationPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, GigantificationPower, 1)
+        before = cs.enemy.hp
+        DamageCmd.deal(
+            cs.hooks, cs.enemy, 10, dealer=cs.player,
+            props=DamageProps.NON_CARD_UNPOWERED,
+        )
+        assert before - cs.enemy.hp == 10
+        assert cs.player.powers["gigantification"].amount == 1
+
+    def test_buffer_prevents_one_instance_of_hp_loss(self):
+        # BufferPower.cs: ModifyHpLostAfterOstyLate → 0, then
+        # AfterModifyingHpLostAfterOsty decrements (only listeners that
+        # actually changed the amount are notified).
+        from sts2_rl.powers import BufferPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, BufferPower, 1)
+        hp = cs.player.hp
+        DamageCmd.deal(cs.hooks, cs.player, 15, dealer=cs.enemy)
+        assert cs.player.hp == hp
+        assert "buffer" not in cs.player.powers
+        DamageCmd.deal(cs.hooks, cs.player, 15, dealer=cs.enemy)
+        assert cs.player.hp == hp - 15
+
+    def test_buffer_survives_a_fully_blocked_hit(self):
+        # No HP was lost, so nothing reduced it — the stack is untouched.
+        from sts2_rl.powers import BufferPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, BufferPower, 1)
+        cs.player.block = 20
+        DamageCmd.deal(cs.hooks, cs.player, 15, dealer=cs.enemy)
+        assert cs.player.powers["buffer"].amount == 1
+
+    def test_radiance_grants_one_energy_at_turn_start_per_stack(self):
+        # RadiancePower.cs: AfterEnergyReset → GainEnergy(1) + Decrement.
+        from sts2_rl.powers import RadiancePower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, RadiancePower, 2)
+        cs.end_turn()
+        assert cs.player.energy == cs.player.ENERGY_PER_TURN + 1
+        assert cs.player.powers["radiance"].amount == 1
+        cs.end_turn()
+        assert cs.player.energy == cs.player.ENERGY_PER_TURN + 1
+        assert "radiance" not in cs.player.powers
+
+    def test_demise_damages_its_owner_every_side_turn_end(self):
+        # DemisePower.cs: AfterSideTurnEnd damages the owner for Amount
+        # (Unblockable | Unpowered) and does NOT decrement.
+        from sts2_rl.powers import DemisePower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, DemisePower, 9, applier=cs.player)
+        cs.enemy.block = 50
+        before = cs.enemy.hp
+        cs.hooks.on_enemy_side_end()
+        assert cs.enemy.hp == before - 9           # unblockable
+        assert cs.enemy.block == 50
+        assert cs.enemy.powers["demise"].amount == 9
+        cs.hooks.on_enemy_side_end()
+        assert cs.enemy.hp == before - 18
+
+    def test_shackling_potion_power_lowers_strength_until_side_end(self):
+        # ShacklingPotionPower : TemporaryStrengthPower with IsPositive=false —
+        # -7 Strength now, restored at the end of the owner's side turn.
+        from sts2_rl.powers import ShacklingPotionPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, ShacklingPotionPower, 7, applier=cs.player)
+        assert cs.enemy.powers["strength"].amount == -7
+        cs.hooks.on_enemy_side_end()
+        assert "strength" not in cs.enemy.powers
+        assert "shackling_potion" not in cs.enemy.powers

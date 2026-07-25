@@ -10,11 +10,15 @@ empty and ``NextItem`` would consume no draw — desyncing the stream counter.
 This module ports the full pool as ``(id, rarity)`` data (identities/rarity
 transcribed from ``src/Core/Models/Potions/*.cs`` plus ``Ironclad4Epoch``),
 so the parity generators draw exactly what the game draws: two draws per
-potion, over non-empty buckets. The potion *identity* never feeds a compared
-RNG counter (the runner skips potion rewards and leaves shops), so unimplemented
-potions surface as lightweight membership placeholders — only their rarity
-(shop pricing) matters. Epoch/unlock gating is not modelled (fully-unlocked
-run), matching the rest of the sim.
+potion, over non-empty buckets. Epoch/unlock gating is not modelled
+(fully-unlocked run), matching the rest of the sim.
+
+Every potion in this roster is now implemented in ``potions.py``
+(test_potions.TestPoolCoverage gates that), so ``_make`` builds a real class
+for every pool id. The ``_ParityPotion`` placeholder remains for ids that are
+*not* in the pool at all: a save/recording can name a cross-character potion
+(Silent's Poison Potion, Defect's Focus Potion, …) that the sim does not
+implement, and the belt resync must still be able to rebuild that slot.
 """
 from __future__ import annotations
 

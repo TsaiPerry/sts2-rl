@@ -157,6 +157,13 @@ class CombatState:
         self.relics: list[Relic] = list(relics or [])
         for relic in self.relics:
             relic.attach(self)
+        # Belt potions are hook listeners too (CombatState.IterateHookListeners
+        # walks each player's Powers, Relics, then PotionSlots) — that is how
+        # Fairy in a Bottle's ShouldDie is consulted while it sits in the belt.
+        # Potions procured mid-combat register in PlayerCombatState.add_potion.
+        for _potion in self.player.held_potions:
+            _potion.combat = self
+            self.hooks.register(_potion)
         self.phase = Phase.PLAYER_TURN
         # Which side is currently acting ("player" / "enemy"); mirrors the
         # game's CombatState.CurrentSide (used by e.g. Inferno).
@@ -588,8 +595,15 @@ class CombatState:
         potion = self.player.potions[slot]
         if potion is None:
             return False
+        # PotionUsage.Automatic potions have no manual use (the game disables
+        # the Use button, NPotionPopup.cs:131) — only their own hook fires them.
+        if potion.automatic:
+            return False
 
+        # PotionModel.OnUseWrapper starts with RemoveBeforeUse: the slot is
+        # nulled (and the potion stops listening) before the effect resolves.
         self.player.potions[slot] = None
+        self.player.detach_potion(potion)
         ctx = self._ctx()
         target = ctx.resolve_target(target_idx) if potion.targeted else None
         potion.use(ctx, target)

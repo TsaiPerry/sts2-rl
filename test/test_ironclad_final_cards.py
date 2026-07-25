@@ -491,6 +491,20 @@ class TestInfernalBlade:
         card.upgrade()
         play(cs, card, energy=0)
 
+    def test_generation_draws_from_the_card_generation_stream_in_parity(self):
+        # InfernalBlade.cs: CardFactory.GetDistinctForCombat(..., Rng.
+        # CombatCardGeneration) — a parity run must move that stream, never the
+        # legacy shared rng (test_rng_tripwire gates the same rule).
+        from sts2_rl.rng import RunRngSet
+        rs = RunRngSet("89U21BV1TZ")
+        cs = CombatState(rng_set=rs)
+        before = rs.combat_card_generation.counter
+        shared_before = cs._rng.getstate()
+        play(cs, InfernalBladeCard())
+        assert rs.combat_card_generation.counter > before
+        assert cs._rng.getstate() == shared_before
+        assert cs.player.hand[-1].card_type == CardType.ATTACK
+
 
 class TestStoke:
     def test_exhausts_hand_and_generates_that_many_pool_cards(self):

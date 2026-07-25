@@ -3873,6 +3873,209 @@ class ConfusedPower(Power):
         card.set_cost_this_combat(combat._rng.randrange(4))
 
 
+# ── Potion powers ────────────────────────────────────────────────────────
+# Powers whose only source is a potion (Models/Powers/*.cs, applied from
+# Models/Potions/*.cs).
+
+
+class ClarityPower(Power):
+    """Draw 1 extra card at the start of each of the owner's next N turns
+    (Clarity).
+
+    Source: ClarityPower.cs — ModifyHandDraw returns count + 1 (flat, NOT the
+    stack count) and AfterSideTurnStart decrements. The game's side-turn-start
+    hook runs *after* SetupPlayerTurn's draw (CombatManager.cs:522 vs :654), so
+    the sim's post-draw slot (on_player_turn_started) is the matching one.
+    """
+
+    id = "clarity"
+    name = "Clarity"
+    power_type = PowerType.BUFF
+
+    def modify_hand_draw(self, player: Creature, count: int) -> int:
+        if player is not self.owner:
+            return count
+        return count + 1
+
+    def on_player_turn_started(self, player: Creature) -> None:
+        if player is self.owner:
+            self._tick()
+
+
+class DuplicationPower(Power):
+    """The owner's next N card plays happen twice (Duplicator).
+
+    Source: DuplicationPower.cs — ModifyCardPlayCount + 1 with
+    AfterModifyingCardPlayCount decrementing, then AfterSideTurnEnd removes
+    whatever is left. The game fires the after-hook immediately after the
+    modifier chain and before the plays resolve, so consuming the stack inside
+    the modifier is exact.
+    """
+
+    id = "duplication"
+    name = "Duplication"
+    power_type = PowerType.BUFF
+
+    def modify_card_play_count(
+        self, card: Card, target: Creature | None, count: int
+    ) -> int:
+        # `card.Owner.Creature != Owner` — every card in the sim belongs to the
+        # player, so the check reduces to the owner being the player.
+        combat = self.hooks.combat
+        if combat is None or self.owner is not combat.player:
+            return count
+        self._tick()
+        return count + 1
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._expire()
+
+
+class GigantificationPower(Power):
+    """The owner's next Attack card deals TRIPLE damage (Gigantification
+    Potion).
+
+    Source: GigantificationPower.cs — BeforeAttack latches the first powered
+    Attack-card command, ModifyDamageMultiplicative returns 3 for it (and for
+    any powered card attack while nothing is latched, which is what makes the
+    card's damage preview read triple), AfterAttack clears the latch and
+    decrements.
+    """
+
+    id = "gigantification"
+    name = "Gigantification"
+    power_type = PowerType.BUFF
+    MULTIPLIER = 3
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._card_to_modify: Card | None = None
+
+    def before_attack(self, dealer: Creature, card: Card | None = None) -> None:
+        from .cards import CardType
+        if dealer is not self.owner or self._card_to_modify is not None:
+            return
+        if card is None or card.card_type != CardType.ATTACK or card.is_unpowered:
+            return
+        self._card_to_modify = card
+
+    def modify_damage_multiplicative(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None = None,
+        card: Card | None = None,
+    ) -> float:
+        # `cardSource == null` / wrong owner → no multiplier. Unpowered damage
+        # never reaches this hook in the sim (DamageCmd gates it), matching the
+        # source's IsPoweredAttack guard.
+        if card is None or dealer is not self.owner:
+            return 1.0
+        if self._card_to_modify is None or card is self._card_to_modify:
+            return float(self.MULTIPLIER)
+        return 1.0
+
+    def after_attack(self, dealer: Creature, card: Card | None = None) -> None:
+        if card is not None and card is self._card_to_modify:
+            self._card_to_modify = None
+            self._tick()
+
+
+class BufferPower(Power):
+    """Prevent the next N instances of HP loss (Lucky Tonic).
+
+    Source: BufferPower.cs — ModifyHpLostAfterOstyLate returns 0 for the owner
+    and AfterModifyingHpLostAfterOsty decrements. Only listeners that actually
+    changed the amount are notified, so a hit fully absorbed by block leaves
+    the stack alone.
+    """
+
+    id = "buffer"
+    name = "Buffer"
+    power_type = PowerType.BUFF
+
+    def modify_hp_lost(
+        self,
+        target: Creature,
+        amount: int,
+        dealer: Creature | None = None,
+        card: Card | None = None,
+    ) -> int:
+        if target is not self.owner:
+            return amount
+        return 0
+
+    def after_modify_hp_lost(self, target: Creature) -> None:
+        self._tick()
+
+
+class RadiancePower(Power):
+    """Gain 1 energy at the start of each of the owner's next N turns
+    (Radiant Tincture).
+
+    Source: RadiancePower.cs — AfterEnergyReset gains EnergyVar(1) and
+    decrements.
+    """
+
+    id = "radiance"
+    name = "Radiance"
+    power_type = PowerType.BUFF
+    ENERGY = 1
+
+    def on_energy_reset(self, player: Creature) -> None:
+        if player is not self.owner:
+            return
+        from .cmds import EnergyCmd
+        EnergyCmd.gain(self.hooks, self.owner, self.ENERGY)
+        self._tick()
+
+
+class DemisePower(Power):
+    """At the end of the owner's side turn it loses N HP (Powdered Demise).
+
+    Source: DemisePower.cs — AfterSideTurnEnd damages the owner for Amount
+    (Unblockable | Unpowered) with no dealer. The stack never decrements, so
+    the damage repeats every turn.
+    """
+
+    id = "demise"
+    name = "Demise"
+    power_type = PowerType.DEBUFF
+
+    def _fire(self) -> None:
+        from .cmds import DamageCmd
+        from .valueprops import DamageProps
+        DamageCmd.deal(
+            self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_HP_LOSS
+        )
+
+    def on_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._fire()
+
+    def on_enemy_side_end(self) -> None:
+        if self.owner.side == "enemy":
+            self._fire()
+
+
+class ShacklingPotionPower(TemporaryStrengthPower):
+    """Temporary Strength LOSS from the Shackling Potion: restored at the end
+    of the owner's side turn (the source subclasses TemporaryStrengthPower with
+    IsPositive=false, exactly like Dark Shackles)."""
+
+    id = "shackling_potion"
+    name = "Shackling Potion"
+    power_type = PowerType.DEBUFF
+    _sign = -1
+
+
 # ── Registry ─────────────────────────────────────────────────────────────
 
 ALL_POWERS: dict[str, type[Power]] = {
@@ -4006,5 +4209,13 @@ ALL_POWERS: dict[str, type[Power]] = {
         TheGambitPower,
         BlockNextTurnPower,
         ConfusedPower,
+        # Potion powers
+        ClarityPower,
+        DuplicationPower,
+        GigantificationPower,
+        BufferPower,
+        RadiancePower,
+        DemisePower,
+        ShacklingPotionPower,
     ]
 }
