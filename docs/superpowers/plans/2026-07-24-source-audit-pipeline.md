@@ -20,12 +20,19 @@ The decompiled C# game source is read-only ground truth.
 
 ## Global Constraints
 
-- **NEVER `git commit` or `git push`** — stage with `git add` only; Perry
-  commits. (CLAUDE.md rule 4 overrides any skill's commit steps. Every
-  "Stage" step below replaces the usual commit step.)
+- **Commits: authorized for THIS branch only.** This plan executes in an
+  isolated worktree `c:\Users\Perry\Desktop\sts2-rl-audit` on branch
+  `audit-pipeline`. Perry explicitly authorized per-task commits on that
+  branch (2026-07-24) so the review loop has diffs to work from. Therefore:
+  commit each task on `audit-pipeline`; **NEVER `git push`**, never commit on
+  or merge into `main` — Perry reviews and merges the branch himself.
+  (This is a scoped exception to CLAUDE.md rule 4; every "Stage" step below
+  becomes `git add` + `git commit` on this branch.)
 - Game source root: `c:\Users\Perry\Desktop\Slay the Spire 2`, overridable
   via env var `STS2_GAME_SRC`. Never modify anything under it.
-- Sim repo root (all relative paths below): `c:\Users\Perry\Desktop\sts2-rl`.
+- Sim repo root (all relative paths below): the worktree root
+  `c:\Users\Perry\Desktop\sts2-rl-audit` (same repo as
+  `c:\Users\Perry\Desktop\sts2-rl`, different checkout).
 - Run tests with `py -m pytest test/ -q` (the `py` launcher; repo root cwd).
 - **Potions are out of scope** (explicitly deferred by Perry). Ascension
   values out of scope (sim uses non-ascension numbers).
@@ -390,11 +397,11 @@ Run: `py -m pytest test/ -q`
 Expected: no regressions (baseline: 2265 passed / 5 xfailed, plus the new
 harness tests).
 
-- [ ] **Step 8: Stage (do not commit)**
+- [ ] **Step 8: Stage and commit (on `audit-pipeline` only)**
 
 ```powershell
 git add tools/audit/harness.py tools/audit/name_overrides.json test/test_audit_harness.py
-git status --short
+git commit -m "feat(audit): completeness harness roster, override enumeration, hashing"
 ```
 
 ---
@@ -818,7 +825,7 @@ Run: `py -m pytest test/ -q` — no regressions.
 
 ```powershell
 git add tools/audit/harness.py tools/audit/PROMPT.md test/test_audit_harness.py
-git status --short
+git commit -m "feat(audit): record skeletons, validation, and the audit prompt"
 ```
 
 ---
@@ -1107,7 +1114,7 @@ Run: `py -m pytest test/ -q` — no regressions.
 
 ```powershell
 git add tools/audit_status.py test/test_audit_status.py
-git status --short
+git commit -m "feat(audit): audit_status coverage/staleness/gap reporting"
 ```
 
 ---
@@ -1218,7 +1225,7 @@ Run: `py -m pytest test/ -q` — no regressions.
 
 ```powershell
 git add test/test_hook_order.py
-git status --short
+git commit -m "test(audit): hook-order tracing helper + damage pipeline pins"
 ```
 
 ---
@@ -1262,9 +1269,10 @@ tests differ, and those are tabulated per task.
   → exit 0.
 - [ ] **Step F: Full suite.** `py -m pytest test/ -q` — no regressions
   (xfails added for recorded gaps are allowed and expected).
-- [ ] **Step G: Stage.**
+- [ ] **Step G: Commit.**
   `git add audits/seam/<seam>.json docs/audit/seams/<seam>.md test/test_hook_order.py tools/audit/harness.py`
-  then `git status --short`.
+  then `git commit -m "audit(seam): <seam> ordering audit + pins"` (on
+  `audit-pipeline` only).
 
 ### Task 5: Seam audit — `damage_pipeline`
 
@@ -1437,9 +1445,10 @@ Pins:
   that in the task report; do not pad the prompt.
 - [ ] **Step 6: Full suite** (`py -m pytest test/ -q`) — audits add no code,
   so any failure means an accidental engine edit; revert it.
-- [ ] **Step 7: Stage.**
+- [ ] **Step 7: Commit.**
   `git add audits/relic tools/audit/PROMPT.md tools/audit/name_overrides.json`
-  then `git status --short`.
+  then `git commit -m "audit(relic): pilot batch records"` (on
+  `audit-pipeline` only).
 
 ---
 
@@ -1475,7 +1484,7 @@ on re-audit). Report the final table plus the list of open gaps.
   each other. Tasks 11–16 depend on 2–3; 12–16 depend on 11's hardened
   prompt. Seam audits (5–10) before content batches (11–16), per the spec's
   order of attack.
-- **Never commit** — stage only; Perry reviews and commits.
+- **Commits are branch-scoped:** commit each task on `audit-pipeline`; never push, never touch `main`. Perry reviews and merges the branch.
 - Audits must not modify engine code. If an audit is blocked by ambiguity
   (decompilation artifact obscures semantics), record the ambiguity in the
   record's entry (`rationale`) per the spec's honest-limits section rather
