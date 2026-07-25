@@ -82,7 +82,9 @@ class DamageCmd:
 
         # 5. HP-loss modifiers applied after block (e.g. Torii: cap at 1, Tungsten Rod: -1)
         if hp_lost > 0:
-            hp_lost = hooks.modify_hp_lost(target, hp_lost, dealer, card)
+            modifiers: list = []
+            hp_lost = hooks.modify_hp_lost(target, hp_lost, dealer, card, modifiers)
+            hooks.after_modify_hp_lost(modifiers, target)
 
         # 6. Apply HP loss
         if hp_lost > 0:
@@ -92,7 +94,8 @@ class DamageCmd:
 
             # 7. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
             if target.hp <= 0:
-                if hooks.should_die(target):
+                preventer: list = []
+                if hooks.should_die(target, preventer):
                     # CreatureCmd.cs:508 — the death stands; a listener may
                     # still keep the corpse in the combat rather than removing
                     # it (Decimillipede's ReattachPower).
@@ -101,7 +104,13 @@ class DamageCmd:
                     )
                     hooks.on_death(target)
                 else:
+                    # CreatureCmd.cs:565 — the game leaves the creature at 0 HP
+                    # and lets the preventer heal it (re-killing it if nobody
+                    # does); the sim floors it at 1 HP instead (Illusion never
+                    # heals here), then notifies the preventer so a healing one
+                    # (Fairy in a Bottle) can top it up.
                     target.hp = 1
+                    hooks.after_preventing_death(preventer, target)
 
         # 8. Post-damage events. A killing blow skips the victim's
         #    AfterDamageReceived (CreatureCmd.cs:392 — `!WasTargetKilled ||
@@ -155,6 +164,16 @@ class CreatureCmd:
             target.hp += healed
             hooks.on_hp_changed(target, healed)
         return healed
+
+    @staticmethod
+    def gain_max_hp(hooks: HookSystem, target: Creature, amount: int) -> None:
+        """Raise max HP, then heal the same amount (mirrors
+        CreatureCmd.GainMaxHp: SetMaxHp followed by Heal). Used by Fruit
+        Juice; RunState.gain_max_hp is the out-of-combat twin."""
+        if amount <= 0:
+            return
+        target.max_hp += amount
+        CreatureCmd.heal(hooks, target, amount)
 
     @staticmethod
     def lose_max_hp(hooks: HookSystem, target: Creature, amount: int) -> None:

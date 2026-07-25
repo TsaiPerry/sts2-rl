@@ -113,6 +113,10 @@ class Card(ABC):
         # (mirror EnergyCost.AddThisTurn and SetToFreeThisTurn).
         self._cost_delta_this_turn: int = 0
         self._free_this_turn: bool = False
+        # Absolute cost override lasting until the end of the turn (mirrors
+        # EnergyCost.SetThisTurnOrUntilPlayed, used by Snecko Oil's cost
+        # randomisation); cleared by reset_turn_cost_modifiers.
+        self._cost_this_turn: int | None = None
         # Cost override lasting the rest of the combat (mirrors
         # EnergyCost.SetThisCombat, used by the Slither enchantment); cleared
         # by reset_combat_state at combat setup.
@@ -219,7 +223,12 @@ class Card(ABC):
     def energy_cost(self) -> int:
         if self._free_this_turn:
             return 0
-        base = self._energy_cost if self._cost_this_combat is None else self._cost_this_combat
+        if self._cost_this_turn is not None:
+            base = self._cost_this_turn
+        elif self._cost_this_combat is not None:
+            base = self._cost_this_combat
+        else:
+            base = self._energy_cost
         return max(0, base + self._cost_delta_this_turn)
 
     def set_cost_this_combat(self, cost: int) -> None:
@@ -240,6 +249,14 @@ class Card(ABC):
         EnergyCost.AddThisTurn, e.g. Stomp's per-attack discount)."""
         self._cost_delta_this_turn += delta
 
+    def set_cost_this_turn(self, cost: int) -> None:
+        """Override this card's cost until the end of the turn (mirrors
+        EnergyCost.SetThisTurnOrUntilPlayed, e.g. Snecko Oil's randomised
+        costs). The game's modifier also expires when the card is played; the
+        sim only tracks the end-of-turn half, which differs solely for a card
+        played and returned to hand in the same turn."""
+        self._cost_this_turn = cost
+
     def set_free_this_turn(self) -> None:
         """Make this card cost 0 until the end of the turn (mirrors
         SetToFreeThisTurn, e.g. Infernal Blade's generated attack)."""
@@ -249,6 +266,7 @@ class Card(ABC):
         """Clear per-turn cost modifiers (called at player turn start)."""
         self._cost_delta_this_turn = 0
         self._free_this_turn = False
+        self._cost_this_turn = None
 
     @abstractmethod
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None: ...

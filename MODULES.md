@@ -124,13 +124,32 @@ Applied/cleared through `CardCmd`. Ringing/Smog/Tainted gate whether a card can
 be played this turn; Entangled raises an Attack card's energy cost.
 
 ### `potions.py` â€” `Potion` + `ALL_POTIONS`
-Potion base plus the implemented potions (Fire / Block / Strength / Blood /
-Weak, plus the event-only Glowwater, Potion-Shaped Rock and Foul Potion),
-values verified against the source models. Registered via `@register_potion`
-and built by id with `make_potion`. `in_reward_pool=False` keeps the
-event-only ones out of random potion rolls; the Foul Potion is the shared
-Fake Merchant event's key, and in combat it damages **every** creature —
-the thrower included (`CombatState.Creatures`).
+Potion base plus **every potion an Ironclad run can roll** — all 45 of
+`SharedPotionPool` and Ironclad4Epoch's Blood Potion / Soldier's Stew /
+Ashwater — plus the event-only Glowwater, Potion-Shaped Rock and Foul Potion.
+Values verified against the source models. Registered via `@register_potion`
+and built by id with `make_potion` (ids are `snake_case` of the source class
+name); `potion_pools.py` holds the rarity roster the reward/shop generators
+draw from. `in_reward_pool=False` keeps the event-only ones out of random
+potion rolls, and `random_potion` additionally skips the three
+`CanBeGeneratedInCombat=false` potions (Fruit Juice / Fairy in a Bottle /
+Regen Potion). The Foul Potion is the shared Fake Merchant event's key, and in
+combat it damages **every** creature — the thrower included
+(`CombatState.Creatures`).
+
+Two potions need more than an `use()` body: **Fairy in a Bottle** is
+`PotionUsage.Automatic`, so it is a hook listener while it sits in the belt
+(`CombatState.IterateHookListeners` walks each player's `PotionSlots`) — its
+`should_die`/`after_preventing_death` pair vetoes the player's death and heals
+to 30% of max HP, and `automatic = True` keeps it out of `use_potion` and the
+env's action mask. **Entropic Brew** refills the belt through
+`PlayerCombatState.add_potion`, which registers newly procured potions as
+listeners the same way. The cross-character potions (Silent/Defect/Regent/
+Necrobinder pools: Ghost in a Jar, Poison Potion, Cunning Potion, Essence of
+Darkness, Focus Potion, Potion of Capacity, Star Potion, King's Courage,
+Cosmic Concoction, Bone Brew, Pot of Ghouls, Potion of Doom) are **not**
+ported — an Ironclad run can never roll them, and most need unported systems
+(orbs, Stars, Forge, Osty, Soul cards, Shivs).
 
 ### `history.py` â€” `CombatHistory` + entry types
 The combat event log, mirroring `CombatManager.History`. Records typed entries

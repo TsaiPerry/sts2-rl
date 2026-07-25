@@ -361,7 +361,8 @@ def combat_action_masks(
             mask[COMBAT_PLAY_BASE + h * MAX_ENEMIES + first] = True
 
     for p, potion in enumerate(s.player.potions[:max_potions]):
-        if potion is None:
+        # PotionUsage.Automatic potions (Fairy in a Bottle) have no manual use.
+        if potion is None or potion.automatic:
             continue
         if potion.targeted:
             for e in living:

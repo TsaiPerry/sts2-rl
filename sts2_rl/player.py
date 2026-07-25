@@ -116,12 +116,24 @@ class PlayerCombatState(Creature):
         if None not in self.potions:
             return False
         self.potions[self.potions.index(None)] = potion
+        potion.combat = self._hooks.combat
+        self._hooks.register(potion)
         return True
 
     def discard_potion(self, potion: Potion) -> None:
         """Null the potion's belt slot (Player.cs DiscardPotionInternal) — the
         other slots keep their positions; the belt is never compacted."""
         self.potions[self.potions.index(potion)] = None
+        self.detach_potion(potion)
+
+    def detach_potion(self, potion: Potion) -> None:
+        """Stop dispatching hooks to a potion that has left the belt (it is no
+        longer in CombatState.IterateHookListeners' PotionSlots walk — that is
+        what stops a used Fairy in a Bottle from preventing death again)."""
+        try:
+            self._hooks.unregister(potion)
+        except ValueError:
+            pass
 
     @property
     def held_potions(self) -> list[Potion]:

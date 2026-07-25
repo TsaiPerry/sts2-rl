@@ -53,20 +53,26 @@ def test_sim_potion_id_maps_parity_pool_placeholders():
 
 
 def test_make_pool_potion_builds_placeholder_for_unimplemented():
-    """The resync rebuilds a belt from the save's slot ids; an unimplemented
-    pool id must yield a _ParityPotion placeholder (carrying its id/rarity)
-    rather than KeyError-ing out of potions.make_potion. Implemented potions
-    still build their real class."""
+    """The resync rebuilds a belt from the save's slot ids; an id the sim does
+    not implement must yield a _ParityPotion placeholder (carrying its id and a
+    rarity) rather than KeyError-ing out of potions.make_potion. Implemented
+    potions still build their real class.
+
+    Every potion of the *Ironclad-reachable* pool (POTION_POOL) is implemented
+    now — see test_potions.TestPoolCoverage — so the placeholder path is
+    exercised by a cross-character potion id, which a save can still carry
+    (Silent's Poison Potion here) and the pool never offers."""
     from sts2_rl.potion_pools import make_pool_potion
     from sts2_rl.potions import _POTION_CLASSES
 
-    placeholder = make_pool_potion("mazaleths_gift")
-    assert placeholder.id == "mazaleths_gift"
-    assert placeholder.rarity == "rare"       # from POTION_POOL
-    assert "mazaleths_gift" not in _POTION_CLASSES   # genuinely a placeholder
+    placeholder = make_pool_potion("poison_potion")
+    assert placeholder.id == "poison_potion"
+    assert placeholder.rarity == "common"     # default for a non-pool id
+    assert "poison_potion" not in _POTION_CLASSES   # genuinely a placeholder
 
-    real = make_pool_potion("fire_potion")
-    assert type(real).__name__ == "FirePotion"
+    real = make_pool_potion("mazaleths_gift")
+    assert type(real).__name__ == "MazalethsGift"
+    assert real.rarity == "rare"              # matches POTION_POOL
 
 
 @pytest.mark.skipif(not (REC.exists() and BK.exists()), reason="fixtures absent")
