@@ -9,14 +9,26 @@ from __future__ import annotations
 
 import random
 
+import pytest
+
 from sts2_rl import CombatState, DamageCmd
 from sts2_rl.cards import StrikeCard
 
 
 def trace(hooks, names):
-    """Record invocation order of the named hooks on this HookSystem."""
+    """Record invocation order of the named hooks on this HookSystem.
+
+    Wraps each named hook on the *instance* in place and never unwraps, so
+    pass a throwaway combat's `cs.hooks` (see `fresh`). Raises AttributeError
+    on a name HookSystem doesn't define, so a typo'd hook can't produce a
+    vacuously passing test, and ValueError if a name is already traced —
+    re-wrapping would capture the previous wrapper and append into both
+    lists. To watch more hooks, pass them all in one call.
+    """
     calls: list[str] = []
     for name in names:
+        if name in vars(hooks):
+            raise ValueError(f"{name} is already traced on this HookSystem")
         orig = getattr(hooks, name)
 
         def make(name=name, orig=orig):
@@ -42,6 +54,21 @@ PIPELINE = [
 
 def fresh(seed: int = 0) -> CombatState:
     return CombatState(rng=random.Random(seed))
+
+
+class TestTraceHelper:
+    """The seam audits (Tasks 5-10) all pin their findings through `trace`,
+    so its two loud-failure guarantees are themselves pinned here."""
+
+    def test_unknown_hook_name_raises(self):
+        with pytest.raises(AttributeError):
+            trace(fresh().hooks, ["modify_damage_addative"])
+
+    def test_double_tracing_a_hook_raises(self):
+        hooks = fresh().hooks
+        trace(hooks, ["on_attacked"])
+        with pytest.raises(ValueError):
+            trace(hooks, ["on_attacked"])
 
 
 class TestDamagePipelineOrder:
