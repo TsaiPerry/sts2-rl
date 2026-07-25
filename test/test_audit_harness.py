@@ -1,6 +1,7 @@
 """Tests for the audit completeness harness (tools/audit/harness.py)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -107,9 +108,6 @@ class TestInterfaceContract:
         )
 
 
-import json
-
-
 def _valid_record(harness, tmp_path):
     """A minimal valid content record against a fixture C# file."""
     cs = tmp_path / "FixtureRelic.cs"
@@ -169,6 +167,37 @@ class TestValidateRecord:
         rec["verdict"] = "faithful"  # but AfterDamageReceivedEarly is a waiver
         errs = harness.validate_record(rec, game_root=tmp_path)
         assert any("rollup" in e for e in errs)
+
+    def test_faithful_without_maps_to_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["hooks"]["Rarity"]["maps_to"] = ""
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("maps_to" in e for e in errs)
+
+    def test_bad_audited_format_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["audited"] = "07/24/2026"
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("audited" in e for e in errs)
+
+    def test_empty_audited_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["audited"] = ""
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("audited" in e for e in errs)
+
+    def test_deliberate_divergence_without_rationale_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["hooks"]["BeforeCombatStart"]["verdict"] = "deliberate-divergence"
+        rec["verdict"] = "deliberate-divergence"
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("rationale" in e for e in errs)
+
+    def test_game_source_not_found_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["game_source"]["path"] = "DoesNotExist.cs"
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("game source not found" in e for e in errs)
 
     def test_seam_record_requires_steps(self, tmp_path):
         rec = {
