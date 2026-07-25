@@ -30,6 +30,14 @@ def sim_relic_id(save_id: str) -> str | None:
 
 
 def sim_potion_id(save_id: str) -> str | None:
+    # ALL_POTIONS is the *implemented* catalogue; POTION_POOL is the full
+    # reward/shop roster the sim also tracks as _ParityPotion placeholders
+    # (Character.PotionPool ∪ SharedPotionPool). A placeholder the sim
+    # legitimately carries in the belt (e.g. MazalethsGift) must map to its id,
+    # not None — otherwise the floor-potion diff misreads a correctly-held
+    # placeholder as a divergence and the resync drops it (un-filling a slot
+    # the game had full). Both registries key on the snake_case id.
+    from ..potion_pools import _POOL_RARITY
     from ..potions import ALL_POTIONS
     k = _POTION_EXCEPTIONS.get(_key(save_id), _key(save_id))
-    return k if k in ALL_POTIONS else None
+    return k if (k in ALL_POTIONS or k in _POOL_RARITY) else None

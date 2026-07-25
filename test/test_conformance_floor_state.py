@@ -27,6 +27,48 @@ def _floor_saves():
     return _floor_saves_for("933T39V18D")
 
 
+def test_sim_potion_id_maps_parity_pool_placeholders():
+    """A potion the sim carries only as a pool-membership placeholder
+    (potion_pools._ParityPotion — e.g. MazalethsGift / PowerPotion, which are
+    in Character.PotionPool ∪ SharedPotionPool but the sim doesn't implement)
+    must map to its snake_case id, NOT None.
+
+    Root cause of the 933T act-2 potion cascade: the sim correctly generates
+    the placeholder into a belt slot (e.g. MazalethsGift in slot 2 for all of
+    act 2), but sim_potion_id only knew ALL_POTIONS (implemented potions), so
+    the floor-potion diff read a correctly-held placeholder as a divergence and
+    the resync then DROPPED it — un-filling a slot the game had full, so the
+    sim went on to grab reward potions the full-belt game skipped
+    (blessing_of_the_forge@39, power_potion@40, ...)."""
+    from sts2_rl.conformance import idmap
+
+    assert idmap.sim_potion_id("POTION.MAZALETHS_GIFT") == "mazaleths_gift"
+    assert idmap.sim_potion_id("POTION.POWER_POTION") == "power_potion"
+    assert idmap.sim_potion_id("POTION.BLESSING_OF_THE_FORGE") == \
+        "blessing_of_the_forge"
+    # An implemented potion still maps (unchanged behaviour).
+    assert idmap.sim_potion_id("POTION.SPEED_POTION") == "speed_potion"
+    # A genuinely unknown id is still None (reported, never crashes).
+    assert idmap.sim_potion_id("POTION.NOT_A_REAL_POTION") is None
+
+
+def test_make_pool_potion_builds_placeholder_for_unimplemented():
+    """The resync rebuilds a belt from the save's slot ids; an unimplemented
+    pool id must yield a _ParityPotion placeholder (carrying its id/rarity)
+    rather than KeyError-ing out of potions.make_potion. Implemented potions
+    still build their real class."""
+    from sts2_rl.potion_pools import make_pool_potion
+    from sts2_rl.potions import _POTION_CLASSES
+
+    placeholder = make_pool_potion("mazaleths_gift")
+    assert placeholder.id == "mazaleths_gift"
+    assert placeholder.rarity == "rare"       # from POTION_POOL
+    assert "mazaleths_gift" not in _POTION_CLASSES   # genuinely a placeholder
+
+    real = make_pool_potion("fire_potion")
+    assert type(real).__name__ == "FirePotion"
+
+
 @pytest.mark.skipif(not (REC.exists() and BK.exists()), reason="fixtures absent")
 def test_floor_checkpoints_and_resync_run_to_completion():
     from sts2_rl.conformance.recording import parse_recording

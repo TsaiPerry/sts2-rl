@@ -96,6 +96,21 @@ def _make(potion_id: str, rarity: str) -> Potion:
     return cls() if cls is not None else _ParityPotion(potion_id, rarity)
 
 
+# id -> rarity for every pooled potion (implemented or placeholder), so a
+# potion can be rebuilt from its id alone (belt resync in the conformance
+# runner, which knows the slot id but not the rarity).
+_POOL_RARITY: dict[str, str] = {pid: rarity for pid, rarity in POTION_POOL}
+
+
+def make_pool_potion(potion_id: str) -> Potion:
+    """Build a potion by id — its real class if implemented, else a
+    pool-membership ``_ParityPotion`` placeholder (id + rarity from
+    ``POTION_POOL``). Mirrors ``potions.make_potion`` but never KeyErrors on a
+    potion the sim only tracks for pool parity (e.g. MazalethsGift), which the
+    belt resync must be able to reconstruct into its slot."""
+    return _make(potion_id, _POOL_RARITY.get(potion_id, "common"))
+
+
 def roll_potion_rarity(rng: Rng) -> str:
     """PotionFactory.CreateRandomPotion rarity roll: one NextFloat, Rare <= 0.1,
     Uncommon <= 0.35, else Common."""

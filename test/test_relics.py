@@ -1160,6 +1160,35 @@ class TestUnsettlingLamp:
         assert cs.play_card(len(cs.player.hand) - 1, target_idx=0)
         assert cs.enemy.powers["vulnerable"].amount == 4  # lamp still fresh
 
+    def test_activation_spent_even_when_artifact_negates_debuff(self):
+        """The Lamp latches its triggering card in BeforePowerAmountChanged,
+        which the C# pipeline runs BEFORE Artifact's negation
+        (ArtifactPower.TryModifyPowerAmountReceived). So a debuff card whose
+        debuff is fully eaten by the enemy's Artifact still spends the
+        once-per-combat activation, and a LATER debuff card is NOT doubled.
+
+        Regression from the 933T Mecha Knight elite: the Mecha starts with
+        Artifact 3, so the player's early Vulnerable applications (Uppercut …)
+        were negated — meaning the game did NOT double the turn-3 Dominate
+        (Dominate applied 2 Vulnerable, not 4, so +2 Strength not +4). The sim
+        checked Artifact first and returned before the Lamp could latch, so it
+        wrongly saved the doubling for Dominate."""
+        from sts2_rl.cmds import PowerCmd
+        from sts2_rl.powers import ArtifactPower
+        cs = fresh(relics=[make_relic("unsettling_lamp")])
+        cs.player.energy = 10
+        PowerCmd.apply(cs.hooks, cs.enemy, ArtifactPower, 1)
+        # First debuff card: Bash's 2 Vulnerable is fully negated by Artifact.
+        cs.player.hand.append(make_card("bash"))
+        assert cs.play_card(len(cs.player.hand) - 1, target_idx=0)
+        assert "vulnerable" not in cs.enemy.powers     # Artifact ate the debuff
+        assert "artifact" not in cs.enemy.powers        # its one charge consumed
+        # The Lamp's activation was still spent on that card: the next debuff
+        # card applies its plain amount (2), NOT doubled (4).
+        cs.player.hand.append(make_card("bash"))
+        assert cs.play_card(len(cs.player.hand) - 1, target_idx=0)
+        assert cs.enemy.powers["vulnerable"].amount == 2
+
 
 class TestPollinousCore:
     def test_every_fourth_turn_draws_two_extra(self):

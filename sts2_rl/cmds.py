@@ -265,6 +265,18 @@ class PowerCmd:
         """
         from .powers import PowerType
 
+        # C# PowerCmd.Apply runs the "given" power-amount modifiers
+        # (Hook.ModifyPowerAmountGiven — e.g. Unsettling Lamp's first-debuff
+        # latch + double) BEFORE Artifact negates the debuff
+        # (ArtifactPower.TryModifyPowerAmountReceived, which fires later on the
+        # "received" side). So a debuff card whose debuff Artifact fully eats
+        # STILL spends the Lamp's once-per-combat activation (it latched on that
+        # card), and a later debuff card is not doubled. Running
+        # modify_power_amount before the Artifact early-return mirrors that
+        # ordering; the doubled amount is simply discarded when the debuff is
+        # then blocked.
+        amount = hooks.modify_power_amount(power_cls, target, amount, applier)
+
         if power_cls.power_type == PowerType.DEBUFF:
             artifact = target.powers.get("artifact")
             if artifact is not None:
@@ -272,9 +284,7 @@ class PowerCmd:
                 hooks.on_power_amount_changed("artifact", target, -1)
                 if artifact.amount <= 0:
                     artifact._expire()
-                return  # debuff blocked
-
-        amount = hooks.modify_power_amount(power_cls, target, amount, applier)
+                return  # debuff blocked (Lamp already latched above)
 
         if power_cls.id in target.powers:
             existing = target.powers[power_cls.id]

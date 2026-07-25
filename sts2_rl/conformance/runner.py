@@ -710,7 +710,7 @@ class ReplayRunner:
         (reported by the floor_potions diff) and slots beyond max_potions are
         left/dropped empty."""
         from . import idmap
-        from ..potions import make_potion
+        from ..potion_pools import make_pool_potion
 
         new_potions: list = [None] * run.max_potions
         for slot, pid in oracle.potion_slots.items():
@@ -718,7 +718,10 @@ class ReplayRunner:
                 continue
             sim_id = idmap.sim_potion_id(pid)
             if sim_id is not None:
-                new_potions[slot] = make_potion(sim_id)
+                # make_pool_potion (not potions.make_potion): a pooled but
+                # unimplemented id (e.g. mazaleths_gift) resyncs into a
+                # _ParityPotion placeholder rather than KeyError-ing.
+                new_potions[slot] = make_pool_potion(sim_id)
         run.potions[:] = new_potions
 
     def run(self, stop_after_act: int = 0,
