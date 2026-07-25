@@ -23,12 +23,12 @@ if str(_REPO) not in sys.path:
 from tools.audit import harness
 
 
-def _is_stale(record: dict, game_root: Path) -> bool:
+def _is_stale(record: dict, unit: str, game_root: Path) -> bool:
     def drifted(src: dict, base: Path) -> bool:
         p = base / src.get("path", "")
         return (not p.is_file()) or harness.file_sha256(p) != src.get("sha256")
 
-    if record["unit"].startswith("seam/"):
+    if unit.startswith("seam/"):
         return (any(drifted(s, game_root) for s in record.get("game_sources", []))
                 or any(drifted(s, _REPO) for s in record.get("sim_sources", [])))
     return (drifted(record.get("game_source", {}), game_root)
@@ -54,13 +54,20 @@ def collect(kinds=None, game_root: Path | None = None,
             if not path.is_file():
                 stats["unaudited"].append(unit)
                 continue
-            record = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                stats["invalid"] += 1
+                continue
+            if record.get("unit") != unit:
+                stats["invalid"] += 1
+                continue
             errs = harness.validate_record(record, game_root=root)
             if errs:
                 stats["invalid"] += 1
                 continue
             stats["audited"] += 1
-            if _is_stale(record, root):
+            if _is_stale(record, unit, root):
                 stats["stale"] += 1
             if record.get("verdict") == "gap":
                 stats["gaps"] += 1

@@ -110,6 +110,78 @@ def test_gap_counted(tmp_path, monkeypatch):
     assert out["relic"]["gaps"] == 1
 
 
+def test_malformed_json_is_invalid(tmp_path, monkeypatch):
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    (audits / "relic" / "fixture_relic.json").write_text(
+        "{not valid json", encoding="utf-8")
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["invalid"] == 1
+
+    monkeypatch.setattr(harness, "DEFAULT_GAME_ROOT", tmp_path)
+    monkeypatch.setattr(harness, "DEFAULT_AUDITS_DIR", audits)
+    assert audit_status.main(["--kind", "relic"]) == 2
+
+
+def test_unit_mismatch_is_invalid(tmp_path, monkeypatch):
+    """A record filed under relic/fixture_relic.json but claiming a
+    different unit must not be trusted for staleness checking — it should
+    be flagged invalid instead."""
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    rec = _make_record(tmp_path)
+    rec["unit"] = "relic/some_other_relic"
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["invalid"] == 1
+    assert out["relic"]["audited"] == 0
+
+
+def test_seam_shape_audited_and_stale(tmp_path, monkeypatch):
+    """Seam records use the plural game_sources/sim_sources shape; cover
+    both the clean-audited case and hash-drift staleness for it."""
+    game_file = tmp_path / "src/Core/Commands/FixtureSeam.cs"
+    game_file.parent.mkdir(parents=True, exist_ok=True)
+    game_file.write_text("public sealed class FixtureSeam {}\n", encoding="utf-8")
+    audits = tmp_path / "audits"
+    (audits / "seam").mkdir(parents=True)
+    monkeypatch.setattr(harness, "SEAMS", ("fixture_seam",))
+
+    sim_path = "sts2_rl/relics/unsettling_lamp.py"
+    rec = {
+        "unit": "seam/fixture_seam",
+        "game_sources": [{
+            "path": "src/Core/Commands/FixtureSeam.cs",
+            "sha256": harness.file_sha256(game_file),
+        }],
+        "sim_sources": [{
+            "path": sim_path,
+            "sha256": harness.file_sha256(Path(sim_path)),
+        }],
+        "steps": [{"what": "ordering", "verdict": "faithful"}],
+        "guards": [],
+        "verdict": "faithful",
+        "audited": "2026-07-24",
+    }
+    seam_path = audits / "seam" / "fixture_seam.json"
+    seam_path.write_text(json.dumps(rec), encoding="utf-8")
+
+    out = audit_status.collect(kinds=("seam",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["seam"]["total"] == 1
+    assert out["seam"]["audited"] == 1
+    assert out["seam"]["stale"] == 0
+
+    rec["game_sources"][0]["sha256"] = "0" * 64  # stale
+    seam_path.write_text(json.dumps(rec), encoding="utf-8")
+    out = audit_status.collect(kinds=("seam",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["seam"]["audited"] == 1
+    assert out["seam"]["stale"] == 1
+
+
 def test_exit_codes(tmp_path, monkeypatch):
     """0 clean; 1 only under --strict with stale/gaps/unaudited; 2 invalid."""
     audits = _setup(tmp_path)
