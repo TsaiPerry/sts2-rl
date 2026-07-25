@@ -11,7 +11,17 @@ import random
 
 import pytest
 
-from sts2_rl import CombatState, DamageCmd, PowerCmd, ThornsPower, ValueProp, DamageProps
+from sts2_rl import (
+    ArtifactPower,
+    CombatState,
+    DamageCmd,
+    DexterityPower,
+    PowerCmd,
+    ThornsPower,
+    ValueProp,
+    VulnerablePower,
+    DamageProps,
+)
 from sts2_rl.cards import StrikeCard
 
 
@@ -137,3 +147,50 @@ class TestDamagePipelineOrder:
         DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
         assert cs.player.is_dead
         assert cs.enemy.hp == enemy_hp_before - 3  # C# still reflects
+
+
+class TestPowerCmdOrder:
+    """power_cmd audit (docs/audit/seams/power_cmd.md): pins the ordering
+    the Unsettling Lamp fix depends on, plus the sign-aware-typing gap (G1)
+    found auditing the rest of the seam."""
+
+    def test_modify_power_amount_runs_before_artifact_block(self):
+        """PowerCmd.cs:122-127: Hook.ModifyPowerAmountGiven (the sim's
+        modify_power_amount, which Unsettling Lamp's doubling hooks into)
+        runs BEFORE Hook.ModifyPowerAmountReceived (Artifact's veto) --
+        cmds.py:297-306 mirrors this ordering (`amount =
+        hooks.modify_power_amount(...)` precedes the Artifact block). A
+        debuff Artifact fully blocks still goes through modify_power_amount
+        first, and Artifact consumes exactly its one stack."""
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, ArtifactPower, 1)
+        calls = trace(cs.hooks, ["modify_power_amount"])
+        PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2, applier=cs.player)
+        assert "modify_power_amount" in calls
+        assert "vulnerable" not in cs.enemy.powers   # debuff blocked
+        assert "artifact" not in cs.enemy.powers     # its one stack consumed
+
+    @pytest.mark.xfail(
+        reason="power_cmd audit gap G1 (audits/seam/power_cmd.json): "
+               "PowerCmd.apply's Artifact check (cmds.py:299) tests the "
+               "static power_cls.power_type class attribute instead of C#'s "
+               "sign-aware GetTypeForAmount(amount) (PowerModel.cs:460-471, "
+               "consumed by ArtifactPower.cs:24). A negative-amount "
+               "application of a Buff-typed, allow_negative power (Strength/"
+               "Dexterity) is a Debuff by C#'s rule but never even reaches "
+               "the sim's Artifact branch, since power_cls.power_type stays "
+               "BUFF regardless of sign. Live via "
+               "monsters/glory/the_lost_and_forgotten.py:54,99 and "
+               "monsters/underdocks/lagavulin_matriarch.py:106-107, both of "
+               "which steal Strength/Dexterity from the player via a "
+               "negative-amount PowerCmd.apply call.",
+        strict=True,
+    )
+    def test_artifact_blocks_negative_signed_debuff(self):
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, ArtifactPower, 1)
+        # Mirrors the Lost and Forgotten / Lagavulin Matriarch steal shape:
+        # a negative amount applied to a Buff-typed, allow_negative power.
+        PowerCmd.apply(cs.hooks, cs.enemy, DexterityPower, -3, applier=cs.player)
+        assert "dexterity" not in cs.enemy.powers  # C#: Artifact blocks the steal
+        assert "artifact" not in cs.enemy.powers   # and consumes its stack

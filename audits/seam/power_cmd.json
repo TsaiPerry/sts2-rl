@@ -1,0 +1,292 @@
+{
+  "unit": "seam/power_cmd",
+  "game_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. Apply<T>: guard CombatManager.Instance.IsEnding -> return null (PowerCmd.cs:69-72)",
+      "verdict": "gap",
+      "issue": "PowerCmd.apply (cmds.py) has no combat-ending guard at all. See guard G6."
+    },
+    {
+      "what": "2. Apply<T>: guard !target.CanReceivePowers -> return null (PowerCmd.cs:73-76; CanReceivePowers = CombatState!=null && Hook.ShouldAllowHitting, Creature.cs:308-322)",
+      "verdict": "gap",
+      "issue": "PowerCmd.apply has no CanReceivePowers/should_allow_hitting guard; should_allow_hitting is wired into the sim's damage pipeline but not the power pipeline. See guard G6."
+    },
+    {
+      "what": "3. FindExistingInstanceForStacking dispatches on power.InstanceType: Instanced->always null, InstancedPerApplier->match by Applier, None->match by power id only (PowerCmd.cs:77-78,165-174; PowerModel.cs:144)",
+      "verdict": "gap",
+      "issue": "The sim's stacking check (cmds.py:308, `if power_cls.id in target.powers`) always behaves as PowerInstanceType.None; there is no instance_type concept at all. See guard G5."
+    },
+    {
+      "what": "4. Branch: no existing instance -> new-power Apply(...) pipeline (steps 6-23); existing instance -> ModifyAmount(...) pipeline (steps 24-37), nulling the result if it returns exactly 0 (PowerCmd.cs:79-87)",
+      "verdict": "gap",
+      "issue": "The sim has only ONE code path (cmds.py:270-332) serving both new-application and re-stacking; C#'s two independently-coded pipelines (Apply vs ModifyAmount) differ in several guards (see steps 6 vs 25, 15/23 vs 33). The sim's collapse happens to reach the same steady state for currently-ported content since both C# pipelines share the same three hook calls in the same order, but the collapse is not verified line-for-line equivalent for every guard. Recorded as a structural note -- no concrete broken interaction found for current content."
+    },
+    {
+      "what": "5. Apply<T> returns `power as T` (may be a fully-populated-but-unregistered PowerModel when Artifact zeroed the amount, per step 17) (PowerCmd.cs:88)",
+      "verdict": "waiver",
+      "rationale": "The sim's PowerCmd.apply returns None (no return value at all) and no sim caller inspects a return value from PowerCmd.apply, so this C#-side return-contract subtlety (a non-null-but-unregistered power object) has no sim-side analogue to diverge from."
+    },
+    {
+      "what": "6. Apply(power,...): guard IsEnding || amount==0m || !target.CanReceivePowers -> return (PowerCmd.cs:103-106)",
+      "verdict": "gap",
+      "issue": "cmds.py has no explicit early-return on amount==0/IsEnding/CanReceivePowers at this point. No IsEnding or CanReceivePowers guard at all. See guard G6."
+    },
+    {
+      "what": "7. Apply(power,...): guard combatState==null -> return (PowerCmd.cs:107-111)",
+      "verdict": "waiver",
+      "rationale": "The sim's CombatState/HookSystem construction guarantees a non-null combat context for any creature that can be passed to PowerCmd.apply; there is no code path constructing a Creature outside an active CombatState. Structurally unreachable in the sim's architecture."
+    },
+    {
+      "what": "8. Apply(power,...): re-check FindExistingInstanceForStacking; if found, delegate to ModifyAmount and return (defensive re-check for direct callers of this overload) (PowerCmd.cs:112-117)",
+      "verdict": "waiver",
+      "rationale": "This guards against C#'s two public entry points (Apply<T> and the non-generic Apply(power,...)) being called independently by different game code; the sim exposes only one PowerCmd.apply entry point (keyed by power_cls, not a pre-constructed PowerModel instance), so the redundant re-check has no separate call site to protect against."
+    },
+    {
+      "what": "9. power.AssertMutable(); power.Applier = applier (PowerCmd.cs:118-119)",
+      "verdict": "faithful",
+      "maps_to": "The sim's power_cls(owner=target, amount=amount, hooks=hooks, applier=applier) constructor sets self.applier = applier at construction (powers.py Power.__init__). Same effect (Applier recorded before any hook fires that might read it)."
+    },
+    {
+      "what": "10. Event: Hook.BeforePowerAmountChanged(combatState, power, amount, target, applier, cardSource) fires with the RAW amount; UnsettlingLamp latches TriggeringCard here (PowerCmd.cs:120; Hook.cs:1006-1016; UnsettlingLamp.cs:71-104)",
+      "verdict": "gap",
+      "issue": "The sim has no standalone BeforePowerAmountChanged-equivalent event at all; UnsettlingLamp's latching (sts2_rl/relics/unsettling_lamp.py:44-53) is folded into the SAME modify_power_amount call as the given-side doubling, and keys off a card bracket (before_card_played/on_card_played) instead of a cardSource parameter (deliberate-divergence, not itself a gap). But the latching condition's sign-awareness is missing -- see guard G2."
+    },
+    {
+      "what": "11. modifiedAmount = amount (PowerCmd.cs:121)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py:297 `amount = hooks.modify_power_amount(power_cls, target, amount, applier)` starts from the same raw amount."
+    },
+    {
+      "what": "12. Guard applier!=null && combatState.ContainsCreature(applier): modifiedAmount = Hook.ModifyPowerAmountGiven(...) additive-sum-then-multiplicative-product chain, tracks givenModifiers; UnsettlingLamp doubles here (PowerCmd.cs:122-126; Hook.cs:1884-1912; UnsettlingLamp.cs:106-129)",
+      "verdict": "gap",
+      "issue": "cmds.py:297 calls hooks.modify_power_amount unconditionally (no applier!=null/ContainsCreature guard) and it is a flat chain hook (hooks.py:170-183, each listener sees the running value and returns a new one) rather than a tracked additive-then-multiplicative dispatch with a modifiers-out-list. UnsettlingLamp's own doubling is present and, per the seed-fact verification, correctly ordered before the Artifact check -- but see guard G3 for the collapsed given/received phase separation and guard G1/G2 for the sign-awareness gap in this step's C# gate (GetTypeForAmount) vs the sim's static power_type check."
+    },
+    {
+      "what": "13. modifiedAmount = Hook.ModifyPowerAmountReceived(...) unconditional predicate chain (TryModifyPowerAmountReceived) evaluated against the already-doubled amount; ArtifactPower and RuinedHelmet intercept here (PowerCmd.cs:127; Hook.cs:1914-1931; ArtifactPower.cs:17-36; RuinedHelmet.cs:32-53)",
+      "verdict": "gap",
+      "issue": "The sim's Artifact interception (cmds.py:299-306) is a hard-coded special case entirely OUTSIDE the hook-listener system, keyed on the static power_cls.power_type == PowerType.DEBUFF rather than C#'s sign-aware GetTypeForAmount(amount) check that ArtifactPower.TryModifyPowerAmountReceived performs. This is the seam's central finding -- see guard G1 (live) and G3 (architecture)."
+    },
+    {
+      "what": "14. Guard multiplayer scaling: combatState.Players.Count>1 && target is primary/secondary enemy && power.ShouldScaleInMultiplayer -> power.GetScaledAmountForMultiplayer(...) (PowerCmd.cs:128-131)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only mechanic; the sim is single-player Ironclad-only, out of scope per the audit prompt's multiplayer waiver."
+    },
+    {
+      "what": "15. Event: await power.BeforeApplied(target, modifiedAmount, applier, cardSource), unconditional even at modifiedAmount==0; TemporaryStrengthPower/TemporaryDexterityPower recursively apply their internal power here, carrying the same applier/cardSource (PowerCmd.cs:132; TemporaryStrengthPower.cs:146-156)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no BeforeApplied-equivalent hook stage; TemporaryStrengthPower/TemporaryDexterityPower's sim counterparts (powers.py:840-870,920-940) instead apply their internal StrengthPower/DexterityPower directly from __init__/on_stack, and OMIT the applier parameter entirely on that internal call (rather than replicating C#'s explicit HasDoubledTemporaryPowerSource double-dip guard). Verified to produce the same net outcome for the currently-ported Mangle-family content -- see guard N2."
+    },
+    {
+      "what": "16. Guard target.CanReceivePowers (re-checked) (PowerCmd.cs:133)",
+      "verdict": "gap",
+      "issue": "No equivalent re-check in the sim; folded into guard G6 (the sim has no CanReceivePowers concept in the power pipeline at any point, entry or mid-pipeline)."
+    },
+    {
+      "what": "17. power.ApplyInternal(target, modifiedAmount, silent): complete no-op if modifiedAmount==0m (power never registered, Owner never set); otherwise sets Owner, SetAmount, registers via Owner.ApplyPowerInternal (PowerCmd.cs:135; PowerModel.cs:564-573)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py's branch at line 308 (`if power_cls.id in target.powers: ... else: power = power_cls(...); target.powers[power_cls.id]=power; hooks.register(power)`) is only reached when the Artifact block above did not already `return` -- i.e. only ever reached with a nonzero, unblocked amount, mirroring ApplyInternal's 0-amount no-op by construction rather than by an explicit if-check."
+    },
+    {
+      "what": "18. Guard modifiedAmount!=0m: History.PowerReceived(...) (PowerCmd.cs:136-139)",
+      "verdict": "waiver",
+      "rationale": "Run/combat telemetry and history bookkeeping, not gameplay logic; out of scope per the audit prompt's presentation/telemetry waiver (mirrors damage_pipeline's step 17.3 waiver for the analogous DamageDealt stat bump)."
+    },
+    {
+      "what": "19. Guard power.IsVisible && CombatManager.Instance.IsInProgress: wait 0.1-0.25s (PowerCmd.cs:140-142)",
+      "verdict": "waiver",
+      "rationale": "Presentation-only VFX pacing delay; out of scope."
+    },
+    {
+      "what": "20. Guard target.Side==Player && power.Type==Debuff: power.SkipNextDurationTick=true, unconditional on modifiedAmount (PowerCmd.cs:144-147)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py:331-332 `if target.side == \"player\" and power_cls.power_type == PowerType.DEBUFF: power.skip_next_tick = True` -- runs only in the else (new-power) branch, after a nonzero amount already passed the Artifact check, so the fully-Artifact-blocked case in C# (which sets this flag on a power that's discarded anyway, per step 5's waiver) has no observable sim counterpart to diverge from."
+    },
+    {
+      "what": "21. Guard givenModifiers!=null: await Hook.AfterModifyingPowerAmountGiven(combatState, givenModifiers, power) (PowerCmd.cs:148-150; Hook.cs:796-809)",
+      "verdict": "gap",
+      "issue": "No sim counterpart exists. See guard G4."
+    },
+    {
+      "what": "22. await Hook.AfterModifyingPowerAmountReceived(combatState, receivedModifiers, power); ArtifactPower.AfterModifyingPowerAmountReceived calls PowerCmd.Decrement(this) here -- the actual Artifact-stack-consumption mechanism; RuinedHelmet sets UsedThisCombat=true here (PowerCmd.cs:152; Hook.cs:811-824; ArtifactPower.cs:38-41; RuinedHelmet.cs:55-60)",
+      "verdict": "gap",
+      "issue": "The sim reimplements Artifact's decrement inline at cmds.py:301-305 (faithful in effect for this one hard-coded listener) rather than via a generic AfterModifyingPowerAmountReceived hook; RuinedHelmet's sim counterpart (relics/ruined_helmet.py:37) sets self._used=True inline inside modify_power_amount itself. No second listener currently needs the generic mechanism, but see guard G4."
+    },
+    {
+      "what": "23. Guard modifiedAmount!=0m: await power.AfterApplied(applier, cardSource); await Hook.AfterPowerAmountChanged(combatState, choiceContext, power, modifiedAmount, applier, cardSource) (PowerCmd.cs:153-157; Hook.cs:1018-1026)",
+      "verdict": "faithful",
+      "maps_to": "The sim's on_power_applied hook call (cmds.py:327, only reached in the new-power else-branch, i.e. only when a nonzero amount survived the Artifact check) is the AfterApplied/AfterPowerAmountChanged analogue for brand-new powers. No separate AfterPowerAmountChanged event distinct from on_power_applied exists in the sim, but no content currently needs the distinction."
+    },
+    {
+      "what": "24. ModifyAmount: guard CombatManager.Instance.IsEnding -> return 0 (PowerCmd.cs:217-220)",
+      "verdict": "gap",
+      "issue": "Folded into guard G6 -- the sim's single code path has no IsEnding guard anywhere, including the stacking case."
+    },
+    {
+      "what": "25. ModifyAmount: guard combatState==null -> return 0; NO CanReceivePowers check in this path (PowerCmd.cs:221-226)",
+      "verdict": "faithful",
+      "maps_to": "The sim's stacking branch (cmds.py:308-321) likewise has no CanReceivePowers-equivalent check -- this is a faithful absence, since C# itself omits the check in ModifyAmount too (see guard N4)."
+    },
+    {
+      "what": "26. ModifyAmount: Event Hook.BeforePowerAmountChanged(combatState, power, offset, owner, applier, cardSource) (PowerCmd.cs:227)",
+      "verdict": "gap",
+      "issue": "Same absence as step 10 -- the sim's single modify_power_amount call (cmds.py:297) runs once regardless of new-vs-stacking, serving as the sim's only analogue to both this step and step 10."
+    },
+    {
+      "what": "27. ModifyAmount: guard applier!=null && ContainsCreature(applier): modifiedOffset = Hook.ModifyPowerAmountGiven(...) (PowerCmd.cs:228-233)",
+      "verdict": "faithful",
+      "maps_to": "Same single cmds.py:297 call serves both the new-power and stacking cases; see step 4's structural note on the collapse."
+    },
+    {
+      "what": "28. ModifyAmount: modifiedOffset = Hook.ModifyPowerAmountReceived(...), unconditional, same mechanism as step 13 -- Artifact/RuinedHelmet also intercept re-stacking (PowerCmd.cs:234)",
+      "verdict": "faithful",
+      "maps_to": "The sim's Artifact block (cmds.py:299-306) runs before the new-vs-stacking branch (cmds.py:308), so it uniformly intercepts both first-application and re-stacking, matching C#'s uniform interception across both Apply and ModifyAmount. Same sign-awareness gap as step 13 applies here too (see G1), not re-flagged separately."
+    },
+    {
+      "what": "29. ModifyAmount: History.PowerReceived(...), UNCONDITIONAL here (unlike step 18's if-modifiedAmount!=0 gate) (PowerCmd.cs:235)",
+      "verdict": "waiver",
+      "rationale": "Telemetry/history bookkeeping; out of scope, same rationale as step 18."
+    },
+    {
+      "what": "30. ModifyAmount: newAmount = power.Amount + (int)modifiedOffset; power.SetAmount(newAmount, silent) (PowerCmd.cs:236-237)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py:311 `existing.on_stack(amount)` -- default Power.on_stack (powers.py:64-66) is `self.amount += amount`, i.e. the same additive combine using the post-modifier amount."
+    },
+    {
+      "what": "31. ModifyAmount: guard modifiers!=null: AfterModifyingPowerAmountGiven(...) (PowerCmd.cs:238-241)",
+      "verdict": "gap",
+      "issue": "Same absence as step 21 for the stacking path; folded into guard G4."
+    },
+    {
+      "what": "32. ModifyAmount: AfterModifyingPowerAmountReceived(...), same Artifact-Decrement/RuinedHelmet mechanism as step 22 (PowerCmd.cs:242)",
+      "verdict": "faithful",
+      "maps_to": "Same inline Artifact-decrement block (cmds.py:301-305) covers both the new-power and stacking cases, since it runs before the branch that distinguishes them."
+    },
+    {
+      "what": "33. ModifyAmount: guard (int)modifiedOffset!=0: AfterPowerAmountChanged(...); NO BeforeApplied/AfterApplied in this path (PowerCmd.cs:243-246)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py:312-314 fires hooks.on_power_amount_changed(power_cls.id, target, existing.amount-old_amount, applier) in the stacking (existing) branch -- distinct from on_power_applied (step 23's analogue), matching C#'s distinction between AfterPowerAmountChanged (stacking) and AfterApplied (new-power-only)."
+    },
+    {
+      "what": "34. ModifyAmount: guard power.ShouldRemoveDueToAmount(): await Remove(power). AllowNegative powers removed only at exactly Amount==0; non-AllowNegative removed at Amount<=0 (PowerCmd.cs:247-250; PowerModel.cs:478-489)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py:317-320 `if existing.amount == 0 or (existing.amount < 0 and not existing.allow_negative): existing._expire()` -- verified case-by-case equivalent to ShouldRemoveDueToAmount's branches (amount==0 always removes either way; negative amount only removes when allow_negative is False; negative amount with allow_negative True never auto-removes, matching AllowNegative's `Amount==0`-only check)."
+    },
+    {
+      "what": "35. ModifyAmount: monster-intent UI update for monster owners (PowerCmd.cs:251-265)",
+      "verdict": "waiver",
+      "rationale": "Presentation/UI bookkeeping (intent icon refresh); out of scope."
+    },
+    {
+      "what": "36. ModifyAmount: guard power.IsVisible && IsInProgress: wait (PowerCmd.cs:266-269)",
+      "verdict": "waiver",
+      "rationale": "Presentation-only pacing delay; out of scope, same rationale as step 19."
+    },
+    {
+      "what": "37. ModifyAmount: return newAmount (PowerCmd.cs:270)",
+      "verdict": "faithful",
+      "maps_to": "cmds.py's stacking branch does not return a value the way C# does, but no sim caller of PowerCmd.apply inspects a return value (mirrors step 5's waiver rationale)."
+    },
+    {
+      "what": "38. Remove(power): guard power!=null (PowerCmd.cs:289)",
+      "verdict": "faithful",
+      "maps_to": "PowerCmd.remove (cmds.py:334-346) and the internal _expire() helper (powers.py:86-92) both guard on the power actually being present before acting."
+    },
+    {
+      "what": "39. Remove: power.RemoveInternal() fires the Removed event, Owner.RemovePowerInternal(this) (PowerCmd.cs:291; PowerModel.cs:575-580)",
+      "verdict": "faithful",
+      "maps_to": "_expire() (powers.py:86-92) pops the power from owner.powers and unregisters it from the hook system -- same net effect (removal + unhooking), no separate 'Removed' event needed since nothing in the sim listens for it."
+    },
+    {
+      "what": "40. Remove: wait 0.2-0.4s (PowerCmd.cs:292)",
+      "verdict": "waiver",
+      "rationale": "Presentation-only pacing delay; out of scope."
+    },
+    {
+      "what": "41. Remove: power.AfterRemoved(power.Owner) (PowerCmd.cs:293)",
+      "verdict": "faithful",
+      "maps_to": "No sim power currently overrides an AfterRemoved-equivalent hook in a way distinguishable from _expire's own unregister step; recorded as faithful by absence of any ported content needing the distinction."
+    }
+  ],
+  "guards": [
+    {
+      "what": "G1: Sign-aware power typing missing from Artifact interception (PowerCmd.apply's Artifact check uses the static power_cls.power_type class attribute instead of C#'s GetTypeForAmount(amount))",
+      "verdict": "gap",
+      "issue": "cmds.py:299 checks `power_cls.power_type == PowerType.DEBUFF` (a fixed class attribute) instead of C#'s sign-aware `canonicalPower.GetTypeForAmount(amount) != PowerType.Debuff` (ArtifactPower.cs:24; definition PowerModel.cs:460-471: `if (StackType==Counter && AllowNegative && amount<0) return Debuff;`). LIVE today: sts2_rl/monsters/glory/the_lost_and_forgotten.py:54,99 and sts2_rl/monsters/underdocks/lagavulin_matriarch.py:106-107 both apply negative StrengthPower/DexterityPower to the player as a Strength/Dexterity steal -- a Buff-typed (power_type=BUFF), allow_negative=True power applied with a negative amount, which C# classifies as Debuff and Artifact (if the player holds it) blocks and consumes a stack for. The sim's static check sees power_type==BUFF and skips the Artifact branch entirely, so the steal always lands even when the player has Artifact. Pinned with an xfail: test/test_hook_order.py::TestPowerCmdOrder::test_artifact_blocks_negative_signed_debuff."
+    },
+    {
+      "what": "G2: Same sign-aware gap in UnsettlingLamp's own doubling condition, plus an amount<=0 early bail; currently dormant",
+      "verdict": "gap",
+      "issue": "sts2_rl/relics/unsettling_lamp.py:44-53's modify_power_amount bails on `amount <= 0` and then checks the static `power_cls.power_type != PowerType.DEBUFF`, instead of C#'s `power.GetTypeForAmount(amount) != PowerType.Debuff` (UnsettlingLamp.cs:124), which classifies a NEGATIVE amount on an AllowNegative buff (e.g. Strength/Dexterity) as Debuff and would double it. C#'s Malaise.cs:40 and Resonance.cs:33 both apply negative StrengthPower to an enemy with applier=player, cardSource=this -- exactly the shape Lamp is meant to double. Neither card is ported in the sim yet (grep confirms no sts2_rl/cards/*.py match for either name), so this is dormant, but it would misfire (fail to ever double) the instant either card is ported, since the sim's amount<=0 guard rejects ANY negative-amount application before the sign-aware check would even matter."
+    },
+    {
+      "what": "G3: C#'s three ordered phases (BeforePowerAmountChanged event / ModifyPowerAmountGiven chain / ModifyPowerAmountReceived predicate chain) collapsed into one registration-order-dependent chain; Artifact bypasses the hook-listener system entirely",
+      "verdict": "gap",
+      "issue": "hooks.py:170-183's modify_power_amount is a single flat chain over hook-registration order with no phase separation, unlike C#'s three separately-sequenced calls (PowerCmd.cs:120,125,127) that guarantee given-before-received regardless of listener registration order. Additionally, ArtifactPower is not a modify_power_amount listener at all in the sim -- it is hard-coded as a direct block in cmds.py:299-306, outside the hook loop entirely (see its own docstring, sts2_rl/powers.py:315-325: 'This power has no active hook methods; it is intercepted by PowerCmd.apply'). The two general modify_power_amount listeners that DO exist -- UnsettlingLamp (given-side, debuff-only) and RuinedHelmet (received-side, StrengthPower-buff-only, sts2_rl/relics/ruined_helmet.py:23-39) -- are domain-disjoint today (one only touches debuffs, the other only touches a specific positive-amount buff), so no live collision is demonstrated. But nothing in the sim's architecture would enforce correct given-before-received ordering for two future listeners whose domains DO overlap, the way C#'s fixed three-call sequence does by construction."
+    },
+    {
+      "what": "G4: No AfterModifyingPowerAmountGiven/AfterModifyingPowerAmountReceived companion-event machinery",
+      "verdict": "gap",
+      "issue": "Hook.cs declares AfterModifyingPowerAmountGiven (Hook.cs:796-809) and AfterModifyingPowerAmountReceived (Hook.cs:811-824), both of which the brief specifically flagged (2 of the 13 AfterModifying* variants Task 5's damage_pipeline audit found the sim implements only 1 of). The sim's hooks.py:170-183 modify_power_amount returns a bare aggregated int with no out-param modifiers list at all -- unlike its sibling modify_hp_lost/after_modify_hp_lost pair (hooks.py:126-154), which Task 5's re-audit found DOES carry this machinery (built for BufferPower). This is not merely a bookkeeping gap: ArtifactPower.AfterModifyingPowerAmountReceived (ArtifactPower.cs:38-41) is the actual method that calls PowerCmd.Decrement(this) in C# -- the sim reimplements that specific effect inline in cmds.py:301-305 (faithful in isolation, since Artifact is the only hard-coded listener), and RuinedHelmet's sim counterpart similarly folds its 'mark used' side effect directly into modify_power_amount (relics/ruined_helmet.py:37) instead of a separate after-hook. No SECOND listener currently needs the generic two-phase mechanism, so this is dormant beyond the two already-faithful special cases, but the general machinery the brief asked about is confirmed absent."
+    },
+    {
+      "what": "G5: No PowerInstanceType (Instanced / InstancedPerApplier) distinction in FindExistingInstanceForStacking",
+      "verdict": "gap",
+      "issue": "PowerCmd.cs:165-174's FindExistingInstanceForStacking dispatches on power.InstanceType (PowerModel.cs:144, default None); the sim's stacking check (cmds.py:308, `if power_cls.id in target.powers`) always behaves as None (single shared instance per power id per owner) with no instance_type concept anywhere in the sim. Ten C# powers declare Instanced/InstancedPerApplier (grep of src/Core/Models/Powers/*.cs for 'InstanceType =>'); nine are ported: ToricToughnessPower and TheBombPower explicitly document the None-approximation and hand-roll a workaround bundling multiple logical instances inside one power's internal list (powers.py:1191-1200, 3748-3753). The other seven -- SwipePower, StranglePower (InstancedPerApplier, powers.py:2833-2869), AutomationPower, HeistPower, PanachePower, RollingBoulderPower, SandpitPower, ThieveryPower, WitheringPresencePower -- do not acknowledge the distinction in their docstrings or implementation at all. No currently-demonstrated collision (only one copy of each is realistically active on a given owner in present content), but a second simultaneous instance on the same owner (e.g. two Thieving Hoppers' Swipe on the same player, or Strangle applied to one target by two different appliers) would silently merge via on_stack in the sim where C# tracks them as independent instances."
+    },
+    {
+      "what": "G6: No CombatManager.IsEnding / CanReceivePowers guard backstop anywhere in PowerCmd.apply",
+      "verdict": "gap",
+      "issue": "C#'s Apply<T> refuses to act once combat is ending (PowerCmd.cs:69-72, spec step 1) or against a creature CanReceivePowers says no to (PowerCmd.cs:73-76, spec step 2 -- CanReceivePowers reuses Hook.ShouldAllowHitting, Creature.cs:308-322, the SAME predicate damage_pipeline's guard N1 covers for the damage path), both as hard backstops independent of caller discipline; ModifyAmount separately re-checks IsEnding (PowerCmd.cs:217-220, step 24). The sim's PowerCmd.apply (cmds.py:270-332) has none of these guards at any point in its single code path. should_allow_hitting IS wired into the sim's damage pipeline (DamageCmd.deal, per damage_pipeline's N1) but not into PowerCmd.apply -- so a currently-unhittable creature (e.g. a mid-revival Decimillipede segment) could still receive a power application in the sim where C# would refuse it outright. No concrete broken interaction is demonstrated (spot-checked callers apply powers only to already-resolved targets), matching the same defense-in-depth-absence pattern as damage_pipeline's guard G5."
+    },
+    {
+      "what": "N1: IsVisible is entirely absent from the sim's Power model; C#'s power.IsVisible gate (UnsettlingLamp.cs:93, ArtifactPower.cs:29-33) provably never varies",
+      "verdict": "waiver",
+      "rationale": "A full grep of src/Core/Models/Powers/*.cs for `IsVisibleInternal` (the only way to override the default-true PowerModel.IsVisible, PowerModel.cs:150-167) returns zero matches anywhere in the entire C# codebase -- not just Ironclad-scope. IsVisible is therefore provably always true for every power in the current game, in both the Lamp's own latch gate and Artifact's own intercept gate. The sim's total omission of the concept produces no currently observable divergence, and cannot until new C# content introduces an invisible power (which would itself require a source-code change upstream, not just an unported-content gap) -- this is dead code in the source itself, not merely unported."
+    },
+    {
+      "what": "N2: TemporaryStrengthPower/TemporaryDexterityPower's internal wrapped-power application omits applier in the sim instead of C#'s explicit HasDoubledTemporaryPowerSource double-dip guard",
+      "verdict": "deliberate-divergence",
+      "rationale": "C#'s TemporaryStrengthPower.BeforeApplied (TemporaryStrengthPower.cs:146-156) re-applies its InternallyAppliedPower (StrengthPower) via a full separate PowerCmd.Apply<T> call carrying the SAME applier/cardSource as the wrapper's own application, which would let UnsettlingLamp double both the wrapper (e.g. ManglePower, a Debuff) AND the internal StrengthPower independently (quadrupling) without UnsettlingLamp.HasDoubledTemporaryPowerSource (UnsettlingLamp.cs:164-167) explicitly detecting and skipping the second doubling. The sim's TemporaryStrengthPower/TemporaryDexterityPower counterparts (powers.py:840-870, 920-940) instead OMIT the applier parameter entirely on the internal StrengthPower/DexterityPower application (`PowerCmd.apply(hooks, owner, StrengthPower, self._sign * amount)`, no applier= kwarg) -- since UnsettlingLamp's own modify_power_amount requires `applier is self.player` to trigger at all, the applier-less internal call is naturally skipped, achieving the same 'double once, not twice' outcome by a different mechanism. Traced through both the wrapper-doubled and internal-application steps by hand for the ported Mangle case: both codebases net -6 Strength from a 3-stack Mangle with Lamp active. Verified equivalent for currently-ported content; recorded as a deliberate-divergence rather than faithful because the mechanisms genuinely differ and a future power with a DIFFERENT double-dip shape could expose it."
+    },
+    {
+      "what": "N3: Artifact's owner-scoping (target != base.Owner in C#, a hook-iteration self-filter) vs the sim's direct target.powers.get(\"artifact\") lookup",
+      "verdict": "faithful",
+      "rationale": "C#'s ArtifactPower.TryModifyPowerAmountReceived is discovered via IterateCombatHookListeners (iterating every hook-listening model in the whole combat) and self-filters with `if (target != base.Owner) return false` (ArtifactPower.cs:19-23) to only intercept when the power is being applied to Artifact's own owner. The sim's cmds.py:300 `target.powers.get(\"artifact\")` directly looks up whether the TARGET (not some other creature) holds Artifact -- architecturally a special case instead of a hook-iteration self-filter, but semantically identical: both only ever have the target's own Artifact stack intercept a debuff aimed at that same target."
+    },
+    {
+      "what": "N4: ModifyAmount's missing CanReceivePowers check (spec step 25) is a faithful absence, not a divergence",
+      "verdict": "faithful",
+      "rationale": "C#'s ModifyAmount (PowerCmd.cs:215-271) itself only checks combatState==null, never CanReceivePowers, unlike Apply<T>/Apply(power,...) which check it twice (steps 2, 16). The sim's stacking branch (cmds.py:308-321) likewise has no CanReceivePowers-equivalent check -- both codebases omit it identically in the re-stacking path, so this is not a sim-vs-C# divergence at all, merely an asymmetry already present within the C# source between its own two power-application pipelines."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-25"
+}

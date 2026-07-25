@@ -183,8 +183,16 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         ["sts2_rl/cmds.py", "sts2_rl/valueprops.py"],
     ),
     "power_cmd": (
-        ["src/Core/Commands/PowerCmd.cs"],
-        ["sts2_rl/cmds.py"],
+        # PowerCmd.cs itself is the orchestration (Apply/ModifyAmount/Remove/
+        # FindExistingInstanceForStacking), but the sign-aware power typing
+        # (GetTypeForAmount), stacking-removal, and 0-amount-is-a-no-op rules
+        # it depends on live in PowerModel.cs, and the additive/multiplicative/
+        # predicate dispatch mechanics (ModifyPowerAmountGiven/Received,
+        # Before/AfterPowerAmountChanged, AfterModifyingPowerAmountGiven/
+        # Received) live in Hook.cs's static dispatcher methods.
+        ["src/Core/Commands/PowerCmd.cs", "src/Core/Hooks/Hook.cs",
+         "src/Core/Models/PowerModel.cs"],
+        ["sts2_rl/cmds.py", "sts2_rl/hooks.py", "sts2_rl/powers.py"],
     ),
     "creature_card_cmds": (
         ["src/Core/Commands/CreatureCmd.cs", "src/Core/Commands/PlayerCmd.cs",
