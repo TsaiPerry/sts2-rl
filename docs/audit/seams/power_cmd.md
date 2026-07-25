@@ -31,20 +31,20 @@ to `sts2_rl/cmds.py` + `sts2_rl/hooks.py` + `sts2_rl/powers.py` (the
 and `hooks.py`'s `modify_power_amount`/`after_modify_hp_lost`-style
 machinery is the sim's `Hook.*` counterpart).
 
-### Scope boundary with `damage_pipeline` (Task 5) and `hook_dispatch` (Task 8)
+### Scope boundary with `damage_pipeline` (Task 5) and `hook_dispatch` (Task 9) — READ BEFORE TASK 9
 
-`Hook.cs` is now listed under three seams. This record only judges the
-power-amount-specific dispatcher methods: `BeforePowerAmountChanged`
-(`Hook.cs:1006-1016`), `AfterPowerAmountChanged` (`Hook.cs:1018-1026`),
-`ModifyPowerAmountGiven` (`Hook.cs:1884-1912`), `ModifyPowerAmountReceived`
-(`Hook.cs:1914-1931`), `AfterModifyingPowerAmountGiven` (`Hook.cs:796-809`),
-`AfterModifyingPowerAmountReceived` (`Hook.cs:811-824`). It does not
-re-audit the damage-modifier methods (`ModifyDamage`, `ModifyHpLost`,
-`ShouldDie`, ...) that `damage_pipeline` already owns, nor does it judge
-`Hook.cs`'s generic listener-iteration machinery (`IterateCombatHookListeners`
-itself), which belongs to `hook_dispatch` (Task 8). If Task 8 finds a
-power-amount-dispatch behavior this record missed, it belongs here as an
-amendment, not a second verdict under a different unit id.
+`Hook.cs` is listed under three seams and is split by method, not by line
+range. `hook_dispatch` (Task 9) owns the generic listener-iteration
+machinery (`IterateCombatHookListeners` and friends) and every dispatcher
+method **not** claimed below or by `damage_pipeline`. It must **not**
+re-audit these six power-amount dispatchers: `BeforePowerAmountChanged`
+(1006-1016), `AfterPowerAmountChanged` (1018-1026), `ModifyPowerAmountGiven`
+(1884-1912), `ModifyPowerAmountReceived` (1914-1931),
+`AfterModifyingPowerAmountGiven` (796-809),
+`AfterModifyingPowerAmountReceived` (811-824) — nor the damage-modifier
+methods `damage_pipeline` owns. A power-amount-dispatch finding Task 9 makes
+belongs here as an amendment to `audits/seam/power_cmd.json`, not as a
+second verdict under `seam/hook_dispatch`.
 
 ## Sim entry point
 
@@ -245,7 +245,9 @@ since C#'s two pipelines share the same three hook calls in the same order.
    type level: `ArtifactPower.TryModifyPowerAmountReceived`
    (`ArtifactPower.cs:24`) bails unless `GetTypeForAmount(amount) ==
    Debuff`. Faithful in spirit, but see **G1** — the sign-aware half of
-   "debuff" is missing from the sim's check.
+   "debuff" is missing from the sim's check (dormant: no player-side
+   Artifact source exists, and the two C# cards that would exercise the
+   enemy-side direction are unported).
 3. **Power typing is sign-aware in C# (`GetTypeForAmount(amount)`) —
    negative Dexterity is a Debuff.** Confirmed; definition at
    `PowerModel.cs:460-471`, consumed at `UnsettlingLamp.cs:97,124` and
@@ -273,22 +275,49 @@ actually fired" side effect (`_used = True` / `TriggeringCard = card`)
 **inside** the single `modify_power_amount` call itself instead of via a
 proper two-phase try/after split — see **G4**.
 
-**Gaps found** (full detail in the JSON `guards` entries; short form here):
+**Verdict counts** (recomputed directly from `audits/seam/power_cmd.json`
+after fix pass 1):
 
-- **G1 — Sign-aware power typing missing from Artifact interception, LIVE
-  today.** `PowerCmd.apply`'s Artifact check (`cmds.py:299`) tests the
+```
+steps    (41): gap 18, faithful 12, waiver 10, deliberate-divergence 1
+guards   (10): gap  6, faithful  2, waiver  1, deliberate-divergence 1
+combined (51): gap 24, faithful 14, waiver 11, deliberate-divergence 2
+unit verdict: "gap"  (= max(all verdicts, key=VERDICTS.index))
+```
+
+**Gaps found** (full detail in the JSON `guards` entries; short form here).
+After fix pass 1, **all six guards G1-G6 are structural or dormant — none is
+live**, and each dormant one names the content that would trigger it. (The
+one live gap in the whole record is the *step*-level step-20 finding added by
+fix pass 1, listed after G6 below; the "G1 is live" claim it replaced was
+wrong.)
+
+- **G1 — Sign-aware power typing missing from Artifact interception;
+  dormant, trigger = porting `Malaise` or `Resonance`.** The *mechanism* is
+  confirmed: `PowerCmd.apply`'s Artifact check (`cmds.py:299`) tests the
   static `power_cls.power_type == PowerType.DEBUFF` class attribute instead
-  of C#'s sign-aware `GetTypeForAmount(amount)`. Concretely reachable
-  *right now*: `the_lost_and_forgotten.py:54,99` (Glory/Act-3) and
-  `lagavulin_matriarch.py:106-107` (Underdocks/Act-1) both apply **negative**
-  `StrengthPower`/`DexterityPower` to the player as a Strength/Dexterity
-  steal — a Buff-typed, `allow_negative = True` power applied with a
-  negative amount, which C# classifies `Debuff` (`GetTypeForAmount`,
-  `StackType == Counter && AllowNegative && amount < 0`). If the player
-  holds Artifact, C# blocks the steal and consumes a stack; the sim's
-  static check sees `power_type == BUFF` and skips the Artifact branch
-  entirely, so **the steal always lands even with Artifact active.**
-  Pinned with an `xfail` in `test/test_hook_order.py`.
+  of C#'s sign-aware `GetTypeForAmount(amount)`
+  (`PowerModel.cs:460-471`, consumed by `ArtifactPower.cs:24`), so a
+  **negative** amount on a Buff-typed, `allow_negative = True` power
+  (Strength/Dexterity) is a `Debuff` by C#'s rule but bypasses the sim's
+  Artifact branch entirely. **Reachability corrected in fix pass 1 — this
+  is dormant in both directions, not live.** *Player-side* (a player-held
+  Artifact meeting an incoming stat steal, e.g.
+  `the_lost_and_forgotten.py:54,99` or `lagavulin_matriarch.py:106-107`)
+  can never occur: **no player-side `ArtifactPower` source exists anywhere
+  in the game.** An exhaustive `grep -rl ArtifactPower --include=*.cs`
+  returns 12 files — `PowerModel`/`AbstractModelSubtypes` plumbing,
+  `ArtifactPower.cs` itself, `Mocks/MockArtifactMonster.cs`, one card
+  (`Expose.cs:40-43`, which only **removes** Artifact from an enemy), and 8
+  monsters (`Aeonglass.cs:84`, `Chomper.cs:52`, `CubexConstruct.cs:91`,
+  `MechaKnight.cs:76`, `PunchConstruct.cs:74`, `TheAdversaryMkOne/Two/
+  Three`), every one of which **self-**applies. No relic, potion, event, or
+  card grants Artifact to a player. *Enemy-side* (the player applying a
+  negative-amount buff to an Artifact-holding enemy — enemies really do
+  hold Artifact) needs `Malaise.cs:39` or `Resonance.cs:33`, **neither of
+  which is ported.** So G1 and G2 are two faces of **one** dormant gap with
+  **one** named trigger: porting Malaise or Resonance. Pinned with an
+  `xfail` in `test/test_hook_order.py` exercising the enemy-side direction.
 - **G2 — Same sign-aware gap in Unsettling Lamp's own doubling condition,
   plus an `amount <= 0` early bail; dormant.**
   `unsettling_lamp.py:44-53`'s `modify_power_amount` bails immediately on
@@ -323,26 +352,41 @@ proper two-phase try/after split — see **G4**.
   not merely a bookkeeping gap: `ArtifactPower.AfterModifyingPowerAmountReceived`
   is the method that actually calls `PowerCmd.Decrement(this)` in C# — the
   sim reimplements the *effect* (decrementing Artifact) inline in
-  `cmds.py:301-305` rather than via the hook, which is faithful for
-  Artifact specifically (single hard-coded listener) but means a *second*
-  power wanting the same "only react on the hit(s) where I actually changed
-  something" pattern for power-amount modification (as opposed to HP-loss,
-  which `hooks.py:149-154` already supports) has no mechanism to hook into.
+  `cmds.py:301-305` rather than via the hook, which is faithful in effect
+  for Artifact — and `RuinedHelmet.cs:55-60` is a **second real C# listener**
+  on the same event, whose "mark used" side effect the sim likewise
+  hand-inlines into `modify_power_amount` (`ruined_helmet.py:37`). So the
+  premise is *not* "dormant machinery no second listener needs": C# has
+  **two** live listeners on `AfterModifyingPowerAmountReceived` today and the
+  sim hand-inlines **both**. Each inline reimplementation is individually
+  correct; what is absent is the mechanism carrying them, so both listeners'
+  correctness rests on hand-inlining, and a *third* power wanting the same
+  "only react on the hit(s) where I actually changed something" pattern for
+  power-amount modification (as opposed to HP-loss, which `hooks.py:149-154`
+  already supports) has nothing to hook into. `AfterModifyingPowerAmountGiven`
+  is separately absent with no sim analogue at all.
 - **G5 — No `PowerInstanceType` distinction in `FindExistingInstanceForStacking`.**
   The sim's stacking check (`cmds.py:308`, `if power_cls.id in
   target.powers`) always behaves as C#'s `PowerInstanceType.None` (single
   shared instance per power id per owner). C# also has `Instanced` (every
   application creates an independently-tracked instance) and
-  `InstancedPerApplier` (instances keyed by applier). Ten C# powers declare
-  `Instanced`/`InstancedPerApplier`; **nine are ported in the sim**:
-  `ToricToughnessPower` and `TheBombPower` explicitly document the
+  `InstancedPerApplier` (instances keyed by applier). **Counts corrected in
+  fix pass 1** by re-running `grep "InstanceType"
+  src/Core/Models/Powers/*.cs`: **21** C# powers declare an `InstanceType`
+  override (19 `Instanced` + 2 `InstancedPerApplier` — `OblivionPower.cs:27`,
+  `StranglePower.cs:29`), and **11 are ported in the sim**:
+  `AutomationPower`, `HeistPower`, `PanachePower`, `RollingBoulderPower`,
+  `SandpitPower`, `StranglePower`, `SwipePower`, `TheBombPower`,
+  `ThieveryPower`, `ToricToughnessPower`, `WitheringPresencePower`. Of those,
+  only `ToricToughnessPower` and `TheBombPower` explicitly document the
   approximation and hand-roll a workaround (bundling multiple logical
   "instances" inside one power's internal list/fuses — see their own
-  docstrings, `powers.py:1191-1200`, `powers.py:3748-3753`). The other seven
-  — `SwipePower`, `StranglePower` (`InstancedPerApplier`),
-  `AutomationPower`, `HeistPower`, `PanachePower`, `RollingBoulderPower`,
-  `SandpitPower`, `ThieveryPower`, `WitheringPresencePower` — do not
-  acknowledge the distinction at all. No currently-demonstrated collision
+  docstrings, `powers.py:1191-1200`, `powers.py:3748-3753`); the other **nine
+  do not acknowledge the distinction at all**. The **10 unported** ones —
+  `CoveredPower`, `FlankingPower`, `GuardedPower`, `KnockdownPower`,
+  `MagicBombPower`, `MonologuePower`, `NightmarePower`, `OblivionPower`,
+  `OrbitPower`, `TagTeamPower` — will need it considered when ported. No
+  currently-demonstrated collision
   (only one copy of each is realistically active on a given owner in
   present content), but a second simultaneous instance on the same owner
   (e.g. two Thieving Hoppers' `Swipe`, or `Strangle` applied by two
@@ -363,6 +407,42 @@ proper two-phase try/after split — see **G4**.
   targets), but, as with `damage_pipeline`'s G5, the pipeline itself
   provides no defense-in-depth the way `CanReceivePowers` does.
 
+Two further gaps live at the **step** level and are not carried by any
+guard id (added/corrected in fix pass 1):
+
+- **Step 6 — the sim has no 0-amount no-op.** C# `PowerCmd.cs:103` returns
+  immediately on `amount == 0m`, so a zero-amount application registers
+  *nothing*. The sim runs the whole pipeline: verified by execution,
+  `PowerCmd.apply(cs.hooks, cs.enemy, StrengthPower, 0)` →
+  `{'strength': Strength(0)}` and `…, VulnerablePower, 0)` →
+  `{'vulnerable': Vulnerable(0)}`. The Artifact block (`cmds.py:299-306`)
+  provides **no** unreachability guarantee — it never fires for buffs at
+  all, and for debuffs only when the target already holds Artifact. C#
+  content actively depends on the no-op: `TheAdversaryMkOne.cs:32` applies
+  `ArtifactPower` with a literal `0m`, so porting that monster would give
+  the sim a live `Artifact(0)`. Currently **dormant** in the sim: the two
+  variable-amount sites that could reach zero both hand-guard with `> 0`
+  (`sts2_rl/cards/colorless_skills.py:492` Prolong;
+  `sts2_rl/powers.py:1708` Surprise granting Heist). Steps 17/20/23 defer
+  their zero-amount observations to this step rather than re-flagging it.
+- **Step 20 — `SkipNextDurationTick` is set on the *stacking* path too.**
+  C# sets it only in the new-power `Apply` path (`PowerCmd.cs:146`);
+  `ModifyAmount` (`PowerCmd.cs:215-271`) never touches it (a full-source
+  grep for `SkipNextDurationTick` returns only `PowerCmd.cs:146` set,
+  `PowerCmd.cs:192-194` consume, `PowerModel.cs:246` declare, plus
+  `Doubt.cs:35`/`Shame.cs:37`). The sim's `cmds.py:331-332` sits at function
+  scope **after** the new-vs-stacking `if`/`else`, on the shared `power`
+  variable the stacking branch rebinds to `existing`, so it fires on
+  re-stacking as well. **Live and reachable on ported content**: an enemy
+  re-applying Vulnerable/Weak/Frail (the three sim powers using
+  `_tick_duration`, `powers.py:420,442,463`) to a player who already holds
+  it, after the first skip was consumed, buys an *extra* skipped duration
+  tick — the debuff lasts one turn longer than in the game. Verified by
+  execution (apply Vulnerable 2 → `skip_next_tick=True`; clear it as the
+  first tick would; re-stack Vulnerable 1 → amount 3 with
+  `skip_next_tick=True` again). Pinned with a strict xfail in
+  `test/test_hook_order.py::TestPowerCmdOrder::test_restacking_a_player_debuff_does_not_rearm_skip_next_tick`.
+
 **Lower-severity / no-current-effect notes** (`deliberate-divergence` or
 `waiver`, full rationale in the JSON): **N1** `IsVisible` is entirely absent
 from the sim's `Power` model — `waiver`, since grep confirms it is
@@ -371,11 +451,25 @@ provably always `true` everywhere in the current C# codebase (see seed fact
 internal wrapped-power application omits `applier` in the sim
 (`powers.py:863,937` call `PowerCmd.apply(..., self._sign * amount)` with no
 `applier=` kwarg) instead of replicating C#'s explicit
-`HasDoubledTemporaryPowerSource` double-dip guard — verified to produce the
-*same* net outcome for the currently-ported Mangle-family content (Lamp's
+`HasDoubledTemporaryPowerSource` double-dip guard (Lamp's
 `applier is not self.player` gate on the internal, applier-less call
-achieves the same "don't double twice" result as C#'s explicit check, by a
-different mechanism) — `deliberate-divergence`. **N3** Artifact's
+achieves the same "don't double twice" result by a different mechanism) —
+**equivalence re-settled by execution in fix pass 1, and it holds.** With
+the Lamp active, the sim's `PowerCmd.apply(hooks, enemy, ManglePower, 3,
+applier=player)` yields `StrengthPower(-6)` + `ManglePower(6)` (control, no
+Lamp: `-3`/`3`), and a real ported Mangle card play yields
+`StrengthPower(-20)` + `ManglePower(20)` (control: `-10`/`10`); a following
+Bash applies an undoubled Vulnerable 2, so the once-per-combat activation is
+spent exactly once. C#, read line-by-line, nets the same: the wrapper is
+doubled once (`HasDoubledTemporaryPowerSource(ManglePower)` is false —
+its `InternallyAppliedPower` is `StrengthPower`, not `ManglePower`), then
+`TemporaryStrengthPower.BeforeApplied` (`TemporaryStrengthPower.cs:145-156`)
+re-applies `StrengthPower` at `Sign * 6 = -6` and *that* call is skipped by
+`HasDoubledTemporaryPowerSource` (`UnsettlingLamp.cs:164-167`). Kept
+`deliberate-divergence`, not `faithful`, because the mechanisms genuinely
+differ and a future double-dip shape (an internal application that needs an
+`applier`, or a Lamp-like relic not gated on `applier`) could expose it.
+**N3** Artifact's
 owner-scoping (`target != base.Owner` in C#, a hook-iteration self-filter)
 vs. the sim's direct `target.powers.get("artifact")` lookup (a special
 case) — architecturally different, semantically identical — `faithful`.
@@ -394,13 +488,16 @@ case) — architecturally different, semantically identical — `faithful`.
 - **Artifact consumes exactly one stack per debuff** (pin table item 2):
   `test/test_powers.py::TestArtifact::test_blocks_one_debuff_per_stack` and
   `test_stacks_and_each_stack_blocks_one_debuff`. Recorded, not duplicated.
-- **G1 (sign-aware Artifact interception, live gap)**: new `xfail` pin
-  added: `test/test_hook_order.py::TestPowerCmdOrder::
+- **G1 (sign-aware Artifact interception, dormant gap)**: `xfail` pin:
+  `test/test_hook_order.py::TestPowerCmdOrder::
   test_artifact_blocks_negative_signed_debuff` — applies a negative-amount
-  `DexterityPower` (mirroring the Lost and Forgotten / Lagavulin Matriarch
-  steal shape) to an Artifact-holding target and asserts the steal is fully
-  blocked and Artifact is consumed; asserts the C#-correct behavior, marked
-  `xfail` referencing G1.
+  `DexterityPower` **to an Artifact-holding enemy**, i.e. the
+  `Malaise.cs:39`/`Resonance.cs:33` (enemy-side) direction, and asserts the
+  steal is fully blocked and Artifact is consumed; asserts the C#-correct
+  behavior, marked `xfail` referencing G1. (The reason string was corrected
+  in fix pass 1: it previously cited the *player*-targeted monster steals,
+  which the test does not exercise and which are unreachable anyway — no
+  player-side Artifact source exists.)
 - **Ordering trace** (new, not a pin-table item but demonstrates step
   12-before-13 directly at the `PowerCmd.apply` level rather than through a
   card play): `test/test_hook_order.py::TestPowerCmdOrder::

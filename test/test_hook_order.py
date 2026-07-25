@@ -179,18 +179,53 @@ class TestPowerCmdOrder:
                "application of a Buff-typed, allow_negative power (Strength/"
                "Dexterity) is a Debuff by C#'s rule but never even reaches "
                "the sim's Artifact branch, since power_cls.power_type stays "
-               "BUFF regardless of sign. Live via "
-               "monsters/glory/the_lost_and_forgotten.py:54,99 and "
-               "monsters/underdocks/lagavulin_matriarch.py:106-107, both of "
-               "which steal Strength/Dexterity from the player via a "
-               "negative-amount PowerCmd.apply call.",
+               "BUFF regardless of sign. This test exercises the ENEMY-side "
+               "direction -- the player applying a negative-amount buff to "
+               "an Artifact-holding enemy -- whose only C# sources are "
+               "Malaise.cs:39 and Resonance.cs:33, neither of which is "
+               "ported; porting either makes this live. The mirror-image "
+               "player-side direction (a monster stealing Strength/Dexterity "
+               "off an Artifact-holding player) is unreachable in principle: "
+               "no relic, potion, event, or card anywhere in the game grants "
+               "ArtifactPower to a player -- every ArtifactPower application "
+               "site is a monster self-applying, and the one card that "
+               "mentions it (Expose.cs:40-43) only removes it.",
         strict=True,
     )
     def test_artifact_blocks_negative_signed_debuff(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, ArtifactPower, 1)
-        # Mirrors the Lost and Forgotten / Lagavulin Matriarch steal shape:
-        # a negative amount applied to a Buff-typed, allow_negative power.
+        # Mirrors the Malaise / Resonance shape: the player applying a
+        # negative amount of a Buff-typed, allow_negative power to an enemy
+        # that holds Artifact.
         PowerCmd.apply(cs.hooks, cs.enemy, DexterityPower, -3, applier=cs.player)
         assert "dexterity" not in cs.enemy.powers  # C#: Artifact blocks the steal
         assert "artifact" not in cs.enemy.powers   # and consumes its stack
+
+    @pytest.mark.xfail(
+        reason="power_cmd audit step 20 (audits/seam/power_cmd.json): "
+               "cmds.py:331-332 sets power.skip_next_tick = True AFTER the "
+               "new-vs-stacking if/else, on the shared `power` variable the "
+               "stacking branch rebinds to `existing` -- so re-applying a "
+               "debuff to the player re-arms the skip on every re-stack. C# "
+               "sets SkipNextDurationTick only in the new-power Apply path "
+               "(PowerCmd.cs:112-117 early-returns any existing-instance "
+               "application into ModifyAmount before the assignment at "
+               "PowerCmd.cs:146 is ever reached); ModifyAmount "
+               "(PowerCmd.cs:215-271) never touches the flag -- the only "
+               "other references are PowerCmd.cs:192-194, which CONSUME it "
+               "in TickDownDuration. This is LIVE and reachable with ported "
+               "content: any enemy re-applying Vulnerable/Weak/Frail to the "
+               "player after the first application's skip has already been "
+               "consumed makes that debuff last one extra turn versus the "
+               "real game.",
+        strict=True,
+    )
+    def test_restacking_a_player_debuff_does_not_rearm_skip_next_tick(self):
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 2, applier=cs.enemy)
+        vuln = cs.player.powers["vulnerable"]
+        assert vuln.skip_next_tick  # first application skips its first tick
+        vuln.skip_next_tick = False  # that first tick has now been consumed
+        PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 2, applier=cs.enemy)
+        assert not cs.player.powers["vulnerable"].skip_next_tick
