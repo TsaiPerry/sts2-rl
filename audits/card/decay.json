@@ -1,0 +1,51 @@
+{
+  "unit": "card/decay",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Decay.cs",
+    "sha256": "c4943a381a19edd2d204be5c777ecc9e465f1e333ba68308be9d2f7c3c01ef1c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\decay.py",
+    "sha256": "378be0bfe5f85d93fe46ecf89acd1dd80387f44b03ee3f8fe9fe54e1eb4ce0d0"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "DecayCard.max_upgrade_level = 0 (decay.py:26)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Decay.cs:13) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "DecayCard.is_playable = False (decay.py:26)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Decay.cs:17) == `is_playable = False`. No Ethereal or Eternal on either side."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "DecayCard.has_turn_end_in_hand_effect = True (decay.py:28)",
+      "verdict": "faithful",
+      "rationale": "`=> true` (Decay.cs:19) == the class attribute -- ported here, unlike card/debt's."
+    },
+    "ctor": {
+      "maps_to": "class attrs (decay.py:20-28) + _init_vars (30-31)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) on both sides, so only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: the ported cost readers all filter `> 0` or skip `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim inlines 2 at the damage site (decay.py:38)",
+      "verdict": "gap",
+      "issue": "`new DamageVar(2m, ValueProp.Unpowered | ValueProp.Move)` (Decay.cs:15) is a printed var with no `_damage` in `_init_vars`, so `Card.base_damage` returns None. The PROP SET is nonetheless right: the sim passes no explicit props and `DamageCmd.deal` infers `DamageProps.CARD_UNPOWERED` (UNPOWERED | MOVE) from `is_unpowered = True` (cmds.py:44-50, decay.py:27), so the 2 damage is not Strength-scaled and IS blockable on both sides -- identical to card/burn. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "DecayCard.on_turn_end_in_hand (decay.py:36-38)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.Damage, this)` (Decay.cs:28) -- passing the VAR, so the Unpowered|Move props ride along -- == `DamageCmd.deal(ctx.hooks, ctx.player, 2, dealer=None, card=self)`. Explicit null dealer on both sides. No Cmd.Wait and no VFX on this one, so the bodies are step-for-step identical."
+    },
+    "OnPlay": {
+      "maps_to": "DecayCard.on_play -> pass (decay.py:33-34)",
+      "verdict": "faithful",
+      "rationale": "Decay.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,47 @@
+{
+  "unit": "card/dominate",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Dominate.cs",
+    "sha256": "6d5b36dd99a22d7fdf6c5789b926833cbfa8b3be274eb201732963bfc187b35b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\dominate.py",
+    "sha256": "728278a6a43dd3aa6c480f1c8c391e21e81f8f548f24f209f7a19e75f6851144"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "DominateCard.exhausts = True (dominate.py:27)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Dominate.cs:17) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (dominate.py:22-27) + _init_vars (29-31)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.AnyEnemy)` (Dominate.cs:31-34) == cost 1 / SKILL / UNCOMMON / ANY_ENEMY -- another enemy-targeting Skill, like card/dark_shackles."
+    },
+    "CanonicalVars": {
+      "maps_to": "DominateCard._vulnerable = 1 (dominate.py:31)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<VulnerablePower>(1m)` == `_vulnerable = 1`, which `magic_number` surfaces. The second var, `new DynamicVar(\"StrengthPerVulnerable\", 1m)` (Dominate.cs:22), is NEVER READ by OnPlay -- the Strength applied is the target's TOTAL Vulnerable, not a multiple of it -- so it is a display-only var and its absence from the sim costs nothing, unlike the inlined vars on bad_luck/beckon/burn."
+    },
+    "OnPlay": {
+      "maps_to": "DominateCard.on_play (dominate.py:36-43)",
+      "verdict": "faithful",
+      "rationale": "Order and both amounts match: `PowerCmd.Apply<VulnerablePower>(choiceContext, cardPlay.Target, DynamicVars[\"VulnerablePower\"].BaseValue, Owner.Creature, this)` FIRST (Dominate.cs:40), then read the target's TOTAL Vulnerable AFTER the application (`cardPlay.Target.GetPower<VulnerablePower>()?.Amount ?? 0`, line 41) and apply that much Strength to SELF (line 42). The sim does the same read-after-apply (dominate.py:41), which is load-bearing -- the card gains Strength equal to the new total, not just the 1 it applied. The sim's `StrengthCmd.apply` adds a `modify_strength_given` hook C# does not have at this site; that is power_cmd seam territory. Presentation, folded in: TriggerAnim (39) and two hover tips (25-29)."
+    },
+    "OnUpgrade": {
+      "maps_to": "DominateCard._on_upgrade (dominate.py:33-34)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"VulnerablePower\"].UpgradeValueBy(1m)` (Dominate.cs:47) == `self._vulnerable += 1` (1 -> 2). The StrengthPerVulnerable var is untouched by the upgrade on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim skips the Strength application when the total Vulnerable is 0 (`if vuln > 0`, dominate.py:42); C# calls Apply unconditionally with num = 0",
+      "verdict": "faithful",
+      "rationale": "Same outcome: `PowerCmd.Apply` early-returns on `amount == 0m` (PowerCmd.cs:103), so neither side applies anything. The only path to 0 is Artifact eating the Vulnerable, and then both sides skip. NOT the `is_gone` family of guards -- this one tests the AMOUNT, not the target's liveness, and the sim correctly adds no liveness guard here (there is no damage step to kill the target first)."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

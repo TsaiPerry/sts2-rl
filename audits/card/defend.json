@@ -1,0 +1,46 @@
+{
+  "unit": "card/defend",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\DefendIronclad.cs",
+    "sha256": "08ba8e1d038f6b2fed46217d974154f4d9deea82a235bedc0efb1c1459c509ef"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\defend.py",
+    "sha256": "5ecb528348c1a44dad9d20f9cd3bac3abdd1f285a7e7a64dd5e0306022919697"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "DefendCard.gains_block = True (defend.py:14)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (DefendIronclad.cs:13) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (defend.py:13-19) + _init_vars (21-23)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Basic, TargetType.Self)` (DefendIronclad.cs:19-22) == cost 1 / SKILL / BASIC / SELF. Note the C# class is DefendIronclad but the sim registers it as id `defend`; the roster resolves it through tools/audit/name_overrides.json, correctly."
+    },
+    "CanonicalTags": {
+      "maps_to": "DefendCard.tags = frozenset({\"defend\"}) (defend.py:19)",
+      "verdict": "faithful",
+      "rationale": "`new HashSet<CardTag> { CardTag.Defend }` (DefendIronclad.cs:15) == the tag set. Load-bearing: the Fortified enchantment gates on `\"defend\" in card.tags` (enchantments.py:286-287)."
+    },
+    "CanonicalVars": {
+      "maps_to": "DefendCard._block = 5 (defend.py:23)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(5m, ValueProp.Move)` (DefendIronclad.cs:17) == `_block = 5`. Move WITHOUT Unpowered -> POWERED block on both sides, so Vambrace and Pael's Legion double it identically and this card is NOT in gap G1's blast radius (`py tools/audit/card_probes.py unpowered-block` lists only Entrench)."
+    },
+    "OnPlay": {
+      "maps_to": "DefendCard.on_play (defend.py:28-30)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` (DefendIronclad.cs:26) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`. Single effect, no guards, no animation."
+    },
+    "OnUpgrade": {
+      "maps_to": "DefendCard._on_upgrade (defend.py:25-26)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (DefendIronclad.cs:31) == `self._block += 3` (5 -> 8)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

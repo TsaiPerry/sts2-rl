@@ -1,0 +1,41 @@
+{
+  "unit": "card/dramatic_entrance",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\DramaticEntrance.cs",
+    "sha256": "874c68c8680b44cd7d0ad219b19db9c847d59996b1fe92fd00a5819a32aded24"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "exhausts = True, innate = True (colorless_attacks.py:63-64)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust, CardKeyword.Innate }` (DramaticEntrance.cs:20-24) == both class attributes. These are CANONICAL keywords, not upgrade-added, so the downgrade-rebuild hazard does not apply."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:58-64) + _init_vars (66-68)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Uncommon, TargetType.AllEnemies)` (DramaticEntrance.cs:26-29) == cost 0 / ATTACK / UNCOMMON / ALL_ENEMIES."
+    },
+    "CanonicalVars": {
+      "maps_to": "DramaticEntranceCard._damage = 11 (colorless_attacks.py:68)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(11m, ValueProp.Move)` (DramaticEntrance.cs:18) == `_damage = 11`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "DramaticEntranceCard.on_play, routed per-enemy by the framework (colorless_attacks.py:73-77; combat.py:481-487)",
+      "verdict": "gap",
+      "issue": "The damage, the target set and the single hit are all faithful: `DamageCmd.Attack(11).FromCard(this).TargetingAllOpponents(CombatState)` (DramaticEntrance.cs:40-42) hits every living opponent once, and the sim's framework routing calls `on_play` once per living enemy because `handles_own_routing` is left False, filtering on `is_gone` (combat.py:483-484), which is the right analogue of AttackCommand's `where c.IsAlive`. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call (AttackCommand.cs:650), which computes every target's DamageResult first, runs the after-damage hooks over all of them, and only then calls `await Kill(killedCreatures)` for the whole batch (CreatureCmd.cs:372-409). The sim issues a SEPARATE `DamageCmd.deal` per enemy, so each enemy's death -- and any on-death effect -- fully resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT: no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage or block, so the batched and sequential orders reach the same end state. Live the moment such a monster is ported. Presentation, folded in: TriggerAnim (38), the fullscreen VFX (39) and ExtraRunAssetPaths (16)."
+    },
+    "OnUpgrade": {
+      "maps_to": "DramaticEntranceCard._on_upgrade (colorless_attacks.py:70-71)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(4m)` (DramaticEntrance.cs:33) == `self._damage += 4` (11 -> 15)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
