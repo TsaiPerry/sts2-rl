@@ -1,0 +1,36 @@
+{
+  "unit": "card/rupture",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Rupture.cs",
+    "sha256": "81b0f544cd88510d974a74fbc921598740fcf281bd7cff9cc364159110875079"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\rupture_card.py",
+    "sha256": "e5b654e1413d618b88f94f6cbfb4375fef22b95d7b867d91dc0ebf2a41e19636"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (rupture_card.py:240-244) + _init_vars (246-248)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Rupture.cs:18-21) == cost 1 / POWER / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "RuptureCard._strength = 1 (rupture_card.py:248)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<StrengthPower>(1m)` (Rupture.cs:14) == `_strength = 1`. Note the var is keyed on StrengthPower but is the amount handed to RUPTUREPower (Rupture.cs:25), the same key/target mismatch as card/demon_form and card/feeding_frenzy -- checked rather than assumed."
+    },
+    "OnPlay": {
+      "maps_to": "RuptureCard.on_play (rupture_card.py:253-256)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<RupturePower>(choiceContext, Owner.Creature, DynamicVars.Strength.BaseValue, Owner.Creature, this)` (Rupture.cs:25) == `PowerCmd.apply(ctx.hooks, ctx.player, RupturePower, self._strength, applier=ctx.player)` -- correctly `PowerCmd.apply` and not `StrengthCmd.apply`, since RupturePower is not Strength. No animation on either side. THIS CARD IS THE WITNESS FOR TWO OTHER FINDINGS: RupturePower gains Strength on any unblocked damage its owner receives (powers.py:272-289), which is what makes card/breakthrough's hand-rolled HP loss and seam gap G6 (lose_max_hp not routing through the damage pipeline, via card/brightest_flame) both LIVE."
+    },
+    "OnUpgrade": {
+      "maps_to": "RuptureCard._on_upgrade (rupture_card.py:250-251)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Strength.UpgradeValueBy(1m)` (Rupture.cs:30) == `self._strength += 1` (1 -> 2)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

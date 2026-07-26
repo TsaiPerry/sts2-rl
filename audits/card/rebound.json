@@ -1,0 +1,41 @@
+{
+  "unit": "card/rebound",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Rebound.cs",
+    "sha256": "fb4fcc6613f6ab3a5850d87e43b1b1058333a70b368f376f792f7e21e75f74cd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<DefectCardPool>()` (Rebound.cs:18) selects the card's ART pool, not its generation pool. Presentation."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:238-242) + _init_vars (244-246)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.AnyEnemy)` (Rebound.cs:20-23) == cost 1 / ATTACK / EVENT / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "ReboundCard._damage = 9 (trash_heap_cards.py:246)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(9m, ValueProp.Move)` (Rebound.cs:16) == `_damage = 9`, powered on both sides. The ReboundPower amount is the literal 1 in both."
+    },
+    "OnPlay": {
+      "maps_to": "ReboundCard.on_play (trash_heap_cards.py:251-258)",
+      "verdict": "faithful",
+      "rationale": "Order matches: attack FIRST (Rebound.cs:28-30), then `PowerCmd.Apply<ReboundPower>(..., 1m, ...)` (31) == `PowerCmd.apply(..., ReboundPower, 1, applier=ctx.player)`. The order matters because ReboundPower redirects the NEXT card played, and applying it after this card's own resolution keeps Rebound itself out of scope -- true on both sides. ReboundPower is a `modify_card_play_result_pile` implementer like NostalgiaPower, so it is in card/havoc's dormant result-pile blast radius."
+    },
+    "OnUpgrade": {
+      "maps_to": "ReboundCard._on_upgrade (trash_heap_cards.py:248-249)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Rebound.cs:36) == `self._damage += 3` (9 -> 12)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}
