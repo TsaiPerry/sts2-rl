@@ -852,15 +852,55 @@ def probe_sweep_reset_exec() -> None:
             sorted((pid, pw.amount) for pid, pw in cs.enemy.powers.items()))
         return snap
 
-    diverged, agreed, errored = [], [], []
+    def _stimulate(cs) -> None:
+        """Give combat 1 enough stimulus to LATCH a trigger-gated field.
+
+        THE FIFTH DEFECT, found by batch 13 and the dangerous kind: the original
+        driver built a CombatState, called end_turn a few times, and applied no
+        stimulus at all -- full HP, no card ever played, no Strength, no run
+        context. A field whose write is gated on a trigger the driver never
+        produces therefore reads identical on BOTH instances, so the executed
+        pass filed it under "agrees with a fresh instance" and OVERRODE the
+        static bucket's correct warning. It false-cleared red_skull,
+        ruined_helmet and pumpkin_candle; the first two are live gaps, and
+        red_skull's is severe (combat 2 at full HP opens with Strength -3,
+        because the un-reset `_applied` makes the relic subtract a bonus it
+        never granted).
+
+        This is distinct from FROZEN CONSTRUCTOR STATE: that field is never
+        written by anything, this one is written only under a condition. A
+        false CLEAR is worse than a false hit -- nothing downstream re-checks it.
+        """
+        from sts2_rl.cmds import DamageCmd, PowerCmd
+        from sts2_rl.powers import StrengthPower
+        p = cs.player
+        with contextlib.suppress(Exception):
+            # Below the half-HP thresholds several relics gate on (red_skull).
+            DamageCmd.deal(cs.hooks, p, max(1, int(p.max_hp * 0.62)), cs.enemy)
+        with contextlib.suppress(Exception):
+            # A positive Strength for the relics that consume or clamp one
+            # (ruined_helmet).
+            PowerCmd.apply(cs.hooks, p, StrengthPower, 2, applier=p)
+        with contextlib.suppress(Exception):
+            if p.hand:
+                cs.play_card(0, 0)
+
+    diverged, agreed, errored, blind = [], [], [], []
     for rid in candidates:
         try:
             carried = make_relic(rid)
+            virgin = {k: repr(v) for k, v in vars(make_relic(rid)).items()
+                      if k not in _BASE_ATTRS}
             cs1 = CombatState(rng=random.Random(0), relics=[carried])
+            _stimulate(cs1)
             for _ in range(3):
                 if cs1.is_over:
                     break
                 cs1.end_turn()
+            # Did combat 1 actually LATCH anything? If not, the cross-combat
+            # diff below is vacuous and must not be reported as agreement.
+            latched = {k: repr(v) for k, v in vars(carried).items()
+                       if k not in _BASE_ATTRS} != virgin
             # Combat 2 with the SAME instance, exactly as RunState.relics does.
             cs2 = CombatState(rng=random.Random(1), relics=[carried])
             fresh = make_relic(rid)
@@ -868,18 +908,34 @@ def probe_sweep_reset_exec() -> None:
             a, b = _snapshot(carried, cs2), _snapshot(fresh, cs_fresh)
             delta = {k: (b.get(k), a.get(k)) for k in a | b.keys()
                      if a.get(k) != b.get(k)}
-            (diverged if delta else agreed).append((rid, delta))
+            if delta:
+                diverged.append((rid, delta))
+            elif not latched:
+                blind.append(rid)
+            else:
+                agreed.append((rid, delta))
         except Exception as exc:                          # pragma: no cover
             errored.append((rid, f"{type(exc).__name__}: {exc}"))
 
     print(f"  {len(candidates)} candidate(s) executed: {len(diverged)} carry "
           f"state into combat 2, {len(agreed)} agree with a fresh instance, "
+          f"{len(blind)} INCONCLUSIVE (driver never latched the field), "
           f"{len(errored)} could not be driven")
     print("\n  CARRIES STATE ACROSS THE COMBAT BOUNDARY "
           "(field: fresh-instance value -> carried-instance value):")
     for rid, delta in diverged:
         for k, (fresh_v, carried_v) in delta.items():
             print(f"    {rid:<26} {k}: {fresh_v} -> {carried_v}")
+    if blind:
+        print("\n  INCONCLUSIVE -- combat 1 never wrote the field, so the diff "
+              "proves NOTHING. Do NOT read this as clean:\n"
+              "  the stimulus this driver supplies (damage to ~38% HP, +2 "
+              "Strength, one card played) was not enough to latch it,\n"
+              "  or the trigger is a RUN-level hook (after_obtained, "
+              "after_combat_end) that a bare CombatState never fires.\n"
+              "  Audit these by hand with a purpose-built probe:")
+        for rid in blind:
+            print(f"    {rid}")
     if errored:
         print("\n  NOT DRIVEN (needs a run/room context this probe does not "
               "build -- audit by hand):")

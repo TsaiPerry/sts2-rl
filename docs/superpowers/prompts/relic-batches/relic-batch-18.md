@@ -72,6 +72,16 @@ before any reader"), that claim was probably never executed — execute it or mo
 the unit out of the bucket. Report anything you find wrong in your lessons file;
 four of the five previous batches found something.
 
+**A FIFTH sweep-A defect was found on 2026-07-26 by batch 13, after the other
+four were fixed:** `sweep-reset-exec` applied no stimulus, so any field gated on a
+trigger the driver never produced read identical on both instances and was filed as
+"agrees with a fresh instance" — **overriding the static bucket's correct warning**.
+It false-cleared `red_skull` (whose combat 2 opens with Strength **-3**),
+`ruined_helmet` and `pumpkin_candle`. The driver now applies stimulus AND reports
+`INCONCLUSIVE` when combat 1 latched nothing. Treat an `INCONCLUSIVE` unit as
+unaudited, never as clean — and note the pattern: **a false clear is worse than a
+false hit, because nothing downstream re-checks it.**
+
 ## Procedure per unit
 
 ```

@@ -65,6 +65,26 @@ fixed. Read this before trusting any earlier sweep-A output:
    instances and gets cleared — but `make_relic` (`relics/base.py:74`) passes no
    arguments, so such a field is frozen at its default for the whole run. New
    `FROZEN CONSTRUCTOR STATE` bucket. Found by batch 5.
+5. **`sweep-reset-exec` applied NO STIMULUS, so it false-*cleared* relics the
+   static pass had correctly flagged.** Found by batch 13, *after* defects 1–4
+   were fixed — the rewrite corrected the static classification and left the
+   execution driver alone. The driver built a `CombatState`, called `end_turn`
+   three times, and never damaged the player, never played a card, never granted
+   a power, never supplied run context. Any field whose write is gated on a
+   trigger the driver does not produce therefore reads identical on **both**
+   instances, so the executed pass reported "agrees with a fresh instance" and
+   **overrode the static bucket's correct warning**. It false-cleared
+   `red_skull`, `ruined_helmet` and `pumpkin_candle`.
+
+   The driver now applies stimulus (damage to ~38% HP, +2 Strength, one card
+   played) and — more importantly — **checks whether combat 1 latched anything
+   at all**. If it did not, the relic is reported `INCONCLUSIVE`, never as
+   agreement. A false clear is strictly worse than a false hit: nothing
+   downstream re-checks a unit the sweep called clean.
+
+   `red_skull` is why this matters. Its un-reset `_applied` makes combat 2 at
+   full HP open with **Strength −3** — the relic subtracts a bonus it never
+   granted. The static pass flagged it; the unstimulated exec pass cleared it.
 
 Defect 3 cuts both ways, and that is the most useful thing to come out of the
 rewrite. `happy_flower` and `pendulum` both carry `turns_seen` into combat 2, and
@@ -83,7 +103,8 @@ and now has mechanical backing.
 | **Frozen constructor state — relic cannot fire** | *(invisible)* | **2** |
 | **Not reset before a reader** | 32 | **38** |
 | …executed by `sweep-reset-exec` | 16 | **19** |
-| **…confirmed carrying state into combat 2** | 3 | **7** |
+| **…confirmed carrying state into combat 2** | 3 | **10** |
+| …**inconclusive** — driver never latched the field | *(reported as clean)* | **9** |
 
 ### CONFIRMED — carry state across the combat boundary
 
@@ -93,14 +114,20 @@ and now has mechanical backing.
 | `centennial_puzzle` | `_used_this_combat` | `False` → `True` | `UsedThisCombat = false` | recorded |
 | `paels_eye` | `used_this_combat` | `False` → `True` | `AfterCombatEnd` | recorded |
 | `diamond_diadem` | `cards_played_this_turn` | stale `3` read at combat-2 turn 1 | turn-END only | batch 4, LIVE |
-| `venerable_tea_set` | `_pending` | frozen `False`, relic never fires | n/a | **UNAUDITED** |
+| `venerable_tea_set` | `_pending` | frozen `False`, relic never fires | n/a | **UNAUDITED** (batch 17) |
 | `fake_venerable_tea_set` | `_pending` | turn-1 energy 3 vs 4 | n/a | batch 5, LIVE |
-| `paels_tears` | `had_leftover_energy` | player energy `3` → `5` | `AfterCombatEnd` | **UNAUDITED** |
+| `paels_tears` | `had_leftover_energy` | player energy `3` → `5` | `AfterCombatEnd` | **UNAUDITED** (batch 11) |
+| `red_skull` | `_applied` | combat 2 at full HP opens **Strength −3** | `RedSkull.cs:54` | batch 13, LIVE |
+| `ruined_helmet` | `_used` | Strength 4 then 2 across two combats | `RuinedHelmet.cs:64` | batch 13, LIVE |
+| `vambrace` | `_used` | `False` → `True` at combat-2 start | `AfterCombatEnd` + `BeforeCombatStart` | **UNAUDITED** (batch 17) |
 
-Two of the seven are still unaudited and are pre-populated work for their
-batches: **`venerable_tea_set`** (batch 17 — identical to the `fake_` sibling
-batch 5 proved LIVE, so confirm, do not re-derive) and **`paels_tears`** (batch
-13 — an energy divergence, not just a flag).
+Three of the ten are still unaudited and are pre-populated work for their
+batches: **`venerable_tea_set`** and **`vambrace`** (both batch 17) and
+**`paels_tears`** (batch 11 — an energy divergence, not just a flag).
+`red_skull` and `ruined_helmet` were found by batch 13 auditing them on their
+merits *after* the unstimulated exec driver had cleared them; the fixed driver
+now reproduces both, and `vambrace` is the one it turned up that no batch has
+reached yet.
 
 `happy_flower`, `fake_happy_flower` and `pendulum` also diff across the boundary
 but are **intended persistence on both sides** — see the `base.Status` note
