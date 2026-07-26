@@ -14,7 +14,7 @@
       "verdict": "faithful"
     },
     "AfterPlayerTurnStartLate": {
-      "maps_to": "on_player_turn_started (blood_vial.py:18-22)",
+      "maps_to": "on_player_turn_started (blood_vial.py:18-21)",
       "verdict": "gap",
       "issue": "The effect is right -- HealVar(2m).IntValue healed to the owner on TurnNumber <= 1 (BloodVial.cs:9-15) vs CreatureCmd.heal(player, 2) on `self.turn <= 1` -- and the post-draw slot is right (executed: py tools/audit/relic_probes.py turn-order puts on_player_turn_started after the draw, where turn_structure step 22 puts AfterPlayerTurnStart). What is lost is the LATE phase, which is guard G1."
     }
