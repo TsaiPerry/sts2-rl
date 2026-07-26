@@ -1,16 +1,18 @@
 # Stream 4 report — event + enchantment content audits
 
 Branch `audit-event`, worktree `C:\Users\Perry\Desktop\sts2-rl-event`.
-Written 2026-07-26. Five commits on top of `8583546a`.
+Written 2026-07-26. Six commits on top of `8583546a`.
 
 ## Status
 
 | kind | total | audited | invalid | gaps | unaudited |
 |---|---|---|---|---|---|
 | `enchantment` | 17 | **17** | 0 | 12 | **0** |
-| `event` | 65 | 42 | 0 | 30 | 23 |
+| `event` | 65 | **65** | 0 | 47 | **0** |
 
-`py tools/audit/harness.py validate` → 64 records, 0 invalid.
+**Stream 4 is complete.** Both kinds are at `unaudited 0`.
+
+`py tools/audit/harness.py validate` → 87 records, 0 invalid.
 `py -m pytest test/ -q` → 2476 passed, 31 xfailed, unchanged at every commit
 (audits add no executable code; the two probe modules under `tools/audit/` are
 not imported by the suite).
@@ -22,16 +24,33 @@ Commits:
 - `53b54670` audit(event): batch 2/5 — 7 units, 5 gaps
 - `4432d5e1` docs(audit): stream 4 report (first cut)
 - `c61f34c3` audit(event): batch 3 — 9 units, 7 gaps
-- (this commit) audit(event): batch 4 — 13 units, 10 gaps
+- `cb207419` audit(event): batch 4 — 13 units, 10 gaps
+- (this commit) audit(event): batch 5 — the final 23 units, 17 gaps
 
-**The enchantment kind is complete — the status report's first `unaudited 0`
-row.** The event kind is 42/65; the residual queue is at the bottom of this
-file, with the shared machinery already established so a follow-up session is
-mostly per-unit mapping.
+**Both kinds are complete.** The enchantment kind reached `unaudited 0` at
+`3abf27d9`; the event kind reaches it here.
+
+### A note on how batch 5 was run
+
+The final 23 units were audited by **three agents working concurrently** on
+disjoint slices of the same branch (A: `potion_courier` … `the_future_of_potions`;
+B: `the_lantern_key` … `vakuu`; C: `war_historian_repy` … `zen_weaver`). None of
+them committed, edited this report, or edited the shared
+`tools/audit/event_probes.py`; each wrote its own probe module and validated only
+its own records by explicit path, and the batch was consolidated, validated and
+committed once.
+
+That worked, but it has one failure mode worth recording for the other streams:
+**all three independently minted the id `EV-9`, and two minted `EV-10`, for five
+different mechanisms.** Renumbering was mechanical here (the ids are prose, not
+schema), but a concurrent stream should either partition the id space up front
+or use provisional slice-local ids. The merge also revealed that two of the three
+`EV-9`s were legs of *one* defect — see EV-9 below — which a sequential audit
+would probably have recorded as a single finding from the start.
 
 ## Reproducible evidence
 
-Two probe modules, following `tools/audit/dormancy_probes.py`'s pattern — every
+Five probe modules, following `tools/audit/dormancy_probes.py`'s pattern — every
 number any record states is produced by one of them:
 
 - `tools/audit/enchantment_probes.py` — `order`, `onplay-slot`, `replay`,
@@ -39,6 +58,17 @@ number any record states is produced by one of them:
 - `tools/audit/event_probes.py` — `lethal`, `maxhp`, `eventrng`, `heal`,
   `deckverbs`, and (batch 4) `kill`, `sortkey`, `relictrade`, `enchantstack`,
   `potiondiscard`, `cheese`, `reach`
+- `tools/audit/event_probes_a.py` (batch 5, slice A) — `ancienthook`,
+  `combatlayout`, `ancientdraws`, `punchhp`, `ransack`, `futurepotions`,
+  `reflect`, `reacha`
+- `tools/audit/event_probes_b.py` (batch 5, slice B) — `potionoffer`, `cape`,
+  `trialoffer`, `draws`, `ids`, `rng5b`, `quest`, `gate`
+- `tools/audit/event_probes_c.py` (batch 5, slice C) — `hollow`, `drawcount`,
+  `nextitem`, `potionroll`, `enchsel`, `grabbag`, `wongo`, `repy`
+
+The three batch-5 modules are separate because their authors ran concurrently,
+not because the split means anything. A future session consolidating them should
+also fix the `eventrng` regex — see the EV-3 correction below.
 
 ## New mechanisms found (all executed, all LIVE unless stated)
 
@@ -137,6 +167,31 @@ C# events roll on the per-event `base.Rng`. `Event.event_rng` already exists
 (`events/base.py:84-88`) and 6 modules branch on it; **28 of the 34 rolling
 event modules roll only on `self.rng`** (`py tools/audit/event_probes.py
 eventrng`). LIVE for the parity path the conformance harness grades.
+
+**Correction (batch 5): treat that 28-of-34 as approximate.** The `eventrng`
+probe's detector is a regex, and batch 5 found it wrong in both directions:
+
+- **False positives.** It counts any `run.transform_card(` call as a roll, but a
+  call passing `into=` is a fixed replacement that never enters the random
+  branch. `wood_carvings` takes **0 draws on every path** and is not an EV-3
+  site (`py tools/audit/event_probes_c.py drawcount`). It also misses
+  `(self.event_rng if … else self.rng).shuffle(...)`, so `tanx` is filed as
+  "rolls nothing" when it rolls correctly, and `potion_courier` is filed as
+  "shared rng only" when its parity branch correctly uses `run.rewards_rng`.
+- **False negatives.** It looks only for `self.rng.…`, so a roll delegated to a
+  `RunState` helper is invisible: `wellspring`'s `run.random_potion()` is a real
+  draw on the shared rng and was filed under "rolls nothing".
+
+The mechanism is unaffected and every *record* states a per-path draw count
+measured by `drawcount`/`draws`/`rng5b` rather than by the regex. It is the
+report's roll-up figure that is soft. A one-line regex fix belongs to whoever
+next owns `event_probes.py`.
+
+Also note the report previously said **six** events have a parity RNG branch.
+That undercounts: `nonupeipe`, `tinker_time` and `vakuu` have one too, so it is
+at least nine. Every one of them was checked for draw *count*, not just stream —
+the `orobas` lesson (below) is that a correct stream can still take the wrong
+number of draws.
 
 ### EV-4 — `RewardsCmd.OfferCustom` force-granted
 
@@ -242,6 +297,140 @@ the upgrade draw and the stream; here the odds are `Uniform` and
 (`CardCreationOptions.cs:160-163`), so those two legs do not apply and the
 missing hook pass is the defect. Sites: `room_full_of_cheese` GORGE.
 
+**Batch 5 adds a second site with a *different* witness: `the_future_of_potions`
+TRADE.** The egg leg is inert there — `reward.AfterGenerated` already upgrades
+all three offers, and **0 of 85** Ironclad pool cards is upgradable twice
+(`futurepotions`), so the source's egg-then-AfterGenerated pair cannot reach +2
+either. Liveness comes from a non-egg implementer instead: `Glitter.cs:18-33`
+enchants every Glam-eligible option with no flag gate. On the Attack branch
+(seed 0 → breakthrough / anger / body_slam) all three satisfy
+`Glam.CanEnchant`, so the game's screen shows **3** Glam cards and the sim's
+shows **0**. Rule 6 is discharged: `glitter` is ported, is Ancient rarity
+(correctly out of the grab bag), and **is in Nonupeipe's Ancient option pool**.
+`silken_tress` and `silver_crucible` reach the same hook via
+`CardReward.cs:114-115`, and `WingCharm.cs:36` even takes an `Rng.Niche` draw
+the sim never takes.
+
+### EV-9 — the potion generator: wrong stream, wrong tiering, wrong draw count
+
+New in batch 5. Two slices found this independently from opposite ends and both
+called it `EV-9`; they are legs of one defect, merged here.
+
+`run.random_potion` (`run.py:513-520`) is a single `self.rng.choice` over every
+potion class flagged `in_reward_pool`. The game's out-of-combat generator is
+`PotionFactory.CreateRandomPotionOutOfCombat` → `CreateRandomPotion`
+(`PotionFactory.cs:67-80`): a `NextFloat()` for the rarity tier (≤0.1 Rare,
+≤0.35 Uncommon, else Common) and *then* a `NextItem` within that tier — two
+draws, on the per-player `Rewards` stream. Executed (`potionroll`):
+
+| | sim | game |
+|---|---|---|
+| draws per offered potion | 1 | 2 |
+| stream | shared `run.rng` | `PlayerRng.Rewards` |
+| P(rare) | **0.3333** | **0.10** |
+| P(uncommon) | 0.3333 | 0.25 |
+| P(common) | 0.3333 | 0.65 |
+
+The 1-in-3 Rare rate is not a rounding difference — the sim's reward pool
+happens to hold 48 classes split exactly 16/16/16, so dropping the tier roll
+makes Rares **3.3× more common** than the game allows.
+
+Two source sub-shapes, and the difference matters for the draw count:
+
+- `new PotionReward(player)` → `Populate` → the full tiered generator: **2
+  Rewards draws.** Site: `whispering_hollow` GOLD (two potions).
+- a bare `PlayerRng.Rewards.NextItem(character pool ∪ shared pool)`: **1 draw,
+  no tier** — the population is wrong but the odds question does not arise.
+  Sites: `the_legends_were_true`, `wellspring` BOTTLE, `battleworn_dummy`
+  Setting1, `endless_conveyor` SUSPICIOUS_CONDIMENT.
+
+Every sim site draws on the shared rng. **The capability exists and one site
+already uses it correctly** — `events/potion_courier.py:55` calls
+`run.rewards_rng.next_item` — so, like EV-4 and EV-6, this is an internal
+inconsistency rather than a missing port.
+
+**Retroactive radius: two already-committed records.** `battleworn_dummy` and
+`endless_conveyor` were both already `gap`, so no verdict changes; but
+`endless_conveyor`'s guard labelled the defect "(EV-3)", which is wrong — the
+source never touches `base.Rng` there. That label is corrected in place in this
+commit.
+
+### EV-10 — the transform screen is missing its `Quest` clause
+
+New in batch 5. `CardSelectCmd.FromDeckForTransformation` filters
+`c.Type != CardType.Quest && c.IsTransformable`
+(`CardSelectCmd.cs:485-489`). `RunState.transformable_cards`
+(`run.py:364-366`) returns `removable_cards()` and drops the Quest clause.
+
+Executed (`quest`): three Quest cards are ported (`byrdonis_egg`,
+`lantern_key`, `spoils_map`); a deck of `[strike, spoils_map, lantern_key]`
+offers all three where the game offers only `strike`, and transforming
+`spoils_map` **destroys it** into a Rare. Grant paths are
+`the_legends_were_true.py:41`, `the_lantern_key.py:44`, `byrdonis_nest.py:45`.
+
+Ten call sites: `aroma_of_chaos.py:25`, `endless_conveyor.py:96`,
+`morphic_grove.py:41`, `symbiote.py:50`, `trial.py:97`,
+`whispering_hollow.py:62`, `wood_carvings.py:38`, plus `relics/astrolabe.py:21`
+and `relics/new_leaf.py:16` (**relic stream**).
+
+The sharpest consequence is not the transform itself: `morphic_grove.py:30`'s
+`IsAllowed` gates on `len(transformable_cards()) >= 2`, so a Quest card can make
+the sim **offer a map node the game would not**.
+
+Note the sim's comment is half right — for a card sitting in the deck
+`IsTransformable` really does reduce to `IsRemovable` (`CardModel.cs:737-750`),
+and `FromDeckForRemoval` genuinely has no Quest clause, so `removable_cards()`
+is correct as written. It is reusing it for *transformation* that is wrong.
+
+### EV-11 — the relic-pull ladder and its fallback
+
+New in batch 5. **Dormant**, and recorded because the shape is load-bearing
+elsewhere. `run.pull_relic_from_front` (`run.py:559-595`) scans the merged bag
+and, on no match, pops the bag front at any rarity.
+`RelicGrabBag.GetAvailableDeque` (`RelicGrabBag.cs:218-243`) instead walks
+**Shop → Common → Uncommon → Rare → None**, and
+`RelicFactory.PullNextRelicFromFront` (`RelicFactory.cs:13, :47`) falls back to
+**Circlet**.
+
+Executed (`grabbag`): with the Common deque emptied, BARGAIN_BIN hands out
+`gremlin_horn` (Uncommon) with no ladder walk; with no Rare left, FEATURED_ITEM
+hands out `gremlin_horn` where the game hands out Circlet — and **`circlet` is
+not ported**. Dormant because the parity bag holds 122 relics (36 Rare plus
+shop-legal), so no ported run empties a deque.
+
+Radius: `luminous_choir`, `round_tea_party`, `relic_trader` and
+`relics/wongos_mystery_ticket.py:47` all verdicted the pull faithful on the
+*stream* question without examining the ladder.
+
+### EV-12 — a Combat-layout event builds its encounter at room entry
+
+New in batch 5. `EventRoom.EnterInternal` (`EventRoom.cs:67-71`) calls
+`GenerateInternalCombatState` for **every** `EventLayoutType.Combat` event,
+which runs `GenerateMonstersWithSlots` on the encounter Rng and then
+`CreateCreature` → max-HP roll on `RunState.Rng.Niche` per monster
+(`EventModel.cs:383-403`, `CombatState.cs:232-247`) — unconditionally, before
+any option is chosen. `EnterCombatWithoutExitingEvent` then *reuses* that state
+(`ShouldCreateCombat = LayoutType != Combat`). The sim only records
+`pending_encounter` and builds monsters later, when the driver runs the fight.
+
+Executed (`combatlayout`): entering Punch-Off consumes **0 Niche draws in the
+sim on both the NAB and the FIGHT path**, where the game consumes **2**, plus 2
+encounter-Rng `NextInt(2,10)` draws. LIVE for parity, invisible in legacy mode.
+
+Three Combat-layout events exist: `PunchOff.cs:33`, `TheLanternKey.cs:15`, and
+the unported `TheArchitect.cs:52`. **The divergence is wider at
+`the_lantern_key`**: both of Punch-Off's options end in a fight, so the sim
+eventually spends the draws either way, but `the_lantern_key`'s RETURN_THE_KEY
+option ends the event with no combat — the game has still paid for a Mysterious
+Knight it never fights.
+
+This mechanism also **overturned a waiver written in the same batch.**
+`the_lantern_key`'s first cut waived `LayoutType` as presentation, reasoning
+that it "constrains how the room system builds the combat, not what the combat
+is". That is observationally false in parity mode: the layout decides *when* the
+encounter is built, and building it costs RNG. The hook now carries EV-12's
+verdict, and the record says so explicitly.
+
 ### Unit-level gaps
 
 - **`endless_conveyor` FRIED_EEL** rolls the CHARACTER pool where C# rolls the
@@ -308,6 +497,64 @@ missing hook pass is the defect. Sites: `room_full_of_cheese` GORGE.
   (relic reward, shop, grab-bag pull) silently drops the 20 Max HP. The relic
   docstring justifies the placement with a false claim ("RunState has no
   run-level AfterObtained dispatch" — `run.py:552` is exactly that dispatch).
+
+### Batch-5 unit-level gaps
+
+- **`war_historian_repy` is NOT `crystal_sphere`'s shape** — and this is the one
+  place a documented lead was wrong. `WarHistorianRepy.cs:30-33` is a bare
+  `return false` **in the source**, so the sim's forced `is_allowed = False` is
+  exactly faithful. The event is *injected*, not pooled: `LanternKey.cs:21-28`
+  narrows every "?" node in act index 2 to `RoomType.Event` and
+  `LanternKey.cs:30-36` swaps in Repy. Executed (`repy`): `lantern_key` is
+  ported and granted, but there are **0** `ModifyNextEvent` implementations
+  anywhere in `sts2_rl/`, and `LanternKeyCard` (`cards/event_cards.py:366-387`)
+  does not override `modify_unknown_map_point_room_types` **even though the sim
+  dispatches that hook** (`run.py:1045-1049`; `relics/golden_compass.py:42`
+  implements it). LIVE. Body leg: the `history_course` relic is unported;
+  everything else in the body is expressible with existing verbs.
+- **`unrest_site`'s gate is decimal-vs-float.** `UnrestSite.cs:26-29` is
+  `(decimal)CurrentHp <= (decimal)MaxHp * 0.70m` — exact base-10 arithmetic;
+  `events/unrest_site.py:30` is binary float. Executed (`gate`): sweeping every
+  `(max_hp, hp)` with `max_hp <= 400` gives **7 disagreements**, all sim-False /
+  game-True at exactly 70% — 90/63, 170/119, 180/126, 330/231, 340/238, 350/245,
+  360/252. LIVE (90 max HP is one relic above the Ironclad's 80), and because it
+  is an `IsAllowed`, it removes the node from the pool and shifts every later
+  event pick.
+- **`trial` NONDESCRIPT_GUILTY is unmodelled.** `Trial.cs:177-187` offers two
+  `CardReward(ForNonCombatWithDefaultOdds([Character.CardPool]), 3)` screens via
+  `OfferCustom`; `events/trial.py:90-93` adds Doubt and nothing else. Executed:
+  **0 cards offered vs 6.** Wider than EV-4 or EV-6 — screens, cards and draws
+  are all absent — though `rewards.create_reward_cards` and
+  `pending_reward_extras` both exist.
+- **`the_legends_were_true` uses the wrong potion pool.** It uniquely calls
+  `potions.random_potion` (the `CreateRandomPotionInCombat` port) where its three
+  sibling sites call `run.random_potion()`. Executed: **45 ids vs 48** — the
+  three it can never offer are `fruit_juice`, `regen_potion` and
+  `fairy_in_a_bottle`, the potion EV-1 turns on.
+- **`punch_off`'s `StartingHpReduction` hits the wrong value in the wrong slot.**
+  `PunchConstruct.cs:71-78` spends it as
+  `SetCurrentHpInternal(Math.Max(1, CurrentHp - reduction))` — **current HP
+  only**, MaxHp untouched, *after* the Niche max-HP roll.
+  `events/punch_off.py:26-28` subtracts it from `max_hp` inside
+  `create_monsters`. Executed (`punchhp`): **legacy** → constructs come out
+  `(50,50)` and `(49,49)` where the game has max 55 / current 46-53, i.e. **zero
+  damaged constructs vs two**; **parity** → `_assign_parity_monster_hp` then
+  overwrites with `creature.hp = creature.max_hp = hp` and the reduction is
+  **erased entirely** (both `(55,55)`). The sim already has the right slot —
+  `Monster.adjust_hp_after_added` (`monsters/base.py:69-77`) — which
+  `PunchConstruct` does not implement.
+- **`welcome_to_wongos` never grants the badge** (`WelcomeToWongos.cs:111-131`
+  vs 0 grant sites). **Dormant**, with the blocker named: no port of
+  `SaveManager.Progress`. A real profile at 1968+ points earns it on the next
+  purchase, so a gap and not a waiver.
+- **`vakuu` puts Distinguished Cape's −9 Max HP in the wrong place** —
+  `DistinguishedCape.cs:29-31` has it in the relic's `AfterObtained`;
+  `events/vakuu.py:52-63` puts it on the event option and
+  `relics/distinguished_cape.py:21-26` omits it. Executed:
+  `run.add_relic('distinguished_cape')` at 80/80 leaves the sim at 80/80 where
+  the game gives 71/71; the Vakuu path itself coincides at 71/71. **Dormant** —
+  the relic is Ancient rarity, out of the grab bag, and Vakuu is its only grant
+  path. Same shape as the `hungry_for_mushrooms` / Big Mushroom finding.
 
 ## Blast radius of existing seam findings (rule 3 — recorded, not re-verdicted)
 
@@ -549,66 +796,75 @@ case-insensitive filesystem; the class is `Bugslayer` and the mapping is correct
   no-op there — see the `potiondiscard` probe), but the in-combat discard path
   is the relic record's business.
 
-## Residual queue — 23 events
+## Residual queue — none for this stream
 
-The shared machinery is done: EV-1…EV-8, the two heal verbs, the deck verbs, the
-blast-radius tables and both probe modules are in place, so the remaining work
-is per-unit mapping against known mechanisms.
+All 82 units (65 events + 17 enchantments) are audited and validating. What
+remains is work for *other* streams and for whoever converts findings into
+fixes.
 
-Batch 3 is **partly done** — `infested_automaton`, `jungle_maze_adventure`,
-`lost_wisp`, `luminous_choir`, `morphic_grove` and the four Ancients (`neow`,
-`nonupeipe`, `orobas`, `pael`) are audited. Still open from it (4):
-`potion_courier`, `punch_off`, `ranwid_the_elder`, `reflections`.
+**Hand-offs to other streams** (found here, not ours to record or fix):
 
-Batch 4 is **done** (13 units, 10 gaps): `relic_trader`,
-`room_full_of_cheese`, `round_tea_party`, `sapphire_seed`, `self_help_book`,
-`slippery_bridge`, `spiraling_whirlpool`, `spirit_grafter`,
-`stone_of_all_time`, `sunken_statue`, `sunken_treasury`, `symbiote`,
-`tablet_of_truth`. Non-gap rollups: `sapphire_seed`, `self_help_book` and
-`spiraling_whirlpool` are `waiver` (presentation-only residue over an
-otherwise faithful port).
+- **Relic stream.** EV-7's uppercase sort key reaches
+  `relics/fragrant_mushroom.py`. EV-10's missing Quest clause reaches
+  `relics/astrolabe.py:21` and `relics/new_leaf.py:16`.
+  `relics/distinguished_cape.py` needs the −9 Max HP moved into
+  `after_obtained`, and its docstring says the opposite of what the code does.
+  `relics/wongo_customer_appreciation_badge.py`'s docstring claims 32+16+8 = 56
+  points per run — false; each buy handler ends in `_finish` and the event is
+  act-2-only, so the max is **32**.
+- **Relic / run-machinery stream.** `run.pull_relic_from_front` applies no relic
+  `IsAllowed(runState)` pre-filter, where C# has
+  `RemoveDisallowedRelicsFromDeques`. **20** relics override it; 19 are
+  `IsBeforeAct3TreasureChest` (`TotalFloor < 41`) and one is multiplayer. At
+  `welcome_to_wongos` (act index 1) it is a no-op, which is why it was flagged
+  rather than recorded — but **any pull after floor 41 diverges**.
+- **Card stream.** `cards/event_cards.py:371`'s claim that Lantern Key is "an
+  inert unplayable card because the sim has no map" is false twice over: the sim
+  dispatches `modify_unknown_map_point_room_types`, and the card is what injects
+  War Historian Repy.
+- **Unported content named by this stream:** `circlet`
+  (`RelicFactory.FallbackRelic`), `history_course`, `ModifierModel` (Neow's
+  run-modifier branch), `SaveManager.Progress` (the Wongo badge), and
+  `TheArchitect` (the third Combat-layout event).
 
-Batch 5 (12): `tanx`, `tea_master`, `tezcatara`, `the_future_of_potions`,
-`the_lantern_key`, `the_legends_were_true`, `this_or_that`, `tinker_time`,
-`trash_heap`, `trial`, `unrest_site`, `vakuu`.
-Batch 6 (7): `war_historian_repy`, `waterlogged_scriptorium`,
-`welcome_to_wongos`, `wellspring`, `whispering_hollow`, `wood_carvings`,
-`zen_weaver`.
+**Four false docstrings** were found across the 82 units
+(`relics/distinguished_cape.py`, `relics/wongo_customer_appreciation_badge.py`,
+`cards/event_cards.py`, and `endless_conveyor`'s "no colourless pool exists").
+Each asserted a *behavioural* claim that the source contradicts. That is a
+recurring enough pattern to be worth a bug class of its own — a docstring
+asserting behaviour is a claim to be checked, not context to be trusted.
 
-Known leads not yet audited:
-
-- `war_historian_repy` is the **second deferred shared-event stub** (named
-  alongside `crystal_sphere` in `events/crystal_sphere.py:12`); expect the same
-  gap shape.
-- The six events with a parity RNG branch (`neow`, `orobas`, `pael`,
-  `tablet_of_truth`, `tezcatara`, `whispering_hollow`) are the ones EV-3 does
-  **not** apply to — check the branch, do not assume it. Four are now audited
-  and three were clean; `orobas` was not, and its defect was a **missing** draw
-  rather than a wrong stream. When auditing the remaining two, count the draws
-  on every path, including the ones that offer a locked option.
-- `nonupeipe`, `orobas` and `pael` are worked examples of the Ancient shape
-  (`events/ancient.py`'s inherited full heal and `_relic_option`); `tanx`,
-  `tezcatara` and `vakuu` are the same shape.
-- `punch_off` and `the_lantern_key` both declare `CanonicalEncounter` and attach
-  `pending_reward_extras`; `battleworn_dummy` and `fake_merchant` are the worked
-  examples for that shape.
-- `ranwid_the_elder` (batch-3 leftover) shares **two** shapes with batch-4
-  units: `RanwidTheElder.cs:74`/`:94` uses the same `IsTradable` filter as
-  `relic_trader` (so the `relictrade` probe's zero-`AfterRemoved` finding
-  carries), and `RanwidTheElder.cs:42-48` sets `CanRemovePotions` (so
-  `stone_of_all_time`'s grep-verified UI waiver carries). Same for
-  `the_future_of_potions` in batch 5 (`TheFutureOfPotions.cs:92-98`).
-- `the_future_of_potions` also uses `ForNonCombatWithUniformOdds` +
-  `NoRarityModification` (`TheFutureOfPotions.cs:127`) — the same shape as
-  `room_full_of_cheese`, so check it against **EV-8**, not EV-6.
+**Retroactive edits made in this commit** to already-committed records:
+`endless_conveyor`'s potion guard was relabelled EV-3 → EV-9, and
+`the_lantern_key`'s `LayoutType` waiver was overturned to EV-12 (both explained
+above). No other committed verdict changed.
 
 ## Cost
 
-One session. Roughly: machinery reading (EnchantmentModel/EventModel/CardModel/
-Hook/CreatureCmd/HealRestSiteOption + the sim's `run.py`, `combat.py`,
-`hooks.py`, `player.py`, `cmds.py`) ≈ 35% of the budget and is amortised across
-all 82 units; the 17 enchantments ≈ 25%; the 20 events ≈ 30%; validation, three
-full suite runs (~4 min each) and this report ≈ 10%. The remaining 45 events
-should run materially cheaper per unit now that the shared mechanisms are named
-and the probes are written — the enchantment kind was expensive because it was
-where EG1, EV-1's cousin and the RNG-stream class were discovered.
+Two sessions. The first covered the machinery plus 17 enchantments and 20
+events; machinery reading (EnchantmentModel/EventModel/CardModel/Hook/
+CreatureCmd/HealRestSiteOption + the sim's `run.py`, `combat.py`, `hooks.py`,
+`player.py`, `cmds.py`) was ≈ 35% of that budget and is amortised across all 82
+units.
+
+Measured per-unit cost, once the mechanisms were named:
+
+| batch | units | tokens | notes |
+|---|---|---|---|
+| 4 | 13 | 258k | one agent, sequential |
+| 5A | 8 | 314k | concurrent |
+| 5B | 8 | 224k | concurrent |
+| 5C | 7 | 234k | concurrent |
+
+So ≈ 20-30k tokens per unit, and it did **not** fall as the shared mechanisms
+accumulated — the later units were not cheaper to audit, they just produced
+findings that cited existing mechanisms instead of minting new ones. Batch 5
+still turned up four new mechanisms in its 23 units, which is the same discovery
+rate as batch 4's two in 13. **The "it gets cheaper once the machinery is
+mapped" prediction in the first cut of this report was wrong**, and a future
+stream should budget flat per-unit rather than assuming a tail-off.
+
+Running the last 23 as three concurrent slices cut wall-clock roughly threefold
+(~27 min versus ~75 min sequential at batch-4's rate) for the same token spend,
+at the cost of the id collision documented at the top of this file and one
+duplicated discovery (two slices independently finding the two halves of EV-9).

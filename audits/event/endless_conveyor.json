@@ -57,7 +57,7 @@
     {
       "what": "SuspiciousCondiment (EndlessConveyor.cs:150-161) draws `base.Owner.PlayerRng.Rewards.NextItem(character potion pool + SharedPotionPool)` and offers it",
       "verdict": "gap",
-      "issue": "events/endless_conveyor.py:105-107 calls run.random_potion() (run.py:513-520), which is `rng.choice` over every potion class flagged in_reward_pool -- a different stream (EV-3) AND a different population (the sim's flag is not the character-pool + shared-pool union the source composes). Same defect as battleworn_dummy's Setting1 potion; recorded at both sites with the same verdict (rule 3). The sim additionally re-checks has_open_potion_slot, which the source does not -- harmless, since the dish is only offered when a slot was open."
+      "issue": "events/endless_conveyor.py:105-107 calls run.random_potion() (run.py:513-520), which is `rng.choice` over every potion class flagged in_reward_pool -- a different stream (EV-9, NOT EV-3 -- this label was wrong in the batch-3 cut: the source draws on `PlayerRng.Rewards`, never on `base.Rng`, so the defect is the per-player Rewards stream being substituted by the shared run rng, which is EV-9's first leg) AND a different population (the sim's flag is not the character-pool + shared-pool union the source composes). Same defect as battleworn_dummy's Setting1 potion; recorded at both sites with the same verdict (rule 3). The sim additionally re-checks has_open_potion_slot, which the source does not -- harmless, since the dish is only offered when a slot was open."
     },
     {
       "what": "EV-4: SuspiciousCondiment's potion (EndlessConveyor.cs:156-159) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",

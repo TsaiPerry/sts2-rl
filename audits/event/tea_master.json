@@ -1,0 +1,56 @@
+{
+  "unit": "event/tea_master",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\TeaMaster.cs",
+    "sha256": "3412bef87b4d4201286392ebe9029e7cb4b55cfad00920644f3622e052ef45d3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\tea_master.py",
+    "sha256": "583c57ecdbc13cf70a127f0312b5d4515962a95fa0a25a8a9fc3755d787ef3bb"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "TeaMaster.is_allowed (events/tea_master.py:31-33) `run.act_index < 2 and run.gold >= 150`, matching TeaMaster.cs:34-41's `if (CurrentActIndex < 2) return Players.All(p => p.Gold >= 150); return false;` -- the act clause short-circuits first in both, and the 150 is the EmberTeaCost constant (TeaMaster.cs:23), i.e. the gate demands the price of the most expensive purchase. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars BoneTeaCost 50 and EmberTeaCost 150 (TeaMaster.cs:21-28), and the LoseGold calls that read them (TeaMaster.cs:68, :75)",
+      "maps_to": "events/tea_master.py:10-11 _BONE_TEA_COST = 50 and _EMBER_TEA_COST = 150, used for the gate, the option lock and the payment. Both exact and read from one constant each, as in the source. The other three CanonicalVars are relic-description StringVars.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (TeaMaster.cs:43-63): BONE_TEA (or BONE_TEA_LOCKED) then EMBER_TEA (or EMBER_TEA_LOCKED) then the always-live TEA_OF_DISCOURTESY, each affordability test read from the SAME DynamicVar the payment uses",
+      "maps_to": "events/tea_master.py:35-47 reproduces all three rows in order, both `>=` tests and both `_LOCKED` keys with on_chosen None (EventOption.locked, events/base.py:62-64). The two locked branches are not dead the way Ranwid's are: IsAllowed demands 150 gold but BONE_TEA needs only 50, so the EMBER_TEA_LOCKED row is reachable whenever gold drops between the room set's IsAllowed check and the visit -- and the sim's docstring (events/tea_master.py:24-25) says so. Both engines behave identically either way.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BoneTea / EmberTea (TeaMaster.cs:66-78): PlayerCmd.LoseGold(cost, GoldLossType.Spent) FIRST, then RelicCmd.Obtain<T>",
+      "maps_to": "events/tea_master.py:49-57 lose_gold(cost) then add_relic(id). Order preserved and observable -- a relic whose AfterObtained reads gold would see the post-payment balance in both. run.lose_gold (run.py:335-337) is exactly PlayerCmd.LoseGold's `int.Max(0, Gold - (int)amount)` (PlayerCmd.cs:198), and GoldLossType.Spent adds only the GoldSpent run-history counter (PlayerCmd.cs:185-188) -- the ordinary purchase annotation the luminous_choir record already mapped as faithful (rule 3). run.add_relic runs the relic's after_obtained (run.py:546-553), which is RelicCmd.Obtain's job; all three teas are ported (EXECUTED, `py tools/audit/event_probes_a.py reacha`).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "TeaOfDiscourtesy (TeaMaster.cs:80-84) is FREE and finishes on a DIFFERENT page than the two paid options",
+      "maps_to": "events/tea_master.py:59-61 grants with no payment and calls _finish('TEA_OF_DISCOURTESY') where the paid options call _finish('DONE') (events/tea_master.py:52, :57) -- matching the source's `TEA_MASTER.pages.DONE.description` vs `TEA_MASTER.pages.TEA_OF_DISCOURTESY.description` split. The page name is the sim's observable analogue of the description the player reads.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this event rolls NOTHING",
+      "maps_to": "no NextItem, no NextInt, no shuffle anywhere in TeaMaster.cs, and no rng call in events/tea_master.py -- confirmed by `py tools/audit/event_probes.py eventrng`, which lists tea_master among the modules that roll nothing. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2. Note the three relics are FIXED, so unlike Ranwid there is no grab-bag pull and no Rewards draw either.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`runState.Players.All(p => p.Gold >= 150)` (TeaMaster.cs:38)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the three relic-description StringVars (TeaMaster.cs:29-31) and the three HoverTipFactory.FromRelicExcludingItself tips (TeaMaster.cs:48, :56, :62)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}
