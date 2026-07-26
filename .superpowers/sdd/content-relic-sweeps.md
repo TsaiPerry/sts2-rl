@@ -119,7 +119,8 @@ and now has mechanical backing.
 | **Not reset before a reader** | 32 | **38** |
 | …executed by `sweep-reset-exec` | 16 | **19** |
 | **…confirmed carrying state into combat 2** | 3 | **10** |
-| …**inconclusive** — driver never latched the field | *(reported as clean)* | **9** |
+| …**inconclusive** — driver never latched the field | *(reported as clean)* | **5** |
+| …**no delta under this stimulus** — still NOT clean | *(reported as clean)* | **4** |
 
 ### CONFIRMED — carry state across the combat boundary
 
