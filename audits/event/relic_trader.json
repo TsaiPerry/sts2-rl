@@ -1,0 +1,65 @@
+{
+  "unit": "event/relic_trader",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\RelicTrader.cs",
+    "sha256": "d5aec2da5f9924b5b170dd0542898e2774f7024f7d969ec128219c8ef7076b35"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\relic_trader.py",
+    "sha256": "abfda521b0b2ee7b4a8d8f2c7a832d7221efc653f64af4bcbbe4ed3070a7abbb"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "RelicTrader.is_allowed (events/relic_trader.py:29-34) `run.act_index != 0 and sum(1 for r in run.relics if r.is_tradable) >= 5`, matching RelicTrader.cs:98-105's early `CurrentActIndex == 0 -> false` followed by `GetValidRelics(p).Count() >= 5`. GetValidRelics is `Relics.Where(r => r.IsTradable)` (RelicTrader.cs:107-110) and Relic.is_tradable (relics/base.py:125-135) is a clause-for-clause port of RelicModel.IsTradable (RelicModel.cs:176-207): not IsUsedUp, no HasUponPickupEffect, not melted, no SpawnsPets, and rarity not in {Starter, Event, Ancient} -- the source spells the last as `rarity == Starter || (uint)(rarity - 6) <= 1u`, and RelicRarity.cs:5-12 makes 6/7 Event/Ancient. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    },
+    "CalculateVars": {
+      "maps_to": "RelicTrader.calculate_vars (events/relic_trader.py:36-46) reproduces the ORDER the source's lazy properties are forced in: RelicTrader.cs:112-129 touches OwnedRelics first (the StableShuffle) and NewRelics second (the three grab-bag pulls), and the sim does the same, which is what keeps the two draw groups in sequence. The StringVar writes themselves are display only (see the UI guard). Both engines force these in CalculateVars, before the initial page: Event.begin calls calculate_vars then initial_options (events/base.py:126-130).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "NewRelics pulls THREE relics from the grab bag whether or not the player trades, and on the correct stream (RelicTrader.cs:58-74)",
+      "maps_to": "events/relic_trader.py:41-46 loops `run.pull_relic_from_front()` three times and keeps them in `self._new`; only the chosen index is obtained (events/relic_trader.py:56-59), so the other two are consumed from the bag and discarded exactly as RelicFactory.PullNextRelicFromFront leaves them. The STREAM is right too: the source's `PullNextRelicFromFront(player)` overload rolls rarity on `player.PlayerRng.Rewards`, and run.pull_relic_from_front with no rarity_rng falls back to run.rewards_rng (run.py:588-589), which IS the per-player Rewards stream in parity runs (run.py:271-274). EV-3 therefore does NOT apply to this leg.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Trade (RelicTrader.cs:146-151): RelicCmd.Remove(owned[i]) THEN RelicCmd.Obtain(new[i]) THEN Done -- and Remove dispatches relic.AfterRemoved (RelicCmd.cs:61-66)",
+      "maps_to": "events/relic_trader.py:56-59 `run.relics.remove(...)` then `run.add_relic(...)` then `_finish('DONE')`. Order preserved, and add_relic runs the new relic's after_obtained (run.py:546-553), which is Obtain's job. The bare list-remove drops nothing: EXECUTED (`py tools/audit/event_probes.py relictrade`), RelicModel.AfterRemoved (RelicModel.cs:551) has ZERO overrides in the entire game source, so there is no relic that reacts to being traded away. The sim's list.remove is identity-based (Relic defines no __eq__), so it removes the exact instance the option named.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-7: OwnedRelics' `GetValidRelics(Owner).ToList().StableShuffle(base.Rng).Take(3)` (RelicTrader.cs:51-52), ported at events/relic_trader.py:39-40 as `stable_shuffle(owned, self.rng, key=lambda r: r.id)[:3]`, which sorts on the sim's LOWERCASE id. ListExtensions.StableShuffle sorts with the element's natural IComparable order first (ListExtensions.cs:22-31); for an AbstractModel that is AbstractModel.CompareTo -> Id.CompareTo (AbstractModel.cs:87-98), i.e. string.Compare(ModelId.Entry, ..., StringComparison.Ordinal) (ModelId.cs:42-50) over the UPPERCASE slug ModelId.SlugifyCategory / StringHelper.Slugify produces",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-7, one verdict at every stable_shuffle site (rule 3). '_' is 0x5F: ABOVE 'A'-'Z' (0x41-0x5A) and BELOW 'a'-'z' (0x61-0x7A). So for two ids sharing a prefix where one continues with '_', the uppercase ordinal order and the lowercase ordinal order are OPPOSITE, and StableShuffle's whole point is that the sorted order fixes the permutation Fisher-Yates then produces -- a different input order gives a different pick from the same draws. EXECUTED (`py tools/audit/event_probes.py sortkey`): over the sim's 258 relic ids, 8 land at a different index than the game's sort would put them, in 4 clashing pairs -- (pen_nib, pendulum), (sea_glass, seal_of_gold), (wing_charm, winged_boots), (wongo_customer_appreciation_badge, wongos_mystery_ticket). Over the 85 Ironclad card ids, 2 move: (blood_wall, bloodletting). The fix is a `key=str.upper`-equivalent at each call site. LIVE for parity: the divergence needs only that the shuffled list contain one of those pairs, which for a whole-collection shuffle it always does, and for a subset shuffle (Relic Trader's tradables) is ordinary run state. Invisible in legacy mode only because legacy runs are graded against themselves. Distinct from EV-3 (which stream) -- this is which ORDER the stream is applied to; Relic Trader carries both."
+    },
+    {
+      "what": "EV-3: OwnedRelics' StableShuffle (RelicTrader.cs:51) -- the sim passes `self.rng`, the shared run RNG, where the source passes the per-event `base.Rng`. Note this is the ONLY draw group on this event that is on the wrong stream; the three grab-bag pulls are correct rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "GenerateInitialOptions gates each option on `OwnedRelics.Count` ALONE (RelicTrader.cs:79-90), and Trade then indexes NewRelics at the same position (RelicTrader.cs:148-149)",
+      "verdict": "gap",
+      "issue": "events/relic_trader.py:51-53 gates on `min(len(self._owned), len(self._new))`. The extra `len(self._new)` term is a divergence in the state where the grab bag runs dry mid-pull: the sim's pull_relic_from_front returns None and the loop breaks (events/relic_trader.py:44-46), hiding options the game would still offer (and then crash on, since NewRelics is a fixed-length array of three possibly-null entries). DORMANT, with the concrete trigger named: the run's relic grab bag holding fewer than 3 relics when the event is entered. IsAllowed only guarantees the player OWNS 5 tradables, not that the bag is stocked, so nothing structurally prevents it -- but exhausting a 200+ relic bag inside one run does not happen with ported content. Recorded so the sim's defensive `min` is not mistaken for the source's shape."
+    },
+    {
+      "what": "the `list.Count == 0 -> PROCEED` fallback (RelicTrader.cs:91-94)",
+      "maps_to": "events/relic_trader.py:54 `options or [EventOption('PROCEED', ...)]`. Dead code in BOTH engines -- IsAllowed already requires 5 tradables, so OwnedRelics.Count is always 3 -- and the sim reproduces the dead branch rather than dropping it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`runState.Players.All(...)` (RelicTrader.cs:104)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the six StringVar CanonicalVars (RelicTrader.cs:34-42), the CalculateVars writes that fill them (RelicTrader.cs:112-129) and GetRelicHoverTips (RelicTrader.cs:159-169)",
+      "verdict": "waiver",
+      "rationale": "presentation only: every one of them is a title string or a hover-tip list for the three trade rows. The sim names the options TOP / MIDDLE / BOTTOM and lets the driver read the relic identities off self._owned / self._new, so no game state depends on the strings."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

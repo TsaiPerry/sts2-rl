@@ -1,16 +1,16 @@
 # Stream 4 report — event + enchantment content audits
 
 Branch `audit-event`, worktree `C:\Users\Perry\Desktop\sts2-rl-event`.
-Written 2026-07-26. Three commits on top of `8583546a`.
+Written 2026-07-26. Five commits on top of `8583546a`.
 
 ## Status
 
 | kind | total | audited | invalid | gaps | unaudited |
 |---|---|---|---|---|---|
 | `enchantment` | 17 | **17** | 0 | 12 | **0** |
-| `event` | 65 | 29 | 0 | 20 | 36 |
+| `event` | 65 | 42 | 0 | 30 | 23 |
 
-`py tools/audit/harness.py validate` → 51 records, 0 invalid.
+`py tools/audit/harness.py validate` → 64 records, 0 invalid.
 `py -m pytest test/ -q` → 2476 passed, 31 xfailed, unchanged at every commit
 (audits add no executable code; the two probe modules under `tools/audit/` are
 not imported by the suite).
@@ -21,10 +21,11 @@ Commits:
 - `c3c9f8de` audit(event): batch 1/5 — 13 units, 8 gaps
 - `53b54670` audit(event): batch 2/5 — 7 units, 5 gaps
 - `4432d5e1` docs(audit): stream 4 report (first cut)
-- (this commit) audit(event): batch 3 — 9 units, 7 gaps
+- `c61f34c3` audit(event): batch 3 — 9 units, 7 gaps
+- (this commit) audit(event): batch 4 — 13 units, 10 gaps
 
 **The enchantment kind is complete — the status report's first `unaudited 0`
-row.** The event kind is 29/65; the residual queue is at the bottom of this
+row.** The event kind is 42/65; the residual queue is at the bottom of this
 file, with the shared machinery already established so a follow-up session is
 mostly per-unit mapping.
 
@@ -36,7 +37,8 @@ number any record states is produced by one of them:
 - `tools/audit/enchantment_probes.py` — `order`, `onplay-slot`, `replay`,
   `imbued`, `goopy`, `eternal`, `slither-rng`, `souls-reset`, `grants`
 - `tools/audit/event_probes.py` — `lethal`, `maxhp`, `eventrng`, `heal`,
-  `deckverbs`
+  `deckverbs`, and (batch 4) `kill`, `sortkey`, `relictrade`, `enchantstack`,
+  `potiondiscard`, `cheese`, `reach`
 
 ## New mechanisms found (all executed, all LIVE unless stated)
 
@@ -105,6 +107,18 @@ Secondary: `lose_hp` does not clamp at 0, so the sim carries negative HP.
 
 This is the single most consequential finding in the stream.
 
+**Batch 4 widened EV-1's radius to a second verb.** `RunState.kill`
+(`run.py:304-305`) sets `hp = 0`; `CreatureCmd.Kill(creature, force: false)`
+runs `Hook.BeforeDeath` and then the same `ShouldDie` /
+`AfterPreventingDeath` pass (`CreatureCmd.cs:439-448`, `:489-507`) — the
+`force` argument exists precisely to bypass it and the event passes `false`.
+Executed (`py tools/audit/event_probes.py kill`): a 20/20 run holding a belt
+Fairy that deciphers Tablet of Truth three times (costs 3, 6, then 12 against
+a max of 11, taking the kill branch) ends **dead at 1/0** with the Fairy still
+in the belt; the game's pass has the Fairy answer and leaves the player alive
+at 1/1. Same mechanism, same verdict (rule 3); the radius is now 18 `lose_hp`
+sites **plus** `run.kill` (`event/tablet_of_truth`).
+
 ### EV-2 — `lose_max_hp` clamps instead of damaging
 
 `CreatureCmd.LoseMaxHp` damages the overflow through the damage pipeline
@@ -162,6 +176,72 @@ frequency), no upgrade draw, and the wrong stream. Sites: `infested_automaton`
 STUDY and TOUCH_CORE, `endless_conveyor` FRIED_EEL (which also gets the *pool*
 wrong — see below).
 
+### EV-7 — `StableShuffle`'s sort comparand is the UPPERCASE `ModelId`
+
+New in batch 4, and the second half of the EV-5 story: EV-5 was about sites
+that dropped `StableShuffle`'s sort; EV-7 is about the sites that kept it and
+**sorted on the wrong string**.
+
+`StableShuffle` sorts with the element's natural `IComparable` order before
+Fisher-Yates (`ListExtensions.cs:22-31`). For an `AbstractModel` that is
+`AbstractModel.CompareTo → Id.CompareTo` (`AbstractModel.cs:87-98`), i.e.
+`string.Compare(ModelId.Entry, …, StringComparison.Ordinal)`
+(`ModelId.cs:42-50`) over the **uppercase** slug. The sim's `stable_shuffle`
+callers pass the **lowercase** sim id.
+
+`'_'` is `0x5F`: above `'A'`–`'Z'` (`0x41`–`0x5A`) and below `'a'`–`'z'`
+(`0x61`–`0x7A`). So for two ids sharing a prefix where one continues with
+`'_'`, the two orders are **opposite** — and the sorted order is exactly what
+fixes the permutation Fisher-Yates then produces from a given draw sequence.
+
+Executed (`py tools/audit/event_probes.py sortkey`):
+
+| id set | size | ids landing at a different index |
+|---|---|---|
+| sim relic ids | 258 | **8**, in 4 pairs: (`pen_nib`, `pendulum`), (`sea_glass`, `seal_of_gold`), (`wing_charm`, `winged_boots`), (`wongo_customer_appreciation_badge`, `wongos_mystery_ticket`) |
+| Ironclad card ids | 85 | **2**: (`blood_wall`, `bloodletting`) |
+
+Recorded on `event/relic_trader` (`events/relic_trader.py:39-40`, which sorts
+the player's tradable relics with `key=lambda r: r.id`). The fix is a
+`key=str.upper`-equivalent at each call site. LIVE for parity; invisible in
+legacy mode. Distinct from EV-3, which is *which stream* — Relic Trader
+carries both.
+
+**Radius beyond this batch (not re-verdicted, rule 3):** `events/doll_room.py:53`
+(`stable_shuffle(list(_DOLLS), self.rng)` — bare, so lowercase relic ids) and
+`relics/fragrant_mushroom.py:31-36` (`key=lambda c: (c.id, c.upgrade_level)` —
+lowercase card ids, and the second tuple element has no counterpart in
+`ModelId.CompareTo` at all). `doll_room` is already audited; a follow-up
+should fold EV-7 into its record. `fragrant_mushroom` belongs to the relic
+stream and is flagged for them below.
+
+### EV-8 — a hand-rolled card offer skips the reward-offer hooks
+
+`CardFactory.CreateForReward`'s tail runs
+`Hook.ModifyCardRewardCreationOptions` (`CardFactory.cs:215`) and
+`Hook.TryModifyCardRewardOptions` + `Hook.AfterModifyingCardRewardOptions`
+(`CardFactory.cs:262-266`) unless `NoModifyHooks` is set. The sim **has** the
+offer-side hook — the egg relics implement `modify_card_reward_options`
+(`relics/_eggs.py:38-41`), whose own docstring says the game applies it "so the
+card is already upgraded when the player takes it (a recording's `TakeCard`
+annotation shows the `+`)". An offer built by hand never reaches it.
+
+Executed (`py tools/audit/event_probes.py cheese`): holding Molten Egg, Room
+Full of Cheese's GORGE screen offers 8 Commons of which 4 are Attacks — the
+sim shows **0** of the 4 upgraded, the game shows **4**. The *deck* outcome
+coincides (`run.add_card` still runs the deck-entry hook, and the probe
+confirms none of the taken Commons is upgradable a second time, so there is no
+double-upgrade either), but the **screen** differs, which is what a player and
+a replay both read. LIVE: `py tools/audit/event_probes.py reach` shows
+`molten_egg` / `toxic_egg` / `frozen_egg` all ported **and** in the relic grab
+bag, and the event gates only on act 0-1.
+
+Related to but distinct from EV-6. EV-6's three observables are rarity odds,
+the upgrade draw and the stream; here the odds are `Uniform` and
+`NoUpgradeRoll` is already set by `ForNonCombatWithUniformOdds`
+(`CardCreationOptions.cs:160-163`), so those two legs do not apply and the
+missing hook pass is the defect. Sites: `room_full_of_cheese` GORGE.
+
 ### Unit-level gaps
 
 - **`endless_conveyor` FRIED_EEL** rolls the CHARACTER pool where C# rolls the
@@ -195,6 +275,32 @@ wrong — see below).
   that is a gap, not a waiver. **Dormant**, with the concrete unported thing
   named: `ModifierModel` has no sim port at all, so `RunState.Modifiers` is
   permanently empty and Neow always takes the relic branch.
+- **`relic_trader` hides options the game would offer when the grab bag runs
+  dry.** `RelicTrader.cs:79-90` gates each trade row on `OwnedRelics.Count`
+  alone and `Trade` then indexes `NewRelics` at the same position;
+  `events/relic_trader.py:51-53` gates on
+  `min(len(self._owned), len(self._new))`, and its pull loop breaks on a
+  `None` (`:44-46`). **Dormant**, trigger named: fewer than 3 relics left in
+  the grab bag on entry. `IsAllowed` only guarantees the player *owns* 5
+  tradables, so nothing structurally prevents it, but exhausting a 200+ relic
+  bag inside one run does not happen with ported content. Recorded so the
+  sim's defensive `min` is not mistaken for the source's shape (the game would
+  offer the row and then dereference a null).
+- **`tablet_of_truth` short-circuits its page flow on death.**
+  `events/tablet_of_truth.py:51` adds `self.run.is_dead or` to the finish
+  test; C# increments and presents the next DECIPHER page even after
+  `CreatureCmd.Kill` (`TabletOfTruth.cs:62-73`). Recorded as a
+  **deliberate-divergence**, not a gap: the run is over either way and Kill's
+  own tail tears it down (`CreatureCmd.cs:450-464`), so the page the source
+  builds is never read. The reachable trigger is a low-max-HP run (20/20:
+  costs 3 then 6 leave max HP 11, and the third cost of 12 takes the kill
+  branch) and it is executed by the `kill` probe.
+- **`round_tea_party`'s `ThatWontSaveToChoiceHistory` is unmodelled.**
+  Same shape as `morphic_grove`'s `GoldLossType.Stolen` and given the same
+  **deliberate-divergence** verdict: the sim has no choice-history subsystem,
+  grep shows only three call sites in the whole source (`RoundTeaParty.cs:50`,
+  `TheArchitect.cs:334`, `:339`), all second-page "continue" buttons, and no
+  gameplay reader. A future history/telemetry port would need it.
 - **`hungry_for_mushrooms`**: BigMushroom's +20 Max HP pickup effect lives on
   the **event** instead of the relic, while its twin FragrantMushroom does it
   correctly via `after_obtained`. **Dormant** — verified by grep that the event
@@ -222,7 +328,29 @@ Rest-site verb (**step 38a applies**): `dense_vegetation`.
 Plain `CreatureCmd.Heal` (faithful — no hooks on either side): `abyssal_baths`,
 `endless_conveyor`, `round_tea_party`, `sapphire_seed`, `spiraling_whirlpool`,
 `spirit_grafter`, `tablet_of_truth`, `trial`, `unrest_site`, plus the shared
-Ancient full heal in `events/ancient.py:31`.
+Ancient full heal in `events/ancient.py:31`. Batch 4 audited five of those
+(`round_tea_party`, `sapphire_seed`, `spiraling_whirlpool`, `spirit_grafter`,
+`tablet_of_truth`) and confirmed each against `CreatureCmd.cs:691-703` — all
+faithful, none in step 38a's radius.
+
+### Batch-4 additions to the shared-mechanism site lists
+
+| mechanism | new sites from batch 4 |
+|---|---|
+| EV-1 (no run-level death prevention) | `room_full_of_cheese` SEARCH, `round_tea_party` CONTINUE_FIGHT, `slippery_bridge` HOLD_ON (unbounded — the worst case), `spirit_grafter` REJECTION, `stone_of_all_time` PUSH, `sunken_statue` DIVE_INTO_WATER, **plus the second verb** `tablet_of_truth` DECIPHER via `run.kill` |
+| EV-2 (`lose_max_hp` clamps) | `tablet_of_truth` DECIPHER (leg 2 stays dormant here — the source's own guard substitutes `MaxHp - 1`, so it never asks for more max HP than the player has) |
+| EV-3 (shared run RNG) | `relic_trader` (owned-relic shuffle only), `room_full_of_cheese` GORGE, `slippery_bridge` (one draw per page), `stone_of_all_time` (potion pick + two throwaway `NextInt(100)`), `sunken_statue`, `sunken_treasury` (two draws), `symbiote` KILL_WITH_FIRE |
+| EV-7 (uppercase sort key) | `relic_trader` |
+| EV-8 (hand-rolled offer skips reward hooks) | `room_full_of_cheese` GORGE |
+| `creature_card_cmds` G3 | `symbiote` (already listed) |
+
+Four batch-4 units roll **nothing at all** and are outside EV-3 entirely —
+`self_help_book`, `spiraling_whirlpool`, `spirit_grafter` and (for its two
+non-random branches) `sapphire_seed`. `tablet_of_truth` is one of the six with
+a parity branch and its branch is **clean**: correct stream, and the draw
+count matches on every arm (zero on the whole-deck upgrade, zero on the
+empty-list arm, zero on the kill arm, exactly one otherwise) — the check the
+`orobas` lesson asked for.
 
 ### Events that transform or add cards (G3's candidate set)
 
@@ -270,7 +398,24 @@ matching is what isolates the multiplicative phase as the cause. **Recommend
 folding this witness into N3.** No verdict change — N3 and
 `creature_card_cmds` step 13(b) already carry `gap`.
 
-**3. Consistency check, not a disagreement.** `turn_structure` G12/G14's Pael's
+**3. Self-correction — `luminous_choir`'s EV-3 entry over-reaches (batch 3 vs
+batch 4).** The `luminous_choir` record's EV-3 guard says
+"`obtain_relic_from_grab_bag` is called with no `rarity_rng`, so
+`run.pull_relic_from_front` rolls on the shared rng". That is **wrong**:
+`pull_relic_from_front` falls back to `run.rewards_rng` (`run.py:588-589`),
+and `rewards_rng` is `self.player_rng.rewards` whenever a parity `rng_set`
+exists (`run.py:271-274`) — i.e. exactly the per-player Rewards stream the
+source's one-argument `PullNextRelicFromFront(player)` rolls on
+(`RelicFactory.cs:28`, `:82`). Batch 4 re-derived this for `round_tea_party`
+(same verb) and `relic_trader` (three pulls) and recorded both legs as
+**faithful**. Only the *shared-rng-in-legacy-mode* half of the claim is true,
+and that is true of every parity accessor. **`luminous_choir`'s EV-3 entry
+should be narrowed to its `NextInt(0, 50)` price roll**, which is a genuine
+shared-rng site; the record's overall `gap` verdict is unaffected. Recorded
+here rather than edited in place because the batch-3 record is already
+committed and rule 3 asks for the disagreement to be surfaced.
+
+**4. Consistency check, not a disagreement.** `turn_structure` G12/G14's Pael's
 Eye leg uses "the Imbued card lands in the opening hand on seeds 0, 4 and 5" as
 executed evidence. My `imbued` probe reproduces exactly that (7 of the first 20
 seeds). Same measurement, noted so the two records are visibly consistent.
@@ -371,10 +516,42 @@ case-insensitive filesystem; the class is `Bugslayer` and the mapping is correct
 6. **Rule 5 has a cheap discharge for content kinds.** A one-line grep proving a
    grant path exists (`enchantment_probes.py grants`) turns 17 reachability
    claims from assertions into evidence. Worth naming in the procedure.
+7. **Add a bug class: "wrong sort key" — the twin of the RNG-stream class.**
+   EV-7 is a port that takes the *right draws off the right stream in the
+   right order* and still lands on a different element, because the sort that
+   precedes the shuffle used a different comparand. Suggested wording: *"When
+   a C# call sorts before it samples, check WHAT it sorts on. `StableShuffle`
+   sorts by the element's `IComparable` order, which for any `AbstractModel`
+   is `ModelId.Entry` compared `Ordinal` — the UPPERCASE slug. A sim id is
+   lowercase, and `'_'` (0x5F) sorts on the opposite side of the letters in
+   the two cases."*
+8. **A negative control is worth writing even when you expect zero.** Three
+   batch-4 guards are "the hook the sim skips reaches nobody": `AfterRemoved`
+   (0 relic overrides), `AfterPotionDiscarded` (1 implementer, gated on
+   `IsInProgress`), `EnchantmentModel.IsStackable` (0 enchantment overrides).
+   Each took one probe and converted a `faithful` verdict from an assertion
+   into evidence — and the third one nearly went the other way, because
+   `CanEnchant`'s stacking clause *reads* like a live divergence until you
+   grep for the overrides.
 
-## Residual queue — 36 events
+### Flagged for the relic stream (not ours to fix)
 
-The shared machinery is done: EV-1…EV-6, the two heal verbs, the deck verbs, the
+- `relics/fragrant_mushroom.py:31-36` calls `actmap.stable_shuffle` with
+  `key=lambda c: (c.id, c.upgrade_level)` — a **lowercase** card id, so EV-7
+  applies, and the `upgrade_level` tiebreaker has no counterpart in
+  `ModelId.CompareTo` at all. The report's earlier praise of this call site as
+  "the pattern EV-5 says the event sites should have followed" is right about
+  the *primitive* and wrong about the *key*.
+- `relics/belt_buckle.py` implements `on_combat_start` and `on_potion_used`
+  but has no potion-**discard** hook, where `BeltBuckle.cs:72-79` overrides
+  `AfterPotionDiscarded`. Out of scope for the event stream (every event
+  discard is out of combat, so the C# body's `IsInProgress` gate makes it a
+  no-op there — see the `potiondiscard` probe), but the in-combat discard path
+  is the relic record's business.
+
+## Residual queue — 23 events
+
+The shared machinery is done: EV-1…EV-8, the two heal verbs, the deck verbs, the
 blast-radius tables and both probe modules are in place, so the remaining work
 is per-unit mapping against known mechanisms.
 
@@ -383,10 +560,14 @@ Batch 3 is **partly done** — `infested_automaton`, `jungle_maze_adventure`,
 `nonupeipe`, `orobas`, `pael`) are audited. Still open from it (4):
 `potion_courier`, `punch_off`, `ranwid_the_elder`, `reflections`.
 
-Batch 4 (13): `relic_trader`, `room_full_of_cheese`, `round_tea_party`,
-`sapphire_seed`, `self_help_book`, `slippery_bridge`, `spiraling_whirlpool`,
-`spirit_grafter`, `stone_of_all_time`, `sunken_statue`, `sunken_treasury`,
-`symbiote`, `tablet_of_truth`.
+Batch 4 is **done** (13 units, 10 gaps): `relic_trader`,
+`room_full_of_cheese`, `round_tea_party`, `sapphire_seed`, `self_help_book`,
+`slippery_bridge`, `spiraling_whirlpool`, `spirit_grafter`,
+`stone_of_all_time`, `sunken_statue`, `sunken_treasury`, `symbiote`,
+`tablet_of_truth`. Non-gap rollups: `sapphire_seed`, `self_help_book` and
+`spiraling_whirlpool` are `waiver` (presentation-only residue over an
+otherwise faithful port).
+
 Batch 5 (12): `tanx`, `tea_master`, `tezcatara`, `the_future_of_potions`,
 `the_lantern_key`, `the_legends_were_true`, `this_or_that`, `tinker_time`,
 `trash_heap`, `trial`, `unrest_site`, `vakuu`.
@@ -411,6 +592,15 @@ Known leads not yet audited:
 - `punch_off` and `the_lantern_key` both declare `CanonicalEncounter` and attach
   `pending_reward_extras`; `battleworn_dummy` and `fake_merchant` are the worked
   examples for that shape.
+- `ranwid_the_elder` (batch-3 leftover) shares **two** shapes with batch-4
+  units: `RanwidTheElder.cs:74`/`:94` uses the same `IsTradable` filter as
+  `relic_trader` (so the `relictrade` probe's zero-`AfterRemoved` finding
+  carries), and `RanwidTheElder.cs:42-48` sets `CanRemovePotions` (so
+  `stone_of_all_time`'s grep-verified UI waiver carries). Same for
+  `the_future_of_potions` in batch 5 (`TheFutureOfPotions.cs:92-98`).
+- `the_future_of_potions` also uses `ForNonCombatWithUniformOdds` +
+  `NoRarityModification` (`TheFutureOfPotions.cs:127`) — the same shape as
+  `room_full_of_cheese`, so check it against **EV-8**, not EV-6.
 
 ## Cost
 

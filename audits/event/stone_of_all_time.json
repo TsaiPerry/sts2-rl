@@ -1,0 +1,66 @@
+{
+  "unit": "event/stone_of_all_time",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\StoneOfAllTime.cs",
+    "sha256": "5725e802cf17d74c454d5f539614b22739059f535028057522ad7d7f03de2a4a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\stone_of_all_time.py",
+    "sha256": "1fe55cc8561d3947fa0672ea4e3a0502d6712f84b44342339c89e7d9d23c337a"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "StoneOfAllTime.is_allowed (events/stone_of_all_time.py:37-39) `run.act_index == 1 and len(run.held_potions) > 0`, matching StoneOfAllTime.cs:55-62's early `CurrentActIndex == 1` guard followed by `player.Potions.Any()`. run.held_potions is Player.cs's `_potionSlots.Where(p => p != null)` (run.py:502-507), so the any-potion test is over the same collection the LIFT roll then picks from. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars DrinkMaxHpGain 10, PushHpLoss 6, PushVigorousAmount 8 (StoneOfAllTime.cs:44-50)",
+      "maps_to": "events/stone_of_all_time.py:11-13 _MAX_HP_GAIN = 10, _PUSH_HP_LOSS = 6, _VIGOROUS_AMOUNT = 8. All three exact. The fourth CanonicalVar is the DrinkRandomPotion StringVar.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions' ORDER (StoneOfAllTime.cs:75-91): the potion NextItem is rolled FIRST, unconditionally, and only then is the Vigorous candidate count checked -- so the potion draw precedes anything the deck test could short-circuit",
+      "maps_to": "events/stone_of_all_time.py:41-55 rolls the potion first (line 44) and builds the PUSH option second (lines 51-54), with a comment saying so. Both options lock independently: LIFT_LOCKED when the belt is empty (StoneOfAllTime.cs:87), PUSH_LOCKED when `Count(Vigorous.CanEnchant) < 1` (StoneOfAllTime.cs:89), and the sim uses null on_chosen for both (EventOption.locked, events/base.py:62-64).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Lift (StoneOfAllTime.cs:93-101): PotionCmd.Discard(potion) THEN GainMaxHp(10) THEN a discarded base.Rng.NextInt(100)",
+      "maps_to": "events/stone_of_all_time.py:60-64 in exactly that order, including the throwaway draw, which the module docstring explains (events/stone_of_all_time.py:28-30). run.gain_max_hp raises max HP then heals the same amount (run.py:311-314), which is what CreatureCmd.GainMaxHp does. run.discard_potion nulls the slot without compacting the belt (run.py:495-498), matching Player.DiscardPotionInternal.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "PotionCmd.Discard's Hook.AfterPotionDiscarded tail (PotionCmd.cs:55-60), which run.discard_potion does not fire",
+      "maps_to": "EXECUTED (`py tools/audit/event_probes.py potiondiscard`): the hook has exactly ONE implementer in the whole game source, BeltBuckle.cs:72-79, and its body is gated on `CombatManager.Instance.IsInProgress && !Owner.Potions.Any()`. An event discard is out of combat, so the gate is false and the hook resolves to a no-op on every event path -- the sim drops nothing observable here. Recorded rather than assumed per rule 5. (The in-COMBAT discard path is a different question and belongs to the relic stream's belt_buckle record; noted in the stream report.)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Push (StoneOfAllTime.cs:103-115): Damage(6) FIRST, then FromDeckForEnchantment(Vigorous, 8) and Enchant at amount 8, then a second discarded NextInt(100)",
+      "maps_to": "events/stone_of_all_time.py:66-73 in the same order. The source's selector takes no explicit filter, and FromDeckForEnchantment ANDs the enchantment's CanEnchant itself (CardSelectCmd.cs:547-551), which is what _vigorous_candidates (events/stone_of_all_time.py:57-58) reproduces. The enchant amount is the PushVigorousAmount var (8) in both, and Vigorous is one of EG1's live ingredients -- this event is its named grant path on the enchantment/vigorous record. The Enchant-vs-attach mapping and the dead stacking branch are recorded once on the sapphire_seed record (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: GenerateInitialOptions' `base.Rng.NextItem(Owner.Potions)` (StoneOfAllTime.cs:77) and BOTH throwaway `base.Rng.NextInt(100)` draws (StoneOfAllTime.cs:97, 113) -- the sim takes the right NUMBER of draws of the right shape (events/stone_of_all_time.py:44, 63, 72) but off `self.rng` instead of the per-event Rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "EV-1: Push's 6 HP loss (StoneOfAllTime.cs:105) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py tools/audit/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    },
+    {
+      "what": "BeforeEventStarted / OnEventFinished setting `Owner.CanRemovePotions = false/true` (StoneOfAllTime.cs:64-73), which events/stone_of_all_time.py:31 declares unmodelled",
+      "verdict": "waiver",
+      "rationale": "presentation only, and VERIFIED rather than accepted: `grep -rn CanRemovePotions src` returns the flag's declaration (Player.cs:168-177, 242), the three events that set it (StoneOfAllTime, RanwidTheElder, TheFutureOfPotions) and exactly two readers, both in NPotionPopup (NPotionPopup.cs:139, 338) -- the potion popup's button state. Nothing in Core reads it to gate a potion's EFFECT, so it is the UI's discard/use button and nothing else. The sim has no potion UI, so there is nothing to disable."
+    },
+    {
+      "what": "`runState.Players.All(...)` (StoneOfAllTime.cs:59), the DrinkRandomPotion StringVar and its write (StoneOfAllTime.cs:46, 81-82, 98-99), the potion / Vigorous hover tips, the `.ThatDoesDamage(6)` annotation and CardCmd.Preview (StoneOfAllTime.cs:83, 89, 111)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

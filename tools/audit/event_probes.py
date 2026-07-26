@@ -152,12 +152,202 @@ def probe_deckverbs() -> None:
         print(f"  {verb:22s} {len(names)}: {names}")
 
 
+# -- kill: EV-1's second verb (CreatureCmd.Kill) -------------------------
+def probe_kill() -> None:
+    print("kill -- EV-1 extends to RunState.kill (run.py:304-305). "
+          "CreatureCmd.Kill(creature, force: false) runs Hook.BeforeDeath and "
+          "Hook.ShouldDie over the run's listeners before the creature dies "
+          "(CreatureCmd.cs:439-507), so a belt Fairy prevents it; run.kill "
+          "just sets hp = 0. Witness: Tablet of Truth's 3rd decipher "
+          "(TabletOfTruth.cs:103-107).")
+    from sts2_rl.events import make_event
+    from sts2_rl.potions import FairyInABottle
+    from sts2_rl.run import RunState
+
+    run = RunState(rng=random.Random(0))
+    run.max_hp, run.hp = 20, 20
+    run.add_potion(FairyInABottle())
+    event = make_event("tablet_of_truth", run).begin()
+    for _ in range(3):
+        if event.finished:
+            break
+        event.choose("DECIPHER")
+    print(f"  max_hp/hp after 3 deciphers from 20/20: "
+          f"{run.max_hp}/{run.hp}  (costs 3, 6, then 12 >= max)")
+    _say("player alive after Tablet's kill branch with a belt Fairy",
+         not run.is_dead, True)
+    _say("  ... Fairy consumed", len(run.held_potions) == 0, True)
+
+
+# -- sortkey: StableShuffle sorts on the UPPERCASE ModelId ---------------
+def probe_sortkey() -> None:
+    print("sortkey -- ListExtensions.StableShuffle sorts before shuffling, and "
+          "the comparand is ModelId (AbstractModel.CompareTo -> Id.CompareTo, "
+          "ModelId.cs:42-50): string.Compare(Entry, ..., Ordinal) over the "
+          "UPPERCASE slug. The sim's stable_shuffle callers pass the LOWERCASE "
+          "sim id. '_' is 0x5F: above 'A'-'Z' but below 'a'-'z', so the two "
+          "orders are not the same permutation.")
+    from sts2_rl.cards.pool import IRONCLAD_POOL
+    from sts2_rl.relics import ALL_RELICS
+
+    for label, ids in (("relic ids", sorted(ALL_RELICS)),
+                       ("Ironclad card ids", sorted(IRONCLAD_POOL))):
+        sim = sorted(ids)                       # lowercase ordinal
+        game = sorted(ids, key=str.upper)       # the game's ordinal order
+        moved = [(i, a, b) for i, (a, b) in enumerate(zip(sim, game)) if a != b]
+        print(f"  {label}: {len(ids)} ids, {len(moved)} land at a different "
+              f"index. The clashing ids (a shared prefix where one continues "
+              f"with '_'):")
+        for i, a, b in moved:
+            print(f"    index {i}: sim={a!r}  game={b!r}")
+        _say(f"{label} sorted identically", len(moved), 0)
+
+
+# -- relictrade: what RelicCmd.Remove dispatches -------------------------
+def _cs_grep(pattern: str, subdir: str = "src") -> list[str]:
+    """Every line in the game source matching `pattern` (regex)."""
+    from tools.audit.harness import DEFAULT_GAME_ROOT
+    rx = re.compile(pattern)
+    out = []
+    for f in sorted((DEFAULT_GAME_ROOT / subdir).rglob("*.cs")):
+        try:
+            txt = f.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError:
+            continue
+        for n, line in enumerate(txt.splitlines(), 1):
+            if rx.search(line):
+                out.append(f"{f.relative_to(DEFAULT_GAME_ROOT).as_posix()}:{n}: "
+                           f"{line.strip()}")
+    return out
+
+
+def probe_relictrade() -> None:
+    print("relictrade -- RelicCmd.Remove (RelicCmd.cs:61-66) calls "
+          "relic.AfterRemoved(); does any relic override it?")
+    hits = _cs_grep(r"override\s+\w*\s*Task\s+AfterRemoved\s*\(\s*\)")
+    print(f"  RelicModel.AfterRemoved overrides in the game source: {len(hits)}")
+    for line in hits:
+        print("   ", line)
+    _say("relics that react to being removed", len(hits), 0)
+    decl = _cs_grep(r"virtual\s+Task\s+AfterRemoved\s*\(\s*\)")
+    for line in decl:
+        print("    (declaration)", line)
+
+
+# -- enchantstack: is EnchantmentModel.CanEnchant's stacking leg live? ---
+def probe_enchantstack() -> None:
+    print("enchantstack -- EnchantmentModel.CanEnchant "
+          "(EnchantmentModel.cs:289-292) allows re-enchanting a card that "
+          "already carries the SAME enchantment when IsStackable is true, and "
+          "CardCmd.Enchant then does `Amount += amount` (CardCmd.cs:545-549). "
+          "The sim's base can_enchant (enchantments.py:57) is a flat "
+          "`card.enchantment is None`.")
+    hits = _cs_grep(r"override\s+bool\s+IsStackable")
+    ench = [h for h in hits if "/Enchantments/" in h]
+    print(f"  IsStackable overrides anywhere in the source: {len(hits)}")
+    for line in hits:
+        print("   ", line)
+    _say("ENCHANTMENTS overriding IsStackable => true", len(ench), 0)
+
+
+# -- potiondiscard: what Hook.AfterPotionDiscarded reaches ---------------
+def probe_potiondiscard() -> None:
+    print("potiondiscard -- PotionCmd.Discard (PotionCmd.cs:55-60) fires "
+          "Hook.AfterPotionDiscarded; RunState.discard_potion "
+          "(run.py:495-498) fires nothing. Who listens?")
+    hits = _cs_grep(r"override\s+.*\bAfterPotionDiscarded\s*\(")
+    print(f"  AfterPotionDiscarded implementers: {len(hits)}")
+    for line in hits:
+        print("   ", line)
+    print("  BeltBuckle.cs:72-79 body gate: "
+          "`if (CombatManager.Instance.IsInProgress && !Owner.Potions.Any())` "
+          "-- an EVENT discard is out of combat, so the hook resolves to a "
+          "no-op on every event path.")
+    _say("implementers that act outside combat", 0, 0)
+
+
+# -- cheese: the GORGE offer skips the reward-offer hooks ----------------
+def probe_cheese() -> None:
+    print("cheese -- RoomFullOfCheese.Gorge (RoomFullOfCheese.cs:40-45) goes "
+          "through CardFactory.CreateForReward, whose tail runs "
+          "Hook.TryModifyCardRewardOptions (CardFactory.cs:262-266) -- the egg "
+          "relics' offer-side upgrade. events/room_full_of_cheese.py:37-50 "
+          "hand-rolls the 8 cards instead, so no hook sees the offer.")
+    from sts2_rl.cards import CardType
+    from sts2_rl.events import make_event
+    from sts2_rl.run import RunState
+
+    offered: dict[str, list] = {}
+
+    def selector(purpose, candidates, count):
+        # Snapshot at SELECTION time: run.add_card upgrades the taken cards
+        # in place afterwards, which would contaminate a live reference.
+        offered.setdefault(purpose, [
+            (c.id, c.card_type, c.upgrade_level, c.is_upgradable)
+            for c in candidates
+        ])
+        return list(candidates)[:count]
+
+    run = RunState(rng=random.Random(0), card_selector=selector)
+    run.add_relic("molten_egg")
+    event = make_event("room_full_of_cheese", run).begin()
+    event.choose("GORGE")
+    cards = offered.get("card_reward", [])
+    attacks = [c for c in cards if c[1] == CardType.ATTACK]
+    upgraded = sum(1 for c in attacks if c[2] >= 1)
+    print(f"  offered {len(cards)} Commons, {len(attacks)} of them Attacks, "
+          f"holding Molten Egg")
+    _say("upgraded Attacks ON THE OFFER SCREEN", upgraded, len(attacks))
+    taken = list(run.deck[-2:])
+    print(f"  ... the 2 taken land in the deck as: "
+          f"{[(c.id, c.upgrade_level) for c in taken]} "
+          f"(run.add_card's deck-entry hook still fires, so a TAKEN card "
+          f"still ends up upgraded)")
+    twice = sum(1 for c in taken if c.upgrade_level >= 1 and c.is_upgradable)
+    print(f"  ... taken cards still upgradable after one egg upgrade: {twice} "
+          f"(a second upgrade is what the game's two-hook path would reach)")
+
+
+# -- reach: rule 5/6 discharge for the batch-4 units ---------------------
+def probe_reach() -> None:
+    print("reach -- rule 5/6: every LIVE claim needs BOTH sides reachable "
+          "with ported content. Relics: ported at all, and in the grab bag? "
+          "Cards / enchantments: ported at all?")
+    from sts2_rl.cards.base import _CARD_CLASSES
+    from sts2_rl.enchantments import _ENCHANTMENT_CLASSES
+    from sts2_rl.relics import ALL_RELICS
+    from sts2_rl.run import RunState
+
+    run = RunState(rng=random.Random(0))
+    bag = set(run.relic_grab_bag)
+    for rid in ("chosen_cheese", "royal_poison", "sword_of_stone",
+                "molten_egg", "toxic_egg", "frozen_egg", "tungsten_rod",
+                "belt_buckle"):
+        print(f"  relic {rid:16s} ported={rid in ALL_RELICS}  "
+              f"in grab bag={rid in bag}")
+    for cid in ("metamorphosis", "greed"):
+        print(f"  card  {cid:16s} ported={cid in _CARD_CLASSES}")
+    for eid in ("sown", "spiral", "vigorous", "corrupted",
+                "sharp", "nimble", "swift"):
+        print(f"  ench  {eid:16s} ported={eid in _ENCHANTMENT_CLASSES}")
+    missing = [x for x in ("chosen_cheese", "royal_poison", "sword_of_stone")
+               if x not in ALL_RELICS]
+    _say("batch-4 event relics missing from the sim", len(missing), 0)
+
+
 PROBES = {
     "lethal": probe_lethal,
+    "reach": probe_reach,
     "maxhp": probe_maxhp,
     "eventrng": probe_eventrng,
     "heal": probe_heal,
     "deckverbs": probe_deckverbs,
+    "kill": probe_kill,
+    "sortkey": probe_sortkey,
+    "relictrade": probe_relictrade,
+    "enchantstack": probe_enchantstack,
+    "potiondiscard": probe_potiondiscard,
+    "cheese": probe_cheese,
 }
 
 
