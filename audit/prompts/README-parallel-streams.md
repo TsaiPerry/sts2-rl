@@ -86,3 +86,31 @@ in any order, then the gap queue. Re-run `py audit/tools/audit_status.py` after 
 merge — a stale count above zero means a merge brought in a sim change that
 invalidates a record, and the record needs re-auditing rather than a hash
 rewrite.
+
+### Repath any branch cut before the audit/ restructure
+
+`audit-pipeline` moved the whole pipeline into `audit/` on 2026-07-26. Streams
+branched before that write their records to the old `audits/<kind>/` path, and a
+merge will faithfully deliver them there — no conflict, just the wrong
+directory, and `audit_status.py` will keep reporting them unaudited.
+
+The tools and the seam records were moved with `git mv`, so git follows those
+renames and they merge cleanly on their own. Only the stream's **new** record
+files need moving, once per merged branch:
+
+```bash
+git merge audit-<stream>
+git mv audits/<kind>/*.json audit/records/<kind>/    # per kind the branch wrote
+rmdir audits/<kind> audits 2>/dev/null
+py audit/tools/harness.py validate                   # 0 invalid
+py audit/tools/audit_status.py                       # <kind> now counts, 0 stale
+git commit
+```
+
+Then grep the merged records for `tools/audit/`, `tools/audit_status.py`,
+`audits/` and `docs/audit/` and repoint any prose citations; the hashes
+themselves never need touching, because they are over `sts2_rl/` and game files
+that did not move.
+
+**A stream that has not started yet should branch off current `audit-pipeline`
+and skip all of this.**

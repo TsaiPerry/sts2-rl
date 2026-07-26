@@ -57,6 +57,16 @@ Every seam rolls up to `gap`, which is the rollup rule working, not a failure:
 one gap anywhere in a record makes the record a gap. Gaps are **queued, not
 fixed** — that is a standing decision, not an oversight.
 
+> **Content records exist, but not on this branch yet.** The relic, power, card
+> and event+enchantment streams are running in sibling worktrees off older
+> `audit-pipeline` commits, and between them have already written several
+> hundred records — at the **pre-restructure** path `audits/<kind>/*.json`.
+> Merging one of those branches drops its records at that old path, beside the
+> empty `audit/records/<kind>/` here, and the status table will keep reading 0
+> until they are moved. See *Merge order* in
+> [`prompts/README-parallel-streams.md`](prompts/README-parallel-streams.md)
+> for the one-line repath.
+
 ---
 
 ## Layout
