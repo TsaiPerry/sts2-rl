@@ -30,6 +30,10 @@ run — the batches then confirm rather than discover. Findings are triaged in
   sweep-reset      per-combat state the sim never resets (belt_buckle shape)
   sweep-isallowed  C# IsAllowed/IsAllowedAtNeow pool gates vs the sim
   sweep-stubs      behaviourless relic ports whose C# has real hooks
+  sweep-upgrade    unguarded Card.upgrade() call sites (class 14)
+
+Per-batch probes:
+  batch2           reachability evidence for batch 2's live gaps
 """
 from __future__ import annotations
 
@@ -826,6 +830,133 @@ def probe_sweep_stub_premises() -> None:
         print(f"    {rid:<24} {cs_hook:<34} -> {sim} (never called)")
 
 
+# ── sweep-upgrade ─────────────────────────────────────────────────────────
+def probe_sweep_upgrade() -> None:
+    """Unguarded `Card.upgrade()` calls across the relic pool (bug class 14).
+
+    C#'s CardCmd.Upgrade skips any card whose IsUpgradable is false
+    (`CurrentUpgradeLevel < MaxUpgradeLevel`, CardModel.cs:785-789). The sim's
+    Card.upgrade() (cards/base.py:146-147) is a bare `upgrade_level += 1` with
+    no guard, so a caller must add its own. relic/bellows does;
+    relic/astrolabe (batch 1) and relic/bone_tea (batch 2) do not. Two
+    instances in two batches is a shape, so sweep it.
+
+    An executed census of the card registry supplies the population that makes
+    it reachable: cards whose max_upgrade_level is 0.
+    """
+    import subprocess
+
+    import sts2_rl.cards  # noqa: F401  (registration)
+    from sts2_rl.cards.base import _CARD_CLASSES
+
+    zero = sorted(cid for cid, c in _CARD_CLASSES.items()
+                  if c.max_upgrade_level == 0)
+    print(f"  {len(zero)} of {len(_CARD_CLASSES)} ported cards have "
+          f"max_upgrade_level == 0 (upgrading them is a no-op in C#):")
+    print(f"    {zero[:12]} ...")
+
+    # Scope the guard search to the ENCLOSING FUNCTION, not a fixed window.
+    # A line-window heuristic reported fishing_rod / pomander / yummy_cookie /
+    # stone_cracker / fragrant_mushroom as unguarded; all five build a
+    # pre-filtered candidate list several lines earlier. Same over-reporting
+    # mistake as the egg relics in sweep-stubs -- see PROMPT.md's sweep section.
+    GUARD_TOKENS = ("is_upgradable", "upgradable_cards", "upgradable")
+    out = subprocess.run(
+        ["git", "grep", "-ln", r"\.upgrade()", "--", "sts2_rl/relics"],
+        capture_output=True, text=True, cwd=_REPO,
+    ).stdout.split()
+    findings = []
+    for path in sorted(out):
+        src = (_REPO / path).read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        for fn in [n for n in ast.walk(tree)
+                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            body = ast.get_source_segment(src, fn) or ""
+            if ".upgrade()" not in body:
+                continue
+            guarded = any(tok in body for tok in GUARD_TOKENS)
+            findings.append((path, fn.name, fn.lineno, guarded))
+    bad = [f for f in findings if not f[3]]
+    print(f"\n  {len(findings)} function(s) under sts2_rl/relics/ call "
+          f"`.upgrade()`; {len(bad)} do so with NO is_upgradable/upgradable "
+          f"filter anywhere in the enclosing function:")
+    for path, fn, lineno, guarded in findings:
+        if not guarded:
+            print(f"    UNGUARDED {path}:{lineno} in {fn}()")
+    print(f"\n  guarded (for contrast): "
+          f"{sorted({Path(p).stem for p, _, _, g in findings if g})}")
+
+
+# ── batch2 ────────────────────────────────────────────────────────────────
+def probe_batch2() -> None:
+    """Reachability evidence for batch 2's live gaps."""
+    from sts2_rl import CombatState
+    from sts2_rl.cards import make_card
+    from sts2_rl.relics import make_relic
+    from sts2_rl.rooms import RoomType
+    from sts2_rl.run import RunState
+
+    print("  -- bone_tea: CardCmd.Upgrade skips !IsUpgradable; the sim's "
+          "card.upgrade() does not (BoneTea.cs:53-56 vs bone_tea.py:34-35)")
+    tea = make_relic("bone_tea")
+    cs = CombatState(rng=random.Random(0), relics=[tea])
+    cs.player.hand.clear()
+    for cid in ("strike", "dazed", "burn"):
+        cs.player.hand.append(make_card(cid))
+    # CombatState.__init__ already ran turn 1, spending the single charge on
+    # the real opening hand; re-arm it to fire against this crafted hand.
+    tea.combats_left = tea.COMBATS
+    tea.on_player_turn_started(cs.player)
+    for c in cs.player.hand:
+        print(f"     {c.id:<10} max_upgrade_level={c.max_upgrade_level} "
+              f"-> upgrade_level={c.upgrade_level}"
+              f"{'   <-- C# leaves this at 0' if c.max_upgrade_level == 0 else ''}")
+
+    print("\n  -- bowler_hat: ModifyGoldGained x1.25 (BowlerHat.cs:18-25)")
+    for relics in ([], ["bowler_hat"]):
+        run = RunState(rng=random.Random(0))
+        for rid in relics:
+            run.add_relic(rid)
+        before = run.gold
+        run.gain_gold(100)
+        print(f"     relics={relics or ['(none)']:} gain_gold(100) -> "
+              f"+{run.gold - before}   (C# with the hat: +125)")
+
+    print("\n  -- book_of_five_rings: heal 20 every 5 cards added to the deck "
+          "(BookOfFiveRings.cs:67-83)")
+    run = RunState(rng=random.Random(0), hp=50)
+    run.add_relic("book_of_five_rings")
+    for _ in range(5):
+        run.add_card(make_card("strike"))
+    print(f"     hp after 5 deck adds: {run.hp}   (C#: 70)")
+
+    print("\n  -- brilliant_scarf: C# AfterCardPlayed SKIPS auto-plays "
+          "(BrilliantScarf.cs:84-87); the sim's on_card_played counts them")
+    scarf = make_relic("brilliant_scarf")
+    cs = CombatState(rng=random.Random(0), relics=[scarf])
+    cs.player.hand.append(make_card("strike"))
+    cs.combat_auto = None
+    cs.auto_play_card(cs.player.hand[-1], 0)
+    print(f"     cards_played_this_turn after ONE auto-play: "
+          f"{scarf.cards_played_this_turn}   (C#: 0)")
+
+    print("\n  -- booming_conch: C# gains energy through PlayerCmd.GainEnergy "
+          "(BoomingConch.cs:41); the sim assigns player.energy directly "
+          "(booming_conch.py:34), bypassing the hook chain")
+    seen = []
+    from sts2_rl.hooks import HookSystem
+    orig = HookSystem.on_energy_gained if hasattr(
+        HookSystem, "on_energy_gained") else None
+    print(f"     HookSystem defines on_energy_gained: {orig is not None}")
+    conch = make_relic("booming_conch")
+    cs = CombatState(rng=random.Random(0), relics=[conch],
+                     room_type=RoomType.ELITE)
+    print(f"     elite turn-1 energy: {cs.player.energy} "
+          f"(base {cs.player.ENERGY_PER_TURN} + 1), hand={len(cs.player.hand)} "
+          f"(base {cs.player.DRAW_PER_TURN} + 2)")
+    del seen
+
+
 PROBES = {
     "pool": probe_pool,
     "turn-order": probe_turn_order,
@@ -840,6 +971,8 @@ PROBES = {
     "sweep-isallowed": probe_sweep_isallowed,
     "sweep-stubs": probe_sweep_stubs,
     "sweep-stub-premises": probe_sweep_stub_premises,
+    "sweep-upgrade": probe_sweep_upgrade,
+    "batch2": probe_batch2,
 }
 
 

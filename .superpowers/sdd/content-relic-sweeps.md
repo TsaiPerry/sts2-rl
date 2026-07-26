@@ -173,6 +173,45 @@ excluded from the 33 above.
 
 ---
 
+## Sweep D — unguarded `Card.upgrade()` (added after batch 2)
+
+**The shape.** C#'s `CardCmd.Upgrade` skips any card whose `IsUpgradable` is
+false (`CurrentUpgradeLevel < MaxUpgradeLevel`, `CardModel.cs:785-789`). The
+sim's `Card.upgrade()` (`cards/base.py:146-147`) is a bare
+`upgrade_level += 1`, so every caller must supply its own filter. Bug class 14
+fired in batch 1 (`astrolabe`) and again in batch 2 (`bone_tea`) — two
+instances in two batches is a shape, so it was swept.
+
+**Population.** An executed census puts **35 of 203** ported cards at
+`max_upgrade_level == 0`: 18 Curse, 14 Status, 3 Quest.
+
+**Result** (`sweep-upgrade`): 23 functions under `sts2_rl/relics/` call
+`.upgrade()`; **7 do so with no `is_upgradable` / `upgradable_cards` filter
+anywhere in the enclosing function.**
+
+| Site | Status |
+|---|---|
+| `astrolabe.py:19` `after_obtained` | **LIVE**, recorded (batch 1) — curses are transformable and roll into curses |
+| `bone_tea.py:31` `on_player_turn_started` | **LIVE**, recorded (batch 2) — statuses reach the opening hand; executed `[strike, dazed, burn]` → `[1, 1, 1]` vs C#'s `[1, 0, 0]` |
+| `_eggs.py:39` `modify_card_reward_options` | **dormant** — the egg relics filter to Attack/Skill/Power and every level-0 card is Curse/Status/Quest |
+| `_eggs.py:47` `modify_card_being_added_to_deck` | **dormant**, same reason |
+| `burning_sticks.py:24` `on_card_exhausted` | unaudited — batch work |
+| `dusty_tome.py:50` `after_obtained` | unaudited — batch work |
+| `neows_talisman.py:29` `after_obtained` | unaudited — batch work |
+
+15 relics guard correctly, including `bellows` — whose port is otherwise
+identical to `bone_tea`'s and which is exactly why `bone_tea` is a defect
+rather than a house style.
+
+> **Third over-reporting correction.** The first version used a 3-line window
+> to look for the guard and flagged `fishing_rod`, `pomander`, `yummy_cookie`,
+> `stone_cracker` and `fragrant_mushroom` — all five build a pre-filtered
+> candidate list several lines earlier. The sweep now scopes the search to the
+> enclosing function via AST. Three sweeps, three over-reports caught before
+> publication; assume the next one over-reports too.
+
+---
+
 ## What this changes for the remaining work
 
 **1. Three fixes are now specified well enough to queue** (the gap-queue stream
