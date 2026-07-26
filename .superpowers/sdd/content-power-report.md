@@ -528,11 +528,10 @@ session on a gate that (correctly) never moved off 2476 passed / 31 xfailed.
 record — it is the plan the two continuation halves executed, and each item's
 outcome is noted. What actually remains is not audit work:
 
-1. **The 4 unauditable units** (section 8 item 1) — `flex_potion`, `heist`,
-   `speed_potion`, `thievery` are still absent from `ALL_POWERS`, so they cannot
-   be skeletoned and are absent from the observation vector. Blocked on a 4-line
-   engine fix this stream must not make. **This is the only coverage hole left in
-   the power tier.**
+1. ~~**The 4 unauditable units**~~ — **RESOLVED. Perry authorised the 4-line
+   `ALL_POWERS` fix and all four are now audited** (`flex_potion`, `speed_potion`,
+   `thievery`, `heist`), so the power tier is **138/138** with no coverage hole.
+   Details and the three consequences worth knowing are in section 11.
 2. **Three seam records need amending** by the seam session: `turn_structure` G8
    (verdict change — the AutoPrePlay half is live), `power_cmd` G6 (verdict
    change — live), `power_cmd` G5 (text: three demonstrated witnesses, doc count
@@ -589,3 +588,75 @@ prediction that the residual units would be *cheaper per unit* than the first 45
 held — see the cost sections of report-a and report-b. The prediction that item 5
 was "lower yield" did **not** hold: `mayhem`, `nostalgia` and `plating` are all
 in it, and `mayhem` produced the stream's biggest finding.
+
+## 11. The last four units — `flex_potion`, `speed_potion`, `thievery`, `heist`
+
+Audited after Perry authorised the 4-line `ALL_POWERS` fix that section 8 item 1
+asked for. **The power tier is now 138/138.** All four roll up `gap`; none of
+their gaps is live. Three findings are worth carrying forward.
+
+**1. `heist` is a death-time instance of the before/after hook mis-port**
+(section 0 item 5, previously only seen on damage hooks). `Hook.BeforeDeath` is
+called **unconditionally** at `CreatureCmd.cs:503`, two lines *before*
+`Hook.ShouldDie` at `:505` decides whether the death stands. The sim's
+`on_death` fires only inside the `should_die`-true branch (`cmds.py:96-105`), so
+it is `AfterDeath` (`:519`), not `BeforeDeath`. Two divergences follow: a
+prevented death queues the gold reward in the game and not in the sim, and a
+creature killed *after* a prevented death has `BeforeDeath` called twice, so C#
+queues the reward **twice**. Dormant, and established by enumerating the ported
+`should_die` listeners rather than asserting it — `IllusionPower`,
+`SteamEruptionPower`, `AdaptablePower`, `FairyInABottle` and Lizard Tail, none
+of which reaches the Underdocks Fat Gremlin that owns `HeistPower`. Named
+trigger: any ported death-preventer on a Fat Gremlin.
+
+**2. `heist` carries a guard the sim ADDS that is load-bearing compensation for
+a seam gap.** `powers.py:1679`'s `amount <= 0` test has no C# counterpart, and a
+zero-amount Heist is very reachable (kill the Merc before it attacks, so
+Thievery's total is 0 and Surprise moves 0 across). It is nevertheless
+`faithful`, because C#'s `PowerCmd.Apply` returns early on `amount == 0m`
+(`PowerCmd.cs:104`) and so never creates the power at all — while the sim, which
+has no zero-amount no-op (`power_cmd`'s step-6 finding, re-confirmed here by
+reading `cmds.py:288-326`), does create `HeistPower(0)` and relies on this guard
+to stay silent. **Either fix alone is correct; removing the guard without fixing
+`power_cmd` step 6, or vice versa, introduces a divergence.** This is the first
+instance in the stream of two known defects cancelling, and it is an argument
+for recording bug-class-8 "guards the sim adds" even when they verdict faithful.
+
+**3. Two more `PowerInstanceType` units, making eleven not nine.** `thievery`
+and `heist` are both `PowerInstanceType.Instanced` and were missing from section
+10 item 3's list purely because they were missing from the roster. Both dormant
+(one applier, one instance each). The `power_cmd` G5 population should read
+**eleven**.
+
+Also settled: `PlayerCmd.LoseGold` (`PlayerCmd.cs:178-199`) dispatches **no
+hooks** — it writes history counters and assigns `player.Gold`. That is what
+makes `thievery`'s deferred `combat.gold_stolen` debit `faithful` rather than a
+divergence; had `LoseGold` fired a hook, the deferral would be a gap. Worth
+knowing for any other unit that moves gold.
+
+### Two process consequences
+
+- **The harness base-class blind spot (section 8 item 2b) reproduced on both
+  potion powers**: `list_overrides` enumerated one hook (`OriginModel`, the only
+  member the `.cs` file declares) where each unit needs six. That is 8 of the
+  units audited in this stream hit by the same defect — it should be the first
+  harness fix, ahead of the tuple-return one.
+- **Any engine edit re-stales the whole tier.** Applying the `ALL_POWERS` fix in
+  the audit worktree moved `powers.py`'s hash and `audit_status` immediately
+  reported **134 stale**. The four new records are therefore hashed against the
+  *committed* `powers.py`, and they sit as roster-invisible orphans (valid, but
+  not counted: `validate` sees 143 records while `--kind power` reports 134)
+  until the engine fix lands on this branch. Whoever merges the fix must re-hash
+  all 138 records in the same commit. This coupling will bite the gap-fix stream
+  on every change it makes, and is worth a `harness.py --rehash` subcommand.
+- **`vocab.json` is written as a side effect of importing the sim, and reverting
+  the code alone leaves a broken tree.** `frozen_ids` (`vocab.py:102-120`)
+  *persists* newly-seen ids on every import. Applying the `ALL_POWERS` fix here,
+  importing once, then reverting `powers.py` left `vocab.json` holding four ids
+  the registry no longer had — and because `merge_frozen` deliberately *keeps*
+  frozen ids missing from the registry as dead slots, `POWER_IDS` was 138 against
+  `ALL_POWERS`'s 134 and `test_full_env.py::test_full_power_vocabulary_triples`
+  failed. **Revert both files or neither.** This is the only way this stream
+  managed to move the suite off baseline, and it is a trap for anyone who
+  experiments with a registry edit in an audit worktree. On the engine branch the
+  `vocab.json` append is correct and belongs in the same commit.

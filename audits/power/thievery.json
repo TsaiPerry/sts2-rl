@@ -1,0 +1,52 @@
+{
+ "unit": "power/thievery",
+ "game_source": {
+  "path": "src\\Core\\Models\\Powers\\ThieveryPower.cs",
+  "sha256": "a2bd149b4083c8756546851bf8bbbcbd6d7288a748699526757b9a34a38c8138"
+ },
+ "sim_source": {
+  "path": "sts2_rl\\powers.py",
+  "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+ },
+ "hooks": {
+  "Type": {
+   "maps_to": "powers.py:1643 power_type = PowerType.BUFF",
+   "verdict": "faithful",
+   "rationale": "ThieveryPower.cs:13 PowerType.Buff; the sim agrees. Not a sign-aware case: Type is a constant, not GetTypeForAmount."
+  },
+  "StackType": {
+   "maps_to": "powers.py:64-66 Power.on_stack",
+   "verdict": "faithful",
+   "rationale": "ThieveryPower.cs:15 PowerStackType.Counter, and the sim's inherited on_stack adds unconditionally, matching PowerCmd.ModifyAmount (PowerCmd.cs:236). Third-file citation, not hashed."
+  },
+  "InstanceType": {
+   "maps_to": "no sim counterpart",
+   "verdict": "gap",
+   "issue": "ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audits/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:37-39, one Merc per encounter), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
+  },
+  "Steal() -- public, NOT public override": {
+   "maps_to": "powers.py:1655-1665 ThieveryPower.steal",
+   "verdict": "faithful",
+   "rationale": "Recorded so a reader does not think it was skipped: ThieveryPower.cs:21 is a plain public method, not a hook, so harness.list_overrides correctly does not enumerate it (the same shape as CrueltyPower.ModifyVulnerableMultiplier). Its caller is the Merc's move. The port is faithful in both arithmetic and guard: C# takes Math.Min(Amount, Target.Player.Gold) (:25) and the sim takes min(self.amount, available) (:1661) where available is player_gold + gold_gained - gold_stolen (:1660) -- equivalent because C# mutates player.Gold immediately (PlayerCmd.cs:198) so a second Steal reads the reduced figure, exactly as the sim's running gold_stolen debit does. C#'s Gold > 0 test (:23) and the sim's amount <= 0 early return (:1662) agree because Amount is a positive 20."
+  }
+ },
+ "guards": [
+  {
+   "what": "ThieveryPower.cs:26 PlayerCmd.LoseGold(GoldLossType.Stolen) vs the sim's deferred debit",
+   "verdict": "faithful",
+   "rationale": "EXECUTED READ of the command rather than assumed: PlayerCmd.LoseGold (PlayerCmd.cs:178-199) fires NO hooks at all -- it writes three history counters, calls MarkLootStolen, and assigns player.Gold. So the sim accumulating combat.gold_stolen and settling in RunState.finish_combat is observationally identical for every ported listener, because there are no listeners to observe. This is the reason the divergence is faithful rather than deliberate: had LoseGold dispatched a hook, the deferral would be a gap."
+  },
+  {
+   "what": "ThieveryPower.cs:23 base.Target vs the sim's combat.player",
+   "verdict": "faithful",
+   "rationale": "C# guards base.Target != null && !base.Target.IsDead and reads base.Target.Player.Gold; the sim reads combat.player.is_dead and combat.player_gold (:1658-1660). Identical in single-player, which is the only scope -- multiplayer is out of scope by the shared audit contract's Global scope section. Flagged rather than waived because it is the sim resolving an identity, not skipping a feature."
+  },
+  {
+   "what": "ThieveryPower.cs:27 DynamicVars.Gold.BaseValue vs self.gold_stolen",
+   "verdict": "waiver",
+   "rationale": "C# accumulates the running total into a DynamicVar so the power's description can render it; the sim keeps the same total in a plain attribute (powers.py:1653, :1665) which SurprisePower then reads to size the Fat Gremlin's HeistPower. Same value, and the DynamicVar machinery itself is presentation. Waiver."
+  }
+ ],
+ "verdict": "gap",
+ "audited": "2026-07-26"
+}
