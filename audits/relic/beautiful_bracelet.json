@@ -1,0 +1,46 @@
+{
+  "unit": "relic/beautiful_bracelet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BeautifulBracelet.cs",
+    "sha256": "0860354119666d6586fcd4cff2290b6b5e1080d670c7537b3cc20d42e03388bb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\beautiful_bracelet.py",
+    "sha256": "c160601a69de39d5cbcba5d6c4945dae49b1f604c1187e0225966017721fe4a7"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (beautiful_bracelet.py:15)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (beautiful_bracelet.py:22-29)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Counts and amounts are right -- 3 cards (CardsVar(3)) each enchanted with Swift 3 (DynamicVar('Swift', 3m)), BeautifulBracelet.cs:21-25 vs beautiful_bracelet.py:17-18 -- but the candidate list the player chooses from is built differently."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): C# selects through CardSelectCmd.FromDeckForEnchantment, which filters the deck by the ENCHANTMENT's own eligibility inside the command (BeautifulBracelet.cs:31); the sim pre-filters with `SwiftEnchantment.can_enchant(c)` and then calls the generic run.select_cards (beautiful_bracelet.py:25-26)",
+      "verdict": "gap",
+      "issue": "The two filters agree only if the sim's can_enchant is the whole of C#'s eligibility test. The sim's Swift predicate is `super().can_enchant(card) and card.rarity == CardRarity.BASIC and ('strike' in card.tags or 'defend' in card.tags)` (enchantments.py:158-164) -- a base clause plus two Swift clauses. FromDeckForEnchantment applies whatever the C# EnchantmentModel declares plus the pile-level filters the command shares with FromDeckForTransformation (Quest cards excluded, CardSelectCmd.cs:487). Settling whether the two are the same set requires reading Swift.cs and CardSelectCmd.cs, NEITHER of which this record hashes -- flagged explicitly per binding rule 7 rather than asserted either way. REACHABILITY (DORMANT, and honestly so): the relic is granted only by the ported Nonupeipe shrine (events/nonupeipe.py), whose own offer gate already requires 4 eligible cards (MIN_ELIGIBLE = 4, beautiful_bracelet.py:20), and no ported content reads which cards were OFFERED as opposed to which were enchanted. A mismatch shows up as a different candidate list at the shrine, which is replay-visible in a conformance run and nowhere else. Recorded as an open question with its blocking sources named, which is what the spec's honest-limits section asks for."
+    },
+    {
+      "what": "N1: the enchant AMOUNT is passed twice in C# -- once to the selector prefs for display and once to CardCmd.Enchant<Swift>(item, 3m) (BeautifulBracelet.cs:31, 33) -- and the second call hard-codes 3m rather than reading the DynamicVar",
+      "verdict": "faithful",
+      "rationale": "The literal 3m and DynamicVars['Swift'] (3m) agree, so the source's inconsistency is harmless; the sim uses one constant SWIFT_AMOUNT = 3 for both. Recorded because a future ascension or balance change to the DynamicVar would desync C# itself, and an auditor re-reading this file should not mistake the sim's single constant for the bug."
+    },
+    {
+      "what": "N2: NCardEnchantVfx.Create + the CardPreviewContainer append (BeautifulBracelet.cs:34-38) and the ExtraHoverTips",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N3: HasUponPickupEffect is NOT overridden by BeautifulBracelet.cs, and the sim leaves the default False",
+      "verdict": "faithful",
+      "rationale": "Checked for the same reason as relic/arcane_scroll's N4: the flag drives Relic.is_tradable and three relics in this batch do override it. BeautifulBracelet.cs declares Rarity, CanonicalVars, ExtraHoverTips and AfterObtained only."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

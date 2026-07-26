@@ -1,0 +1,51 @@
+{
+  "unit": "relic/archaic_tooth",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ArchaicTooth.cs",
+    "sha256": "a2b0e2e32c48689bc16f6c6225687b4c75a995e7ef5006f0cecc10de463d08fa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\archaic_tooth.py",
+    "sha256": "bf22f32b4dfc49209d4f2f5d67a635358f4158ae07ebd5c0c969168a5ca9676e"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (archaic_tooth.py:15)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (archaic_tooth.py:20-39)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The transform itself is right -- first deck card whose id is a TranscendenceUpgrades key (ArchaicTooth.cs:146 vs archaic_tooth.py:23-25), replaced via run.transform_card(into=) -- but the upgrade-carry and enchantment-carry clauses of GetTranscendenceTransformedCard (ArchaicTooth.cs:149-166) are each reproduced with a different condition than the source."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): C# carries the upgrade with a single `if (starterCard.IsUpgraded) CardCmd.Upgrade(cardModel)` (ArchaicTooth.cs:154-157); the sim loops `for _ in range(original.upgrade_level)` (archaic_tooth.py:30-32)",
+      "verdict": "gap",
+      "issue": "C# grants exactly ONE upgrade level regardless of how many the original had; the sim grants as many as the original had. They agree only while upgrade_level is 0 or 1. REACHABILITY (DORMANT): the sim's Card.max_upgrade_level defaults to 1 (cards/base.py:101) and an executed census (py -c over sts2_rl.cards.base._CARD_CLASSES) finds 168 cards at max level 1 and 35 at max level 0 -- ZERO above 1 -- and the only transcendable Ironclad card is Bash, at 1. Porting any card with MaxUpgradeLevel > 1 (Searing-Blow-shaped content; CardModel.cs:781 makes it virtual, so the game supports it) into the transcendence table makes it live. Note the sim's loop is ALSO unguarded by is_upgradable, unlike C#'s CardCmd.Upgrade (CardCmd.cs, `if (!card.IsUpgradable)` skip) -- same defect family as relic/astrolabe's G1, but unreachable here because a transcendence target is always a fresh upgradable card."
+    },
+    {
+      "what": "G2 (DORMANT): the sim adds a `can_enchant(transformed)` condition C# does not have, and MOVES the enchantment instead of cloning it (archaic_tooth.py:33-38 vs ArchaicTooth.cs:158-162)",
+      "verdict": "gap",
+      "issue": "C# clones the enchantment (`(EnchantmentModel)starterCard.Enchantment.MutableClone()`) and enchants unconditionally; the sim detaches the original object, then re-attaches it ONLY if `enchantment.can_enchant(transformed)` -- so where the replacement fails the eligibility test, C# produces an enchanted Break and the sim produces a BARE Break with the enchantment silently destroyed (it was already cleared off the original at line 35-36, so it is not merely un-transferred, it is lost). REACHABILITY (DORMANT): needs an enchantment that can sit on Bash but not on Break. The one eligibility predicate narrow enough to matter in the ported set is Swift's (enchantments.py:160-164: BASIC rarity and a strike/defend tag), and Bash is neither BASIC nor tagged, so Swift cannot be on Bash to begin with. Porting an enchantment whose can_enchant distinguishes Bash from Break makes it live. The clone-vs-move half is unobservable while the transform consumes the original card."
+    },
+    {
+      "what": "N1: TranscendenceUpgrades restricted to {bash: break} (archaic_tooth.py:18) vs C#'s five entries (ArchaicTooth.cs:26-48)",
+      "verdict": "waiver",
+      "rationale": "The four dropped rows are Neutralize->Suppress (Silent), Unleash->Protector, FallingStar->MeteorShower and Dualcast->Quadcast -- other characters' starter cards, which the shared contract puts out of scope for an Ironclad-only sim. Named individually rather than waived as 'other characters' so that adding a character shows exactly which rows to restore."
+    },
+    {
+      "what": "N2: the Doubt fallback when the starter card is not in the table (ArchaicTooth.cs:165) and the null-starter path",
+      "verdict": "faithful",
+      "rationale": "GetTranscendenceTransformedCard is only ever called with a card GetTranscendenceStarterCard already matched against the same dictionary, so the Doubt branch is unreachable in C# too -- the sim's absence of it is not a divergence. The sim additionally returns early when no starter card is found (archaic_tooth.py:26-27) where C# would pass null into CardCmd.Transform; the relic is only offered by Orobas when SetupForPlayer succeeded (its own gate), so neither path runs, and the sim's is the safer of two unreachable branches."
+    },
+    {
+      "what": "N3: SetupForPlayer / SetupForTests / UpdateHoverTips / the SerializableCard StarterCard+AncientCard SavedProperties (ArchaicTooth.cs:54-142)",
+      "verdict": "waiver",
+      "rationale": "StarterCard/AncientCard exist to render the relic's hover tips and description text and to survive a save round-trip; SetupForPlayer's only non-display job is its boolean return, which is the OFFER GATE the Orobas shrine consults, and the sim models that gate in the event rather than the relic. Presentation plus save-serialization, both out of scope; no combat or deck observable depends on the stored copies."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

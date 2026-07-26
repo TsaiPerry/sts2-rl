@@ -1,0 +1,41 @@
+{
+  "unit": "relic/akabeko",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Akabeko.cs",
+    "sha256": "c7987f6de16afb2a7910507f12fc9803298798a8425b670d8f44e1f2ed058236"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\akabeko.py",
+    "sha256": "1355cec3d4874b7fb8cc0eea2cd9622b8bfefc8bcfbf8b87814967c829873ec6"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (akabeko.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (akabeko.py:18-22)",
+      "verdict": "faithful",
+      "rationale": "Akabeko.cs:23-30 applies VigorPower to its owner on AfterSideTurnStart when the owner is among the participants and PlayerCombatState.TurnNumber <= 1. The sim's on_player_turn_started is the post-draw player-turn-start slot (player.py:186), which is where audits/seam/turn_structure.json step 23 puts Hook.AfterSideTurnStart -- correct mapping, unlike relic/bag_of_marbles, whose C# hook is the PRE-block-clear BeforeSideTurnStart and which the sim maps to this same slot. `participants.Contains(Owner.Creature)` is the multiplayer/side filter: on_player_turn_started only ever fires for the player's own turn, so the sim's guardless call is equivalent in single-player. Turn numbering verified by execution (py tools/audit/relic_probes.py turn-order): the sim's self.turn is 1 during the first turn's hooks, so `self.turn <= 1` and `TurnNumber <= 1` select the same turn. Amount 8 matches PowerVar<VigorPower>(8m) (Akabeko.cs:19) and applier is the owner on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: DynamicVars['VigorPower'].IntValue (Akabeko.cs:28) vs the sim's literal 8 (akabeko.py:22)",
+      "verdict": "faithful",
+      "rationale": "CanonicalVars declares PowerVar<VigorPower>(8m) (Akabeko.cs:19) with no AscensionHelper.GetValueIfAscension call anywhere in the file, so the non-ascension value the contract pins is a constant 8. Nothing in the relic mutates the var, so hard-coding it changes nothing observable."
+    },
+    {
+      "what": "N2: Flash() (Akabeko.cs:27) and the ExtraHoverTips / CanonicalVars display members",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N3: `<= 1` rather than `== 1` on the turn guard, i.e. the relic re-fires if TurnNumber were ever 0",
+      "verdict": "faithful",
+      "rationale": "Both codebases spell it `<= 1` (Akabeko.cs:25, akabeko.py:19), so any turn-0 behaviour is shared. Recorded because sibling relics in this batch are NOT consistent about it -- bag_of_preparation and big_mushroom use `TurnNumber > 1` / `!= 1` respectively -- and a future reader comparing them should know the asymmetry is in the source, not the port."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

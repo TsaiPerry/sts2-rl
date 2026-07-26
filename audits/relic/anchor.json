@@ -1,0 +1,46 @@
+{
+  "unit": "relic/anchor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Anchor.cs",
+    "sha256": "8ec8f84f20049c2b3613be8e6705a5a669ec6b2338984091d2774b4b39f5b647"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\anchor.py",
+    "sha256": "e77e6679508b418d9702662595518c274bd3b40f18a2f5094e33c20a907c312c"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (anchor.py:19)",
+      "verdict": "faithful"
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_block_cleared, gated on `self.turn == 1` (anchor.py:21-24)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Anchor.cs:19-23 grants 10 Block at Hook.BeforeCombatStart, which audits/seam/turn_structure.json step 3 places BEFORE the first StartTurn; the block then survives turn 1 because C# SKIPS the turn-1 block clear entirely (step 12: `creature.AfterTurnStart` returns before clearing for a player whose TurnNumber == 1). The sim has no such skip -- executed confirmation, py tools/audit/relic_probes.py turn-order: on_block_cleared(turn=1) DOES fire -- so a naive on_combat_start port would be wiped immediately. Granting on the turn-1 block-clear event instead reproduces the game's observable exactly: the player holds 10 Block for the whole of turn 1 and into the first enemy turn, at the same ValueProp.UNPOWERED (BlockVar(10m, ValueProp.Unpowered), Anchor.cs:15 vs anchor.py:24). Binding rule 2 is satisfied -- the outcome a player or a replay sees is identical. The sim leans on turn_structure's gap G1 (the UNCONDITIONAL AfterBlockCleared loop, which Anchor is already a listed witness for) to make this work, so the two records agree that the loop fires; they differ only in that G1 calls the loop's unconditionality a defect and this record uses it. That is worth flagging: if G1 is ever FIXED to fire only on an actual clear, Anchor's port breaks on turn 1 and this verdict must be re-audited."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `target is self.player` on the block-clear callback (anchor.py:22)",
+      "verdict": "faithful",
+      "rationale": "The sim's AfterBlockCleared analogue fires per creature (player.py:159 for the player, combat.py:298 for each enemy), so without the identity check an enemy's clear would grant the player block. C#'s hook is on the relic's owner by construction. Equivalent."
+    },
+    {
+      "what": "N2: `self.turn == 1` (anchor.py:22) has no C# counterpart -- C# needs no turn guard because BeforeCombatStart fires once",
+      "verdict": "faithful",
+      "rationale": "It is the price of the divergent hook choice, not an extra condition: on_block_cleared fires every turn (executed above: turn=1 and turn=2), so the guard is what restores 'once per combat'. Same observable."
+    },
+    {
+      "what": "N3: ordering against other BeforeCombatStart listeners",
+      "verdict": "gap",
+      "issue": "C# grants Anchor's block at step 3 (Hook.BeforeCombatStart, before StartTurn); the sim grants it at step 14's equivalent (the AfterBlockCleared loop, well inside turn-1 setup). Any effect that runs BETWEEN those two points and reads or writes the player's Block sees 10 in C# and 0 in the sim. The window spans turn_structure steps 4-13, which includes step 8's per-power AmountOnTurnStart snapshot and step 11's enemy RollMove -- so a monster whose move selection reads the player's Block would choose differently. REACHABILITY (DORMANT): no ported monster's move logic reads player block (the hand-rolled and state-machine monsters branch on HP, turn counters and their own powers), and no ported BeforeCombatStart listener reads it either. Porting a block-reading intent -- the shape exists in the game -- makes it live. Recorded rather than folded into the hook's deliberate-divergence because it is a genuinely different observable from 'the player has 10 block on turn 1'."
+    },
+    {
+      "what": "N4: Flash() (Anchor.cs:21) and the Block hover tip",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

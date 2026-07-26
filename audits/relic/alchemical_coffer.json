@@ -1,0 +1,40 @@
+{
+  "unit": "relic/alchemical_coffer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\AlchemicalCoffer.cs",
+    "sha256": "8d456bbd094b5fee3b9211a371a288cc79b5545e738222124ecf3e94d6d01bbf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\alchemical_coffer.py",
+    "sha256": "e1d39c02a3ea0907e3b4a542f5b25a7a26491b79ddf2704c206d8a0bcb608e45"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (alchemical_coffer.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (alchemical_coffer.py:14), read by Relic.is_tradable (relics/base.py:132)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (alchemical_coffer.py:18-32)",
+      "verdict": "waiver",
+      "rationale": "The whole hook is potion machinery, which the shared contract puts out of scope everywhere ('potions (deferred by Perry)'). Named precisely so the waiver can be re-opened when potions come back into scope: C# raises MaxPotionCount by 4 (PlayerCmd.GainMaxPotionCount, AlchemicalCoffer.cs:23) and then procures 4 potions into EXPLICIT slot indices `originalSlotCount + i` (line 27), while the sim raises the slot count and calls run.add_potion(potion) per potion (alchemical_coffer.py:19, 32), which lets the belt choose the slot. Slot IDENTITY is not cosmetic in this codebase -- UsePotion replay commands name a slot -- so this is the one part of the unit a potion-scope re-audit must actually check. The 4/4 counts and the CombatPotionGeneration stream both match the source."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the relic has no combat hooks at all, so nothing about it is reachable from CombatState",
+      "verdict": "faithful",
+      "rationale": "AlchemicalCoffer.cs overrides exactly three members and only AfterObtained does anything; the sim's port likewise defines only after_obtained. There is no stubbed-out combat behaviour hiding here, which is what the relic-stream brief asks the auditor to check before accepting a thin port."
+    },
+    {
+      "what": "N2: DynamicVar('PotionSlots', 4m) (AlchemicalCoffer.cs:18) vs POTION_SLOTS = 4 (alchemical_coffer.py:16), used for BOTH the slot gain and the potion count in C#",
+      "verdict": "faithful",
+      "rationale": "One var feeds both call sites in C# (lines 23 and 24) and one constant feeds both in the sim (lines 19 and 28); no ascension branch is involved."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

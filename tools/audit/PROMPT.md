@@ -1,4 +1,9 @@
-# Audit prompt — source-to-sim unit audits (v1)
+# Audit prompt — source-to-sim unit audits (v2)
+
+> **v2 (2026-07-26, relic Tier 1 pilot):** bug classes 11–16 added, all six
+> drawn from defects the pilot batch actually found. Classes 11, 12 and 14
+> each caught a LIVE gap that reading the sim's own docstrings would have
+> talked you out of.
 
 You are auditing ONE ported unit for behavioral fidelity: the decompiled C#
 model (ground truth) vs the sim implementation. You judge; the harness only
@@ -48,6 +53,60 @@ checks completeness. Read BOTH files fully before writing any verdict.
    loop iteration; the sim fires `before_card_played` once per play.
 10. **Reset timing**: when does per-combat/per-turn state clear —
     BeforeCombatStart vs AfterCombatEnd vs turn boundaries; compare exactly.
+11. **The sim's own mapping docstrings are evidence, not truth.** The hook
+    table in `sts2_rl/relics/base.py:10-18` says `BeforeSideTurnStart (player)
+    → on_player_turn_start`. It is WRONG: executed order (`py
+    tools/audit/relic_probes.py turn-order`) is `on_block_cleared →
+    on_energy_reset → on_player_turn_start → modify_hand_draw →
+    on_player_turn_started`, so `on_player_turn_start` sits at
+    `turn_structure` step ~18, not step 9. Two relics in the pilot inherited
+    the confusion. **Never verdict a hook mapping off a docstring — print the
+    real order and diff it against `audits/seam/turn_structure.json`'s steps.**
+12. **A port that does nothing usually justifies itself with a claim about the
+    sim — check the claim.** Two pilot units were no-op stubs resting on
+    premises that are false today: Amethyst Aubergine's "the sim has no gold"
+    (it has `RunState.gold`, a rewards screen that grants it, and the exact
+    `modify_combat_rewards` hook the port needs) and Big Mushroom's "RunState
+    has no run-level AfterObtained dispatch" (`run.py:552` calls it, and the
+    sibling relic from the same event uses it). Both were LIVE gaps. Grep the
+    sim for the capability the docstring says is missing **before** accepting a
+    stub, and check whether a sibling unit already does the thing.
+13. **Missing reset ≠ gap; missing reset with nothing shadowing it = gap.**
+    Sim relic instances live on `RunState.relics` and are re-attached to every
+    combat, so a dropped `BeforeCombatStart`/`AfterCombatEnd` reset latches for
+    the whole run. Three pilot units dropped one: Unsettling Lamp and Art of
+    War are safe (a combat-start reset / an unconditional turn-start clear runs
+    before any reader), Belt Buckle is a live gap that disables the relic from
+    combat 2 onward. **Trace to the first READER of the stale field**, then
+    verdict.
+14. **Unguarded `Card.upgrade()`.** `CardCmd.Upgrade` skips cards whose
+    `IsUpgradable` is false (`CurrentUpgradeLevel < MaxUpgradeLevel`,
+    `CardModel.cs:785-789`). The sim's `Card.upgrade()`
+    (`cards/base.py:146-147`) is a bare `upgrade_level += 1` with no guard —
+    35 ported cards (every curse and status) have `max_upgrade_level = 0`.
+    Astrolabe calls it unguarded (live gap), Bellows guards it. Curses ARE
+    transformable and roll into curses, so this is reachable.
+15. **Paired hooks rarely carry the same guard set.** Unsettling Lamp checks
+    applier, target side and `IsVisible` on its *latch*
+    (`BeforePowerAmountChanged`) and none of the three on its *modifier*
+    (`ModifyPowerAmountGivenMultiplicative`). The sim collapses both into one
+    method and applies the UNION of the guards. Whenever the sim maps two C#
+    hooks onto one method, **list both C# guard sets side by side** and
+    verdict each difference; the collapse is where the divergence hides.
+16. **Two whole C# concepts have no sim counterpart at all** — check every
+    unit for them rather than rediscovering them per unit:
+    `RelicModel.IsAllowed(runState)` pool-eligibility overrides (e.g.
+    `IsBeforeAct3TreasureChest`, `RelicModel.cs:452-456`) have no `is_allowed`
+    on `Relic`; and callers that name an RNG stream in C#
+    (`CreateRandomCardForTransform(..., Rng.Niche)`) often reach a sim helper
+    whose stream argument defaults to `None` and silently falls back to the
+    legacy shared `random.Random` (`run.transform_card`'s `pick_rng`). The
+    second is invisible outside the conformance harness — check it anyway.
+
+## Recording lessons
+
+Add a bug class here only when a unit actually exhibited it, and say which
+unit. A checklist entry that never fired is noise the next 700 units pay for.
 
 ## Scope
 

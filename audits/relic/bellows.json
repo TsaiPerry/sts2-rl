@@ -1,0 +1,46 @@
+{
+  "unit": "relic/bellows",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Bellows.cs",
+    "sha256": "26dadc70650d8a416c0f33c389904f574ad3ec03e04355bcafab2fd599a724fb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\bellows.py",
+    "sha256": "e2665d5252640b049e9c6d4261d4fcc519be8fcffff900d2bcaf8b1352b5a9d0"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (bellows.py:17)",
+      "verdict": "faithful"
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "on_player_turn_started (bellows.py:19-23)",
+      "verdict": "faithful",
+      "rationale": "Bellows.cs:15-28 upgrades every card in the owner's hand on turn 1. audits/seam/turn_structure.json step 22 fires Hook.AfterPlayerTurnStart immediately after CardPileCmd.Draw, and the sim's on_player_turn_started is the post-draw slot at player.py:186 (executed: py tools/audit/relic_probes.py turn-order shows modify_hand_draw then on_player_turn_started with hand=5), so the hand this relic upgrades is the fully-drawn turn-1 hand on both sides -- the ordering detail the whole relic depends on. `player != base.Owner` is the multiplayer filter; `TurnNumber > 1 -> return` matches `self.turn <= 1`. PileType.Hand.GetPile(Owner).Cards maps to player.hand."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: CardCmd.Upgrade's per-card `if (!card.IsUpgradable)` skip vs the sim's explicit `if card.is_upgradable` (bellows.py:22)",
+      "verdict": "faithful",
+      "rationale": "The sim hoists the guard C# keeps inside the command, reaching the same result: curses and statuses in the opening hand (max_upgrade_level 0 -- 35 such cards by the executed census under relic/astrolabe's G1) are left alone. This is the SAME call the astrolabe port gets wrong, so the two records are deliberately cross-referenced: the defect there is real precisely because it is absent here."
+    },
+    {
+      "what": "N2: `CombatManager.Instance.IsEnding -> return` at the top of CardCmd.Upgrade",
+      "verdict": "faithful",
+      "rationale": "Turn-1 setup cannot run while combat is ending, so the guard is unreachable at this call site on either side. No verdict rests on the unreachability -- it is structural, not a content claim."
+    },
+    {
+      "what": "N3: upgrades are per-COMBAT, not permanent -- Bellows never touches the deck",
+      "verdict": "faithful",
+      "rationale": "C# upgrades the CardModel instances sitting in the hand pile, which are the combat's copies; the sim upgrades player.hand cards, which CombatState builds from the deck at combat start. Neither writes back to RunState.deck, so the relic's effect ends with the combat on both sides. Stated because 'upgrade' reads as permanent and a fix that reached the deck would be a regression."
+    },
+    {
+      "what": "N4: Flash() (Bellows.cs:25) and the CardPreviewStyle.HorizontalLayout argument",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

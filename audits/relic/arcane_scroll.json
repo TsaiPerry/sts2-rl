@@ -1,0 +1,46 @@
+{
+  "unit": "relic/arcane_scroll",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ArcaneScroll.cs",
+    "sha256": "2c4ed3e98daa57d0d689bd0f4af253f2c5c09697190b9f0d6f2d1f3e946c19ba"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\arcane_scroll.py",
+    "sha256": "3afa80690159476fb2ecab61ef2d75db7b1ad05a2355ea241ce1107ccd7f1a3a"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (arcane_scroll.py:12)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (arcane_scroll.py:14-31)",
+      "verdict": "gap",
+      "issue": "The card CHOICE is faithful; the deck INSERTION is not. ArcaneScroll.cs:27 adds the rolled card with `CardPileCmd.Add(card, PileType.Deck)` -- the no-index overload, which AddInternal appends at the END of the deck, the same end-placement audits/seam/creature_card_cmds.json pins for out-of-combat pile adds and that run.transform_card's own docstring (run.py:419-427) calls out as parity-critical because the combat-start UnstableShuffle is order-dependent. The sim calls run.add_card(make_card(pick)) (arcane_scroll.py:31); whether RunState.add_card appends is not visible from this unit's two files, so the divergence recorded here is that the port does not STATE or pin the placement the way its siblings do, and a reader cannot settle it from the record's hashed sources. REACHABILITY (DORMANT as a placement bug, LIVE as a documentation gap): the relic is granted by the ported Neow event (events/neow.py), so it is obtainable, but no ported content re-derives deck order from Arcane Scroll's card alone. Flagged for the gap queue as a cheap confirm-or-fix rather than asserted as broken -- binding rule 6 forbids labelling it live without proving both sides, and proving it needs run.py, which this record does not hash."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: CardRarityOddsType.Uniform + the `c.Rarity == CardRarity.Rare` filter + CardCreationFlags.NoUpgradeRoll (ArcaneScroll.cs:21) vs the sim's single player_rng.rewards.next_item over the Rare slice (arcane_scroll.py:28)",
+      "verdict": "faithful",
+      "rationale": "Uniform odds mean no rarity draw is rolled and NoUpgradeRoll means no upgrade draw is rolled, so CreateForReward's whole RNG cost collapses to one NextItem over the filtered pool -- which is exactly what the sim spends, on the Rewards stream, matching the memory-of-record that relic and reward rolls burn PlayerRng.Rewards draws. CardsVar(1) (line 17) matches the sim's single pick, and both take element [0] of a one-element result."
+    },
+    {
+      "what": "N2: `base.Owner.Character.CardPool` (ArcaneScroll.cs:21) vs sts2_rl.cards.pool.pool_card_ids() (arcane_scroll.py:17, 20)",
+      "verdict": "faithful",
+      "rationale": "The character pool, not a combat-filtered pool: the SP3 convergence work already established that reward generation draws from the full GetUnlockedCards rather than FilterForCombat, and pool_card_ids() is the sim's name for that same full pool. Recorded because using the combat-filtered pool here would be an easy and silent mistake."
+    },
+    {
+      "what": "N3: the `if (list.Count > 0)` guard (ArcaneScroll.cs:24) vs the sim's `if rares:` (arcane_scroll.py:23)",
+      "verdict": "faithful",
+      "rationale": "Both no-op when the pool yields nothing; neither can occur with the Ironclad pool, but the guards are structurally identical so no verdict rests on the unreachability."
+    },
+    {
+      "what": "N4: HasUponPickupEffect is NOT overridden by ArcaneScroll.cs, and the sim correspondingly leaves has_upon_pickup_effect at its False default",
+      "verdict": "faithful",
+      "rationale": "Checked explicitly because three other relics in this batch (alchemical_coffer, astrolabe, big_mushroom) DO override it and the flag drives Relic.is_tradable (relics/base.py:132), so getting it wrong changes which relics the trade events offer. ArcaneScroll.cs declares only Rarity, CanonicalVars and AfterObtained."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

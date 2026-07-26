@@ -1,0 +1,55 @@
+{
+  "unit": "relic/amethyst_aubergine",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\AmethystAubergine.cs",
+    "sha256": "34446b1c3df8b87539f7c658e29cf42ebd7e70618789875f8fa7de42c3c3431f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\amethyst_aubergine.py",
+    "sha256": "d3f7f1c0d5c9adb136ab5314b0371d739d8b416a1d28006d2118d2c7140677b3"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (amethyst_aubergine.py:12)",
+      "verdict": "faithful"
+    },
+    "IsAllowedInShops": {
+      "maps_to": "is_allowed_in_shops = False (amethyst_aubergine.py:13), read by the shop stocking path",
+      "verdict": "faithful"
+    },
+    "IsAllowed": {
+      "maps_to": "no counterpart in the sim",
+      "verdict": "gap",
+      "issue": "AmethystAubergine.cs:20-23 refuses to spawn from the Act 3 treasure chest onward (RelicModel.IsBeforeAct3TreasureChest, RelicModel.cs:452-456: `runState.TotalFloor < 41` in single-player). The sim's Relic base class (sts2_rl/relics/base.py) declares no is_allowed member at all, and relic_pools.populate_relic_grab_bags shuffles the whole transcribed pool once at run init with no per-pull eligibility filter, so Amethyst Aubergine stays pullable for the entire run. REACHABILITY (LIVE): the relic is in the transcribed shared pool as Common (relic_pools.py:'RELIC.AMETHYST_AUBERGINE'), the sim tracks TotalFloor (run.py total_floor, already used by event gates), and runs reach floor 41. The observable is pool composition: a late grab-bag pull can hand out a relic the game would have filtered, which also shifts every subsequent pull. NOTE: the sim has no is_allowed concept for relics at all, so this is one instance of a base-class-wide omission, not an Aubergine-only slip -- the remaining 243 relics should be swept for other IsAllowed overrides before a fix is scoped."
+    },
+    "TryModifyRewards": {
+      "maps_to": "no counterpart; Relic.modify_combat_rewards (relics/base.py:168) is the hook it would map to and the sim's port does not implement it",
+      "verdict": "gap",
+      "issue": "MECHANISM: AmethystAubergine.cs:25-45 appends a GoldReward(15) to the rewards of every combat room, skipping only non-combat rooms and the FINAL act's boss (`room.RoomType == Boss && CurrentActIndex >= Acts.Count - 1`). The sim registers the relic as a behaviourless stub whose docstring says the effect is 'out-of-combat only (the sim has no gold), so this is a no-op stub' -- and that premise is FALSE. The sim has gold (RunState.gold, run.py:325 gain_gold), has a combat rewards screen that rolls and grants it (rewards.py:462-464, 483-485), and runs `relic.modify_combat_rewards(run, rewards)` over the run's relics right after (rewards.py:499-500) -- the exact hook this port needs, already used by black_star, driftwood, lava_rock, paels_wing and wongos_mystery_ticket. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes.py aubergine-gold): the relic is Common in the transcribed shared grab bag, and a MONSTER reward screen pays rewards.gold=19 / run.gold delta=19 BOTH with and without it, where C# pays 15 more. IMPLEMENTATION NOTE for whoever fixes it: rewards.py grants the gold at line 464/485, BEFORE the modify_combat_rewards loop at 499, so a fix that only mutates rewards.gold would display the 15 without banking it -- it must call run.gain_gold as well, the way the relic-appending hooks grant their own relics."
+    },
+    "AfterModifyingRewards": {
+      "maps_to": "no counterpart (Flash() only)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the `player != base.Owner` and `room == null` early bails (AmethystAubergine.cs:27-34)",
+      "verdict": "waiver",
+      "rationale": "The owner check is the multiplayer per-player reward filter; the sim is single-player by construction (one RunState, one player) so it has nobody else's rewards to modify. Multiplayer-only paths are out of scope under the shared contract. The null-room bail is defensive and has no sim counterpart to diverge from."
+    },
+    {
+      "what": "N2: the final-act-boss exclusion (`CurrentActIndex >= Acts.Count - 1`, AmethystAubergine.cs:39-42)",
+      "verdict": "gap",
+      "issue": "Part of the same unported TryModifyRewards body, recorded separately because a fix that adds the gold but forgets this clause would pay 15 extra on the run's last boss where the game pays nothing. Carries TryModifyRewards' LIVE label: the sim reaches final-act boss rooms (the conformance seeds run to the act-2 boss today) and models CurrentActIndex."
+    },
+    {
+      "what": "N3: GoldVar(15) (AmethystAubergine.cs:18) -- the numeric constant, checked against the non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "A bare GoldVar(15) with no AscensionHelper.GetValueIfAscension anywhere in the file, so 15 is the pinned value. The sim has no constant to compare because it has no implementation; recorded so the number is on file for the fix."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
