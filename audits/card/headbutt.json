@@ -1,0 +1,42 @@
+{
+  "unit": "card/headbutt",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Headbutt.cs",
+    "sha256": "aad2ecac6f64af4c821e11bf77fc26018c35fabf1c9c59cb239efbcbed718280"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\headbutt.py",
+    "sha256": "168307ee89865fa0c93fd1cd1df49530f59a2c5264bc230b3ccf7c18a052b524"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (headbutt.py:26-30) + _init_vars (32-34)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (Headbutt.cs:18-21) == cost 1 / ATTACK / COMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "HeadbuttCard._damage = 9 (headbutt.py:34)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(9m, ValueProp.Move)` (Headbutt.cs:16) == `_damage = 9`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "HeadbuttCard.on_play (headbutt.py:39-49)",
+      "verdict": "faithful",
+      "rationale": "Order matches: attack FIRST (Headbutt.cs:26-28), then select one card from the DISCARD pile (`CardSelectCmd.FromCombatPile(prefs: 1, pile: PileType.Discard.GetPile(Owner))`, 29) and move it to the TOP of the draw pile (`CardPileCmd.Add(cardModel, PileType.Draw, CardPilePosition.Top)`, 32). The sim's `draw_pile.append` is the top of its pile (end-of-list convention, stated in the code comment). The `predicate=lambda c: c is not self` (headbutt.py:45) is a CORRECT compensation, not a divergence: C# holds Headbutt in the Play pile so it is not among the discard-pile candidates, while the sim parks it in the discard-pile limbo (combat.py:452-454) and so must filter it out by hand. The sim's own docstring says so.  BLAST RADIUS, not re-verdicted per rule 3: `CardSelectCmd` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates and otherwise falls back to `self._rng.sample` (combat.py:575-581) -- creature_card_cmds steps 104/105."
+    },
+    "OnUpgrade": {
+      "maps_to": "HeadbuttCard._on_upgrade (headbutt.py:36-37)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Headbutt.cs:38) == `self._damage += 3` (9 -> 12)."
+    }
+  },
+  "guards": [
+    {
+      "what": "an empty discard pile skips the move on both sides (Headbutt.cs:30 `if (cardModel != null)`)",
+      "verdict": "faithful",
+      "rationale": "C#'s `FirstOrDefault()` yields null; the sim's `select_cards` returns `[]` for empty candidates (combat.py:575-576) and `if chosen:` skips. Same outcome."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

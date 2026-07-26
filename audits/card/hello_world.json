@@ -1,0 +1,36 @@
+{
+  "unit": "card/hello_world",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\HelloWorld.cs",
+    "sha256": "8a81edd5b4d347e20510a23a5352c6c78f5aaed71b971c6083608f4701e3fba8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<DefectCardPool>()` (HelloWorld.cs:12) selects the card's ART pool, not its generation pool. Presentation."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:188-192) + _init_vars (194-195)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Event, TargetType.Self)` (HelloWorld.cs:14-17) == cost 1 / POWER / EVENT / SELF. No keywords, no CanonicalVars (the power amount is the literal 1)."
+    },
+    "OnPlay": {
+      "maps_to": "HelloWorldCard.on_play (trash_heap_cards.py:200-203)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<HelloWorldPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (HelloWorld.cs:22) == `PowerCmd.apply(ctx.hooks, ctx.player, HelloWorldPower, 1, applier=ctx.player)`. Presentation, folded in: TriggerAnim (21)."
+    },
+    "OnUpgrade": {
+      "maps_to": "HelloWorldCard._on_upgrade (trash_heap_cards.py:197-198)",
+      "verdict": "gap",
+      "issue": "`AddKeyword(CardKeyword.Innate)` (HelloWorld.cs:27) maps to `self.innate = True`, which is correct at upgrade level 1. DOWNGRADE IS STICKY: `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars` and re-applying upgrades, and `_init_vars` does not re-seed the flag, so the instance attribute written by `_on_upgrade` survives. C# `DowngradeInternal` rebuilds the whole keyword set from canonical (`_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()`, CardModel.cs:2143). EXECUTED: `py tools/audit/card_probes.py downgrade` lists this card among the 5 of 203 that do not restore. LIVE -- `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` (both registered in `events/__init__.py`) and `powers.py:3171` (DampenPower). Same mechanism and same verdict as card/aggression's and card/apparition's OnUpgrade entries (rule 3). The fix is one line: re-seed the flag in `_init_vars`, as card/anointed, card/discovery, card/entropy and card/gold_axe all do. Observable: a downgraded Hello World still starts every combat in the opening hand in the sim; in the game it does not."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
