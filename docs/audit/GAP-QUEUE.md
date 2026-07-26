@@ -743,3 +743,792 @@ content.
   `run.rest_heal_rewards()` instead of `run.heal()`. Failing test asserts the
   after-rest hooks fire and the reward offer appears.
 - **radius** Isolated — one event, two call sites. Cheapest B-impact fix here.
+
+
+---
+
+# Tier 2 — dormant gaps
+
+67 mechanisms are dormant at every recorded site: the divergence is real and
+verified, but no currently-ported content reaches it. Each names the concrete
+thing that makes it live (collected in the watch list below). Ordered by
+seed-convergence exposure first, then by blast radius.
+
+## 2A. Parity-relevant dormant gaps — extra or off-stream RNG draws
+
+These are labelled dormant because no *gameplay* effect differs today, but each
+one takes a draw the game does not take, or takes it from the wrong stream.
+Under legacy single-stream RNG that is invisible; under seed parity it is a
+desync. **Read this group before the next conformance grind.**
+
+### 24. `creature_card_cmds/N10` + `/step104` — CardSelectCmd's auto-select shortcut  [DORMANT / parity-live] [unpinned]
+
+- **sites** `creature_card_cmds/step104`, `/step105`, `/N10` (3 entries; step 105 sits under N10).
+- **divergence** C#'s auto-select shortcut (`!prefs.RequireManualConfirmation &&
+  candidateCount <= prefs.MinSelect` -> return every candidate in pile order,
+  `CardSelectCmd.cs:287-290, 396-399, 708-711`) consumes **nothing** from any
+  stream; `CombatState.select_cards` (`combat.py:560-581`) has no shortcut — it
+  clamps `count = min(count, len(candidates))` (`combat.py:577`) and, with no
+  `card_selector` installed, falls through to `self._rng.sample(candidates, count)`
+  (`combat.py:581`).
+- **observable** The same *membership*, reached by burning draws C# never takes,
+  **and taking them off-stream** on the shared legacy `random.Random` rather than
+  `combat_rng.card_selection`. Also missing: the MinSelect/MaxSelect range, the
+  `RequireManualConfirmation` flag, and C#'s draw-pile pre-sort
+  (`CardSelectCmd.cs:403-408`) — an installed selector sees the true draw order
+  where C#'s would see a rarity/id sort.
+- **trigger** Already reachable in any replay containing a forced full-hand
+  selection; "dormant" here means no *gameplay* divergence, not no desync.
+- **pin** unpinned. A conformance-side pin is the right home, not `test_hook_order.py`.
+- **fix** Add the auto-select shortcut to `select_cards` (return all candidates,
+  in pile order, drawing nothing) and move the fallback onto
+  `combat_rng.card_selection`. Failing test: a forced selection of every
+  candidate consumes zero draws from any stream.
+- **radius** `creature_card_cmds/step99` (`AutoPlayFromDrawPile`'s two-phase
+  structure), `/G10` (shuffle order). Any replay through a grid/selection screen.
+
+### 25. `creature_card_cmds/step55` — the in-combat transform rolls off-stream  [DORMANT / parity-live] [unpinned]
+
+- **divergence** `CardCmd.transform_to_random` (`cmds.py:415-450`) rolls its
+  replacement on `hooks.combat._rng` (`cmds.py:435`) — the shared legacy
+  `random.Random` — where C# takes an explicit `Rng` argument
+  (`CardCmd.cs:323, 369`). It also searches only hand/draw/discard/exhaust and
+  returns `None` for a card mid-play, because the sim has no Play pile.
+- **observable** Every in-combat transform in a conformance replay draws from the
+  wrong stream. Dormant for the Play-pile half (Entropy, the only ported
+  in-combat transformer, targets the hand).
+- **trigger** Any conformance replay containing an in-combat transform; the
+  Play-pile half needs a transformer that can target a resolving card.
+- **pin** unpinned.
+- **fix** Route the roll through the appropriate `combat_rng` stream (mirror what
+  `CardCmd.cs` passes at each call site) and teach the pile search about
+  `player._playing_card`. Failing test: an Entropy transform consumes a draw from
+  the named stream and none from the legacy rng.
+- **radius** Tier 1 #9 (`creature_card_cmds/G3`), `/step56` (`PileIndexSort`),
+  `/N9` (no Play pile).
+
+### 26. `creature_card_cmds/G10` — `ModifyShuffleOrder` modelled as an `AfterShuffle` listener  [DORMANT / parity-live] [unpinned]
+
+- **sites** `creature_card_cmds/step93`, `/step102b`, `/G10` (3 entries).
+- **divergence** C# mutates the shuffled list **inside** the shuffle, on the
+  shuffled-but-not-yet-placed list, strictly before `AfterShuffle`
+  (`CardPileCmd.cs:876-877` vs `917`), and the combat-start randomize calls it too
+  with `isInitialShuffle: true` (`CardPile.cs:69-74`); the sim has no
+  `modify_shuffle_order` hook at all, so `PerfectFitEnchantment` hand-rolls the
+  reposition on `on_shuffle` (`enchantments.py:186-189`) and the net order is
+  decided by hook-registration order.
+- **observable** Draw order after a reshuffle — the most convergence-sensitive
+  thing in the engine — is decided by registration order rather than by C#'s fixed
+  call sequence. `step102b` adds that `RandomizeOrderInternal` is an **Unstable**
+  shuffle (no stabilising sort) plus its own `ModifyShuffleOrder`.
+- **trigger** A second `on_shuffle` listener that also repositions, or any
+  reshuffle in a replay where Perfect Fit is enchanted.
+- **pin** unpinned.
+- **fix** Add a real `modify_shuffle_order(pile, cards)` hook called from inside
+  the shuffle before placement, and move Perfect Fit onto it. Failing test: with
+  Perfect Fit plus one other repositioning listener the post-shuffle order matches
+  C#'s call sequence regardless of registration order.
+- **radius** `creature_card_cmds/N9` (Play-pile limbo already changes which cards
+  a reshuffle sees), `/G9` (draw prevention).
+
+### 27. `monster_state_machine/G6` — one machine roll on the wrong stream  [DORMANT] [pinned]
+
+- **sites** `monster_state_machine/step35`, `/step41` (2 entries).
+- **divergence** `MonsterModel.RollMove` uses the dedicated `RunRng.MonsterAi`
+  stream (`MonsterModel.cs:415-418`). SP3 already moved both machine roll sites
+  onto `monster_ai`; **one** off-stream site survives — `powers.py:2233` passes
+  `self.owner._rng`, the shared combat `random.Random`. Clause (b): the sim's
+  `roll_move` walks all the way to a `MoveState` and so **consumes a branch draw**
+  where `FlutterPower.cs:47` consumes none (`MoveState.GetNextState` is
+  deterministic).
+- **trigger** `FlutterPower` reaching a monster whose machine has a
+  `RandomBranchState`. Its only applier on both sides is Thieving Hopper, whose
+  machine is a pure deterministic chain (`thieving_hopper.py:61-65`).
+- **pin** `TestMonsterStateMachineOrder::test_flutter_stun_splice_consumes_no_shared_stream_draw`
+  (the first pass labelled this LIVE and the pin itself refuted that by XPASSing).
+- **fix** Pass `combat_rng.monster_ai` at `powers.py:2233` and give the splice a
+  deterministic "ask the last logged state for its follow-up" path that does not
+  advance the machine. Failing test asserts zero shared-stream draws.
+- **radius** Tier 1 #2 (`turn_structure/G9`), Tier 1 #21 (`/G4`).
+
+## 2B. Missing guard families
+
+### 28. `hook_dispatch/G8` — no `IsEnding` / `IsOverOrEnding` dispatch gate  [DORMANT] [pinned]
+
+**The largest mechanism in the queue: 22 entries across three records.**
+
+- **sites** `hook_dispatch/step19`, `/step20`, `/step21`;
+  `creature_card_cmds/step1`, `/step7`, `/step11`, `/step48`, `/step54`,
+  `/step63`, `/step71`, `/step72`, `/step74`, `/step83`, `/step90`, `/step103b`,
+  `/G14`; `power_cmd/step1`, `/step2`, `/step6`, `/step16`, `/step24`, `/G6`.
+- **divergence** `Hook.IterateCombatHookListeners` (`Hook.cs:53-63`) yields
+  **nothing** to a dispatch that begins after combat started ending, and 73 of the
+  147 dispatchers go through it; separately, every C# command in
+  `creature_card_cmds`' scope opens with its own liveness check
+  (`CreatureCmd.Add` 55-67, `Escape` 585-588, `GainBlock` 637-640, `Heal` 693-696,
+  `CardCmd.Discard` 174-177, `Downgrade` 214, `Transform` 371-374,
+  `CardPileCmd.Add` 308-319, `Draw` 800-803, `Shuffle` 866-869 ...), and
+  `PowerCmd.Apply`/`ModifyAmount` check `IsEnding` twice (`PowerCmd.cs:69-72`,
+  `217-220`) plus `CanReceivePowers` (`73-76`, `133`). The sim has no gate
+  anywhere: `combat.py` flips `Phase.COMBAT_OVER` only inside `_end_combat` and no
+  dispatcher or command consults it.
+- **observable** Executed: with Daughter of the Wind
+  (`relics/daughter_of_the_wind.py:23-33`) a lethal Strike still grants its 1 Block
+  from `on_card_played` after `_all_enemies_dead()` is true.
+- **trigger** Porting a listener on a guarded dispatcher that mutates **run-level**
+  state (HP, gold, deck) from `AfterCardPlayed`/`AfterCardDrawn`/
+  `AfterCardExhausted`/`AfterShuffle`/`AfterEnergySpent`. The record names the
+  conformance exporter as the near-term risk.
+- **pin** `TestHookDispatchOrder::test_no_listener_runs_after_the_combat_starts_ending`
+  and `TestCreatureCardCmdsOrder::test_select_cards_refuses_once_the_combat_is_over`.
+- **fix** One gate in `HookSystem`'s dispatch helper (`if combat is ending and not
+  starting: return`) plus a shared `_assert_live()` helper on the command module.
+  Both are cheap; the risk is that the existing suite relies on post-combat
+  dispatches being harmless. Land it behind the two pins.
+- **radius** Tier 1 #7 (`turn_structure/G13`) and `/G10` decide *when* the gate
+  closes, so all three should be designed together. `power_cmd/G6` also carries the
+  missing `CanReceivePowers` half — that needs `should_allow_hitting` wired into
+  the power pipeline, not just a phase check.
+
+### 29. `damage_pipeline/G5` — no dealer-dead / target-dead entry guard  [DORMANT] [unpinned]
+
+- **sites** `damage_pipeline/step1`, `/step3`, `/G5` (3 entries).
+- **divergence** `CreatureCmd.Damage` refuses any hit from an already-dead dealer
+  (`CreatureCmd.cs:242-245`) and skips an already-dead target in its per-target
+  loop (`256-259`); `DamageCmd.deal` has neither and relies on call-site discipline
+  (`monsters/base.py:114-117`, `cards/whirlwind.py:43-49`, both correct on
+  spot-check).
+- **trigger** A new multi-hit or multi-target effect that forgets the check.
+- **pin** unpinned. **fix** two `if ... return` guards at the top of
+  `DamageCmd.deal`; failing test drives a hit from a dead dealer and asserts zero
+  hooks fire. **radius** `power_cmd/G6` is the same backstop absence on the power
+  pipeline; `damage_pipeline/N1` (the sim-only `should_allow_hitting` pre-check) is
+  the deliberate-divergence beside it.
+
+### 30. `creature_card_cmds/N3` — the `CardPileAddResult` failure surface is unmodelled  [DORMANT] [unpinned]
+
+- **sites** `creature_card_cmds/step70`, `/step73`, `/N3` (3 entries; `/step72` is
+  also a site).
+- **divergence** C#'s `Add` returns a per-card result carrying
+  success/oldPile/modifyingModels and sets `success = false` for a dead owner, a
+  removed-from-state card, a detached combat card, or a `ShouldAddToDeck`
+  prevention (`CardPileCmd.cs:322-397`); the sim's three pile helpers
+  (`cmds.py:463-512`) return `None` and always succeed. The behaviourally
+  significant one is `creature.IsDead -> success = false`
+  (`CardPileCmd.cs:329-340`): C# silently drops a card generated onto a dead
+  player, the sim appends it.
+- **trigger** `ShouldAddToDeck`/`AfterAddToDeckPrevented` have zero overrides
+  game-wide, so the trigger is porting the first one — or any card generation that
+  can outlive the player's death (the sim ends combat as soon as the player dies,
+  `combat.py:419-420`).
+- **pin** unpinned. **fix** return a small result object from the pile helpers and
+  honour the dead-owner drop. **radius** `hook_dispatch/G8`, `/N4`.
+
+### 31. `creature_card_cmds/N4` — no duplicate-instance guard on any pile insert  [DORMANT] [unpinned]
+
+- **sites** `creature_card_cmds/step102c`, `/N4` (2 entries).
+- `CardPile.AddInternal` throws if the pile already holds that `CardModel`
+  instance and `RemoveInternal` throws if it does not (`CardPile.cs:86-89,
+  117-120`); the sim's piles are plain lists with no invariant — which is what lets
+  `/G7`'s double-membership bug exist silently.
+- **pin** unpinned. **fix** assert the invariant in the three pile helpers.
+  **radius** `/G7` is the verb-level symptom of this container-level hole; fix N4
+  first and G7 becomes a loud failure instead of a silent one.
+
+### 32. `creature_card_cmds/N2` — `afflict` skips ShouldAfflict / CanAfflict / AfterApplied  [DORMANT] [unpinned]
+
+- **sites** `creature_card_cmds/step64`, `/step65`, `/N2` (3 entries).
+- `CardCmd.Afflict` guards on `Hook.ShouldAfflict` and `affliction.CanAfflict(card)`
+  and fires an `AfterApplied` lifecycle event (`CardCmd.cs:627-634` ff.); the sim
+  has no surface for any of the three and returns `None` where C# throws.
+  `ShouldAfflict` has zero overrides game-wide; `CanAfflict` has no sim surface at
+  all. Trigger: porting any affliction with a `CanAfflict` restriction.
+- **radius** `hook_dispatch/G6` (afflictions are not listeners at all), `/G8`.
+
+### 33. `creature_card_cmds/N5` + `/step31` — `EnergyCmd.gain` lacks the `finalAmount > 0` guard  [DORMANT] [unpinned]
+
+`PlayerCmd.cs:37-41` adds energy only when the modified amount is positive;
+`cmds.py:553-554` does `player.energy += amount` unconditionally, so a modifier
+returning a negative value would subtract energy. The only ported
+`modify_energy_gain` listener returns 0 (`NoEnergyGainPower`,
+`powers.py:554-557`), a no-op under both rules. One `if final > 0` guard.
+
+## 2C. Missing hook surfaces
+
+### 34. `creature_card_cmds/G8` — no `AfterCardChangedPiles` at all  [DORMANT] [unpinned]
+
+- **sites** `creature_card_cmds/step69`, `/step81`, `/step89`, `/step96`, `/G8`
+  (5 entries; `/step59` is also a site).
+- **divergence** Every C# pile move funnels through it (`CardPileCmd.cs:635` Add,
+  `188` RemoveFromCombat, `683` manual play, `CardCmd.cs:447` transform); the sim
+  has one hook per transition (`on_card_drawn`, `on_card_discarded`,
+  `on_card_exhausted`, `on_card_entered_combat`) plus a deck-only relic shim
+  (`relics/base.py:208-210`), and nothing observes an arbitrary pile-to-pile move.
+- **trigger** All four ported C# listeners filter to `pile.Type == Deck`, so the
+  shim covers them everywhere except the transform path (Tier 1 #9). The three C#
+  listeners that watch **combat** piles — `SovereignBlade`, `Hoarder`, `SoulFysh`
+  — are unported; porting any makes this live.
+- **pin** unpinned. **fix** add `on_card_changed_piles(card, old_pile, new_pile)`
+  and fire it from the three pile helpers. **radius** Tier 1 #9, `/G11`,
+  `hook_dispatch/G1`.
+
+### 35. `creature_card_cmds/G12` + `/step34` — no gold-gain hook surface  [DORMANT] [unpinned]
+
+`PlayerCmd.GainGold` fires `ModifyGoldGained` -> `AfterModifyingGoldGained` ->
+`AfterGoldGained` (`PlayerCmd.cs:144-169`); `RunState.gain_gold`
+(`run.py:325-333`) runs a relic `modify_gold_gained` loop and nothing else. The
+consequence is visible **today**: `DragonFruit.cs:22-29` grants +1 Max HP on every
+gold gain and is a ported relic whose sim implementation is an inert stub
+(`relics/dragon_fruit.py`, docstring still claiming "no gold system" although
+`run.gold` exists). Fix: add `after_gold_gained(amount)` to the run-side surface
+and un-stub Dragon Fruit. **radius** `damage_pipeline/G2` (the
+`AfterModifyingGoldGained` variant), `hook_dispatch/N5` (no run-level listener
+list to hang it on).
+
+### 36. `creature_card_cmds/G11` + `/step49` — `AfterCardDiscarded` fires pre-move and in a batch  [DORMANT] [unpinned]
+
+C# adds each card to the discard pile **first**, then fires the hook, one card at
+a time (`CardCmd.cs:186-195`); `discard_hand` (`player.py:192-196`) fires
+`on_card_discarded` for every flushed card while they are all still in `hand`,
+then moves them as a batch. Executed: flushing `[Strike, Defend]` records
+`[('strike', in_hand=True, in_discard=False), ('defend', in_hand=True,
+in_discard=False)]` at hook time; C# would give `(False, True)` for each and would
+have moved Strike before Defend's hook ran. Trigger: any `on_card_discarded`
+listener that reads pile membership. Fix: interleave move-then-fire.
+
+### 37. `creature_card_cmds/G9` + `/step84` — `ShouldDraw` re-evaluated per card, no `AfterPreventingDraw`  [DORMANT] [unpinned]
+
+`CardPileCmd.Draw` evaluates `Hook.ShouldDraw` exactly once before the loop and
+fires `Hook.AfterPreventingDraw` on refusal (`CardPileCmd.cs:804-808`);
+`player.py:280-281` calls `should_draw` inside the per-card loop and has no
+`after_preventing_draw`. Trigger: a `should_draw` listener that flips mid-draw —
+Fiddle (`relics/fiddle.py:26-29`) is the only ported one and is stateless. Fix:
+hoist the check; add the hook.
+
+### 38. `creature_card_cmds/step12` — no `BeforeBlockGained`  [DORMANT] [unpinned]
+
+C#'s unconditional pre-modifier event carrying the raw amount
+(`CreatureCmd.cs:642`, `Hook.cs:131-137`) has no sim surface. Zero overrides
+game-wide today; live the moment any model implements it. One dispatcher to add.
+
+### 39. `creature_card_cmds/step46` — no `BeforeCardAutoPlayed`  [DORMANT] [unpinned]
+
+`combat.py:552` fires `on_energy_spent(card, 0)` and then the ordinary
+`before_card_played`; the auto-play-only event is absent and none of its C#
+implementations is ported. **radius** `hook_dispatch/G4` (the per-play bracket).
+
+### 40. `creature_card_cmds/step61` — no `AfterCardGeneratedForCombat` on transform  [DORMANT] [unpinned]
+
+`cmds.py:445-450` fires only `on_card_entered_combat`; C# fires **both** events for
+a combat-pile transform (`CardCmd.cs:445` and `504`). None of the seven C#
+implementations is ported.
+
+### 41. `creature_card_cmds/step68` — no `BeforeCardRemoved`, no removed-from-state marking  [DORMANT] [unpinned]
+
+`RunState.remove_cards` (`run.py:356-358`) is a bare `self.deck.remove(card)` loop.
+No ported listener, and the sim's cards carry no `HasBeenRemovedFromState` flag for
+anything to read — which is also why `hook_dispatch/G7` cannot be implemented as
+C# does it.
+
+### 42. `turn_structure/step20` — no `AfterModifyingHandDraw`  [DORMANT] [unpinned]
+
+`modify_hand_draw` is ported with the same base of 5 (`player.py:171`), but the
+companion event is absent. C# has four implementers; the two ported ones are
+presentation-only (`Pocketwatch.cs:67-71` is a bare `Flash()`). This is one of
+`damage_pipeline/G2`'s 13 variants.
+
+### 43. `turn_structure/step55` — no `BeforeFlush`  [DORMANT] [unpinned]
+
+No slot between `_process_turn_end_cards` (`combat.py:658`) and the flush
+(`661-662`). C#'s three implementers (`SlumberingEssence.cs`,
+`WellLaidPlansPower.cs`, a mock) are unported. **radius** Tier 1 #18.
+
+### 44. `turn_structure/G11` + `/step37` — no enemy-side `BeforeTurnEnd` slot  [DORMANT] [unpinned]
+
+C# fires the same three-pass `BeforeTurnEnd` dispatcher for the enemy side
+(`CombatManager.cs:1251`); the sim has only per-enemy `on_enemy_turn_end`
+(`combat.py:341`) and side-scoped `on_enemy_side_end` (`345`), with no slot
+between them. Eight C# powers implement a `BeforeSideTurnEnd*` phase
+(`AsleepPower`, `PlatingPower`, `ChainsOfBindingPower`, `DoomPower`,
+`HailstormPower`, `SandpitPower`, `TheBombPower` + a mock); none is ported onto
+that slot. **radius** Tier 1 #13, `hook_dispatch/G3`.
+
+### 45. `turn_structure/G16` — `on_hand_emptied` fires from the one site C# excludes  [DORMANT] [unpinned]
+
+- **sites** `turn_structure/step63`, `/step73`, `/G16` (3 entries).
+- C#'s `CheckForEmptyHand` (`CombatManager.cs:887-893`) is called **only** after a
+  card play and after a potion use, gated on `IsExecutingCardOrPotionEffect` and
+  the player's phase; `UnceasingTop.cs:25-35` carries a source remark explaining
+  why the draw and the flush must not trigger it. The sim's `on_hand_emptied` has
+  exactly one call site — `player.py:197`, at the bottom of `discard_hand`, i.e.
+  the flush — and none after a play or potion.
+- **trigger** Porting Unceasing Top, or any listener that draws on an empty hand.
+- **radius** Tier 1 #18 and #19 (Joss Paper leans on the flush firing it).
+
+### 46. `turn_structure/G7` + `/step38` — `EndOfTurnCleanup` has no counterpart at either site  [DORMANT] [unpinned]
+
+C# runs it twice per round — end of the enemy turn for every player
+(`CombatManager.cs:1252-1255`) and inside each `FlushPlayerHand` (`1346`) —
+clearing `ExhaustOnNextPlay`, `HasSingleTurnRetain`, `HasSingleTurnSly` and the
+turn-scoped cost modifiers in **every** pile (`PlayerCombatState.cs:268-274`,
+`CardModel.cs:1610-1623`). The sim's only per-turn card reset
+(`cards/base.py:265-269`) clears three cost fields and runs at the **start** of the
+next player turn (`player.py:153-155`). Two consequences: the reset window is a
+full enemy turn wider than the game's, and single-turn Retain / Sly /
+ExhaustOnNextPlay do not exist at all. **radius** Tier 1 #18 (the flush tail that
+should run it), `creature_card_cmds/step51` (Sly is unported).
+
+### 47. `turn_structure/step8` — no per-power `AmountOnTurnStart` snapshot  [DORMANT] [unpinned]
+
+`grep -rn amount_on_turn_start sts2_rl/` returns 0 hits. C# snapshots every power's
+amount before anything else in the turn (`CombatManager.cs:449-455`,
+`Creature.cs:673-679`) and three powers read it, two ported:
+`DrawCardsNextTurnPower` (`AmountOnTurnStart == 0` suppresses both the extra draw
+and the removal, `DrawCardsNextTurnPower.cs:28,37`) and `HelloWorldPower`. The
+sim's `DrawCardsNextTurnPower` (`powers.py:2737-2754`) has no such guard, so a
+stack applied during the turn-start window would draw and expire in the same turn.
+
+### 48. `turn_structure/step17` — the two energy hooks fire in the opposite order  [DORMANT] [unpinned]
+
+The arithmetic matches (`player.py:163-167`) but the sim calls `modify_max_energy`
+first and `should_reset_energy` second, where C# evaluates
+`ShouldPlayerResetEnergy` first and reads `MaxEnergy` inside the chosen branch
+(`CombatManager.cs`). Unobservable while both dispatchers are pure aggregations;
+live with the first side-effecting implementation of either.
+
+### 49. `hook_dispatch/step37` — the predicate family short-circuits in the sim  [DORMANT] [unpinned]
+
+C# uses `flag = flag || item.ShouldX(...)` with **no** short-circuit, calling every
+listener (`Hook.cs:2472-2480` `ShouldForcePotionReward`, `2485-2493`
+`ShouldAllowFreeTravel` — those are the only two); the sim aggregates with a
+short-circuiting `any(...)` (`rewards.py:449`). Each hook has exactly one
+implementer today (`WhiteBeastStatue.cs`, `WingedBoots.cs`), both side-effect free.
+Trigger: a second ported implementer with a side effect.
+
+## 2D. Listener-registry shape
+
+### 50. `hook_dispatch/G7` — no per-item liveness re-check  [DORMANT] [unpinned]
+
+- **sites** `hook_dispatch/step4`, `/step11`, `/step12`, `/step16`, `/step45` (5 entries).
+- **divergence** C# yields `if (Contains(item))` **lazily, per item**
+  (`CombatState.cs:482-488`), and `Contains` (`549-599`) drops any
+  relic/potion/card/affliction/enchantment/orb whose `HasBeenRemovedFromState` is
+  set or whose owner is not `IsActiveForHooks`; every sim dispatcher walks a
+  `list(self._listeners)` snapshot with no re-check.
+- **observable** Dormancy is *executed and reproducible from the committed tree*:
+  `py -m pytest test/ -q -p tools.audit.stale_listener_plugin` instruments every
+  listener call with C#'s lazy re-check. The only hit across the suite is
+  `on_enemy_side_end -> IntangiblePower`. **Caveat: the record quotes that run as
+  "2476 passed / 30 xfailed", which is a stale tree — the suite is 2478 passed /
+  38 xfailed today. Re-run before relying on the number.**
+- **trigger** Any listener that removes another listener mid-dispatch.
+- **fix** Needs Tier 1 #5's derived listener list plus a `HasBeenRemovedFromState`
+  flag on cards/relics (`creature_card_cmds/step68`).
+- **radius** `hook_dispatch/G2`, `/G1`, `/G5`, `/G6`, `/N5` — the registry-shape
+  family lands together or not at all.
+
+### 51. `hook_dispatch/G1` — card listener order frozen at combat start  [DORMANT] [unpinned]
+
+- **sites** `hook_dispatch/step9`, `/step44` (2 entries).
+- `CombatState.cs:449-467` walks `AllPiles` = Hand, Draw, Discard, Exhaust, Play
+  (`PlayerCombatState.cs:70-80`) on **every** dispatch, so a card that moves pile
+  moves position in the listener list; `combat.py:124` registers `player.all_cards`
+  once, in a fixed order (`player.py:100-103`), and never reorders. Dormancy
+  executed: card classes implement only six hooks (`dormancy_probes.py card-hooks`,
+  203 classes x 66 hook names) and none can observe cross-card order.
+- **radius** Tier 1 #5 (same list), `/G6`.
+
+### 52. `hook_dispatch/G5` + `/step3` — `MonsterModel` is not a sim listener  [DORMANT] [unpinned]
+
+`CombatState.cs:420` adds `creature.Monster` to the listener list and
+`MonsterModel.cs:51` declares `ShouldReceiveCombatHooks => true`. Exactly **12** C#
+monster models override an `AbstractModel` hook
+(`py tools/audit/dormancy_probes.py cs-monster-hooks`); only `KinPriest` has been
+adjudicated (waiver: presentation). **The other 11 are in no seam's scope — see
+the holes section.** Trigger: porting any of them onto their real hook.
+
+### 53. `hook_dispatch/G6` — `AfflictionModel` is not a sim listener  [DORMANT] [unpinned]
+
+`CombatState.cs:458-461` adds `cardModel.Affliction` immediately after its card and
+`AfflictionModel.cs:146` declares `ShouldReceiveCombatHooks => true`. Executed both
+ways: 0 of the 7 sim `Affliction` subclasses define any hook, and exactly one of
+the 10 C# affliction files overrides one (`Hexed.cs`, `AfterCardEnteredCombat`) —
+and Hexed is a data-only stub (`afflictions.py:72-79`). Trigger: porting Hexed's
+hook; it then needs `hook_dispatch/G1`'s per-card ordering to register in the right
+position.
+
+### 54. `hook_dispatch/N5` — no run-level listener list  [DORMANT] [unpinned]
+
+- **sites** `hook_dispatch/step14`, `/step18`, `/N5` (3 entries).
+- `RunState.cs:545-596` makes every deck card and its enchantment a run listener at
+  all times, in and out of combat, and appends the whole combat list when there is
+  a child combat; the sim has two disjoint systems — `HookSystem` inside a combat,
+  duck-typing over `run.relics` (`relics/base.py:205-235`) outside one — and a deck
+  card is never a listener. Executed: no sim card class implements a run-scoped
+  hook at all.
+- **trigger** Porting any `CardModel` overriding `AfterRoomEntered`,
+  `AfterRewardTaken`, `ShouldAddToDeck` or another run-level hook.
+- **radius** `creature_card_cmds/G12` (nowhere to hang `AfterGoldGained`).
+
+## 2E. Power pipeline
+
+### 55. `power_cmd/G1` — Artifact's typing is static, not sign-aware  [DORMANT] [pinned]
+
+- **sites** `power_cmd/step13`, `/step28`, `/G1` (3 entries).
+- `cmds.py:299` checks `power_cls.power_type == PowerType.DEBUFF` (a fixed class
+  attribute) instead of C#'s `canonicalPower.GetTypeForAmount(amount) !=
+  PowerType.Debuff` (`ArtifactPower.cs:24`; `PowerModel.cs:460-471` — a
+  Counter+AllowNegative power with a negative amount **is** a Debuff).
+  Strength/Dexterity are Counter+AllowNegative+Buff on both sides, so a
+  negative-amount application bypasses the sim's Artifact branch entirely.
+- **trigger** Dormant in both directions: no player-side `ArtifactPower` source
+  exists anywhere in the game, and the enemy side needs a ported negative-Strength
+  applier (`Malaise`, `Resonance` — neither ported).
+- **pin** `TestPowerCmdOrder::test_artifact_blocks_negative_signed_debuff`.
+- **fix** Add `get_type_for_amount(amount)` to the power model and use it at
+  `cmds.py:299` and in Unsettling Lamp. **radius** `/G2`, `/G3`.
+
+### 56. `power_cmd/G2` + `/step10` — Unsettling Lamp's condition has the same blind spot  [DORMANT] [unpinned]
+
+`relics/unsettling_lamp.py:44-53` bails on `amount <= 0` and then checks the static
+`power_type`, where C# uses `power.GetTypeForAmount(amount)`
+(`UnsettlingLamp.cs:124`). `Malaise.cs:40` and `Resonance.cs:33` both apply
+negative `StrengthPower` with `applier = player, cardSource = this` — exactly the
+shape Lamp doubles — and the sim's `amount <= 0` guard rejects it before the
+sign-aware check would matter. **This is the seam the 933T Mecha Knight bug lived
+on**: the ordering half is fixed, the sign half is not.
+
+### 57. `power_cmd/G3` — the three power-amount phases collapsed into one chain  [DORMANT] [unpinned]
+
+- **sites** `power_cmd/step12`, `/step27`, `/G3` (3 entries).
+- C# runs `BeforePowerAmountChanged` -> `ModifyPowerAmountGiven` (guarded on
+  `applier != null && ContainsCreature(applier)`) -> `ModifyPowerAmountReceived`,
+  three separately-sequenced calls (`PowerCmd.cs:120,125,127`); `hooks.py:170-183`
+  is one flat registration-order chain with no phase separation and no applier
+  gate, and `ArtifactPower` is not a listener at all (hard-coded at
+  `cmds.py:299-306`).
+- **trigger** The two general listeners are domain-disjoint today (Unsettling Lamp
+  given-side debuff-only, Ruined Helmet received-side buff-only). A third listener,
+  or either widening, collides.
+- **radius** Tier 1 #6 (`hook_dispatch/G3`, phases), Tier 1 #11
+  (`damage_pipeline/G2`, the companion events), `/G1`.
+
+### 58. `power_cmd/G5` + `/step3` — no `PowerInstanceType`  [DORMANT] [unpinned]
+
+`PowerCmd.cs:165-174`'s `FindExistingInstanceForStacking` dispatches on
+`power.InstanceType` (`PowerModel.cs:144`, default `None`); the sim's
+`if power_cls.id in target.powers` (`cmds.py:308`) always behaves as `None`. **21**
+C# powers declare an override (19 `Instanced`, 2 `InstancedPerApplier` —
+`OblivionPower.cs:27`, `StranglePower.cs:29`), **11 of them ported**. Trigger: two
+appliers of the same `InstancedPerApplier` power in one combat, or any ported
+`Instanced` power stacking where it should not.
+
+### 59. `power_cmd/step4` + `/step26` — one code path serves Apply and ModifyAmount  [DORMANT] [unpinned]
+
+C# has two independently-coded pipelines whose guards differ (`PowerCmd.cs:79-87`);
+the sim collapses them (`cmds.py:270-332`). It reaches the same steady state for
+ported content, but the collapse is not verified line-for-line — and Tier 1 #22 is
+the one place it has already been proven wrong. **Read this entry before touching
+`PowerCmd.apply`.**
+
+### 60. `power_cmd/step6` — no `amount == 0` early return  [DORMANT] [unpinned]
+
+Filed under the `IsEnding` family by its first reference, but it owns the
+zero-amount half itself. Executed: `PowerCmd.apply(cs.hooks, cs.enemy,
+StrengthPower, 0)` -> `{'strength': Strength(0)}`, same for Vulnerable, where C#
+(`PowerCmd.cs:103`) registers nothing; a 0-amount debuff on the **player**
+additionally lands with `skip_next_tick = True`. One guard at the top of
+`PowerCmd.apply`.
+
+## 2F. Damage pipeline remainder
+
+### 61. `damage_pipeline/G1` — Thorns is on the wrong hook  [DORMANT] [pinned]
+
+C#'s `ThornsPower.BeforeDamageReceived` (`ThornsPower.cs:17-24`) fires
+unconditionally for every hit, **including the hit that kills its owner**, and is
+gated on `props.IsPoweredAttack() || cardSource is Omnislice`; the sim's
+`ThornsPower` (`powers.py:328-353`) hooks `on_damage_received`, which the damage
+pipeline skips entirely on a killing blow, and has no powered/Omnislice gate. Two
+consequences: no reflect on the killing blow, and an incorrect reflect against
+Unpowered dealer-attributed damage. Pin:
+`TestDamagePipelineOrder::test_thorns_reflects_even_on_killing_blow`. **radius**
+`/G4` (the killing-blow snapshot), `/G3` (the powered gate).
+
+### 62. `damage_pipeline/G4` + `/step17.5` — the killing-blow skip is recomputed after death prevention  [DORMANT] [unpinned]
+
+C# decides whether to fire `AfterDamageReceived` (`CreatureCmd.cs:392-399`) from a
+snapshot taken **before** `Kill()`, so an arithmetically-lethal hit permanently
+skips it even if a `ShouldDieLate` listener prevents the death — `LizardTail.cs:49-55`
+restores HP through its own `AfterPreventingDeath` hook instead; the sim resets HP
+to 1 first and only then tests `target.is_dead` (`cmds.py:84-120`), so a prevented
+death does **not** skip `on_damage_received`. **Witness to use as the failing
+test**: Lizard Tail + Centennial Puzzle, both ported — C#'s
+`CentennialPuzzle.AfterDamageReceived` is itself killing-blow guarded and correctly
+does not draw; the sim's (`relics/centennial_puzzle.py:24-35`) fires and draws 3
+cards.
+
+### 63. `damage_pipeline/G6` + `/step17.4` — the dealer-side event fires after the victim-side one  [DORMANT] [unpinned]
+
+`CreatureCmd.cs:388-395` fires `AfterDamageGiven` (unconditional) **before** the
+killing-blow-guarded `AfterDamageReceived`; `DamageCmd.deal` fires
+`on_damage_received` then `on_damage_dealt` — the reverse. No sim power implements
+`on_damage_dealt` yet. Two lines to swap.
+
+## 2G. Creature and card verbs with no sim counterpart
+
+### 64. `creature_card_cmds/G4` — `heal` refuses to heal a corpse; C#'s revives  [DORMANT] [unpinned]
+
+- **sites** `creature_card_cmds/step19`, `/step20`, `/G4` (3 entries).
+- `cmds.py:160-161` early-returns 0 on `target.is_dead`; `CreatureCmd.Heal` guards
+  only `IsEnding && !IsPlayer` (`CreatureCmd.cs:693-696`) and `HealInternal` fires
+  `Revived` and re-activates the player's hooks when HP crosses 0
+  (`Creature.cs:477-491`) — healing a corpse is a supported operation. The one
+  ported corpse-heal, `ReattachPower.DoReattach`, hand-rolls
+  `owner.hp = self.amount` (`powers.py:2360-2365`) and nets the same. Live the
+  moment a second corpse-heal is ported, or anyone routes Reattach through the verb.
+
+### 65. `creature_card_cmds/G5` + `/step22` — heal reports the clamped amount, and nothing at full HP  [DORMANT] [unpinned]
+
+`CreatureCmd.cs:751-754` fires `AfterCurrentHpChanged` when the **requested** amount
+> 0, carrying that raw amount; `cmds.py:162-166` fires with the **clamped** amount
+and only when positive. Executed: healing 20 on a player 3 below max reports delta 3
+(C#: 20); healing at full HP reports nothing (C#: reports +amount). The only ported
+`on_hp_changed` listener is Red Skull (`relics/red_skull.py:44-46`), which ignores
+the delta.
+
+### 66. `creature_card_cmds/G6` + `/step28` + `/step29` — `lose_max_hp` cannot kill  [DORMANT] [unpinned]
+
+`CreatureCmd.LoseMaxHp` computes an **unfloored** `newMaxHp` and, when it is below
+`CurrentHp`, deals the difference as Unblockable|Unpowered damage through the
+**full** damage pipeline — hooks, death check, `Kill` — and only afterwards floors
+MaxHp at 1 (`CreatureCmd.cs:823-827`). The sim floors first (`cmds.py:179-189`), so
+no `modify_hp_lost` / `on_damage_received` / `should_die` / `on_death` fires and no
+creature can die of max-HP loss. Executed: a 10/10 player losing 30 max HP ends
+**alive at 1/1**; C# deals `10 - (-20) = 30` unblockable damage and kills. The order
+is load-bearing (`/step29`). Ported in-combat callers: Brightest Flame
+(`cards/brightest_flame.py:37`), `PaperCutsPower`.
+
+### 67. `creature_card_cmds/G7` — `exhaust` only knows the hand and the discard pile  [DORMANT] [unpinned]
+
+`cmds.py:379-384` removes the card from `hand` or `discard_pile` and appends it to
+`exhaust_pile`; a card in the draw pile, the exhaust pile, or mid-play stays put
+**and** lands in the exhaust pile — it exists in two piles at once. Executed: a
+Strike alone in the draw pile ends with `card in draw_pile` **and** `card in
+exhaust_pile`; a Strike exhausted twice ends with the same instance in the exhaust
+pile twice. C# routes through `CardPileCmd.Add(card, Exhaust, Bottom)` whose
+`RemoveFromCurrentPile()` is pile-agnostic (`CardPileCmd.cs:496`). **radius** `/N4`
+is the missing invariant that hides it.
+
+### 68. `creature_card_cmds/G13` + `/step8` — escape leaves the escaper's powers registered  [DORMANT] [unpinned]
+
+`CreatureCmd.Escape` calls `RemoveAllPowersInternalExcept()` (`CreatureCmd.cs:589`),
+stripping every power silently — the deliberate contrast with death, which awaits
+each `AfterRemoved` (`533-537`); the sim's escape (`cmds.py:221-234`) sets
+`escaped = True`, fires an invented `on_creature_escaped` hook and leaves every
+power on the creature **and registered as a live hook listener**. The three ported
+escape sites (Thieving Hopper, Gremlin Merc, `BattlewornDummyTimeLimitPower`) leave
+only owner-scoped, self-filtering powers.
+
+### 69. `creature_card_cmds/step18` — no `LoseBlock` verb  [DORMANT] [unpinned]
+
+Four sites assign `block = 0` directly (`combat.py:297`, `player.py:158`,
+`powers.py:1208`, `powers.py:2300`). `BurrowedPower`'s C# original calls
+`CreatureCmd.LoseBlock(owner, all)` from `AfterRemoved`, so where C# re-fires
+`Hook.AfterBlockBroken` on residual block the sim fires nothing. Hand Drill
+(`relics/hand_drill.py:21`) is a live `on_block_broken` listener that would see the
+difference.
+
+### 70. `creature_card_cmds/step23` — no `SetCurrentHp` verb  [DORMANT] [unpinned]
+
+Sites that need one assign HP directly (`powers.py:2360-2365`, `cmds.py:112`); none
+runs the death pipeline the way `CreatureCmd.cs:775-778` does, so setting HP to 0
+through those paths would leave a 0-HP creature that never fired
+`BeforeDeath`/`ShouldDie`/`AfterDeath`. Every ported direct assignment sets a
+positive HP (a revive).
+
+### 71. `creature_card_cmds/step26` — no `SetMaxAndCurrentHp` verb  [DORMANT] [unpinned]
+
+Three C# callers, **two ported**: `DecimillipedeSegment.cs:142` and `ToughEgg.cs:173`
+(plus `WaterfallGiant.cs:305`). Both ports hand-roll a raw assignment
+(`monsters/hive/decimillipede.py:68` and `:167`, `monsters/hive/ovicopter.py:81-83`),
+skipping `SetMaxHpInternal`'s CurrentHp clamp (`Creature.cs:493-501`), `SetMaxHp`'s
+`if (MaxHp <= 0) Kill` (`CreatureCmd.cs:844-847`) and the `SetCurrentHp` death check.
+
+### 72. `creature_card_cmds/step51` — the Sly keyword is unported  [DORMANT] [unpinned]
+
+No `CardKeyword.Sly` / `IsSlyThisTurn` analogue anywhere in `sts2_rl`, so
+`CardCmd.Discard`'s collect-then-auto-play tail (`CardCmd.cs:186-188, 201-204`) and
+the `AutoPlayType.SlyDiscard` path have no counterpart. Porting any Sly card also
+makes step 50's DiscardAndDraw ordering live at the same moment.
+
+### 73. `creature_card_cmds/step52` — `Downgrade` drops one level, not to base  [DORMANT] [pinned]
+
+`CardModel.DowngradeInternal` (`CardModel.cs:2135-2147`) re-derives the card from
+its canonical model — `CurrentUpgradeLevel = 0`, "downgrades a card to its **base**
+form" — where `Card.downgrade` (`cards/base.py:150-165`) drops exactly one level and
+does not re-apply the enchantment. Ported callers: `DampenPower`
+(`powers.py:3149-3183`, from the Magi Knight's DAMPEN_MOVE) and the Reflections
+event (`events/reflections.py:36-41`). Pin:
+`TestCreatureCardCmdsOrder::test_downgrade_reapplies_the_cards_enchantment`.
+
+### 74. `creature_card_cmds/step56` — no `PileIndexSort` on transform  [DORMANT] [unpinned]
+
+`CardCmd.cs:353-360, 405` sorts recorded tuples by (pile type, original index) so a
+multi-card transform re-inserts deterministically; neither sim transform path sorts,
+because both are single-card verbs. Trigger: porting any multi-card transform.
+
+### 75. `creature_card_cmds/step99` — no `AutoPlayFromDrawPile` verb  [DORMANT] [unpinned]
+
+C# moves **every** selected card to the Play pile first and only then plays them,
+which is what makes it immune to the second card's reshuffle disturbing the first
+card's selection; the sim's Havoc-shaped effects pull and play one at a time.
+Trigger: any ported card that plays more than one card from the draw pile.
+**radius** `/N9`, `/N10`.
+
+### 76. `creature_card_cmds/N9` + `/step82` — the sim has no Play pile  [DORMANT] [unpinned]
+
+C# holds a card being played in `PileType.Play` for the whole of `OnPlay`
+(`CardPileCmd.cs:669-670`, `CardCmd.cs:114-117`) and `Shuffle` reads only Draw and
+Discard (`CardPileCmd.cs:870-871`) — the entire mechanism behind the exoskeleton
+reshuffle parity fact. The sim appends the played card to the **discard** pile and
+holds it back from a reshuffle **in parity mode only** (`player.py:203, 232`),
+because legacy RL runs are kept byte-for-byte. Residual exposure: an effect that
+counts the discard pile during its own `OnPlay` sees the resolving card in the sim
+and not in the game.
+
+## 2H. Monster state machine remainder
+
+### 77. `monster_state_machine/G8` — no construction validation  [DORMANT] [pinned]
+
+- **sites** `/step3` (duplicate state id: `Dictionary.Add` throws
+  (`RandomBranchState.cs:171`, `MoveState.cs:74`), the sim's dict assignment
+  silently overwrites), `/step37` (`monster.machine = other` is a legal Python
+  rebind where the C# setter throws, `MonsterModel.cs:228-236`), `/step22`
+  (overload #1's `CanRepeatXTimes` rejection, `RandomBranchState.cs:48-51`, has no
+  sim analogue) — 3 entries, one mechanism: *C# validates a malformed machine and
+  raises; the sim's API does not*.
+- **trigger** Porting a monster with a repeated state id — `Fogmog.cs:44-45` is the
+  near-miss in the shipped source — or any code that rebuilds a machine mid-combat.
+  Dormancy executed over 82 of the 83 ported machines and 6,560,008 fuzzed
+  transitions; `_Cultist` is unbuildable (needs a constructor arg) so it is
+  unproven for that one machine.
+- **pin** `TestMonsterStateMachineOrder::test_duplicate_state_id_is_rejected_at_machine_construction`.
+
+### 78. `monster_state_machine/G7` — `AddBranch` repeat-limit edge cases  [DORMANT] [pinned]
+
+- **sites** `/step21` (clause a: `maxTimes == 0` with `CanRepeatXTimes`
+  **permanently disables** the branch in C#, `RandomBranchState.cs:144-147`; the sim
+  refuses to build the machine at all), `/step15` (clause c: a float
+  subtract-and-check fall-through **throws** in C#, `RandomBranchState.cs:127`, and
+  quietly picks the last branch in the sim) — 2 entries.
+- **trigger** A C# monster added with `AddBranch(state, 0)`; all 15 non-default
+  integer arguments across the 61 call sites are 2 or 3 today. The fall-through
+  needs a non-dyadic weight — the only ported one is `TwoTailedRat.cs:127`'s
+  `1f/12f`, behind a `_can_summon()` gate the machine-only fuzz cannot open.
+- **pin** `TestMonsterStateMachineOrder::test_max_times_zero_disables_the_branch_instead_of_raising`.
+- **radius** Tier 1 #1 (`/G1`) is the same `AddBranch` argument surface — read both
+  before touching `add_branch`.
+
+### 79. `monster_state_machine/G9` — the spawn roll is not gated on the combat side  [DORMANT] [unpinned]
+
+- **sites** `/step11`, `/step48` (2 entries).
+- C# leaves a freshly added enemy on `UNSET_MOVE` with no intent until the next
+  player-turn roll — `AfterCreatureAdded` only rolls when `CurrentSide == Player`
+  (`CombatManager.cs:863-866`) — and `rollNewMove: false` (`CreatureCmd.cs:72-75`)
+  suppresses it for a player-side monster even on the player's turn. The sim rolls
+  in the constructor, unconditionally. Dormancy: `combat.py:286-345` runs the whole
+  enemy side to completion before returning, so nothing observes the interim state;
+  all 11 sim `CreatureCmd.add` sites fire during the enemy side and every ported
+  monster is `side='enemy'`.
+- **trigger** A sim consumer that reads an enemy's intent mid-enemy-side — a
+  per-enemy observation build, or an interruptible enemy phase. **radius**
+  Tier 1 #2 owns where the roll is placed.
+
+### 80. `monster_state_machine/G5` — `stun`'s `next_move_key` is dropped for a machine monster  [DORMANT] [pinned]
+
+Two halves: (a) no `CanTransitionAway` guard on the override path, so a move pinned
+by `must_perform_once_before_transitioning` can be replaced where the game refuses
+(`MonsterModel.cs:420-432`); (b) `cmds.py:216` gates `next_move_key` on
+`hasattr(target, '_move_key')` — the hand-rolled monsters' field — so for a
+`MachineMonster` the caller's explicit next move **evaporates silently**. Executed
+on a `MachineMonster` FossilStalker: `next_move_key='LASH_MOVE' was SILENTLY
+DROPPED`. The only ported caller passing one is
+`monsters/overgrowth/ceremonial_beast.py:45`, and Ceremonial Beast is hand-rolled.
+Pin: `TestMonsterStateMachineOrder::test_stun_next_move_key_reaches_a_machine_monster`.
+**radius** Tier 1 #21 — same fix site.
+
+### 81. `monster_state_machine/G3` — `MoveState` has no string follow-up  [DORMANT] [pinned]
+
+`MoveState.GetNextState` is `(FollowUpState?.Id ?? FollowUpStateId) ?? throw`
+(`MoveState.cs:23-25, 67-70`); the sim has no string form, so a C# monster that sets
+`FollowUpStateId` without `FollowUpState` cannot be ported without making
+`build_machine` two-pass. `grep FollowUpStateId` over the game returns exactly two
+sites: the declaration and `Creature.cs:539`, the stun path (Tier 1 #21). Pin:
+`TestMonsterStateMachineOrder::test_move_state_accepts_a_string_follow_up_id`.
+
+### 82. `monster_state_machine/G2` — no way to express an unreachable registered state  [DORMANT] [unpinned]
+
+`Inklet.cs:69-71` builds and registers `INIT_RAND` with two branches (one of them
+`AddBranch(JAB, 2, 1f)` = maxRepeats 2) and never wires it; `PhrogParasite.cs:6-10`
+is the same shape. Reproducing only the reachable graph is *correct* today, but the
+sim cannot express the dead state, so the moment one becomes reachable the port
+silently keeps the old graph. Pinned in the opposite direction by
+`test/test_monster_branch_audit.py::TestInkletMoveSequence` and
+`::TestPhrogParasiteMoveSequence`, which assert **zero** `monster_ai` draws on
+exactly those legs.
+
+## 2I. Turn structure remainder
+
+### 83. `turn_structure/G10` — the combat-end path collapses five C# distinctions  [DORMANT] [unpinned]
+
+- **sites** 7 entries (`/G10`, `/N5` and five steps).
+- C# distinguishes a **loss** (`LoseCombat()` -> `_pendingLoss` ->
+  `ProcessPendingLoss()`, which fires the `CombatEnded` event and **no hook at
+  all**, `CombatManager.cs:945-965`) from a **victory** (`EndCombatInternal` with
+  `ReviveBeforeCombatEnd()` -> `AfterCombatEnd` -> `AfterCombatVictory`,
+  `970-1033`), and consults `Hook.ShouldStopCombatFromEnding` inside `IsEnding`
+  (`196-199`). The sim has one `_end_combat(player_won)` firing one
+  `on_combat_end` (`combat.py:347-350`), no revive step, no
+  `should_stop_combat_from_ending`.
+- **On top of that**, `_run_enemy_turns` has **two player-death exits that
+  disagree**: `combat.py:308-310` calls `_end_combat(player_won=False)` (the hook
+  fires) while `combat.py:332-335` sets phase/result by hand and returns (it does
+  not). Executed: `killed from on_enemy_turn_start: hooks=[('on_combat_end',
+  False)]` versus `killed by the attack: hooks=[]` — same end state, different hook
+  record.
+- **trigger** Any `AfterCombatVictory`-only listener with an unconditional effect;
+  the two-exit inconsistency goes live for any `on_combat_end` listener whose
+  effect outlives the combat. All four ported listeners gate on victory or on the
+  player being alive. The win-condition **predicate** itself is faithful (`/N5`).
+- **radius** Tier 1 #7 (`/G13`) and `hook_dispatch/G8` — one design.
+
+### 84. `turn_structure/G5` + `/step9` — the enemy side is per-enemy in the sim, per-side in the game  [DORMANT] [unpinned]
+
+C# has **no** per-creature turn-start or turn-end hook: `BeforeTurnStart`
+(`CombatManager.cs:449-455`), `AfterTurnStart`/`ClearBlock` (`492-499`) and
+`AfterBlockCleared` (`500-507`) each run as a complete pass over every participant,
+then one `AfterSideTurnStart` (`522`), the moves (`1072-1090`), one `BeforeTurnEnd`
+(`1251`) and one `AfterTurnEnd` (`1256`); `_run_enemy_turns` (`combat.py:286-345`)
+does [clear block -> `on_enemy_turn_start` -> move -> `on_enemy_turn_end`] per enemy
+and only `on_enemy_side_end` once. Dormant because every ported listener on those
+hooks self-filters to its own owner. **radius** Tier 1 #15, `/G11`.
+
+### 85. `turn_structure/G15` — the turn-end wrapper re-consults `should_ethereal_trigger`  [DORMANT] [unpinned]
+
+`CardModel.OnTurnEndInHandWrapper` (`CardModel.cs:1682-1698`) decides the card's
+destination on the raw keyword and never re-consults the hook; `combat.py:370` does
+(`if card.is_ethereal and self.hooks.should_ethereal_trigger(card)`), so a false
+predicate would send an Ethereal turn-end card to the discard pile in the sim and
+to the exhaust pile in the game. Zero implementations on either side, so the
+predicate is constant-true and the branches coincide. `turn_structure/step54` is
+the same finding on its step.
+
+### 86. `turn_structure/step32` + `/step67` — no `SpawnedThisTurn` flag, no `OnSideSwitch`  [DORMANT] [unpinned]
+
+`TakeTurn` runs `PerformMove()` only if `!Monster.SpawnedThisTurn`; `grep -rn
+spawned_this_turn sts2_rl/` returns 0 hits, and there is no side-switch verb to
+clear it either (`CombatManager.cs:1420-1424`, `MonsterModel.cs:479-483`). The
+no-`IsDead`-guard half **is** faithfully ported (`combat.py:288-292` keeps a
+`retained_after_death` corpse in the loop — that is how a withered Decimillipede
+segment reaches REATTACH). The record could not construct a reachable C# path where
+the flag survives to `TakeTurn`. **radius** `monster_state_machine/G9`.
