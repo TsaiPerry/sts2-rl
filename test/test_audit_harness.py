@@ -1,4 +1,4 @@
-"""Tests for the audit completeness harness (tools/audit/harness.py)."""
+"""Tests for the audit completeness harness (audit/tools/harness.py)."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.audit import harness
+from audit.tools import harness
 
 FIXTURE_CS = """\
 using System;

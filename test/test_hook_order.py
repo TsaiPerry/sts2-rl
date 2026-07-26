@@ -133,7 +133,7 @@ class TestDamagePipelineOrder:
         assert cs.enemy.block == 10
 
     @pytest.mark.xfail(
-        reason="gap G1 (audits/seam/damage_pipeline.json): ThornsPower is "
+        reason="gap G1 (audit/records/seam/damage_pipeline.json): ThornsPower is "
                "wired to on_damage_received, which cmds.py's killing-blow "
                "guard skips entirely (`if not target.is_dead`). C#'s "
                "ThornsPower overrides BeforeDamageReceived (ThornsPower.cs:"
@@ -154,7 +154,7 @@ class TestDamagePipelineOrder:
 
 
 class TestPowerCmdOrder:
-    """power_cmd audit (docs/audit/seams/power_cmd.md): pins the ordering
+    """power_cmd audit (audit/seams/power_cmd.md): pins the ordering
     the Unsettling Lamp fix depends on, plus the sign-aware-typing gap (G1)
     found auditing the rest of the seam."""
 
@@ -175,7 +175,7 @@ class TestPowerCmdOrder:
         assert "artifact" not in cs.enemy.powers     # its one stack consumed
 
     @pytest.mark.xfail(
-        reason="power_cmd audit gap G1 (audits/seam/power_cmd.json): "
+        reason="power_cmd audit gap G1 (audit/records/seam/power_cmd.json): "
                "PowerCmd.apply's Artifact check (cmds.py:299) tests the "
                "static power_cls.power_type class attribute instead of C#'s "
                "sign-aware GetTypeForAmount(amount) (PowerModel.cs:460-471, "
@@ -207,7 +207,7 @@ class TestPowerCmdOrder:
         assert "artifact" not in cs.enemy.powers   # and consumes its stack
 
     @pytest.mark.xfail(
-        reason="power_cmd audit step 20 (audits/seam/power_cmd.json): "
+        reason="power_cmd audit step 20 (audit/records/seam/power_cmd.json): "
                "cmds.py:331-332 sets power.skip_next_tick = True AFTER the "
                "new-vs-stacking if/else, on the shared `power` variable the "
                "stacking branch rebinds to `existing` -- so re-applying a "
@@ -236,7 +236,7 @@ class TestPowerCmdOrder:
 
 
 class TestCreatureCardCmdsOrder:
-    """creature_card_cmds audit (docs/audit/seams/creature_card_cmds.md):
+    """creature_card_cmds audit (audit/seams/creature_card_cmds.md):
     pins the two seed-fact behaviours from the brief's pin table plus the
     three live gaps the seam audit found."""
 
@@ -295,7 +295,7 @@ class TestCreatureCardCmdsOrder:
 
     @pytest.mark.xfail(
         reason="creature_card_cmds audit gap G1 "
-               "(audits/seam/creature_card_cmds.json): BlockCmd.apply "
+               "(audit/records/seam/creature_card_cmds.json): BlockCmd.apply "
                "(cmds.py:145-147) gates the WHOLE modify_block_additive/"
                "modify_block_multiplicative dispatch on is_powered_attack "
                "(Move && !Unpowered). C#'s Hook.ModifyBlock (Hook.cs:1310-1340) "
@@ -321,7 +321,7 @@ class TestCreatureCardCmdsOrder:
 
     @pytest.mark.xfail(
         reason="creature_card_cmds audit gap G2 "
-               "(audits/seam/creature_card_cmds.json): the sim has no "
+               "(audit/records/seam/creature_card_cmds.json): the sim has no "
                "AfterModifyingBlockAmount event (CreatureCmd.cs:646, "
                "Hook.cs:649-656), so Vambrace's port hand-rolls its "
                "once-per-combat latch onto on_block_gained "
@@ -344,7 +344,7 @@ class TestCreatureCardCmdsOrder:
 
     @pytest.mark.xfail(
         reason="creature_card_cmds audit gap G3 "
-               "(audits/seam/creature_card_cmds.json): RunState.transform_card "
+               "(audit/records/seam/creature_card_cmds.json): RunState.transform_card "
                "(run.py:459-469) deletes the original and appends the "
                "replacement directly instead of routing through add_card "
                "(run.py:341-354), so it skips both deck-entry hooks that C#'s "
@@ -366,7 +366,7 @@ class TestCreatureCardCmdsOrder:
 
     @pytest.mark.xfail(
         reason="creature_card_cmds audit step 103b / guard G14 "
-               "(audits/seam/creature_card_cmds.json): CombatState."
+               "(audit/records/seam/creature_card_cmds.json): CombatState."
                "select_cards (combat.py:560-581) implements only the "
                "0-candidate arm of CardSelectCmd's guards; it has no "
                "CombatManager.IsEnding / IsOverOrEnding check, where every C# "
@@ -392,7 +392,7 @@ class TestCreatureCardCmdsOrder:
 
     @pytest.mark.xfail(
         reason="creature_card_cmds audit step 52 "
-               "(audits/seam/creature_card_cmds.json): C#'s "
+               "(audit/records/seam/creature_card_cmds.json): C#'s "
                "CardModel.DowngradeInternal (CardModel.cs:2135-2147) re-derives "
                "the card from its canonical ModelDb entry and then RE-APPLIES "
                "its decorations -- `AfterDowngraded(); "
@@ -424,7 +424,7 @@ class TestCreatureCardCmdsOrder:
 
     @pytest.mark.xfail(
         reason="creature_card_cmds audit step 38a "
-               "(audits/seam/creature_card_cmds.json): "
+               "(audit/records/seam/creature_card_cmds.json): "
                "PlayerCmd.MimicRestSiteHeal (PlayerCmd.cs:264-274) delegates to "
                "HealRestSiteOption.ExecuteRestSiteHeal "
                "(HealRestSiteOption.cs:106-113), which heals and THEN fires "
@@ -456,8 +456,8 @@ class TestCreatureCardCmdsOrder:
 
 
 class TestTurnStructureOrder:
-    """turn_structure audit (docs/audit/seams/turn_structure.md,
-    audits/seam/turn_structure.json): pins the whole end_turn hook pipeline
+    """turn_structure audit (audit/seams/turn_structure.md,
+    audit/records/seam/turn_structure.json): pins the whole end_turn hook pipeline
     plus the seam's eleven pinnable live gaps."""
 
     # Every turn-lifecycle hook one CombatState.end_turn touches, in the
@@ -575,7 +575,7 @@ class TestTurnStructureOrder:
         ]
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G1 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G1 (audit/records/seam/turn_structure.json, "
                "spec step 14): C# runs the block clear and its event in TWO "
                "separate loops -- `foreach (item3 in creaturesStartingTurn) "
                "await item3.AfterTurnStart(side)` (CombatManager.cs:492-499) "
@@ -610,7 +610,7 @@ class TestTurnStructureOrder:
         assert cs.player.block == 14  # C#: Horn Cleat fires anyway
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G2 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G2 (audit/records/seam/turn_structure.json, "
                "spec step 13): Creature.ClearBlock passes the vetoing listener "
                "out of Hook.ShouldClearBlock and fires "
                "Hook.AfterPreventingBlockClear(preventer, creature) on the "
@@ -641,7 +641,7 @@ class TestTurnStructureOrder:
         assert cs.player.block == 30  # C#: Barricade is the preventer
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G3 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G3 (audit/records/seam/turn_structure.json, "
                "spec step 65): combat.py:648-652 tests should_take_extra_turn "
                "at the TOP of end_turn and, on success, runs only "
                "on_extra_turn, `turn += 1` and start_turn(). C# evaluates "
@@ -674,7 +674,7 @@ class TestTurnStructureOrder:
         ]
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G4 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G4 (audit/records/seam/turn_structure.json, "
                "spec steps 61-63): C#'s FlushPlayerHand treats ShouldFlush == "
                "false as 'every card is retained' and STILL runs "
                "Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup "
@@ -709,7 +709,7 @@ class TestTurnStructureOrder:
         assert len(p.hand) == 6
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G6 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G6 (audit/records/seam/turn_structure.json, "
                "spec step 12): Creature.AfterTurnStart returns BEFORE "
                "ClearBlock for a player whose PlayerCombatState.TurnNumber == "
                "1 (Creature.cs:681-692) -- which is what lets "
@@ -733,7 +733,7 @@ class TestTurnStructureOrder:
         assert cs.player.block == 10  # C#: turn 1 never clears
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G8 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G8 (audit/records/seam/turn_structure.json, "
                "spec step 47): C# gives end-of-turn auto-plays their own "
                "phase -- Phase = AutoPostPlay, "
                "Hook.AfterAutoPostPlayPhaseEntered, Phase = End -- entered "
@@ -767,7 +767,7 @@ class TestTurnStructureOrder:
         assert cs.player.block == 3
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G12 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G12 (audit/records/seam/turn_structure.json, "
                "spec step 48): Hook.BeforeTurnEnd runs THREE complete listener "
                "passes in order -- BeforeSideTurnEndVeryEarly, then "
                "BeforeSideTurnEndEarly, then BeforeSideTurnEnd "
@@ -799,7 +799,7 @@ class TestTurnStructureOrder:
         assert cs.player.block == hand + 6
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G13 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G13 (audit/records/seam/turn_structure.json, "
                "spec step 27): CombatManager.cs:573 runs `await "
                "CheckWinCondition()` immediately after SetupPlayerTurn (which "
                "ends with Hook.AfterPlayerTurnStart at 675) and after the "
@@ -827,7 +827,7 @@ class TestTurnStructureOrder:
         assert cs.is_over             # C#: CheckWinCondition ends it here
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G14 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G14 (audit/records/seam/turn_structure.json, "
                "spec step 21): on turn 1 CombatManager.cs:657-672 runs TWO "
                "pile moves before the draw -- every card whose enchantment "
                "sets ShouldStartAtBottomOfDrawPile goes to the BOTTOM, then "
@@ -860,7 +860,7 @@ class TestTurnStructureOrder:
         assert len(cs.player.hand) == 5
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G17 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G17 (audit/records/seam/turn_structure.json, "
                "spec step 53): C# passes the CAUSE of an exhaust to the hook -- "
                "AfterCardExhausted(ctx, card, bool causedByEthereal) "
                "(JossPaper.cs:102-114, dispatched from CardCmd.cs:237-244) -- "
@@ -906,7 +906,7 @@ class TestTurnStructureOrder:
         assert len(p.hand) == 1  # C#: the Joss Paper draw landed this turn
 
     @pytest.mark.xfail(
-        reason="turn_structure audit gap G18 (audits/seam/turn_structure.json, "
+        reason="turn_structure audit gap G18 (audit/records/seam/turn_structure.json, "
                "spec step 65): PaelsEye.AnyCardsPlayedThisTurn "
                "(PaelsEye.cs:149-156) has two clauses the sim's "
                "relics/paels_eye.py:27-34 has neither of -- the turn-1 "
@@ -967,8 +967,8 @@ def listener_categories(hooks):
 
 
 class TestHookDispatchOrder:
-    """hook_dispatch audit (docs/audit/seams/hook_dispatch.md,
-    audits/seam/hook_dispatch.json): pins the cross-listener ordering rule the
+    """hook_dispatch audit (audit/seams/hook_dispatch.md,
+    audit/records/seam/hook_dispatch.json): pins the cross-listener ordering rule the
     sim actually implements plus the seam's four pinnable gaps.
 
     The sim's rule is "registration order over one flat list"; the game's is a
@@ -1044,7 +1044,7 @@ class TestHookDispatchOrder:
         assert cs.hooks._listeners[-1].owner is cs.enemy
 
     @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G2 (audits/seam/hook_dispatch.json, "
+        reason="hook_dispatch audit gap G2 (audit/records/seam/hook_dispatch.json, "
                "spec steps 1-6, 41-43): CombatState.IterateHookListeners walks "
                "each creature's POWERS (CombatState.cs:416) before that "
                "player's RELICS (428-435), while the sim appends relics at "
@@ -1078,7 +1078,7 @@ class TestHookDispatchOrder:
         assert cost == 1  # C#: Curious floors at 0 first, then Gauntlets +1
 
     @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G3 (audits/seam/hook_dispatch.json, "
+        reason="hook_dispatch audit gap G3 (audit/records/seam/hook_dispatch.json, "
                "spec steps 27-30): Hook.ModifyEnergyCostInCombat runs TWO "
                "complete listener passes -- every TryModifyEnergyCostInCombat, "
                "then every TryModifyEnergyCostInCombatLate "
@@ -1117,7 +1117,7 @@ class TestHookDispatchOrder:
         assert cost == 0  # C#: the Late pass zeroes it whatever Tangled did
 
     @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G4 (audits/seam/hook_dispatch.json, "
+        reason="hook_dispatch audit gap G4 (audit/records/seam/hook_dispatch.json, "
                "spec seed fact 3): CardModel.cs:1904-1965 loops `for (int i = "
                "0; i < playCount; i++)`, builds a FRESH CardPlay each "
                "iteration (1919-1928, PlayIndex = i) and fires "
@@ -1152,7 +1152,7 @@ class TestHookDispatchOrder:
         assert nib._attacks_played == 2  # C#: one CardPlay per iteration
 
     @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G8 (audits/seam/hook_dispatch.json, "
+        reason="hook_dispatch audit gap G8 (audit/records/seam/hook_dispatch.json, "
                "spec steps 19-21): Hook.IterateCombatHookListeners "
                "(Hook.cs:53-63) yields NOTHING to a dispatch that begins once "
                "CombatManager.IsOverOrEnding is true, and 73 of the 147 "
@@ -1187,7 +1187,7 @@ class TestHookDispatchOrder:
         assert cs.player.block == block_before  # C#: nobody was dispatched to
 
     @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G9 (audits/seam/hook_dispatch.json "
+        reason="hook_dispatch audit gap G9 (audit/records/seam/hook_dispatch.json "
                "step 31; the same mechanism as damage_pipeline's guard N3, "
                "raised to gap in the same pass): Hook.ModifyDamageInternal "
                "(Hook.cs:2515-2538) threads a RUNNING decimal through the "
@@ -1198,7 +1198,7 @@ class TestHookDispatchOrder:
                "`amount = int(amount * hooks.modify_damage_multiplicative"
                "(...))`. No implementation on either side reads the value it "
                "is handed (0 of 46 C# overrides, 0 of 31 sim ones -- "
-               "tools/audit/dormancy_probes.py cs-running-value / "
+               "audit/tools/dormancy_probes.py cs-running-value / "
                "sim-running-value), so the divergence is the aggregation "
                "SHAPE, not the argument: 1.5 * 0.7 is 1.0499999999999998 in "
                "float, so 20 * that truncates to 20, where 20m * 1.5m * 0.7m "
@@ -1231,9 +1231,9 @@ class TestHookDispatchOrder:
 class TestMonsterStateMachineOrder:
     """Task 10 (`monster_state_machine`) pins.
 
-    The spec is `docs/audit/seams/monster_state_machine.md`; verdicts are in
-    `audits/seam/monster_state_machine.json`. Every number a reason cites is
-    reproducible from `tools/audit/state_machine_probes.py`.
+    The spec is `audit/seams/monster_state_machine.md`; verdicts are in
+    `audit/records/seam/monster_state_machine.json`. Every number a reason cites is
+    reproducible from `audit/tools/state_machine_probes.py`.
 
     Pin-table note: the "repeat-rule enforcement" pin is already carried by
     `test/test_new_features.py::TestStateMachine` --
@@ -1305,7 +1305,7 @@ class TestMonsterStateMachineOrder:
         Pinned because nothing else asserts it and a future
         `telegraph_next_move` call inside `CreatureCmd.add` would silently
         double-roll (one extra MonsterAi draw plus a second log entry).
-        Executed equivalently by `tools/audit/state_machine_probes.py
+        Executed equivalently by `audit/tools/state_machine_probes.py
         spawn-roll`."""
         from sts2_rl.cmds import CreatureCmd
         from sts2_rl.monsters import Encounter
@@ -1337,7 +1337,7 @@ class TestMonsterStateMachineOrder:
         assert spawn._current_move.id == spawn.machine.current.id
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G1 (audits/seam/"
+        reason="monster_state_machine audit gap G1 (audit/records/seam/"
                "monster_state_machine.json step 13), LIVE. C#'s "
                "RandomBranchState.AddBranch puts cooldown-or-maxRepeats in "
                "positional slot 2 and NEVER a weight -- every weight is a "
@@ -1346,7 +1346,7 @@ class TestMonsterStateMachineOrder:
                "(monsters/state_machine.py:160-167), so a positional port "
                "turns a repeat limit into a weight. This is the shipped "
                "TwigSlimeM/Flyconid bug class, still present in FIVE ported "
-               "monsters (tools/audit/state_machine_probes.py mismatch): "
+               "monsters (audit/tools/state_machine_probes.py mismatch): "
                "FlailKnight.cs:50,51 AddBranch(FLAIL, 2) / AddBranch(RAM, 2) "
                "= maxRepeats 2 weight 1, ported at "
                "monsters/hive/flail_knight.py:51-52 as weight=2.0 "
@@ -1385,7 +1385,7 @@ class TestMonsterStateMachineOrder:
             assert b["max_times"] == 2
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G4 (audits/seam/"
+        reason="monster_state_machine audit gap G4 (audit/records/seam/"
                "monster_state_machine.json steps 39, 40, 44), LIVE. "
                "Creature.StunInternal (Creature.cs:524-544) makes the stun a "
                "REAL move: it builds MoveState('STUNNED', stunMove, new "
@@ -1449,7 +1449,7 @@ class TestMonsterStateMachineOrder:
         assert [s.id for s in mon.machine.state_log] == log_before + [deferred]
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G5 (audits/seam/"
+        reason="monster_state_machine audit gap G5 (audit/records/seam/"
                "monster_state_machine.json step 36), DORMANT. "
                "CreatureCmd.stun's next_move_key override is gated on "
                "hasattr(target, '_move_key') (cmds.py:216-217) -- _move_key "
@@ -1490,7 +1490,7 @@ class TestMonsterStateMachineOrder:
         assert mon._current_move.id == "LASH_MOVE"
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G6 (audits/seam/"
+        reason="monster_state_machine audit gap G6 (audit/records/seam/"
                "monster_state_machine.json steps 35, 41), DORMANT -- see the "
                "demotion below. The machine "
                "itself is already on the right stream -- "
@@ -1574,7 +1574,7 @@ class TestMonsterStateMachineOrder:
         assert rng.floats == before
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G7 clause (a) (audits/seam/"
+        reason="monster_state_machine audit gap G7 clause (a) (audit/records/seam/"
                "monster_state_machine.json step 21), DORMANT. C# treats "
                "CanRepeatXTimes with maxTimes == 0 as a PERMANENTLY DISABLED "
                "branch -- RandomBranchState.cs:144-147 computes n = 0, "
@@ -1626,7 +1626,7 @@ class TestMonsterStateMachineOrder:
         assert ids == {"B"}
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G8 clause (a) (audits/seam/"
+        reason="monster_state_machine audit gap G8 clause (a) (audit/records/seam/"
                "monster_state_machine.json step 3; clauses (b) and (c) are "
                "steps 37 and 22, the same mechanism at two more sites and so "
                "the same verdict by rule 3), DORMANT. Every C# "
@@ -1667,7 +1667,7 @@ class TestMonsterStateMachineOrder:
             MonsterMoveStateMachine([first, second], first)
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G3 (audits/seam/"
+        reason="monster_state_machine audit gap G3 (audit/records/seam/"
                "monster_state_machine.json step 10), DORMANT. "
                "MoveState.GetNextState is (FollowUpState?.Id ?? "
                "FollowUpStateId) ?? throw (MoveState.cs:23-25, 67-70) -- the "

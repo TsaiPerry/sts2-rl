@@ -4,8 +4,8 @@ Every "executed evidence" number a seam record states about *which sim or game
 classes implement a hook* is produced here, so a later auditor can re-derive it
 instead of trusting a throwaway script. Each probe prints its own counts.
 
-  py tools/audit/dormancy_probes.py                 # every probe
-  py tools/audit/dormancy_probes.py card-hooks      # one probe
+  py audit/tools/dormancy_probes.py                 # every probe
+  py audit/tools/dormancy_probes.py card-hooks      # one probe
 
 Probes (seam/hook_dispatch unless noted):
   card-hooks        G1, N5   which HookSystem hooks sim Card classes implement
@@ -34,7 +34,7 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from tools.audit.harness import DEFAULT_GAME_ROOT  # noqa: E402
+from audit.tools.harness import DEFAULT_GAME_ROOT  # noqa: E402
 
 HOOK_CS = "src/Core/Hooks/Hook.cs"
 ABSTRACT_MODEL_CS = "src/Core/Models/AbstractModel.cs"

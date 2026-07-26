@@ -1,10 +1,10 @@
 """Reproducible probes for seam/monster_state_machine (Task 10).
 
-Same contract as tools/audit/dormancy_probes.py: every "executed evidence"
+Same contract as audit/tools/dormancy_probes.py: every "executed evidence"
 number the record states is produced here so a later auditor can re-derive it.
 
-  py tools/audit/state_machine_probes.py                # every probe
-  py tools/audit/state_machine_probes.py cs-addbranch   # one probe
+  py audit/tools/state_machine_probes.py                # every probe
+  py audit/tools/state_machine_probes.py cs-addbranch   # one probe
 
 Probes:
   cs-addbranch      the AddBranch overload census: every C# monster call site
@@ -71,7 +71,7 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from tools.audit.harness import DEFAULT_GAME_ROOT  # noqa: E402
+from audit.tools.harness import DEFAULT_GAME_ROOT  # noqa: E402
 
 CS_MONSTER_DIR = "src/Core/Models/Monsters"
 SIM_MONSTER_DIR = "sts2_rl/monsters"
@@ -286,7 +286,7 @@ def branch_order() -> None:
 def hand_rolled() -> None:
     """Sim Monster subclasses whose C# model uses a RandomBranchState."""
     import sts2_rl.monsters  # noqa: F401
-    from tools.audit.harness import _monster_units
+    from audit.tools.harness import _monster_units
     from sts2_rl.monsters.state_machine import MachineMonster
 
     cs_with_branch = {p.stem for p in
@@ -404,7 +404,7 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
     import random as _random
 
     import sts2_rl.monsters  # noqa: F401
-    from tools.audit.harness import _monster_units
+    from audit.tools.harness import _monster_units
     from sts2_rl.monsters.state_machine import MachineMonster
 
     class _Owner:
@@ -547,7 +547,7 @@ def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
     import random as _random
 
     import sts2_rl.monsters  # noqa: F401
-    from tools.audit.harness import _monster_units
+    from audit.tools.harness import _monster_units
     from sts2_rl.combat import CombatState
     from sts2_rl.monsters import Encounter
     from sts2_rl.monsters.state_machine import MachineMonster
@@ -984,7 +984,7 @@ def stun_machine() -> None:
 
 
 # ── rule-7 sweep: every cited file must be a hashed source ───────────────
-_SWEEP_EXCLUDE = ("test/", "tools/audit/")
+_SWEEP_EXCLUDE = ("test/", "audit/tools/")
 
 
 def sources_sweep() -> None:
@@ -1007,14 +1007,14 @@ def sources_sweep() -> None:
     Residual limitation, stated rather than hidden: for an ambiguous bare
     basename the probe cannot know WHICH candidate the prose meant, so it
     accepts the token if any candidate is hashed and flags it for a human."""
-    from tools.audit.harness import SEAM_SOURCES
+    from audit.tools.harness import SEAM_SOURCES
 
     game_paths, sim_paths = SEAM_SOURCES["monster_state_machine"]
     hashed_full = set(game_paths) | set(sim_paths)
 
     texts = []
-    for rel in ("audits/seam/monster_state_machine.json",
-                "docs/audit/seams/monster_state_machine.md"):
+    for rel in ("audit/records/seam/monster_state_machine.json",
+                "audit/seams/monster_state_machine.md"):
         f = _REPO / rel
         if f.exists():
             texts.append((rel, f.read_text(encoding="utf-8")))
@@ -1101,7 +1101,7 @@ def stun_sites() -> None:
     whether the target is the caller itself (a monster self-stun, which can
     never be the player) or an externally supplied creature."""
     import sts2_rl.monsters  # noqa: F401
-    from tools.audit.harness import _monster_units
+    from audit.tools.harness import _monster_units
     from sts2_rl.monsters.state_machine import MachineMonster
 
     rows = []
@@ -1427,7 +1427,7 @@ def spawn_roll() -> None:
 
     # is the non-enemy-monster arm representable in the sim at all?
     import sts2_rl.monsters  # noqa: F401
-    from tools.audit.harness import _monster_units
+    from audit.tools.harness import _monster_units
     sides = set()
     for _uid, cls in sorted(_monster_units().items()):
         if not issubclass(cls, MachineMonster):

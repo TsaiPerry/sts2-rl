@@ -6,9 +6,9 @@ never judges faithfulness. Agents write the audit records; this tool makes
 sure they cannot skip a unit, skip a hook, or leave a verdict vague.
 
 Usage:
-  py tools/audit/harness.py roster [KIND]       # work queue + unmatched units
-  py tools/audit/harness.py skeleton UNIT       # write record skeleton
-  py tools/audit/harness.py validate [PATH...]  # validate records
+  py audit/tools/harness.py roster [KIND]       # work queue + unmatched units
+  py audit/tools/harness.py skeleton UNIT       # write record skeleton
+  py audit/tools/harness.py validate [PATH...]  # validate records
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ import re
 import sys
 from pathlib import Path
 
+# audit/tools/harness.py -> parents[0]=audit/tools, [1]=audit, [2]=repo root.
 _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
@@ -30,7 +31,7 @@ if str(_REPO) not in sys.path:
 DEFAULT_GAME_ROOT = Path(
     os.environ.get("STS2_GAME_SRC", r"c:\Users\Perry\Desktop\Slay the Spire 2")
 )
-DEFAULT_AUDITS_DIR = _REPO / "audits"
+DEFAULT_AUDITS_DIR = _REPO / "audit" / "records"
 NAME_OVERRIDES_PATH = Path(__file__).with_name("name_overrides.json")
 
 # Audit verdicts in rollup precedence order (low -> high).
@@ -206,7 +207,7 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         # counterpart — the pile verbs are on PlayerCombatState (player.py),
         # the deck/gold verbs on RunState (run.py), and CardCmd.AutoPlay maps
         # to CombatState.auto_play_card (combat.py). See the scope-boundary
-        # section of docs/audit/seams/creature_card_cmds.md for the
+        # section of audit/seams/creature_card_cmds.md for the
         # method-level split against turn_structure and hook_dispatch.
         # Three more files were added in the Task 7 fix pass because the record
         # cites them as primary evidence and an unpinned source cannot go
@@ -269,7 +270,7 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         #    block-clear skip), ClearBlock (718-728), OnSideSwitch (694-704),
         #    TakeTurn (706-716), PrepareForNextTurn (546-554), IsPrimaryEnemy
         #    (252-263). Split by method against creature_card_cmds — see the
-        #    scope-boundary section of docs/audit/seams/turn_structure.md.
+        #    scope-boundary section of audit/seams/turn_structure.md.
         #  - PlayerCombatState.cs: TurnNumber/IncrementTurnNumber, ResetEnergy /
         #    AddMaxEnergyToCurrent, EndOfTurnCleanup, Phase.
         #  - CardModel.cs: OnTurnEndInHandWrapper (1682-1698) and the per-turn
@@ -399,8 +400,8 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         # Added in the Task 9 FIX PASS. The rule above was stated and then only
         # half-applied: these files are cited as evidence by the record (most
         # of them with line numbers) and were not hashed. Swept for with
-        # tools/audit/dormancy_probes.py's companion citation sweep, i.e. every
-        # .py/.cs token in audits/seam/hook_dispatch.json + the doc, resolved to
+        # audit/tools/dormancy_probes.py's companion citation sweep, i.e. every
+        # .py/.cs token in audit/records/seam/hook_dispatch.json + the doc, resolved to
         # a real path and checked against this table. Game side:
         #  - Models/Afflictions/Hexed.cs: the ONLY C# affliction overriding an
         #    AbstractModel hook (AfterCardEnteredCombat) -- G6's whole dormancy
@@ -597,7 +598,7 @@ def _hash_sources(paths: list[str], base: Path) -> list[dict]:
 
 def skeleton(unit: str, game_root: Path | None = None,
              audits_dir: Path | None = None) -> Path:
-    """Write audits/<kind>/<id>.json with hooks/steps enumerated and
+    """Write audit/records/<kind>/<id>.json with hooks/steps enumerated and
     verdicts empty, ready for an agent to fill in. Refuses to overwrite."""
     root = game_root or DEFAULT_GAME_ROOT
     adir = audits_dir or DEFAULT_AUDITS_DIR

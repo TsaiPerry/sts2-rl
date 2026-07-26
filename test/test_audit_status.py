@@ -1,4 +1,4 @@
-"""Tests for tools/audit_status.py using a synthetic game root + ledger.
+"""Tests for audit/tools/audit_status.py using a synthetic game root + ledger.
 
 Self-contained on purpose: `test/` shadows CPython's stdlib `test` package,
 so importing fixtures from test.test_audit_harness would resolve to the
@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools import audit_status
-from tools.audit import harness
+from audit.tools import audit_status
+from audit.tools import harness
 
 FIXTURE_CS = """\
 public sealed class FixtureRelic : RelicModel

@@ -6,7 +6,7 @@ checks completeness. Read BOTH files fully before writing any verdict.
 
 ## Procedure
 
-1. `py tools/audit/harness.py skeleton <kind>/<id>` (skip if the record
+1. `py audit/tools/harness.py skeleton <kind>/<id>` (skip if the record
    exists from a previous incomplete pass — then re-read it critically).
 2. Read the C# file top to bottom. List for yourself: every override, every
    guard clause / early return, every numeric constant (take the
@@ -22,7 +22,7 @@ checks completeness. Read BOTH files fully before writing any verdict.
    on purpose — rationale required) | `gap` (real divergence — `issue`
    required, describing the observable wrong behavior). NEVER fix engine
    code during an audit; record the gap.
-6. `py tools/audit/harness.py validate audits/<kind>/<id>.json` must pass.
+6. `py audit/tools/harness.py validate audit/records/<kind>/<id>.json` must pass.
 
 ## Known bug classes — check EVERY one against your unit
 

@@ -1,7 +1,7 @@
 """Extract every ``verdict == "gap"`` entry from the seam audit records.
 
-This is the generator behind ``docs/audit/GAP-QUEUE.md``.  Nothing here reads or
-writes engine code; it only parses ``audits/seam/*.json`` plus the xfail pins in
+This is the generator behind ``audit/GAP-QUEUE.md``.  Nothing here reads or
+writes engine code; it only parses ``audit/records/seam/*.json`` plus the xfail pins in
 ``test/test_hook_order.py`` so the queue's counts are reproducible instead of
 transcribed.
 
@@ -21,7 +21,7 @@ joins that guard's mechanism; a guard entry anchors its own; the rest stand
 alone.  ``_CROSS_RECORD`` then merges mechanism keys that the records themselves
 declare to be the same mechanism recorded in two seams.
 
-Usage:  py tools/audit/gap_queue.py <command>
+Usage:  py audit/tools/gap_queue.py <command>
 """
 
 from __future__ import annotations
@@ -31,8 +31,11 @@ import re
 import sys
 from pathlib import Path
 
+# audit/tools/gap_queue.py -> parents[0]=audit/tools, [1]=audit, [2]=repo root.
 ROOT = Path(__file__).resolve().parents[2]
-RECORD_DIR = ROOT / "audits" / "seam"
+RECORD_DIR = ROOT / "audit" / "records" / "seam"
+# test_hook_order.py deliberately did NOT move into audit/ -- it is a pytest
+# suite member and its strict-xfail gap pins must run with the normal suite.
 PIN_FILE = ROOT / "test" / "test_hook_order.py"
 
 SEAMS = [
@@ -95,7 +98,7 @@ _PRIMARY_OVERRIDE = {
 # Additional mechanisms an entry is ALSO a site of (does not affect counts;
 # each entry is counted once, under its primary mechanism).
 _ALSO = {
-    # "(c) AGGREGATION SHAPE -- this is gap G9 of audits/seam/hook_dispatch.json
+    # "(c) AGGREGATION SHAPE -- this is gap G9 of audit/records/seam/hook_dispatch.json
     #  (step 31), the same mechanism as ... damage_pipeline.json guard N3,
     #  carried here at the third and last of its three sites"
     "creature_card_cmds/step13": ["hook_dispatch/G9"],
@@ -419,7 +422,7 @@ def cmd_json():
 
 
 GAME_ROOT = Path(r"c:\Users\Perry\Desktop\Slay the Spire 2")
-QUEUE_DOC = ROOT / "docs" / "audit" / "GAP-QUEUE.md"
+QUEUE_DOC = ROOT / "audit" / "GAP-QUEUE.md"
 _CITE = re.compile(r"`?([\w][\w./-]*\.(?:py|cs)):(\d+)(?:-(\d+))?`?")
 
 # Citations the queue quotes BECAUSE they are broken -- the two stale record

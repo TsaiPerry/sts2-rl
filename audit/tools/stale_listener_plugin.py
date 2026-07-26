@@ -15,7 +15,7 @@ dispatch is otherwise unchanged, and the shadow is removed in a `finally`.
 
 Run it over the whole suite from the repo root:
 
-    py -m pytest test/ -q -p tools.audit.stale_listener_plugin
+    py -m pytest test/ -q -p audit.tools.stale_listener_plugin
 
 The report is printed at session finish. A non-empty report is not
 automatically a bug -- C#'s `Contains` also lets a *power* through on

@@ -1,10 +1,10 @@
 """Audit ledger status: coverage, staleness, open gaps.
 
-Aggregates audits/ against the harness roster and both source trees.
+Aggregates audit/records/ against the harness roster and both source trees.
 
-  py tools/audit_status.py                # report, exit 0 (2 if invalid records)
-  py tools/audit_status.py --strict       # also exit 1 on stale/gaps/unaudited
-  py tools/audit_status.py --kind relic   # one kind (or "seam")
+  py audit/tools/audit_status.py                # report, exit 0 (2 if invalid records)
+  py audit/tools/audit_status.py --strict       # also exit 1 on stale/gaps/unaudited
+  py audit/tools/audit_status.py --kind relic   # one kind (or "seam")
 
 Success statement this enables: "N of M in-scope units audited faithful,
 zero stale, zero open gaps."
@@ -16,11 +16,15 @@ import json
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[1]
+# audit/tools/audit_status.py -> parents[0]=audit/tools, [1]=audit, [2]=repo
+# root. The repo root has to be on sys.path BEFORE the `audit.tools` import
+# below, because running this file as a script puts audit/tools on sys.path
+# and not the root the `audit` namespace package lives under.
+_REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from tools.audit import harness
+from audit.tools import harness
 
 
 def _is_stale(record: dict, unit: str, game_root: Path) -> bool:
