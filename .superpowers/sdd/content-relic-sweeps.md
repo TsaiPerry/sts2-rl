@@ -77,10 +77,25 @@ fixed. Read this before trusting any earlier sweep-A output:
    `red_skull`, `ruined_helmet` and `pumpkin_candle`.
 
    The driver now applies stimulus (damage to ~38% HP, +2 Strength, one card
-   played) and — more importantly — **checks whether combat 1 latched anything
-   at all**. If it did not, the relic is reported `INCONCLUSIVE`, never as
-   agreement. A false clear is strictly worse than a false hit: nothing
-   downstream re-checks a unit the sweep called clean.
+   played) to combat 1 **and to both sides of combat 2**, samples the relic's
+   fields at every step rather than only at the end, and — most importantly —
+   **checks whether combat 1 latched anything at all**. If it did not, the relic
+   is reported `INCONCLUSIVE`, never as agreement.
+
+   **The residual, stated plainly: the fixed driver still cannot clear a unit.**
+   Its no-delta bucket is *known* to contain live gaps — `diamond_diadem`, whose
+   stale count is only read after a WON combat 1 (and the driver breaks out
+   before `end_turn` once the fight is over, so it can never produce that), and
+   `paels_legion`, whose stale `cooldown` changes what a Defend *does* (block 5
+   vs 10) rather than what any field reads. The bucket is therefore labelled
+   "SHOW NO DELTA UNDER THIS STIMULUS" and prints both known false clears, so it
+   cannot be read as a clean bill. **`sweep-reset-exec` escalates candidates; it
+   never clears one.** Only a purpose-built probe does.
+
+   A false clear is strictly worse than a false hit: nothing downstream
+   re-checks a unit the sweep called clean. Both sweep failures that survived
+   the first rewrite — B's under-report and A's false clears — were in that
+   direction, and batch 9 then found a third of the same kind in sweep C.
 
    `red_skull` is why this matters. Its un-reset `_applied` makes combat 2 at
    full HP open with **Strength −3** — the relic subtracts a bonus it never

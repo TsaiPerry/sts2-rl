@@ -891,20 +891,37 @@ def probe_sweep_reset_exec() -> None:
             carried = make_relic(rid)
             virgin = {k: repr(v) for k, v in vars(make_relic(rid)).items()
                       if k not in _BASE_ATTRS}
+            def _fields():
+                return {k: repr(v) for k, v in vars(carried).items()
+                        if k not in _BASE_ATTRS}
+
             cs1 = CombatState(rng=random.Random(0), relics=[carried])
             _stimulate(cs1)
+            # Sample EVERY step, not just the end. A per-turn field that the
+            # stimulus writes and the next turn-start hook clears is back at its
+            # virgin value by the end of the loop, so an end-only check calls it
+            # unlatched -- which is how paels_legion's `cooldown` (0 -> 2 on a
+            # card play, cleared each turn) stayed misreported after the first
+            # attempt at this fix.
+            latched = _fields() != virgin
             for _ in range(3):
                 if cs1.is_over:
                     break
                 cs1.end_turn()
-            # Did combat 1 actually LATCH anything? If not, the cross-combat
-            # diff below is vacuous and must not be reported as agreement.
-            latched = {k: repr(v) for k, v in vars(carried).items()
-                       if k not in _BASE_ATTRS} != virgin
+                latched = latched or _fields() != virgin
             # Combat 2 with the SAME instance, exactly as RunState.relics does.
             cs2 = CombatState(rng=random.Random(1), relics=[carried])
             fresh = make_relic(rid)
             cs_fresh = CombatState(rng=random.Random(1), relics=[fresh])
+            # Stimulate BOTH sides of combat 2 identically before snapshotting.
+            # Comparing only the construction-time state misses every relic
+            # whose stale field changes what a card DOES rather than what the
+            # field reads: paels_legion enters combat 2 with cooldown 2 vs 0,
+            # which is invisible until a Defend is played (block 5 vs 10, batch
+            # 11's executed evidence). Same stimulus, same rng, so any delta is
+            # attributable to the carried state.
+            _stimulate(cs2)
+            _stimulate(cs_fresh)
             a, b = _snapshot(carried, cs2), _snapshot(fresh, cs_fresh)
             delta = {k: (b.get(k), a.get(k)) for k in a | b.keys()
                      if a.get(k) != b.get(k)}
@@ -918,9 +935,22 @@ def probe_sweep_reset_exec() -> None:
             errored.append((rid, f"{type(exc).__name__}: {exc}"))
 
     print(f"  {len(candidates)} candidate(s) executed: {len(diverged)} carry "
-          f"state into combat 2, {len(agreed)} agree with a fresh instance, "
-          f"{len(blind)} INCONCLUSIVE (driver never latched the field), "
-          f"{len(errored)} could not be driven")
+          f"state into combat 2, {len(agreed)} SHOW NO DELTA UNDER THIS "
+          f"STIMULUS, {len(blind)} INCONCLUSIVE (driver never latched the "
+          f"field), {len(errored)} could not be driven")
+    if agreed:
+        print("\n  NO DELTA UNDER THIS STIMULUS -- this is NOT a clean bill. "
+              "This bucket is known to contain live gaps:\n"
+              "  diamond_diadem (batch 4, LIVE: the stale count is read at "
+              "combat 2's turn 1, which needs a WON combat 1 --\n"
+              "  and the driver breaks out before end_turn when the fight is "
+              "over, so it can never produce that) and\n"
+              "  paels_legion (batch 11, LIVE: cooldown 2 vs 0 changes what a "
+              "Defend DOES, block 5 vs 10). Treat every unit\n"
+              "  here as UNAUDITED. The sweep generates candidates; only a "
+              "purpose-built probe clears one:")
+        for rid, _ in agreed:
+            print(f"    {rid}")
     print("\n  CARRIES STATE ACROSS THE COMBAT BOUNDARY "
           "(field: fresh-instance value -> carried-instance value):")
     for rid, delta in diverged:
