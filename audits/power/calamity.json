@@ -1,0 +1,56 @@
+{
+  "unit": "power/calamity",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CalamityPower.cs",
+    "sha256": "c4f55d42c349a1514dbf2b8f29a4ba65d2ba583cf17b21a086640ff8dc916dca"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3482 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "no sim counterpart -- powers.py:3484 uses on_card_played only",
+      "verdict": "gap",
+      "issue": "C# uses a TWO-HOOK LATCH the sim collapses into one. CalamityPower.cs:28-40 records amountsForPlayedCards[card] = base.Amount at BeforeCardPlayed and :44 removes it at AfterCardPlayed, so (a) the Amount is SNAPSHOTTED at the start of the play and (b) the after-hook only fires for a card the before-hook admitted. The sim reads self.amount at the end of the play (powers.py:3493) and re-tests the card type there. Consequence: if the Attack's own resolution stacks Calamity, the game generates the OLD amount and the sim the NEW one; and if the Attack's resolution somehow changed its type the sim would disagree about whether to fire at all. DORMANT: no ported Attack applies Calamity (its only applier is the Calamity card itself, a Power) and card types are immutable in the sim. Named trigger: any Attack that grants Calamity. The latch is also what makes the C# side safe against Dictionary.Add throwing on a repeat key, since BeforeCardPlayed and AfterCardPlayed are both inside the per-CardPlay loop and pair up -- see the AfterCardPlayed entry."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:3484-3494 CalamityPower.on_card_played (hooks.py:385-389, combat.py:514)",
+      "verdict": "gap",
+      "issue": "TWO gaps. (1) THE COUNT: hook_dispatch's G4 (the per-CardPlay bracket): CardModel.cs:1904-1965 constructs a fresh CardPlay per replay iteration and fires Hook.BeforeCardPlayed (:1929) and Hook.AfterCardPlayed (:1959) INSIDE the loop, where combat.py:466 fires before_card_played once before the `for _ in range(play_count)` loop (:477-494) and combat.py:514 fires on_card_played once after it. Already LIVE with a Throwing Axe / Pen Nib witness and not re-verdicted here per binding rule 3; what is recorded is this unit's share of it. Throwing Axe is a ported relic from the ported Tanx shrine (relics/throwing_axe.py:30-36, events/tanx.py:13) and power/duplication and power/one_two_punch are ported replay sources. C# fires BeforeCardPlayed/AfterCardPlayed once per replay iteration, so a Throwing-Axe-doubled or Duplication-doubled Attack generates 2 x Amount cards in the game and Amount in the sim -- combat.py:514 fires on_card_played once per card, outside the `for _ in range(play_count)` loop. (2) THE RNG AND THE POOL HELPER: C# is CardFactory.GetForCombat(pool.GetUnlockedCards().Where(Type == Attack), base.Amount, Rng.CombatCardGeneration) (CalamityPower.cs:48-50) -- the WITH-replacement variant, one rng.NextItem per card (CardFactory.cs:140-150) -- and the sim calls random_pool_cards(combat._rng, ...) (powers.py:3493), the LEGACY shared-rng helper, where cards.pool.get_for_combat_parity (pool.py:164-179) is an already-written, already-documented parity port of exactly this call and takes the card_gen accessor. WRONG RNG STREAM. combat._rng is the SHARED unseeded random.Random (combat.py:88), NOT the per-purpose accessor object -- that is combat.combat_rng, built one line later at combat.py:94, whose seven named accessors (combat_rng.py:17-25: shuffle, monster_ai, card_gen, card_selection, targets, energy, potion_gen) are GameRandomAdapters over the matching RunRngSet streams in a parity run. This is the sixth and seventh power unit in this stream with the same defect -- power/aggression (main report section 4 item 8), then power/hello_world, power/entropy, power/stampede and power/confused in half A -- so it is systematic, not incidental, and it is proposed as its own PROMPT.md bug class in .superpowers/sdd/content-power-report-a.md section 7 item 11. LIVE under seed parity by construction: the draw comes off a different stream in a different order AND every later consumer of the shared rng is perturbed. Third-file citations, not hashed here. The with-replacement SEMANTICS are right on both sides (duplicates allowed -- the sim's docstring at powers.py:3477-3478 says so, and the C# doc comment at CardFactory.cs:131-133 contrasts it with GetDistinctForCombat, which is the call power/hello_world gets wrong in the other direction)."
+    }
+  },
+  "guards": [
+    {
+      "what": "CalamityPower.cs:30-33 / :34-37 the owner and Attack-type guards",
+      "verdict": "faithful",
+      "rationale": "The owner test is a single-player tautology the sim omits; the Attack-type test is powers.py:3488. Both sides therefore ignore Skills and Powers."
+    },
+    {
+      "what": "CalamityPower.cs:48-49 the pool: Character.CardPool.GetUnlockedCards filtered to Type == Attack",
+      "verdict": "faithful",
+      "rationale": "cards.pool.random_pool_cards(..., CardType.ATTACK) filters pool_card_ids (pool.py:100-117 -- the documented port of CardFactory.FilterForCombat, excluding Basic/Ancient rarities and can_be_generated_in_combat=False) by card type. Filter and order match; GetForCombat's other step is FilterForPlayerCount (CardFactory.cs:143, multiplayer -- waived)."
+    },
+    {
+      "what": "CalamityPower.cs:53 AddGeneratedCardToCombat(item, PileType.Hand, ...)",
+      "verdict": "faithful",
+      "rationale": "powers.py:3494 CardPileCmd.add_to_hand per card -- same destination, same on_card_entered_combat path. Neither side clamps to the max hand size here, unlike power/stratagem's port."
+    },
+    {
+      "what": "The sim ADDS a combat.is_over guard",
+      "verdict": "faithful",
+      "rationale": "powers.py:3491-3492. C# has none, relying on Hook.IterateCombatHookListeners' IsOverOrEnding gate (Hook.cs:53-63) and on CardModel.cs:1957's `if (CombatManager.Instance.IsInProgress)` around the AfterCardPlayed call. The sim has neither (hook_dispatch's G8), so the inline check is the sim compensating for a recorded engine gap, not a divergence."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

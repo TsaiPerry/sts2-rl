@@ -1,0 +1,51 @@
+{
+  "unit": "power/stratagem",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\StratagemPower.cs",
+    "sha256": "a3326b138b55d9b860d944c77ebc87af4f6836504b57bc47f785621433558be5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3734 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterShuffle": {
+      "maps_to": "powers.py:3736-3745 StratagemPower.on_shuffle (hooks.py:433-439)",
+      "verdict": "faithful",
+      "rationale": "Same hook, same order of operations: select Amount cards from the DRAW pile and move them to the hand (StratagemPower.cs:24-27 vs powers.py:3738-3745). The selection goes through CardSelectCmd.from_pile (cmds.py:532-542) -> CombatState.select_cards (combat.py:560-581), which is the sim's modelled player-choice seam -- it delegates to an installed card_selector (the conformance replay, the RL policy) and falls back to a uniform random pick only when none is installed, which is the same treatment power/entropy's CardSelectCmd.FromHand gets. C# passes CardSelectorPrefs(base.SelectionScreenPrompt, base.Amount); the sim's purpose string 'from_draw' stands in for the prompt. The move is a pile transfer, not a draw, on both sides -- C# CardPileCmd.Add(item, PileType.Hand) at :26, the sim remove/append at :3744-3745 -- so neither fires on_card_drawn and power/automation and power/confused do not see these cards. Correct."
+    }
+  },
+  "guards": [
+    {
+      "what": "StratagemPower.cs:19-22 player != base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "The sim's on_shuffle carries the player (hooks.py:433) and the sim uses it as the pile owner rather than as a filter (powers.py:3736-3739). Tautology in single-player."
+    },
+    {
+      "what": "The sim ADDS a MAX_HAND_SIZE break",
+      "verdict": "faithful",
+      "rationale": "powers.py:3742-3743 stops moving cards once the hand is full. C# relies on CardPileCmd.Add's own handling of CardPile.MaxCardsInHand (the constant CombatManager.cs:671 also clamps the turn-1 innate draw against), so the cap exists on both sides -- what differs is only where it is enforced. Defensive, not divergent. Third-file citation, not hashed here."
+    },
+    {
+      "what": "The shuffle timing",
+      "verdict": "faithful",
+      "rationale": "AfterShuffle fires when the discard pile is shuffled into an empty draw pile, which mid-draw means cards move back into the hand while the draw is still in progress. Both sides fire from the shuffle site itself, so the interleaving is the same; the sim's reshuffle site is player.reshuffle_discard_into_draw (player.py:199ff), whose own pile-limbo handling for a card mid-OnPlay (player.py:203-206) is the PROMPT.md bug class 7 fix and is not this power's concern."
+    },
+    {
+      "what": "Stratagem is never removed",
+      "verdict": "faithful",
+      "rationale": "Neither side ticks or removes it. Both agree."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

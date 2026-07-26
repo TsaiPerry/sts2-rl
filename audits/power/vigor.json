@@ -1,0 +1,56 @@
+{
+  "unit": "power/vigor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\VigorPower.cs",
+    "sha256": "4422ba55e4d4e0bd85b06b95e5c88bceb6947374255d9d5587c3933c86efc11e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1880 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeAttack": {
+      "maps_to": "powers.py:1903-1913 VigorPower.before_attack (hooks.py:344-359, combat.py:479 and Monster._execute_attack)",
+      "verdict": "faithful",
+      "rationale": "One of only TWO power units that use the sim's before_attack/after_attack slots (the other is power/gigantification); power/thorns, power/curl_up and power/skittish all have C# before/after-attack hooks and reach for on_damage_received instead, which is the main report's section 4 items 2, 5 and 14. The latch semantics match: C# stores the command AND snapshots Amount (VigorPower.cs:52-53), the sim stores _amount_when_attack_started (powers.py:1913), and both bail when something is already latched (C# :40-43, sim :1904). C#'s attacker guard (:31-34) is powers.py:1904's `dealer is not self.owner`; C#'s IsPoweredAttack guard (:35-38, repeated redundantly at :48-51) is powers.py:1911's `card.is_unpowered`, with the sim's comment at :1906-1910 explaining that card is None for monster attacks and that those are always powered -- which also covers C#'s :44-47 `ModelSource != null && !(ModelSource is CardModel)` arm, since a null ModelSource is exactly the non-card case both sides let through."
+    },
+    "ModifyDamageAdditive": {
+      "maps_to": "powers.py:1892-1901 VigorPower.modify_damage_additive (hooks.py:52-64, cmds.py:57)",
+      "verdict": "gap",
+      "issue": "The sim keeps only the FIRST of C#'s four guards. C# (VigorPower.cs:57-77) tests, in order: base.Owner != dealer (present, powers.py:1899), !props.IsPoweredAttack() (present structurally -- cmds.py:56-58 only runs the additive family for powered damage), `commandToModify != null && cardSource != null && cardSource != commandToModify.ModelSource` (ABSENT), and `commandToModify != null && commandToModify.Attacker != dealer` (ABSENT, and redundant with the first for a single-attacker command). The missing third guard is the real one: it confines the bonus to the LATCHED card, so while an attack is in flight a DIFFERENT card's powered damage from the same dealer gets nothing in the game and gets the full Vigor in the sim. DORMANT: reaching it needs powered damage with a different cardSource to resolve between before_attack (combat.py:479) and after_attack (:492), i.e. a card that plays another card mid-resolution, and no ported Ironclad card does that -- the ported auto-play sources (power/mayhem at turn start, power/stampede at turn end, Howl From Beyond) all fire outside any attack bracket. Named trigger: porting a Havoc-style play-another-card Attack, or any effect that issues a second powered card attack inside one play. Note the additive AGGREGATION shape is hook_dispatch's G9, which settled by execution that the additive family is exactly equal to C#'s running fold over integers -- not re-verdicted here."
+    },
+    "AfterAttack": {
+      "maps_to": "powers.py:1915-1923 VigorPower.after_attack (combat.py:492)",
+      "verdict": "faithful",
+      "rationale": "Consumes exactly the snapshotted amount, not the current one -- C# is PowerCmd.ModifyAmount(this, -internalData.amountWhenAttackStarted) (VigorPower.cs:84) and the sim is `self.amount -= consumed` where consumed is the snapshot (powers.py:1918-1920). That is the load-bearing detail: Vigor gained DURING the attack survives it on both sides. The sim then fires on_power_amount_changed for the delta (:1921) and _expires at <= 0 (:1922-1923), which is what ModifyAmount's ShouldRemoveDueToAmount does (PowerCmd.cs:247-250). The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audits/power/duplication.json and audits/power/flame_barrier.json per binding rule 3. C#'s AfterAttack has no dealer guard (it relies on command identity, VigorPower.cs:82) where the sim tests dealer is self.owner plus a non-None latch (powers.py:1916) -- equivalent, since the latch is only ever set for the owner."
+    }
+  },
+  "guards": [
+    {
+      "what": "The attack boundary itself",
+      "verdict": "faithful",
+      "rationale": "combat.py:472-479,491-492 brackets each play-count iteration of an Attack card with before_attack/after_attack, and Monster._execute_attack does the same for monster moves; the sim's docstring at powers.py:1875-1876 says so. That is C#'s AttackCommand lifetime. Note a MULTI-HIT card resolves inside ONE iteration on both sides, so Vigor's bonus applies per hit and is consumed once -- the sim's docstring at :1870-1871 states it and it matches C#, where ModifyDamageAdditive runs per damage instance and AfterAttack once per command."
+    },
+    {
+      "what": "VigorPower.cs:13-18,24-27 the per-instance Data",
+      "verdict": "faithful",
+      "rationale": "powers.py:1882-1890 initialises the latch in __init__, the sim's equivalent of InitInternalData. Vigor is NOT PowerInstanceType.Instanced (it is absent from `py tools/audit/power_census.py instance`), so one shared latch per owner is correct on both sides and power_cmd's G5 does not apply."
+    },
+    {
+      "what": "Vigor's ported appliers all pass applier=",
+      "verdict": "faithful",
+      "rationale": "power/prep_time (powers.py:3695) is the one that does NOT -- see that record's applier guard -- while Akabeko and the Terror Eel apply it directly. Nothing reads Vigor's applier on either side, so the omission is dormant there and is recorded on that unit rather than duplicated here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

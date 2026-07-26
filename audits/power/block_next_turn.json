@@ -1,0 +1,46 @@
+{
+  "unit": "power/block_next_turn",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\BlockNextTurnPower.cs",
+    "sha256": "cd97a64ecf79b7259101d74d03ff2fa37b1bd40d39ae1c35477a32c60a45cec4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3839 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterBlockCleared": {
+      "maps_to": "powers.py:3841-3848 BlockNextTurnPower.on_block_cleared (hooks.py:500-504, player.py:157-159)",
+      "verdict": "faithful",
+      "rationale": "Correct slot: C# fires Hook.AfterBlockCleared per creature at CombatManager.cs:500-507, immediately after Creature.AfterTurnStart -> ClearBlock (:492-499) and BEFORE SetupPlayerTurn (:514), and the sim clears and fires at player.py:157-159, the first thing start_turn does and before the energy reset (:163) and the draw (:183). Same owner guard (BlockNextTurnPower.cs:21 vs powers.py:3843), same amount (base.Amount), same props: GainBlock(..., ValueProp.Unpowered, null) at :24 vs props=ValueProp.UNPOWERED at :3847 -- so the regained block ignores Dexterity/Frail and ignores power/no_block and power/unmovable on both sides (cmds.py:145 gates both block families on is_powered_attack). The main report's section 4 item 4 counts this power among the eight siblings that pass UNPOWERED correctly where feel_no_pain and curl_up do not. Remove, not Decrement, on both sides, so it is one-shot regardless of Amount. Shares the slot with power/toric_toughness, which agrees."
+    }
+  },
+  "guards": [
+    {
+      "what": "BlockNextTurnPower.cs:24-25 GainBlock BEFORE Remove; the sim _expires FIRST",
+      "verdict": "deliberate-divergence",
+      "rationale": "powers.py:3845-3848 calls self._expire() and THEN BlockCmd.apply, the reverse of C#'s order (BlockNextTurnPower.cs:24 then :25). So during the block gain the power is already off the creature in the sim and still on it in the game. No ported listener observes the difference -- the sim's on_block_gained listeners are power/juggernaut (which reads only the target and amount) and relics, none of which reads Blocked Off -- and expiring first has the incidental virtue of making re-entrancy impossible. Kept as a deliberate divergence rather than faithful because it is a real ordering difference; the mirror-image ordering on power/setup_strike's family is recorded the same way. The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audits/power/duplication.json and audits/power/flame_barrier.json per binding rule 3."
+    },
+    {
+      "what": "The name mismatch: id block_next_turn, name 'Blocked Off'",
+      "verdict": "faithful",
+      "rationale": "powers.py:3837-3838. Cosmetic; the C# class is BlockNextTurnPower and the displayed title comes from loc data. Recorded because the main report's section 4 item 4 refers to this power as 'Blocked Off' and a reader matching names to ids would otherwise not find it."
+    },
+    {
+      "what": "The applier",
+      "verdict": "faithful",
+      "rationale": "The Prolong card (cards/colorless_skills.py:492's `> 0` guard is the one power_cmd's step-6 finding cites as hand-guarding the zero-amount case). No AscensionHelper call in BlockNextTurnPower.cs."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}
