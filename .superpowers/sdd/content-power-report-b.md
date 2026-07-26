@@ -16,21 +16,27 @@ list.
 
 | | |
 |---|---|
-| half-B units audited | 15 / 48 (batch 1) |
-| power kind overall | 60 / 134 audited, 0 invalid, 0 stale |
-| suite | 2476 passed / 31 xfailed at the batch-1 gate, unchanged |
-| commits | batch 1: see the branch log |
+| half-B units audited | 30 / 48 (batches 1-2) |
+| power kind overall | 75 / 134 audited, 0 invalid, 0 stale |
+| suite | 2476 passed / 31 xfailed at every batch gate, unchanged |
+| commits | batch 1 `c27003a4`; batch 2 see the branch log |
 
 ## 0. Headline findings
 
 1. **`turn_structure` G5 is settled and stays DORMANT — but its dormancy
    argument is wrong and one of its premises is false.** Section 1.
-2. **Two NEW live gaps**, both executed: **`rampart`** drops C#'s extra-turn
-   guard (Pael's Eye witness), and **`flutter`** re-rolls the stunned hopper's
-   move on the **wrong RNG stream**. Section 2.
+2. **Four NEW live gaps**, all executed. Section 2:
+   - **`rampart`** drops C#'s extra-turn guard (Pael's Eye witness);
+   - **`flutter`** re-rolls the stunned hopper's move on the **wrong RNG
+     stream**;
+   - **`power_cmd` G6 is LIVE** — its own record says "no concrete broken
+     interaction is demonstrated"; `adaptable` demonstrates one;
+   - **`minion` / `reattach`** — the missing `ShouldOwnerDeathTriggerFatal`
+     hook lets Feed pay out on a minion's death.
 3. **No fourth non-dyadic multiplicative factor** in half B. Section 4.
-4. One new **recurring gap shape** for `PROMPT.md`, plus an independent
-   reproduction of an existing seam finding's population. Sections 3 and 6.
+4. Two new **recurring gap shapes** for `PROMPT.md`, plus independent
+   reproductions of two existing seam findings' populations and two
+   corrections to seam-record text. Sections 3, 5 and 6.
 
 ## 1. `turn_structure` G5 — the question half B was asked to settle
 
@@ -190,6 +196,73 @@ different state once a `ConditionalBranchState` is involved.
 This one is worth flagging to the conformance-parity work directly, not just to
 the gap queue: it is a replay-divergence source in a ported act-2 encounter.
 
+### 2.3 `power_cmd` G6 is LIVE — `adaptable` demonstrates the interaction G6 says is undemonstrated
+
+`power_cmd`'s **G6** ("No `CombatManager.IsEnding`/`CanReceivePowers` guard
+backstop in `PowerCmd.apply`") ends with: *"No concrete broken interaction is
+demonstrated (spot-checked callers apply powers only to already-resolved
+targets)."* **That is now falsified.**
+
+`AdaptablePower.ShouldAllowHitting` (`AdaptablePower.cs:44-51`) exists for one
+stated reason — its own doc comment is *"This is so the Test Subject doesn't
+receive **powers** while it is reviving"*. C#'s `PowerCmd.Apply<T>` honours it
+through step 2's `CanReceivePowers`, which reuses `Hook.ShouldAllowHitting`. The
+sim wires `should_allow_hitting` into `DamageCmd.deal` (`cmds.py:51-52`) and
+**not** into `PowerCmd.apply`, which has no such guard at all.
+
+**Executed.** A `TEST_SUBJECT_BOSS` combat (the boss starts with powers
+`['adaptable', 'enrage']`), a lethal Strike, then Vulnerable 2 from the player:
+
+```
+after lethal hit: is_reviving True  hp 1  is_dead False
+should_allow_hitting(ts): False
+sim: vulnerable on the reviving Test Subject -> Vulnerable(2)
+control -- damage while reviving is refused by the sim too: 0
+```
+
+The control is the important half: damage **is** refused, so the predicate is
+correctly wired for one pipeline and missing from the other. Rule-6
+co-occurrence: the Test Subject is the ported Act-3 Glory boss and self-applies
+`adaptable` at combat start; Bash/Vulnerable is ported basic-pool Ironclad
+content; and the revive window is simply the rest of the player's turn after the
+killing blow. `IllusionPower` and `ReattachPower` carry the identical override,
+so all three records cross-reference it. **Reported, not edited** — half B owns
+neither `audits/seam/**` nor `docs/audit/seams/**`.
+
+### 2.4 `minion` and `reattach` — `ShouldOwnerDeathTriggerFatal` has no sim hook, and Feed pays out on a minion
+
+C# reads `ShouldOwnerDeathTriggerFatal` at three card sites — `Feed.cs:38`,
+`HandOfGreed.cs:49`, `TheHunt.cs:41` — each computing
+`cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` **before**
+the attack. `MinionPower` returns `false` (`MinionPower.cs:20-23`) and
+`ReattachPower` returns `AreAllOtherSegmentsDead()`
+(`ReattachPower.cs:106-109`). The sim has no such hook anywhere in `hooks.py`,
+and `cards/feed.py:45` tests only `target.is_dead`.
+
+**Executed.** Feed played into a 4-HP Tough Egg carrying `MinionPower 1`:
+
+```
+egg WITH minion   : (['hatch','minion'], is_dead=True, max_hp delta 3)   <- sim
+egg WITHOUT minion: (['hatch'],          is_dead=True, max_hp delta 3)   <- control
+game WITH minion  : shouldTriggerFatal=False -> max_hp delta 0
+```
+
+Rule-6 co-occurrence: Feed is a ported Rare Ironclad Attack; Tough Eggs receive
+`MinionPower` from the ported Act-2 Hive Ovicopter
+(`monsters/hive/ovicopter.py:153`), which lays up to five of them; the Kin
+Followers are a second ported source. Hand of Greed and The Hunt are unported,
+so Feed is the whole live surface — and it is enough. The fix is a
+`should_owner_death_trigger_fatal` hook plus one line in `cards/feed.py`.
+
+**A second, opposite-direction consequence on `adaptable`:** `AdaptablePower`
+does *not* override `ShouldOwnerDeathTriggerFatal`, and in C# the Test Subject
+genuinely dies, so `WasTargetKilled` is true and **the game grants the +3 max HP
+for Feeding the Test Subject to death**. The sim prevents the death, so
+`target.is_dead` is False and it grants nothing — and `cards/feed.py:17-18`'s
+docstring asserts the opposite ("death-prevented targets such as Illusions don't
+count, which falls out of the is_dead check here"). That reasoning is right for
+Illusion (which auto-applies Minion) and **wrong for Adaptable**.
+
 ## 3. New recurring gap shape: the *substituted* guard `is_dead` for `participants.Contains(Owner)`
 
 Four half-B units (`high_voltage`, `territorial`, `nemesis`, and — for the
@@ -214,6 +287,57 @@ for `PROMPT.md`** (section 6).
 
 This is distinct from the prompt's shape 8 ("a guard the sim ADDS") because the
 sim did not add a guard — it *translated* one, and the translation is lossy.
+
+### 3b. Batch 2's own recurring shape: `should_die` standing in for `AfterDeath`
+
+Four half-B units re-express C#'s *"the creature dies, is retained in combat, and
+its `AfterDeath` listener flips it into a revive state"* as *"prevent the death
+from `should_die`"*: `adaptable`, `illusion`, `steam_eruption` and — going the
+other way — `reattach`, which uses the real hooks and is the odd one out.
+
+The substitution produces three observables:
+
+1. **HP 1 vs 0.** `cmds.py:112` floors a prevented death at 1 HP; C# leaves the
+   creature at 0 HP and dead. Conformance asserts on HP directly.
+2. **`damage_pipeline` G4.** C# locks the `AfterDamageReceived`-skip to the
+   pre-`Kill()` snapshot, so an arithmetically lethal hit permanently skips the
+   victim's on-damage-received powers; the sim resets HP to 1 *first* and only
+   then tests `target.is_dead` (`cmds.py:121`), so those powers fire. Cross-ref,
+   not re-verdicted.
+3. **`is_dead` readers.** `cards/feed.py:45` is one (section 2.4);
+   `combat.py:272-277`'s win check is another.
+
+`steam_eruption` is the model of how to do it: it *documents* the substitution
+and then repairs the only observable it produces, restoring
+`hp = max_hp = 999_999_999` from `on_damage_received`
+(`powers.py:2022-2033`) to mirror C#'s `SetMaxAndCurrentHp(999999999)`. That is
+why it is a `deliberate-divergence` and `adaptable`/`illusion` are `gap`s. Note
+the irony: its repair *depends* on G4's divergence — a prevented death must fire
+`on_damage_received` for the restore to run, and in C# it would not.
+
+### 3c. Two absent death-time machineries, reported not verdicted
+
+Both are engine-wide absences rather than any one power's divergence, so they are
+recorded here and each unit's record cross-references them:
+
+- **`ShouldStopCombatFromEnding` has no sim hook.** C# reads it inside the win
+  check (`Hook.ShouldStopCombatFromEnding`, `CombatManager.cs:196`); the sim
+  decides the win purely from `is_gone` over the non-minion enemies
+  (`combat.py:272-277`). All five ported overrides (`adaptable`, `infested`,
+  `steam_eruption`, `stock`, `surprise`) happen to be paired with a death
+  prevention or a mid-death spawn that keeps `_all_enemies_dead()` false on its
+  own, so it is dormant — but a future power wanting to hold combat open without
+  doing either has nothing to hook.
+- **`ShouldPowerBeRemovedAfterOwnerDeath` is inverted-by-omission.** C# strips a
+  dead creature's powers at `CreatureCmd.cs:533` (`RemoveAllPowersAfterDeath()`,
+  then each power's `AfterRemoved`) and the **default is `true`**. The sim never
+  removes powers on death at all. So every power that *overrides it to `false`*
+  (`adaptable`, `minion`, `reattach`, `steam_eruption`) is satisfied for free,
+  and every power that does **not** override it should be stripped and is not.
+  That is a one-line-per-site engine gap for the gap-fix stream, and it is the
+  reason several units in this batch add their own `_expire()` where C# adds
+  none — those hand-rolled expiries are the sim compensating for the missing
+  strip, one power at a time.
 
 ## 4. Non-dyadic multiplicative factors — no fourth one in half B
 
@@ -267,6 +391,34 @@ now checked from both ends.
    it is dormant **by scope** (one player = one applier), not by content — so
    unlike the rest of G5 it will not become live by porting more Ironclad
    content. Worth adding to G5.
+6. **`power_cmd` G5's documentation count is wrong: it is 3 of 11, not 2.** G5
+   says only `ToricToughnessPower` and `TheBombPower` "explicitly document the
+   approximation and hand-roll a workaround" while "the other nine do not
+   acknowledge the distinction at all". **`SwipePower` is a third**: its
+   docstring (`powers.py:2238-2247`) explains the per-stolen-card instancing and
+   bundles the instances into one `stolen_cards` list. `SwipePower` should move
+   out of the nine.
+7. **`wasRemovalPrevented` is misnamed in the decompiled source, and the obvious
+   reading is wrong.** It is passed `true` when **`Hook.ShouldDie` returned
+   false** (`CreatureCmd.cs:566`) and `false` on the real-death path
+   (`CreatureCmd.cs:519`); it has nothing to do with
+   `ShouldCreatureBeRemovedFromCombatAfterDeath`, which is computed separately at
+   `CreatureCmd.cs:508` and never feeds the flag. So `!wasRemovalPrevented`
+   means "the creature actually died". Ten half-B units guard on it, and reading
+   it the other way would have produced ten wrong verdicts. The sim satisfies it
+   structurally (`hooks.on_death` fires only on the should_die-true branch), so
+   all ten are faithful; the residue — the sim has no `AfterDeath` dispatch at
+   all for a prevented death — is dormant machinery, since no ported power acts
+   on the flag being true. **This belongs in `PROMPT.md`.**
+8. **`cards/base.py`'s `downgrade()` docstring is wrong, harmlessly.** It says
+   it "Mirrors CardCmd.Downgrade: drop one upgrade level"; `CardCmd.Downgrade`
+   → `CardModel.DowngradeInternal` (`CardModel.cs:2135-2148`) sets
+   `CurrentUpgradeLevel = 0` — a full reset. Effects agree only because **no
+   card in the game has `MaxUpgradeLevel > 1`**: `grep -rn 'override int
+   MaxUpgradeLevel' src/Core/Models/Cards/` returns only overrides to `0` plus
+   `Mocks/MockCardModel.cs`, and `grep -rn 'max_upgrade_level = [2-9]'
+   sts2_rl/` returns nothing. Flagged for the **card stream**, since
+   `dampen`'s restore loop depends on it.
 
 ## 6. Lessons for `tools/audit/PROMPT.md` (relic stream to fold in)
 
@@ -295,6 +447,29 @@ of which earned their keep this batch):
    power continuation prompt hides exactly the line you need.
 4. **`ShouldScaleInMultiplayer` is a one-line waiver** and shows up on 6 of
    half B's 48 units. Worth naming once in `PROMPT.md` rather than re-deriving.
+5. **`wasRemovalPrevented` means "the death was prevented", not "the removal
+   was prevented".** Section 5 item 7. Checklist line: *`AfterDeath`'s
+   `wasRemovalPrevented` is set from `Hook.ShouldDie` returning false
+   (`CreatureCmd.cs:566`), not from
+   `ShouldCreatureBeRemovedFromCombatAfterDeath`. `!wasRemovalPrevented` == "the
+   creature actually died". The sim's `hooks.on_death` fires only on that
+   branch, so the guard is usually satisfied structurally — say so rather than
+   calling it dropped.* Ten units in one batch turned on this.
+6. **The death-time hook family the sim does not have.** Checklist line: *the
+   sim has no `should_stop_combat_from_ending`, no
+   `should_power_be_removed_after_owner_death`, no
+   `should_power_be_removed_on_death` and no
+   `should_owner_death_trigger_fatal`. It DOES have `should_die`,
+   `should_remove_from_combat_after_death`, `after_preventing_death` and
+   `should_allow_hitting`. Check which of the eight a unit's C# uses before
+   believing any mapping.* Half B's batch 2 found one LIVE gap
+   (`should_owner_death_trigger_fatal`) hiding in that list.
+7. **A `should_die` port of an `AfterDeath` revive is a divergence, not a
+   refactor.** Section 3b. Checklist line: *when C# lets a creature die and
+   retains it (`ShouldCreatureBeRemovedFromCombatAfterDeath` false) and the sim
+   instead prevents the death from `should_die`, the creature ends at 1 HP vs 0
+   and `is_dead` disagrees — check every `is_dead` reader, `cards/feed.py`
+   included.*
 
 ## 7. Harness / roster problems (half B owns neither; reporting per the contract)
 
@@ -305,6 +480,13 @@ Nothing new beyond the main report's section 8. Specifically checked:
   Verified by reading all 15 files in full.
 - The roster resolved all 15 units correctly; no `name_overrides.json` change is
   needed for them.
+
+Additionally confirmed for batch 2: **`ThieveryPower` and `HeistPower` — two of
+the four unauditable powers (main report section 8 item 1) — are load-bearing
+dependencies of `surprise`**, whose whole gold-return mechanism is expressed in
+terms of them. So the 4-line `ALL_POWERS` fix is not merely coverage
+bookkeeping: one audited unit's correctness currently rests on two units nobody
+can record.
 
 ## 8. Cost data
 
@@ -329,22 +511,18 @@ Nothing new beyond the main report's section 8. Specifically checked:
   script, commit the script" rule. It is the reproduction path for every number
   in section 1 and for the `ungated-modifiers` population in section 5.
 
-## 9. Half B's residual queue — 33 units
+## 9. Half B's residual queue — 18 units
 
-Grouped the way batch 2 and 3 should be taken, with what is already known:
+Batch 2 (the death / minion / removal family, 15 units) is **done**:
+`adaptable`, `illusion`, `infested`, `minion`, `ravenous`, `reattach`,
+`steam_eruption`, `stock`, `surprise`, `swipe`, `crab_rage`, `dampen`, `hex`,
+`possess_speed`, `possess_strength`. It was the right group to take second —
+it yielded two of half B's four live gaps, both corrections to `power_cmd`, the
+`wasRemovalPrevented` correction, and the section-3b/3c shapes.
 
-1. **The death / minion / removal family (15)** — `adaptable`, `illusion`,
-   `infested`, `minion`, `ravenous`, `reattach`, `steam_eruption`, `stock`,
-   `surprise`, `swipe`, `crab_rage`, `dampen`, `hex`, `possess_speed`,
-   `possess_strength`. Highest expected yield: they are the units that override
-   `AfterDeath` / `ShouldAllowHitting` /
-   `ShouldCreatureBeRemovedFromCombatAfterDeath` /
-   `ShouldPowerBeRemovedAfterOwnerDeath`, i.e. the exact classes section 3 names
-   as the trigger for the substituted-guard shape. `possess_speed` /
-   `possess_strength` are also the ported *readers* of the missing-`applier=`
-   shape, so they should be audited before anything else that applies a power
-   without an applier. `swipe` carries `PowerInstanceType.Instanced`
-   (power_cmd G5) and `dampen`/`hex` carry `on_stack -> pass`.
+Remaining, grouped the way batch 3 should be taken:
+
+1. ~~The death / minion / removal family~~ — **done in batch 2.**
 2. **Damage/block modifiers and per-hit reactors (10)** — `hard_to_kill`,
    `slippery`, `plow`, `personal_hive`, `paper_cuts`, `imbalanced`, `suck`,
    `painful_stabs`, `burrowed`, `galvanic`. Expect the before-hook-on-after-hook
@@ -356,5 +534,11 @@ Grouped the way batch 2 and 3 should be taken, with what is already known:
    marker powers (`BackAttackLeftPower.cs:6` says so) and should be cheap;
    `withering_presence` carries `PowerInstanceType.Instanced`.
 
-`on_stack -> pass` units still owed by half B: `adaptable`, `burrowed`,
-`dampen`, `hex`, `imbalanced`. (`nemesis`, `soar` and `surrounded` are done.)
+`on_stack -> pass` units still owed by half B: `burrowed`, `imbalanced`.
+(`nemesis`, `soar`, `surrounded`, `adaptable`, `dampen` and `hex` are done —
+`hex` is the one whose Amount is genuinely read, so it is the sharpest of the
+15.) Half B also found the *inverse* class worth naming: `minion`, `illusion`,
+`reattach`, `crab_rage`, `swipe`, `surprise`, `infested`, `possess_speed` and
+`possess_strength` are `PowerStackType.Single` units that leave `Power.on_stack`
+alone — i.e. they get Single **right**. Whoever folds these halves in should
+report the ratio, not just the wrong 15.
