@@ -101,6 +101,27 @@ fixed. Read this before trusting any earlier sweep-A output:
    full HP open with **Strength −3** — the relic subtracts a bonus it never
    granted. The static pass flagged it; the unstimulated exec pass cleared it.
 
+6. **The C#-side reset census omitted `AfterRoomEntered`.** It filtered to four
+   hooks (`BeforeCombatStart`, `AfterCombatEnd`, `AfterCombatVictory`,
+   `AfterCombatDefeat`). But for a `CombatRoom` the game fires
+   `Hook.AfterRoomEntered` right after `SetUpCombat` and **before**
+   `Hook.BeforeCombatStart` (`CombatRoom.cs:228`), so it is a combat-entry reset
+   site like any other. `Permafrost.AfterRoomEntered` does exactly
+   `ActivatedThisCombat = false`; the census printed `C# resets: NONE (may be
+   per-run by design)` and **this document then listed `permafrost` as "decent
+   evidence the state is per-run on both sides"**. It is a LIVE gap — the
+   carried instance gives 0 block where a fresh one gives 7. Found by batch 12.
+   `AfterRoomEntered` is now in the census; candidates 19 -> 20. Batch 12's
+   rescan finds 11 C# relics assigning inside that hook, and both tea sets *arm*
+   `GainEnergyInNextCombat = true` there — batch 17 should know.
+
+**Six defects, three of them false clears, and the sweep is still not an
+oracle.** `permafrost` is now a candidate but lands in `INCONCLUSIVE`, because
+the driver plays a Defend and Permafrost triggers on a Power. That is the
+correct behaviour for a candidate-generator: escalate, never clear. Chasing full
+generality in the driver is the wrong investment — the sixth defect was found,
+like the other five, by a batch auditing a unit on its merits.
+
 Defect 3 cuts both ways, and that is the most useful thing to come out of the
 rewrite. `happy_flower` and `pendulum` both carry `turns_seen` into combat 2, and
 the old column said "C# resets: `AfterCombatEnd`" — implying a reset the sim
@@ -136,6 +157,7 @@ and now has mechanical backing.
 | `red_skull` | `_applied` | combat 2 at full HP opens **Strength −3** | `RedSkull.cs:54` | batch 13, LIVE |
 | `ruined_helmet` | `_used` | Strength 4 then 2 across two combats | `RuinedHelmet.cs:64` | batch 13, LIVE |
 | `vambrace` | `_used` | `False` → `True` at combat-2 start | `AfterCombatEnd` + `BeforeCombatStart` | **UNAUDITED** (batch 17) |
+| `permafrost` | `_activated` | block `0` carried vs `7` fresh | `AfterRoomEntered: ActivatedThisCombat = false` | batch 12, LIVE |
 
 Three of the ten are still unaudited and are pre-populated work for their
 batches: **`venerable_tea_set`** and **`vambrace`** (both batch 17) and
@@ -162,11 +184,13 @@ keep that.
   identical on both instances by construction. That is *why* both are separate
   static buckets, and why a static hit there must be settled by a purpose-built
   probe (batches 4 and 5 both wrote one).
-- 19 candidates remain unexecuted because their C# counterpart makes no
-  combat-boundary assignment at all — decent evidence the state is per-run on
-  both sides, not proof. `nunchaku`, `pen_nib`, `permafrost`, `tuning_fork` and
-  `iron_club` still deserve a second look in their own batches; all five hold
-  attack/card counters whose names read per-combat.
+- Candidates whose C# counterpart makes no combat-boundary assignment are
+  **not cleared** — that is evidence the state is per-run on both sides, not
+  proof, and defect 6 showed the census itself was incomplete. `permafrost` sat
+  in exactly that bucket and was a LIVE gap. `nunchaku` (audited: its per-run
+  counter genuinely matches C#'s `[SavedProperty]`), `pen_nib`, `tuning_fork`
+  and `iron_club` all hold attack/card counters whose names read per-combat;
+  `tuning_fork` is still unaudited.
 - A cross-combat diff is a **candidate**, never a verdict. PROMPT.md bug class 13
   still requires tracing to the first reader of the stale field.
 

@@ -456,6 +456,21 @@ def _cs_overrides(game_path: str) -> list[str]:
     return list_overrides(p.read_text(encoding="utf-8-sig", errors="replace"))
 
 
+def _snake(pascal: str) -> str:
+    """`ModifyDamageAdditive` -> `modify_damage_additive`.
+
+    Sweep C compared a PascalCase C# hook name against snake_case keys taken
+    from `vars(HookSystem)`, so its "is this a HookSystem combat hook?" branch
+    could never be true and every dropped combat hook outside `_RUN_HOOK_MAP`
+    was silently skipped. `mystic_lighter`'s `ModifyDamageAdditive` was filed as
+    "not a HookSystem hook, larger than a one-relic fix" when `hooks.py:52`
+    defines it and `cmds.py:57` dispatches it. Found by batches 9 and 10
+    independently; the third UNDER-report across the sweeps, which is the
+    direction nothing downstream catches.
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", pascal).lower()
+
+
 def _cs_method_body(text: str, name: str) -> str | None:
     """The braced body of C# member `name`, brace-matched.
 
@@ -733,8 +748,19 @@ def probe_sweep_reset() -> None:
             if p.is_file():
                 text = p.read_text(encoding="utf-8-sig", errors="replace")
                 for h in _cs_overrides(row["game_path"]):
+                    # AfterRoomEntered belongs here: for a CombatRoom, C# fires
+                    # it right after SetUpCombat and BEFORE Hook
+                    # .BeforeCombatStart (CombatRoom.cs:228), so it is a
+                    # combat-entry reset site like any other. Omitting it made
+                    # the census print "C# resets: NONE (may be per-run by
+                    # design)" for permafrost, whose AfterRoomEntered does
+                    # exactly `ActivatedThisCombat = false` -- and the sweeps
+                    # doc then filed it as evidence the state was per-run on
+                    # both sides. It is a LIVE gap. Sixth sweep-A defect, found
+                    # by batch 12; the third that produced a false CLEAR.
                     if h not in ("BeforeCombatStart", "AfterCombatEnd",
-                                 "AfterCombatVictory", "AfterCombatDefeat"):
+                                 "AfterCombatVictory", "AfterCombatDefeat",
+                                 "AfterRoomEntered"):
                         continue
                     body = _cs_method_body(text, h)
                     if body is None:
@@ -781,8 +807,13 @@ def probe_sweep_reset() -> None:
     print("\n  RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- "
           "genuinely safe: combat 2's turn 1 clears it first):")
     for rid, unreset, boundary, t_start, _t_end, _who in shadowed:
+        # Batch 10 caught this: the brace-matched assignment evidence was wired
+        # into the hits bucket only, so THIS bucket still printed a bare hook
+        # name and implied a reset that may not exist -- ornamental_fan's
+        # AfterCombatEnd assigns only `IsActivating = false`, a glow flag.
+        ev = "; ".join(f"{h}: {a}" for h, a in sorted(boundary.items()))
         print(f"    {rid:<26} {unreset} turn-start-reset={t_start} "
-              f"C# resets: {sorted(boundary) or 'NONE'}")
+              f"C# resets: {ev or 'NONE'}")
     print(f"\n  FROZEN CONSTRUCTOR STATE ({len(frozen)}): the field is written "
           f"ONLY in __init__ from a parameter, and make_relic\n"
           f"  (relics/base.py:74) passes no arguments -- so it holds its "
@@ -1099,8 +1130,8 @@ def probe_sweep_stubs() -> None:
             sim = _RUN_HOOK_MAP.get(h)
             if sim:
                 marked.append(f"{h} -> Relic.{sim} EXISTS")
-            elif h in combat_hooks:
-                marked.append(f"{h} -> HookSystem.{h} EXISTS")
+            elif _snake(h) in combat_hooks:
+                marked.append(f"{h} -> HookSystem.{_snake(h)} EXISTS")
             else:
                 marked.append(h)
         print(f"    {rid}")
@@ -1156,7 +1187,8 @@ def probe_sweep_stub_premises() -> None:
         for h in _cs_overrides(row["game_path"] if row else ""):
             if h in _DECLARATIVE_CS:
                 continue
-            sim = _RUN_HOOK_MAP.get(h) or (h if h in combat_hooks else None)
+            sim = (_RUN_HOOK_MAP.get(h)
+                   or (_snake(h) if _snake(h) in combat_hooks else None))
             if sim is None:
                 continue
             (live_pipeline if cache.get(sim) else no_pipeline).append(
