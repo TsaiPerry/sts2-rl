@@ -1,0 +1,409 @@
+{
+  "unit": "seam/hook_dispatch",
+  "game_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137"
+    },
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe"
+    },
+    {
+      "path": "src/Core/Entities/Players/PlayerCombatState.cs",
+      "sha256": "c908ea3144a466dc0d979ec44ade207dd692d6b23b9512afbcccae3468fea123"
+    },
+    {
+      "path": "src/Core/Models/MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea"
+    },
+    {
+      "path": "src/Core/Models/AfflictionModel.cs",
+      "sha256": "8aee0ce0b30603c24b325ed4c02aa67e1c2182817b163a0e85a03a195df03e41"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9"
+    },
+    {
+      "path": "src/Core/Models/BadgeModel.cs",
+      "sha256": "4dfe350508af69b6d9654b121acc5b76976203b4862444532552633b84f7bb34"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21"
+    },
+    {
+      "path": "src/Core/Models/Powers/BufferPower.cs",
+      "sha256": "bf95bf58bf220b5e5dfe112a32834d857be8f9ce44c0ebbebb69a6caef805231"
+    },
+    {
+      "path": "src/Core/Models/Powers/TangledPower.cs",
+      "sha256": "f52ae733202234b2cf4dfe54c05d3657e24a996e867d6142048b2d106650d022"
+    },
+    {
+      "path": "src/Core/Models/Powers/FreeAttackPower.cs",
+      "sha256": "3b5e91b54cfa618c14e9567d99c0fab1292e057db822817207c4e4ddda4a00d2"
+    },
+    {
+      "path": "src/Core/Models/Powers/CuriousPower.cs",
+      "sha256": "f3df630baac3366c2e297a029df30eee1abd014d0e752fa4142c540ee545ec6c"
+    },
+    {
+      "path": "src/Core/Models/Relics/SpikedGauntlets.cs",
+      "sha256": "f68af9cb8e3369692db2538a06e81460a51fde3b66648e4bc2ccc9f472aa8faa"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04"
+    },
+    {
+      "path": "src/Core/Models/Relics/ThrowingAxe.cs",
+      "sha256": "c7bb04ac13201a2ee892bc860caa37c0f2eff33efe31606c762442b3019a4c48"
+    },
+    {
+      "path": "src/Core/Models/Relics/PenNib.cs",
+      "sha256": "c2ca39be064bf9504c5d9bf9f0931fbe7158db6b176b303d098d9ee2cf422cde"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+    },
+    {
+      "path": "sts2_rl/history.py",
+      "sha256": "d7ea1066594e18f4da4bf10f280b10fdcebe3f733989c02a5cd7113964cad782"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676"
+    },
+    {
+      "path": "sts2_rl/afflictions.py",
+      "sha256": "20981d821451eacedbcad5c7087fdafdbbb77755582a13a7a0dcac65e1054132"
+    },
+    {
+      "path": "sts2_rl/relics/spiked_gauntlets.py",
+      "sha256": "f46a1d09206e1ae5d8e2205312b7954a6298e0b827adff470a1b39f3653fcad7"
+    },
+    {
+      "path": "sts2_rl/relics/brilliant_scarf.py",
+      "sha256": "831b8c3eb42f1650125d12e6938c7b294b01128b2065647ebf84027f3d8356d9"
+    },
+    {
+      "path": "sts2_rl/relics/pen_nib.py",
+      "sha256": "7458fb6e6cf67ec60a5a24617a44887d20dc352b4153ef62794934097ee0395e"
+    },
+    {
+      "path": "sts2_rl/relics/throwing_axe.py",
+      "sha256": "3ca1723abe8e39501df9c51b8a1f096dca7ee94990538b7947eb8cf9aae1ebc3"
+    },
+    {
+      "path": "sts2_rl/cards/unrelenting.py",
+      "sha256": "da71a11d760801e67b3655ac25ec52aae3ea85dee7740ccf6f69379c917f4d50"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/vine_shambler.py",
+      "sha256": "bacc1fe6cf182b5bd924cf06429fa25de71f20ba213ea9d29e14b4465c44fe36"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. CombatState.IterateHookListeners walks _allies then _enemies as one index space; allies (players) always precede enemies (CombatState.cs:412-415)",
+      "verdict": "gap",
+      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-32, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0."
+    },
+    {
+      "what": "2. Per creature, list.AddRange(creature.Powers) FIRST -- a creature's powers precede its relics, potions, orbs and cards (CombatState.cs:416)",
+      "verdict": "gap",
+      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-32, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0."
+    },
+    {
+      "what": "3. creature.Player == null -> list.Add(creature.Monster): the MonsterModel itself is a listener (CombatState.cs:417-421; MonsterModel.cs:51)",
+      "verdict": "gap",
+      "issue": "gap G5 (MonsterModel is not a sim listener): CombatState.cs:420 adds creature.Monster to the listener list and MonsterModel.cs:51 declares ShouldReceiveCombatHooks => true; 71 C# monster models override at least one AbstractModel hook. sts2_rl/monsters/base.py:78-81 stores _hooks and never calls register. DORMANT, evidence executed: a scan instantiating the four act packages finds 0 sim Monster subclasses defining any HookSystem hook name. Concrete trigger: porting any of those 71 monsters' hook overrides as a hook rather than as move code -- Task 10 (monster_state_machine) is the audit most likely to hit one."
+    },
+    {
+      "what": "4. Guard: !player.IsActiveForHooks -> continue, skipping that player's relics/potions/orbs/cards but NOT the powers already added (CombatState.cs:424-427; Player.cs:112,272,438,859-870)",
+      "verdict": "gap",
+      "issue": "gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed: the whole suite (2475 tests) re-run with HookSystem.register instrumented to flag any listener invoked while absent from _listeners yields exactly one hit, on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
+    },
+    {
+      "what": "5. Player's relics in player.Relics order, skipping IsMelted ones (CombatState.cs:428-435); sim: relics/base.py:153-155 registers them AFTER the cards",
+      "verdict": "gap",
+      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-32, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0."
+    },
+    {
+      "what": "6. Player's PotionSlots in slot order, skipping null slots (CombatState.cs:436-443); sim: combat.py:164-166 registers held_potions at setup but player.py:120 APPENDS a mid-combat potion at the list tail regardless of its slot",
+      "verdict": "gap",
+      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-32, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0."
+    },
+    {
+      "what": "7. Guard: player.PlayerCombatState == null -> continue; out of combat a player contributes only relics and potions (CombatState.cs:444-447)",
+      "verdict": "faithful",
+      "maps_to": "no sim counterpart needed: a HookSystem exists only inside a CombatState, so player.PlayerCombatState is never null while a combat dispatch is running (combat.py:106-117)"
+    },
+    {
+      "what": "8. OrbQueue.Orbs join the listener list (CombatState.cs:448)",
+      "verdict": "waiver",
+      "rationale": "Orbs are the Defect's mechanic; the Ironclad-only sim has no orb system. See note N1."
+    },
+    {
+      "what": "9. Every card in AllPiles order -- Hand, Draw, Discard, Exhaust, Play -- and per card the card, then its Affliction, then its Enchantment; the list is REBUILT every dispatch (CombatState.cs:449-467; PlayerCombatState.cs:70-80)",
+      "verdict": "gap",
+      "issue": "gap G1 (card listener order is per-pile and re-derived in C#, frozen at combat start in the sim): CombatState.cs:449-467 walks AllPiles = Hand, Draw, Discard, Exhaust, Play (PlayerCombatState.cs:70-80) on EVERY dispatch, so a card that moves pile moves position in the listener list. combat.py:124 registers player.all_cards once, in the fixed order hand+draw+discard+exhaust (player.py:100-103), and never reorders. DORMANT, evidence executed: an MRO-aware scan of the whole _CARD_CLASSES registry finds card classes implementing only six hooks, none able to observe cross-card order -- on_card_entered_combat (1: Stomp), on_card_exhausted (1: Drum of Battle), on_energy_spent (1: Stomp), on_player_turn_start (2: Bolas, Thrumming Hatchet, both self-only), on_player_turn_end (2: Howl from Beyond, Regret -- neither reads state the other writes), should_play_card (3: Clash, Enthralled, Normality -- an AND predicate whose sim dispatcher hooks.py:690-694 has no preventer out-param, so the vetoer's identity is unobservable). Concrete trigger: porting a card whose hook reads state another card's hook writes, or giving should_play_card a preventer out-param."
+    },
+    {
+      "what": "10. After every creature: Modifiers, then BadgeModels, then MultiplayerScalingModel (CombatState.cs:470-481)",
+      "verdict": "waiver",
+      "rationale": "Modifiers are custom/daily-run mutators loaded from save.Modifiers (RunState.cs:296,344) and empty in a standard run; BadgeModels are cloned into every run (RunState.cs:332) but BadgeModel.cs:3-9 says they exist to track badge stats, and an executed grep over src/Core/Models/Badges/ finds NO badge overriding any Should*/Modify*/TryModify* hook -- they are pure event listeners. Out of scope for the same reason ascension values are. See note N4."
+    },
+    {
+      "what": "11. Yield phase: foreach (item in list) if (Contains(item)) yield return item -- the list is eager but Contains is evaluated lazily, per item, when the enumerator reaches it (CombatState.cs:482-488)",
+      "verdict": "gap",
+      "issue": "gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed: the whole suite (2475 tests) re-run with HookSystem.register instrumented to flag any listener invoked while absent from _listeners yields exactly one hit, on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
+    },
+    {
+      "what": "12. Contains by type (CombatState.cs:549-599): a PowerModel needs only Owner.CombatState != null (it is NOT checked against its owner's power list); relics/potions/cards/afflictions/enchantments/orbs additionally need !HasBeenRemovedFromState; a monster needs Creature.CombatState != null; badges/modifiers/achievements always pass; anything else throws",
+      "verdict": "gap",
+      "issue": "gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed: the whole suite (2475 tests) re-run with HookSystem.register instrumented to flag any listener invoked while absent from _listeners yields exactly one hit, on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
+    },
+    {
+      "what": "13. ModHelper.IterateAllCombatStateSubscribers last, never Contains-filtered (CombatState.cs:489-492)",
+      "verdict": "waiver",
+      "rationale": "Modding surface; the sim has no mod loader and no equivalent extension point. See note N2."
+    },
+    {
+      "what": "14. RunState.IterateHookListeners: every active player's deck cards, each immediately followed by its Enchantment -- deck cards are run listeners even while a combat is running (RunState.cs:548-562)",
+      "verdict": "gap",
+      "issue": "gap N5 (no run-level listener list): RunState.cs:545-596 makes every deck card and its enchantment a run listener at all times, in combat and out, and delegates to the combat list when there is a child combat. The sim has no run-level HookSystem: run-scoped hooks are duck-typed directly over run.relics (relics/base.py:205-235) and a deck card is never a listener. DORMANT, evidence executed: the MRO-aware _CARD_CLASSES scan above finds no sim card class implementing a run-scoped hook at all (the six it implements are combat hooks). Concrete trigger: porting any CardModel that overrides AfterRoomEntered/AfterRewardTaken/ShouldAddToDeck or another run-level hook."
+    },
+    {
+      "what": "15. Only when childCombatState == null: each active player's non-melted relics, then Potions, then Modifiers/BadgeModels/MultiplayerScalingModel (RunState.cs:563-576)",
+      "verdict": "faithful",
+      "maps_to": "sts2_rl/relics/base.py:205-235 -- the sim's run-scoped hooks are duck-typed directly over run.relics in run.relics order, the same set and the same order this branch produces for a single player; Modifiers/BadgeModels are note N4's waiver."
+    },
+    {
+      "what": "16. Run-side yield uses the same lazy Contains filter (RunState.cs:577-583)",
+      "verdict": "gap",
+      "issue": "gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed: the whole suite (2475 tests) re-run with HookSystem.register instrumented to flag any listener invoked while absent from _listeners yields exactly one hit, on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
+    },
+    {
+      "what": "17. ModHelper.IterateAllRunStateSubscribers (RunState.cs:584-587)",
+      "verdict": "waiver",
+      "rationale": "Modding surface; see note N2."
+    },
+    {
+      "what": "18. If childCombatState != null the run walk appends the whole combat list, so an in-combat run-level dispatch order is deck cards -> mod subscribers -> combat listeners (RunState.cs:588-595)",
+      "verdict": "gap",
+      "issue": "gap N5 (no run-level listener list): RunState.cs:545-596 makes every deck card and its enchantment a run listener at all times, in combat and out, and delegates to the combat list when there is a child combat. The sim has no run-level HookSystem: run-scoped hooks are duck-typed directly over run.relics (relics/base.py:205-235) and a deck card is never a listener. DORMANT, evidence executed: the MRO-aware _CARD_CLASSES scan above finds no sim card class implementing a run-scoped hook at all (the six it implements are combat hooks). Concrete trigger: porting any CardModel that overrides AfterRoomEntered/AfterRewardTaken/ShouldAddToDeck or another run-level hook."
+    },
+    {
+      "what": "19. Hook.IterateCombatHookListeners: `if (IsOverOrEnding && !IsStarting) yield break;` -- a dispatch that BEGINS after combat started ending reaches nobody (Hook.cs:55-58)",
+      "verdict": "gap",
+      "issue": "gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
+    },
+    {
+      "what": "20. The guard is evaluated ONCE at enumeration start, not per listener, so a dispatch that began while combat was live still runs every listener even if one of them ends combat; combat setup (IsStarting) is exempt (Hook.cs:31-51)",
+      "verdict": "gap",
+      "issue": "gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
+    },
+    {
+      "what": "21. 73 of the 147 dispatchers go through the guard, 64 are run-side and never consult it, and 10 combat-side ones bypass it deliberately: AfterBlockBroken (107), AfterCardPlayed (278), AfterCreatureAddedToCombat (362), AfterDamageGiven (389), AfterDiedToDoom (484), ModifyKeywordsInCombat (1595), ModifyUnblockedDamageTarget (2048), ShouldCreatureBeRemovedFromCombatAfterDeath (2214), ShouldStopCombatFromEnding (2442), ShouldPowerBeRemovedOnDeath (2495)",
+      "verdict": "gap",
+      "issue": "gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
+    },
+    {
+      "what": "22. Base per-listener protocol: `await model.<Hook>(args); model.InvokeExecutionFinished();` (AbstractModel.cs:191-194)",
+      "verdict": "waiver",
+      "rationale": "InvokeExecutionFinished raises the ExecutionFinished event, which AbstractModel.cs:64-68 documents as 'a little unreliable, so you should only use it for UI things that can't be done any other way'. Pure presentation. See note N2."
+    },
+    {
+      "what": "23. Choice-context variant: choiceContext.PushModel(model) ... PopModel(model) around the await (AfterCardDiscarded 186-195, AfterCardExhausted 237-246, AfterCardPlayed 278-294)",
+      "verdict": "waiver",
+      "rationale": "PlayerChoiceContext is the multiplayer choice-routing channel; the sim has one local player. See note N1."
+    },
+    {
+      "what": "24. Hook-owned-context variant: read LocalContext.NetId, RETURN WITHOUT CALLING ANYONE if it is null, then build a HookPlayerChoiceContext per listener and await AssignTaskAndWaitForPauseOrCompletion (AfterDeath 452-461, AfterDiedToDoom 486-495, BeforeFlush 534-545, and the turn dispatchers)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer net identity plus the async pause protocol; the sim's dispatch is synchronous and single-player. See note N1."
+    },
+    {
+      "what": "25. Grouped-await variant: pause-aware dispatchers collect WaitForCompletion() into tasksToAwait and finish with await Task.WhenAll(tasksToAwait), so a pass boundary bounds the dispatcher's return, not the listeners' side effects (BeforeFlush 539-556, BeforeTurnEnd 1236-1263, AfterTurnEnd 1269-1292)",
+      "verdict": "waiver",
+      "rationale": "Async task plumbing with no synchronous analogue; see note N1."
+    },
+    {
+      "what": "26. Every hook is a virtual no-op on AbstractModel (returning Task.CompletedTask or the unmodified value), so the dispatcher calls EVERY listener unconditionally and 'does not implement' equals 'implements as identity' (AbstractModel.cs:199-2440)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim dispatches duck-typed -- `if hasattr(l, '<hook>')` (hooks.py:62 and the same line in all 66 dispatchers), stated as intentional in the module docstring ('Dispatch is duck-typed: a hook only calls listeners that define a matching method'). The observable is identical whenever the method names agree, because a C# no-op override and an absent Python method both contribute nothing; the only difference is a maintenance one (a misspelled hook name is a silent no-op in the sim and a compile error in C#), which is why test/test_hook_order.py's `trace` helper raises AttributeError on an unknown hook name."
+    },
+    {
+      "what": "27. 24 of the 147 dispatchers run more than one COMPLETE listener pass -- 20 run two, and AfterPlayerTurnStart (882-908), AfterAutoPrePlayPhaseEntered (928-958), BeforeTurnEnd (1232-1265) and ModifyHpLost (1717-1769) run three or four",
+      "verdict": "gap",
+      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+    },
+    {
+      "what": "28. AbstractModel.cs declares 27 phase-suffixed hooks; nine belong to dispatchers this record owns -- AfterCardChangedPilesLate (359), AfterCardDrawnEarly (384), AfterCardPlayedLate (474), ModifyCardRewardCreationOptionsLate (1525), ModifyGeneratedMapLate (1627), TryModifyCardBeingAddedToDeckLate (1951), TryModifyCardRewardOptionsLate (1988), TryModifyEnergyCostInCombatLate (2016), TryModifyRewardsLate (2122)",
+      "verdict": "gap",
+      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+    },
+    {
+      "what": "29. The phases are load-bearing, not cosmetic: BufferPower.cs:17-19 states 'We use Late because other effects may reduce damage taken to 0 too, and it's more player-friendly for them to trigger first so that this power doesn't have to decrement'",
+      "verdict": "gap",
+      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+    },
+    {
+      "what": "30. Each pass re-enumerates the listener list from scratch, so pass N+1 sees listeners added or removed during pass N (subject to steps 11-12 and 19)",
+      "verdict": "gap",
+      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+    },
+    {
+      "what": "31. Additive (num += item.ModifyXAdditive(target, num, ...)) and multiplicative (num *= ...) are SEQUENTIAL chains in which each listener receives the running value, not the pre-step base (Hook.cs:1320-1337, 2515-2538)",
+      "verdict": "faithful",
+      "maps_to": "no dispatcher this record owns uses either shape -- the only two sites are Hook.ModifyDamage/ModifyDamageInternal (damage_pipeline's, already recorded there as its step 4 and guards G3/N3) and Hook.ModifyBlock (creature_card_cmds'). The sim passes the pre-step base to every additive/multiplicative listener (hooks.py:61-64, 106-109), which is a real divergence at the BLOCK site and belongs in audits/seam/creature_card_cmds.json as an amendment, not as a second verdict here (see the doc's 'Cross-seam consequences')."
+    },
+    {
+      "what": "32. Chain family: x = item.ModifyX(..., x), a plain fold with no change-tracking -- ModifyAttackHitCount (1297), ModifyCardRewardCreationOptions (1429), ModifyExtraRestSiteHealText (1646), ModifyGeneratedMap(Late) (1658/1671), ModifyMerchant* (1794-1829), ModifyNextEvent (1830), ModifyOddsIncreaseForUnrolledRoomType (1843), ModifyOrbValue (1874), ModifyRestSiteHealAmount (1936), ModifyStarCost (2015), ModifySummonAmount (2032), ModifyUnknownMapPointRoomTypes (2061), ModifyXValue (2071)",
+      "verdict": "faithful",
+      "maps_to": "hooks.py's chain hooks are the same fold: modify_strength_given (165-168), modify_power_amount (180-183), modify_vulnerable_multiplier (191-194), modify_card_energy_cost (198-201), modify_max_energy (205-208), modify_energy_gain (212-215), modify_hand_draw (219-222), modify_card_play_count (231-234), modify_card_play_result_pile (243-246), modify_orb_value (250-253), modify_x_value (258-261) -- each rebinds the accumulator from the listener's return, so the running value reaches the next listener exactly as in C#."
+    },
+    {
+      "what": "33. Cap family: track a running minimum and clamp as it falls (Hook.cs:2539-2555) -- a fourth aggregation shape the seed fact's three-family taxonomy does not name",
+      "verdict": "faithful",
+      "maps_to": "hooks.py:87-93 modify_damage_cap takes min over the non-None caps and returns it for the caller to apply; the site itself (Hook.ModifyDamage) is damage_pipeline's."
+    },
+    {
+      "what": "34. Try-chain family: bool TryModifyX(input, out output) -- the listener reports whether it changed anything and the dispatcher threads the out-value (ModifyEnergyCostInCombat 1574-1590, ModifyCardBeingAddedToDeck 1345-1367, TryModifyCardRewardOptions 1445-1472, ModifyCardRewardAlternatives 1413-1424, ModifyRewards 1981-2003)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim collapses `bool Try(out v)` into `v = f(v)` (hooks.py:196-201 and the other chain hooks), which produces the identical value because a C# listener that returns false leaves modifiedCost == originalCost. The one thing the boolean carries that the fold cannot is membership of the out-modifiers list, and that consequence is recorded separately at step 38 rather than duplicated here."
+    },
+    {
+      "what": "35. Predicate family, AND with first-False short-circuit, several with an out preventer/modifier naming the vetoing listener -- ShouldAddToDeck (2084), ShouldAfflict (2101), ShouldAllowAncient (2116), ShouldAllowHitting (2131), ShouldAllowMerchantCardRemoval (2146), ShouldAllowSelectingMoreCardRewards (2161), ShouldAllowTargeting (2176), ShouldDisableRemainingRestSiteOptions (2254), ShouldDraw (2269), ShouldGenerateTreasure (2316), ShouldGainStars (2331), ShouldPayExcessEnergyCostWithStars (2346), ShouldPlay (2361), ShouldProceedToNextMapPoint (2393), ShouldProcurePotion (2408), ShouldRefillMerchantEntry (2423), ShouldPowerBeRemovedOnDeath (2495)",
+      "verdict": "faithful",
+      "maps_to": "hooks.py's predicates are the same AND-with-first-False short-circuit: should_die (588-594, with a preventer list out-param), should_remove_from_combat_after_death (607-611), should_clear_block (615-619), should_reset_energy (625-629), should_draw (638-642), should_flush_hand (648-652), should_allow_hitting (656-660), should_play_card (690-694), should_ethereal_trigger (698-702). The short-circuit makes the vetoer order-dependent, which is exactly why step 2's ordering is gap G2 (and turn_structure's G2). The missing preventer out-param matters at only one dispatcher this record owns, Hook.AfterPreventingDraw (1056-1067), whose sole implementer in the whole game is Fiddle.cs:39-43 and whose body is `Flash();` -- presentation only, so nothing observable is dropped."
+    },
+    {
+      "what": "36. Predicate family, OR with first-True short-circuit -- ShouldStopCombatFromEnding (2442-2452) and ShouldTakeExtraTurn (2457-2467)",
+      "verdict": "faithful",
+      "maps_to": "hooks.py:667-671 should_take_extra_turn returns True on the first listener that does, matching Hook.cs:2459-2466 (its docstring says so). Both dispatchers are turn_structure's; the shape is recorded here because the seed fact's 'predicate short-circuits on any False' does not describe them."
+    },
+    {
+      "what": "37. Predicate family, OR with NO short-circuit -- `flag = flag || item.ShouldX(...)` calls every listener even after one returns true: ShouldForcePotionReward (2472-2480) and ShouldAllowFreeTravel (2485-2493)",
+      "verdict": "gap",
+      "issue": "The sim aggregates both with a short-circuiting `any(...)` generator (rewards.py:449: `any(relic.should_force_potion_reward(run, room_type) for relic in run.relics)`), so C# calls every listener where the sim stops at the first True and a later listener with a side effect would be skipped. DORMANT, evidence executed: each hook has exactly ONE implementer in the decompiled game outside the run-modifier set -- WhiteBeastStatue.cs for ShouldForcePotionReward and WingedBoots.cs for ShouldAllowFreeTravel (Modifiers/Flight.cs is the second and run modifiers are note N4's waiver) -- so no second listener exists to be skipped, and both implementers' predicates are side-effect free. Concrete trigger: a second ported implementer of either hook, or one whose predicate has a side effect."
+    },
+    {
+      "what": "38. Modifier-notification lists: chain/try-chain dispatchers with an `out modifiers` parameter add a listener only when its call actually CHANGED the value, and ModifyEnergyGain (1610-1618) / ModifyGoldGained (1630-1638) compare with an INTEGER cast so a sub-1 decimal change does not count; ModifyCardPlayCount (1376-1384), ModifyCardPlayResultPileTypeAndPosition (1396-1405) and ModifyCardBeingAddedToDeck (1350-1364) track it exactly. The caller then fires the matching AfterModifying* event over exactly that subset",
+      "verdict": "gap",
+      "issue": "hooks.py implements this mechanism for exactly one hook, modify_hp_lost (126-147, with after_modify_hp_lost at 149-154) -- damage_pipeline's site. The dispatchers this record owns have no modifiers list and no companion event: modify_energy_gain (210-215), modify_card_play_count (224-234), modify_card_play_result_pile (236-246), and the deck/reward ones have no sim counterpart at all. DORMANT for the card-play-count case by construction: the three ported AfterModifyingCardPlayCount listeners each consume their stack INSIDE the sim's modifier instead (powers.py:966-978 One-Two Punch, powers.py:3919-3928 Duplication, relics/throwing_axe.py:30-36 Throwing Axe, each with a source comment saying so), a deliberate compensation with the same observable. Concrete trigger: porting NoEnergyGainPower (the sole AfterModifyingEnergyGain implementer) or BowlerHat/Ectoplasm's AfterModifyingGoldGained legs, none of which is a sim listener on that hook today, and any future ported listener that must know it was outvoted."
+    },
+    {
+      "what": "39. Dispatcher-level guards outside the loop: ModifyEnergyCostInCombat returns originalCost untouched when it is negative (Hook.cs:1576-1579), ShouldPowerBeRemovedOnDeath returns true when power.Owner.CombatState == null (2497-2500), and the LocalContext.NetId early return of step 24",
+      "verdict": "faithful",
+      "maps_to": "hooks.py:196-201 modify_card_energy_cost has no negative-cost arm, but its input cannot be negative: Card.energy_cost (cards/base.py:222-232) already returns max(0, base + delta), and that property is the only producer of the argument at every call site (combat.py:408, combat.py:701, env.py:88/94/140, previews.py:181). ShouldPowerBeRemovedOnDeath has no sim counterpart hook at all beyond should_remove_from_combat_after_death (a different predicate), and a sim Power always has an owner in a combat."
+    },
+    {
+      "what": "40. Event dispatchers return no value and ignore listener output entirely: no cancellation, no ordering feedback (the ~60 `await model.X(); model.InvokeExecutionFinished();` bodies)",
+      "verdict": "faithful",
+      "maps_to": "hooks.py's event hooks are the same fire-and-forget walk (on_combat_start 267-269 through on_death 576-578); the sim likewise ignores return values."
+    },
+    {
+      "what": "41. Sim registry: HookSystem.__init__ holds one flat self._listeners list plus a self.combat back-reference (hooks.py:37-41)",
+      "verdict": "gap",
+      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-32, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0."
+    },
+    {
+      "what": "42. Sim registry: register() appends, unregister() is list.remove (identity, since no sim model defines __eq__) and raises ValueError when absent, which every caller wraps -- cmds.py:341-345, cmds.py:445-448, player.py:130-134, powers.py:89-92 (hooks.py:43-47)",
+      "verdict": "faithful",
+      "maps_to": "C# has no register/unregister at all -- membership is structural (a power is a listener because it is in creature.Powers). The sim's explicit registry is the mechanism that produces gap G2's ordering; the register/unregister PRIMITIVES themselves are consistent with the game's reference semantics: identity-based, idempotent-safe, and every removal site mirrors a C# removal site (PowerCmd.Remove / power expiry -> cmds.py:341 and powers.py:89, a potion leaving the belt -> player.py:130, a card removed from combat -> cmds.py:445)."
+    },
+    {
+      "what": "43. Sim registration order in CombatState.__init__: history (combat.py:112) -> every card in player.all_cards with its enchantment right after it (124-133) -> relics via Relic.attach (158-159, relics/base.py:153-155) -> belt potions (164-166); powers join later as applied (cmds.py:326), mid-combat cards at cmds.py:460, mid-combat potions at player.py:120, monsters never",
+      "verdict": "gap",
+      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-32, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0."
+    },
+    {
+      "what": "44. player.all_cards is hand + draw_pile + discard_pile + exhaust_pile (player.py:100-103), evaluated ONCE at combat start, so the card listener order is frozen for the combat",
+      "verdict": "gap",
+      "issue": "gap G1 (card listener order is per-pile and re-derived in C#, frozen at combat start in the sim): CombatState.cs:449-467 walks AllPiles = Hand, Draw, Discard, Exhaust, Play (PlayerCombatState.cs:70-80) on EVERY dispatch, so a card that moves pile moves position in the listener list. combat.py:124 registers player.all_cards once, in the fixed order hand+draw+discard+exhaust (player.py:100-103), and never reorders. DORMANT, evidence executed: an MRO-aware scan of the whole _CARD_CLASSES registry finds card classes implementing only six hooks, none able to observe cross-card order -- on_card_entered_combat (1: Stomp), on_card_exhausted (1: Drum of Battle), on_energy_spent (1: Stomp), on_player_turn_start (2: Bolas, Thrumming Hatchet, both self-only), on_player_turn_end (2: Howl from Beyond, Regret -- neither reads state the other writes), should_play_card (3: Clash, Enthralled, Normality -- an AND predicate whose sim dispatcher hooks.py:690-694 has no preventer out-param, so the vetoer's identity is unobservable). Concrete trigger: porting a card whose hook reads state another card's hook writes, or giving should_play_card a preventer out-param."
+    },
+    {
+      "what": "45. Every one of the 66 sim dispatchers is `for l in list(self._listeners): if hasattr(l, '<hook>'): l.<hook>(...)` -- the list() copy makes the walk a snapshot, so a listener registered during a dispatch is not called and one unregistered during it still is",
+      "verdict": "gap",
+      "issue": "gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed: the whole suite (2475 tests) re-run with HookSystem.register instrumented to flag any listener invoked while absent from _listeners yields exactly one hit, on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
+    },
+    {
+      "what": "46. The sim has no phase concept, no preventer for most predicates, no Contains re-check, no IsOverOrEnding gate, no per-listener choice context, and no run-level HookSystem (hooks.py in full)",
+      "verdict": "gap",
+      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+    }
+  ],
+  "guards": [
+    {
+      "what": "N1 -- multiplayer plumbing: PlayerChoiceContext push/pop (step 23), HookPlayerChoiceContext + AssignTaskAndWaitForPauseOrCompletion and the LocalContext.NetId early return (step 24), the grouped Task.WhenAll (step 25), the OrbQueue listener block (step 8), and MultiplayerScalingModel (step 10).",
+      "verdict": "waiver",
+      "rationale": "Genuinely out of scope: one local player, one character (Ironclad), no orbs, no async pausing. Nothing a single-player run or replay can observe depends on any of it. The step-level waivers that cite N1 are steps 8, 23, 24, 25 and the MultiplayerScalingModel clause of step 10."
+    },
+    {
+      "what": "N2 -- presentation and modding: InvokeExecutionFinished / the ExecutionFinished event (step 22) and the ModHelper.IterateAll*Subscribers tails (steps 13, 17).",
+      "verdict": "waiver",
+      "rationale": "AbstractModel.cs:64-68 documents ExecutionFinished as 'a little unreliable, so you should only use it for UI things that can't be done any other way' -- presentation. ModHelper is the mod-loading extension point and the sim has no mod loader. Neither can change a single-player outcome."
+    },
+    {
+      "what": "N3 -- CombatHistory is a sim-only listener, registered first (combat.py:111-112) so it observes every event before any relic or power. The game has no history listener: CombatManager.History is written by explicit calls (CardModel.cs:1930, 1956), not through the hook system.",
+      "verdict": "deliberate-divergence",
+      "rationale": "The observable is identical: CombatHistory only records, never mutates combat state, and registering it first is what makes the recording complete by the time a later listener reads it (relics/paels_eye.py:27-34 and relics/whispering_earring.py both scan it). Routing the recording through the listener list instead of through explicit call sites is a sim re-architecture with no behavioural consequence -- verified by reading every CombatHistory hook method, all of which only append entries."
+    },
+    {
+      "what": "N4 -- Modifiers and BadgeModels as listeners (step 10; RunState.cs:573-574, CombatState.cs:470-477).",
+      "verdict": "waiver",
+      "rationale": "Modifiers are custom/daily-run mutators loaded from save.Modifiers (RunState.cs:296, 344) and a standard run has none. BadgeModels ARE cloned into every run (RunState.cs:332), but BadgeModel.cs:3-9 states they exist to 'keep track of stats for badges' and an executed grep over src/Core/Models/Badges/ finds no badge overriding any Should*/Modify*/TryModify* hook -- they subscribe to events for meta-progression accounting only. Out of scope for the same reason ascension values are, and unable to change an in-run outcome even if they were in scope."
+    },
+    {
+      "what": "N5 -- the run/combat delegation split: in combat a run-level dispatch visits deck cards first and then the whole combat list (steps 14-18), and the sim has two disjoint dispatch systems instead (HookSystem inside a combat, duck-typing over run.relics outside one).",
+      "verdict": "gap",
+      "issue": "gap N5 (no run-level listener list): RunState.cs:545-596 makes every deck card and its enchantment a run listener at all times, in combat and out, and delegates to the combat list when there is a child combat. The sim has no run-level HookSystem: run-scoped hooks are duck-typed directly over run.relics (relics/base.py:205-235) and a deck card is never a listener. DORMANT, evidence executed: the MRO-aware _CARD_CLASSES scan above finds no sim card class implementing a run-scoped hook at all (the six it implements are combat hooks). Concrete trigger: porting any CardModel that overrides AfterRoomEntered/AfterRewardTaken/ShouldAddToDeck or another run-level hook."
+    },
+    {
+      "what": "N6 -- AbstractModel.ShouldReceiveCombatHooks (AbstractModel.cs:53-62) is abstract and 19 model classes override it, but a whole-source grep for reads finds ZERO consumers; the real filtering is structural (which lists IterateHookListeners walks) plus Contains.",
+      "verdict": "faithful",
+      "rationale": "Documented-but-unread property. The sim has no counterpart and needs none: it performs the same filtering structurally, by choosing what to register. Recorded so a future reader does not mistake it for a missing gate. Executed: `grep -rn ShouldReceiveCombatHooks --include=*.cs .` over the whole decompiled tree returns only the abstract declaration and the 19 overrides, no reads."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-25"
+}

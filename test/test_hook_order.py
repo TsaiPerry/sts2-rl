@@ -937,3 +937,251 @@ class TestTurnStructureOrder:
         cs.auto_play(card)            # what Imbued does on turn 1
         # C#: IsAutoPlay plays are excluded, so Pael's Eye still fires.
         assert cs.hooks.should_take_extra_turn(cs.player)
+
+
+def listener_categories(hooks):
+    """The category of every listener on `hooks`, in dispatch order.
+
+    Every HookSystem dispatcher walks `list(self._listeners)` in order
+    (hooks.py:61 and the same line in all 66 of them), so this list IS the
+    sim's cross-listener ordering rule made visible. Categories mirror the
+    five kinds C#'s CombatState.IterateHookListeners walks, plus the sim-only
+    CombatHistory (hook_dispatch note N3).
+    """
+    from sts2_rl.cards.base import Card
+    from sts2_rl.enchantments import Enchantment
+    from sts2_rl.history import CombatHistory
+    from sts2_rl.potions import Potion
+    from sts2_rl.powers import Power
+    from sts2_rl.relics.base import Relic
+
+    kinds = [(CombatHistory, "history"), (Enchantment, "enchantment"),
+             (Card, "card"), (Relic, "relic"), (Potion, "potion"),
+             (Power, "power")]
+    out = []
+    for listener in hooks._listeners:
+        out.append(next((name for cls, name in kinds
+                         if isinstance(listener, cls)),
+                        type(listener).__name__))
+    return out
+
+
+class TestHookDispatchOrder:
+    """hook_dispatch audit (docs/audit/seams/hook_dispatch.md,
+    audits/seam/hook_dispatch.json): pins the cross-listener ordering rule the
+    sim actually implements plus the seam's four pinnable gaps.
+
+    The sim's rule is "registration order over one flat list"; the game's is a
+    structural per-creature walk (CombatState.cs:413-467). The two are close to
+    reversed, which is what gap G2 records.
+    """
+
+    @staticmethod
+    def _probe(hooks, hook_name):
+        """Replace `hook_name` on every current listener with a recorder.
+
+        `trace` (above) wraps the HookSystem's own methods, which shows WHICH
+        hooks fired and in what order; this shows WHICH LISTENERS a single
+        dispatch visits and in what order, which is the thing this seam is
+        about. The recorder replaces rather than wraps, so no real listener
+        effect runs -- the combat is a throwaway either way.
+        """
+        seen = []
+
+        for listener in hooks._listeners:
+            def rec(*a, _l=listener, **k):
+                seen.append(_l)
+            setattr(listener, hook_name, rec)
+        return seen
+
+    def test_dispatch_order_is_registration_order_grouped_by_category(self):
+        """Spec steps 41-44 and gap G2. The sim's listener list is built once,
+        by appending, in CombatState.__init__ order: the combat history first
+        (combat.py:112), then every deck card with its enchantment right after
+        it (124-133), then relics (158-159), then belt potions (164-166); a
+        power joins only when it is applied (cmds.py:326), so powers are always
+        LAST among the listeners that exist at that moment.
+
+        Both halves are asserted: the composition of `_listeners`, and that a
+        real dispatch visits exactly that sequence -- the second is what makes
+        this a pin on dispatch rather than on a data structure.
+
+        C# builds no such list. `CombatState.IterateHookListeners`
+        (CombatState.cs:410-493) re-derives the listeners per dispatch from the
+        creatures themselves, allies before enemies, and within a player walks
+        Powers (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448)
+        -> the cards of AllPiles (449-467). Powers first, cards last: almost
+        the mirror image of the assertion below. If a future change reorders
+        registration or replaces `_listeners`, this test is where it surfaces.
+        """
+        from sts2_rl.potions import make_potion
+
+        cs = CombatState(
+            rng=random.Random(0),
+            relics=[make_relic("pen_nib"), make_relic("orichalcum")],
+            potions=[make_potion("block_potion")],
+        )
+        # 9 starting cards (5 Strike + 4 Defend), none enchanted.
+        assert len(cs.player.all_cards) == 9
+        PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 3, applier=cs.player)
+        PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2,
+                       applier=cs.player)
+
+        expected = (["history"] + ["card"] * 9 + ["relic"] * 2 + ["potion"]
+                    + ["power"] * 2)
+        assert listener_categories(cs.hooks) == expected
+
+        # ...and a dispatch really does visit them in that order.
+        visited = self._probe(cs.hooks, "on_combat_start")
+        cs.hooks.on_combat_start()
+        assert visited == list(cs.hooks._listeners)
+
+        # The enemy's Vulnerable is the LAST listener even though C# would put
+        # every enemy power after the player's block but before nothing at all
+        # -- enemies come after allies there, powers first within each.
+        from sts2_rl.powers import Power
+        assert isinstance(cs.hooks._listeners[-1], Power)
+        assert cs.hooks._listeners[-1].owner is cs.enemy
+
+    @pytest.mark.xfail(
+        reason="hook_dispatch audit gap G2 (audits/seam/hook_dispatch.json, "
+               "spec steps 1-6, 41-43): CombatState.IterateHookListeners walks "
+               "each creature's POWERS (CombatState.cs:416) before that "
+               "player's RELICS (428-435), while the sim appends relics at "
+               "combat setup (combat.py:158-159) and powers only when applied "
+               "(cmds.py:326), so relics always run first. LIVE on "
+               "Hook.ModifyEnergyCostInCombat (Hook.cs:1574-1590), a "
+               "dispatcher this record owns: CuriousPower reduces a Power "
+               "card's cost with a floor of 0 (CuriousPower.cs:12-32 -> "
+               "powers.py:2883-2889, applied by the ported Mad Science card, "
+               "cards/mad_science.py:174-177) and Spiked Gauntlets raises a "
+               "Power card's cost by 1 (SpikedGauntlets.cs:27-39 -> "
+               "relics/spiked_gauntlets.py:26-32, from the ported Tanx shrine, "
+               "events/tanx.py:13). Both are early-phase, so listener order is "
+               "the only thing that decides the result: on a 1-cost Power card "
+               "with 2 Curious stacks the game computes max(0, 1-2) = 0 then "
+               "+1 = 1, and the sim computes 1+1 = 2 then max(0, 2-2) = 0 -- "
+               "the sim hands the player a free Power card the real game "
+               "charges 1 energy for.",
+        strict=True,
+    )
+    def test_powers_modify_energy_cost_before_relics_do(self):
+        from sts2_rl.powers import CuriousPower
+
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("spiked_gauntlets")])
+        PowerCmd.apply(cs.hooks, cs.player, CuriousPower, 2, applier=cs.player)
+        power_card = make_card("inflame")
+        assert power_card.energy_cost == 1
+        cost = cs.hooks.modify_card_energy_cost(power_card,
+                                                power_card.energy_cost)
+        assert cost == 1  # C#: Curious floors at 0 first, then Gauntlets +1
+
+    @pytest.mark.xfail(
+        reason="hook_dispatch audit gap G3 (audits/seam/hook_dispatch.json, "
+               "spec steps 27-30): Hook.ModifyEnergyCostInCombat runs TWO "
+               "complete listener passes -- every TryModifyEnergyCostInCombat, "
+               "then every TryModifyEnergyCostInCombatLate "
+               "(Hook.cs:1574-1590) -- and 24 of Hook.cs's 147 dispatchers are "
+               "multi-pass while AbstractModel.cs declares 27 phase-suffixed "
+               "hooks. hooks.py:196-201 is a single flat walk with no phase "
+               "concept (hooks.py:673-680 says so outright). LIVE with two "
+               "ported powers that both target Attacks: TangledPower is EARLY "
+               "(TangledPower.cs's TryModifyEnergyCostInCombat -> "
+               "powers.py:1486-1502, applied by the ported Act-1 monster Vine "
+               "Shambler, monsters/overgrowth/vine_shambler.py:42-43) and adds "
+               "1 to an Entangled Attack's cost, while FreeAttackPower is LATE "
+               "(FreeAttackPower.cs:14-40 -> powers.py:1133-1155, applied by "
+               "the ported Ironclad card Unrelenting, cards/unrelenting.py:40) "
+               "and sets an Attack's cost to 0. The game always runs Tangled "
+               "first and Free Attack last, so the next Attack is free; the "
+               "sim's answer depends on which power landed first -- applying "
+               "Free Attack before the Vine Shambler's Tangle leaves the "
+               "Strike at 1. BufferPower.cs:17-19 is the source's own "
+               "statement that Late is load-bearing.",
+        strict=True,
+    )
+    def test_late_energy_cost_modifiers_run_after_early_ones(self):
+        from sts2_rl.powers import FreeAttackPower, TangledPower
+
+        cs = CombatState(rng=random.Random(0))
+        strike = make_card("strike")
+        cs.player.hand.clear()
+        cs.player.hand.append(strike)
+        # Unrelenting resolves first, then the Vine Shambler tangles the hand.
+        PowerCmd.apply(cs.hooks, cs.player, FreeAttackPower, 1,
+                       applier=cs.player)
+        PowerCmd.apply(cs.hooks, cs.player, TangledPower, 1, applier=cs.enemy)
+        assert strike.affliction is not None      # Entangled landed
+        cost = cs.hooks.modify_card_energy_cost(strike, strike.energy_cost)
+        assert cost == 0  # C#: the Late pass zeroes it whatever Tangled did
+
+    @pytest.mark.xfail(
+        reason="hook_dispatch audit gap G4 (audits/seam/hook_dispatch.json, "
+               "spec seed fact 3): CardModel.cs:1904-1965 loops `for (int i = "
+               "0; i < playCount; i++)`, builds a FRESH CardPlay each "
+               "iteration (1919-1928, PlayIndex = i) and fires "
+               "Hook.BeforeCardPlayed at 1929 and Hook.AfterCardPlayed at 1959 "
+               "INSIDE that loop. combat.py:466 fires before_card_played once "
+               "BEFORE the `for _ in range(play_count)` loop (477-494) and "
+               "combat.py:514 fires on_card_played once AFTER it, so a replayed "
+               "card brackets its whole multi-play with one pair of events. "
+               "LIVE with two ported relics: Throwing Axe plays the first card "
+               "of each combat twice (ThrowingAxe.cs -> "
+               "relics/throwing_axe.py:30-36, from the ported Tanx shrine, "
+               "events/tanx.py:13) and Pen Nib counts Attack plays in "
+               "before_card_played and doubles every 10th (PenNib.cs -> "
+               "relics/pen_nib.py:30-35). The real game counts the doubled "
+               "Strike as two Attacks and the sim counts one, so from the "
+               "first combat onward the sim doubles a different Attack. The "
+               "four other ported replay sources (enchantments.py:167, "
+               "enchantments.py:232, powers.py:966 One-Two Punch, "
+               "powers.py:3919 Duplication) widen it, as does every one of the "
+               "sim's 48 on_card_played listeners.",
+        strict=True,
+    )
+    def test_before_card_played_fires_once_per_replay_iteration(self):
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("pen_nib"),
+                                 make_relic("throwing_axe")])
+        nib = next(r for r in cs.relics if r.id == "pen_nib")
+        cs.enemies[0].hp = 200          # survive both hits
+        cs.player.hand.clear()
+        cs.player.hand.append(make_card("strike"))
+        cs.play_card(0)                 # Throwing Axe plays it twice
+        assert nib._attacks_played == 2  # C#: one CardPlay per iteration
+
+    @pytest.mark.xfail(
+        reason="hook_dispatch audit gap G8 (audits/seam/hook_dispatch.json, "
+               "spec steps 19-21): Hook.IterateCombatHookListeners "
+               "(Hook.cs:53-63) yields NOTHING to a dispatch that begins once "
+               "CombatManager.IsOverOrEnding is true, and 73 of the 147 "
+               "dispatchers go through it -- the summary comment at "
+               "Hook.cs:31-51 spells out that the check is made once, at "
+               "enumeration start. The sim has no gate at all: combat.py flips "
+               "Phase.COMBAT_OVER only inside _end_combat and no dispatcher "
+               "consults the phase, so every listener still runs on the "
+               "dispatch that follows the killing blow (C# additionally guards "
+               "this particular call site at CardModel.cs:1957). DORMANT: "
+               "every effect currently reachable on that path is combat-scoped "
+               "state the combat then discards -- here Daughter of the Wind's "
+               "1 Block (relics/daughter_of_the_wind.py:23-33) lands on a "
+               "player whose fight is already won. The concrete trigger that "
+               "would make it live is a ported listener on a guarded "
+               "dispatcher that mutates RUN-level state (HP, gold, deck) from "
+               "AfterCardPlayed / AfterCardDrawn / AfterCardExhausted / "
+               "AfterShuffle / AfterEnergySpent; the conformance exporter is "
+               "the nearer-term risk, since extra listener side effects after "
+               "the deciding blow perturb the recorded combat state.",
+        strict=True,
+    )
+    def test_no_listener_runs_after_the_combat_starts_ending(self):
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("daughter_of_the_wind")])
+        cs.enemy.hp = 1
+        cs.player.hand.clear()
+        cs.player.hand.append(make_card("strike"))
+        block_before = cs.player.block
+        cs.play_card(0)                       # the killing blow
+        assert cs._all_enemies_dead()
+        assert cs.player.block == block_before  # C#: nobody was dispatched to

@@ -334,8 +334,75 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "sts2_rl/cards/apparition.py", "sts2_rl/enchantments.py"],
     ),
     "hook_dispatch": (
-        ["src/Core/Hooks/Hook.cs", "src/Core/Models/AbstractModel.cs"],
-        ["sts2_rl/hooks.py"],
+        # Hook.cs holds the 147 static dispatchers and AbstractModel.cs the
+        # virtual hook surface they call, but NEITHER of them decides which
+        # listeners exist or in what order — and that ordering is this seam's
+        # central claim. Added on the game side (Task 9 Step A):
+        #  - CombatState.cs: IterateHookListeners (410-493), the ONLY statement
+        #    of combat listener order (per creature: Powers -> Monster |
+        #    Relics -> PotionSlots -> Orbs -> AllPiles cards + Affliction +
+        #    Enchantment; then Modifiers, BadgeModels, MultiplayerScalingModel),
+        #    and Contains (549-599), the per-item liveness re-filter.
+        #  - RunState.cs: IterateHookListeners (545-596), the run-side order
+        #    (deck cards + enchantments, then relics/potions/modifiers/badges
+        #    only when there is no child combat, then the combat listeners).
+        #  - Entities/Players/Player.cs: IsActiveForHooks (112, 272, 438,
+        #    859-870), the per-player gate both iterators consult.
+        #  - Entities/Players/PlayerCombatState.cs: AllPiles (70-80) — the card
+        #    listeners are ordered Hand, Draw, Discard, Exhaust, Play and
+        #    RE-DERIVED per dispatch, which is why a card's listener position
+        #    moves when it changes pile.
+        #  - Models/MonsterModel.cs, AfflictionModel.cs, EnchantmentModel.cs,
+        #    BadgeModel.cs: the ShouldReceiveCombatHooks declarations and the
+        #    listener categories the sim's flat list does or does not have.
+        #  - Models/CardModel.cs (1895-1965): the per-Replay CardPlay loop that
+        #    fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per
+        #    iteration — primary evidence for gap G4.
+        #  - Powers/BufferPower.cs (18-27): the source comment that states the
+        #    Late phase is load-bearing ("We use Late because other effects may
+        #    reduce damage taken to 0 too") — evidence for gap G3.
+        #  - Powers/TangledPower.cs + Powers/FreeAttackPower.cs +
+        #    Powers/CuriousPower.cs + Relics/SpikedGauntlets.cs +
+        #    Relics/BrilliantScarf.cs: the ported early-phase / Late-phase
+        #    TryModifyEnergyCostInCombat pairs that make G2 and G3 LIVE.
+        #  - Relics/ThrowingAxe.cs + Relics/PenNib.cs: the ported pair that
+        #    makes G4 LIVE.
+        # Every file above is cited with line numbers by the record, so by the
+        # rule adopted in Task 8 it must be hashed: a change to it can
+        # invalidate a verdict without touching Hook.cs.
+        # Sim side: hooks.py is only the dispatch bodies. The listener REGISTRY
+        # is spread over combat.py (__init__ registration order, and
+        # _resolve_card_play's once-per-play card bracket), cmds.py (power and
+        # card register/unregister), player.py (potion belt register/detach,
+        # all_cards), powers.py (Power._expire) and relics/base.py (attach);
+        # monsters/base.py and afflictions.py are where the two MISSING
+        # listener categories would be. The rest are the live gaps' sim halves.
+        ["src/Core/Hooks/Hook.cs", "src/Core/Models/AbstractModel.cs",
+         "src/Core/Combat/CombatState.cs", "src/Core/Runs/RunState.cs",
+         "src/Core/Entities/Players/Player.cs",
+         "src/Core/Entities/Players/PlayerCombatState.cs",
+         "src/Core/Models/MonsterModel.cs",
+         "src/Core/Models/AfflictionModel.cs",
+         "src/Core/Models/EnchantmentModel.cs",
+         "src/Core/Models/BadgeModel.cs",
+         "src/Core/Models/CardModel.cs",
+         "src/Core/Models/Powers/BufferPower.cs",
+         "src/Core/Models/Powers/TangledPower.cs",
+         "src/Core/Models/Powers/FreeAttackPower.cs",
+         "src/Core/Models/Powers/CuriousPower.cs",
+         "src/Core/Models/Relics/SpikedGauntlets.cs",
+         "src/Core/Models/Relics/BrilliantScarf.cs",
+         "src/Core/Models/Relics/ThrowingAxe.cs",
+         "src/Core/Models/Relics/PenNib.cs"],
+        ["sts2_rl/hooks.py", "sts2_rl/combat.py", "sts2_rl/cmds.py",
+         "sts2_rl/player.py", "sts2_rl/powers.py", "sts2_rl/history.py",
+         "sts2_rl/relics/base.py", "sts2_rl/monsters/base.py",
+         "sts2_rl/afflictions.py",
+         "sts2_rl/relics/spiked_gauntlets.py",
+         "sts2_rl/relics/brilliant_scarf.py",
+         "sts2_rl/relics/pen_nib.py", "sts2_rl/relics/throwing_axe.py",
+         "sts2_rl/cards/unrelenting.py",
+         "sts2_rl/monsters/overgrowth/vine_shambler.py"],
     ),
     "monster_state_machine": (
         ["src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs"],
