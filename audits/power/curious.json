@@ -1,0 +1,51 @@
+{
+  "unit": "power/curious",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CuriousPower.cs",
+    "sha256": "f3df630baac3366c2e297a029df30eee1abd014d0e752fa4142c540ee545ec6c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2881 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "TryModifyEnergyCostInCombat": {
+      "maps_to": "powers.py:2883-2887 CuriousPower.modify_card_energy_cost (hooks.py:196-201)",
+      "verdict": "gap",
+      "issue": "The arithmetic is exact -- originalCost - Amount floored at 0, with the Power-card and cost > 0 gates (CuriousPower.cs:19-31 vs powers.py:2885-2887). What is wrong is everything about HOW it is dispatched, and this power is already the executed witness for two committed seam gaps, so neither is re-verdicted here (binding rule 3): (a) hook_dispatch's G2 (cross-listener order) is LIVE with THIS POWER as its witness -- Curious at 2 stacks on a 1-cost Power card versus the ported relic Spiked Gauntlets (+1): the game runs powers before relics and computes max(0, 1-2) = 0 then +1 = 1, and the sim runs relics before powers and computes 1+1 = 2 then max(0, 2-2) = 0, so the sim charges 0 where the game charges 1. (b) hook_dispatch's G3 (the missing Early/Late phase passes): C#'s TryModifyEnergyCostInCombat is the EARLY pass and TryModifyEnergyCostInCombatLate is a separate later one, which is why power/free_attack and the ported relic Brilliant Scarf are guaranteed to run after Curious in the game and are a coin flip in the sim. Recorded as a gap on this unit because the observable cost of a card is wrong, not merely the ordering."
+    }
+  },
+  "guards": [
+    {
+      "what": "CuriousPower.cs:15-18 card.Owner.Creature != base.Owner",
+      "verdict": "faithful",
+      "rationale": "The sim's modify_card_energy_cost signature (hooks.py:196) carries no owner at all. A tautology in single-player -- the only cards with costs are the player's."
+    },
+    {
+      "what": "CuriousPower.cs:12-14,32 the TryModify predicate protocol",
+      "verdict": "gap",
+      "issue": "C#'s Try* hooks are a predicate chain: the listener returns bool to say 'I changed it' and writes the new value to an out-param, and Hook.ModifyEnergyCostInCombat (Hook.cs:1574-1590) uses that to decide who to notify afterwards and, in some families, to stop looking. The sim's modify_card_energy_cost (hooks.py:196-201) is a plain fold with no bool and no out-param, so 'nobody modified it' and 'somebody modified it to the same value' are indistinguishable and there is no after-notification list. Same absent machinery as audits/seam/power_cmd.json's G4 one family over, and the same shape hook_dispatch G1 notes for should_play_card's missing `preventer` out-param. DORMANT on its own -- no ported listener on this family reads the notification -- with the trigger named: any AfterModifyingEnergyCostInCombat implementer."
+    },
+    {
+      "what": "CuriousPower.cs:23-26 originalCost <= 0m -> return false",
+      "verdict": "faithful",
+      "rationale": "powers.py:2885 `cost <= 0` returns the cost unchanged. Identical, and it matters: it is what keeps Curious from making an already-free Power card negative, and it is also why the G2 witness above is order-sensitive."
+    },
+    {
+      "what": "The reduction amount",
+      "verdict": "faithful",
+      "rationale": "The only ported applier is the Mad Science card's Curious rider (cards/mad_science.py:162-176, _CURIOUS_REDUCTION), from the ported Act-3 Glory event Tinker Time. No AscensionHelper call in CuriousPower.cs, so there is no non-ascension branch to pick."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

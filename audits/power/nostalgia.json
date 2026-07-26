@@ -1,0 +1,76 @@
+{
+  "unit": "power/nostalgia",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\NostalgiaPower.cs",
+    "sha256": "1e2ccb87f2b714a983e9672dd52b3bda3bfe5db6f5758ec491be77ebf17234bd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3593 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyCardPlayResultPileTypeAndPosition": {
+      "maps_to": "powers.py:3595-3612 NostalgiaPower.modify_card_play_result_pile (hooks.py:236-246, combat.py:510)",
+      "verdict": "gap",
+      "issue": "ADDED BY HAND -- the harness did not enumerate it. NostalgiaPower.cs:16 is `public override (PileType, CardPilePosition) ModifyCardPlayResultPileTypeAndPosition(...)`, and harness.list_overrides' _OVERRIDE_RE return-type class does not match the parentheses of a tuple return type; this is the third instance of that defect in the power stream (CorruptionPower, ReboundPower, and now this) and the main report's section 8 item 2 documents it. THE GAP: the sim runs the pile decision at the WRONG TIME. Hook.ModifyCardPlayResultPileTypeAndPosition is called at CardModel.cs:1890 -- BEFORE the play loop starts (:1904) and therefore before OnPlay, before History.CardPlayStarted (:1930) and before Hook.AfterCardPlayed (:1959). The sim calls it at combat.py:510, AFTER the whole play loop (:477-494) has resolved. Two consequences. (a) A card whose own effect plays another card is counted against its OWN allowance: with Nostalgia 1, C# decides the outer card's pile with a count of 0 and redirects it, while the sim counts the inner play's CardPlayedEntry first, sees 1 >= 1, and sends the outer card to the discard. Reachable with the ported Mayhem/Stampede auto-plays and with any ported card that plays another. (b) The current play is excluded from the count on BOTH sides, which the sim's comment (powers.py:3603-3604) states correctly -- C# because the decision precedes History.CardPlayStarted, the sim because on_card_played fires at combat.py:514 after :510. That half is faithful and is recorded so it is not re-litigated."
+    },
+    "AfterModifyingCardPlayResultPileOrPosition": {
+      "maps_to": "no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "NostalgiaPower.cs:50-58's body is entirely presentation once the owner guard passes -- the only statement the dump retains is the guard and the Task.CompletedTask returns; the filtered lines are a VFX/hover call. Contrast ReboundPower, whose override of the same hook does real work (PowerCmd.Decrement) and is recorded as a gap in audits/power/rebound.json. Nostalgia never consumes a stack: its allowance is enforced entirely by counting history, so Amount is constant for the combat. Waiver-grade content, recorded faithful because the sim's total absence of the hook is the correct port of a presentation-only override."
+    }
+  },
+  "guards": [
+    {
+      "what": "NostalgiaPower.cs:18-21 card.Owner.Creature != base.Owner",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; the sim omits it. Same treatment as audits/power/rebound.json's identical guard."
+    },
+    {
+      "what": "NostalgiaPower.cs:22-26 (uint)(type - 1) > 1u -- Attack or Skill only",
+      "verdict": "faithful",
+      "rationale": "The decompiled unsigned trick tests CardType in {1, 2}. CardType.cs orders None, Attack, Skill, Power, ..., so it is exactly 'Attack or Skill'. powers.py:3598-3600 tests card.card_type in (CardType.ATTACK, CardType.SKILL). Identical, and the same trick appears again inside the history predicate at :37-39 with the same meaning."
+    },
+    {
+      "what": "NostalgiaPower.cs:27-30 pileType != PileType.Discard -> unchanged",
+      "verdict": "faithful",
+      "rationale": "powers.py:3598 tests pile != 'discard', and combat.py:509 only calls the hook when the card is actually in the discard pile -- which also means an exhausting card, moved to the exhaust pile at combat.py:501-504 BEFORE the hook, is correctly skipped, matching C# where GetResultPileTypeForCardPlay() returns Exhaust for it."
+    },
+    {
+      "what": "NostalgiaPower.cs:31-42 the history count is over CardPlaysStarted, not CardPlaysFinished",
+      "verdict": "gap",
+      "issue": "C# counts History.CardPlaysStarted entries (pushed at CardModel.cs:1930, once per PLAY-COUNT ITERATION); the sim counts CardPlayedEntry rows, which CombatHistory records from on_card_played -- fired ONCE per card at combat.py:514, outside the `for _ in range(play_count)` loop (:477-494). So any replay source halves the rate at which Nostalgia's allowance is consumed: a Throwing-Axe-doubled or Duplication-doubled Attack advances C#'s count by 2 and the sim's by 1, and the sim then redirects a card the game sends to the discard. This is hook_dispatch's G4 (the per-CardPlay bracket, already LIVE with a Throwing Axe / Pen Nib witness, and whose own text says 'every one of the sim's 48 on_card_played listeners' widens it), so the mechanism is not re-verdicted here per binding rule 3 -- what is recorded is that Nostalgia is one of those listeners and that the consequence is a wrong pile, not just a wrong counter. Reachable: Throwing Axe is a ported relic from the ported Tanx shrine and Nostalgia is a ported Colorless power card (cards/colorless_powers.py:199)."
+    },
+    {
+      "what": "NostalgiaPower.cs:33 e.HappenedThisTurn(base.CombatState)",
+      "verdict": "faithful",
+      "rationale": "powers.py:3607 passes this_turn=True to combat.history.of_type. Same windowing predicate."
+    },
+    {
+      "what": "NostalgiaPower.cs:41 e.CardPlay.Card.Owner == base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; the sim omits it."
+    },
+    {
+      "what": "NostalgiaPower.cs:47 (PileType.Draw, CardPilePosition.Top)",
+      "verdict": "faithful",
+      "rationale": "powers.py:3612 returns 'draw_top' and combat.py:512 appends to draw_pile, whose END is the top by the sim's stated convention (player.py:181). Correct pile AND correct position -- the same pair audits/power/rebound.json checks."
+    },
+    {
+      "what": "Contention with power/corruption and power/rebound on the same chain",
+      "verdict": "gap",
+      "issue": "Nostalgia is the one power in this group that uses the RIGHT hook, and that is precisely why it wins the contention the other two lose: hooks.modify_card_play_result_pile is dispatched at combat.py:510, BEFORE on_card_played at :514 where CorruptionPower and ReboundPower reach into the piles instead. So Nostalgia moves the card to the draw pile first and then Corruption's `card in discard_pile` test fails (the Skill is never exhausted) and Rebound's does too (it gets its effect free and keeps its stack). Both are recorded as gaps from their own end in audits/power/corruption.json and audits/power/rebound.json; this entry is the third corner of the same rule-3 triangle, reached independently and agreeing. In C# all three are listeners on ONE ModifyCardPlayResultPileTypeAndPosition chain (Hook.cs:1391-1405) and the LAST writer wins, so which one prevails is hook_dispatch G2's listener-order question, not this record's."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

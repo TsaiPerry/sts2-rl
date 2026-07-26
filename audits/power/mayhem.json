@@ -1,0 +1,61 @@
+{
+  "unit": "power/mayhem",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\MayhemPower.cs",
+    "sha256": "37c1ebc22d563421d57d8d96ef81dc6f5da064d20520e3ddaad7425d93f9f5e3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3570 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterAutoPrePlayPhaseEntered": {
+      "maps_to": "powers.py:3572-3583 MayhemPower.on_player_turn_started (hooks.py:285-295, player.py:186)",
+      "verdict": "gap",
+      "issue": "WRONG PHASE, and this is the finding that makes turn_structure's G8 -- the AutoPrePlay and AutoPostPlay phases do not exist in the sim and their two hooks are hand-rolled onto neighbouring slots. Not re-verdicted here (binding rule 3); the verdict is gap on both sides. LIVE on its AutoPrePlay side, which G8 currently calls dormant. G8's dormancy argument is that 'the two ported users' effects (play cards / auto-play one Skill) do not read any other turn-start listener's output', naming Whispering Earring and the Imbued enchantment -- it does not name MayhemPower, which is C#'s third ported AfterAutoPrePlayPhaseEntered implementer and DOES read other turn-start listeners' output. In the game this hook fires at CombatManager.cs:568 -> RunAutoPrePlayPhase (:613-619), strictly AFTER Hook.AfterSideTurnStart (:522) and after SetupPlayerTurn's Hook.AfterPlayerTurnStart (:675); in the sim it shares on_player_turn_started with every AfterSideTurnStart and AfterPlayerTurnStart power, so the order is hook-REGISTRATION order. THREE EXECUTED WITNESSES, all on ported Colorless power cards a single run can hold (binding rule 6 satisfied on both halves of each): (1) PrepTimePower 3 + Mayhem 1, one Strike on top of the draw pile -- Prep Time applied first makes the auto-played Strike deal 9 (6 + Vigor 3, Vigor consumed), Mayhem first makes it deal 6 and leaves Vigor(3) unspent; the game always deals 9. (2) RollingBoulderPower 5 + Mayhem 1 against a 4-HP enemy -- boulder first kills it, ends the combat and Mayhem's own combat.is_over guard (powers.py:3577) leaves the Strike in the DRAW pile; Mayhem first plays it into the DISCARD pile. The game always resolves the boulder first. (3) DrawCardsNextTurnPower 2 (from the ported card Relax) + Mayhem 1 with Relax on top of the draw pile -- power first expires it and the fresh Draw Cards Next Turn(2) survives, which is the game's answer; Mayhem first stacks 2 -> 4 and the expiry then deletes the whole thing, costing the player two bonus draws."
+    }
+  },
+  "guards": [
+    {
+      "what": "MayhemPower.cs:18 player == base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "powers.py:3573-3574. Identical."
+    },
+    {
+      "what": "MayhemPower.cs:20 CardPileCmd.AutoPlayFromDrawPile is TWO-PHASE",
+      "verdict": "gap",
+      "issue": "CardPileCmd.cs:931-966 first moves ALL `count` cards out of the draw pile into PileType.Play (the loop at :939-955, one ShuffleIfNecessary per pick), and only THEN plays them (:956-965). The sim interleaves: it picks and plays one card per iteration (powers.py:3576-3583). So at Mayhem 2 the game commits both cards before either resolves, and the sim lets the first card's effect change which card is played second. Any draw, reshuffle or pile redirect the first card causes therefore diverges -- and the game's cards sit in PileType.Play while waiting, so a reshuffle the first card triggers excludes them (PROMPT.md bug class 7, pile limbo), where the sim's second pick can be a card the reshuffle just moved. Reachable: Mayhem is Counter-stacked at 1 per play (cards/colorless_powers.py:174), so two plays give Mayhem 2, and the Ironclad pool is full of cards that draw. Not executed -- it needs a two-stack Mayhem plus a drawing first card, and the phase gap above already carries this unit's LIVE label."
+    },
+    {
+      "what": "MayhemPower.cs:20 CardPilePosition.Top",
+      "verdict": "faithful",
+      "rationale": "C#'s Top is drawPile.Cards.FirstOrDefault() (CardPileCmd.cs:945); the sim takes player.draw_pile[-1] (powers.py:3583), and the END of the sim's list is the top of the draw pile by the convention stated at player.py:181 and used identically by NostalgiaPower and ReboundPower. Correct end of the pile."
+    },
+    {
+      "what": "MayhemPower.cs:20 the per-pick ShuffleIfNecessary",
+      "verdict": "faithful",
+      "rationale": "CardPileCmd.cs:941 calls ShuffleIfNecessary before each pick (:972-975: reshuffle only when the draw pile is empty and the discard is not); powers.py:3579-3580 does exactly that with reshuffle_discard_into_draw. Both then break out when the draw pile is still empty (C# :949-952, sim :3581-3582)."
+    },
+    {
+      "what": "MayhemPower.cs:20 forceExhaust: false",
+      "verdict": "faithful",
+      "rationale": "CardPileCmd.cs:960 sets ExhaustOnNextPlay = false, i.e. a no-op. turn_structure's G7 records that ExhaustOnNextPlay has no sim counterpart and that AutoPlayFromDrawPile(forceExhaust) is its only setter; with the argument false this unit does not exercise it."
+    },
+    {
+      "what": "CombatManager.Instance.IsOverOrEnding / IsDead guards",
+      "verdict": "faithful",
+      "rationale": "CardPileCmd.cs:933 and :958 vs powers.py:3577 (combat.is_over or player.is_dead, checked per iteration). Equivalent, and the sim needs the explicit check because it has no IsOverOrEnding dispatch gate (hook_dispatch's G8)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,56 @@
+{
+  "unit": "power/unmovable",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\UnmovablePower.cs",
+    "sha256": "b267db119bf6d000e1ccc146584cc1d648566a82a4ac7ef34bc2dd53ff5306a6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1092 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyBlockMultiplicative": {
+      "maps_to": "powers.py:1105-1120 UnmovablePower.modify_block_multiplicative plus the hand-rolled counters at :1094-1103, :1122-1130",
+      "verdict": "gap",
+      "issue": "The sim replaces C#'s HISTORY QUERY with hand-rolled per-power state, and the two disagree about when the allowance resets. C# counts, on every call, History.Entries.OfType<BlockGainedEntry>() where e.HappenedThisTurn(base.CombatState) && e.Actor == target && e.Props.IsCardOrMonsterMove() && e.CardPlay != cardPlay (UnmovablePower.cs:35) -- so the window is the game's own turn window and the exclusion is 'gains from THIS card play do not count against it'. The sim keeps self._plays_used and self._active_card and resets them from on_player_turn_start (powers.py:1127-1130), which is player.py:169. Two divergences follow. (a) THE RESET SLOT: the sim's counter survives the whole enemy turn and is cleared only at the player's next turn start, while C#'s HappenedThisTurn window is the CombatState's, so any block the owner gains during the ENEMY turn from a card or move -- a turn-end auto-play under power/stampede, an on_enemy_turn effect -- lands in a different window on the two sides. (b) THE per-CardPlay EXCLUSION: C# compares CardPlay identities so a card played twice (Duplication, Throwing Axe) counts as TWO plays against the allowance, where the sim compares CARD identity (powers.py:1113) and its on_card_played bump fires once per card (combat.py:514, outside the play loop), so a doubled block card consumes ONE stack in the sim and two in the game -- hook_dispatch's G4 again, not re-verdicted, but here it means a doubled Iron Wave gets DOUBLE block twice in the sim and once in the game. Reachable: Unmovable is a ported Ironclad card (cards/unmovable.py:36) and Throwing Axe is a ported relic from the ported Tanx shrine."
+    }
+  },
+  "guards": [
+    {
+      "what": "UnmovablePower.cs:23-26 target.IsMonster -> 1m",
+      "verdict": "faithful",
+      "rationale": "C# refuses to double a MONSTER's block outright, where powers.py:1111 only tests `target is not self.owner`. Equivalent for the ported content and checked rather than assumed: the sole applier is the Ironclad card (cards/unmovable.py:36, target = ctx.player), no ported monster applies it, and no ported effect copies a player power onto a monster. Named trigger: applying Unmovable to a monster, at which point the sim would double its block and the game would not."
+    },
+    {
+      "what": "UnmovablePower.cs:27-30 !props.IsCardOrMonsterMove() -> 1m",
+      "verdict": "faithful",
+      "rationale": "The sim gets this from BlockCmd.apply, whose cmds.py:145 gate (is_powered_attack(props) -- Move and not Unpowered) is the only route to the block-multiplier hooks at all. So unpowered block (power/plating, power/toric_toughness, Rage, block potions) is not doubled on either side, which the sim's docstring states (powers.py:1087-1088). NOTE C#'s predicate admits monster-MOVE block as well as card block; that arm is unreachable here because the owner is always the player and a monster move never grants the player block."
+    },
+    {
+      "what": "UnmovablePower.cs:31-34 cardSource.Owner.Creature != base.Owner -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:1111 `card is None -> 1.0` plus the owner test. Single-player tautology for the ownership half."
+    },
+    {
+      "what": "UnmovablePower.cs:35 the CardPlay != cardPlay exclusion, i.e. multiple block gains inside ONE play all double",
+      "verdict": "faithful",
+      "rationale": "powers.py:1113-1116 returns 2.0 unconditionally while card is self._active_card, with a comment saying exactly this. Correct for the within-one-play case; the ACROSS-plays case is the (b) divergence on the hook entry."
+    },
+    {
+      "what": "UnmovablePower.cs:36-40 num >= base.Amount -> 1m, else 2m",
+      "verdict": "faithful",
+      "rationale": "powers.py:1117-1120. The factor 2.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py tools/audit/power_census.py multipliers), and it composes with power/no_block's absorbing 0.0 the same way under either aggregation shape."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

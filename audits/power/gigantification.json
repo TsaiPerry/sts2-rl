@@ -1,0 +1,61 @@
+{
+  "unit": "power/gigantification",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\GigantificationPower.cs",
+    "sha256": "644db8e55cc75924a5a703539cb88cccc82a0a5d6a5b94d8c34410f23de0a0a9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3948 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeAttack": {
+      "maps_to": "powers.py:3961-3967 GigantificationPower.before_attack (hooks.py:344-359, combat.py:479)",
+      "verdict": "faithful",
+      "rationale": "USES THE RIGHT SLOT, which is worth recording loudly: hooks.py has before_attack/after_attack slots that power/thorns, power/curl_up and power/skittish all fail to use (the main report's section 4 items 2, 5 and 14), and this power and power/vigor are the two that do. C#'s BeforeAttack takes an AttackCommand and latches the first one that qualifies; combat.py:479 fires before_attack once per play-count iteration around the card's on_play, which is the sim's attack-command boundary (stated at combat.py:472-475). All four C# guards are present: ModelSource is a CardModel (GigantificationPower.cs:30-33 vs powers.py:3965 `card is None`), the owner (:34-37 vs :3963), Type == Attack (:38-41 vs :3965), IsPoweredAttack (:42-45 vs :3965 card.is_unpowered), and the already-latched early return (:47-50 vs :3963)."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:3969-3983 GigantificationPower.modify_damage_multiplicative (cmds.py:58)",
+      "verdict": "faithful",
+      "rationale": "3 for the latched card, 3 for any powered card attack of the owner while nothing is latched (which is what makes the card's damage PREVIEW read triple, and the sim's docstring at powers.py:3940-3942 says so), 1 otherwise. GigantificationPower.cs:57-74 vs powers.py:3979-3983: cardSource == null, the owner, IsPoweredAttack (structural via cmds.py:56-58) and the commandToModify-vs-cardSource comparison all line up, with the sim comparing CARD identity where C# compares command.ModelSource -- the same object for a card attack. The literal 3 at GigantificationPower.cs:72 matches powers.py:3949's MULTIPLIER = 3, and 3 is dyadic-safe as an integer factor (executed: py tools/audit/power_census.py multipliers lists it among the safe ones), so this power does not widen hook_dispatch's G9."
+    },
+    "AfterAttack": {
+      "maps_to": "powers.py:3985-3988 GigantificationPower.after_attack (hooks.py:361-370, combat.py:492)",
+      "verdict": "gap",
+      "issue": "The slot is right (combat.py:492, immediately after the card's on_play inside the play-count loop). The GAP is the IDENTITY the latch is cleared against: C# compares ATTACK-COMMAND identity (`command == internalData.commandToModify`, GigantificationPower.cs:80), the sim compares CARD identity (`card is self._card_to_modify`, powers.py:3986). They agree for one card producing one attack command, which is the normal case. They diverge when ONE card produces SEVERAL attack commands -- C# clears and Decrements once per matching command, i.e. once, while the sim clears and _ticks on the first after_attack for that card and then, because the latch is now None, the NEXT hit of the same card re-enters modify_damage_multiplicative on the `_card_to_modify is None` arm (powers.py:3981) and gets tripled AGAIN for free. DORMANT: combat.py:477-494 fires exactly one before_attack/after_attack pair per play-count iteration and a multi-hit card resolves inside one iteration, so no ported card reaches the second command. Named trigger: any card or effect that issues two attack commands within one play, or a port that moves before_attack/after_attack inside a card's own hit loop."
+    }
+  },
+  "guards": [
+    {
+      "what": "GigantificationPower.cs:14-17,23-26,46 the per-instance Data latch",
+      "verdict": "faithful",
+      "rationale": "powers.py:3951-3959 initialises self._card_to_modify in __init__, which is the sim's equivalent of InitInternalData. Note this power is NOT PowerInstanceType.Instanced (unlike power/automation, power/the_bomb, power/rolling_boulder and power/toric_toughness), so one shared latch per owner is correct on both sides and power_cmd's G5 does not apply here."
+    },
+    {
+      "what": "GigantificationPower.cs:83 PowerCmd.Decrement, once per triggered attack",
+      "verdict": "faithful",
+      "rationale": "powers.py:3988 self._tick(). So Gigantification 2 triples two separate Attack cards, not one card twice. The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    {
+      "what": "GigantificationPower.cs:77-85 AfterAttack has NO owner guard",
+      "verdict": "faithful",
+      "rationale": "C# relies on the command comparison alone; powers.py:3986 relies on the card comparison alone. Equivalent -- neither can match another creature's attack, because the latch was only ever set for the owner's own card."
+    },
+    {
+      "what": "The only applier is a potion",
+      "verdict": "waiver",
+      "rationale": "GigantificationPotion.cs is the sole applier -- PowerVar<GigantificationPower>(1), ported at potions.py:806-819 -- and potions are out of scope by Perry's deferral. The POWER is audited in full above; only its one applier's reachability is waived."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

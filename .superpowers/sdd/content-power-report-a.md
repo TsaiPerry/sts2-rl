@@ -11,10 +11,21 @@ both in. Section numbering here deliberately mirrors the main report's.
 
 | | |
 |---|---|
-| half-A units audited | 15 / 41 |
-| power units audited overall | 60 / 134 (`py tools/audit_status.py --kind power`) |
+| half-A units audited | 30 / 41 |
+| power units audited overall | 75 / 134 (`py tools/audit_status.py --kind power`) |
 | suite | 2476 passed / 31 xfailed at every batch boundary |
-| commits | batch 1: see below |
+| commits | batch 1 `dfca8463`, batch 2 (this) |
+
+## Batch 2 — 15 units
+
+`mayhem`, `stampede`, `nostalgia`, `plating`, `battleworn_dummy_time_limit`,
+`automation`, `the_bomb`, `toric_toughness`, `confused`, `curious`,
+`the_gambit`, `no_block`, `unmovable`, `diamond_diadem`, `gigantification`.
+
+Rollups: 13 gap, 1 faithful (`no_block`), 1 waiver (`diamond_diadem`). Chosen
+to close out the mechanisms batch 1 opened (the two auto-play phases, the
+`InstanceType` cluster, the pile-decision chain) plus the block/damage-modifier
+group.
 
 ## Batch 1 — 15 units
 
@@ -143,6 +154,100 @@ nine records) — the marginal cost per unit inside a mechanism group is very lo
    the same field (`HelloWorldPower.cs:22,27`, used as both guard *and* count) —
    dormant there.
 
+### Batch 2 additions to section 4
+
+7. **`plating` — a `BeforeSideTurnEndEarly` phase dropped, and it costs HP.**
+   `PlatingPower.cs:58-60` says outright why the hook is Early: *"We do this in
+   early so that it triggers before end-of-turn damage effects."* The sim has no
+   phase passes (`hook_dispatch` G3) and fires the block gain from the plain
+   `on_player_turn_end` dispatch. **Executed:** Plating 4 on the player plus
+   Constrict 6 — applying Constrict first costs the player **6 HP** and leaves
+   **4 unused block**; applying Plating first costs **2 HP**. The game always
+   costs 2. Reachable: player-side Plating four ways (`cards/stone_armor.py:38`,
+   `relics/gorget.py:17`, `cards/colorless_powers.py:121`, `potions.py:592`) and
+   Constrict from the ported Act-1 Slithering Strangler
+   (`monsters/overgrowth/slithering_strangler.py:43`).
+   `plating` also has the **wrong slot** on its decay leg (C#
+   `AfterSideTurnStart` = post-draw, sim `on_player_turn_start` = pre-draw),
+   dormant.
+8. **`stampede` — wrong RNG stream, on top of `turn_structure` G8's phase gap.**
+   `StampedePower.cs:28` picks the Attack with `Rng.Shuffle.NextItem(items)` —
+   the **Shuffle** stream. `powers.py:1041` uses `combat._rng.choice`.
+9. **`confused` — wrong RNG stream, widest blast radius of the four.**
+   `ConfusedPower.cs:53` is `Rng.CombatEnergyCosts.NextInt(4)`;
+   `powers.py:3873` is `combat._rng.randrange(4)`. Confused re-costs **every**
+   card the player draws for the whole combat, so a Snecko Eye / Fake Snecko Eye
+   run diverges on the first draw and perturbs every later shared-rng consumer.
+   Both appliers are ported relics.
+   **Four of half A's units now carry the same wrong-stream defect** —
+   `hello_world` (`CombatCardGeneration`), `entropy` (`CombatCardSelection`),
+   `stampede` (`Shuffle`), `confused` (`CombatEnergyCosts`) — plus
+   `aggression` from the main report. Every one of the four correct accessors
+   exists on `CombatRng` (`combat_rng.py:17-25`). This is a **systematic** defect
+   worth its own `PROMPT.md` bug class, not five coincidences.
+10. **`nostalgia` — the pile decision is made at the wrong TIME.**
+    `Hook.ModifyCardPlayResultPileTypeAndPosition` is called at
+    `CardModel.cs:1890`, **before** the play loop (`:1904`), `OnPlay`,
+    `History.CardPlayStarted` (`:1930`) and `AfterCardPlayed` (`:1959`). The sim
+    calls it at `combat.py:510`, **after** the whole loop. So a card whose own
+    effect plays another card is counted against its own allowance: with
+    Nostalgia 1, C# redirects the outer card and the sim sends it to the discard.
+    Separately, C# counts `CardPlaysStarted` (one per play-count iteration) where
+    the sim counts `CardPlayedEntry` (one per card, `combat.py:514`, outside the
+    loop), so any replay source (Throwing Axe, Duplication) consumes the
+    allowance at **half** the rate — `hook_dispatch` G4's blast radius, with a
+    wrong *pile* as the observable rather than a wrong counter.
+    `nostalgia` is also the **third** tuple-return-type override the harness
+    silently missed.
+11. **`mayhem` — `AutoPlayFromDrawPile` is two-phase and the sim interleaves.**
+    `CardPileCmd.cs:931-966` moves **all** `count` cards into `PileType.Play`
+    first (`:939-955`) and plays them after (`:956-965`); `powers.py:3576-3583`
+    picks and plays one at a time. At Mayhem 2 the game commits both cards before
+    either resolves — and they sit in `PileType.Play`, so a reshuffle the first
+    card triggers excludes them (`PROMPT.md` bug class 7) — while the sim's
+    second pick can be a card the reshuffle just moved. Not executed; the phase
+    gap already carries the unit's live label.
+12. **`unmovable` — a history query replaced by hand-rolled state that resets in
+    the wrong window, and the per-`CardPlay` exclusion degraded to per-card.**
+    `UnmovablePower.cs:35` counts `BlockGainedEntry` rows with
+    `e.CardPlay != cardPlay`; the sim keeps `_plays_used`/`_active_card` and
+    clears them from `on_player_turn_start` (`powers.py:1127-1130`), so the
+    counter survives the whole enemy turn, and a doubled block card consumes one
+    stack in the sim and two in the game — so a Throwing-Axe-doubled Iron Wave
+    gets double block **twice** in the sim and once in the game.
+13. **`automation` and `toric_toughness` — two more reachable, arithmetically
+    divergent `power_cmd` G5 witnesses.** `automation`'s per-instance state is a
+    *counter*: two C# instances each fire once per 10 cards drawn (two separate
+    grants on the same draw), where the sim merges into one power with one
+    `cards_left` and grants the summed amount at half the frequency — and the
+    merged counter is never reset by the second application, so the second
+    Automation's first trigger arrives up to 9 draws early.
+    `toric_toughness` is the sharper one: two C# instances at 2 turns with block
+    5 and 9 give **14 block for two turns**; the sim holds one instance at
+    Amount 4 with block 9 and gives **9 block for four turns** — both the
+    per-turn amount and the duration wrong, in opposite directions. Its own
+    docstring (`powers.py:1194-1199`) admits it. Both appliers are normal deck
+    cards playable twice in one combat.
+    **`the_bomb` is the counter-example and it holds up**: its `self.bombs` fuse
+    list (`powers.py:3768-3802`) reproduces N independent instances exactly; the
+    only residue is per-instance identity and `set_damage` always writing the
+    newest fuse.
+14. **`the_gambit` — the kill bypasses a death prevention the engine just
+    honoured.** `cmds.py:96-113` floors a prevented death at 1 HP and clears
+    `is_dead`, after which `cmds.py:121` lets `on_damage_received` fire and this
+    power calls `CreatureCmd.kill` outright. In C# `CreatureCmd.Kill` is itself
+    subject to the death pipeline, so the preventer gets a second say. Dormant —
+    the sim's preventers are the Illusion revive (enemy-only) and Fairy in a
+    Bottle, and The Gambit is player-only.
+15. **`gigantification` — the latch is cleared against CARD identity where C#
+    uses ATTACK-COMMAND identity.** Dormant (`combat.py:477-494` fires exactly
+    one `before_attack`/`after_attack` pair per play-count iteration), but if a
+    card ever issued two attack commands in one play the sim would re-enter the
+    `_card_to_modify is None` arm and triple the second hit for free.
+    Recorded positively too: `gigantification` and `vigor` are the **only two**
+    power units that use the sim's `before_attack`/`after_attack` slots, which
+    `thorns`, `curl_up` and `skittish` all fail to use.
+
 ## 6. Cross-record disagreements spotted under rule 3
 
 1. **`turn_structure` G8's AutoPrePlay dormancy argument is wrong** — see
@@ -174,6 +279,29 @@ nine records) — the marginal cost per unit inside a mechanism group is very lo
      **static** `power.Type`, not `GetTypeForAmount`.
 
    So porting Malaise or Resonance remains the single named trigger.
+4. **The main report's own section 6 item 1 is partly WRONG, and the correction
+   is a narrowing.** It named three units whose effects escape the
+   "every ported listener self-filters to its own owner" argument behind
+   `turn_structure` G5's dormancy, and asked for a **two-dummy Battle Friend
+   witness**. There is no such witness to execute:
+   `BattlewornDummyEventEncounter.GenerateMonsters`
+   (`BattlewornDummyEventEncounter.cs:62-72`) returns a
+   `_ReadOnlySingleElementList` — **exactly one dummy**, chosen by `Setting` —
+   and the sim's three encounters each list a single monster class
+   (`monsters/glory/battle_friend.py:67-78`). The dummy's only move is
+   `NOTHING_MOVE`, so its escape cannot affect another creature's turn either.
+   `battleworn_dummy_time_limit` therefore does **not** make G5 live. It is also
+   **in half A, not half B** as the continuation prompt's section-6 note claims;
+   the two remaining candidates (`asleep`, `slumber`) really are half B's.
+5. **`hook_dispatch` G2's and G3's live witnesses are both `curious`, and it is
+   half A's unit.** Recorded from the unit's end at the same `gap` verdict, so
+   rule 3 holds. Worth noting because it means the seam record's most-cited
+   content example is now audited independently and agrees.
+6. **`hook_dispatch` G4's blast radius reaches two more units with a
+   *state-changing* observable, not just a counter.** G4's own text says "every
+   one of the sim's 48 `on_card_played` listeners" widens it; `nostalgia` (wrong
+   destination pile) and `unmovable` (double block granted twice) are two where
+   the consequence is player-visible state rather than a relic counter.
 
 ## 7. Lessons for `tools/audit/PROMPT.md` (relic stream to fold in)
 
@@ -217,6 +345,41 @@ proposed lessons has landed, so all seven are still live. Half A adds:
    the main report's section 8 item 2, and it is far more common — the roster has
    at least 10 such subclasses (`TemporaryStrengthPower` ×4 ported +
    `flex_potion`, `TemporaryDexterityPower`, and the potion-source powers).
+11. **New bug class, and it is the highest-yield one half A found — "the power
+    does not use the per-purpose RNG accessor."** Five power units now carry it
+    (`aggression`, `hello_world`, `entropy`, `stampede`, `confused`), each
+    reaching for `combat._rng` (the **shared unseeded** `random.Random`,
+    `combat.py:88`) where C# names a specific `RunRngSet` stream. All five
+    accessors exist on `CombatRng` (`combat_rng.py:17-25`: `shuffle`,
+    `monster_ai`, `card_gen`, `card_selection`, `targets`, `energy`,
+    `potion_gen`) and `combat.combat_rng` is the object that carries them. The
+    trap is that `combat._rng` and `combat.combat_rng` are **different objects**
+    one line apart (`combat.py:88` vs `:94`) and only the second is
+    parity-aware. Checklist line: *any C# `Rng.<Stream>` in the unit must appear
+    in the sim as `combat.combat_rng.<accessor>`; `combat._rng` is the shared
+    legacy rng and is never the right answer under parity. Grep the unit's sim
+    body for `_rng.` and check every hit.* Contrast the correct usage one line
+    away in the same power: `stampede`'s target pick uses
+    `combat_rng.targets.choice` (`combat.py:546`) while its candidate pick uses
+    `combat._rng.choice` (`powers.py:1041`).
+12. **New checklist line — the two auto-play phases.**
+    `AfterAutoPrePlayPhaseEntered` fires at `CombatManager.cs:568` (**after**
+    `AfterSideTurnStart` `:522` and `AfterPlayerTurnStart` `:675`) and
+    `AfterAutoPostPlayPhaseEntered` at `:1167` (**before** `BeforeTurnEnd`
+    `:1179`, `DoTurnEnd` `:1191`, the flush `:1296` and `AfterTurnEnd` `:1307`).
+    Neither has a sim slot. `turn_structure` G8 owns the machinery; the per-unit
+    obligation is to notice that a power on either hook is *ordered* against
+    every other turn-start / turn-end power in the game and is a coin flip in the
+    sim.
+13. **`PowerInstanceType.Instanced` is a per-unit reachability question with real
+    arithmetic behind it.** Three of half A's four `Instanced` units
+    (`rolling_boulder`, `automation`, `toric_toughness`) have two simultaneous
+    instances reachable from a *normal deck card played twice*, and in all three
+    the merge changes numbers, not just bookkeeping. Checklist line: *for an
+    `Instanced` power, ask "can the applier fire twice in one combat?" — for a
+    deck card the answer is almost always yes — and then work out what the merge
+    does to the per-instance state, which is often a counter or a paired value
+    rather than the Amount.*
 10. **`ITemporaryPower` is absent from the sim as a marker.** No `is_temporary`,
     no `InternallyAppliedPower`, and no `should_power_be_removed_on_death` hook
     among `hooks.py`'s 66. C# has five readers: `IllusionPower.cs:59-66`,
@@ -251,47 +414,67 @@ proposed lessons has landed, so all seven are still live. Half A adds:
   cost; the constants are what make rule 3 cheap to honour.
 - Suite: **223s** (3m43s), unchanged at 2476 passed / 31 xfailed, as expected
   since audits add no code.
+- **Batch 2: 15 units, and materially cheaper per unit than batch 1** — the
+  turn-start/turn-end `CombatManager` ordering table, the seam gap lists and the
+  boilerplate rationales were all already paid for, so the marginal cost was one
+  C# dump per 7-8 units plus one sim dump. **2 units needed execution**
+  (`plating` against Constrict; `stampede`, whose witness was already run for
+  batch 1's temp-strength family). Suite **215s**.
+- **The single best return on time in both batches was following one mechanism
+  across units instead of going alphabetically.** Batch 1's Mayhem witnesses paid
+  for four records (`prep_time`, `rolling_boulder`, `draw_cards_next_turn`,
+  `mayhem`); reading `CombatManager.cs`'s two auto-play phases once paid for
+  `mayhem`, `stampede` and `plating`; and the `_rng` grep habit found the same
+  live defect on four separate units at essentially zero marginal cost.
+- **Two of the batch's best findings came from checking a *positive* claim.**
+  `the_bomb`'s fuse-list workaround and `no_block`'s structural `Unpowered` gate
+  both turned out to be right, and both are worth as much as a gap: they tell the
+  gap-fix stream what NOT to touch, and `the_bomb` is the existence proof that
+  the `Instanced` merge is fixable per-unit without engine work.
 
-## 10. Residual queue — the 26 half-A units left
+## 10. Residual queue — the 11 half-A units left
 
-`automation, battleworn_dummy_time_limit, block_next_turn, buffer, calamity,
-confused, curious, diamond_diadem, fasten, free_attack, gigantification,
-improvement, juggernaut, mayhem, no_block, nostalgia, plating, retain_hand,
-stampede, stratagem, the_bomb, the_gambit, toric_toughness, unmovable, vicious,
-vigor`
+`block_next_turn, buffer, calamity, fasten, free_attack, improvement,
+juggernaut, retain_hand, stratagem, vicious, vigor`
 
 Ordered by expected yield, with what is already known:
 
-1. **`mayhem` and `stampede`** — the two units section 4 item 1 and item 2 are
-   *about*. Both are cheap now (the C# and the witnesses are already read and
-   executed) and both must cross-reference `turn_structure` G8.
-2. **`nostalgia`** — the `ModifyCardPlayResultPileTypeAndPosition` tuple-return
-   override the harness misses (main report section 8 item 2). It is the *other*
-   side of `corruption`'s and `rebound`'s already-recorded contention, so the
-   rule-3 obligation is to reach the same verdict from its end.
-3. **`plating`** — the widest override list in half A (8) and the one unit in
-   half A that the `slots` census flags as touching *other* creatures' state
-   from an enemy-side per-creature slot, i.e. part of the main report's section-6
-   disagreement with `turn_structure` G5. `asleep` (half B) removes Plating.
-4. **`battleworn_dummy_time_limit`** — the prompt's section-6 note says all
-   three G5 cases are in half B; **that is wrong, this one is in half A.** It
-   escapes its owner in an enemy-side slot, and the Battle Friend encounter
-   fields more than one dummy, so the two-dummy witness the main report asks for
-   is half A's to execute.
-5. **The `InstanceType` units** — `automation`, `the_bomb`, `toric_toughness`
-   (`rolling_boulder` done). `power_cmd` G5 owns the mechanism; per-unit is
-   whether two instances are reachable, and `rolling_boulder` shows that
-   question is worth asking properly.
-6. **The `on_stack`-no-op units in half A** — `confused`, `curious`,
-   `the_gambit`. One grep each ("does anything read `Amount`").
-7. **The block/damage-modifier units** — `buffer`, `diamond_diadem`, `fasten`,
-   `gigantification`, `no_block`, `unmovable`, `vigor`, `juggernaut`,
-   `block_next_turn`, `toric_toughness`. Expect the `props` omission (main
-   report's proposed bug class 1) and `hook_dispatch` G9 cross-references;
-   `no_block` (×0.0), `unmovable` (×2.0), `diamond_diadem` (×0.5) and
-   `gigantification` (×3) are all already confirmed **dyadic** by the
-   `multipliers` census, so none of them widens G9.
-8. **The rest** — `calamity`, `free_attack`, `improvement`, `retain_hand`,
-   `stratagem`, `vicious`.
+1. **`buffer`** — the only half-A unit on the `ModifyHpLostAfterOstyLate` /
+   `AfterModifyingHpLostAfterOsty` pair, i.e. a **Late** phase (`hook_dispatch`
+   G3) on the one modifier family the sim *does* carry two-phase machinery for
+   (`hooks.py:126-154`, `modify_hp_lost` + `after_modify_hp_lost` — the pair
+   `power_cmd` G4 says the power-amount family lacks). So it is the natural test
+   of whether the sim's one correct two-phase implementation is used correctly.
+   It also declares `GetScaledAmountForMultiplayer` (waiver).
+2. **`vigor`** — the second of the only two units that use
+   `before_attack`/`after_attack` (see section 4 item 15) and the reader of
+   `prep_time`'s and `akabeko`'s grants. `ModifyDamageAdditive` only, so no G9
+   exposure.
+3. **`free_attack`** — `TryModifyEnergyCostInCombatLate`, i.e. the **Late** half
+   of the pair whose Early half is `curious`. `hook_dispatch` G3's live witness
+   is *literally this pair* (Tangled early vs Free Attack late), so the rule-3
+   obligation is to reach the same verdict from this end. Also declares
+   `BeforeCardPlayed`.
+4. **`fasten`** — `ModifyBlockAdditive` + `AfterModifyingBlockAmount`, the block
+   analogue of `buffer`'s pair; expect the same missing-notification-list shape
+   as `power_cmd` G4 and `curious`'s `TryModify` guard.
+5. **`juggernaut`** and **`block_next_turn`** — `AfterBlockGained` and
+   `AfterBlockCleared`. `juggernaut` is already cited by `power/thorns` as the
+   reachable route to unpowered non-card damage, so its `props` argument matters.
+   `block_next_turn` shares `toric_toughness`'s hook and should agree with it.
+6. **`calamity`** — `BeforeCardPlayed` + `AfterCardPlayed`, i.e. squarely inside
+   `hook_dispatch` G4's per-`CardPlay` bracket; and its C# generator is
+   `CardFactory.GetForCombat` (the *with*-replacement sibling of the call
+   `hello_world` gets wrong), so check the RNG accessor per section 7 item 11.
+7. **`vicious`** — `AfterPowerAmountChanged`, the one half-A unit that listens to
+   the power pipeline itself; cross-reference `power_cmd` steps 23 and 33.
+8. **`stratagem`** (`AfterShuffle`), **`retain_hand`** (`ShouldFlush` +
+   `AfterSideTurnEnd`), **`improvement`** (`AfterCombatEnd`) — lower yield;
+   `retain_hand`'s `ShouldFlush` is `turn_structure` territory and its
+   `AfterSideTurnEnd` is the already-settled enemy-side slot.
 
-**No fourth non-dyadic multiplicative factor has been found in half A so far.**
+**No fourth non-dyadic multiplicative factor has been found in half A.** Batch 2
+checked four more factors against the census and all four are dyadic:
+`no_block` ×0.0, `unmovable` ×2.0, `diamond_diadem` ×0.5, `gigantification` ×3.
+Only `fasten` (additive) and `buffer` (HP-loss) remain in half A that touch a
+modifier family at all, so **half A is unlikely to widen `hook_dispatch` G9**.
