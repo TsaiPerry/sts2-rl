@@ -416,6 +416,63 @@ def cmd_json():
     json.dump(extract(), sys.stdout, indent=1)
 
 
+GAME_ROOT = Path(r"c:\Users\Perry\Desktop\Slay the Spire 2")
+QUEUE_DOC = ROOT / "docs" / "audit" / "GAP-QUEUE.md"
+_CITE = re.compile(r"`?([\w][\w./-]*\.(?:py|cs)):(\d+)(?:-(\d+))?`?")
+
+
+def _candidates(name: str):
+    """Every file a citation could name, sim tree first.
+
+    Citations are written the way the records write them: repo-relative for the
+    sim (``sts2_rl/cmds.py``), often sim-relative (``relics/anchor.py``), and by
+    bare filename or partial path for the game (``Hook.cs``,
+    ``Events/DenseVegetation.cs``).  Some bare names are ambiguous -- the game
+    has both ``Models/Monsters/PaelsLegion.cs`` and ``Models/Relics/PaelsLegion.cs``.
+    """
+    out = []
+    for base, prefix in (
+        (ROOT, ""),
+        (ROOT, "sts2_rl/"),
+        (GAME_ROOT, ""),
+        (GAME_ROOT, "src/Core/"),
+    ):
+        p = base / (prefix + name)
+        if p.exists():
+            out.append(p)
+    out += list(GAME_ROOT.glob(f"src/**/{name}"))
+    out += list(ROOT.glob(f"sts2_rl/**/{name}"))
+    return list(dict.fromkeys(out))
+
+
+def cmd_cite_check():
+    """Every file:line cited in GAP-QUEUE.md must resolve to a real line."""
+    text = QUEUE_DOC.read_text(encoding="utf-8")
+    seen = {}
+    bad = []
+    for name, a, b in _CITE.findall(text):
+        lo, hi = int(a), int(b or a)
+        cands = _candidates(name)
+        if not cands:
+            bad.append(f"UNRESOLVED FILE  {name}:{a}")
+            continue
+        for p in cands:
+            if p not in seen:
+                seen[p] = len(
+                    p.read_text(encoding="utf-8", errors="replace").splitlines()
+                )
+        # a citation is good if ANY candidate file covers the range
+        if not any(1 <= lo and hi <= seen[p] for p in cands):
+            longest = max(seen[p] for p in cands)
+            bad.append(f"OUT OF RANGE     {name}:{a}-{b} (longest candidate has {longest} lines)")
+    total = len(_CITE.findall(text))
+    print(f"citations in {QUEUE_DOC.name}: {total}, files resolved: {len(seen)}")
+    for line in sorted(set(bad)):
+        print("  " + line)
+    print(f"{len(set(bad))} problem(s)")
+    return 1 if bad else 0
+
+
 COMMANDS = {
     "counts": cmd_counts,
     "list": cmd_list,
@@ -424,6 +481,7 @@ COMMANDS = {
     "unpinned": cmd_unpinned,
     "refs": cmd_refs,
     "json": cmd_json,
+    "cite-check": cmd_cite_check,
 }
 
 

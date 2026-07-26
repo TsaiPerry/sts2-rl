@@ -250,7 +250,8 @@ content.
   the sim; cards last in the game and first in the sim**.
 - **observable** Executed on `Hook.ModifyEnergyCostInCombat`: with
   `CuriousPower(2)` (`powers.py:2883`, applied by the ported Mad Science card)
-  and Spiked Gauntlets (`relics/spiked_gauntlets.py:26-32`, ported Tanx shrine)
+  and Spiked Gauntlets (`relics/spiked_gauntlets.py:26-31`, ported Tanx shrine —
+  the record cites `26-32`, one line past the end of the file)
   on a 1-cost Power card, the game computes `max(0, 1-2) = 0` then `+1 = 1`; the
   sim computes `1+1 = 2` then `max(0, 2-2) = 0`. **Game 1, sim 0.** Co-occurrence
   is explicit: Mad Science comes from the ported Glory event Tinker Time
