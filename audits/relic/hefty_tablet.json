@@ -1,0 +1,81 @@
+{
+  "unit": "relic/hefty_tablet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\HeftyTablet.cs",
+    "sha256": "80f6caa9dd2738a9dd51878ee6f5c817642e8359c907dc2d8e5e811f9bec0d1d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\hefty_tablet.py",
+    "sha256": "c40977549155667509a8e43e3d0f371705127ada8d313d50815071f80d544733"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (hefty_tablet.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (hefty_tablet.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches HeftyTablet.cs:21; same is_tradable consequence recorded for relic/golden_pearl in this batch."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (hefty_tablet.py:17-42) -> pool_card_ids() + PlayerRng.Rewards draws -> run.select_cards('obtain', ...) -> run.add_card, then run.add_card(make_card('injury'))",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The skeleton is right -- three Rare candidates on the Rewards stream with prior picks excluded and no upgrade roll, a choose-one screen, then the chosen card and an Injury appended to the deck in that order -- and guards N1-N4 confirm each of those clauses individually. What diverges is the CANDIDATE POOL (G1: FilterForCombat instead of GetUnlockedCards, so Feed and Not Yet can never be offered), the dropped card-reward-options hook (G2) and the skip the sim cannot express (G3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the port builds its Rare candidates with cards.pool.pool_card_ids() -- the FilterForCombat pool -- where CardFactory.CreateForReward draws from CardPool.GetUnlockedCards(), so two Rare cards are unreachable and every draw indexes a shorter list",
+      "verdict": "gap",
+      "issue": "MECHANISM: HeftyTablet.cs:29 builds `new CardCreationOptions(Owner.Character.CardPool, ..., CardRarityOddsType.Uniform, c => c.Rarity == CardRarity.Rare)`, and CardFactory.CreateForReward -> CreateForReward(player, blacklist, options) resolves the candidate set as `options.GetPossibleCards(player).Except(blacklist)` (CardFactory.cs:214-217), where GetPossibleCards is `CardPools.SelectMany(p => p.GetUnlockedCards(...)).Where(CardPoolFilter)` (CardCreationOptions.cs:168-178). There is NO FilterForCombat anywhere on that path -- the Uniform arm only drops Basic and Ancient (CardFactory.cs:221-224). hefty_tablet.py:20-25 uses pool_card_ids(), which cards/pool.py:100-117 documents as the FilterForCombat mirror and which drops every card with can_be_generated_in_combat = False. The sim already HAS the right helper: cards/pool.py:120-131's reward_pool_card_ids exists for exactly this path and its docstring names the two casualties. LIVE, no dormancy question, executed (py tools/audit/relic_probes_b07.py tablet-pool): the port's Rare candidate list is 23 entries and the game's is 25; the two missing are `feed` and `not_yet`, both rarity RARE with can_be_generated_in_combat = False. Two observables, not one: Feed and Not Yet -- a max-HP scaler and a revive, i.e. two of the strongest Rares in the pool -- can never be offered by Hefty Tablet in the sim, AND because Rng.NextItem indexes into the candidate list in pool order, a 23-item list returns a DIFFERENT card than a 25-item list for the same draw, so all three offered cards diverge on every seed. Both sides ported and obtainable: Hefty Tablet is offered by the ported Neow event (events/neow.py; Neow.cs:99 `RelicOption<HeftyTablet>` on the CURSED branch). Same root cause as the batch-2 finding recorded in the project's own notes for the bowlbug fight ('reward pool = full GetUnlockedCards not FilterForCombat, Feed/NotYet offerable') -- this is that shape at a relic site. Rule 7: CardFactory.cs, CardCreationOptions.cs, cards/pool.py and events/neow.py are not hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): CardFactory.CreateForReward runs Hook.TryModifyCardRewardOptions on the three cards unless CardCreationFlags.NoModifyHooks is set, and HeftyTablet sets only NoUpgradeRoll -- the port calls no such hook",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardFactory.cs:104-107 folds `Hook.TryModifyCardRewardOptions(player.RunState, player, list2, options, out modifiers)` and then AfterModifyingCardRewardOptions over the created reward list; HeftyTablet.cs:29 sets `WithFlags(CardCreationFlags.NoUpgradeRoll)` and nothing else, so the modify hooks DO run for this relic's three cards. hefty_tablet.py:17-42 builds the options with make_card and hands them straight to run.select_cards, never touching the sim's `modify_card_reward_options` -- which exists on the base class (relics/base.py:172-176) and is implemented by four ported relics (executed, py tools/audit/relic_probes_b07.py tablet-pool: relics/_eggs.py, relics/glitter.py, relics/silken_tress.py, relics/silver_crucible.py). So in the game Silver Crucible would upgrade Hefty Tablet's three Rares and Silken Tress would enchant one; in the sim it does neither. DORMANT, and the reachability argument is specific rather than assumed: Hefty Tablet's ONLY ported grant path is Neow (executed by probe `pool`: bag=-, granted_by=events/neow.py), which is floor 0, where the player holds nothing but the character's starting relic -- so no card-reward-modifying relic can be held when this AfterObtained runs. It is not in any grab bag on either side (the C# EventRelicPool that lists it is a registry with no random puller -- executed: `grep -rn EventRelicPool src/ --include=*.cs` outside its own file returns only the AbstractModelSubtypes type table and ModelDb's registration). CONCRETE UNPORTED THING that makes it live: any source that grants Hefty Tablet after floor 0 -- an Event-rarity relic reward, a shrine option, or a shop slot. Note the contrast with relic/kaleidoscope in this batch, which DOES set NoCardPoolModifications and so correctly expects no modification. Rule 7: CardFactory.cs, relics/base.py, relics/_eggs.py, relics/silken_tress.py, relics/silver_crucible.py and events/neow.py are not hashed by this record."
+    },
+    {
+      "what": "G3: `CardSelectCmd.FromChooseACardScreen(..., canSkip: true)` (HeftyTablet.cs:32) may return null -- the player can decline all three; run.select_cards always returns a pick",
+      "verdict": "deliberate-divergence",
+      "rationale": "HeftyTablet.cs:33-37 builds `[Injury]` and only inserts the chosen card at index 0 `if (chosenCard != null)`, so declining is a first-class outcome: the player takes the curse and no Rare. run.select_cards(purpose, candidates, 1) (run.py:371-390) returns min(1, len(candidates)) cards and has no skip channel at all -- with a card_selector installed it takes the policy's pick, and without one it samples the run RNG. Verdicted deliberate-divergence rather than gap on the same basis as relic/calling_bell guard G3 (binding rule 3): the divergent thing is the sim's player-choice MODEL, which offers no decline anywhere, not this relic's effect, and it is applied consistently across relic and card offers. Flagged for two reasons. (a) It is strictly BENEFICIAL to the sim's player, so an RL policy is not merely denied an option, it is handed a card the game would let it refuse. (b) The conformance runner DOES model the skip -- CombatState.resolve_screen_selection takes `index is None` as a skip 'as the game's canSkip screens allow' (combat.py:625-634) -- so the out-of-combat path is the one that cannot express it, and a fix has a working in-combat precedent. If a policy that ever declines is added, this becomes a gap. Rule 7: sts2_rl/run.py, sts2_rl/combat.py and audits/relic/calling_bell.json are not hashed by this record."
+    },
+    {
+      "what": "N1: `CardRarityOddsType.Uniform` + `WithFlags(CardCreationFlags.NoUpgradeRoll)` (HeftyTablet.cs:29) -- what the port's Rewards-stream loop has to reproduce",
+      "verdict": "faithful",
+      "rationale": "Three separate clauses, all matched. (a) Uniform means NO rarity roll: CardFactory.cs:221-224 takes the whole predicate-filtered set minus Basic/Ancient rather than calling RollForRarity, so the three cards cost no rarity draws. (b) One `rng.NextItem(items)` per card on `player.PlayerRng.Rewards` (CardFactory.cs:235-236), with the accumulating blacklist `Except(blacklist)` at line 217 making the picks distinct -- hefty_tablet.py:30-37 does exactly that, `run.player_rng.rewards.next_item(pool)` followed by `pool.remove(cid)`, three times. (c) NoUpgradeRoll skips the RollForUpgrade draw at CardFactory.cs:98-102, so no upgrade-stream draws happen either and the offered cards are un-upgraded; the port never upgrades. The parity gate `if run.rng_set is not None` selects that path and falls back to a plain random.sample in legacy mode, which is the sim's standing legacy/parity split rather than a divergence. Rule 7: CardFactory.cs and sts2_rl/run.py are not hashed by this record."
+    },
+    {
+      "what": "N2: the candidate pool is `base.Owner.Character.CardPool` ONLY -- the Ironclad pool, with no Colorless and no Curse pool",
+      "verdict": "faithful",
+      "rationale": "HeftyTablet.cs:29 passes a single-element pool list built from the character's own pool, and hefty_tablet.py:22-25 defaults pool_card_ids() to IRONCLAD_POOL (cards/pool.py:102). Recorded because several other reward paths in the game DO add the Colorless pool, and including it here would change both the offered cards and the list length that G1's RNG draw indexes into. Rule 7: cards/pool.py is not hashed by this record."
+    },
+    {
+      "what": "N3: the ORDER and POSITION of the two deck additions -- chosen card first, Injury second, both appended at the deck's end",
+      "verdict": "faithful",
+      "rationale": "HeftyTablet.cs:33-38 builds `[Injury]`, inserts the chosen card at index 0, and passes the whole list to ONE `CardPileCmd.Add(list, PileType.Deck)`; hefty_tablet.py:40-42 adds the chosen card then the Injury through two run.add_card calls. Same resulting order, and both append at the end, which is the position CardCmd.cs:437 pins for out-of-combat additions (PROMPT.md bug class 8). The batched-vs-sequential difference is not observable: run.add_card runs modify_card_being_added_to_deck before each append and after_card_added_to_deck after it, which is per-card in C# too. The Injury curse is ported (cards/pool.py's CURSE_POOL lists `injury`). Rule 7: CardCmd.cs, sts2_rl/run.py and cards/pool.py are not hashed by this record."
+    },
+    {
+      "what": "N4: `count = min(self.CARDS, len(rares))` (hefty_tablet.py:26) -- a defensive clamp C# does not have",
+      "verdict": "faithful",
+      "rationale": "C# would throw from CreateForReward if the pool ran dry (CardFactory.cs:237-240 raises InvalidOperationException on a null pick). The clamp cannot bind with today's content -- executed (probe tablet-pool): 23 Rare candidates against CardsVar(3) -- so it is unreachable defensive code rather than a divergence. Recorded because a shrinking pool is the shape in which a clamp silently hides a real problem, and here the number to watch is 23 vs 3."
+    },
+    {
+      "what": "N5: `CardsVar(3)` read as IntValue (HeftyTablet.cs:23, 30) vs the sim's CARDS = 3",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 3 is the pinned non-ascension value."
+    },
+    {
+      "what": "N6: the CardChoiceHistoryEntry loop for the unpicked cards (HeftyTablet.cs:39-45)",
+      "verdict": "waiver",
+      "rationale": "MapPointHistoryEntry.CardChoices is the run history the replay/save writes for the run-history screen; the sim's own history is a separate combat-scoped structure and audits/seam/hook_dispatch.json guard N3 already verdicts the sim's history architecture a deliberate divergence with an identical observable. Waived here as save/presentation bookkeeping, not as unported behaviour -- note though that this is the record the conformance oracle reads when reconstructing what a node offered, so a future parity pass over out-of-combat card choices will need it. Rule 7: audits/seam/hook_dispatch.json is not hashed by this record."
+    },
+    {
+      "what": "N7: `CardCmd.PreviewCardPileAdd`, `BlockingPlayerChoiceContext`, the Injury hover tip and CanonicalVars (HeftyTablet.cs:25, 32, 38)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

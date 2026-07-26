@@ -1,0 +1,61 @@
+{
+  "unit": "relic/intimidating_helmet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\IntimidatingHelmet.cs",
+    "sha256": "85eaad41fffa0ac0f622b91f2ee0b47490a47967436271d0021e3cfeb786ac8e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\intimidating_helmet.py",
+    "sha256": "7593348b45794db08e07a7d441d27eb760a9396457a54a8f89ae5d12b31fa9dc"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (intimidating_helmet.py:17)",
+      "verdict": "faithful"
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "on_energy_spent (intimidating_helmet.py:19-22), dispatched by CombatState.play_card (combat.py:413) with the energy ACTUALLY spent and by CombatState.auto_play_card (combat.py:552) with a hard-coded 0",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The threshold and the payout are exact -- `Resources.EnergyValue >= EnergyVar(2)` -> BlockVar(4, Unpowered) (IntimidatingHelmet.cs:24-31) vs `amount >= 2` -> BlockCmd.apply(..., 4, props=ValueProp.UNPOWERED) (intimidating_helmet.py:20-22), and EXECUTED (py tools/audit/relic_probes_b07.py helmet-autoplay) a manual 2-cost play gives exactly 4 block. But the sim reads the energy SPENT where C# reads the card's COST (G1), and it fires once per play where C# fires once per Replay iteration (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `cardPlay.Resources.EnergyValue` is the card's COST, not the energy spent -- so an AUTO-PLAYED 2-cost card triggers Intimidating Helmet in the game and cannot trigger it in the sim",
+      "verdict": "gap",
+      "issue": "MECHANISM: ResourceInfo has two separate fields and the struct's own doc comment spells the difference out -- 'The amount of energy that this card cost when it was played. Note that this is not necessarily the same as EnergySpent. For example, if you auto-play a 3-energy-cost card, this will be 3, while EnergySpent will be 0' (ResourceInfo.cs:9-16). IntimidatingHelmet.cs:26 reads EnergyValue. On the auto-play path CardCmd.cs:123-128 builds `EnergySpent = 0, EnergyValue = card.EnergyCost.GetAmountToSpend()`, so the relic fires; on the manual path PlayCardAction.cs:94-100 sets both to the same number. The sim has no ResourceInfo: its on_energy_spent hook carries ONE integer, and combat.py:552 passes a literal 0 for every auto-play (its own comment says 'BeforeCardPlayed fires for auto-plays too (0 energy spent)' -- correct that the hook fires, wrong about what the game reads). REACHABILITY (LIVE, both sides ported, executed -- py tools/audit/relic_probes_b07.py helmet-autoplay): auto-playing a 2-cost Dark Embrace with relics=[intimidating_helmet] leaves the player at block 0 where the game gives 4; the manual control gives 4 on both sides. Auto-play is reached by three ported cards from inside their own on_play (cards/cascade.py:58, cards/colorless_skills.py:117 and :164) plus powers.py:713, :1041 and :3583 -- the same population brilliant_scarf's G1 enumerates. Intimidating Helmet is Rare in the transcribed shared grab bag (executed by probe `pool`: bag=Rare). NOTE THE DIRECTION IS OPPOSITE to brilliant_scarf G1: there the sim counts an auto-play the game excludes; here the sim EXCLUDES an auto-play the game counts. Both are the same root cause -- the sim collapsed EnergySpent and EnergyValue into one number -- and a fix must add the second field rather than flip a flag. Rule 7: ResourceInfo.cs, CardCmd.cs, PlayCardAction.cs, sts2_rl/combat.py, cards/cascade.py, cards/colorless_skills.py, sts2_rl/powers.py and audits/relic/brilliant_scarf.json are not hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): C# fires Hook.BeforeCardPlayed INSIDE the play-count loop, so a Replayed 2-cost card grants the 4 Block ONCE PER ITERATION; the sim's on_energy_spent fires once, before the loop",
+      "verdict": "gap",
+      "issue": "This is audits/seam/hook_dispatch.json gap G4 -- the per-CardPlay bracket -- at a new ported site, and on the BeforeCardPlayed half specifically. CardModel.cs:1919-1929 constructs a fresh CardPlay with PlayIndex = i and fires Hook.BeforeCardPlayed at line 1929 inside `for (int i = 0; i < playCount; i++)`; the sim spends the energy and fires on_energy_spent at combat.py:412-413, before _resolve_card_play is even entered, so it cannot repeat. One verdict per mechanism, binding rule 3: matched, not re-derived. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b07.py helmet-replay): relics=[intimidating_helmet] playing a 2-cost card gives block 4; relics=[intimidating_helmet, throwing_axe], where the first card of the combat plays twice, ALSO gives block 4 (the dark_embrace power stacked to 2, confirming the card really did replay) where the game gives 8. Throwing Axe is granted by the ported Tanx shrine and Intimidating Helmet is Rare in the grab bag, so both sides are ported and co-obtainable. Pinned by the strict xfail hook_dispatch G4 names: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (verified present at test/test_hook_order.py:1143). Rule 7: audits/seam/hook_dispatch.json, CardModel.cs, sts2_rl/combat.py and test/test_hook_order.py are not hashed by this record."
+    },
+    {
+      "what": "N1 (DORMANT): the SLOT -- C# fires BeforeCardPlayed after the card has been added to the Play pile and after GeneratePlayCount; the sim fires on_energy_spent immediately after deducting the energy, before the card leaves the hand",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.OnPlayWrapper does CardPileCmd.AddDuringManualCardPlay -> ModifyCardPlayResultPileTypeAndPosition -> GeneratePlayCount -> `if (Owner.Creature.IsDead) return` -> BeforeCardPlayed (CardModel.cs:1867-1929). combat.py:411-414 deducts the energy and fires on_energy_spent, and only then pops the card from the hand and calls _resolve_card_play. Two consequences: (a) the sim's Block arrives while the card is still nominally in hand, so a listener that reads pile membership sees a different world; (b) C# has an early return between the two points -- a player who died during GeneratePlayCount never gets the Block, and the sim always does. DORMANT: nothing between the two points reads the player's Block, and the sim has no way for the player to die inside the play-count computation (modify_card_play_count listeners are pure arithmetic -- `grep -rn 'def modify_card_play_count' sts2_rl/` finds relics/throwing_axe.py, the two replay enchantments and two powers, none of which deal damage). Goes live with a play-count modifier that can kill the player, or a Block reader in the same window. Rule 7: CardModel.cs, sts2_rl/combat.py and relics/throwing_axe.py are not hashed by this record."
+    },
+    {
+      "what": "N2: BlockVar(4m, ValueProp.Unpowered) and EnergyVar(2) (IntimidatingHelmet.cs:16-20); the block var is passed WHOLE (line 29) so the ValueProp travels with it, and the energy var is read as IntValue (line 26)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.GainBlock(Owner.Creature, base.DynamicVars.Block, null)` carries ValueProp.Unpowered, which is what makes the 4 immune to Dexterity and Frail; intimidating_helmet.py:22 passes props=ValueProp.UNPOWERED explicitly and cmds.py's BlockCmd.apply gates the modifier fold on is_powered_attack(props). Same idiom and same reasoning as relic/horn_cleat guard N1 in this batch. No AscensionHelper branch in the file, so 4 and 2 are the pinned non-ascension values. Rule 7: sts2_rl/cmds.py and sts2_rl/valueprops.py are not hashed by this record."
+    },
+    {
+      "what": "N3: the threshold is `>=`, so a 3-cost card also triggers it once (not twice)",
+      "verdict": "faithful",
+      "rationale": "IntimidatingHelmet.cs:26 is `>= base.DynamicVars.Energy.IntValue` and intimidating_helmet.py:20 is `amount >= 2` -- one grant per qualifying play on both sides, no scaling with the cost. Recorded because 'per 2 energy spent' is the natural misreading and would double the Block on a 4-cost card."
+    },
+    {
+      "what": "N4: X-cost cards -- the sim passes the whole of the player's remaining energy as `amount` (combat.py:405-407)",
+      "verdict": "faithful",
+      "rationale": "C#'s CardModel.SpendResources spends all remaining energy for an X cost and returns it as BOTH EnergySpent and EnergyValue on the manual path (PlayCardAction.cs:94-100), so an X card played with 2+ energy triggers the relic on both sides and an X card played with 0 or 1 triggers it on neither. Checked because the sim computes actual_cost differently for X cards and a mismatch here would be invisible in ordinary play. The auto-play arm of the same question is G1's, not this entry's. Rule 7: PlayCardAction.cs and sts2_rl/combat.py are not hashed by this record."
+    },
+    {
+      "what": "N5: Flash(), the Block hover tip, and `cardPlay.Card.Owner == base.Owner` (IntimidatingHelmet.cs:22, 26, 28)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

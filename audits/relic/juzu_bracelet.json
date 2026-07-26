@@ -1,0 +1,46 @@
+{
+  "unit": "relic/juzu_bracelet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\JuzuBracelet.cs",
+    "sha256": "241aa3308a6bbca80cab15e1b218230841a9ea5e40a81e8cd47fea205d1452a6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\juzu_bracelet.py",
+    "sha256": "be6b566f75df6cddaeba10e62cec181b9d182efada7dc550cd277090d7410aa4"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (juzu_bracelet.py:10)",
+      "verdict": "faithful"
+    },
+    "IsAllowed": {
+      "maps_to": "no counterpart; sts2_rl.relics.base.Relic declares no is_allowed member at all",
+      "verdict": "gap",
+      "issue": "MECHANISM: JuzuBracelet.cs:12-15 returns RelicModel.IsBeforeAct3TreasureChest(runState), which is `runState.TotalFloor < 41` in single player (RelicModel.cs:452-456; the 38 arm is the multiplayer one). The relic therefore stops being offered from the Act 3 treasure chest onward. The sim's Relic base has NO is_allowed member -- executed: `py tools/audit/relic_probes.py sweep-isallowed` prints 'sim Relic base defines is_allowed: False' -- and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. LIVE, not dormant: Juzu Bracelet is Common in the transcribed shared grab bag (executed by probe `pool`: bag=Common), the sim already tracks RunState.total_floor, and every run reaches floor 41, so the sim keeps offering a relic the game has withdrawn -- and because a wrong pull consumes the front of the grab bag, it shifts EVERY later relic pull in the run. This is one member of the 16-relic single-fix cluster .superpowers/sdd/content-relic-sweeps.md Sweep B (a) identified, and the same verdict amethyst_aubergine's IsAllowed carries in batch 1 (binding rule 3) -- confirmed here, not re-derived. Rule 7: RelicModel.cs, relics/base.py, relic_pools.py and the sweeps file are not hashed by this record."
+    },
+    "ModifyUnknownMapPointRoomTypes": {
+      "maps_to": "no counterpart; the port implements nothing (juzu_bracelet.py:5-10) and inherits Relic.modify_unknown_map_point_room_types's identity default (relics/base.py:276-278)",
+      "verdict": "gap",
+      "issue": "MECHANISM: JuzuBracelet.cs:17-27 copies the incoming room-type set, removes RoomType.Monster and returns it, so a '?' node can never roll a combat. The port is behaviourless and its docstring justifies itself with 'map-only effect, stub' -- the exact shape PROMPT.md bug class 12 says to distrust, and the claim is FALSE: run.py:1046-1049 dispatches modify_unknown_map_point_room_types over every relic and deck card inside RunState._unknown_allowed_room_types, whose result is passed straight to roll_room_type for UNKNOWN points (run.py:958-974). LIVE, both sides proved by execution (py tools/audit/relic_probes_b07.py juzu-map): with no relic the allowed set is [ELITE, EVENT, MONSTER, SHOP, TREASURE]; WITH juzu_bracelet it is unchanged, MONSTER included; and the SIBLING relic golden_compass -- which implements the same hook (relics/golden_compass.py:39-44) -- correctly narrows the same set to [EVENT], which is what proves the pipeline is whole rather than merely present. The observable is run composition (extra fights, and a different room type for the same '?'-node RNG draw), and it also shifts the UnknownMapPoint stream's consumer because roll_room_type picks from a different candidate set. Confirms .superpowers/sdd/content-relic-sweeps.md Sweep C's 'map-only effect' row, which names juzu_bracelet as the single relic in that premise family and this dispatch site as live. Rule 7: run.py, relics/base.py and relics/golden_compass.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the hook removes RoomType.Monster ONLY -- Elite is left in the set (JuzuBracelet.cs:25)",
+      "verdict": "faithful",
+      "rationale": "Recorded because the relic's text reads as 'no more combats' and the obvious wrong fix removes both. The sim's own candidate set keeps MONSTER and ELITE as distinct RoomType members (run.py:1039-1045), so the fix is a one-member discard and must not touch ELITE. Executed: the probe prints ELITE in the allowed set on every configuration."
+    },
+    {
+      "what": "N2: the C# hook takes and returns an IReadOnlySet and defensively COPIES before mutating (JuzuBracelet.cs:19-26); the sim's dispatcher re-wraps each listener's return value in a new set (run.py:1047-1049)",
+      "verdict": "faithful",
+      "rationale": "Both sides therefore chain safely: no listener can corrupt the caller's set, and a listener that returns the same object it was given is harmless. Checked because the sim's dispatch is a fold over ALL relics and deck cards, so a mutating implementation of this hook would leak across listeners; the wrapping at run.py:1048 forecloses that. Rule 7: run.py is not hashed by this record."
+    },
+    {
+      "what": "N3: the relic has NO combat behaviour of any kind, so the 'behaviourless port' finding is confined to the two hooks above",
+      "verdict": "faithful",
+      "rationale": "Executed completeness check: JuzuBracelet.cs declares exactly three overrides (Rarity, IsAllowed, ModifyUnknownMapPointRoomTypes) and no CanonicalVars, ExtraHoverTips, Flash or Status usage at all -- unusually clean for the pool. So unlike the other 34 behaviourless ports in Sweep C, this one drops no presentation legs and nothing else is hiding in it; the record's two gaps are the whole relic."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

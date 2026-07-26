@@ -1,0 +1,86 @@
+{
+  "unit": "relic/joss_paper",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\JossPaper.cs",
+    "sha256": "97237a51eda6199f48455edf7e83c061a73b97980279ee4a6cfdd149561b6bf2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\joss_paper.py",
+    "sha256": "0422ba5e6305aad13158e75b13c970b306b389340fdc7a49e0815158b956dfb2"
+  },
+  "hooks": {
+    "FlashSfx": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (joss_paper.py:20)",
+      "verdict": "faithful"
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "AfterCardExhausted": {
+      "maps_to": "on_card_exhausted (joss_paper.py:35-40), dispatched from four sim sites (cmds.py:384 ExhaustCmd, combat.py:361 and :372 the turn-end ethereal and turn-end-in-hand passes, combat.py:504 the Exhaust keyword)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The counting arithmetic is exact -- CardsExhausted++ then DrawIfThresholdMet, threshold 5, draw `CardsExhausted / 5` truncated, then `CardsExhausted %= 5` (JossPaper.cs:102-134 vs joss_paper.py:29-40) -- and EXECUTED (py tools/audit/relic_probes_b07.py joss-ethereal) five non-Ethereal exhausts draw exactly one card and leave the counter at 0, matching the game. What diverges is the causedByEthereal SIGNAL: C# takes the cause as a parameter and the port infers it from the card."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "on_hand_emptied (joss_paper.py:42-45), whose ONLY dispatch site is the bottom of PlayerCombatState.discard_hand (player.py:197)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4. C#'s AfterSideTurnEnd (JossPaper.cs:116-124) fires unconditionally for the player side after the hand flush -- turn_structure spec step 64, the slot the sim exposes as after_player_turn_end (hooks.py:303-310, combat.py:663) -- and the port instead listens on on_hand_emptied, which combat.py:661-662 skips entirely whenever any listener vetoes the flush."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; the port resets neither field at a combat boundary",
+      "verdict": "gap",
+      "issue": "MECHANISM: JossPaper.cs:144-148 sets `EtherealCount = 0` at combat end -- and NOTHING else; CardsExhausted is a [SavedProperty] (line 60) and is deliberately carried, which the port matches by never resetting cards_exhausted (guard N1). So the single dropped reset is _ethereal_pending. In an isolated turn that is harmless because on_hand_emptied zeroes it every turn end; it becomes observable exactly when guard G2 strands a non-zero value, and then it crosses into the next combat where C# would have cleared it. EXECUTED (py tools/audit/relic_probes_b07.py joss-ethereal, leg 3): the same joss_paper instance that ended combat 1 with _ethereal_pending = 5 enters combat 2 still holding 5, so the first four genuine exhausts of combat 2 already sit above the threshold. Carries guard G2's LIVE label; recorded as its own hook entry because fixing G2 alone (re-hooking onto after_player_turn_end) would leave this reset missing for any other path that strands the counter -- for instance a combat that ends mid-turn after an Ethereal card was exhausted by guard G1's path. Confirms .superpowers/sdd/content-relic-sweeps.md Sweep A's listing of joss_paper's `_ethereal_pending` under 'never reset at a combat boundary, C# resets AfterCombatEnd'; the sweep's field-only diff did not confirm it because the field settles at 0 in an unvetoed turn, which is exactly the over-clearing risk that sweep documents. Rule 7: the sweeps file is not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): causedByEthereal is a parameter of the EXHAUST CALL in C#; the port infers it from `card.is_ethereal`, so any mid-turn exhaust of an Ethereal card is deferred instead of counted at once",
+      "verdict": "gap",
+      "issue": "This is audits/seam/turn_structure.json gap G17 at the site that record names -- its issue text cites JossPaper.cs:102-114 and relics/joss_paper.py:36 directly, labels it LIVE, and pins it with test/test_hook_order.py::TestTurnStructureOrder::test_joss_paper_credits_a_mid_turn_ethereal_exhaust_at_once (verified present at test/test_hook_order.py:885). One verdict per mechanism, binding rule 3: matched, not re-derived; the seam owns the machinery and this record owns the relic's observable. CONFIRMED INDEPENDENTLY BY EXECUTION HERE (py tools/audit/relic_probes_b07.py joss-ethereal, leg 1): five mid-turn exhausts of Dazed -- an Ethereal ported status card -- leave cards_exhausted = 0, _ethereal_pending = 5 and NO card drawn, where the game books all five as ordinary exhausts (CardCmd.Exhaust's causedByEthereal parameter defaults to false, CardCmd.cs:230-237, and the doc comment says 'This should always be false except the specific case in CombatManager') and draws one card the player can still spend the turn on. The control -- five Defends -- draws the card in the sim too, isolating the Ethereal signal as the cause. Only TWO call sites in the whole game pass true, both at turn end (CombatManager.cs:1240 and CardModel.cs:1692); every other Exhaust, including the play-time Exhaust-keyword move at CardModel.cs:1985, passes false explicitly. REACHABILITY: the seam record's trigger is Apparition (a ported Ancient 1-cost Skill that is both exhausts and is_ethereal, granted by the ported relic Distinguished Cape); this record adds a second and cheaper one -- any ported hand-exhaust effect applied to a Dazed or Ascender's Bane, both of which are Ethereal ported cards that enemies put in the deck. Rule 7: audits/seam/turn_structure.json, CardCmd.cs, CardModel.cs, CombatManager.cs, cards/apparition.py and test/test_hook_order.py are not hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): the deferred credit is flushed from on_hand_emptied, which the sim fires only from inside discard_hand -- so a vetoed hand flush strands it permanently, where C#'s AfterSideTurnEnd fires unconditionally",
+      "verdict": "gap",
+      "issue": "This is audits/seam/turn_structure.json gap G4 (spec step 64) at the site that record names, compounded with its gap G16 (on_hand_emptied's only call site is the one C# deliberately excludes). Both are verdicted `gap` there -- G4 LIVE with Joss Paper as its stated live path, G16 dormant on its own but named as the mechanism through which G4 bites. Binding rule 3: matched, not re-derived. THE OBSERVABLE: C#'s JossPaper.AfterSideTurnEnd (JossPaper.cs:116-124) credits EtherealCount and draws whether or not the hand was flushed; the sim's `if self.hooks.should_flush_hand(): self.player.discard_hand()` (combat.py:661-662) skips the credit entirely, and since nothing else clears _ethereal_pending (see the AfterCombatEnd hook entry) the relic degrades permanently -- every stranded Ethereal exhaust is a card the player never draws, for the rest of the run. CONFIRMED INDEPENDENTLY BY EXECUTION HERE (probe joss-ethereal, leg 2): a turn ending with 5 Ethereal cards in hand leaves cards_exhausted = 0 and _ethereal_pending = 0 with relics=[joss_paper] (the credit lands, one card drawn) but cards_exhausted = 0 and _ethereal_pending = 5 with relics=[joss_paper, runic_pyramid] (stranded, no draw). REACHABILITY (LIVE): three ported listeners return False from should_flush_hand -- relics/runic_pyramid.py:16-17 (Ancient, from the ported Darv shrine), relics/ringing_triangle.py:15 (shop) and powers.py:3539 -- and Joss Paper is Uncommon in the transcribed grab bag (executed by probe `pool`: bag=Uncommon). Pinned: test/test_hook_order.py::TestTurnStructureOrder::test_no_flush_still_credits_the_end_of_turn_hand_events (verified present at test/test_hook_order.py:696). THE SEAM RECORD ALREADY STATES THE FIX ORDERING and this record agrees with it: re-hooking Joss Paper onto after_player_turn_end is both the smaller change and the faithful one, because that IS the sim's AfterSideTurnEnd slot; making the flush tail unconditional is still needed for G4 itself. Rule 7: audits/seam/turn_structure.json, sts2_rl/combat.py, sts2_rl/player.py, sts2_rl/hooks.py, relics/runic_pyramid.py, relics/ringing_triangle.py, sts2_rl/powers.py and test/test_hook_order.py are not hashed by this record."
+    },
+    {
+      "what": "N1: CardsExhausted is a [SavedProperty] (JossPaper.cs:60-74) that AfterCombatEnd does NOT reset, and the port likewise never resets cards_exhausted -- both carry across combats",
+      "verdict": "faithful",
+      "rationale": "The half of Sweep A's joss_paper flag that is a NON-finding, settled by reading the source rather than the field list: JossPaper.cs's only combat-boundary override is AfterCombatEnd and its body is `EtherealCount = 0` alone, so the exhaust counter is deliberately per-run on the C# side (and serialised into run.save). The sim reaches the same state because relic instances live on RunState.relics and are re-attached to each combat. The trace PROMPT.md bug class 13 asks for therefore terminates with 'no reset on either side, no stale read'. Same shape and same conclusion as relic/iron_club N1 and relic/happy_flower N1 in this batch. Rule 7: sts2_rl/run.py and the sweeps file are not hashed by this record."
+    },
+    {
+      "what": "N2: the draw amount is `(int)(CardsExhausted / ExhaustAmount)` -- a truncated QUOTIENT, so a single event that pushes the counter to 11 draws 2, not 1",
+      "verdict": "faithful",
+      "rationale": "JossPaper.cs:128-132 draws the quotient and then takes the remainder; joss_paper.py:30-33 is `cards_exhausted // EXHAUST_AMOUNT` followed by `%=`, which is the same pair. This matters only on the batched credit path (AfterSideTurnEnd adding a whole turn's EtherealCount at once), which is exactly where a naive `draw 1` port would silently under-draw a Fiend Fire turn. Both sides also draw through the standard draw command, so the hand cap and reshuffle behave identically."
+    },
+    {
+      "what": "N3: the guard is `!(CardsExhausted < ExhaustAmount)` -- i.e. `>=` (JossPaper.cs:128) -- mirrored by joss_paper.py:30",
+      "verdict": "faithful",
+      "rationale": "A `>=` rather than `==` is what makes the batched credit correct: a turn-end credit can jump the counter past the threshold in one step, and an equality test would then never fire again. Recorded because it is the clause that carries N2's quotient logic."
+    },
+    {
+      "what": "N4: `card.Owner == base.Owner` (JossPaper.cs:104), `participants.Contains(base.Owner.Creature)` (line 118) and the PlayerChoiceContext threaded into both draws",
+      "verdict": "waiver",
+      "rationale": "One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3. The participants check additionally restricts C#'s two-sided AfterSideTurnEnd to the player side; the sim's on_hand_emptied and after_player_turn_end both fire only on the player's turn end, so the filter is structural."
+    },
+    {
+      "what": "N5: `TaskHelper.RunSafely(DoActivateVisuals())` and the Status Active/Normal bookkeeping in the CardsExhausted setter (JossPaper.cs:71, 130, 136-142)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

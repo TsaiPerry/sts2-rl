@@ -1,0 +1,76 @@
+{
+  "unit": "relic/iron_club",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\IronClub.cs",
+    "sha256": "39e204592b870eb6aca976923ecaff137c0d7fc6a9503c9d82686d774ca7aaf2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\iron_club.py",
+    "sha256": "605c03f161c057e152f13e83adb677e4467e21ae1efecf80d9fcbaa67f6d4cc8"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (iron_club.py:18)",
+      "verdict": "faithful"
+    },
+    "FlashSfx": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (iron_club.py:26-31), dispatched once per logical card play by CombatState._resolve_card_play (combat.py:514)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The structure of the port is right -- increment a run-scoped counter on every play by the owner, draw 1 when it hits a multiple of CardsVar (IronClub.cs:83-95 vs iron_club.py:29-31) -- but the THRESHOLD IS WRONG (G1: 6 in the sim, 4 in the source) and the counter advances once per play where C# advances it once per Replay iteration (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the threshold is `new CardsVar(4)` in the source and `CARDS = 6` in the port -- Iron Club draws on every 4th card played in the game and every 6th in the sim",
+      "verdict": "gap",
+      "issue": "MECHANISM: IronClub.cs:38 declares `CanonicalVars => ... new CardsVar(4)`, and every consumer reads it -- DisplayAmount (line 32), UpdateDisplay (line 77) and the draw condition `CardsPlayed % intValue == 0` (lines 88-89). The port pins `CARDS = 6` (iron_club.py:20) and its own docstring asserts the source says otherwise: 'IronClub.cs -- every 6th card you play, draw 1 card (CardsVar(6); ...)'. There is no ascension branch to explain it: no AscensionHelper.GetValueIfAscension appears anywhere in IronClub.cs, so 4 is the pinned non-ascension value, and the numeric-constant check the per-unit procedure requires is what caught it. Nor is there a second source file -- executed: `grep -rn 'IronClub' src/ --include=*.cs` returns only Relics/IronClub.cs, the AbstractModelSubtypes registry line, Events/Tanx.cs and RelicPools/EventRelicPool.cs. LIVE, no dormancy question at all: EXECUTED (py tools/audit/relic_probes_b07.py club-count) the sim reports CARDS = 6 and draws on plays 6 and 12 where the game draws on 4, 8 and 12 -- so the relic gives roughly a third fewer cards over a run, and every draw it does give arrives two plays late. Both sides ported and obtainable: Iron Club is offered by the ported Tanx shrine (events/tanx.py; Tanx.cs:33 `RelicOption<IronClub>()`), which is the same grant path relic/throwing_axe uses, and it is Event rarity so it is not in the grab bag (executed by probe `pool`: bag=-, granted_by=events/tanx.py). Rule 7: events/tanx.py is not hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): C# fires Hook.AfterCardPlayed INSIDE the play-count loop, so a replayed card advances CardsPlayed once per iteration; the sim fires on_card_played once for the whole play",
+      "verdict": "gap",
+      "issue": "This is audits/seam/hook_dispatch.json gap G4 -- the per-CardPlay bracket -- at a new ported site. CardModel.cs:1904-1961 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1957 within it; combat.py:514 fires on_card_played once, after the loop. hook_dispatch G4 labels the mechanism LIVE and lists Throwing Axe and Pen Nib as its witnesses while noting it widens to 'every one of the sim's 48 on_card_played listeners' -- Iron Club is one of them, and it is the arithmetically loudest because its counter is the relic's entire behaviour. One verdict per mechanism, binding rule 3: matched, not re-derived. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b07.py club-replay): with relics=[iron_club, throwing_axe] one Strike played (twice) leaves cards_played = 1 where C# leaves 2. Both relics come from the SAME ported Tanx shrine, so a single event can hand the player both. Four further ported replay sources reach the same play-count hook per hook_dispatch G4 (the Spiral and Glam enchantments, One-Two Punch, Duplication). Pinned by the strict xfail hook_dispatch G4 names: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (verified present at test/test_hook_order.py:1143). Rule 7: audits/seam/hook_dispatch.json, CardModel.cs, sts2_rl/combat.py, relics/throwing_axe.py and test/test_hook_order.py are not hashed by this record."
+    },
+    {
+      "what": "N1: `CardsPlayed` is a [SavedProperty] (IronClub.cs:54-67) with NO combat-boundary reset, and the port's cards_played is likewise never reset -- so both carry across combats for the whole run",
+      "verdict": "faithful",
+      "rationale": ".superpowers/sdd/content-relic-sweeps.md Sweep A lists iron_club among the 32 relics whose sim port never resets a mid-combat field, and flags it for a SECOND LOOK precisely because `cards_played` reads per-combat; that second look is done here and the field is genuinely per-RUN on both sides. Executed on the source: IronClub.cs declares no BeforeCombatStart, AfterCombatEnd or AfterCombatVictory override at all (the whole file is Rarity, FlashSfx, ShowCounter, DisplayAmount, CanonicalVars, IsActivating, CardsPlayed, UpdateDisplay, AfterCardPlayed, DoActivateVisuals), and [SavedProperty] means the counter is serialised into run.save and restored -- the game deliberately carries it. The sim reaches the same state by a different route: relic instances live on RunState.relics and are re-attached to each new CombatState, so nothing clears it either. This is the belt_buckle shape with the opposite answer, and the trace PROMPT.md bug class 13 asks for terminates immediately: there is no reset on either side, so there is no stale read. Same conclusion as relic/happy_flower's N1 in this batch. Rule 7: sts2_rl/run.py and the sweeps file are not hashed by this record."
+    },
+    {
+      "what": "N2: `CombatManager.Instance.IsInProgress && CardsPlayed % intValue == 0` (IronClub.cs:89) -- the counter increments even when the combat is over, but the draw is skipped",
+      "verdict": "faithful",
+      "rationale": "Structurally satisfied, and verified on the source rather than assumed: the sim's on_card_played is a combat hook, and the C# guard can only ever be false if IsInProgress flipped during the play. It cannot: CheckWinCondition is the only thing that clears IsInProgress, and an executed `grep -rn 'CheckWinCondition()' src/Core/` finds no call inside the card-play path -- the nearest is ActionExecutor.cs:170, AFTER the whole action. CardModel.cs:1955-1957 additionally re-checks IsInProgress before firing AfterCardPlayed at all, so on a killing-blow play the game still fires the hook, still increments, and still draws. The sim matches: combat.py:514 fires on_card_played unconditionally at the end of _resolve_card_play, and play_card only ends the combat afterwards. Checked deliberately because the obvious reading -- 'the killing blow does not count' -- would have made the counters drift by one per combat. Rule 7: CardModel.cs, ActionExecutor.cs and sts2_rl/combat.py are not hashed by this record."
+    },
+    {
+      "what": "N3: `CardPileCmd.Draw(choiceContext, 1m, base.Owner)` (IronClub.cs:92) vs DrawCmd.draw(self.player, 1) (iron_club.py:31) -- the draw amount is a literal 1, NOT the CardsVar",
+      "verdict": "faithful",
+      "rationale": "Easy to get wrong in the direction of drawing CardsVar cards. Both sides draw exactly one, and both route through the standard draw path so the hand cap, the reshuffle-on-empty and the per-card draw hooks fire identically (player._draw, player.py:276-292). Rule 7: sts2_rl/cmds.py and sts2_rl/player.py are not hashed by this record."
+    },
+    {
+      "what": "N4: `cardPlay.Card.Owner == base.Owner` (IronClub.cs:85) and the PlayerChoiceContext threaded into the draw",
+      "verdict": "waiver",
+      "rationale": "One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3."
+    },
+    {
+      "what": "N5: C# does NOT exclude auto-plays -- there is no `cardPlay.IsAutoPlay` check anywhere in IronClub.cs",
+      "verdict": "faithful",
+      "rationale": "Recorded as a deliberate NON-finding, because the sibling relic audited in batch 2 does the opposite: relic/brilliant_scarf's guard G1 is LIVE precisely because BrilliantScarf.cs:84-87 DOES skip auto-plays and the port counts them. Iron Club's source has no such clause, so the sim's unconditional increment is correct here and the two relics must not be 'made consistent' with each other. Executed contrast: `grep -n IsAutoPlay` over the two C# files hits BrilliantScarf.cs and not IronClub.cs. Rule 7: audits/relic/brilliant_scarf.json and BrilliantScarf.cs are not hashed by this record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
