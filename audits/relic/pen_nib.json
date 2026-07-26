@@ -1,0 +1,87 @@
+{
+  "unit": "relic/pen_nib",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PenNib.cs",
+    "sha256": "c2ca39be064bf9504c5d9bf9f0931fbe7158db6b176b303d098d9ee2cf422cde"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\pen_nib.py",
+    "sha256": "7458fb6e6cf67ec60a5a24617a44887d20dc352b4153ef62794934097ee0395e"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (pen_nib.py:21), matching PenNib.cs:23",
+      "verdict": "faithful",
+      "rationale": "Obtainable: Uncommon in the transcribed shared grab bag (py tools/audit/relic_probes_b12.py b12-pool reports bag=Uncommon)."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / Cmd.Wait are presentation only -- the relic bar's glow and counter. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PenNib.cs:27-37 returns AttacksPlayed % 10 (or 10 while the activation animation runs). Presentation, same exclusion as ShowCounter. Recorded rather than skipped because the `% 10` here is the SECOND place the source takes the modulo -- the AttacksPlayed setter (PenNib.cs:63) already does it, so the counter never exceeds 9 and the display expression is redundant. The sim's single `% self.ATTACKS` (pen_nib.py:33) is the setter's copy, which is the one that matters."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "modify_damage_multiplicative (pen_nib.py:37-46), dispatched by HookSystem.modify_damage_multiplicative (hooks.py:66-79) from DamageCmd.deal (cmds.py:58) and from previews._modified_damage (previews.py:57)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The `cardSource == AttackToDouble -> 2m` arm (PenNib.cs:129-132) is ported exactly, but the port drops the whole `AttackToDouble == null` arm (PenNib.cs:120-128), which is what doubles the PENDING 10th Attack's displayed number -- guard G2. G1 is the replay defect the mark itself inherits."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "before_card_played (pen_nib.py:30-35), dispatched by HookSystem.before_card_played (hooks.py:372-384) from CombatState._resolve_card_play (combat.py:466)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The body matches PenNib.cs:136-152 clause for clause -- Attack-type filter, increment-then-wrap, mark the card when the counter wraps to 0 -- but C# fires this hook once per Replay ITERATION (CardModel.cs:1929, inside the `for (i = 0; i < playCount; i++)` loop opened at :1904) and combat.py:466 fires it once per logical play, outside the sim's own play-count loop (combat.py:477). So a replayed Attack advances the game's counter by 2 and the sim's by 1, and from the first combat onward the two codebases double a DIFFERENT Attack. The `cardPlay.Card.Owner != base.Owner` clause (PenNib.cs:142-145) is multiplayer scoping -- see guard N1."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (pen_nib.py:48-50), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G3. The unmark logic is identical (PenNib.cs:154-166: bail unless AttackToDouble is this card, then null it), but the same per-iteration/per-play mismatch applies -- C# fires it at CardModel.cs:1959, INSIDE the play-count loop, so the game clears the mark at the end of iteration 0 and iteration 1 of a replayed 10th Attack is NOT doubled, where the sim clears it only after every iteration and doubles them all. Executed: a Throwing-Axe-replayed 10th Strike costs the enemy 24 HP in the sim (12 + 12) against the game's 18 (12 + 6) -- py tools/audit/relic_probes_b12.py b12-pennib."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): both of the relic's event hooks fire once per logical play in the sim and once per Replay ITERATION in the game, so a replayed Attack is counted once instead of twice AND doubled twice instead of once",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)`, builds a fresh CardPlay at :1919-1928 and fires Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1959 INSIDE it. combat.py:466 fires before_card_played before the sim's `for _ in range(play_count)` loop (combat.py:477) and combat.py:514 fires on_card_played after it. Two observables follow: (a) the counter under-counts, so the sim's 10th Attack is a different Attack from the game's for the rest of the run; (b) on the 10th Attack itself the game doubles pass 0 only -- pass 1 re-enters ModifyDamageMultiplicative with AttackToDouble already nulled and takes the `AttacksPlayed == 9` test, which is false (the counter is 1 by then) -- while the sim doubles every pass. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b12.py b12-pennib): Pen Nib is Uncommon in the transcribed grab bag and Throwing Axe (relics/throwing_axe.py:30-35, granted by the ported Tanx shrine) makes the first card of a combat play twice. Observed: one replayed Strike leaves _attacks_played = 1 where the game leaves 2; with the counter primed to 9 the replayed 10th Strike deals 24 where the game deals 18. This is audits/seam/hook_dispatch.json guard G4 at the site that record ALREADY NAMES as its ported witness (its issue text cites relics/pen_nib.py:30-35 by line and labels the mechanism a LIVE gap); one verdict per mechanism, binding rule 3, so this entry matches it rather than re-deriving it, and the seam owns the machinery while this record owns Pen Nib's observable. Pinned by the seam's strict xfail: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (test_hook_order.py:1143), which asserts nib._attacks_played == 2. NOTE per binding rule 7: CardModel.cs, combat.py, hooks.py, throwing_axe.py, test_hook_order.py and hook_dispatch.json are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE at the sim's own preview site): the entire `AttackToDouble == null` arm of ModifyDamageMultiplicative (PenNib.cs:120-128) has no counterpart -- the game doubles the PENDING 10th Attack's number for any cardSource that is not in PileType.Play once AttacksPlayed == 9",
+      "verdict": "gap",
+      "issue": "MECHANISM: PenNib.cs:120-128 reads `CardPile? pile = cardSource.Pile; if ((pile == null || pile.Type != PileType.Play) && AttacksPlayed == 9) return 2m;`. A card mid-OnPlay is in PileType.Play (PROMPT.md bug class 7), so this arm can only be taken for a card that is NOT being played -- i.e. a card in hand whose damage the game is PREVIEWING. It is the relic's promise made visible: with nine Attacks played, the tenth shows its doubled face before you commit. pen_nib.py:44 keys solely on `card is self._card_to_double`, which before_card_played sets only during the play, so the sim's preview never doubles. REACHABILITY (LIVE and executed -- py tools/audit/relic_probes_b12.py b12-pennib): the sim HAS the preview path and consumes it as an RL feature, not only as UI -- previews.preview_card_damage (previews.py:149-158) replays the same modifier chain as DamageCmd.deal and full_env.py:510 calls it per (card, enemy) pair to build the observation. Observed with _attacks_played = 9 and a Strike in hand: preview_card_damage = 6 where the game prints 12; the damage actually DEALT is 12 on both sides, so the divergence is confined to the previewed/observed number. Filed as a gap rather than waived under the presentation exclusion for exactly that reason: the sim's consumer of this number is the policy's observation vector, not a sprite. The fix must keep the pile clause or the real play would double twice. NOTE per binding rule 7: previews.py, full_env.py and cmds.py are NOT hashed by this record."
+    },
+    {
+      "what": "G3 (DORMANT): C# skips Hook.AfterCardPlayed entirely when the play ended the combat (CardModel.cs:1957 gates on CombatManager.IsInProgress) while combat.py:514 always fires it, so a game-side 10th Attack that lands the killing blow stays MARKED and the sim's does not",
+      "verdict": "gap",
+      "issue": "MECHANISM: the mark (AttackToDouble / _card_to_double) is cleared only by the AfterCardPlayed handler. C#'s dispatch of that hook is conditional, the sim's is not, so the two codebases can leave the relic in different states after a combat-ending Attack -- and because a C# deck CardModel is the same instance combat after combat, a stale mark would double that exact card for free in the NEXT fight. DORMANT and named as such: this is audits/seam/hook_dispatch.json guard G8's mechanism (Hook.IterateCombatHookListeners yields nothing once CombatManager.IsOverOrEnding is true; the sim has no gate at all), which that record labels DORMANT and pins as a strict xfail at test/test_hook_order.py::TestTurnStructureOrder (test_hook_order.py:1178 test_no_listener_runs_after_the_combat_starts_ending). One verdict per mechanism, binding rule 3, so this entry matches rather than re-derives. Stated plainly as a limit of this audit: I did NOT establish by execution that C#'s IsInProgress is already false at the instant that dispatch is reached, so the killing-blow consequence is an unconfirmed corollary of a mechanism another record owns. The concrete thing that would make it live is a fix to the sim's dispatch gate without a matching reset of _card_to_double. NOTE per binding rule 7: CardModel.cs, combat.py, test_hook_order.py and hook_dispatch.json are not hashed here."
+    },
+    {
+      "what": "N1: `_attacks_played` and `_card_to_double` are never reset at a combat boundary in the sim -- and AttacksPlayed is never reset at one in the game either. The sweep row `pen_nib  C# resets: NONE (may be per-run by design)` is CORRECT here",
+      "verdict": "faithful",
+      "rationale": "`py tools/audit/relic_probes.py sweep-reset` flags both fields and .superpowers/sdd/content-relic-sweeps.md lists pen_nib among five relics deserving a second look. Settled: AttacksPlayed is a [SavedProperty] (PenNib.cs:53-66) so it survives a save/load, PenNib.cs overrides no combat-boundary hook at all, and its only mutator is the setter -- so 'every 10th Attack you play' is a run-level count on both sides. The sim's relic instance lives on RunState.relics and is re-attached to every CombatState (run.py:1153), which is precisely the persistence this needs. Same family and same verdict as relic/happy_flower N1 and relic/fake_happy_flower N1 (binding rule 3). PROMPT.md bug class 13 wants the reader-trace before clearing a missing reset: the readers are before_card_played and modify_damage_multiplicative, and a run-level counter is what both are supposed to see. `_card_to_double`'s cross-combat behaviour is guard G3's subject, not this entry's. NOTE per binding rule 7: this rationale leans on relic_probes.py, content-relic-sweeps.md, run.py, happy_flower.json and fake_happy_flower.json, none of which this record hashes."
+    },
+    {
+      "what": "N2: `cardPlay.Card.Owner != base.Owner` on BeforeCardPlayed (PenNib.cs:142-145) and `dealer != base.Owner.Osty` on the multiplicative (PenNib.cs:116)",
+      "verdict": "waiver",
+      "rationale": "Two separate out-of-scope clauses. The card-owner check is multiplayer scoping: the sim has one player and CombatState dispatches card hooks only for that player's plays, so it is structurally satisfied. Osty is the NECROBINDER's pet -- Player.Osty is `PlayerCombatState?.GetPet<Osty>()` (src/Core/Entities/Players/Player.cs:132) and its model is src/Core/Models/Monsters/Osty.cs, referenced from Necrobinder cards and from Achievements/SkillNecrobinder2Achievement.cs. The sim is Ironclad-only and has no pet creature, so `dealer is self.player` (pen_nib.py:44) is the complete single-character form of C#'s two-way test. Waived under the shared contract's multiplayer and other-characters exclusions, not under an unreachability claim about ported content. NOTE per binding rule 7: Player.cs, Osty.cs and SkillNecrobinder2Achievement.cs are not hashed here."
+    },
+    {
+      "what": "N3: `if (!props.IsPoweredAttack()) return 1m;` (PenNib.cs:108-111) -- the sim's modify_damage_multiplicative takes no props argument at all",
+      "verdict": "faithful",
+      "rationale": "Structurally satisfied at BOTH sim call sites rather than dropped: cmds.py:56 wraps the additive+multiplicative stage in `if is_powered_attack(props):` and previews.py:55 repeats the identical gate, and valueprops.is_powered_attack (valueprops.py:47-49) is a line-for-line port of ValuePropExtensions.IsPoweredAttack (src/Core/ValueProps/ValuePropExtensions.cs:5-12, `Move && !Unpowered`). So an unpowered or non-Move damage packet never reaches the relic's method in the sim, which is what the C# early return achieves. Checked deliberately because omitting the parameter makes the guard invisible in the relic file. The one sim caller that bypasses the gate is cards/thrash.py:47, which calls modify_damage_multiplicative directly with a Creature in the `card` slot, so pen_nib's `card is self._card_to_double` test cannot match and the relic returns 1.0 there regardless. NOTE per binding rule 7: cmds.py, previews.py, valueprops.py, cards/thrash.py and ValuePropExtensions.cs are not hashed here."
+    },
+    {
+      "what": "N4: `_attacksThreshold = 10` (PenNib.cs:15) is declared and never read -- every arithmetic site uses a bare literal (PenNib.cs:33, :63, and `== 9` at :123)",
+      "verdict": "faithful",
+      "rationale": "ATTACKS = 10 (pen_nib.py:23) is the sim's single constant and it feeds the only arithmetic the port performs (`(self._attacks_played + 1) % self.ATTACKS`, pen_nib.py:33). No AscensionHelper.GetValueIfAscension appears anywhere in the file, so 10 is the pinned non-ascension value, and the `AttacksPlayed == 9` form of the same threshold (which the missing preview arm needs, guard G2) is ATTACKS - 1. Recorded because PROMPT.md bug class 19 is a wrong constant hiding behind a citation that looks verified: here the unused const, the three literals and the sim constant all agree at 10."
+    },
+    {
+      "what": "N5: C# marks the card only when the counter WRAPS (`if (AttacksPlayed == 0) AttackToDouble = cardPlay.Card;`, PenNib.cs:147-150) -- the mark is set for the attack that IS the tenth, not the one after it",
+      "verdict": "faithful",
+      "rationale": "pen_nib.py:34-35 is the same test against the same post-increment value, and both sides take the modulo inside the increment so 'wrapped to 0' means 'this was the 10th'. Worth an entry because the off-by-one is easy to get backwards and it is the hinge of guard G2's `AttacksPlayed == 9` preview test: after nine attacks the counter reads 9 and the NEXT play is the doubled one. Executed as a by-product of b12-pennib, where priming _attacks_played = 9 makes the very next Strike deal 12 instead of 6."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

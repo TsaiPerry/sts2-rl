@@ -1,0 +1,87 @@
+{
+  "unit": "relic/pocketwatch",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Pocketwatch.cs",
+    "sha256": "34ace6fd79250582c18f53ea514062b8c7963f290e4fd389cace177464a192f6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\pocketwatch.py",
+    "sha256": "18d433f6e5305405c30200dcad9b38fc469a09614fb45324e9825b2762aa6c55"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (pocketwatch.py:19), matching Pocketwatch.cs:23",
+      "verdict": "faithful",
+      "rationale": "Obtainable: Rare in the transcribed shared grab bag (py tools/audit/relic_probes_b12.py b12-pool reports bag=Rare)."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / RefreshCounter / CanonicalVars are presentation only -- the relic bar's glow and counter. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Pocketwatch.cs:27 returns _cardsPlayedThisTurn. Same presentation exclusion as ShowCounter."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (pocketwatch.py:29-30), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The counter increment is unconditional on both sides -- and deliberately so: unlike relic/brilliant_scarf (BrilliantScarf.cs:84-87), Pocketwatch does NOT skip auto-plays, so the sim counting them is correct here (guard N1). The divergence is that C# fires this hook once per Replay ITERATION (CardModel.cs:1959) and the sim once per logical play, so a replayed card under-counts."
+    },
+    "ModifyHandDraw": {
+      "maps_to": "modify_hand_draw (pocketwatch.py:37-42), dispatched by HookSystem.modify_hand_draw (hooks.py:217-222) from PlayerCombatState.start_turn (player.py:171)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1. The arithmetic and all three clauses are faithful -- `player != Owner` (multiplayer), `TurnNumber == 1`, and `_cardsPlayedLastTurn > CardThreshold` -> no bonus, else `count + Cards` (Pocketwatch.cs:50-65) map onto pocketwatch.py:38-42 with THRESHOLD = 3 and DRAW = 3; note the C# test is a strict `>` against the threshold and the sim's is `<=` for the bonus, which is the same partition, so playing exactly 3 cards DOES earn the bonus on both sides. The gap it inherits is the under-counted input from G1."
+    },
+    "AfterModifyingHandDraw": {
+      "maps_to": "no counterpart -- the sim has no after_modifying_hand_draw hook (`grep 'def after_modifying_hand_draw' sts2_rl/hooks.py` returns nothing)",
+      "verdict": "waiver",
+      "rationale": "Pocketwatch.cs:67-71 does nothing but `Flash()`. Same presentation exclusion as ShowCounter, so at THIS relic's site the missing hook costs nothing. The absent hook itself is a real omission with a verdict elsewhere -- relic/bag_of_preparation N1 records it as a dormant gap and audits/seam/turn_structure.json step 20 owns the machinery -- and the sibling batch-12 relic relic/pollinous_core is the port that actually needs it. Not re-derived here per binding rule 3. NOTE per binding rule 7: hooks.py, bag_of_preparation.json and turn_structure.json are not hashed here."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (pocketwatch.py:32-35), dispatched by HookSystem.on_player_turn_start (hooks.py:279-284)",
+      "verdict": "faithful",
+      "rationale": "Pocketwatch.cs:73-82 snapshots `_cardsPlayedLastTurn = _cardsPlayedThisTurn` and zeroes the latter, and the ONLY thing that must hold is that this runs before ModifyHandDraw reads the snapshot. It does, on both sides: audits/seam/turn_structure.json orders BeforeSideTurnStart -> ... -> ModifyHandDraw -> Draw, and the sim's executed order (`py tools/audit/relic_probes.py turn-order`) is on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so on_player_turn_start is the pre-draw slot the port's own comment claims and the mapping is executed rather than read off relics/base.py's docstring (PROMPT.md bug class 11). The absolute slot does shift -- C#'s BeforeSideTurnStart is before the block clear and the sim's on_player_turn_start is after it -- but this handler only moves the relic's own two private ints, which nothing else reads in that window, so the observable is identical and no relic/brilliant_scarf-style divergence entry is warranted. The `participants.Contains(base.Owner.Creature)` clause is the player-side filter; the sim's hook fires only for the player. NOTE per binding rule 7: turn_structure.json, relic_probes.py, hooks.py and relics/base.py are not hashed here."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Pocketwatch.cs:84-92 calls RefreshCounter() only. Same presentation exclusion as ShowCounter."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (pocketwatch.py:32-35) is the only place either counter is cleared",
+      "verdict": "deliberate-divergence",
+      "rationale": "Pocketwatch.cs:100-107 zeroes BOTH _cardsPlayedThisTurn and _cardsPlayedLastTurn at combat end; the sim zeroes only _played_this_turn, at turn start, and COPIES the stale value into _played_last_turn on combat 2's first turn. PROMPT.md bug class 13 requires tracing to the first reader of the stale field before verdicting, and guard N2 does that by execution: the only reader is modify_hand_draw, whose `self.turn == 1` guard bails before it looks. Same observable at every point either codebase can be observed, so a divergence rather than a gap -- and the contrast with relic/belt_buckle (where the analogous missing reset IS live) and with relic/permafrost in this same batch (likewise live) is exactly why the trace has to be done rather than assumed. NOTE per binding rule 7: belt_buckle.json and permafrost.json are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): AfterCardPlayed fires per Replay ITERATION in C# and once per logical play in the sim, so a replayed card under-counts and can leave the sim under the 3-card threshold when the game is over it",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at :1959 INSIDE it; combat.py:514 fires on_card_played once, after the sim's whole play-count loop. Pocketwatch's threshold is a COUNT, so an under-count is not cosmetic: it decides whether the relic pays 3 extra cards next turn. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b12.py b12-pocketwatch): three plays of which the first is replayed by Throwing Axe (relics/throwing_axe.py:30-35, granted by the ported Tanx shrine) leave the sim at _played_this_turn = 3 where the game reaches 4; evaluated at the next turn's guard, modify_hand_draw(5) returns 8 for the sim's count and 5 for the game's -- three cards the game withholds and the sim deals, every turn the situation recurs. Both relics are in the transcribed grab bag / ported events and the four other ported replay sources widen it. This is audits/seam/hook_dispatch.json guard G4 at a NEW site (that record names Pen Nib as its witness and lists 'every one of the sim's 48 on_card_played listeners' as further exposure -- Pocketwatch is one of them); one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it. NOTE per binding rule 7: CardModel.cs, combat.py, relics/throwing_axe.py and hook_dispatch.json are NOT hashed by this record."
+    },
+    {
+      "what": "N1: Pocketwatch does NOT skip auto-plays, where relic/brilliant_scarf's near-identical counter does",
+      "verdict": "faithful",
+      "rationale": "BrilliantScarf.cs:84-87 opens its AfterCardPlayed with `if (cardPlay.IsAutoPlay) return;` and batch 2 recorded the sim's failure to copy that as its LIVE gap G1. Pocketwatch.cs:35-48 has no such clause -- only the owner test and the IsInProgress test -- so an auto-played card DOES advance this counter in the game, and pocketwatch.py:29-30 incrementing unconditionally is correct. Checked deliberately because the two ports look interchangeable and copying the Scarf's fix onto this relic would introduce a defect. The `!CombatManager.Instance.IsInProgress` clause is structurally satisfied: on_card_played is a combat hook and combat.py:493-494 breaks the play loop once the fight is decided. NOTE per binding rule 7: BrilliantScarf.cs, brilliant_scarf.json and combat.py are not hashed here."
+    },
+    {
+      "what": "N2 (the bug-class-13 reader trace, EXECUTED): the stale `_played_last_turn` that crosses the combat boundary is provably unreadable",
+      "verdict": "faithful",
+      "rationale": "`py tools/audit/relic_probes.py sweep-reset` flags both fields with `C# resets: {'AfterCombatEnd': ['_cardsPlayedThisTurn = 0', '_cardsPlayedLastTurn = 0', ...]}` and marks _played_this_turn as partly turn-start-reset; sweep-reset-exec puts pocketwatch among the 12 candidates that agree with a fresh instance. Confirmed and made specific by execution (py tools/audit/relic_probes_b12.py b12-pocketwatch): after five plays in combat 1 the carried instance enters combat 2 with _played_last_turn = 5 against a fresh instance's 0 -- the fields really do differ -- yet both deal a 5-card turn-1 hand, because on_player_turn_start overwrites _played_last_turn from the (stale) _played_this_turn and modify_hand_draw's `self.turn == 1` bail (pocketwatch.py:38) returns before reading it. combat.turn is 1 for a freshly constructed CombatState, so the bail always fires on the first turn of every combat. By turn 2 the field holds a value produced inside combat 2, and the probe confirms carried and fresh hands are equal (8 and 8). This is the 'diff the observable, not just the object' rule the sweeps doc records: the field diff is real and the observable diff is nil. NOTE per binding rule 7: relic_probes.py, combat.py and content-relic-sweeps.md are not hashed here."
+    },
+    {
+      "what": "N3: `DynamicVar('CardThreshold', 3m)` and `CardsVar(3)` (Pocketwatch.cs:29-33), both read as BaseValue at their functional call sites (Pocketwatch.cs:60, 64) vs THRESHOLD = 3 and DRAW = 3 (pocketwatch.py:21-22)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so both 3s are the pinned non-ascension values, and the two vars are numerically equal but semantically distinct (a threshold and a draw count) -- the port keeps them as two constants, which is right. Checked against the C# and not against the port's docstring per PROMPT.md bug class 19; the docstring's '3 or fewer cards ... draw 3 additional cards' agrees, including the inclusive boundary. The one place C# reads CardThreshold as BaseValue in a PRESENTATION expression too (RefreshCounter, Pocketwatch.cs:96) is the same IntValue/BaseValue asymmetry batch 1 and batch 2 noted as a source idiom, not a port error."
+    },
+    {
+      "what": "N4: `base.Owner.PlayerCombatState.TurnNumber == 1` (Pocketwatch.cs:56) vs `self.turn == 1` (pocketwatch.py:38)",
+      "verdict": "faithful",
+      "rationale": "Relic.turn is combat.turn (relics/base.py:291-292) and a fresh CombatState starts at 1, so the turn-1 suppression matches -- and it has to, because turn 1 has no 'last turn' to count. Recorded because it is the guard that makes N2's stale field harmless, so the two entries are load-bearing for each other: if the turn test were ever relaxed (or if an extra-turn mechanism made combat.turn and TurnNumber diverge), N2's verdict would have to be re-derived. NOTE per binding rule 7: relics/base.py and combat.py are not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
