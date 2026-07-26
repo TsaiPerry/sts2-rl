@@ -1,0 +1,54 @@
+{
+  "unit": "power/frail",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\FrailPower.cs",
+    "sha256": "0c1090da7732348da9a8c5ab595b0ed11e30079298c94c51983f5660c65cc4dd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:450 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
+    },
+    "ModifyBlockMultiplicative": {
+      "maps_to": "powers.py:452-460 FrailPower.modify_block_multiplicative",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:462-463 on_enemy_side_end -> Power._tick_duration",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "FrailPower.cs:14-17 `base.Owner != target` -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:458-459 `target is self.owner`. Identical."
+    },
+    {
+      "what": "FrailPower.cs:18-21 `!props.IsPoweredCardOrMonsterMoveBlock()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "Enforced by BlockCmd.apply's is_powered_attack gate (cmds.py:145-147); the two C# predicates are identical (ValuePropExtensions.cs:5-21). Third-file citations, not hashed here."
+    },
+    {
+      "what": "FrailPower.cs:22 the 0.75m literal",
+      "verdict": "faithful",
+      "rationale": "powers.py:459 returns 0.75. Unlike Weak's and Shrink's, this factor is hard-coded in C# too (no DynamicVar) and 3/4 is dyadic, so the sim's float product equals C#'s decimal fold -- this is one of the five binary-exact block factors hook_dispatch's block-site dormancy argument rests on. Executed: `py tools/audit/power_census.py multipliers`."
+    },
+    {
+      "what": "AfterSideTurnEnd slot and tick verb",
+      "verdict": "faithful",
+      "rationale": "FrailPower.cs:25-31 is the third member of the Vulnerable/Weak/Frail TickDownDuration trio; the sim uses on_enemy_side_end (combat.py:345, the Hook.AfterTurnEnd(Enemy) slot) and _tick_duration (powers.py:77-84), matching both."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}
