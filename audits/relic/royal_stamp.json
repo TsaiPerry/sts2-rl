@@ -1,0 +1,62 @@
+{
+  "unit": "relic/royal_stamp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RoyalStamp.cs",
+    "sha256": "db15cac7690e55153f7655e880c5f8bbb91cee5f574afa7de93228e8192c423c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\royal_stamp.py",
+    "sha256": "f738505e0b01d3bb7bfef5e9654f0b757f03dc6f3d5bb88be6ed7f1e618b9f8c"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (royal_stamp.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches RoyalStamp.cs:20. In the transcribed shared grab bag as Shop (relic_pools.py:129), executed by `py tools/audit/relic_probes_b13.py pool`."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (royal_stamp.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches RoyalStamp.cs:22. Load-bearing beyond display: Relic.is_tradable (relics/base.py:124-125) excludes relics with an upon-pickup effect, so the trade events cannot offer this one -- same as C#'s RelicModel.IsTradable. Worth noting against relic/calling_bell's batch-2 sibling relic/byrdpip, which drops the identical declaration."
+    },
+    "CanonicalVars": {
+      "maps_to": "no counterpart (the port has no amount to carry)",
+      "verdict": "gap",
+      "issue": "RoyalStamp.cs:24-28 pins `new CardsVar(1)` and a StringVar naming the enchantment; AfterObtained passes `amount: 1` to CardSelectCmd.FromDeckForEnchantment and `1m` to CardCmd.Enchant<RoyallyApproved> (RoyalStamp.cs:36, 39). The port carries nothing because it implements nothing; the 1/1 pair is part of guard G1's missing behaviour and is recorded here so a fix does not have to re-derive it."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart -- the class body is a docstring plus four class attributes (royal_stamp.py:1-14)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. RoyalStamp.cs:32-46 filters the deck to RoyallyApproved-eligible cards, UnstableShuffles that list on Rng.Niche, offers one, and enchants it; the port does none of it and draws no RNG."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT, and the port's stated premise is FALSE): 'the sim has no enchantments, so this is a no-op stub' (royal_stamp.py:8-9)",
+      "verdict": "gap",
+      "issue": "MECHANISM: RoyalStamp.cs:32-46 resolves the canonical RoyallyApproved enchantment, builds `PileType.Deck.GetPile(Owner).Cards.Where(c => royalStamp.CanEnchant(c))`, offers the shuffled list through CardSelectCmd.FromDeckForEnchantment with amount 1, and calls `CardCmd.Enchant<RoyallyApproved>(cardModel, 1m)` on the pick. THE PREMISE IS FALSE, confirmed by execution (`py tools/audit/relic_probes_b13.py stub-premises`): sts2_rl/enchantments.py ports 17 enchantments and relics/beautiful_bracelet.py:23-29 already performs this exact pickup shape -- filter the deck by `Enchantment.can_enchant`, run.select_cards('enchant', ...), attach with an amount. Sweep C reached the same conclusion for this unit ('AfterObtained dispatched; no enchantments is FALSE'), and this record confirms rather than re-derives it. WHAT IS ACTUALLY MISSING (rule 6, DORMANT with the unported thing NAMED): the RoyallyApproved ENCHANTMENT MODEL -- `'royally_approved' in ALL_ENCHANTMENTS` is False. Porting RoyallyApproved makes it live immediately. Filed as a gap and not a waiver because 'the sim has no such content yet' is today's content, not the divergence's shape (binding rule 1). EXECUTED baseline: `run.add_relic('royal_stamp')` leaves every deck card's enchantment unchanged. Same shape and same disposition as relic/punch_dagger in this batch, whose missing enchantment is Momentum; the two differ in that this one also has G2."
+    },
+    {
+      "what": "G2 (DORMANT for RL play, LIVE for RNG parity): `list.UnstableShuffle(base.Owner.RunState.Rng.Niche)` (RoyalStamp.cs:36) is an RNG draw the sim never makes",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# shuffles the eligible-card list on the player's named `Rng.Niche` stream before offering it, so taking Royal Stamp advances Niche by one UnstableShuffle's worth of draws whatever the player then picks. The port has no after_obtained at all, so it consumes NOTHING from any stream. This is PROMPT.md bug class 16's second half, and the class's own warning was checked rather than skipped: the stream is not merely NAMED here, it is CONSUMED -- UnstableShuffle takes the Rng as its ordering source, unlike the CardTransformation case the class cites where an explicit Replacement means GetReplacement never touches it. Note the contrast with relic/punch_dagger in this same batch, whose CardSelectCmd.FromDeckForEnchantment call has no shuffle and therefore no RNG half. REACHABILITY: LIVE for the conformance harness the moment a recorded seed buys Royal Stamp in a shop -- every subsequent Niche draw in that run shifts, which is the same class of divergence batch 1 recorded as relic/astrolabe N1 and which the runner's own comparisons would surface. DORMANT for RL play, where the shared legacy random.Random is not compared against anything. Because the sim grants no enchantment either (G1), a fix must do both halves at once: an after_obtained that shuffles the candidate list on the Niche stream AND attaches the enchantment; implementing G1 alone with the sim's default `pick_rng=None` would reproduce astrolabe N1's exact defect."
+    },
+    {
+      "what": "N1: `CanEnchant` filters the candidate list BEFORE the shuffle and the offer (RoyalStamp.cs:35)",
+      "verdict": "faithful",
+      "rationale": "Recorded because the order is load-bearing for G2's fix: the shuffle is applied to the FILTERED list, so the number of items the Rng orders depends on the deck's composition, and a fix that shuffles the whole deck and then filters would draw a different amount and diverge on parity. The sim's sibling relic/beautiful_bracelet builds its candidate list the same way round (filter, then select). Also note the contrast with batch 1's relic/beautiful_bracelet G1, which flagged the candidate-list filter as an open question needing Swift.cs -- here the filter's position is legible from RoyalStamp.cs alone. NOTE per binding rule 7: RoyallyApproved.cs, EnchantmentModel.cs and CardSelectCmd.cs are not hashed by this record."
+    },
+    {
+      "what": "N2: `.FirstOrDefault()` and the `cardModel != null` check (RoyalStamp.cs:36-37) -- an empty-deck / no-eligible-card path",
+      "verdict": "faithful",
+      "rationale": "C# tolerates a deck with no RoyallyApproved-eligible card: the selection returns nothing, the null check skips the enchant, and the relic simply does nothing -- but the UnstableShuffle has still run, so G2's stream draw happens even in that case (a shuffle of an empty or single-element list still consumes what UnstableShuffle consumes for that length). Recorded so a fix does not put the shuffle inside an `if candidates` guard and silently diverge on decks with no eligible card. Recorded as faithful because the port's do-nothing behaviour happens to match this arm exactly; every other arm is G1's."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
