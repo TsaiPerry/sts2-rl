@@ -1,0 +1,76 @@
+{
+  "unit": "relic/byrdpip",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Byrdpip.cs",
+    "sha256": "5f024688c99c2549ac63f4147b7fb040e817c1e427ee62b66096dfb5a9bb369e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\byrdpip.py",
+    "sha256": "f570cc0f916a346ec663a871fb14e0ea752c678349c886ccf77b955c6e04d2d2"
+  },
+  "hooks": {
+    "AddsPet": {
+      "maps_to": "adds_pet = True (byrdpip.py:21)",
+      "verdict": "faithful",
+      "rationale": "Player.HasEventPet gates the Pael's Legion option at the Pael shrine; the sim mirrors the flag even though it does not model the pet creature itself (guard G3)."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (byrdpip.py:20)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "no counterpart -- byrdpip.py does not set has_upon_pickup_effect",
+      "verdict": "gap",
+      "issue": "Byrdpip.cs:24 declares `HasUponPickupEffect => true` and the sim's Relic base has the exact field for it (relics/base.py:96), which fourteen other ports set. Byrdpip leaves it at the False default. DORMANT (executed -- `py tools/audit/relic_probes.py batch3`): the flag's only sim consumer is Relic.is_tradable (relics/base.py:132), and EVENT rarity already excludes the relic there, so the probe reports `has_upon_pickup_effect=False spawns_pets=False adds_pet=True is_tradable=False` -- the right answer by the wrong route. Goes live the moment anything else reads the flag, e.g. a port of the shop's HasUponPickupEffect handling."
+    },
+    "SpawnsPets": {
+      "maps_to": "no counterpart -- byrdpip.py does not set spawns_pets",
+      "verdict": "gap",
+      "issue": "Byrdpip.cs:26 declares `SpawnsPets => true`; relics/base.py:98 has the field and the port leaves it False. Same dormancy and same executed evidence as HasUponPickupEffect -- both feed only is_tradable, which EVENT rarity already decides."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (byrdpip.py:23-27)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G3 per binding rule 4. The deck half of the Byrdonis Egg -> Byrd Swoop transform is faithful; the combat-pile half (G1) and the mid-combat SummonPet call (G3) are dropped."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "Byrdpip.cs:64-67 summons the pet at the start of EVERY combat. The port has no on_combat_start. Carries guard G3's verdict; see G3 for why the omission is observationally inert today."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): the transform covers the deck only, not the combat piles",
+      "verdict": "gap",
+      "issue": "Byrdpip.cs:49-53 collects every ByrdonisEgg from the Deck pile and, `if (CombatManager.Instance.IsInProgress)`, ALSO from `Owner.PlayerCombatState.AllCards` -- i.e. a Byrdonis Egg sitting in the draw/hand/discard/exhaust pile of a fight in progress is transformed too. byrdpip.py:25 iterates `run.deck` only. DORMANT for the same reason relic/belt_buckle's AfterObtained is: the sim grants relics through RunState.add_relic between rooms and has no path that obtains a relic inside a combat, and Byrdpip's own grant path is the Byrdonis Egg card's HATCH rest-site option -- a rest site, never a fight. Recorded as a gap rather than a waiver because 'no ported content reaches this' is today's content, not the divergence's shape (binding rule 1). Porting any mid-combat relic grant makes it live."
+    },
+    {
+      "what": "G3: the pet creature (SummonPet, Byrdpip.cs:69-72, from both AfterObtained and BeforeCombatStart) is not modelled at all",
+      "verdict": "deliberate-divergence",
+      "rationale": "The port's docstring asserts the pet is pure flavour; the claim is checked here rather than trusted (PROMPT.md bug class 12). It holds, on four independent readings. (a) Monsters/Byrdpip.cs:12-16 gives it MinInitialHp == MaxInitialHp == 9999 and IsHealthBarVisible false; (b) its GenerateMoveStateMachine (:26-31) is a single MoveState 'NOTHING_MOVE' whose body is `Task.CompletedTask` and whose FollowUpState is itself -- no RNG, no effect; (c) it is never targeted, because monster moves aim at CombatState.PlayerCreatures, which filters `c.IsPlayer` (CombatState.cs:75) and a pet creature is not a player, and it is not in `_enemies` so it never takes a turn; (d) the only content that looks the pet up is ByrdSwoop.cs:28, `WithAttackerAnim(..., GetPet<Byrdpip>())` -- the attack animation origin. PlayerCmd.AddPet<T> (PlayerCmd.cs:237-257) draws no RNG either. WHAT WOULD MAKE IT OBSERVABLE: the pet IS in CombatState.Creatures and therefore in CreaturesOnCurrentSide, so it is a participant for BeforeSideTurnStart / AfterTurnStart / AfterBlockCleared. Every ported listener on those hooks filters on `creature == Owner.Creature` or `participants.Contains(...)` (this batch's relic/captains_wheel, relic/candelabra, relic/chandelier and relic/cloak_clasp all do), so no ported effect can see the extra creature -- porting one that reacts to ANY player-side creature without an owner check would. Verdicted deliberate-divergence rather than gap because the observable outcome is identical under every ported reader (binding rule 2). Rule 7: Monsters/Byrdpip.cs, ByrdSwoop.cs, CombatState.cs and PlayerCmd.cs are NOT hashed here."
+    },
+    {
+      "what": "G2: `Skin = new Rng(base.Owner, base.Id).NextItem(SkinOptions)` (Byrdpip.cs:48) and the [SavedProperty] Skin field",
+      "verdict": "waiver",
+      "rationale": "A cosmetic sprite-skin choice with no gameplay reading (its only consumer is Monsters/Byrdpip.cs:18-24 SetupSkins). It is also not an RNG-parity concern, which is why it is checked rather than skipped: `new Rng(owner, id)` CONSTRUCTS a fresh independent generator seeded from the owner and the relic id, so it consumes nothing from any RunRngSet stream. Presentation-only under the shared contract."
+    },
+    {
+      "what": "G4: `CardCmd.TransformTo<ByrdSwoop>` (Byrdpip.cs:56) vs `run.transform_card(card, into=make_card('byrd_swoop'))` (byrdpip.py:27)",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 16's second half (a named RNG stream silently falling back to the shared legacy rng) does NOT apply: TransformTo supplies an explicit replacement, and CardTransformation.GetReplacement returns `Replacement` without touching the Rng when it is set (CardTransformation.cs:55-59). The sim's transform_card only rolls when `into is None` (run.py:437), so both sides consume zero draws. Placement also matches: a Deck-pile transform in C# removes the original and APPENDS the replacement at the end (CardCmd.cs:427-437), which run.transform_card's docstring cites and implements. Rule 7: CardCmd.cs, CardTransformation.cs and run.py are not hashed here."
+    },
+    {
+      "what": "N1: the Byrdonis Egg -> Byrd Swoop identity",
+      "verdict": "faithful",
+      "rationale": "Both cards are ported (cards/event_cards.py: ByrdonisEggCard id 'byrdonis_egg' CardType.QUEST, ByrdSwoopCard id 'byrd_swoop' CardType.ATTACK max_upgrade_level 1), and byrdpip.py:26 matches on `card.id == 'byrdonis_egg'` where C# matches on `c is ByrdonisEgg`. Verified by execution alongside the relic/claws probe, which needs the same card."
+    },
+    {
+      "what": "N2: ExtraHoverTips (Byrdpip.cs:44)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

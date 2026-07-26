@@ -3,7 +3,8 @@
 **Date:** 2026-07-26 · **Branch:** `audit-relic`
 **Companion to:** [`content-relic-report.md`](content-relic-report.md) (the Tier 1 pilot)
 **Reproduce:** `py tools/audit/relic_probes.py sweep-reset` · `sweep-reset-exec` ·
-`sweep-isallowed` · `sweep-stubs` · `sweep-stub-premises`
+`sweep-isallowed` · `sweep-stubs` · `sweep-stub-premises` · `sweep-upgrade` ·
+`sweep-clone`
 
 The pilot batch found that its live gaps cluster into a few repeating **shapes**
 rather than sixteen unique bugs. These five sweeps chase three of those shapes
@@ -209,6 +210,57 @@ rather than a house style.
 > candidate list several lines earlier. The sweep now scopes the search to the
 > enclosing function via AST. Three sweeps, three over-reports caught before
 > publication; assume the next one over-reports too.
+
+---
+
+## Sweep E — shallow card "clones" (added after batch 3)
+
+**The shape.** C#'s `CardModel.CreateClone()` is `CardScope.CloneCard(this)` →
+`ClonePreservingMutability()` (`CardModel.cs:2168-2179`;
+`CombatState.cs:188-193`) — a full model clone that carries the card's upgrade
+level, its **enchantment**, its **affliction**, its keyword edits and its local
+**energy-cost modifiers**. The sim has no clone helper at all. Every port
+reconstructs the card from its id or class and replays the upgrades, so *only*
+the upgrade level survives. Found as `burning_sticks` G3 in batch 3; swept
+because the idiom is copy-pasted across three kinds.
+
+**Result** (`sweep-clone`): **12 C# content files / 16 sites** clone a card,
+against **5 sim sites** using the shallow rebuild:
+
+| Sim site | Kind | C# counterpart |
+|---|---|---|
+| `relics/burning_sticks.py:30` | relic | `BurningSticks.cs:49` — **LIVE, recorded (batch 3)** |
+| `relics/music_box.py:46` | relic | `MusicBox.cs` — unaudited |
+| `relics/paels_growth.py:39` | relic | unaudited |
+| `cards/trash_heap_cards.py:18-24` (`_clone`, Dual Wield's copier) | card | `DualWield.cs` — card stream |
+| `powers.py:827` | power | `JugglingPower.cs` / `NightmarePower.cs` — power stream |
+
+**Executed evidence.** A Defend carrying Swift, a Ringing affliction and a
+`set_cost_this_combat(0)` is rebuilt as:
+
+```
+enchantment   original=Swift       clone=None
+affliction    original=Ringing(1)  clone=None
+energy_cost   original=0           clone=1
+```
+
+**Why it is reachable without a second relic.** Afflictions are applied to
+cards *in hand* by ported enemy powers — Ringing, Entangled, Smog, Tainted and
+Galvanized all call `CardCmd.afflict` from `powers.py` (`:1332`, `:1477`,
+`:1742`, `:2420`, `:3022`) — so a single combat can put per-instance state on a
+card that is then cloned. Enchantments need `relic/beautiful_bracelet` (ported,
+Ancient) or the `Imbued` enchantment.
+
+**This crosses streams.** Two of the five sites belong to the card and power
+streams, and the C# side includes `Anger.cs`, `AdaptiveStrike.cs`,
+`HeirloomHammer.cs`, `Undeath.cs`, `NightmarePower.cs` and `JugglingPower.cs`.
+The probe is in `tools/audit/relic_probes.py` (relic stream owns the file), but
+the card and power streams should re-run it rather than rediscover the shape —
+`py tools/audit/relic_probes.py sweep-clone`.
+
+**The fix is one helper**, not five: a `Card.clone()` on `cards/base.py` that
+copies upgrade level, enchantment, affliction and cost modifiers, and five call
+sites switched to it.
 
 ---
 

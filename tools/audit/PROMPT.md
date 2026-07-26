@@ -1,4 +1,4 @@
-# Audit prompt — source-to-sim unit audits (v3)
+# Audit prompt — source-to-sim unit audits (v4)
 
 > **v2 (2026-07-26, relic Tier 1 pilot):** bug classes 11–16 added, all six
 > drawn from defects the pilot batch actually found. Classes 11, 12 and 14
@@ -10,6 +10,13 @@
 > 12, 13 and 16 turned out to be pool-wide shapes; sweeping all 258 relics
 > for them cost ~1 h and found two live gaps and a 16-relic single-fix
 > cluster that per-unit batches would have taken sixteen batches to reach.
+>
+> **v4 (2026-07-26, relic batch 3):** class 17 added — shallow card "clones"
+> that drop per-instance state. Found as `burning_sticks` G3, then swept
+> (`sweep-clone`) and found to be five sites across three kinds. Class 18
+> added — a port that implements the source's `TestMode.IsOn` branch;
+> `calling_bell` grants three fixed relics where the game pulls three from
+> the pool.
 
 You are auditing ONE ported unit for behavioral fidelity: the decompiled C#
 model (ground truth) vs the sim implementation. You judge; the harness only
@@ -108,6 +115,35 @@ checks completeness. Read BOTH files fully before writing any verdict.
     whose stream argument defaults to `None` and silently falls back to the
     legacy shared `random.Random` (`run.transform_card`'s `pick_rng`). The
     second is invisible outside the conformance harness — check it anyway.
+    *Do not assume it fires whenever a stream is named:* `claws` passes
+    `PlayerRng.Transformations` to `CardCmd.Transform`, but every
+    `CardTransformation` it builds carries an explicit `Replacement`, so
+    `GetReplacement(rng)` never touches the Rng (`CardTransformation.cs:55-59`)
+    and neither side draws. Check whether the stream is *consumed*, not
+    whether it is named.
+17. **A "clone" that is a rebuild.** `CardModel.CreateClone()` is
+    `ClonePreservingMutability()` (`CardModel.cs:2168-2179`) and carries the
+    card's enchantment, affliction, keyword edits and local energy-cost
+    modifiers as well as its upgrade level. The sim has **no clone helper**;
+    all five ports rebuild from the id/class and replay the upgrades, so only
+    the level survives (`burning_sticks` G3, LIVE — executed: an enchanted,
+    afflicted, cost-modified Defend clones to `enchantment=None`,
+    `affliction=None`, `energy_cost` back to 1). It is reachable inside one
+    combat with no second relic, because five ported enemy powers afflict
+    cards in hand. Pool-wide list: `py tools/audit/relic_probes.py
+    sweep-clone`; it spans relics, cards (Dual Wield) and powers, so the card
+    and power streams should re-run it rather than rediscover it.
+18. **`TestMode.IsOn` branches are not the shipping behaviour.** Several
+    models fork on it, and the test arm is the readable one — fixed lists
+    instead of pool rolls. `TestMode.TurnOnInternal` (`TestMode.cs:38`) is
+    documented "NEVER CALL THIS" and has no caller anywhere under `src/`, so
+    the shipping game always takes the other arm. `calling_bell` ported the
+    test arm: it grants Anchor + Gremlin Horn + Mummified Hand where the game
+    pulls one Common, one Uncommon and one Rare from the grab bag — wrong
+    relics *and* three unconsumed `PullNextRelicFromFront` draws, which shifts
+    every later pull. `cauldron`'s C# has the same fork (a fixed five-potion
+    list vs five pool rolls) and is the next place to get it wrong. Whenever a
+    C# body has two arms, check which one ships **before** reading the code.
 
 ## Sweep the shape before you audit the units
 
@@ -118,7 +154,8 @@ over the whole roster and let the batches confirm rather than discover.
 
 `tools/audit/relic_probes.py` has the relic versions and is the template —
 `sweep-reset` / `sweep-reset-exec` (class 13), `sweep-isallowed` (class 16),
-`sweep-stubs` / `sweep-stub-premises` (class 12); findings in
+`sweep-stubs` / `sweep-stub-premises` (class 12), `sweep-upgrade` (class 14),
+`sweep-clone` (class 17); findings in
 `.superpowers/sdd/content-relic-sweeps.md`. They cost ~1 h and turned up two
 live gaps (`centennial_puzzle`, `paels_eye`) that batch 1 could not have seen,
 plus a 16-relic single-fix cluster. **Write the equivalent for your own kind.**

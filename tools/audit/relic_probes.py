@@ -31,9 +31,12 @@ run — the batches then confirm rather than discover. Findings are triaged in
   sweep-isallowed  C# IsAllowed/IsAllowedAtNeow pool gates vs the sim
   sweep-stubs      behaviourless relic ports whose C# has real hooks
   sweep-upgrade    unguarded Card.upgrade() call sites (class 14)
+  sweep-clone      shallow card rebuilds vs CreateClone (class 17)
 
 Per-batch probes:
   batch2           reachability evidence for batch 2's live gaps
+  batch3           reachability evidence for batch 3's live gaps
+  batch3-pool      obtainability of batch 3's 15 relics
 """
 from __future__ import annotations
 
@@ -887,6 +890,288 @@ def probe_sweep_upgrade() -> None:
           f"{sorted({Path(p).stem for p, _, _, g in findings if g})}")
 
 
+# ── sweep-clone ───────────────────────────────────────────────────────────
+def probe_sweep_clone() -> None:
+    """Shallow card "clones" that drop per-instance state (bug class 17).
+
+    THE SHAPE (relic/burning_sticks G3, a live gap): C#'s
+    `CardModel.CreateClone()` is `CardScope.CloneCard(this)` ->
+    `ClonePreservingMutability()` (CardModel.cs:2168-2179; CombatState.cs:188-193)
+    -- a full model clone carrying the card's upgrade level, its ENCHANTMENT,
+    its AFFLICTION, its keyword edits and its local energy-cost modifiers. The
+    sim has no clone helper at all. Every port reconstructs the card from its
+    id or class and replays the upgrades, so only the upgrade level survives.
+
+    This sweep lists both sides: the C# content files that clone a card, and
+    every sim site using the shallow rebuild idiom. It then EXECUTES the
+    difference on the three kinds of per-instance state the sim actually
+    models, so the claim is not left as a reading.
+    """
+    import subprocess
+
+    import sts2_rl.cards  # noqa: F401  (registration)
+    from sts2_rl.cards import make_card
+    from tools.audit.harness import DEFAULT_GAME_ROOT
+
+    cs_hits: list[tuple[str, int, str]] = []
+    for path in sorted((DEFAULT_GAME_ROOT / "src/Core/Models").rglob("*.cs")):
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+        for i, line in enumerate(text.splitlines(), start=1):
+            if "CreateClone()" in line or "CreateDupe()" in line:
+                cs_hits.append((path.name, i, line.strip()[:70]))
+    files = sorted({name for name, _, _ in cs_hits})
+    print(f"  C# content files calling CreateClone()/CreateDupe(): "
+          f"{len(files)} ({len(cs_hits)} sites)")
+    for name in files:
+        print(f"    {name}")
+
+    out = subprocess.run(
+        ["git", "grep", "-n",
+         r"make_card(\(card\|c\|original\)\.id)\|type(card)()\|type(c)()",
+         "--", "sts2_rl"],
+        capture_output=True, text=True, cwd=_REPO,
+    ).stdout.splitlines()
+    sites = [ln for ln in out if "/pool.py" not in ln]
+    print(f"\n  sim sites rebuilding a card instead of cloning it "
+          f"({len(sites)}):")
+    for ln in sites:
+        print(f"    {ln.strip()[:110]}")
+    print("  (cards/pool.py's make_card(card_id) calls are GENERATION from an "
+          "id, not cloning, and are excluded.)")
+
+    print("\n  EXECUTED -- what a rebuild drops. Per-instance state the sim "
+          "models on a Card:")
+    from sts2_rl.afflictions import RingingAffliction
+    from sts2_rl.cmds import CardCmd
+    from sts2_rl.enchantments import make_enchantment
+
+    src = make_card("defend")
+    ench = make_enchantment("swift")
+    if ench.can_enchant(src):
+        ench.attach(src)
+    CardCmd.afflict(src, RingingAffliction, 1)
+    src.set_cost_this_combat(0)
+    clone = make_card(src.id)
+    for _ in range(src.upgrade_level):
+        clone.upgrade()
+    for field in ("enchantment", "affliction"):
+        print(f"    {field:<22} original={getattr(src, field)!r:<12} "
+              f"clone={getattr(clone, field)!r}")
+    print(f"    {'energy_cost':<22} original={src.energy_cost!r:<12} "
+          f"clone={clone.energy_cost!r}")
+    print("  C# ClonePreservingMutability carries all three.")
+
+
+# ── batch3 ────────────────────────────────────────────────────────────────
+# The third 15-unit relic batch, alphabetically after batch 2.
+BATCH3 = [
+    "burning_blood", "burning_sticks", "byrdpip", "calling_bell",
+    "candelabra", "captains_wheel", "cauldron", "centennial_puzzle",
+    "chandelier", "charons_ashes", "chemical_x", "choices_paradox",
+    "chosen_cheese", "claws", "cloak_clasp",
+]
+
+
+def probe_batch3_pool() -> None:
+    """Obtainability of batch 3's 15 relics (binding rule 6, first half).
+
+    Same method as `pool`: grab-bag membership from the transcribed C# pools,
+    every other grant path is a literal relic id somewhere in sts2_rl/.
+    """
+    import subprocess
+
+    from sts2_rl.relic_pools import IRONCLAD_RELIC_POOL, SHARED_RELIC_POOL
+    from sts2_rl.relics import ALL_RELICS
+
+    bag = {rid.removeprefix("RELIC.").lower(): rarity
+           for rid, rarity in SHARED_RELIC_POOL + IRONCLAD_RELIC_POOL}
+    for rid in BATCH3:
+        srcs = subprocess.run(
+            ["git", "grep", "-l", f'"{rid}"', "--", "sts2_rl"],
+            capture_output=True, text=True, cwd=_REPO,
+        ).stdout.split()
+        srcs = [s for s in srcs if not s.endswith(f"relics/{rid}.py")]
+        print(f"  {rid:<20} registered={rid in ALL_RELICS} "
+              f"bag={bag.get(rid, '-'):<9} granted_by={srcs or ['(none)']}")
+
+
+def probe_batch3() -> None:
+    """Reachability evidence for batch 3's live gaps."""
+    import sts2_rl.cards  # noqa: F401  (registration)
+    from sts2_rl import CombatState
+    from sts2_rl.cards import CardType, make_card
+    from sts2_rl.cards.base import _CARD_CLASSES
+    from sts2_rl.cmds import ExhaustCmd
+    from sts2_rl.relics import make_relic
+    from sts2_rl.run import RunState
+
+    # ── burning_sticks ────────────────────────────────────────────────────
+    print("  -- burning_sticks (1/3): C# clears WasUsedThisCombat in BOTH "
+          "AfterRoomEntered(CombatRoom) (BurningSticks.cs:33-42) and\n"
+          "     AfterCombatEnd (:56-61); burning_sticks.py resets it nowhere. "
+          "Same shape as belt_buckle G2 / centennial_puzzle.")
+    sticks = make_relic("burning_sticks")
+    for n, seed in enumerate((0, 1), start=1):
+        cs = CombatState(rng=random.Random(seed), relics=[sticks])
+        cs.player.hand.clear()
+        skill = make_card("defend")
+        cs.player.hand.append(skill)
+        ExhaustCmd.exhaust(cs.hooks, cs.player, skill)
+        print(f"     combat {n}: _used_this_combat={sticks._used_this_combat} "
+              f"copy added to hand={len(cs.player.hand)}   "
+              f"(C# combat 2: 1 copy)")
+
+    print("\n  -- burning_sticks (2/3): sweep-upgrade flags "
+          "burning_sticks.py:24 as an unguarded Card.upgrade() (class 14).\n"
+          "     Settled by execution: the relic only clones SKILLs, and the "
+          "max_upgrade_level==0 population is Curse/Status/Quest only.")
+    zero_by_type: dict[str, list[str]] = {}
+    for cid, cls in sorted(_CARD_CLASSES.items()):
+        if cls.max_upgrade_level == 0:
+            zero_by_type.setdefault(cls.card_type.name, []).append(cid)
+    print(f"     max_upgrade_level==0 by card type: "
+          f"{ {k: len(v) for k, v in sorted(zero_by_type.items())} }")
+    print(f"     SKILL cards with max_upgrade_level==0: "
+          f"{zero_by_type.get('SKILL', [])}  -> the class-14 hit is DORMANT")
+
+    print("\n  -- burning_sticks (3/3): C# CardModel.CreateClone "
+          "(CardModel.cs:2168-2179) is a full CardScope.CloneCard; the sim "
+          "rebuilds\n     from make_card(id) + an upgrade loop, so per-instance "
+          "state does not survive the clone.")
+    from sts2_rl.enchantments import ALL_ENCHANTMENTS
+    ench_cls = ALL_ENCHANTMENTS.get("swift")
+    src = make_card("defend")
+    if ench_cls is not None:
+        e = ench_cls()
+        if e.can_enchant(src):
+            e.attach(src)
+    clone = make_card(src.id)
+    print(f"     original.enchantment={src.enchantment!r}  "
+          f"clone.enchantment={clone.enchantment!r}   (C#: cloned)")
+
+    # ── centennial_puzzle ─────────────────────────────────────────────────
+    print("\n  -- centennial_puzzle: C# clears UsedThisCombat in AfterCombatEnd "
+          "(CentennialPuzzle.cs:53-57); the sim never does.\n"
+          "     (Also produced pool-wide by `sweep-reset-exec`.)")
+    puz = make_relic("centennial_puzzle")
+    for n, seed in enumerate((0, 1), start=1):
+        cs = CombatState(rng=random.Random(seed), relics=[puz])
+        before = len(cs.player.hand)
+        cs.hooks.on_damage_received(cs.player, 5, None, None)
+        print(f"     combat {n}: _used_this_combat={puz._used_this_combat} "
+              f"hand {before} -> {len(cs.player.hand)}   (C# combat 2: +3)")
+
+    # ── cauldron ──────────────────────────────────────────────────────────
+    print("\n  -- cauldron: AfterObtained offers "
+          "DynamicVars['Potions'].IntValue == 5 PotionRewards "
+          "(Cauldron.cs:31-55).\n     The port is behaviourless; "
+          "run.add_relic dispatches after_obtained at run.py:552.")
+    run = RunState(rng=random.Random(3))
+    before = list(run.potions)
+    run.add_relic("cauldron")
+    print(f"     potions {before} -> {list(run.potions)}   (C#: 5 offers)")
+    print(f"     sim HAS the pipeline: run.random_potion() -> "
+          f"{run.random_potion().id!r}, run.add_potion is "
+          f"{callable(getattr(run, 'add_potion', None))}")
+
+    # ── calling_bell ──────────────────────────────────────────────────────
+    print("\n  -- calling_bell: CallingBell.GenerateRewards has TWO branches "
+          "(CallingBell.cs:34-64). The fixed Anchor/Gremlin Horn/Mummified\n"
+          "     Hand trio is the `TestMode.IsOn` branch; real play takes the "
+          "RelicReward(Common) / (Uncommon) / (Rare) branch, each of which\n"
+          "     Populates via RelicFactory.PullNextRelicFromFront "
+          "(RelicReward.cs:75-96). The port implements the test branch.")
+    run2 = RunState(rng=random.Random(3))
+    bag_before = len(run2.relic_grab_bag)
+    run2.add_relic("calling_bell")
+    print(f"     relics granted: {[r.id for r in run2.relics]}")
+    print(f"     grab bag {bag_before} -> {len(run2.relic_grab_bag)}   "
+          f"(C#: three PullNextRelicFromFront pulls, one per rarity)")
+    print(f"     curse added: "
+          f"{[c.id for c in run2.deck if c.id == 'curse_of_the_bell']}")
+
+    # ── claws ─────────────────────────────────────────────────────────────
+    print("\n  -- claws: C# CardSelectCmd.FromDeckForTransformation offers "
+          "`c.Type != CardType.Quest && c.IsTransformable` "
+          "(CardSelectCmd.cs:487);\n     claws.py:25 offers "
+          "run.removable_cards() (= not eternal), which INCLUDES Quest cards.")
+    quest = sorted(cid for cid, c in _CARD_CLASSES.items()
+                   if c.card_type == CardType.QUEST)
+    print(f"     ported QUEST cards: {quest}")
+    run3 = RunState(rng=random.Random(0))
+    run3.add_card(make_card("byrdonis_egg"))
+    run3.card_selector = lambda purpose, cands, count: [
+        c for c in cands if c.card_type == CardType.QUEST][:count]
+    run3.add_relic("claws")
+    print(f"     byrdonis_egg still in the deck after Claws: "
+          f"{any(c.id == 'byrdonis_egg' for c in run3.deck)}   (C#: True)")
+
+    # ── choices_paradox ───────────────────────────────────────────────────
+    print("\n  -- choices_paradox: C# draws on "
+          "RunState.Rng.CombatCardGeneration (ChoicesParadox.cs:34) via "
+          "CardFactory.\n     GetDistinctForCombat = FilterForCombat(...)"
+          ".TakeRandom(count, rng) (UnstableShuffle + take-first). The port "
+          "calls the\n     LEGACY random_pool_cards(self.combat._rng, ...) "
+          "(rng.sample), which is a different stream AND a different draw.")
+    from sts2_rl.combat_rng import CombatRng
+    from sts2_rl.rng import RunRngSet
+    parity = CombatRng.parity(RunRngSet("89U21BV1TZ"))
+    shared = random.Random(0)
+    legacy = CombatRng.legacy(shared)
+    print(f"     legacy mode: combat._rng IS card_gen -> "
+          f"{legacy.card_gen is shared}")
+    print(f"     parity mode: combat._rng IS card_gen -> "
+          f"{parity.card_gen is shared}  <-- wrong stream in a parity run")
+    print("     the house-style parity branch already exists and is used by "
+          "cards/infernal_blade.py:37-41 and potions.py:447-453:")
+    print("       if crng.is_parity: get_distinct_for_combat_parity"
+          "(crng.card_gen, n, ...)")
+
+    # ── byrdpip ───────────────────────────────────────────────────────────
+    print("\n  -- byrdpip: C# HasUponPickupEffect => true and SpawnsPets => "
+          "true (Byrdpip.cs:24, 26); the port sets neither.")
+    byrd = make_relic("byrdpip")
+    print(f"     sim has_upon_pickup_effect={byrd.has_upon_pickup_effect} "
+          f"spawns_pets={byrd.spawns_pets} adds_pet={byrd.adds_pet} "
+          f"is_tradable={byrd.is_tradable}")
+    print(f"     (rarity {byrd.rarity.name} is already excluded from "
+          f"is_tradable, so the two dropped flags are shadowed today)")
+
+    # ── chemical_x ────────────────────────────────────────────────────────
+    print("\n  -- chemical_x: ModifyXValue +2 on the captured X, energy spent "
+          "unchanged (ChemicalX.cs:31-38).")
+    cs = CombatState(rng=random.Random(0), relics=[make_relic("chemical_x")])
+    xs = sorted(cid for cid, c in _CARD_CLASSES.items()
+                if getattr(c, "energy_cost_x", False))
+    print(f"     ported X-cost cards: {xs}")
+    if xs:
+        cs.player.hand.clear()
+        cs.player.energy = 3
+        card = make_card(xs[0])
+        cs.player.hand.append(card)
+        cs.play_card(0, 0)
+        print(f"     {xs[0]}: energy 3 -> {cs.player.energy}, "
+              f"captured_x={card.captured_x}   (C#: X = 3 + 2 = 5)")
+
+    # ── chosen_cheese ─────────────────────────────────────────────────────
+    print("\n  -- chosen_cheese: +1 Max HP at combat end, and the run must see "
+          "it (RunState.finish_combat syncs max_hp, run.py:1178).")
+    run4 = RunState(rng=random.Random(0))
+    run4.add_relic("chosen_cheese")
+    before = (run4.max_hp, run4.hp)
+    cs = CombatState(rng=random.Random(0), relics=run4.relics,
+                     max_hp=run4.max_hp, current_hp=run4.hp)
+    cs._end_combat(player_won=True)
+    run4.finish_combat(cs)
+    print(f"     run max_hp/hp {before} -> {(run4.max_hp, run4.hp)}   "
+          f"(C#: 81/81)")
+    # C# AfterCombatEnd fires ONLY on the victory path (EndCombatInternal,
+    # CombatManager.cs:970-988); a loss goes through ProcessPendingLoss and
+    # fires no hook at all. The sim fires on_combat_end on both, so the port's
+    # `is_dead` guard is what stands in -- and every sim _end_combat(False)
+    # site is itself gated on player.is_dead, so the two agree.
+
+
 # ── batch2 ────────────────────────────────────────────────────────────────
 def probe_batch2() -> None:
     """Reachability evidence for batch 2's live gaps."""
@@ -972,7 +1257,10 @@ PROBES = {
     "sweep-stubs": probe_sweep_stubs,
     "sweep-stub-premises": probe_sweep_stub_premises,
     "sweep-upgrade": probe_sweep_upgrade,
+    "sweep-clone": probe_sweep_clone,
     "batch2": probe_batch2,
+    "batch3": probe_batch3,
+    "batch3-pool": probe_batch3_pool,
 }
 
 
