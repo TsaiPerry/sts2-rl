@@ -15,9 +15,11 @@ The final section tracks what is done and what is left.
 |---|---|---|---|
 | 1 | aggression, alchemize, anger, anointed, apotheosis, apparition, armaments, ascenders_bane, ashen_strike, automation, bad_luck, barricade, bash, battle_trance, beat_down | 8 gap, 6 faithful, 1 waiver | `10946560` |
 | 2 | beckon, blood_wall, bloodletting, bludgeon, body_slam, bolas, brand, break, breakthrough, brightest_flame, bully, burn, burning_pact, byrd_swoop, byrdonis_egg | 10 gap, 5 faithful | `716f023e` |
+| 3 | calamity, caltrops, cascade, catastrophe, cinder, clash, clumsy, colossus, conflagration, corruption, crimson_mantle, cruelty, curse_of_the_bell, dark_embrace, dark_shackles | 8 gap, 6 faithful, 1 dd | `2c8b3c35` |
+| 4 | dazed, debt, decay, defend, demon_form, discovery, disintegration, dismantle, distraction, dominate, doubt, dramatic_entrance, drum_of_battle, dual_wield, enlightenment | 11 gap, 4 faithful | `935bc8da` |
 
-`py tools/audit_status.py --kind card` after batch 2: **30 / 203 audited, 0
-invalid, 0 stale, 18 with gaps.** `py -m pytest test/ -q` is unchanged at
+`py tools/audit_status.py --kind card` after batch 4: **60 / 203 audited, 0
+invalid, 0 stale, 37 with gaps.** `py -m pytest test/ -q` is unchanged at
 **2476 passed, 31 xfailed** after both batches — audits add no executable code;
 the only non-record file added is the probe script.
 
@@ -346,6 +348,43 @@ The card stream does not own `PROMPT.md`. These are offered, not applied.
   Uncommon Skill, 11 block + 2 Weak) and is NOT the counterpart. Resolution is
   pending and will be recorded here; `tools/audit/name_overrides.json` is
   relic-stream-owned, so the card stream will not edit it.
+
+## 7b. Additional live gaps from batches 3-4
+
+| Unit | Entry | Gap |
+|---|---|---|
+| `clash` | IsPlayable | The predicate is right, the HOOK is wrong. C# `IsPlayable` is read only by `CardModel.CanPlay` (CardModel.cs:1759-1762) -- the MANUAL play path. `CardCmd.AutoPlay` checks only the Unplayable KEYWORD and `Hook.ShouldPlay` (CardCmd.cs:57-71), neither of which Clash implements, so an auto-played Clash fires in the game regardless of hand contents. The sim routes the gate through `should_play_card`, which `auto_play_card` DOES consult (combat.py:536, `auto_play=True`), so the sim discards it unplayed. Four ported auto-play sources reach it: beat_down, havoc, catastrophe, cascade. Fix shape: `if auto_play: return True`. |
+| `catastrophe` | guard | The sim breaks its pick loop on combat-over; Catastrophe.cs has no loop-level bail and does the StableShuffle pick BEFORE `CardCmd.AutoPlay`'s own `IsOverOrEnding` return (CardCmd.cs:53-56). When an auto-played card ends the combat, C# burns a full StableShuffle per remaining iteration and the sim burns none -- a Shuffle-stream COUNT desync under parity. Opposite polarity to `beat_down`'s target-roll guard, where the sim is the one that skips a draw. |
+| `debt` | HasTurnEndInHandEffect + OnTurnEndInHand | Both simply absent. The sim's docstring justifies it with "the sim has no gold", which is FALSE -- `RunState.gold` exists and `RunState.lose_gold` is implemented with the matching floor-at-zero semantics and a `PlayerCmd.LoseGold` citation (run.py:335-337), and ported events spend gold routinely. Debt is a strictly weaker curse in the sim, compounding across a combat and changing shop affordability. A textbook rule-1 case: "not modelled" is a gap, never a waiver. |
+| `enlightenment` | OnPlay | The unupgraded branch writes a RELATIVE delta (`add_cost_this_turn(1 - card.energy_cost)`) where C# registers an ABSOLUTE LocalCostModifier of 1 (CardEnergyCost.cs:197-203). They agree until the card's base cost changes within the same turn -- which `armaments` and `apotheosis` both do to cards in hand, and several Ironclad cards drop a cost on upgrade. The sim already has the absolute primitive (`Card.set_cost_this_turn`, cards/base.py:252-258). |
+| `drum_of_battle` | AfterCardExhausted | The exhaust payout feeds a bare `1` into `modify_card_play_count` where C# feeds `GetEnchantedReplayCount() + 1` = `Enchantment?.EnchantPlayCount(BaseReplayCount) ?? BaseReplayCount` plus one (CardModel.cs:1129-1132, 2015-2021), and also drops the `AfterModifyingCardPlayCount` notification. Hidden Gem on Drum of Battle pays out twice in the game and once in the sim. This is gap G4's card-side blast radius. |
+| `discovery`, `distraction` | OnPlay | Both generate from the unseeded shared `combat._rng` where C# names `Rng.CombatCardGeneration`, and `random_pool_cards` uses `rng.sample` (pool.py:158) rather than GetDistinctForCombat's draw sequence. Same mechanism as `anointed` / `beat_down`; 4 of the 21 shared-RNG cards are now audited and all 4 are gaps. |
+| `dual_wield` | OnPlay | Its copies are `type(card)()` plus replayed upgrades, not `CreateClone` deep clones, so an enchanted Attack duplicates as vanilla. Same verdict as `anger` (rule 3), and the card where it matters most -- copying an enchanted Attack is the whole point. |
+
+New dormant gaps from batches 3-4, in brief: `conflagration` (and, by the same
+mechanism, `dramatic_entrance` and every other ALL_ENEMIES card) hands the
+damage pipeline one target at a time where C# hands it the whole valid-target
+list per hit, so deaths interleave differently -- live once a monster with a
+sibling-affecting on-death effect is ported; `crimson_mantle` increments its
+self-damage counter whenever the power is present where C# skips it when Apply
+returns null; `disintegration` has TWO mismatched flags (C# overrides
+`CanBeGeneratedInCombat => false`, the sim instead sets
+`can_be_generated_by_modifiers = False`, which C# leaves true) and is marked
+unplayable where C# gives it no Unplayable keyword; `enlightenment`'s
+`reduceOnly` is lazy in C# (`LocalCostModifier.IsReduceOnly` is a per-READ
+test) and eager in the sim; plus more inlined CanonicalVars (colossus,
+corruption, decay, doubt, debt) and more -1 costs (clumsy, curse_of_the_bell,
+dazed, decay, doubt, disintegration).
+
+Two faithful ports are worth naming as the patterns others should follow:
+**`card/cinder`** routes `Rng.CombatCardSelection` correctly under parity and
+falls back to the shared rng only in legacy mode -- the shape the other 20
+shared-RNG cards need; and **`card/catastrophe`**'s pick reproduces
+StableShuffle's stabilising sort, the game's top-first pile orientation, the
+N-1 draw count AND the unfiltered fallback. **`card/discovery`** is the correct
+KEYWORD pattern: it sets `exhausts` in `_init_vars` rather than as a class
+attribute, which is exactly why it survives the downgrade rebuild that catches
+aggression and apparition.
 
 ## 8. Remaining work
 
