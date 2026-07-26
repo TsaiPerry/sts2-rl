@@ -1,0 +1,61 @@
+{
+  "unit": "relic/jeweled_mask",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\JeweledMask.cs",
+    "sha256": "5477eac26c75abfcc49a3043a216a1aa0f840cd0a644496224175c7825883725"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\jeweled_mask.py",
+    "sha256": "7d50b04c93b8245fb32d57dd80cc4b7b54048b26728f90f76cce148dba913b75"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (jeweled_mask.py:18)",
+      "verdict": "faithful"
+    },
+    "BeforeHandDraw": {
+      "maps_to": "on_player_turn_start (jeweled_mask.py:20-34)",
+      "verdict": "faithful",
+      "rationale": "JeweledMask.cs:17-31 fires on Hook.BeforeHandDraw -- turn_structure spec step 19, between AfterEnergyReset and ModifyHandDraw -- and the sim's on_player_turn_start is executed-confirmed to sit in exactly that slot: `py tools/audit/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started. This is the one place where relics/base.py:11's docstring mapping (`BeforeSideTurnStart (player) -> on_player_turn_start`) is wrong in a way that would have mattered, and PROMPT.md bug class 11 says not to verdict off it; the executed order is what this entry rests on. Body matches clause for clause: turn <= 1, the draw pile filtered to CardType.Power, a bail on an empty list, one Rng.CombatCardSelection.NextItem pick, SetToFreeThisTurn, and a move to the hand. EXECUTED (py tools/audit/relic_probes_b07.py mask-turn1): with a 10-card deck holding Inflame and Demon Form, turn 1 opens with a 6-card hand containing Inflame at cost 0 (the control opens with 5 and no free Power), and turn 2 does not fire again. Rule 7: relics/base.py and sts2_rl/player.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `TurnNumber <= 1` (JeweledMask.cs:19) vs the port's `self.turn != 1` bail (jeweled_mask.py:21-22) -- an inequality narrowed to an equality",
+      "verdict": "faithful",
+      "rationale": "Equivalent because the sim has no turn 0: CombatState.__init__ sets self.turn = 1 (combat.py:108) before the first start_turn, and the counter only ever increments (combat.py:650 for an extra turn, :673-674 for a normal one), so `<= 1` and `== 1` select the same single turn. Verified by execution rather than read: the turn-order probe prints on_player_turn_start(turn=1) as the first occurrence, never turn=0. C# uses `<=` defensively because PlayerCombatState.TurnNumber is incremented in SwitchSides and a player who has not yet started could in principle read 0. Rule 7: sts2_rl/combat.py is not hashed by this record."
+    },
+    {
+      "what": "N2: `player.RunState.Rng.CombatCardSelection.NextItem(list)` (JeweledMask.cs:25) vs `self.combat.combat_rng.card_selection.choice(powers)` (jeweled_mask.py:31)",
+      "verdict": "faithful",
+      "rationale": "The stream matches: CombatRng maps `card_selection` onto the run-level combat_card_selection Rng in parity mode (combat_rng.py:17-25, 52) -- a RUN stream, as C#'s `RunState.Rng.CombatCardSelection` is, not a per-combat one -- and GameRandomAdapter.choice is documented as one Rng.NextItem draw (rng.py:312-315). One draw on both sides, over a candidate list built in the same pile order. This is the case PROMPT.md bug class 16's second half warns about and it comes out CLEAN: the stream is named in C#, it is consumed, and the port passes the matching stream rather than falling through to the legacy shared random.Random. Rule 7: sts2_rl/combat_rng.py and sts2_rl/rng.py are not hashed by this record."
+    },
+    {
+      "what": "N3 (DORMANT): SetToFreeThisTurn is `EndOfTurn | WhenPlayed` in C#; the sim's _free_this_turn expires only at the next turn start",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.SetToFreeThisTurn (CardModel.cs:1266-1270) adds a LocalCostModifier with `LocalCostModifierExpiration.EndOfTurn | LocalCostModifierExpiration.WhenPlayed` (CardEnergyCost.cs:197-203), and the source's own remark at CardEnergyCost.cs:206-210 says 'most effects that say \"this turn\" really mean \"this turn or until played\"'. The sim's Card.set_free_this_turn sets a bare flag cleared by reset_turn_cost_modifiers at the next player turn start (cards/base.py:260-269, called from player.py:153-155), so the WhenPlayed half is missing and a freed card that returns to hand within the same turn is free AGAIN. DORMANT at this site, and the argument is specific rather than generic: the card Jeweled Mask frees is always a POWER card, and a played Power card is removed from the combat entirely rather than going to a pile (combat.py:446-452 skips the discard append for CardType.POWER; C# routes Power plays to PileType.None at CardModel.cs:1981-1983), so it cannot come back to hand to be re-freed. Concrete trigger: any ported effect that returns a played Power card to hand, or -- more likely -- a second relic or card that calls set_free_this_turn on a non-Power card, which is where the same missing expiration becomes observable. The defect belongs to cards/base.py (the card stream's file), not to this relic; recorded here because Jeweled Mask is one of only a few ported callers. Rule 7: CardModel.cs, CardEnergyCost.cs, cards/base.py, sts2_rl/player.py and sts2_rl/combat.py are not hashed by this record."
+    },
+    {
+      "what": "N4 (DORMANT): the port moves the card with two list operations (`draw_pile.remove` / `hand.append`, jeweled_mask.py:33-34) instead of the sim's CardPileCmd, so it bypasses the hand cap",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# calls `CardPileCmd.Add(cardModel, PileType.Hand)` (JeweledMask.cs:28), which goes through the pile machinery; the sim's CardPileCmd.add_to_hand overflows to the discard pile when the hand is at PlayerCombatState.MAX_HAND_SIZE (cmds.py:500-512) and player._draw breaks on the same cap (player.py:278-279), while the relic's direct append can exceed it. DORMANT, by construction rather than by census: the hook fires at turn_structure step 19, BEFORE the hand draw, and on turn 1 only -- so the hand is empty every time this code runs and the cap cannot bind. It also correctly does NOT fire the sim's on_card_drawn hooks, which is right: C#'s CardPileCmd.Add to Hand is not a Draw either, so a 'drew a card' listener must not see it. Concrete trigger: re-pointing the relic at a later slot, or a ported effect that fills the hand before step 19. Rule 7: sts2_rl/cmds.py and sts2_rl/player.py are not hashed by this record."
+    },
+    {
+      "what": "N5: the candidate list is `PileType.Draw.GetPile(player).Cards` filtered to Power -- the DRAW pile only, not the discard or the whole deck",
+      "verdict": "faithful",
+      "rationale": "jeweled_mask.py:25-27 filters player.draw_pile on CardType.POWER, matching exactly. Recorded because the relic reads as 'a Power card' and the obvious wrong port searches every pile; on turn 1 the two happen to coincide for a fresh combat, but they diverge the moment the relic is re-used or an Innate card has already moved. The Innate interaction is worth naming: turn_structure spec step 21 moves Innate cards to the TOP of the draw pile AFTER this hook has run (player.py:172-182 does the same after on_player_turn_start), so an Innate Power is still in the draw pile and IS a candidate on both sides. Rule 7: sts2_rl/player.py and the turn_structure record are not hashed by this record."
+    },
+    {
+      "what": "N6: `player == base.Owner` (JeweledMask.cs:19) and the PlayerChoiceContext parameter",
+      "verdict": "waiver",
+      "rationale": "One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3."
+    },
+    {
+      "what": "N7: Flash() (JeweledMask.cs:26); the file declares NO CanonicalVars and no hover tips",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Noted for completeness: with no CanonicalVars there is no numeric constant in this relic at all, so the non-ascension constant check is vacuous here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

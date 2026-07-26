@@ -1,0 +1,66 @@
+{
+  "unit": "relic/gremlin_horn",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\GremlinHorn.cs",
+    "sha256": "a132a06a66a9e90ee324e2a2316cbfb4f324705e0fef8e3c07561ce73b605ae6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\gremlin_horn.py",
+    "sha256": "d056b799eb6625767ab63dd52b23d6bd9984624bb3de91a87406c4fdbf1b74d9"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (gremlin_horn.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterDeath": {
+      "maps_to": "on_death (gremlin_horn.py:18-22), dispatched by DamageCmd.deal (cmds.py:105) and CreatureCmd.kill (cmds.py:203)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The relic's own body is exact -- GremlinHorn.cs:24-32's side check, EnergyVar(1) and CardsVar(1) map one-for-one onto gremlin_horn.py:19-22, and EXECUTED (py tools/audit/relic_probes_b07.py horn-death) an enemy death takes energy 3 -> 4 and hand 5 -> 6 while a player-side death changes neither. What diverges is WHICH deaths reach the hook (G1: the sim never fires on_death for a prevented death, and C# does) and WHEN relative to the dealer's own post-damage event (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C# fires Hook.AfterDeath on a PREVENTED death as well (CreatureCmd.cs:566, `wasRemovalPrevented: true`), and the three ported revive powers do not prevent death in C# at all -- so Gremlin Horn pays out on an Illusion enemy in the game and pays nothing in the sim",
+      "verdict": "gap",
+      "issue": "MECHANISM, two layers. (a) CreatureCmd.Kill has two AfterDeath sites: line 519 on a real death and line 566 on a prevented one; the sim's DamageCmd.deal calls hooks.on_death ONLY in the should_die-true arm (cmds.py:96-105) and the else-arm floors HP at 1 and calls after_preventing_death instead (cmds.py:106-113). So a prevented death fires nothing. (b) More decisively, the ported revive powers should not be taking that arm at all: IllusionPower, SteamEruptionPower and AdaptablePower override ShouldCreatureBeRemovedFromCombatAfterDeath (IllusionPower.cs:108-114) and AfterDeath (IllusionPower.cs:77-90) -- NOT ShouldDie. Executed: `grep -rln 'ShouldDie' src/Core/Models/` returns only FairyInABottle.cs, LizardTail.cs and two files under Powers/Mocks/, so in the game an Illusion creature REALLY DIES (CurrentHp 0, AfterDeath with wasRemovalPrevented FALSE), merely stays in the Enemies list, and revives on its next turn -- the 'death does not mean removal' shape. The sim's ports instead return should_die = False (powers.py:1566-1570 Illusion, :2016-2020 Steam Eruption, :3365-3371 Adaptable), so the creature never dies and no on_death listener ever sees it. REACHABILITY (LIVE, both sides ported, executed -- py tools/audit/relic_probes_b07.py horn-illusion): Eye With Teeth carries IllusionPower from its constructor (monsters/overgrowth/fogmog.py:31-35) and is summoned by Fogmog, a ported act-1 Overgrowth NORMAL enemy (fogmog.py:95; Fogmog.cs:66 summons the same creature), so no exotic content is required. Observed with relics=[gremlin_horn] and a lethal hit on Eye With Teeth: enemy hp=1, is_dead=False, energy 3 -> 3, hand 5 -> 5. The game gives +1 energy and +1 card. Gremlin Horn is Uncommon in the transcribed grab bag AND is granted by relic/calling_bell (executed by probe `pool`), so obtainability is doubly proved. THE DIVERGENCE IS NOT THIS RELIC'S TO FIX -- it lives in the three power ports and in cmds.py's prevented-death arm -- but Gremlin Horn is where it becomes observable, and no audits/power record exists yet to own it. Note for the fix queue: audits/seam/damage_pipeline.json guard N4 waives C#'s two-phase ShouldDie/ShouldDieLate split and its guard G4 covers the killing-blow snapshot; NEITHER covers AfterDeath-on-a-prevented-death, so this is a new site, not a re-derivation. Rule 7: CreatureCmd.cs, IllusionPower.cs, sts2_rl/cmds.py, sts2_rl/powers.py, monsters/overgrowth/fogmog.py, Fogmog.cs and the damage_pipeline record are not hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): the sim resolves death INSIDE the damage pipeline, before the dealer's post-damage event; C# defers Kill() until after AfterDamageGiven and AfterDamageReceived have run for every target of the batch",
+      "verdict": "gap",
+      "issue": "MECHANISM: CreatureCmd.cs:388-409 runs AfterDamageGiven, then the killing-blow-guarded AfterDamageReceived, and only then `await Kill(killedCreatures)` -- so in C# every AfterDamageGiven listener sees the victim at 0 HP but not yet dead, and Gremlin Horn's energy and draw land AFTER them. The sim fires on_death at cmds.py:105, before on_damage_received (cmds.py:122) and before on_damage_dealt (cmds.py:124), inverting both. This is the same architectural difference audits/seam/damage_pipeline.json records as its spec step 18 plus guards G6 and N2 -- one verdict per mechanism, binding rule 3 -- and it is DORMANT for the same executed reason G6 gives: no sim power implements on_damage_dealt at all, so nothing runs in the window whose order changed. Concrete trigger: porting any AfterDamageGiven implementer that reads the player's energy or hand (Gremlin Horn's own outputs), or any multi-target attack where a first victim's death would change a second victim's damage. Rule 7: CreatureCmd.cs, sts2_rl/cmds.py and the damage_pipeline record are not hashed by this record."
+    },
+    {
+      "what": "N1: EnergyVar(1) / CardsVar(1) (GremlinHorn.cs:16-20) read as BaseValue at both call sites (lines 29-30) vs the sim's two literal 1s",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 1 and 1 are the pinned non-ascension values."
+    },
+    {
+      "what": "N2: `target.Side != base.Owner.Creature.Side` (GremlinHorn.cs:26) -- a SIDE comparison, mirrored exactly by `creature.side != self.player.side` (gremlin_horn.py:19)",
+      "verdict": "faithful",
+      "rationale": "Both compare sides rather than identity, which is the right choice for a relic that must not pay out on a friendly death: executed (probe horn-death) a player-side on_death leaves energy and hand untouched. Recorded because relic/unsettling_lamp guard G3 shows the opposite error at its own site (the sim substituting identity for side); here the port got it right, and the sim HAS the side attribute needed to do so. The sim has no ported player-side minion today, so side and identity coincide for the player, but the comparison is future-proof either way."
+    },
+    {
+      "what": "N3: the ORDER inside the hook -- energy first, draw second (GremlinHorn.cs:29-30 vs gremlin_horn.py:21-22)",
+      "verdict": "faithful",
+      "rationale": "Load-bearing and matched: a drawn card can be playable only if the energy is already there, and a draw can trigger further hooks (Dark Embrace, Evolve) that read energy. Recorded because swapping the two lines is a free-looking edit that would change what a same-turn auto-play can afford. Both sides also route the draw through the standard draw command (CardPileCmd.Draw / DrawCmd.draw -> player._draw), so reshuffle-on-empty, the hand cap and the per-card draw hooks all fire identically. Rule 7: sts2_rl/cmds.py and sts2_rl/player.py are not hashed by this record."
+    },
+    {
+      "what": "N4: the unused `wasRemovalPrevented` and `deathAnimLength` parameters (GremlinHorn.cs:24)",
+      "verdict": "faithful",
+      "rationale": "Gremlin Horn ignores both, so the sim's narrower on_death(creature) signature loses nothing THIS relic reads -- but note that ignoring wasRemovalPrevented is precisely why C# pays out on a prevented death, which is guard G1's subject. deathAnimLength is presentation. Recorded to make clear that G1 is a dispatch-side gap, not a dropped guard on the relic's side."
+    },
+    {
+      "what": "N5: Flash() and the energy hover tip (GremlinHorn.cs:22, 28)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N6: PlayerChoiceContext threaded through AfterDeath into CardPileCmd.Draw (GremlinHorn.cs:24, 30)",
+      "verdict": "waiver",
+      "rationale": "One local player, so `player != base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / ThrowingPlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
