@@ -1,0 +1,51 @@
+{
+  "unit": "relic/delicate_frond",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DelicateFrond.cs",
+    "sha256": "df8797785c515b3392392623a941ecc2cf1e223a4759cc4b870ba96db1da58e5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\delicate_frond.py",
+    "sha256": "0cf7d5688b9436ff83a8bc91e362bad5f702521d412e7b0d3d142ddd8d62be21"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (delicate_frond.py:14)",
+      "verdict": "faithful"
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_combat_start (delicate_frond.py:16-25)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and G3 (all LIVE) per binding rule 4. The loop SHAPE is right -- fill every open slot at combat start -- but each of the three things the C# body actually calls is replaced by something weaker: the rarity-weighted pool roll becomes a uniform pick on the wrong stream (G1), and PotionCmd.TryToProcure -- which carries the Sozu veto and the AfterPotionProcured event -- becomes a bare belt-slot write (G2, G3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C# rolls a potion RARITY first (10% Rare / 25% Uncommon / 65% Common) and then picks inside that bucket on Rng.CombatPotionGeneration; delicate_frond.py:20-25 picks UNIFORMLY over every reward-pool potion on the shared combat rng",
+      "verdict": "gap",
+      "issue": "MECHANISM: DelicateFrond.cs:17 calls PotionFactory.CreateRandomPotionOutOfCombat, which is CreateRandomPotion(GetPotionOptions(...), 1, rng) at PotionFactory.cs:31-33; PotionFactory.cs:67-81 does `float num = rng.NextFloat()` then `num <= 0.1f ? Rare : num <= 0.35f ? Uncommon : Common` and `rng.NextItem(list.Where(p => p.Rarity == rarity))`. The sim already has a faithful port of exactly this -- potion_pools.generate_random_potion, whose docstring reads 'roll a rarity, then NextItem from that rarity's bucket. Two draws over a non-empty bucket' -- and delicate_frond.py does not use it, building its own sorted list of in_reward_pool classes and calling self.combat._rng.choice. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py frond): POTION_POOL has 16 Common, 16 Uncommon and 16 Rare, so the uniform pick gives P(Rare) = 16/48 = 0.333 where the game gives 0.10 -- the relic hands out three times as many Rare potions as it should, EVERY combat, and the observed belt on seed 5 was ['blessing_of_the_forge', 'dexterity_potion', 'clarity']. Both sides are ported: the relic is granted by the Nonupeipe shrine (events/nonupeipe.py:12) and the potion belt carries back into the run (run.py:1182 `self.potions = list(combat.player.potions)`). SCOPE NOTE: the shared contract defers potions, so this is filed as a gap rather than waived for the same reason relic/belt_buckle's potion hooks were -- the divergent observable is not the potion SYSTEM but which items the player carries into every subsequent fight, and the conformance runner's potion belt resync compares it. The second half is PROMPT.md bug class 16: the named stream (CombatPotionGeneration) is replaced by the shared random.Random, and it IS consumed on both sides, so the caveat about unconsumed streams does not apply. RULE 7: potion_pools.py, potions.py, run.py and PotionFactory.cs are not hashed here."
+    },
+    {
+      "what": "G2 (LIVE): C# procures through PotionCmd.TryToProcure, which consults Hook.ShouldProcurePotion (Sozu) and BREAKS the fill loop on refusal; delicate_frond.py:25 calls PlayerCombatState.add_potion, which explicitly does not run that gate",
+      "verdict": "gap",
+      "issue": "MECHANISM: PotionCmd.cs:28-39 returns success=false with PotionProcureFailureReason.NotAllowed when Hook.ShouldProcurePotion is false, and DelicateFrond.cs:18-21 breaks out of the while loop on that failure -- so a player holding Sozu gets NOTHING from the Frond. player.py:107-121's docstring states the omission outright: 'Combat-side procurement (Alchemize, Delicate Frond, Petrified Toad) does not run the Hook.ShouldProcurePotion gate today'. The gate itself is ported and live on the out-of-combat path (run.py:480). REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py frond): relics=['delicate_frond'] and relics=['delicate_frond', 'sozu'] both produce the SAME full belt ['blessing_of_the_forge', 'dexterity_potion', 'clarity'], where C# leaves the belt empty in the second case. Both sides ported: the Frond comes from the Nonupeipe shrine and Sozu from the Darv shrine (events/darv.py:35), and the two shrines are independent nodes, so one run can hold both. This is the sim's most load-bearing anti-synergy silently disabled. RULE 7: player.py, run.py, relics/sozu.py and PotionCmd.cs are not hashed here."
+    },
+    {
+      "what": "G3 (LIVE): TryToProcure fires Hook.AfterPotionProcured on success (PotionCmd.cs:46); the sim's add_potion fires nothing, so Belt Buckle keeps the 2 Dexterity the Frond should have taken away",
+      "verdict": "gap",
+      "issue": "MECHANISM: the same substitution as G2, on the success branch. BeltBuckle.cs:63-70 removes its 2 Dexterity the moment a potion is procured mid-combat; with the Frond filling the belt during BeforeCombatStart, C# grants the Dexterity and takes it straight back, netting zero. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py frond): relics=[belt_buckle, delicate_frond] leaves the player at [('dexterity', 2)] with a full belt ['gamblers_brew', 'fortifier', 'attack_potion'], where C# gives 0 Dexterity. Both relics ported and independently obtainable (Belt Buckle is Shop rarity in the transcribed grab bag; the Frond is a Nonupeipe shrine option). The MISSING HOOK is already recorded as audits/relic/belt_buckle.json's AfterPotionProcured gap and carries the same verdict there (binding rule 3); what this entry adds is that the Frond is a ported TRIGGER for it that needs no player action at all -- belt_buckle's own probe had to call add_potion by hand. Note also the relic-ORDER dependence this creates once AfterPotionProcured exists: C# runs every listener's BeforeCombatStart in hook order, so whether the Buckle applies before or after the Frond fills the belt is decided by listener order on both sides. RULE 7: relics/belt_buckle.py, player.py and BeltBuckle.cs are not hashed here."
+    },
+    {
+      "what": "N1: `while (base.Owner.HasOpenPotionSlots)` with a `break` on procure failure (DelicateFrond.cs:15-22) vs `while player.has_open_potion_slot` with no break (delicate_frond.py:24-25)",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because a missing break is a hang risk, and it is not one here: PlayerCombatState.add_potion (player.py:116-121) can only return False when `None not in self.potions`, which is the negation of the loop condition has_open_potion_slot (player.py:146-149), so the loop always terminates. The one C# failure mode that is NOT belt-full -- the Sozu veto -- is guard G2's subject, and there the sim does not merely fail to break, it succeeds. HasOpenPotionSlots itself matches: `_potionSlots.Any(p => p == null)` vs `None in self.potions`, so empty slots and a nulled slot mean the same thing on both sides (the belt is never compacted -- player.py:123-127)."
+    },
+    {
+      "what": "N2: Flash() (DelicateFrond.cs:14)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

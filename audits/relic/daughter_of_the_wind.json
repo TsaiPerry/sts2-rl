@@ -1,0 +1,51 @@
+{
+  "unit": "relic/daughter_of_the_wind",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DaughterOfTheWind.cs",
+    "sha256": "d54d6e169c6d61993c31313953524df5888bd4eadccfcdc7a1345e93a1a1cb21"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\daughter_of_the_wind.py",
+    "sha256": "e9d41987759b115003d1dcc2653b5cfb4b4c88dc40d287f31a9c394cfdc64e6b"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (daughter_of_the_wind.py:19)",
+      "verdict": "faithful"
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (daughter_of_the_wind.py:23-33)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 (LIVE) and G2 per binding rule 4. The arithmetic and the type filter are right; the DISPATCH is not -- the sim fires on_card_played once per logical play where C# fires it once per CardPlay (G1), and fires it at all after the combat has started ending (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): Hook.AfterCardPlayed fires once per Replay ITERATION in C# and once per logical play in the sim, so a replayed Attack grants 1 Block instead of 2",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904-1965 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed INSIDE that loop; combat.py:514 fires on_card_played ONCE after the whole play-count loop (combat.py:477-494). This is audits/seam/hook_dispatch.json gap G4, which that record labels LIVE and pins as a strict-xfail test; one verdict per mechanism, binding rule 3 -- the seam owns the machinery and this record owns Daughter of the Wind's observable. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py dotw): relics=[daughter_of_the_wind] gives 1 Block from a Strike (correct); relics=[daughter_of_the_wind, throwing_axe] STILL gives 1 Block, where C# gives 2 because the Strike plays twice and each CardPlay fires the hook. Both sides ported: the relic is one of the three dolls in the Doll Room event (events/doll_room.py:15) and Throwing Axe -- which replays the first card of each combat -- is granted by the Tanx shrine (events/tanx.py). Four further ported replay sources reach the same play-count hook (the Spiral and Glam enchantments, One-Two Punch, Duplication), all enumerated by hook_dispatch G4. RULE 7: relics/throwing_axe.py, events/doll_room.py, combat.py and CardModel.cs are not hashed here."
+    },
+    {
+      "what": "G2 (DORMANT): C# yields no listeners to a combat hook dispatched after the combat has started ending; the sim has no such gate, so a LETHAL Attack still grants its 1 Block",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.IterateCombatHookListeners (Hook.cs:53-63) yields nothing once IsOverOrEnding is set, and 73 of the game's 147 dispatchers go through it; combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. This relic is the NAMED WITNESS for audits/seam/hook_dispatch.json gap G8, whose issue text cites relics/daughter_of_the_wind.py:23-33 and records the executed observation that 'a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true'. Cited and matched, not re-derived (binding rule 3): same verdict (gap) and same DORMANT label, for the reason that record gives -- the 1 Block is combat-scoped state the combat then discards. The concrete thing that would make it live is also G8's: a listener on a guarded dispatcher that mutates RUN-level state (HP, gold, deck) from AfterCardPlayed / AfterCardDrawn / AfterCardExhausted / AfterShuffle / AfterEnergySpent; the conformance exporter is the near-term risk, because a replay that records post-lethal block would not match the save. RULE 7: hook_dispatch.json and Hook.cs are not hashed here."
+    },
+    {
+      "what": "N1: BlockVar(1m, ValueProp.Unpowered) (DaughterOfTheWind.cs:16) passed to CreatureCmd.GainBlock (line 23) vs BLOCK = 1 with props=DamageProps.NON_CARD_UNPOWERED (daughter_of_the_wind.py:21, 30-33)",
+      "verdict": "faithful",
+      "rationale": "Two things had to line up and both do. The CONSTANT: no AscensionHelper.GetValueIfAscension in the file, so 1 is the pinned non-ascension value. The PROP: DamageProps.NON_CARD_UNPOWERED is exactly ValueProp.UNPOWERED (valueprops.py:42), and BlockCmd.apply (cmds.py:130-151) gates the Dexterity/Frail additive and multiplicative modifiers behind is_powered_attack, which requires MOVE and not UNPOWERED -- so the 1 Block is flat, which is what ValueProp.Unpowered means in the source. This matters: the relic fires on every Attack, so a Dexterity misclassification would compound all fight long. RULE 7: valueprops.py and cmds.py are not hashed here."
+    },
+    {
+      "what": "N2: `cardPlay.Card.Owner == base.Owner` (DaughterOfTheWind.cs:20) and the PlayerChoiceContext parameter (line 18)",
+      "verdict": "faithful",
+      "rationale": "Both are the multiplayer per-player plumbing the shared contract puts out of scope: one player exists in the sim, so the owner clause is vacuous and the choice context has nothing to route. The clause the sim DOES keep, `Card.Type == CardType.Attack` (daughter_of_the_wind.py:28-29), is the only one that can vary."
+    },
+    {
+      "what": "N3: Flash() and GainBlock's `fast: true` animation flag (DaughterOfTheWind.cs:22-23)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

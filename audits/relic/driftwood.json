@@ -1,0 +1,46 @@
+{
+  "unit": "relic/driftwood",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Driftwood.cs",
+    "sha256": "898c11b70a4d2c3fb89257a751d5d92e0abb87c13cfac6b92af59c7a12d30cd5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\driftwood.py",
+    "sha256": "f1414c00ce2deab22b5f204d53850d56d38ab2bce3e2346e49dbd33358badc64"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (driftwood.py:15)",
+      "verdict": "faithful"
+    },
+    "TryModifyRewardsLate": {
+      "maps_to": "modify_combat_rewards (driftwood.py:17-19), dispatched by rewards.generate_combat_rewards (rewards.py:499-500). relics/base.py:168-170 maps THREE C# hooks -- Hook.ModifyRewards, TryModifyRewards and TryModifyRewardsLate -- onto this one sim method, which is where guard G2 lives (PROMPT.md class 15).",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 (LIVE) and G2 per binding rule 4. The effect itself is right -- card rewards become rerollable, and rewards.py:399-403's one-shot reroll regenerates the options through the same room-typed creation path, matching CardReward.Reroll -- but the sim's hook reaches only the COMBAT reward screen where C#'s reaches every RewardsSet (G1), and the Late phase is flattened (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C# dispatches TryModifyRewardsLate for EVERY reward screen (Hook.ModifyRewards is called from RewardsSet.GenerateWithoutOffering); the sim's modify_combat_rewards is dispatched only by generate_combat_rewards, so rest-site and custom reward screens are never made rerollable",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.ModifyRewards (Hook.cs:1981-1999) runs a plain TryModifyRewards pass and then a full TryModifyRewardsLate pass, and its single caller is RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136) -- which every RewardsSet goes through, including the ones built by RewardsCmd.OfferCustom for a rest-site heal (HealRestSiteOption.cs:111-113) and for event rewards. So in the game Driftwood marks any CardReward on any screen rerollable. In the sim the hook has exactly one dispatch site, rewards.py:499-500 inside generate_combat_rewards; RunState.rest_heal_rewards (run.py:1097-1110) builds its CombatRewards and dispatches only modify_rest_site_heal_rewards. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py dream-driftwood): with relics=[dream_catcher] the rest screen offers 3 cards with can_reroll=False, and adding driftwood leaves it can_reroll=False, while the MONSTER combat screen with driftwood alone comes back can_reroll=True -- so the relic works on one screen type and not the other, where C# has no such distinction. Both sides ported and independently obtainable: Driftwood is an Orobas shrine option (events/orobas.py:21) and Dream Catcher a Trash Heap event relic (events/trash_heap.py:15), two different nodes, and driver.py:521 already offers the rest screen with the same reroll-aware code path (driver.py:140 reads rewards.can_reroll). The player simply loses a reroll they paid an Ancient relic for. RULE 7: rewards.py, run.py, driver.py, events/orobas.py, RewardsSet.cs, Hook.cs and HealRestSiteOption.cs are not hashed here."
+    },
+    {
+      "what": "G2 (DORMANT): the hook is TryModifyRewards**Late** and the sim collapses the plain and Late passes into one flat walk over run.relics, so Driftwood's guaranteed 'after everyone else' position becomes registration-order luck (PROMPT.md class 15)",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# guarantees ordering by running two COMPLETE passes -- every listener's TryModifyRewards, then every listener's TryModifyRewardsLate (Hook.cs:1983-1997) -- and AbstractModel.cs:2113-2115 says of the Late form 'CAREFUL! You should usually use TryModifyRewards instead of this. Works just like TryModifyRewards, but runs after it.' Driftwood is Late for a reason: it must see every CardReward any other listener ADDED. The sim has one pass (`for relic in list(run.relics)`, rewards.py:499-500) and driftwood.py:18's `if rewards.cards:` is evaluated at Driftwood's own position in run.relics, so a card reward appended by a later-registered relic is never marked. This is the same flattening audits/seam/turn_structure.json guard G12 and audits/seam/hook_dispatch.json record as gaps for their own phased hooks; one verdict per mechanism, binding rule 3. REACHABILITY (DORMANT, and the concrete unported thing is named): no ported plain-phase listener adds a CardReward. The game's four other TryModifyRewards implementers are AmethystAubergine (gold), LavaRock (relics), PrayerWheel, WhiteStar and WongosMysteryTicket, and of those PrayerWheel and WhiteStar -- the two that touch card rewards -- are behaviourless stubs in the sim per .superpowers/sdd/content-relic-sweeps.md sweep C, while lava_rock adds relics rather than cards. Porting Prayer Wheel (whose C# effect is a second card reward) makes it live immediately and in the silent direction: the extra reward would sometimes be rerollable and sometimes not, depending on grab-bag order."
+    },
+    {
+      "what": "G3: C# sets `CanReroll = true` on EACH CardReward in the list (Driftwood.cs:20-23); the sim sets one `can_reroll` flag on the whole CombatRewards (driftwood.py:19)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim's CombatRewards models one card CHOICE per screen -- rewards.py:384-392 describes `cards` as 'a pick-one-of-N group' and keeps independently-offered cards in a separate `special_cards` list -- so one screen has at most one CardReward-equivalent today and the per-instance flag and the per-screen flag are the same observable. `reroll` (rewards.py:399-403) is also correctly one-shot per screen, clearing the flag before regenerating, which is CardReward.Reroll's contract. Verdicted a divergence rather than faithful because the shapes genuinely differ, and flagged for the same reason relic/dream_catcher's G3 is: if a screen ever carries two card choices (Prayer Wheel, or Tiny Mailbox at a rest site) then C# would let the player reroll each and the sim only the merged group, and this becomes a gap. Note `special_cards` are NOT CardRewards in C# either -- SpecialCardReward is its own type -- so excluding them from the flag is correct."
+    },
+    {
+      "what": "N1: `if (player != base.Owner) return false;` (Driftwood.cs:16-19), the bool return, the `AbstractRoom? room` parameter, and `public class` rather than `sealed`",
+      "verdict": "faithful",
+      "rationale": "The owner clause is the multiplayer per-player filter the shared contract puts out of scope. The bool return only feeds Hook.ModifyRewards' modifier list for the AfterModifyingRewards companion (RewardsSet.cs:142), which Driftwood does not implement, so the sim's void hook loses nothing. The room parameter is unused by this relic; the sim passes the run instead, and the room type is already on CombatRewards.room_type. The non-sealed class invites a knock-off subclass (the Fake Merchant pattern behind relic/fake_anchor and relic/fake_venerable_tea_set), and a grep for ': Driftwood' across the game source returns ZERO subclasses -- so there is no Fake Driftwood to have missed."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

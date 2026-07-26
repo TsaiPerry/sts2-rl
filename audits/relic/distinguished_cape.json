@@ -1,0 +1,51 @@
+{
+  "unit": "relic/distinguished_cape",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DistinguishedCape.cs",
+    "sha256": "e95c2a94df54d4e0cd7a133e3ecedc807a51935c63302c375d63f208d73168e8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\distinguished_cape.py",
+    "sha256": "34e73e730c6e4273eaaab3ab77631e3ad2c158ecaa435fa2294b9927e911e82e"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (distinguished_cape.py:15)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (distinguished_cape.py:16)",
+      "verdict": "faithful",
+      "rationale": "Matches DistinguishedCape.cs:19. It is load-bearing beyond display: relics/base.py:132-136's is_tradable refuses any relic with an upon-pickup effect, so a dropped declaration would make the Cape tradable at the relic-trade events. Worth noting against batch 3's relic/byrdpip, which drops the identical declaration."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (distinguished_cape.py:21-25)",
+      "verdict": "gap",
+      "issue": "Carries guard G1's LIVE label. The card half is faithful -- three Apparitions appended to the deck -- but the relic's -9 Max HP is not implemented at all; the port puts it in the Vakuu event option instead, on a premise about the source that is false."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the -9 Max HP belongs to the RELIC (DistinguishedCape.cs:31) and the port assigns it to the Vakuu event option instead, on the false premise that EventOption.ThatDecreasesMaxHp(9) applies it",
+      "verdict": "gap",
+      "issue": "MECHANISM: DistinguishedCape.AfterObtained's FIRST statement is `CreatureCmd.LoseMaxHp(new ThrowingPlayerChoiceContext(), base.Owner.Creature, base.DynamicVars.HpLoss.BaseValue, isFromCard: false)` (DistinguishedCape.cs:31), with HpLossVar(9m) declared at DistinguishedCape.cs:25 and the same 9 pinned as `public const int maxHpLoss` at line 15. distinguished_cape.py's docstring asserts the opposite -- 'The -9 Max HP comes from the Vakuu event OPTION (RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9)), not the relic itself' -- and its after_obtained only adds the cards. THE PREMISE IS FALSE: EventOption.ThatDecreasesMaxHp (EventOption.cs:193-197) is `return ThatWillKillPlayerIf(p => p.Creature.MaxHp <= value)`, i.e. it sets the WillKillPlayer predicate that makes the option flash red, and a grep for the field it sets finds no consumer that loses HP anywhere under src/Core. It is presentation. Its only two other users, DrowningBeacon.cs:32 and UnrestSite.cs:36, both apply their HP loss in their own option bodies. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py cape): `run.add_relic(make_relic('distinguished_cape'))` leaves (max_hp, hp, deck) at (80, 80, 13) where C# gives (71, 71, 13) -- the sim loses 0 Max HP. This is EXACTLY the relic/big_mushroom G1 shape from batch 1 with the sign reversed ('+20 Max HP lives in the wrong place'), and it has the same two live consequences. (a) The conformance runner grants relics by id straight through add_relic (runner.py:465, 698, 751), so its relic resync silently keeps 9 Max HP that the save says was spent, which DETECTOR 3's act-boundary HP assertion reports as a parity failure on any seed that took the Cape. (b) The port defines no undo_after_obtained (executed: False), which relics/base.py:143-151 exists precisely to let the runner unwind a max-HP relic on a swap. The TOTAL via the Vakuu shrine is right by accident -- events/vakuu.py:58-60 pays run.lose_max_hp(9) itself and the executed path gives 80 -> 71, matching C# -- so this defect is invisible to anyone who only plays the event. The fix must move the loss into the relic AND delete it from the event, or the Cape will cost 18. RULE 7: events/vakuu.py, relics/base.py, conformance/runner.py, EventOption.cs, DrowningBeacon.cs and UnrestSite.cs are not hashed here."
+    },
+    {
+      "what": "N1: HpLossVar(9m) / `const int maxHpLoss = 9` read as BaseValue (DistinguishedCape.cs:15, 25, 31) vs MAX_HP_LOSS = 9 (distinguished_cape.py:19), and CardsVar(3) read as IntValue (DistinguishedCape.cs:26, 33) vs CARDS = 3 (distinguished_cape.py:18)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 9 and 3 are the pinned non-ascension values, and both constants are transcribed correctly. The 9 is in the wrong FILE, not the wrong amount -- that is G1's subject, and the constant being right is why the Vakuu total comes out correct. The BaseValue-vs-IntValue asymmetry within one file is the same source idiom batch 1 recorded for relic/big_mushroom vs relic/bag_of_preparation."
+    },
+    {
+      "what": "N2: `CreatureCmd.LoseMaxHp(..., isFromCard: false)` vs RunState.lose_max_hp (run.py:316-321), and the loop of `RunState.CreateCard<Apparition>` + `CardPileCmd.Add(card, PileType.Deck)` (DistinguishedCape.cs:33-38) vs `run.add_card(make_card('apparition'))` x3 (distinguished_cape.py:24-25)",
+      "verdict": "faithful",
+      "rationale": "Both halves line up. lose_max_hp floors max HP at 1 and clamps current HP to the new max, which is CreatureCmd.LoseMaxHp's contract; the isFromCard flag only routes the source attribution the sim does not model. run.add_card (run.py:341-354) runs Hook.ModifyCardBeingAddedToDeck before the append and the deck-entry hook after it, which is what CardPileCmd.Add(card, PileType.Deck) does -- so the egg relics can still substitute upgraded Apparitions, one per card, three times, matching the C# loop rather than a batch add. The ported card is correct: cards/apparition.py exists and is the same model the C# ExtraHoverTips advertise. ORDER: C# loses the max HP BEFORE adding the cards, and the sim adds only cards, so once G1 is fixed the loss must go first -- it clamps current HP, and relic/book_of_five_rings heals on deck adds. RULE 7: run.py and cards/apparition.py are not hashed here."
+    },
+    {
+      "what": "N3: ExtraHoverTips (HoverTipFactory.FromCardWithCardHoverTips<Apparition>, DistinguishedCape.cs:21), CanonicalVars (:23-27) and CardCmd.PreviewCardPileAdd(results, 2f) (:39)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
