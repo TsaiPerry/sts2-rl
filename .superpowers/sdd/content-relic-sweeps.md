@@ -32,10 +32,11 @@ second combat with the same instance, and diff both the relic's own fields *and*
 the player/enemy state against a freshly-constructed instance entering its first
 combat.
 
-### REWRITTEN 2026-07-26 after batches 4–8 — the first version was unsound
+### REWRITTEN 2026-07-26 — the first version was unsound, in six ways
 
-**Every one of batches 4, 5, 6 and 7 independently faulted this sweep**, on four
-distinct grounds. All four were confirmed at the source and all four are now
+**Six of the ten batches that used this sweep independently faulted it** —
+batches 4, 5, 6 and 7 before the rewrite, then 12 and 13 after it, each on
+different grounds. Every fault was confirmed at the source and every one is now
 fixed. Read this before trusting any earlier sweep-A output:
 
 1. **Turn-*end* resets were pooled with turn-*start* resets.** The old output
