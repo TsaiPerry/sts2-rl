@@ -1,0 +1,51 @@
+{
+  "unit": "relic/fake_mango",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FakeMango.cs",
+    "sha256": "af296375be99acd2f65bbb2d08b01ae6f6d84b37eea9bf31af0a434c7dd75e94"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fake_mango.py",
+    "sha256": "a1f85e0324d4cc2a83a2ecb01f5aab6558fe0f3844be76607e5f79cd381f7692"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fake_mango.py:13)",
+      "verdict": "faithful"
+    },
+    "MerchantCost": {
+      "maps_to": "merchant_cost_override = 50 (fake_mango.py:14)",
+      "verdict": "faithful",
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (fake_mango.py:15)",
+      "verdict": "faithful",
+      "rationale": "Matches FakeMango.cs:13; drives RelicModel.IsTradable (RelicModel.cs:176-190), mirrored at relics/base.py:126-136. Rule 7: those two files are unhashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (fake_mango.py:19-20)",
+      "verdict": "faithful",
+      "rationale": "FakeMango.cs:19-22 calls CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue) with MaxHpVar(3m) (line 17) and no AscensionHelper branch in the file, so 3 is the pinned non-ascension value and matches MAX_HP = 3 (fake_mango.py:17). The load-bearing detail is that GainMaxHp is NOT just a max-HP bump: CreatureCmd.cs:786-799 calls SetMaxHp, captures the actual delta it returned, and then `await Heal(creature, num)` -- so the relic also restores 3 current HP. run.gain_max_hp (run.py:311-314) does exactly that pair, and its own docstring cites it. EXECUTED (py tools/audit/relic_probes_b05.py mango-hp): a run at 40/80 becomes 43/83. Rule 7: CreatureCmd.cs and run.py are unhashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: CreatureCmd.SetMaxHp truncates with `Math.Min((int)amount, 999999999)` and then clamps CurrentHp (Creature.cs:493-501); GainMaxHp heals the RETURNED delta, not the requested amount (CreatureCmd.cs:792, 798)",
+      "verdict": "faithful",
+      "rationale": "The distinction matters when the requested amount is fractional or the cap bites -- neither happens here (3 is an integer and no run reaches 999999999 Max HP), so `newMaxHp - oldMaxHp` is exactly 3 and the heal is exactly 3, which is what run.gain_max_hp assumes when it passes the same int to both halves. Checked rather than assumed because the sibling relic/fake_lees_waffle in this batch DOES have a fractional amount and needed an exhaustive rounding probe. Rule 7: Creature.cs, CreatureCmd.cs and run.py are unhashed here."
+    },
+    {
+      "what": "N2: the sim's Relic.undo_after_obtained is a no-op for this max-HP relic (relics/base.py:142-151)",
+      "verdict": "gap",
+      "issue": "MECHANISM: undo_after_obtained has no C# counterpart at all -- nothing in the game un-picks a relic -- and exists solely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was really picked. relics/base.py:142-151 says in terms that 'only relics whose pickup mutates run state outside run.relics need it', and this relic mutates BOTH max_hp and hp. Without an undo, a discarded Fake Mango leaves +3 Max HP and +3 HP behind. This is the same defect shape relic/big_mushroom's batch-1 record found from the other direction (there the +20 was missing entirely and the record notes 'it also defeats undo_after_obtained, which exists precisely to unwind max-HP relics on a runner swap'). DORMANT, and the concrete unported thing is named: the Fake Merchant event is gated to acts 2-3 and needs 100 gold or a Foul Potion (events/fake_merchant.py:50-58), and neither of the two convergeable Ironclad conformance seeds (89U21BV1TZ, 933T39V18D) reaches it -- so no parity run currently exercises the swap on this relic. Any seed whose replay buys a knock-off and whose runner resyncs relics at that node makes it live, and DETECTOR 3's act-boundary HP assertion is what would report it. Rule 7: relics/base.py and events/fake_merchant.py are unhashed here."
+    },
+    {
+      "what": "N3: FakeMango.cs overrides no combat hook at all, so the sim's port correctly has none",
+      "verdict": "faithful",
+      "rationale": "The whole file is Rarity, HasUponPickupEffect, MerchantCost, CanonicalVars and AfterObtained (FakeMango.cs:9-23). Checked against PROMPT.md bug class 12: this is a one-hook port, not a behaviourless stub, and .superpowers/sdd/content-relic-sweeps.md's sweep C does not list it among the 37 behaviourless ports."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
