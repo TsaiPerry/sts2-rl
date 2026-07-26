@@ -1,0 +1,42 @@
+{
+  "unit": "card/cinder",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Cinder.cs",
+    "sha256": "66b4c4714675a97cb50530fe9e53449a3d7705a3be8092d21215d4659945cefd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\cinder.py",
+    "sha256": "39b4b54258952436186a012ad3f213f1bee5c03913ea5c1bb1dbfb033d7ce0fd"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (cinder.py:20-24) + _init_vars (26-28)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (Cinder.cs:22-25) == cost 2 / ATTACK / COMMON / ANY_ENEMY. Cinder has NO Exhaust keyword of its own -- the Exhaust hover tip (Cinder.cs:20) refers to the hand card it exhausts -- and the sim correctly leaves `exhausts` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "CinderCard._damage = 18 (cinder.py:28)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(18m, ValueProp.Move)` (Cinder.cs:18) == `_damage = 18`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "CinderCard.on_play (cinder.py:33-45)",
+      "verdict": "faithful",
+      "rationale": "Order matches: attack FIRST (Cinder.cs:30-33), then exhaust a random hand card (34-39). The RNG is handled correctly here, unlike anointed/beat_down: `Rng.CombatCardSelection.NextItem(pile.Cards)` (Cinder.cs:35) maps to `crng.card_selection.choice(ctx.player.hand)` under parity, with the shared legacy rng only in the non-parity branch (cinder.py:40-44) -- the pattern the other 20 shared-rng cards should follow. The empty-hand case matches (`if (cardModel != null)` == `if ctx.player.hand:`). Cinder itself is never a candidate: C# holds it in the Play pile, the sim in the discard-pile limbo (combat.py:452-454). Presentation, folded in: WithAttackerAnim's Ironclad heavy-anim helpers and the NFireBurstVfx hit node."
+    },
+    "OnUpgrade": {
+      "maps_to": "CinderCard._on_upgrade (cinder.py:30-31)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(6m)` (Cinder.cs:44) == `self._damage += 6` (18 -> 24)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the hand is read AFTER the attack resolves, so a card added to hand by the attack is a candidate",
+      "verdict": "faithful",
+      "rationale": "Both sides fetch the hand at the exhaust step, not before the attack. Same candidate set."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

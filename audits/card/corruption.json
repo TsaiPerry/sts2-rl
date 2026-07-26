@@ -1,0 +1,36 @@
+{
+  "unit": "card/corruption",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Corruption.cs",
+    "sha256": "714a9898a496ae8c5f46e8bba846318afffb3b17b3c4834744dbb49715b6210b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\corruption.py",
+    "sha256": "d69ac35dbabb4d4a52a28a7969388b35849ad54e3dc9a408a0a676ff3dd028a1"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (corruption.py:20-24) + _init_vars (26-27)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Power, CardRarity.Ancient, TargetType.Self)` (Corruption.cs:21-24) == cost 3 / POWER / ANCIENT / SELF. Corruption has NO Exhaust keyword of its own -- the Exhaust hover tip (Corruption.cs:19) describes what CorruptionPower does to Skills -- and the sim correctly leaves `exhausts` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim passes the literal 1 (corruption.py:35)",
+      "verdict": "gap",
+      "issue": "`new DynamicVar(\"Power\", 1m)` (Corruption.cs:17) is a printed var with no `_`-attribute in `_init_vars`, so `magic_number` returns None. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "CorruptionCard.on_play (corruption.py:32-35)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<CorruptionPower>(choiceContext, Owner.Creature, DynamicVars[\"Power\"].BaseValue, Owner.Creature, this)` (Corruption.cs:30) == `PowerCmd.apply(ctx.hooks, ctx.player, CorruptionPower, 1, applier=ctx.player)`. CorruptionPower's Skills-cost-0 and exhaust-on-play behaviour belongs to the power stream. Presentation, folded in: NPowerUpVfx (28) and TriggerAnim (29)."
+    },
+    "OnUpgrade": {
+      "maps_to": "CorruptionCard._on_upgrade (corruption.py:29-30)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Corruption.cs:35) == `self._energy_cost = max(0, self._energy_cost - 1)` (3 -> 2)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

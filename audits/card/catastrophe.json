@@ -1,0 +1,47 @@
+{
+  "unit": "card/catastrophe",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Catastrophe.cs",
+    "sha256": "a6793468810144fb4ec1d1e52f5ff80c5d2baacb9aa65854614b583ef112ccf8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:128-132) + _init_vars (134-136)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Catastrophe.cs:16-19) == cost 2 / SKILL / UNCOMMON / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "CatastropheCard._cards = 2 (colorless_skills.py:136)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(2)` (Catastrophe.cs:14) == `_cards = 2`, read as `IntValue` for the loop bound."
+    },
+    "OnPlay": {
+      "maps_to": "CatastropheCard.on_play (colorless_skills.py:138-161)",
+      "verdict": "faithful",
+      "rationale": "This is one of the more carefully ported cards in the pool and it holds up. Per iteration C# takes `PileType.Draw.GetPile(Owner).Cards.Where(!Unplayable).ToList().StableShuffle(Rng.Shuffle).FirstOrDefault()`, falling back to the UNFILTERED pile shuffled the same way when the filtered list is empty (Catastrophe.cs:25-30). The sim reproduces all four subtleties: it uses the named `Shuffle` stream via `stable_shuffled_cards(options, ctx.combat.combat_rng)`; it reverses the draw pile to the game's TOP-FIRST orientation first (colorless_skills.py:155) because StableShuffle's stabilising `list2.Sort()` leaves compare-equal cards in incoming order (ListExtensions.cs:22-31); it takes `[0]` after the shuffle rather than one uniform choice, so the draw COUNT matches (N-1 draws per pick); and `options = playable or pile` (colorless_skills.py:157) is exactly C#'s FirstOrDefault-null fallback. `is_playable` mirrors the Unplayable keyword."
+    },
+    "OnUpgrade": {
+      "maps_to": "CatastropheCard._on_upgrade (colorless_skills.py:145-146)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (Catastrophe.cs:40) == `self._cards += 1` (2 -> 3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim breaks the pick loop on `ctx.combat.is_over or ctx.player.is_dead` (colorless_skills.py:152-153); Catastrophe.cs has NO loop-level bail-out",
+      "verdict": "gap",
+      "issue": "C#'s loop runs the full `CardsVar` iterations unconditionally. The combat-over check lives one level down, in `CardCmd.AutoPlay`'s `if (CombatManager.Instance.IsOverOrEnding || card.Owner.Creature.IsDead) return;` (CardCmd.cs:53-56) -- which is AFTER Catastrophe has already done the StableShuffle pick for that iteration. So when an auto-played card ends the combat, C# still burns a full StableShuffle (N-1 Shuffle draws) for every remaining iteration and the sim burns none. Under seed parity a differing draw COUNT is an observable desync, which is the same reasoning creature_card_cmds step 104 applies to the auto-select shortcut. LIVE: Catastrophe is a ported Uncommon colorless Skill, killing the last enemy with an auto-played Attack on the first of two or three iterations is ordinary play, and the Shuffle parity stream is wired (combat_rng.py:17,50). Note this is the OPPOSITE polarity to card/beat_down's target-roll guard, where the sim is the one that skips a draw C# takes -- both are stream-count divergences at an auto-play boundary."
+    },
+    {
+      "what": "each pick re-reads the draw pile, so a card auto-played in iteration 1 cannot be picked again in iteration 2",
+      "verdict": "faithful",
+      "rationale": "C# re-evaluates `PileType.Draw.GetPile(Owner).Cards` inside the loop (Catastrophe.cs:25) and the sim rebuilds `pile` from `ctx.player.draw_pile` each iteration (colorless_skills.py:155). Both also see any card the auto-play ADDED to the draw pile."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

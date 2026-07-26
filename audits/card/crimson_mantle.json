@@ -1,0 +1,42 @@
+{
+  "unit": "card/crimson_mantle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\CrimsonMantle.cs",
+    "sha256": "5043e67cc4d015d03361d0dc47c589bd1ae4717b5d235f335fc94b9efff21a6f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\crimson_mantle.py",
+    "sha256": "209269c1712c411d8c19543bac182c79f01f8fd14a742790e074b9b3b9ed9871"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (crimson_mantle.py:21-25) + _init_vars (27-29)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Rare, TargetType.Self)` (CrimsonMantle.cs:19-22) == cost 1 / POWER / RARE / SELF. No keywords. It does NOT override GainsBlock even though the power grants block, so the sim's `gains_block` default of False is right and Nimble's CanEnchant refuses it on both sides."
+    },
+    "CanonicalVars": {
+      "maps_to": "CrimsonMantleCard._power_amount = 8 (crimson_mantle.py:29)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<CrimsonMantlePower>(8m)` (CrimsonMantle.cs:15) == `_power_amount = 8`, which `magic_number` surfaces."
+    },
+    "OnPlay": {
+      "maps_to": "CrimsonMantleCard.on_play (crimson_mantle.py:34-42)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<CrimsonMantlePower>(..., DynamicVars[\"CrimsonMantlePower\"].BaseValue, ...)` followed by `?.IncrementSelfDamage()` on the RETURNED power (CrimsonMantle.cs:28) == `PowerCmd.apply(...)` then `ctx.player.powers.get('crimson_mantle')` and `power.increment_self_damage()` (crimson_mantle.py:37-42). The sim has no return value from `PowerCmd.apply`, so it re-fetches the power by id; on the normal path both reach the same instance and increment it exactly once per play. Presentation, folded in: NPowerUpVfx (26) and TriggerAnim (27)."
+    },
+    "OnUpgrade": {
+      "maps_to": "CrimsonMantleCard._on_upgrade (crimson_mantle.py:31-32)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"CrimsonMantlePower\"].UpgradeValueBy(2m)` (CrimsonMantle.cs:33) == `self._power_amount += 2` (8 -> 10)."
+    }
+  },
+  "guards": [
+    {
+      "what": "C# skips IncrementSelfDamage when Apply returns NULL; the sim increments whenever the power is present (CrimsonMantle.cs:28 vs crimson_mantle.py:40-42)",
+      "verdict": "gap",
+      "issue": "`PowerCmd.Apply<T>` returns null in three documented cases (PowerCmd.cs:29-34, 68-87): combat is ending, `!target.CanReceivePowers`, or the stacking `ModifyAmount` resolved to 0. The null-conditional `?.` then skips the increment. The sim's re-fetch by id (`ctx.player.powers.get('crimson_mantle')`) cannot distinguish those cases from a successful apply -- if a SECOND Crimson Mantle is played and something modifies its amount to 0, C# leaves the self-damage counter alone and the sim still bumps it, so the player takes one extra HP per turn for the rest of the combat. DORMANT: no ported effect modifies a positive self-applied BUFF's amount down to exactly 0 (Artifact only intercepts debuffs, `PowerType.DEBUFF`, cmds.py:299-306), and the combat-ending and CanReceivePowers cases both imply the combat is over. Live the moment a power-amount modifier that can zero a self-buff is ported."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
