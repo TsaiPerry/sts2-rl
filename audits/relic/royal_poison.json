@@ -1,0 +1,57 @@
+{
+  "unit": "relic/royal_poison",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RoyalPoison.cs",
+    "sha256": "ddbb27b4723f3646672d78d24807eab8da79bfa7b3ce9210bcb3a282f3ca2161"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\royal_poison.py",
+    "sha256": "8a9397eef70c2263a3edc53db632154737df2ef517c8118118b5420af27b7860"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (royal_poison.py:21)",
+      "verdict": "faithful",
+      "rationale": "Matches RoyalPoison.cs:14. Event rarity is never in the grab bag and never shop-stocked; obtainability is the ported Round Tea Party event's Enjoy Tea option (events/round_tea_party.py:40), executed by `py tools/audit/relic_probes_b13.py pool`. Event rarity also makes the relic untradable on both sides (Relic.is_tradable, relics/base.py:128-131)."
+    },
+    "CanonicalVars": {
+      "maps_to": "DAMAGE = 4 with props=DamageProps.NON_CARD_HP_LOSS (royal_poison.py:24, 30-32)",
+      "verdict": "faithful",
+      "rationale": "RoyalPoison.cs:16 is `new DamageVar(4m, ValueProp.Unblockable | ValueProp.Unpowered)` and AfterPlayerTurnStart passes the DynamicVar itself to CreatureCmd.Damage (line 23). DamageProps.NON_CARD_HP_LOSS is defined as exactly `ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED` (valueprops.py:44), so the prop pair matches bit for bit -- Unblockable means Block never absorbs it and Unpowered means no Strength/Vulnerable/Weak scaling. No AscensionHelper.GetValueIfAscension in the file, so 4 is the non-ascension value. EXECUTED (`py tools/audit/relic_probes_b13.py royal-poison`): 80 HP -> 76 on turn 1, and a turn 2 entered with 99 Block takes no further loss. NOTE per binding rule 7: valueprops.py is not hashed by this record."
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "on_player_turn_started (royal_poison.py:26-32)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The slot is right -- `py tools/audit/relic_probes.py turn-order` places on_player_turn_started after the draw, where C#'s AfterPlayerTurnStart also sits (turn_structure's C# order: Draw -> AfterPlayerTurnStart -> AfterSideTurnStart) -- and the damage is right. What is missing is the CheckWinCondition C# runs immediately afterwards, so a player this relic kills on turn 1 keeps playing."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the sim runs no CheckWinCondition after the turn-1 setup, and this relic is the seam record's own named witness",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# calls CheckWinCondition immediately after the player's turn setup and the auto-pre-play phase (CombatManager.cs:573), so a turn-start effect that kills the player ends the fight on the spot. The sim's turn-1 setup (combat.py:208-209 fires on_combat_start then start_turn) is followed by NOTHING -- the only post-setup check is on the end_turn path. THIS IS audits/seam/turn_structure.json gap G13, whose issue text names relics/royal_poison.py:25 as one of the four damage-dealing turn-start relics and uses THIS relic to produce its executed evidence; per binding rule 3 the verdict is matched and cited, not re-derived, and the seam owns the machinery while this record owns the relic's observable. RE-EXECUTED here at the relic's own site (`py tools/audit/relic_probes_b13.py royal-poison`): a combat built with relics=[royal_poison] and current_hp=4 comes back with hp=0, is_dead=True, phase=Phase.PLAYER_TURN, is_over=False and 6 valid actions -- the sim hands a dead player a full turn, which they can win the fight in. REACHABILITY (LIVE, both sides ported): the relic is granted by the ported Round Tea Party event and 4 or less HP on entering a fight is ordinary late-act play; no second relic and no card are needed. NOTABLE: two sibling relics on the same hook, relics/festive_popper.py and relics/mercury_hourglass.py, hand-roll a `self._check_win()` call precisely because this check is missing -- and neither that workaround nor Royal Poison's port covers PLAYER death, which is the direction this relic damages in. Royal Poison is the only one of the four whose damage targets the player. Pinned by the seam: test_turn_one_setup_death_ends_the_combat."
+    },
+    {
+      "what": "N1: `TurnNumber <= 1` (RoyalPoison.cs:20) vs the port's `self.turn != 1` (royal_poison.py:27)",
+      "verdict": "faithful",
+      "rationale": "The two partition identically for every value the sim can hold: CombatState.turn starts at 1 and only increments, so `turn <= 1` and `not (turn != 1)` are the same set. EXECUTED above: the 4 HP is lost on turn 1 and not on turn 2. audits/seam/turn_structure.json guard N4 independently confirms that `self.turn` is the right counter for this relic -- it lists Royal Poison among the ported readers that read TurnNumber (as opposed to RoundNumber, which an extra turn would skew), so the extra-turn divergence that guard records does not reach here."
+    },
+    {
+      "what": "N2: `player == base.Owner` (RoyalPoison.cs:20), the PlayerChoiceContext, and CreatureCmd.Damage's null applier/cardSource",
+      "verdict": "faithful",
+      "rationale": "The owner check is single-player-structural: hooks.on_player_turn_started is dispatched only for the sim's one player. C# passes `Owner.Creature` as target with applier and cardSource both null (RoyalPoison.cs:23) and royal_poison.py:30-32 calls DamageCmd.deal with no applier either, so the loss is unattributed on both sides -- which matters because an attributed self-damage would feed relics and powers that react to being attacked. PlayerChoiceContext is multiplayer plumbing, noted rather than verdicted."
+    },
+    {
+      "what": "N3: the relic holds no state, so its per-combat repetition is structural on both sides",
+      "verdict": "faithful",
+      "rationale": "RoyalPoison.cs has no fields and no reset hook; `py tools/audit/relic_probes.py sweep-reset` puts royal_poison in the 'relics holding no state at all' bucket, so PROMPT.md bug class 13 has nothing to bite. The 'once per combat' behaviour comes entirely from the turn-1 test, which N1 settles. Recorded so the absence reads as a source property."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
