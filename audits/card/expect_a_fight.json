@@ -1,0 +1,42 @@
+{
+  "unit": "card/expect_a_fight",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\ExpectAFight.cs",
+    "sha256": "b0c2ea5a57dbd6df806ee973b2101b557e13b09fbed72c80403412550633dfa8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\expect_a_fight.py",
+    "sha256": "8f326b4998443757be80b1a4ee7f54a37c067aef3c0e13258e1b942a4372bb30"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (expect_a_fight.py:22-26) + _init_vars (28-29)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (ExpectAFight.cs:28-31) == cost 2 / SKILL / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim computes the count inline (expect_a_fight.py:37)",
+      "verdict": "gap",
+      "issue": "Four vars in C#: `EnergyVar(0)`, `CalculationBaseVar(0m)`, `CalculationExtraVar(1m)` and `CalculatedVar(\"CalculatedEnergy\").WithMultiplier(card => Hand.Cards.Count(c => c.Type == Attack))` (ExpectAFight.cs:18-24). The FORMULA is reproduced exactly -- `CalculatedVar.Calculate` is `base + extra * multiplier` (CalculatedVar.cs:62-71) = `0 + 1 * attacks` == the sim's `sum(1 for c in ctx.player.hand if c.card_type == CardType.ATTACK)` -- but none of the four vars is stored, so `magic_number` returns None and the observation encoder sees no secondary number. The card also defines no `calc_damage`-style accessor, so nothing outside `on_play` can preview the energy. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the applied number is identical), LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "ExpectAFightCard.on_play (expect_a_fight.py:34-40)",
+      "verdict": "faithful",
+      "rationale": "Order matches: gain the computed energy FIRST (`PlayerCmd.GainEnergy(((CalculatedVar)DynamicVars[\"CalculatedEnergy\"]).Calculate(cardPlay.Target), Owner)`, ExpectAFight.cs:36) == `EnergyCmd.gain(ctx.hooks, ctx.player, attacks)`, then `PowerCmd.Apply<NoEnergyGainPower>(..., 1m, ...)` (37) == `PowerCmd.apply(..., NoEnergyGainPower, 1, applier=ctx.player)`. The order is load-bearing -- NoEnergyGainPower is applied AFTER the gain, so this card's own energy is not blocked by it -- and is preserved. The Attack count is read from the hand at play time, and Expect A Fight itself is out of the hand on both sides (Play pile in C#, discard-pile limbo in the sim), so it never counts itself -- and it is a Skill anyway. Presentation, folded in: TriggerAnim (35) and the energy hover tip (26)."
+    },
+    "OnUpgrade": {
+      "maps_to": "ExpectAFightCard._on_upgrade (expect_a_fight.py:31-32)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (ExpectAFight.cs:42) == `self._energy_cost = max(0, self._energy_cost - 1)` (2 -> 1). The energy-per-Attack multiplier is unchanged by the upgrade on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim skips the gain entirely when there are no Attacks in hand (`if attacks > 0`, expect_a_fight.py:38-39); C# calls GainEnergy(0)",
+      "verdict": "faithful",
+      "rationale": "`PlayerCmd.GainEnergy(0, ...)` adds nothing, and the sim's `EnergyCmd.gain` would run `hooks.modify_energy_gain` on a zero amount (cmds.py:553) -- a modifier could in principle turn 0 into something. No ported `modify_energy_gain` listener adds a flat bonus on a zero gain (they all scale or gate on a positive amount), so the two agree today. Recorded because it is a guard the sim added, not one it copied."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

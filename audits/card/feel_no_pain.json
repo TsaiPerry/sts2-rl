@@ -1,0 +1,36 @@
+{
+  "unit": "card/feel_no_pain",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\FeelNoPain.cs",
+    "sha256": "4fd134b915fdfd2b54812a284b3e812c85b1929c23d2803b3115bad9a46b7dab"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\feel_no_pain_card.py",
+    "sha256": "dd07317bd59ddc9173d2cae3c7ddb4e978aaffcf1daceab6f4060a4e9dde18bf"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (feel_no_pain_card.py:19-23) + _init_vars (25-27)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (FeelNoPain.cs:24-27) == cost 1 / POWER / UNCOMMON / SELF. It does NOT override GainsBlock -- cards/base.py:65-69 calls this out by name: \"Feel No Pain's number belongs to its power, not the card\" -- and the sim correctly leaves `gains_block` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "FeelNoPainCard._block = 3 (feel_no_pain_card.py:27)",
+      "verdict": "gap",
+      "issue": "`new DynamicVar(\"Power\", 3m)` (FeelNoPain.cs:16) is a generic power var, and the sim stores it in **`_block`** -- the attribute `Card.base_block` reads (cards/base.py:202-205). So the sim reports Feel No Pain as a card that itself grants 3 block, which is exactly the confusion cards/base.py:65-69 warns about when it explains why `gains_block` cannot be derived from `base_block`. The card grants NO block; FeelNoPainPower does, on exhaust. This is worse than the ordinary inlined-var finding: it is not a missing number but a WRONG one. `full_env.card_features` writes both `base_block` and `preview_card_block(s, card)` into the observation (full_env.py:483-485), so a policy is told Feel No Pain gives 3 (later 4) block on play. DORMANT for game fidelity -- `on_play` passes the same value to the power, so combat behaviour is identical, and no gameplay code reads `base_block` -- but LIVE for the observation encoder. The correct storage is `_plating`-style: card/eternal_armor stores the same shape of number in `_plating` and reports it through `magic_number` instead."
+    },
+    "OnPlay": {
+      "maps_to": "FeelNoPainCard.on_play (feel_no_pain_card.py:32-35)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<FeelNoPainPower>(choiceContext, Owner.Creature, DynamicVars[\"Power\"].BaseValue, Owner.Creature, this)` (FeelNoPain.cs:31) == `PowerCmd.apply(ctx.hooks, ctx.player, FeelNoPainPower, self._block, applier=ctx.player)`. The VALUE handed to the power is right on both sides; only where the sim stores it is wrong."
+    },
+    "OnUpgrade": {
+      "maps_to": "FeelNoPainCard._on_upgrade (feel_no_pain_card.py:29-30)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"Power\"].UpgradeValueBy(1m)` (FeelNoPain.cs:36) == `self._block += 1` (3 -> 4)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

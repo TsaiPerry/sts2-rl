@@ -1,0 +1,47 @@
+{
+  "unit": "card/evil_eye",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\EvilEye.cs",
+    "sha256": "048402a559c941e7bb20fff348cb9d3f307631d01713e4995b5712f5ad0acee4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\evil_eye.py",
+    "sha256": "c167d247cf67166ebf4737bf870feea0cfca5e4b60d673178bd3493d7d417d0c"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "EvilEyeCard.gains_block = True (evil_eye.py:24)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (EvilEye.cs:17) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (evil_eye.py:23-28) + _init_vars (30-32)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (EvilEye.cs:27-30) == cost 1 / SKILL / UNCOMMON / SELF. Evil Eye has NO Exhaust keyword of its own -- the Exhaust hover tip (EvilEye.cs:23) describes its TRIGGER -- and the sim leaves `exhausts` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "EvilEyeCard._block = 8 (evil_eye.py:32)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(8m, ValueProp.Move)` (EvilEye.cs:21) == `_block = 8`. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "EvilEyeCard.on_play (evil_eye.py:37-41)",
+      "verdict": "faithful",
+      "rationale": "`int blockGains = ((!WasCardExhaustedThisTurn) ? 1 : 2)` then a LOOP of separate `CreatureCmd.GainBlock` calls (EvilEye.cs:36-40) == `gains = 2 if ctx.combat.history.card_exhausted_this_turn() else 1` then a loop of separate `BlockCmd.apply` calls. Two SEPARATE gains rather than one doubled gain is load-bearing on both sides -- per-gain listeners (Juggernaut, and the Vambrace latch that creature_card_cmds G2 names Evil Eye as a witness for) fire twice. The condition matches too: `History.Entries.OfType<CardExhaustedEntry>().Any(e => e.HappenedThisTurn(CombatState) && e.Card.Owner == Owner)` (EvilEye.cs:25) == the sim's `history.card_exhausted_this_turn()`, with the owner clause folded into the single-player model. Presentation, folded in: TriggerAnim (34), the gaze VFX (35) and ShouldGlowGoldInternal (19)."
+    },
+    "OnUpgrade": {
+      "maps_to": "EvilEyeCard._on_upgrade (evil_eye.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (EvilEye.cs:45) == `self._block += 3` (8 -> 11). The doubling condition is unchanged by the upgrade on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the exhaust check is re-evaluated at play time, so a card exhausted EARLIER in the same turn counts but one exhausted by this card's own resolution cannot (EvilEye.cs:36)",
+      "verdict": "faithful",
+      "rationale": "Both sides read the history once, before the first gain. Evil Eye exhausts nothing itself, so there is no self-interaction on either side."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

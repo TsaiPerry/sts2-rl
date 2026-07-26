@@ -1,0 +1,52 @@
+{
+  "unit": "card/feed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Feed.cs",
+    "sha256": "99d3e68dbdc4c3d687c756d5c4c3acdc545a37d043d888bb476028faad684cb8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\feed.py",
+    "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa"
+  },
+  "hooks": {
+    "CanBeGeneratedInCombat": {
+      "maps_to": "FeedCard.can_be_generated_in_combat = False (feed.py:30)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (Feed.cs:18) == the class attribute, with the sim's comment naming the same FilterForCombat consumers. Contrast card/disintegration, where this exact override was mapped to the wrong flag."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "FeedCard.exhausts = True (feed.py:27)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Feed.cs:26) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (feed.py:22-30) + _init_vars (32-35)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Rare, TargetType.AnyEnemy)` (Feed.cs:30-33) == cost 1 / ATTACK / RARE / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 10, _max_hp = 3 (feed.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(10m, ValueProp.Move)` + `new MaxHpVar(3m)` (Feed.cs:20-24) == both numbers, both declared. Powered damage on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "FeedCard.on_play (feed.py:41-47)",
+      "verdict": "gap",
+      "issue": "The damage and the max-HP amount are faithful, and so is the max-HP verb's shape: `CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.IntValue)` is `SetMaxHp(MaxHp + amount)` followed by `Heal(num)` (CreatureCmd.cs:786-799) == the sim's `ctx.player.max_hp += self._max_hp` then `CreatureCmd.heal(ctx.hooks, ctx.player, self._max_hp)`. THE FATAL TEST IS NOT. C# computes `bool shouldTriggerFatal = cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` BEFORE the attack (Feed.cs:38) and only grants max HP when that is true AND the attack actually killed (`attackCommand.Results...Any(r => r.WasTargetKilled)`, line 42). The sim tests only `if target.is_dead` (feed.py:45), dropping the power-veto half entirely. Two C# powers return false from `ShouldOwnerDeathTriggerFatal`: `MinionPower` (unconditionally, MinionPower.cs:20-23) and `ReattachPower` (unless every other segment is dead, ReattachPower.cs:106-109). BOTH ARE PORTED -- `MinionPower` at powers.py:1536-1542, applied by three ported monsters (`monsters/glory/fabricator.py:182`, `monsters/glory/queen.py:50`, `monsters/hive/ovicopter.py:128`), and ReattachPower at powers.py:2360. Observable: kill a Fabricator bot, a Queen minion or an Ovicopter egg with Feed -- the game grants NO max HP, the sim grants 3 and heals 3. LIVE. The sim's docstring (feed.py:17-19) claims the Illusion case \"falls out of the is_dead check\", which is true for DEATH PREVENTION but does not cover the fatal-veto powers, which allow the death and only suppress the Fatal trigger. RATIONALE CITES THIRD FILES (rule 7): MinionPower.cs, ReattachPower.cs, CreatureCmd.cs, powers.py and the three monster modules are not hashed by this record."
+    },
+    "OnUpgrade": {
+      "maps_to": "FeedCard._on_upgrade (feed.py:37-39)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` + `DynamicVars.MaxHp.UpgradeValueBy(1m)` (Feed.cs:50-51) == `_damage += 2` (10 -> 12) and `_max_hp += 1` (3 -> 4). Both upgraded numbers checked."
+    }
+  },
+  "guards": [
+    {
+      "what": "`WasTargetKilled` vs the sim's `target.is_dead` for the KILL half of the test (Feed.cs:42)",
+      "verdict": "faithful",
+      "rationale": "These agree: the target is chosen from living enemies, so `is_dead` after the single hit means this attack killed it, and a death-prevention effect leaves it alive on both sides (the sim floors a saved creature at 1 HP, cmds.py:106-112). The divergence is entirely in the missing power veto, which the OnPlay entry owns."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

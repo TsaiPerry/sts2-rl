@@ -1,0 +1,42 @@
+{
+  "unit": "card/exterminate",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Exterminate.cs",
+    "sha256": "d592a2422a8e14b17d4db440f1bea83422a6dfffc603d29df455c0bd6109103a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:215-220) + _init_vars (222-225)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.AllEnemies)` (Exterminate.cs:19-22) == cost 1 / ATTACK / EVENT / ALL_ENEMIES. `handles_own_routing = True` is faithful for the same reason as conflagration's: C#'s OnPlay runs once and the multi-hit fan-out happens inside the attack command."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 3, _hits = 4 (event_cards.py:224-225)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(3m, ValueProp.Move)` + `new RepeatVar(4)` (Exterminate.cs:13-17) == both numbers, and `base_hits` reports 4."
+    },
+    "OnPlay": {
+      "maps_to": "ExterminateCard.on_play (event_cards.py:230-238)",
+      "verdict": "gap",
+      "issue": "Damage per hit, hit count, target set and the hits-outer/enemies-inner loop order are all faithful against `DamageCmd.Attack(3).WithHitCount(4).FromCard(this).TargetingAllOpponents(CombatState)` (Exterminate.cs:26-29) -- AttackCommand runs `for (i = 0; i < attackCount; i++)` with the target list re-derived per hit (AttackCommand.cs:538-546), and the sim's `for _ in range(self._hits)` with a fresh `is_gone` filter per hit matches. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call per hit (AttackCommand.cs:650), which computes every target's DamageResult first, runs the after-damage hooks over all of them, and only then calls `await Kill(killedCreatures)` for the batch (CreatureCmd.cs:372-409). The sim issues a SEPARATE `DamageCmd.deal` per enemy, so each death and its on-death effects fully resolve before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT: no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage or block, so both orders reach the same end state. Live the moment such a monster is ported."
+    },
+    "OnUpgrade": {
+      "maps_to": "ExterminateCard._on_upgrade (event_cards.py:227-228)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(1m)` (Exterminate.cs:34) == `self._damage += 1` (3 -> 4). The REPEAT count stays 4 when upgraded -- the opposite of card/conflagration, whose upgrade raises the repeat and leaves the damage. Both checked against their own sources rather than assumed from the pattern."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim checks `_all_enemies_dead() or player.is_dead` AFTER each full sweep; C# checks `validTargets.Count == 0` and `Attacker.IsDead` at the START of each hit (event_cards.py:237-238 vs AttackCommand.cs:540-550)",
+      "verdict": "faithful",
+      "rationale": "Equivalent: an empty living-enemy list at the top of the sim's next hit would skip every `DamageCmd.deal` anyway (the `is_gone` continue), so the explicit break only saves work. Both stop fanning out once the player has died mid-attack."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
