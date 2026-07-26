@@ -221,15 +221,41 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         # scope-boundary section); and hooks.py is where the sim's block
         # modifiers return a bare aggregate with no companion event, which is
         # G2's core evidence. Both prior seams already list Hook.cs.
+        # Thirteen more were added in the Task 9 fix pass (clause (c) of step
+        # 13, hook_dispatch's gap G9 at the BLOCK site). That clause's verdict
+        # is DORMANT, and the dormancy rests entirely on the *literal factors*
+        # the block modifiers return: every reachable block multiplier is
+        # binary-exact, so the sim's float product equals C#'s sequential
+        # decimal fold. That claim goes wrong the moment any of these files
+        # grows a non-dyadic factor, so the whole block-modifier population is
+        # pinned — the 8 C# ModifyBlockMultiplicative overrides (FrailPower,
+        # NoBlockPower, ShadowmeldPower, UnmovablePower, PaelsLegion, Vambrace,
+        # VitruvianMinion, MultiplayerScalingModel), the 2 ModifyBlockAdditive
+        # ones (DexterityPower, FastenPower — the additive half of the same
+        # dispatch, and G1/step 15 already cite them), and the three sim files
+        # holding their five ported counterparts (powers.py: Frail x0.75,
+        # Unmovable x2, No Block x0; relics/vambrace.py x2 — also G1's and G2's
+        # primary sim evidence; relics/paels_legion.py x2).
         ["src/Core/Commands/CreatureCmd.cs", "src/Core/Commands/PlayerCmd.cs",
          "src/Core/Commands/CardCmd.cs", "src/Core/Commands/CardPileCmd.cs",
          "src/Core/Commands/CardSelectCmd.cs",
          "src/Core/Entities/Cards/CardPile.cs",
          "src/Core/Entities/Creatures/Creature.cs",
          "src/Core/Hooks/Hook.cs",
-         "src/Core/Extensions/ListExtensions.cs"],
+         "src/Core/Extensions/ListExtensions.cs",
+         "src/Core/Models/Powers/DexterityPower.cs",
+         "src/Core/Models/Powers/FastenPower.cs",
+         "src/Core/Models/Powers/FrailPower.cs",
+         "src/Core/Models/Powers/NoBlockPower.cs",
+         "src/Core/Models/Powers/ShadowmeldPower.cs",
+         "src/Core/Models/Powers/UnmovablePower.cs",
+         "src/Core/Models/Relics/PaelsLegion.cs",
+         "src/Core/Models/Relics/Vambrace.cs",
+         "src/Core/Models/Relics/VitruvianMinion.cs",
+         "src/Core/Models/Singleton/MultiplayerScalingModel.cs"],
         ["sts2_rl/cmds.py", "sts2_rl/player.py", "sts2_rl/run.py",
-         "sts2_rl/combat.py", "sts2_rl/hooks.py"],
+         "sts2_rl/combat.py", "sts2_rl/hooks.py", "sts2_rl/powers.py",
+         "sts2_rl/relics/vambrace.py", "sts2_rl/relics/paels_legion.py"],
     ),
     "turn_structure": (
         # CombatManager.cs is the turn driver, but PlayerTurnPhase.cs is a bare
@@ -370,6 +396,33 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         # Every file above is cited with line numbers by the record, so by the
         # rule adopted in Task 8 it must be hashed: a change to it can
         # invalidate a verdict without touching Hook.cs.
+        # Added in the Task 9 FIX PASS. The rule above was stated and then only
+        # half-applied: these files are cited as evidence by the record (most
+        # of them with line numbers) and were not hashed. Swept for with
+        # tools/audit/dormancy_probes.py's companion citation sweep, i.e. every
+        # .py/.cs token in audits/seam/hook_dispatch.json + the doc, resolved to
+        # a real path and checked against this table. Game side:
+        #  - Models/Afflictions/Hexed.cs: the ONLY C# affliction overriding an
+        #    AbstractModel hook (AfterCardEnteredCombat) -- G6's whole dormancy
+        #    argument ("porting Hexed is what makes G6 live").
+        #  - Relics/WhiteBeastStatue.cs + Relics/WingedBoots.cs +
+        #    Models/Modifiers/Flight.cs: the only implementers of
+        #    ShouldForcePotionReward / ShouldAllowFreeTravel -- step 37's
+        #    dormancy ("no second listener exists to be skipped"). NOTE the
+        #    record used to cite Flight.cs as src/Core/Modifiers/Flight.cs,
+        #    which does not exist; the real path is src/Core/Models/Modifiers/.
+        #  - Relics/Fiddle.cs: the sole AfterPreventingDraw implementer, whose
+        #    presentation-only body is why step 35's missing preventer
+        #    out-param drops nothing observable.
+        # Sim side: mad_science.py + events/tanx.py (the content that grants
+        # G2's and G4's witnesses), relics/daughter_of_the_wind.py (G8's
+        # executed witness), rewards.py (step 37's `any(...)`), previews.py and
+        # env.py and cards/base.py (step 39's call sites and the max(0, ...)
+        # clamp the no-negative-cost argument rests on), relics/paels_eye.py
+        # (N3's CombatHistory reader -- the fix pass also found the record's
+        # second named reader, relics/whispering_earring.py, reads no history
+        # at all, so it is corrected in the record and NOT hashed), and
+        # enchantments.py (G4's replay sources).
         # Sim side: hooks.py is only the dispatch bodies. The listener REGISTRY
         # is spread over combat.py (__init__ registration order, and
         # _resolve_card_play's once-per-play card bracket), cmds.py (power and
@@ -393,7 +446,20 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "src/Core/Models/Relics/SpikedGauntlets.cs",
          "src/Core/Models/Relics/BrilliantScarf.cs",
          "src/Core/Models/Relics/ThrowingAxe.cs",
-         "src/Core/Models/Relics/PenNib.cs"],
+         "src/Core/Models/Relics/PenNib.cs",
+         "src/Core/Models/Afflictions/Hexed.cs",
+         "src/Core/Models/Relics/WhiteBeastStatue.cs",
+         "src/Core/Models/Relics/WingedBoots.cs",
+         "src/Core/Models/Modifiers/Flight.cs",
+         "src/Core/Models/Relics/Fiddle.cs",
+         # Cited by the fix pass's own corrected evidence, so hashed by the
+         # same rule: KinPriest.cs:81-108 + Vantom.cs:97-105 are the two
+         # already-ported members of G5's corrected 12-model list, and
+         # FairyInABottle.cs is the single potion that overrides any hook at
+         # all (step 15's executed evidence).
+         "src/Core/Models/Monsters/KinPriest.cs",
+         "src/Core/Models/Monsters/Vantom.cs",
+         "src/Core/Models/Potions/FairyInABottle.cs"],
         ["sts2_rl/hooks.py", "sts2_rl/combat.py", "sts2_rl/cmds.py",
          "sts2_rl/player.py", "sts2_rl/powers.py", "sts2_rl/history.py",
          "sts2_rl/relics/base.py", "sts2_rl/monsters/base.py",
@@ -402,7 +468,23 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "sts2_rl/relics/brilliant_scarf.py",
          "sts2_rl/relics/pen_nib.py", "sts2_rl/relics/throwing_axe.py",
          "sts2_rl/cards/unrelenting.py",
-         "sts2_rl/monsters/overgrowth/vine_shambler.py"],
+         "sts2_rl/monsters/overgrowth/vine_shambler.py",
+         "sts2_rl/cards/mad_science.py", "sts2_rl/events/tanx.py",
+         "sts2_rl/relics/daughter_of_the_wind.py",
+         "sts2_rl/rewards.py", "sts2_rl/previews.py", "sts2_rl/env.py",
+         "sts2_rl/cards/base.py",
+         "sts2_rl/relics/paels_eye.py",
+         "sts2_rl/enchantments.py",
+         # Cited by the fix pass's own corrected evidence: tinker_time.py +
+         # events/__init__.py are G2's rule-6 co-occurrence proof;
+         # the_kin.py is G5's already-contended trigger; shrinker_beetle.py
+         # and potions.py apply gap G9's Shrink witness; whirlwind.py and
+         # full_env.py complete step 39's X-cost argument.
+         "sts2_rl/events/tinker_time.py", "sts2_rl/events/__init__.py",
+         "sts2_rl/monsters/overgrowth/the_kin.py",
+         "sts2_rl/monsters/overgrowth/shrinker_beetle.py",
+         "sts2_rl/potions.py", "sts2_rl/cards/whirlwind.py",
+         "sts2_rl/full_env.py"],
     ),
     "monster_state_machine": (
         ["src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs"],

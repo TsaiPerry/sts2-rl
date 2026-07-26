@@ -1185,3 +1185,44 @@ class TestHookDispatchOrder:
         cs.play_card(0)                       # the killing blow
         assert cs._all_enemies_dead()
         assert cs.player.block == block_before  # C#: nobody was dispatched to
+
+    @pytest.mark.xfail(
+        reason="hook_dispatch audit gap G9 (audits/seam/hook_dispatch.json "
+               "step 31; the same mechanism as damage_pipeline's guard N3, "
+               "raised to gap in the same pass): Hook.ModifyDamageInternal "
+               "(Hook.cs:2515-2538) threads a RUNNING decimal through the "
+               "listeners -- `num *= item.ModifyDamageMultiplicative(target, "
+               "num, ...)` folds each factor in immediately -- while "
+               "hooks.py:66-78 multiplies every listener's factor together in "
+               "FLOAT and cmds.py:58 applies the product once, "
+               "`amount = int(amount * hooks.modify_damage_multiplicative"
+               "(...))`. No implementation on either side reads the value it "
+               "is handed (0 of 46 C# overrides, 0 of 31 sim ones -- "
+               "tools/audit/dormancy_probes.py cs-running-value / "
+               "sim-running-value), so the divergence is the aggregation "
+               "SHAPE, not the argument: 1.5 * 0.7 is 1.0499999999999998 in "
+               "float, so 20 * that truncates to 20, where 20m * 1.5m * 0.7m "
+               "is exactly 21m. LIVE: Shrink (x0.7 on the dealer, "
+               "powers.py:1366-1387, applied by the ported Act-1 Shrinker "
+               "Beetle at monsters/overgrowth/shrinker_beetle.py:39-40 and by "
+               "the Shrink Potion at potions.py:718-722) plus Vulnerable "
+               "(x1.5 on the target, powers.py:403-417, applied by the ported "
+               "Bash) on a 20-damage powered attack: the sim deals 20 where "
+               "the game deals 21. A control that keeps float arithmetic but "
+               "threads it sequentially returns 21, so this is not "
+               "float-vs-decimal representation.",
+        strict=True,
+    )
+    def test_multiplicative_damage_modifiers_chain_sequentially(self):
+        from sts2_rl.powers import ShrinkPower
+
+        cs = fresh()
+        cs.enemy.hp = cs.enemy.max_hp = 9999
+        PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2,
+                       applier=cs.player)
+        PowerCmd.apply(cs.hooks, cs.player, ShrinkPower, -1, applier=cs.enemy)
+        hp_before = cs.enemy.hp
+        DamageCmd.deal(cs.hooks, cs.enemy, 20, dealer=cs.player,
+                       card=StrikeCard())
+        # C#: 20m * 1.5m = 30m, 30m * 0.7m = 21m.
+        assert hp_before - cs.enemy.hp == 21

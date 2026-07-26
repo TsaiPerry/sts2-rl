@@ -83,6 +83,34 @@ regenerated (`py tools/audit_status.py` → not stale):
   / `before_block_gained` / `after_card_changed_piles` from this file is what
   **G10**, step 12 and **G8** rest on.
 
+### Source correction, fix pass 2 (2026-07-26)
+
+Fix pass 2 propagated `hook_dispatch`'s gap **G9** (parallel sum/product vs
+C#'s sequential running-value chain) to its third and last site, the **block**
+dispatch, as **clause (c) of step 13**. That clause's verdict is *dormant*,
+and the dormancy rests entirely on the **literal factors** the block modifiers
+return — every reachable block multiplier is binary-exact, so the sim's float
+product equals C#'s sequential decimal fold. That claim breaks the moment any
+one of those files grows a non-dyadic factor, so the **whole block-modifier
+population** is now pinned. Thirteen files were added to
+`SEAM_SOURCES["creature_card_cmds"]` and the record's hash lists were
+regenerated (`py tools/audit_status.py` → not stale; no pre-existing hash
+drifted):
+
+- the **8** C# `ModifyBlockMultiplicative` overrides —
+  `Powers/FrailPower.cs`, `Powers/NoBlockPower.cs`, `Powers/ShadowmeldPower.cs`,
+  `Powers/UnmovablePower.cs`, `Relics/PaelsLegion.cs`, `Relics/Vambrace.cs`,
+  `Relics/VitruvianMinion.cs`, `Singleton/MultiplayerScalingModel.cs`;
+- the **2** C# `ModifyBlockAdditive` overrides — `Powers/DexterityPower.cs`,
+  `Powers/FastenPower.cs` (the additive half of the same dispatch; **G1** and
+  step 15 already cited both);
+- the **3** sim files holding their five ported counterparts —
+  `sts2_rl/powers.py` (Frail ×0.75, Unmovable ×2, No Block ×0),
+  `sts2_rl/relics/vambrace.py` (×2 — also **G1**'s and **G2**'s primary sim
+  evidence, previously unpinned) and `sts2_rl/relics/paels_legion.py` (×2).
+
+The record now pins **19** game sources and **8** sim sources.
+
 ### Scope boundary — READ BEFORE TASK 8 (`turn_structure`) AND TASK 9 (`hook_dispatch`)
 
 Three of this seam's files are shared with later seams. The split is by
@@ -230,9 +258,16 @@ matters is a state-machine question.
     (`EnchantBlockAdditive` then `EnchantBlockMultiplicative`), then an
     additive chain over every combat hook listener, then a multiplicative
     chain over every listener, collecting the ones that actually changed the
-    value. **There is no props gate at the pipeline level** — every listener is
-    called for every block gain and self-gates. `CreatureCmd.cs:644`;
-    `Hook.cs:1310-1340`. See guard **G1**.
+    value. Both chains thread the **running** `decimal`: `decimal num2 =
+    item.ModifyBlockAdditive(target, num, …); num += num2;`
+    (`Hook.cs:1322-1323`) then `decimal num3 =
+    item2.ModifyBlockMultiplicative(target, num, …); num *= num3;`
+    (`Hook.cs:1331-1332`) — each contribution folded in immediately and the
+    next listener handed the folded value. **There is no props gate at the
+    pipeline level** — every listener is called for every block gain and
+    self-gates. `CreatureCmd.cs:644`; `Hook.cs:1310-1340`. See guard **G1**
+    for the gate and **clause (c)** of the record's step 13 for the
+    aggregation shape (`hook_dispatch`'s gap **G9**).
 14. `modifiedAmount = Math.Max(modifiedAmount, 0)`. `CreatureCmd.cs:645`.
 15. Event: `Hook.AfterModifyingBlockAmount(combatState, modifiedAmount, card,
     cardPlay, modifiers)` — fires only for the listeners that changed the
@@ -625,8 +660,9 @@ record:
   (`Relic.after_card_added_to_deck`), and nothing that sees an arbitrary
   pile-to-pile move.
 
-**Verdict counts** — *fix pass 1, 2026-07-25* (recomputed programmatically
-from `audits/seam/creature_card_cmds.json`):
+**Verdict counts** — *re-recomputed in fix pass 2, 2026-07-26*
+(`collections.Counter` over `steps + guards` of
+`audits/seam/creature_card_cmds.json`):
 
 ```
 steps    (110): gap 53, faithful 33, waiver 13, deliberate-divergence 11
@@ -634,6 +670,11 @@ guards   ( 25): gap 20, waiver 3, deliberate-divergence 2
 combined (135): gap 73, faithful 33, waiver 16, deliberate-divergence 13
 unit verdict: "gap"  (= max(all verdicts, key=VERDICTS.index))
 ```
+
+**Unchanged by fix pass 2.** That pass added clause (c) to step 13 and a scope
+sentence to guard **G1**; both entries were already `gap`, no entry was added,
+split or re-verdicted, so every count above is identical to fix pass 1's and
+the rollup still equals `max(verdicts)`.
 
 The first pass recorded `steps (106): faithful 35, gap 33, waiver 20, dd 18` /
 `guards (24): gap 13, dd 8, waiver 3` / `combined (130): gap 46, faithful 35,
@@ -655,7 +696,10 @@ rationale. The two governing rules applied throughout:
 **Gaps found** (short form; full text in the JSON). **Five** are live on
 currently-ported content — **G1**, **G2**, **G3**, and the two the fix pass
 found, step **38a** (`MimicRestSiteHeal`) and step **52** (`Downgrade`); the
-rest are dormant with the trigger named.
+rest are dormant with the trigger named. *Fix pass 2 (2026-07-26) added one
+more dormant entry, **clause (c) of step 13** — `hook_dispatch`'s gap **G9** at
+the block site — narrated with the other step-level gaps below; the live count
+is still five.*
 
 - **G1 — block modifiers are gated at the pipeline level on
   `is_powered_attack`. LIVE.** `BlockCmd.apply` (`cmds.py:145-147`) skips the
@@ -953,6 +997,69 @@ rest are dormant with the trigger named.
   differing draw count is an observable desync, so the same membership reached
   by a different route is not enough to keep this a `deliberate-divergence`.
   See step 105 for the off-stream fallback itself.
+- **Step 13, clause (c) — the block modifiers are aggregated in parallel where
+  C# threads a running value. Dormant.** *Added in fix pass 2; this is
+  `hook_dispatch`'s gap **G9** and `damage_pipeline`'s guard **N3**, the same
+  mechanism carried to its third and last site (rule 3: one verdict per
+  mechanism at every site, including across records). Beware the name clash —
+  **G9** here always means `hook_dispatch`'s; this record's own **G9**
+  (`should_draw`) is unrelated.* **Confirmed, not assumed:**
+  `Hook.ModifyBlock` (`Hook.cs:1320-1337`) has exactly the shape of
+  `Hook.ModifyDamageInternal` (`Hook.cs:2515-2538`) — two sequential `foreach`
+  loops over `IterateCombatHookListeners`, `num += num2` then `num *= num3`,
+  each contribution folded into the running `decimal` immediately — and the
+  sim has exactly the damage site's parallel shape: `hooks.py:98-109` sums
+  every listener's additive return against the same pre-step base,
+  `hooks.py:111-122` multiplies every listener's factor together in **float**,
+  and `cmds.py:145-147` applies each aggregate once
+  (`amount = amount + hooks.modify_block_additive(...)` then
+  `amount = int(amount * hooks.modify_block_multiplicative(...))`). Same
+  divergence, same verdict: **gap**. **Dormant here** where the damage site is
+  live, evidence executed:
+  1. The base-vs-running *argument* is inert at this site too —
+     `py tools/audit/dormancy_probes.py cs-running-value` finds **0 of 46** C#
+     `Modify{Damage,Block}{Additive,Multiplicative}` overrides reading the
+     value they are handed, **10** of those 46 being the block pair
+     (`DexterityPower.cs:20`, `FastenPower.cs:20`; `FrailPower.cs:22`,
+     `NoBlockPower.cs:30`, `ShadowmeldPower.cs:24`, `UnmovablePower.cs:21`,
+     `PaelsLegion.cs:134`, `Vambrace.cs:57`, `VitruvianMinion.cs:34`,
+     `MultiplayerScalingModel.cs:52`) — and `sim-running-value` finds **0 of
+     31** sim implementations reading theirs.
+  2. The block **additive** family is therefore exactly equal over integers.
+  3. The block **multiplicative** family is *also* equal today, unlike
+     damage's, because every reachable block factor is **binary-exact
+     (dyadic)** and a float product of dyadic factors equals the sequential
+     decimal fold bit for bit. An AST enumeration of `sts2_rl` finds exactly
+     five ported implementations — Frail ×0.75 (`powers.py:452`), Unmovable ×2
+     (`powers.py:1105`), No Block ×0 (`powers.py:3673`), Pael's Legion ×2
+     (`relics/paels_legion.py:36`), Vambrace ×2 (`relics/vambrace.py:26`) —
+     factor set `{0.0, 0.75, 2.0}`; an exhaustive sweep of all **15** ordered
+     subsets × bases 0–999 finds **0 mismatches** between `int(base × product)`
+     (sim), the sequential decimal fold (game) and a sequential-float control.
+     Executed end-to-end through the real pipeline: a player holding the
+     ported **Vambrace** with 1 **Frail** gaining 5 card block gets **7** in
+     the sim and **7** in the game (`5m × 2m = 10m`, `10m × 0.75m = 7.5m`,
+     `GainBlockInternal` truncates to 7, `Creature.cs:459-466`; sim
+     `2.0 × 0.75 == 1.5` exactly, `int(5 × 1.5) == 7`) — where the damage
+     site's Shrink ×0.7 + Vulnerable ×1.5 gives **20 vs 21**.
+
+  **Concrete trigger:** any block multiplier whose factor is *not*
+  binary-exact. None exists in single-player content — all 8 C#
+  `ModifyBlockMultiplicative` overrides return dyadic values
+  (`FrailPower.cs:32` `0.75m`, `NoBlockPower.cs:44` `0m`,
+  `ShadowmeldPower.cs:30` `2^Amount`, `UnmovablePower.cs:40` `2m`,
+  `PaelsLegion.cs:152` `2m`, `Vambrace.cs:79` `2m`, `VitruvianMinion.cs:48`
+  `2m`) and the **only** non-dyadic block factor anywhere in the decompiled
+  source is `MultiplayerScalingModel.cs:52-68`
+  (`playerCount × {1.1m, 1.2m, 1.3m}`), which `hook_dispatch`'s note **N1**
+  waives as multiplayer. So the named unported thing that would make this site
+  live is a block multiplier returning a non-dyadic factor: a port of the
+  MultiplayerScalingModel factor, or new content mirroring the damage side's
+  ×0.7 Shrink shape onto block. **Not pinned by a test**, for exactly that
+  reason — with today's ported content the two shapes cannot be made to
+  disagree, so a strict xfail would XPASS. The mechanism's one pin lives at
+  the damage site
+  (`test/test_hook_order.py::TestHookDispatchOrder::test_multiplicative_damage_modifiers_chain_sequentially`).
 
 **The `N`-guards.** Fix pass 1 raised six of these to `gap` (**N2**, **N3**,
 **N4**, **N5**, **N9**, **N10**) because a guard rollup must carry
@@ -1041,6 +1148,19 @@ got a `strict=True` xfail in the same class:
 
 `py -m pytest test/test_hook_order.py -q` → **9 passed, 9 xfailed**; forced
 with `--runxfail` all nine fail at their stated assertions.
+
+### Pins added in fix pass 2 (2026-07-26)
+
+**None, deliberately.** Fix pass 2's only new finding is clause (c) of step 13
+(`hook_dispatch`'s gap **G9** at the block site) and it is **dormant**: every
+ported block multiplier returns a binary-exact factor, so the sim's float
+product and C#'s sequential decimal fold agree on all 15 ordered subsets of
+`{0.0, 0.75, 2.0}` × bases 0–999. A `strict=True` xfail asserting the game's
+number would therefore **XPASS**, which the pipeline treats as a failure. The
+mechanism stays pinned once, at the live damage site
+(`TestHookDispatchOrder::test_multiplicative_damage_modifiers_chain_sequentially`),
+and this record's clause (c) names the unported trigger instead: a block
+multiplier with a non-dyadic factor.
 
 ### Sim-side follow-up for Perry (not an audit finding)
 

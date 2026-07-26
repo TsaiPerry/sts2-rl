@@ -36,6 +36,46 @@
     {
       "path": "src/Core/Extensions/ListExtensions.cs",
       "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1"
+    },
+    {
+      "path": "src/Core/Models/Powers/DexterityPower.cs",
+      "sha256": "40117b7d813af37ed580a278f516ce276d15cc89dd1ccaaa8876a0681f754096"
+    },
+    {
+      "path": "src/Core/Models/Powers/FastenPower.cs",
+      "sha256": "a7d67c5fa1269971bec979bd63e6c0100c1482f636c641741d512edcfa7cd6ac"
+    },
+    {
+      "path": "src/Core/Models/Powers/FrailPower.cs",
+      "sha256": "0c1090da7732348da9a8c5ab595b0ed11e30079298c94c51983f5660c65cc4dd"
+    },
+    {
+      "path": "src/Core/Models/Powers/NoBlockPower.cs",
+      "sha256": "72c475f498ed9559ceac3bff15a2caeb10a0d738d1f4a7c50444aa8d48b7e419"
+    },
+    {
+      "path": "src/Core/Models/Powers/ShadowmeldPower.cs",
+      "sha256": "5192775e12e165e0b4634e39a206c2247cb8592c96246b9c638c37e5d456c18f"
+    },
+    {
+      "path": "src/Core/Models/Powers/UnmovablePower.cs",
+      "sha256": "b267db119bf6d000e1ccc146584cc1d648566a82a4ac7ef34bc2dd53ff5306a6"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsLegion.cs",
+      "sha256": "08bc0980dc3b133a256bb39d50881b6888fabb5f47033aaab02b7ccb36381530"
+    },
+    {
+      "path": "src/Core/Models/Relics/Vambrace.cs",
+      "sha256": "d804bb40a837fa90b9b5e734e7dcdd61643cd0328f35a884ce07d97f1dc4a34a"
+    },
+    {
+      "path": "src/Core/Models/Relics/VitruvianMinion.cs",
+      "sha256": "157b4b527c3c43854dba79e638d8cb402efbfccb5597ff065c2e8c2dd18439f5"
+    },
+    {
+      "path": "src/Core/Models/Singleton/MultiplayerScalingModel.cs",
+      "sha256": "0c18b8918bd05d7068fcbd9c97475339fa64badd10c7b830a8fc98f70c331975"
     }
   ],
   "sim_sources": [
@@ -58,6 +98,18 @@
     {
       "path": "sts2_rl/hooks.py",
       "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+    },
+    {
+      "path": "sts2_rl/relics/vambrace.py",
+      "sha256": "95c98caeae4206f9737a2f3de4c8275edfd4be384397baf07d0e66f81cf6bcb5"
+    },
+    {
+      "path": "sts2_rl/relics/paels_legion.py",
+      "sha256": "20f9950262269d972fff7aff6d200544ce02c445f956217cf9568890938e5f21"
     }
   ],
   "steps": [
@@ -119,9 +171,9 @@
       "issue": "The sim has no before_block_gained hook, so C#'s unconditional pre-modifier event carrying the RAW amount (CreatureCmd.cs:642, Hook.cs:131-137) has no surface at all. The grep evidence stands and was re-run 2026-07-25: `grep -rn \"override.*BeforeBlockGained\" src/ --include=*.cs` returns ZERO matches, so nothing in the game implements it today. Per this pipeline's vocabulary that makes it a DORMANT GAP, not a waiver -- `waiver` is reserved for genuinely out-of-scope material (multiplayer, presentation, ascension), and a hook with no sim surface is a real hole in the block pipeline's shape. It goes live the moment any model overrides BeforeBlockGained."
     },
     {
-      "what": "13. Hook.ModifyBlock: enchantment additive/multiplicative FIRST, then per-listener additive chain, then per-listener multiplicative chain; NO pipeline-level props gate",
+      "what": "13. Hook.ModifyBlock: enchantment additive/multiplicative FIRST, then a per-listener additive chain, then a per-listener multiplicative chain -- both loops threading the RUNNING decimal (num += / num *=); NO pipeline-level props gate",
       "verdict": "gap",
-      "issue": "See guard G1 (LIVE). Two divergences in one step: (a) BlockCmd.apply (cmds.py:145-147) skips the entire dispatch unless is_powered_attack(props), while Hook.ModifyBlock (Hook.cs:1310-1340) calls every listener for every block gain -- and Vambrace.cs:59-63 / PaelsLegion.cs:132-134 self-gate only on IsCardOrMonsterMove() (Move alone); (b) C# applies the source card's own enchantment modifiers before any listener (Hook.cs:1314-1319), whereas the sim's enchantments are ordinary modify_block_additive listeners (enchantments.py:298, 428) ordered only by registration -- and are additionally skipped by the same (a) gate."
+      "issue": "See guard G1 (LIVE). Two divergences in one step: (a) BlockCmd.apply (cmds.py:145-147) skips the entire dispatch unless is_powered_attack(props), while Hook.ModifyBlock (Hook.cs:1310-1340) calls every listener for every block gain -- and Vambrace.cs:59-63 / PaelsLegion.cs:132-134 self-gate only on IsCardOrMonsterMove() (Move alone); (b) C# applies the source card's own enchantment modifiers before any listener (Hook.cs:1314-1319), whereas the sim's enchantments are ordinary modify_block_additive listeners (enchantments.py:298, 428) ordered only by registration -- and are additionally skipped by the same (a) gate. (c) AGGREGATION SHAPE -- this is gap G9 of audits/seam/hook_dispatch.json (step 31), the same mechanism as audits/seam/damage_pipeline.json guard N3, carried here at the third and last of its three sites (rule 3: one verdict per mechanism at every site, including across records). NOTE ON NAMING: \"G9\" here always means hook_dispatch's G9; this record's own guard G9 (ShouldDraw) is unrelated. CONFIRMED, not assumed: Hook.ModifyBlock (Hook.cs:1320-1337) has EXACTLY the shape of Hook.ModifyDamageInternal (Hook.cs:2515-2538) -- two sequential foreach loops over IterateCombatHookListeners, `decimal num2 = item.ModifyBlockAdditive(target, num, ...); num += num2;` (1322-1323) then `decimal num3 = item2.ModifyBlockMultiplicative(target, num, ...); num *= num3;` (1331-1332), each contribution folded into the running decimal immediately and the next listener handed the folded value -- and the sim has EXACTLY the damage site's parallel shape: hooks.py:98-109 sums every listener's additive return against the same pre-step base and hooks.py:111-122 multiplies every listener's factor together in FLOAT, after which cmds.py:145-147 applies each aggregate once (`amount = amount + hooks.modify_block_additive(...)` then `amount = int(amount * hooks.modify_block_multiplicative(...))`). Same divergence, same verdict: gap. DORMANT at the block site (the damage site is LIVE), evidence executed, in three parts. (1) The base-vs-running ARGUMENT is inert here too: `py tools/audit/dormancy_probes.py cs-running-value` finds 0 of 46 C# Modify{Damage,Block}{Additive,Multiplicative} overrides reading the value they are handed -- 10 of those 46 are the block pair (2 ModifyBlockAdditive: DexterityPower.cs:20, FastenPower.cs:20; 8 ModifyBlockMultiplicative: FrailPower.cs:22, NoBlockPower.cs:30, ShadowmeldPower.cs:24, UnmovablePower.cs:21, PaelsLegion.cs:134, Vambrace.cs:57, VitruvianMinion.cs:34, MultiplayerScalingModel.cs:52) -- and `sim-running-value` finds 0 of 31 sim implementations reading theirs. (2) The block ADDITIVE family is therefore exactly equal, `base + sum(a_i) == the sequential fold` over integers. (3) The block MULTIPLICATIVE family, unlike damage's, is ALSO equal today, because every reachable block factor is BINARY-EXACT (dyadic) and a float product of dyadic factors equals the sequential decimal fold bit for bit. An AST enumeration of sts2_rl finds exactly five ported implementations -- Frail x0.75 (powers.py:452), Unmovable x2.0 (powers.py:1105), No Block x0.0 (powers.py:3673), Pael's Legion x2.0 (relics/paels_legion.py:36), Vambrace x2.0 (relics/vambrace.py:26) -- factor set {0.0, 0.75, 2.0}; an exhaustive sweep of all 15 ordered subsets of that set x bases 0..999 finds 0 mismatches between int(base * product) (sim), the sequential decimal fold (game) and a sequential-float control. Executed end-to-end through the real pipeline: a player holding the ported Vambrace with 1 Frail gaining 5 card block gets 7 in the sim and 7 in the game (game 5m x 2m = 10m, 10m x 0.75m = 7.5m, Creature.cs:459-466 GainBlockInternal truncates to 7; sim 2.0 * 0.75 == 1.5 exactly, int(5 * 1.5) == 7), where the damage site's Shrink x0.7 + Vulnerable x1.5 gives 20 vs 21. CONCRETE TRIGGER: any block multiplier whose factor is not binary-exact. None exists in single-player content -- all 8 C# ModifyBlockMultiplicative overrides return dyadic values (FrailPower.cs:32 0.75m, NoBlockPower.cs:44 0m, ShadowmeldPower.cs:30 2^Amount, UnmovablePower.cs:40 2m, PaelsLegion.cs:152 2m, Vambrace.cs:79 2m, VitruvianMinion.cs:48 2m) and the ONLY non-dyadic block factor anywhere in the decompiled source is MultiplayerScalingModel.cs:52-68 (playerCount x {1.1m, 1.2m, 1.3m}), which hook_dispatch's note N1 waives as multiplayer. So the named unported thing that would make this site live is a block multiplier returning a non-dyadic factor -- concretely, a port of the MultiplayerScalingModel factor, or any new content mirroring the damage side's x0.7 Shrink shape onto block. NOT pinned by a test for exactly that reason: with today's ported content the two shapes cannot be made to disagree, so a strict xfail would XPASS. The damage site's pin, test/test_hook_order.py::TestHookDispatchOrder::test_multiplicative_damage_modifiers_chain_sequentially, is the mechanism's one pin."
     },
     {
       "what": "14. modifiedAmount = Math.Max(modifiedAmount, 0)",
@@ -587,7 +639,7 @@
     {
       "what": "G1 (LIVE) -- block modifiers gated at the pipeline level on is_powered_attack",
       "verdict": "gap",
-      "issue": "BlockCmd.apply (cmds.py:145-147) skips the whole modify_block_additive/modify_block_multiplicative dispatch unless props is Move && !Unpowered. C#'s Hook.ModifyBlock (Hook.cs:1310-1340) calls every listener for every block gain and leaves the gate to each implementation: Dexterity (DexterityPower.cs:33), Frail (FrailPower.cs:28) and Fasten (FastenPower.cs:27) self-gate on IsPoweredCardOrMonsterMoveBlock, but Vambrace (Vambrace.cs:59-63) and Pael's Legion (PaelsLegion.cs:132-134) self-gate only on IsCardOrMonsterMove() -- Move alone, ignoring Unpowered (ValuePropExtensions.cs:22-25). LIVE: Entrench is a ported Ironclad Event card that gains block with MOVE|UNPOWERED (cards/trash_heap_cards.py:159-179, mirroring Entrench.cs:23), and Vambrace is a ported Uncommon relic, so both sides of the scenario are constructible in one run. Verified by execution: a player at 10 Block holding Vambrace plays Entrench and gains 10 (the game gains 20); the control powered card block (Defend 5 -> 10) shows the doubling is otherwise wired up. Pinned: test/test_hook_order.py::TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers. The same gate also skips the source card's enchantment block modifiers, which C# applies unconditionally and FIRST (Hook.cs:1314-1319)."
+      "issue": "BlockCmd.apply (cmds.py:145-147) skips the whole modify_block_additive/modify_block_multiplicative dispatch unless props is Move && !Unpowered. C#'s Hook.ModifyBlock (Hook.cs:1310-1340) calls every listener for every block gain and leaves the gate to each implementation: Dexterity (DexterityPower.cs:33), Frail (FrailPower.cs:28) and Fasten (FastenPower.cs:27) self-gate on IsPoweredCardOrMonsterMoveBlock, but Vambrace (Vambrace.cs:59-63) and Pael's Legion (PaelsLegion.cs:132-134) self-gate only on IsCardOrMonsterMove() -- Move alone, ignoring Unpowered (ValuePropExtensions.cs:22-25). LIVE: Entrench is a ported Ironclad Event card that gains block with MOVE|UNPOWERED (cards/trash_heap_cards.py:159-179, mirroring Entrench.cs:23), and Vambrace is a ported Uncommon relic, so both sides of the scenario are constructible in one run. Verified by execution: a player at 10 Block holding Vambrace plays Entrench and gains 10 (the game gains 20); the control powered card block (Defend 5 -> 10) shows the doubling is otherwise wired up. Pinned: test/test_hook_order.py::TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers. The same gate also skips the source card's enchantment block modifiers, which C# applies unconditionally and FIRST (Hook.cs:1314-1319). SCOPE: this guard is about the GATE on that dispatch only. The AGGREGATION SHAPE of the same Hook.ModifyBlock dispatch (parallel sum/product vs C#'s sequential running-decimal fold) is a separate finding recorded as clause (c) of step 13 -- hook_dispatch's gap G9 / damage_pipeline's guard N3, dormant at this site."
     },
     {
       "what": "G2 (LIVE) -- no AfterModifyingBlockAmount machinery; Vambrace's latch is hand-rolled onto the wrong event",

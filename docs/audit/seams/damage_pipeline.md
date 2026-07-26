@@ -62,8 +62,9 @@ and `CreatureCmd.Kill`/`KillWithoutCheckingWinCondition`, `CreatureCmd.cs:409,
    — `Move && !Unpowered`); the cap phase applies unconditionally to every
    damage type. The additive/multiplicative loops in C# are a **sequential
    chain** — each listener receives the running total including every
-   earlier listener's contribution, not the pre-step base. See guards
-   **G3**, **N3**.
+   earlier listener's contribution, not the pre-step base, and each
+   contribution is folded in immediately, in `decimal`. See guards
+   **G3** and **N3** (**N3 is now a LIVE gap**, not a note).
 5. Event: `AfterModifyingDamageAmount(modifiers)` — fires for the subset of
    listeners whose additive/multiplicative/cap call actually changed the
    value. `CreatureCmd.cs:262`; `Hook.cs:694`. See guard **G2**.
@@ -218,17 +219,45 @@ filter; re-check this step when porting one.
   (`sts2_rl/monsters/base.py:114-117`, `sts2_rl/cards/whirlwind.py:43-49`),
   so no concrete failure is demonstrated, but the pipeline itself provides
   no defense-in-depth guarantee the way `CreatureCmd.Damage` does.
+- **N3 — parallel sum/product vs C#'s sequential running-value chain. LIVE.**
+  *Raised from `deliberate-divergence` to `gap` in the Task 9 fix pass; see
+  `docs/audit/seams/hook_dispatch.md` gap **G9**, which is the same mechanism
+  and carries the identical verdict (governing rule 3).* `Hook.cs:2515-2538`
+  folds each contribution into a running `decimal` — `num +=
+  item.ModifyDamageAdditive(target, num, …)`, then `num *=
+  item.ModifyDamageMultiplicative(target, num, …)`. `hooks.py:52-78` hands
+  every listener the same pre-step base and aggregates afterwards;
+  `cmds.py:57-58` applies the aggregate once. The old rationale — "every ported
+  implementation returns a value independent of the running amount" — was
+  re-verified and is true (`py tools/audit/dormancy_probes.py cs-running-value`
+  / `sim-running-value`: 0 of 46 C# overrides, 0 of 9 C# `Enchant*` overrides
+  and 0 of 31 sim implementations read the value they are handed). **But it
+  settles only the argument, not the aggregation shape.** The additive family
+  is genuinely equal; the multiplicative family is not, because the sim
+  multiplies the factors together in *float* before applying them.
+  **Executed:** Shrink (×0.7 on the dealer,
+  `monsters/overgrowth/shrinker_beetle.py:39-40`, `powers.py:1366-1387`) plus
+  Vulnerable (×1.5 on the target, `powers.py:403-417`) on a 20-damage powered
+  attack — sim **20**, game **21** (`1.5*0.7 = 1.0499999999999998`;
+  `20m × 1.5m × 0.7m = 21m`). A control threading the same float factors
+  sequentially returns 21, so it is the shape, not the representation. Pinned:
+  `test/test_hook_order.py::TestHookDispatchOrder::
+  test_multiplicative_damage_modifiers_chain_sequentially` (strict xfail).
 
 **Lower-severity / no-current-effect notes** (`deliberate-divergence` or
 `waiver`, see JSON for rationale): **N1** `should_allow_hitting` vs upstream
 `IsAlive` filtering; **N2** single-target-per-call vs C#'s batched
 multi-target semantics for step 17/18 (cross-reference the `creature_card_cmds`
-seam, Task 7); **N3** parallel-sum/product additive-multiplicative dispatch
-vs C#'s sequential chain (safe today because every ported modifier is
-amount-independent); **N4** `ShouldDie`/`ShouldDieLate` two-phase priority
+seam, Task 7); **N4** `ShouldDie`/`ShouldDieLate` two-phase priority
 collapsed to one phase (no second Ironclad-reachable listener exists yet);
 **N5** `AfterBlockBroken`/`on_block_broken` timing relative to HP
 application (neither ported listener reads HP/death state).
+
+**Verdict counts** for this record after the fix pass, recomputed
+programmatically (`collections.Counter` over `steps + guards`): **34 entries —
+14 gap, 9 faithful, 7 waiver, 4 deliberate-divergence**, over 23 steps
+(7 / 9 / 6 / 1) and 11 guards (7 / 0 / 1 / 3). Rollup `gap`, unchanged.
+(Before: 13 gap / 5 deliberate-divergence.)
 
 ## Existing test coverage (Step D)
 
