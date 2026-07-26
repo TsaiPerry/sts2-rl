@@ -1,0 +1,66 @@
+{
+  "unit": "relic/lords_parasol",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LordsParasol.cs",
+    "sha256": "0ad7323e7ea52135b01222b65ed0f3e3f833cfb5475ffc1225f461099d28dfad"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lords_parasol.py",
+    "sha256": "3fa52e5c94dc53084eec197be02dbb1b6736afd4d1e7ad63ad27775d23f2e876"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (lords_parasol.py:15)",
+      "verdict": "faithful"
+    },
+    "AfterRoomEntered": {
+      "maps_to": "after_shop_entered (lords_parasol.py:17-24) -- the sim splits RelicModel.AfterRoomEntered's merchant branch into its own hook, dispatched at run.py:1022-1028 once MerchantInventory.create has stocked the shop; Relic.after_shop_entered's docstring (relics/base.py:197-200) names Lord's Parasol as the reason it exists",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. LordsParasol.cs:20-28 filters AfterRoomEntered to a MerchantRoom and hands the inventory to PurchaseEverything, which buys the character cards, the colorless cards, the relics, the potions AND -- at lines 102-107, after the four loops -- the CARD REMOVAL service. The port skips the last one deliberately and says so in a docstring that is false."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the free CARD REMOVAL is never taken, and the port's docstring claims the game does not take it",
+      "verdict": "gap",
+      "issue": "MECHANISM: LordsParasol.cs:102-107 is `if (inventory.CardRemovalEntry != null) { NMapScreen...SetTravelEnabled(false); await inventory.CardRemovalEntry.OnTryPurchaseWrapper(inventory, ignoreCost: true, cancelable: false); ... }` -- outside the try/finally, after the card / relic / potion loops, with cancelable:false so the player MUST remove a card. lords_parasol.py:20-24 iterates `shop.all_entries` and `continue`s past any MerchantCardRemovalEntry, and lords_parasol.py:10-11 asserts 'the card-removal service is not an item and is not bought'. That claim is false against the source. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b08.py b08-parasol): entering a stocked merchant with the relic buys 7 cards, 4 relics and 3 potions for 0 gold, and leaves `removal_used=False` -- where the game would also remove one deck card, leaving the deck at 16 rather than 17. Both sides are fully ported: the relic is granted by the ported Vakuu shrine (events/vakuu.py), MerchantInventory.create always builds a MerchantCardRemovalEntry (shop.py:381-382), its `_buy` is implemented end to end (shop.py:343-353: select a removable card, lose the gold, remove it, bump card_shop_removals_used) and MerchantEntry.purchase already honours ignore_cost by zeroing the cost around the buy (shop.py:173-194). So the fix is to stop skipping the entry, not to build anything. The observable is a permanently larger deck AND a missed 75+25n gold-priced service, in every merchant room the relic sees -- and deck contents are what conformance/runner.py compares as (id, upgrade_level) pairs. Rule 7: shop.py, run.py, relics/base.py, events/vakuu.py and conformance/runner.py are not hashed by this record."
+    },
+    {
+      "what": "N1: the PURCHASE ORDER -- C# buys character cards, then colorless cards, then relics, then potions, then the card removal",
+      "verdict": "faithful",
+      "rationale": "For the four item loops the orders coincide: MerchantInventory.all_entries (shop.py:385-394) is `[*card_entries, *relic_entries, *potion_entries, card_removal_entry]` and card_entries is `[*character_card_entries, *colorless_card_entries]` (shop.py:378-380), which is exactly LordsParasol.cs:51-90's sequence. The order matters because each purchase fires Hook.AfterItemPurchased (shop.py:189-194) and relic/maw_bank deactivates on the first spend with gold > 0 -- ignore_cost makes every gold_spent 0 here, so Maw Bank survives on both sides. The card-removal entry being LAST in all_entries also means the G1 fix needs no reordering: dropping the `continue` puts it exactly where C# has it. Rule 7: shop.py and relics/maw_bank.py are not hashed by this record."
+    },
+    {
+      "what": "N2: C# checks IsStocked only on the two CARD loops (and Sentry-logs a miss); the relic and potion loops call OnTryPurchaseWrapper unconditionally, while the sim gates every entry on is_stocked",
+      "verdict": "faithful",
+      "rationale": "LordsParasol.cs:51-76 tests `characterCardEntry.IsStocked` / `colorlessCardEntry.IsStocked` and, on a miss, reports to Sentry instead of buying; lines 77-90 do not test the relic or potion entries at all. The sim tests `entry.is_stocked` on all of them (lords_parasol.py:23). Same outcome, because OnTryPurchaseWrapper itself refuses an unstocked entry -- MerchantEntry.purchase's own first clause is `if not self.is_stocked ... return False` (shop.py:178), and a freshly-created inventory has every slot stocked anyway. The Sentry report is telemetry (N4). Rule 7: shop.py are not hashed by this record."
+    },
+    {
+      "what": "N3: `inventory.Player != base.Owner -> return` (LordsParasol.cs:32-35) and `merchantRoom.GetLocalInventory()`",
+      "verdict": "waiver",
+      "rationale": "The Player comparison is the multiplayer filter -- each player has their own inventory in the same MerchantRoom -- noted in maps_to per the contract rather than treated as a divergence. GetLocalInventory is the same multiplayer-scoping concept on the read side; the sim has one inventory per shop room."
+    },
+    {
+      "what": "N4: the whole UI-blocking body -- TestMode.IsOff, NRun.Instance.GlobalUi.TopBar Map/Deck Disable/Enable, NMapScreen.SetTravelEnabled, NMerchantRoom BlockInput/Open, Cmd.Wait(0.75f/1f/0.25f), the try/finally restore, and SentryService.CaptureMessage",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / DoActivateVisuals / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / TaskHelper.RunSafely of a visuals task are presentation only -- the relic bar's glow, counter, sfx, icon variant and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. This relic is unusual in that the MAJORITY of its C# body is UI choreography -- disabling the map and deck buttons so the player cannot leave mid-spree, and re-enabling them around each relic purchase because obtaining a relic may open a screen. None of it has a gameplay reader. `TestMode.IsOff` here is the inverse of PROMPT.md bug class 18's usual trap: the shipping arm is the one that RUNS the UI code, and the purchases happen on both arms, so the branch changes nothing behavioural."
+    },
+    {
+      "what": "N5: `ignoreCost: true` on every purchase (LordsParasol.cs:60, 73, 81, 88, 105) vs `entry.purchase(ignore_cost=True)` (lords_parasol.py:24)",
+      "verdict": "faithful",
+      "rationale": "EXECUTED (b08-parasol): gold stays at 99 across a full sweep that adds 7 cards, 4 relics and 3 potions. MerchantEntry.purchase implements ignore_cost by temporarily zeroing self.cost around the _buy and reporting gold_spent = 0 to after_item_purchased (shop.py:173-194), which is what OnTryPurchaseWrapper's ignoreCost does; the temporary zeroing matters because MerchantCardRemovalEntry._buy calls `run.lose_gold(self.cost)` (shop.py:348) and would otherwise charge for the free removal -- worth knowing for the G1 fix. Rule 7: shop.py are not hashed by this record."
+    },
+    {
+      "what": "N6: no state, no reset, no IsAllowed, and the relic fires on EVERY merchant room, not once",
+      "verdict": "faithful",
+      "rationale": "LordsParasol.cs declares only Rarity and AfterRoomEntered -- no latch, no IsUsedUp, no IsAllowed -- so the relic empties every shop the player ever enters, and lords_parasol.py holds no state either. Checked deliberately because three relics in this batch (lava_rock, lasting_candy, lizard_tail) DO carry a once-per-run latch and it would be easy to assume one here. PROMPT.md bug class 13 does not apply (the shared sweep-reset puts it in the 'holds no state' bucket) and bug class 16's first half does not either (the full-brace rescan `py tools/audit/relic_probes_b08.py b08-isallowed` lists all 20 IsAllowed overrides and this relic is not among them)."
+    },
+    {
+      "what": "N7: the DISPATCH POINT -- AfterRoomEntered fires as the room is entered in C#, and the sim's after_shop_entered fires after the inventory is stocked",
+      "verdict": "faithful",
+      "rationale": "C# reaches the inventory through `merchantRoom.GetLocalInventory()`, so the stock must already exist when AfterRoomEntered runs; the sim makes that ordering explicit by building MerchantInventory.create(self) first and then dispatching a dedicated hook (run.py:1022-1028, whose own comment says the merchant branch 'needs the stocked inventory (Lord's Parasol buys everything), so the sim fires a dedicated hook'). The generic Relic.after_room_entered is also dispatched for the shop room, earlier (run.py:981-983) -- before the stock exists -- which is the slot relic/silver_crucible uses for its treasure counting. Splitting one C# hook into two sim hooks with a well-defined order is a modelling choice with the same observable, so faithful rather than deliberate-divergence: any relic needing the pre-stock moment has after_room_entered and any relic needing the post-stock moment has after_shop_entered, and C#'s single hook sees the post-stock state. Rule 7: run.py and relics/silver_crucible.py are not hashed by this record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
