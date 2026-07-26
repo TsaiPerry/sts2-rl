@@ -50,7 +50,8 @@ Added on the game side:
   `OnSideSwitch` (479-483). Steps 11, 32, 33, 67; gap **G9**. Move
   *selection* is Task 10's — see the boundary section.
 - **`src/Core/Hooks/Hook.cs`** — the turn dispatchers themselves. This record
-  claims 24 of them by name (listed in the boundary section); the two whose
+  claims **27** of them by name (listed in the boundary section — an earlier
+  draft of this file said 24, which did not match the list); the two whose
   internal phase structure the spec depends on are `BeforeTurnEnd`
   (1238-1261: `BeforeSideTurnEndVeryEarly` → `BeforeSideTurnEndEarly` →
   `BeforeSideTurnEnd`) and `AfterTurnEnd` (1265-1291: `AfterSideTurnEnd`,
@@ -74,9 +75,37 @@ Added on the game side:
   `BeforeCombatStart` (which is why **G6** matters). Cited with line numbers,
   so they are pinned. *Fake Anchor is the same shape as Anchor and is named
   only, not separately cited.*
-- **`src/Core/Models/Relics/PaelsEye.cs`** (108-137) and
-  **`RunicPyramid.cs`** (10-17) — the ported `ShouldTakeExtraTurn` and
+- **`src/Core/Models/Relics/PaelsEye.cs`** (108-137, and 149-156 for **G18**)
+  and **`RunicPyramid.cs`** (10-17) — the ported `ShouldTakeExtraTurn` and
   `ShouldFlush` implementations that make **G3** and **G4** live.
+
+Added in the **fix pass** — the content files the LIVE labels actually rest
+on. The rule applied: *if a verdict's liveness or dormancy argument cites a
+file with line numbers, that file is part of the audited unit's evidence and
+must be hashed.* An earlier draft argued the opposite ("hashing them would
+make the record stale on every unrelated relic edit"), which inverts what
+staleness detection is for — a record whose evidence changed **should** go
+stale — and did not explain why the six relics above were hashed and these
+were not. Both lists are now consistent:
+
+- **`BarricadePower.cs`** — **G1**/**G2**'s `ShouldClearBlock` preventer.
+- **`CloakClasp.cs`** (24) — the contender in both **G8** and **G12**.
+- **`Orichalcum.cs`** (44-56) — **G12**'s two-phase `VeryEarly` snapshot.
+- **`RoyalPoison.cs`** (18-25) — **G13**'s turn-1 player-damage trigger.
+- **`Enchantments/Imbued.cs`** (11, 20-26) — **G14**'s only
+  `ShouldStartAtBottomOfDrawPile` implementer.
+- **`JossPaper.cs`** (102-124) — **G4**'s and **G17**'s `causedByEthereal`
+  deferral.
+- **`UnceasingTop.cs`** (25-35) — **G16**'s source-comment evidence.
+- sim side: `cards/barricade_card.py`, `cards/apparition.py`,
+  `relics/cloak_clasp.py`, `relics/orichalcum.py`, `relics/royal_poison.py`,
+  `relics/joss_paper.py`, `relics/electric_shrymp.py`,
+  `relics/unceasing_top.py`, `relics/whispering_earring.py` and
+  `enchantments.py`.
+
+`SEAM_SOURCES["turn_structure"]` is therefore **25 game files + 23 sim
+files**, and the record's hashes were regenerated from it with
+`harness._hash_sources` (`py tools/audit_status.py` → not stale).
 
 Added on the sim side (`combat.py` + `player.py` cover under half of it):
 
@@ -111,7 +140,7 @@ Added on the sim side (`combat.py` + `player.py` cover under half of it):
 **method**. `damage_pipeline` owns the damage modifiers; `power_cmd` owns the
 six power-amount dispatchers; `creature_card_cmds` owns the four block
 dispatchers (`BeforeBlockGained`, `AfterBlockGained`,
-`AfterModifyingBlockAmount`, `ModifyBlock`). **This record claims the 24
+`AfterModifyingBlockAmount`, `ModifyBlock`). **This record claims the 27
 turn-lifecycle dispatchers below, and Task 9 must not re-audit them** — a
 turn-dispatcher finding belongs here as an amendment to
 `audits/seam/turn_structure.json`:
@@ -128,6 +157,11 @@ turn-dispatcher finding belongs here as an amendment to
 (1770-1782), `ShouldClearBlock` (2193-2204), `ShouldEtherealTrigger`
 (2286-2296), `ShouldFlush` (2301-2311), `ShouldPlayerResetEnergy` (2378-2388),
 `ShouldStopCombatFromEnding` (2442-2452), `ShouldTakeExtraTurn` (2457-2467).
+
+That list is **27** entries (counted programmatically off this file, and every
+one re-checked against `Hook.cs` in the fix pass: each cited line holds a
+`public static` declaration of the named dispatcher). Task 9's
+non-re-audit boundary keys off this number.
 
 Task 9 keeps `AbstractModel.cs` in full and the generic listener-iteration
 machinery (`IterateCombatHookListeners` and friends). **The *shape* of a
@@ -414,7 +448,10 @@ not re-verdicted here.
     `CurrentSide != Player`; `WaitForUnpause`.
     `CombatManager.cs:1145-1154`.
 46. Participants: the extra-turn players if any, else every player.
-    `CombatManager.cs:1155-1159`.
+    `CombatManager.cs:1155-1159`. Faithful — with one player both arms are the
+    same one-element list, the same collapse as steps 7, 15, 50, 58 and 59.
+    (An earlier draft verdicted this one step `waiver` while the other five
+    were `faithful`; corrected in the fix pass — see below.)
 47. Per player: `Phase = AutoPostPlay`, then
     `Hook.AfterAutoPostPlayPhaseEntered(ctx, state, player)`; in a **second**
     pass, await each context and set `Phase = End`.
@@ -426,7 +463,10 @@ not re-verdicted here.
 50. Per player: `DoTurnEnd(player, ctx)` (steps 51-54), each on its own choice
     context; then await all of them. `CombatManager.cs:1185-1199`.
 51. `DoTurnEnd`: `await OrbQueue.BeforeTurnEnd(ctx)`; `if (IsOverOrEnding)
-    return`. `CombatManager.cs:1216-1222`.
+    return`. `CombatManager.cs:1216-1222`. The orb leg is **N3**; the
+    `IsOverOrEnding` leg maps to `combat.py:655-657`, the same cached-flag
+    read steps 49 and 56 are verdicted `gap` at, so this step carries
+    **G13** too (re-verdicted in the fix pass from `waiver`).
 52. Partition the hand **in pile order** into two lists: a card with
     `HasTurnEndInHandEffect` → `turnEndCards`; **else if**
     `Keywords.Contains(Ethereal) && Hook.ShouldEtherealTrigger(state, card)`
@@ -532,8 +572,9 @@ not re-verdicted here.
     `_pendingLoss = null`; `DebugForcedTopCardOnNextShuffle = null`;
     `IsInProgress`/`IsStarting`/`IsEnemyTurnStarted = false`;
     `History.Clear()`; clear `_cardOrPotionEffectDepth`.
-    `CombatManager.cs:899-921`. Waiver — the sim builds a fresh
-    `CombatState` per combat instead.
+    `CombatManager.cs:899-921`. **Deliberate divergence** (the record's only
+    one) — the sim builds a fresh `CombatState` per combat instead, so every
+    field this method clears is already gone.
 
 ## Sim comparison (Step C summary — full verdicts in the JSON)
 
@@ -563,18 +604,31 @@ deferral. Three structural differences run through the whole record:
 
 **Verdict counts**, recomputed programmatically from
 `audits/seam/turn_structure.json` (`collections.Counter` over
-`steps + guards`), are **95 entries: 64 gap, 20 faithful, 10 waiver, 1
-deliberate-divergence** — 74 steps (45 gap / 20 faithful / 8 waiver / 1 dd)
-and 21 guards (19 gap / 2 waiver). The unit verdict is the rollup `gap`.
+`steps + guards`) **after the fix pass**, are **97 entries: 67 gap, 21
+faithful, 8 waiver, 1 deliberate-divergence** — 74 steps (46 gap / 21
+faithful / 6 waiver / 1 dd) and 23 guards (21 gap / 2 waiver). The unit
+verdict is the rollup `gap`.
+
+The fix pass moved three of those: step 46 `waiver` → `faithful` (the
+multiplayer participant-set collapse now carries one verdict at all six of
+its sites, 7/15/46/50/58/59), step 51 `waiver` → `gap` (its substantive
+`IsOverOrEnding` leg is **G13**'s cached-flag mechanism; only the orb leg was
+ever a waiver, and that stays with **N3**), and two new guards were added
+(**G17**, **G18**). The only two remaining `waiver`s in the whole record are
+**N2** (presentation / action-queue / choice-context plumbing) and **N3**
+(orbs); the six step-level waivers all cite one of those two. Nothing a
+player or a replay could observe is verdicted `waiver`.
 
 ### Gaps found
 
-**Nine are LIVE on currently-ported content and pinned with a strict xfail** —
-**G1**, **G2**, **G3**, **G4**, **G6**, **G8**, **G12**, **G13**, **G14** —
-and a tenth, **G9**, is live under seed parity but is an RNG-stream finding
-rather than a hook-order one, so the conformance suite is its pin. The rest
-(**G5**, **G7**, **G10**, **G11**, **G15**, **G16**) are dormant with the
-concrete unported trigger named.
+**Eleven are LIVE on currently-ported content and pinned with a strict
+xfail** — **G1**, **G2**, **G3**, **G4**, **G6**, **G8**, **G12**, **G13**,
+**G14**, **G17**, **G18** — and a twelfth, **G9**, is live under seed parity
+but is an RNG-stream finding rather than a hook-order one, so the conformance
+suite is its pin (its differing draw count is now *executed*, not argued; see
+below). The rest (**G5**, **G7**, **G10**, **G11**, **G15**, **G16**) are
+dormant with the concrete unported trigger named, and each one's dormancy
+evidence was re-executed in the fix pass rather than inherited.
 
 > **Corrections made in Step C/D to this file's own Step-A/B prose.** Every
 > one was found by running the sim, not by re-reading the source:
@@ -610,6 +664,35 @@ concrete unported trigger named.
 >    LIVE via Imbued), **G15** (the turn-end-in-hand wrapper re-consulting
 >    `ShouldEtherealTrigger`, dormant on both sides) and **G16**
 >    (`on_hand_emptied` fired from the flush, the one site C# excludes).
+
+> **Corrections made in the fix pass** (review round 1). No verdict on the nine
+> LIVE gaps changed; these are documentation, hashing and consistency defects.
+>
+> 1. The Parrying Shield citation named a class that does not exist; the real
+>    coverage is two cases in `test/test_relics.py`, not three in
+>    `test_ancients.py`. Citation defect, not a coverage hole.
+> 2. `SEAM_SOURCES["turn_structure"]` omitted the seven content files that
+>    seven LIVE labels rest on; they are hashed now, and the "hashing them
+>    would make the record stale" rationale is replaced (see the sources
+>    section).
+> 3. Step 46 was `waiver` while the same participant-set collapse was
+>    `faithful` at steps 7/15/50/58/59 — one mechanism, one verdict: all six
+>    are `faithful`.
+> 4. The dispatcher count said 24; the authoritative list is **27**.
+> 5. The `AfterBlockCleared` line range was re-checked against the source
+>    (`CombatManager.cs:492-499` is the `AfterTurnStart` loop, `500-507` the
+>    `AfterBlockCleared` loop) — the record and the xfail already agreed, and
+>    no `492-507` citation exists anywhere in the tree.
+> 6. **G4**'s observable is compound and now says so; a new adjacent gap
+>    **G17** records the `card.is_ethereal` proxy in the same port.
+> 7. Step 51 was `waiver` on a step whose substantive leg is **G13**'s
+>    cached-flag read; re-verdicted `gap`, with the orb leg left in **N3**.
+> 8. A new gap **G18** records `PaelsEye.cs:152`/`:155`'s two missing clauses.
+> 9. The three items the reviewer could not settle were settled by execution:
+>    **G14**'s 17-of-30 sweep re-ran and is confirmed (seed partition now
+>    recorded); **G9**'s draw count is measured (1 normally, 0 stunned) instead
+>    of argued; and **G7**, **G10**, **G11** and **G16**'s dormancy evidence
+>    was re-executed, which corrected **G11**'s ported-content list.
 
 - **G1 — `AfterBlockCleared` is a separate unconditional loop; the sim fires
   it only when the block was actually cleared. LIVE.** C# runs the block clear
@@ -714,8 +797,20 @@ concrete unported trigger named.
   Ethereal cards leaves the next hand at **6** cards with `[joss_paper]` and
   at **5** with `[joss_paper, runic_pyramid]` — the deferred credit is
   stranded (`_ethereal_pending` stays at 5) and the Joss Paper draw never
-  happens, where the real game draws it either way. Pinned with a strict
-  xfail. See also **G16** for the `on_hand_emptied` call site itself.
+  happens, where the real game draws it either way. **The observable is
+  compound, and the fix queue needs to see the shape.** Joss Paper is the
+  *only* listener on `on_hand_emptied` today — re-executed in the fix pass,
+  `grep -rn --include=*.py on_hand_emptied sts2_rl/` returns five lines:
+  `hooks.py:427/430/431` (the dispatcher), `player.py:197` (the one call site)
+  and `relics/joss_paper.py:42` (the one listener) — so the flush-gate defect
+  in isolation has no other observable. Fixing **either** leg clears the pin:
+  (a) run the flush tail unconditionally, or (b) re-hook Joss Paper's deferred
+  credit onto `after_player_turn_end`, which is the sim's `AfterSideTurnEnd`
+  slot and where `JossPaper.cs:116` actually lives. (b) is smaller and is the
+  faithful one; (a) is still needed for G4 itself, but the pin will already be
+  green by then. Pinned with a strict xfail. See also **G16** for the
+  `on_hand_emptied` call site itself and **G17** for the second defect in the
+  same port.
 - **G5 — the enemy side is per-enemy in the sim and per-side in the game.
   Dormant.** C# runs three complete passes over every participant before any
   enemy acts (`BeforeTurnStart` 449-455, `AfterTurnStart`/`ClearBlock`
@@ -777,8 +872,18 @@ concrete unported trigger named.
   (an effect reading a card's cost during the enemy turn sees the stale
   modifier), and there is no single-turn Retain / single-turn Sly /
   ExhaustOnNextPlay state to clear because the sim has no such fields — a card
-  is `retain` or not (`player.py:192`). Dormant: no ported effect grants Retain
-  or Sly for one turn only, and `ExhaustOnNextPlay` is set only by
+  is `retain` or not (`player.py:192`). Dormant, and the dormancy evidence was
+  **re-executed in the fix pass** rather than inherited:
+  `grep -rn --include=*.py <field> sts2_rl/` gives `has_single_turn_retain`
+  **0 hits**, `single_turn_sly` **0 hits** and `exhaust_on_next_play` **0
+  hits**, so no ported effect can grant any of the three states
+  `EndOfTurnCleanup` exists to clear; and the counterpart grep for the one
+  reset the sim *does* have,
+  `grep -rn --include=*.py reset_turn_cost_modifiers sts2_rl/`, returns exactly
+  four lines — `cards/base.py:118` (a comment), `:245` (the constructor),
+  `:265` (the definition) and `player.py:155` (its **one** call site, inside
+  `start_turn`) — confirming there is no end-of-turn site on either of C#'s
+  two. `ExhaustOnNextPlay` is set only by
   `CardPileCmd.AutoPlayFromDrawPile(forceExhaust)`
   (`CardPileCmd.cs:933-965`), which is unported. It goes live with the first
   single-turn Retain/Sly grant, or with any effect that reads a cost modifier
@@ -825,9 +930,22 @@ concrete unported trigger named.
   documents the consequence in the engine itself: a monster stunned this round
   keeps its move (correct) but **misses one `MonsterAi` draw** where the game
   takes one. Under a parity run a missed draw is a stream desync, which is
-  observable by definition; under legacy it is invisible. Recorded here as a
-  gap rather than fixed, and cross-referenced to Task 10, which owns what the
-  roll returns.
+  observable by definition; under legacy it is invisible. **The differing draw
+  count is now demonstrated by execution, not argued** (it was the one LIVE
+  label in this record resting on reasoning alone): with a one-`LeafSlimeS`
+  encounter — whose `telegraph_next_move`
+  (`monsters/overgrowth/slimes.py:47-56`) draws exactly one
+  `weighted_branch_pick` on `combat_rng.monster_ai` at every transition — and
+  a counting proxy installed over the `monster_ai` accessor, one
+  `_run_enemy_turns` records **`normal enemy turn: MonsterAi draws = 1`** and
+  **`STUNNED enemy turn: MonsterAi draws = 0`**. C# takes **1 in both**
+  (`PrepareForNextTurn` → `RollMove` runs for every enemy regardless of
+  whether it acted), so a single stunned round shifts every later draw in the
+  combat. The stun is *player*-reachable, not monster-only: **Whistle** is a
+  ported Ancient Attack card from Tanx's Whistle (`cards/whistle.py:30-38`)
+  that calls `CreatureCmd.stun` with no `next_move_key`, i.e. with no
+  compensating pre-roll (`cmds.py:208-218`). Recorded here as a gap rather than
+  fixed, and cross-referenced to Task 10, which owns what the roll returns.
 - **G10 — the combat-end path collapses five C# distinctions into one hook,
   and the sim's two player-death exits disagree with each other. Dormant.**
   C# distinguishes (a) a **loss**, which goes `LoseCombat()` → `_pendingLoss`
@@ -842,14 +960,22 @@ concrete unported trigger named.
   has **two** player-death exits that behave differently: `combat.py:308-310`
   calls `_end_combat(player_won=False)` (hook fires) while
   `combat.py:332-335` sets `phase`/`result` by hand and returns (hook does
-  **not** fire). Verified by execution: a listener that kills the player from
-  `on_enemy_turn_start` records `[('on_combat_end', False)]`, and the ordinary
-  case — the player dying to an enemy's attack — records `[]`, both ending in
-  `Phase.COMBAT_OVER`. Dormant: the two ported effects that need
-  `ShouldStopCombatFromEnding` hand-roll around it (`SteamEruptionPower`
-  prevents the death instead, `powers.py:2004-2010`; `StockPower` spawns the
-  replacement Axebot from `on_death`, `powers.py:2962-2984`, which runs before
-  the `_all_enemies_dead()` check), and no ported `on_combat_end` listener
+  **not** fire). Verified by execution, **re-run in the fix pass**:
+  `killed from on_enemy_turn_start: hooks=[('on_combat_end', False)]
+  phase=Phase.COMBAT_OVER player_dead=True` versus `killed by the attack:
+  hooks=[] phase=Phase.COMBAT_OVER player_dead=True` — same end state,
+  different hook record. Dormant, and that half was re-executed too:
+  `grep -rn --include=*.py 'def on_combat_end' sts2_rl/` returns the
+  `hooks.py:271` dispatcher plus exactly four listeners, and all four gate on
+  victory or on the player being alive — `black_blood.py:18`
+  `if player_won and not self.player.is_dead`, `burning_blood.py:16` the same,
+  `meat_on_the_bone.py:18` `if not player_won or self.player.is_dead: return`,
+  `chosen_cheese.py:20` `if self.player.is_dead: return`. The two ported
+  effects that need `ShouldStopCombatFromEnding` hand-roll around it
+  (`SteamEruptionPower` prevents the death instead, `powers.py:2004-2010`;
+  `StockPower` spawns the replacement Axebot from `on_death`,
+  `powers.py:2962-2984`, which runs before the `_all_enemies_dead()` check),
+  and no ported `on_combat_end` listener
   distinguishes win from loss in a way the missed call would change. It goes
   live for any `AfterCombatVictory`-only listener, and the two-exit
   inconsistency is live the moment any `on_combat_end` listener has an effect
@@ -860,12 +986,27 @@ concrete unported trigger named.
   `AfterTurnEnd`. The sim's `_run_enemy_turns` has only the per-enemy
   `on_enemy_turn_end` (`combat.py:341`) and the side-scoped
   `on_enemy_side_end` (345), which maps to `AfterTurnEnd`; there is no slot
-  between them. Dormant because the ported enemy-side `BeforeSideTurnEnd*`
-  content — `AsleepPower.BeforeSideTurnEndVeryEarly`, `DoomPower`,
-  `HailstormPower`, `ChainsOfBindingPower` — was ported onto
-  `on_enemy_turn_end` with an owner filter (`powers.py:1853-1863` is the
-  Asleep case, which the sim's own comment labels "Mirrors
-  BeforeSideTurnEndVeryEarly"), so with one enemy the two coincide. It goes
+  between them. Dormant — **and the inherited content list was wrong; it was
+  re-enumerated by execution in the fix pass.**
+  `grep -rln 'BeforeSideTurnEndVeryEarly|BeforeSideTurnEndEarly|override.*Task
+  BeforeSideTurnEnd' src/Core/Models/Powers/` returns eight files:
+  `AsleepPower` (VeryEarly, 38), `PlatingPower` (Early, 61),
+  `ChainsOfBindingPower` (80), `DoomPower` (68), `HailstormPower` (30),
+  `SandpitPower` (139), `TheBombPower` (38) and a mock. Of those, **`DoomPower`
+  and `HailstormPower` — named in the earlier draft as ported — are not
+  ported** (`grep -n '^class DoomPower|^class HailstormPower'
+  sts2_rl/powers.py` returns nothing); `ChainsOfBindingPower`
+  (`powers.py:3292`) and `TheBombPower` (`powers.py:3748`) *are* ported but
+  their `BeforeSideTurnEnd` is the **player** side and both sit on
+  `on_player_turn_end` (`powers.py:3331`, `:3779`). The genuinely ported
+  enemy-side content is two powers, each owner-filtered: `PlatingPower`'s
+  `BeforeSideTurnEndEarly` block grant went onto `on_enemy_turn_end`
+  (`powers.py:1076-1078`, `if enemy is self.owner`), and `AsleepPower`'s
+  `BeforeSideTurnEndVeryEarly` Plating-drop went onto
+  `on_enemy_turn_`**`start`** (`powers.py:1853-1857`, comment "Mirrors
+  BeforeSideTurnEndVeryEarly") — one slot *further* from the C# position than
+  the earlier draft said. With one enemy the per-enemy slot and the side slot
+  coincide, so nothing is observable today. It goes
   live in any multi-enemy fight where one of those powers must act after the
   *last* enemy's move rather than after its own.
 - **G12 — the sub-phase ordering inside `BeforeTurnEnd` / `AfterTurnEnd` /
@@ -940,7 +1081,13 @@ concrete unported trigger named.
   self-auto-playing Imbued card does not occupy an opening-hand slot. Verified
   by execution over 30 seeds with a 9-Strike + 1-Imbued-Defend deck: the sim's
   turn-1 hand is **4** cards on 17 seeds and 5 on the other 13, where C# is
-  always 5. Knock-on: the sim's Imbued only fires `if self.card in player.hand`
+  always 5. **The 17/30 figure was re-run in the fix pass and is confirmed**,
+  with the seed partition now recorded so it is reproducible:
+  `CombatState(starting_deck=[9× strike, defend+imbued],
+  rng=random.Random(seed))` for `seed in range(30)` gives `hand == 4` on seeds
+  `[0, 4, 5, 6, 7, 10, 11, 13, 17, 18, 20, 21, 23, 24, 25, 26, 28]` (17) and
+  `hand == 5` on `[1, 2, 3, 8, 9, 12, 14, 15, 16, 19, 22, 27, 29]` (13), with
+  no other hand size. Knock-on: the sim's Imbued only fires `if self.card in player.hand`
   (`enchantments.py:261-266`), so on the seeds where it is not drawn the sim
   never auto-plays it at all, where C# always does (`Imbued.cs:20-26`, from the
   AutoPrePlay phase — **G8**). Pinned with a strict xfail.
@@ -968,14 +1115,80 @@ concrete unported trigger named.
   `IsExecutingCardOrPotionEffect` and on the player's `Phase` being
   AutoPrePlay/Play/AutoPostPlay. The sim's `on_hand_emptied` has exactly one
   call site — `player.py:197`, at the bottom of `discard_hand` — and none after
-  a card play or a potion. Dormant: the sim re-wired the one C#
-  `AfterHandEmptied` implementer away from it (`relics/unceasing_top.py:21-28`
-  uses `on_card_played` with a hand-empty test, which reproduces the C#
-  semantics), and the only listener left, **Joss Paper**
-  (`relics/joss_paper.py:41-45`), was deliberately written against the sim's
-  flush-time semantics — its C# counterpart uses `AfterSideTurnEnd`
-  (`JossPaper.cs:116`). Not independently observable today, but it is the
-  mechanism through which **G4** becomes live.
+  a card play or a potion. Dormant, and the dormancy evidence was
+  **re-executed in the fix pass**: `grep -rn --include=*.py on_hand_emptied
+  sts2_rl/` returns exactly five lines — `hooks.py:427` (the dispatcher def),
+  `hooks.py:430-431` (its listener walk), `player.py:197` (the one call site)
+  and `relics/joss_paper.py:42` (the one listener). The sim re-wired the one C#
+  `AfterHandEmptied` implementer away from it: `relics/unceasing_top.py:21-28`
+  uses `on_card_played` gated on `not self.combat.is_over and
+  self.combat.current_side == "player" and not self.player.hand`, which
+  reproduces `CheckForEmptyHand`'s play-time-only semantics. The only listener
+  left, **Joss Paper** (`relics/joss_paper.py:42-45`), was deliberately written
+  against the sim's flush-time semantics — its C# counterpart uses
+  `AfterSideTurnEnd` (`JossPaper.cs:116`). Not independently observable today,
+  but it is the mechanism through which **G4** becomes live — and see **G17**
+  for a second, independently live defect in the same port.
+- **G17 — Joss Paper's port uses `card.is_ethereal` as its `causedByEthereal`
+  proxy, so *any* mid-turn exhaust of an Ethereal card is deferred to the
+  flush. LIVE.** C# passes the **cause** of the exhaust to the hook —
+  `AfterCardExhausted(ctx, card, bool causedByEthereal)`
+  (`JossPaper.cs:102-114`, dispatched from `CardCmd.cs:237-244` via
+  `Hook.cs:237-242`) — and `causedByEthereal: true` is passed from exactly
+  **two** sites in the whole decompiled game, both at turn end:
+  `CombatManager.cs:1240` (step 53's ethereal pass) and `CardModel.cs:1692`
+  (step 54's `OnTurnEndInHandWrapper`). Everything else passes `false`,
+  including the play-time exhaust of an Exhaust-keyword card
+  (`CardModel.cs:1985`). The sim has no cause parameter:
+  `relics/joss_paper.py:36` branches on `card.is_ethereal`, a property of the
+  *card*, so an Ethereal card exhausted in the middle of the play phase is
+  booked to `_ethereal_pending` and its credit is withheld until
+  `on_hand_emptied` fires from the flush. Both sides ported and obtainable:
+  **Apparition** is a ported 1-cost Ancient Skill carrying **both** `Exhaust`
+  and `Ethereal` (`cards/apparition.py:12-38`), granted by the ported relic
+  **Distinguished Cape** (`relics/distinguished_cape.py:25`), and Joss Paper is
+  a ported Uncommon relic. Verified by execution: with `[joss_paper]`, four
+  plain Strikes exhausted first (`cards_exhausted = 4`,
+  `_ethereal_pending = 0`) and then Apparition played, the sim reports
+  `cards_exhausted = 4`, `_ethereal_pending = 1`, hand `1 → 0` — **no draw**.
+  C# counts that exhaust as the fifth non-ethereal one and draws immediately,
+  handing the player a card they can still play this turn (hand `1 → 1`).
+  Knock-on at turn end: the sim credits it *after* the flush, so its card
+  survives into the next turn (next hand **6**) where C#'s mid-turn draw was
+  flushed with the rest (next hand **5**). Distinct from **G4** — there the
+  credit is stranded, here it is merely late, and one fix does not cover both.
+  Pinned with a strict xfail.
+- **G18 — Pael's Eye's `AnyCardsPlayedThisTurn` predicate is missing *both*
+  of its C# clauses. LIVE.** `PaelsEye.cs:149-156` has two clauses
+  `relics/paels_eye.py:27-34` has neither of: (1) `PaelsEye.cs:152`, `if
+  (playerCombatState.TurnNumber == 1 && Owner.Relics.Any(r => r is
+  WhisperingEarring)) return true;` — on turn 1, merely *holding* Whispering
+  Earring counts as having played, which switches Pael's Eye off for that
+  turn; and (2) `PaelsEye.cs:155`, the history scan's `&&
+  !e.CardPlay.IsAutoPlay` filter. The sim's predicate is a bare
+  `any(history.of_type(CardPlayedEntry, this_turn=True))`, and
+  `history.py:80-81` records an entry from `on_card_played` for **every** play
+  including auto-plays (`relics/whispering_earring.py:36` already names the
+  missing auto flag as a known divergence). The two omissions **cancel** in the
+  common case — the Earring's own turn-1 auto-plays are counted by the sim and
+  so reproduce clause (1)'s effect — and diverge otherwise. Verified by
+  execution on both legs. *Leg (2), the reachability-proven one:* with
+  `relics=[paels_eye]` and a 9-Strike + 1-Imbued-Defend deck (Imbued comes from
+  the ported relic **Electric Shrymp**, `relics/electric_shrymp.py:17-21`), on
+  seeds 0, 4 and 5 the Imbued card lands in the opening hand and auto-plays,
+  and the sim reports `_any_cards_played_this_turn = True` and
+  `should_take_extra_turn = False` where C# reports `False` and **`True`**;
+  isolated from **G14**'s draw ordering, a direct `cs.auto_play(card)` on turn
+  1 gives the same pair. *Leg (1), the clause the review named:* with
+  `[whispering_earring, paels_eye]` and an opening hand in which nothing is
+  playable (a 10-Dazed deck — `valid card actions = []`), the Earring's loop
+  plays nothing, and the sim reports `should_take_extra_turn = True` where
+  `PaelsEye.cs:152` makes it `False` — the sim hands out an extra turn *and*
+  its hand exhaust that the real game withholds. Leg (1) needs a turn-1 hand
+  with no playable card, which is constructible but for which I could not name
+  a realistic Ironclad deck, so the LIVE label rests on leg (2), and that is
+  what is pinned. Adjacent to **G3**, which owns *when* the extra-turn
+  predicate is evaluated; this gap owns *what it reads*.
 
 ### The `N`-guards
 
@@ -1036,20 +1249,31 @@ concrete unported trigger named.
   player's block clears appear so the two are positionally distinguishable.
   The damage-pipeline hooks the enemy's attack runs through are deliberately
   left untraced: they are `damage_pipeline`'s seam.
-- **`AfterTurnEnd` after the hand flush** (pin table item 2): `Grep`ping
-  `test/` for `parrying_shield` finds
-  `test/test_ancients.py::TestParryingShield` (three cases), which pins the
-  relic's *effect* (block retained / halved) but not the ordering claim that
-  `after_player_turn_end` runs after `discard_hand`. Recorded here as the
-  existing coverage, and complemented — not duplicated — by the ordering
-  assertion inside `test_end_turn_hook_sequence`, which places
-  `after_player_turn_end` after `on_hand_emptied`.
+- **`AfterTurnEnd` after the hand flush** (pin table item 2): an earlier draft
+  of this file cited `test/test_ancients.py::TestParryingShield` (three
+  cases). **That class does not exist** — `grep -rn "TestParryingShield" test/`
+  returns nothing outside stale `__pycache__` blobs. This is a **citation
+  defect, not a coverage hole**: the behaviour *is* covered, by **two** cases
+  in `test/test_relics.py::TestTurnEndRelics` —
+  `test_parrying_shield_needs_ten_block` (`test/test_relics.py:810`) and
+  `test_parrying_shield_counts_block_gained_at_turn_end`
+  (`test/test_relics.py:822`). The first pins the relic's *effect* (6 damage at
+  ≥10 block, nothing at 5). The second is partly an ordering test already: it
+  runs a real `cs.end_turn()` with Plating 6 on top of 8 block and asserts the
+  damage fires, i.e. that `after_player_turn_end` sees block a turn-end effect
+  added — and its docstring cites `CombatManager.cs:1307` and the 933T39V18D
+  Hive-boss regression. Neither, however, pins the ordering claim this record
+  makes: that `after_player_turn_end` runs *after* `discard_hand`. That is
+  complemented — not duplicated — by the assertion inside
+  `test_end_turn_hook_sequence`, which places `after_player_turn_end` after
+  `on_hand_emptied`.
 - **G5** (per-enemy vs per-side scoping): new order-tracing test
   `TestTurnStructureOrder::test_enemy_side_is_interleaved_per_enemy`, written
   as a **passing** pin of the sim's current (divergent) order so that a future
   fix to the C# order has to come here and change it deliberately.
 
-Nine new strict xfails, one per live gap. Each `reason` names the sim line,
+Eleven strict xfails, one per live gap (nine from the original pass, plus
+**G17** and **G18** added in the fix pass). Each `reason` names the sim line,
 the C# line, live-or-dormant and the observable effect, and each was
 force-run (`py -m pytest test/test_hook_order.py::TestTurnStructureOrder -q
 --runxfail`) to confirm it fails at the assertion its reason describes:
@@ -1065,9 +1289,12 @@ force-run (`py -m pytest test/test_hook_order.py::TestTurnStructureOrder -q
 | G12 | `test_orichalcum_snapshots_block_before_other_turn_end_listeners` | `assert 5 == (5 + 6)` |
 | G13 | `test_turn_one_setup_death_ends_the_combat` | `assert False` (`cs.is_over`) |
 | G14 | `test_imbued_card_starts_at_the_bottom_of_the_draw_pile` | `assert 4 == 5` |
+| G17 | `test_joss_paper_credits_a_mid_turn_ethereal_exhaust_at_once` | `assert 0 == 1` (`len(p.hand)`) |
+| G18 | `test_paels_eye_ignores_auto_plays` | `assert False` (`should_take_extra_turn`) |
 
-Under a normal run the class is 2 passed / 9 xfailed with no XPASS.
+Under a normal run the class is 2 passed / 11 xfailed with no XPASS.
 **G9** is the one live gap with no pin here: its observable is a MonsterAi
-RNG-stream draw count, not a hook order, so the conformance suite owns it.
+RNG-stream draw count, not a hook order, so the conformance suite owns it (the
+count itself is now executed — 1 draw normally, 0 when stunned — see G9 above).
 **G7**, **G10**, **G11**, **G15** and **G16** are dormant and unpinned — a pin
 would have to assert behaviour no ported content can produce.

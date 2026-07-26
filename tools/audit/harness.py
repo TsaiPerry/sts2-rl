@@ -269,12 +269,35 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         #    AfterBlockCleared loop) — a preventer and three listeners.
         #  - PaelsEye.cs / RunicPyramid.cs: the ported ShouldTakeExtraTurn and
         #    ShouldFlush implementations that make gaps G3 and G4 live.
+        # Added in the Task 8 fix pass — the content files seven LIVE labels
+        # rest on. The rule is: if a verdict's liveness or dormancy argument
+        # cites a file with line numbers, that file is part of the audited
+        # unit's evidence and MUST be hashed. Editing it is exactly the event
+        # staleness detection exists to catch — a Barricade/Cloak Clasp/
+        # Orichalcum/Royal Poison/Imbued/Joss Paper/Unceasing Top change can
+        # invalidate G1, G2, G4, G8, G12, G13, G14, G16, G17 or G18 without
+        # touching CombatManager.cs, and the record must go stale when it does.
+        # (The earlier "hashing them would make the record stale on every
+        # unrelated relic edit" note had this backwards, and did not explain
+        # why the six relics above were hashed and these were not.)
+        #  - BarricadePower.cs: G1/G2's ShouldClearBlock preventer.
+        #  - CloakClasp.cs: G8's and G12's contender.
+        #  - Orichalcum.cs (44-56): G12's two-phase VeryEarly snapshot.
+        #  - RoyalPoison.cs (18-25): G13's turn-1 player-damage trigger.
+        #  - Enchantments/Imbued.cs (11, 20-26): G14's only
+        #    ShouldStartAtBottomOfDrawPile implementer.
+        #  - JossPaper.cs (102-124): G4's and G17's causedByEthereal deferral.
+        #  - UnceasingTop.cs (25-35): G16's source-comment evidence.
         # Sim side: combat.py + player.py cover under half the seam — hooks.py
         # holds the turn dispatchers (and the missing ones), creatures.py the
         # is_gone/retained_after_death win-condition inputs, monsters/base.py
         # take_turn/telegraph_next_move, powers.py the _tick_duration sites,
-        # cards/base.py reset_turn_cost_modifiers, and the six relic modules the
-        # live gaps' sim halves.
+        # cards/base.py reset_turn_cost_modifiers, and the relic/card/
+        # enchantment modules the live gaps' sim halves (the six original ones
+        # plus barricade_card.py, cloak_clasp.py, orichalcum.py,
+        # royal_poison.py, joss_paper.py, electric_shrymp.py, unceasing_top.py,
+        # whispering_earring.py, apparition.py and enchantments.py, added in
+        # the fix pass for the same reason).
         ["src/Core/Combat/CombatManager.cs", "src/Core/Combat/PlayerTurnPhase.cs",
          "src/Core/Combat/CombatState.cs",
          "src/Core/Entities/Creatures/Creature.cs",
@@ -289,13 +312,26 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "src/Core/Models/Relics/CaptainsWheel.cs",
          "src/Core/Models/Relics/Anchor.cs",
          "src/Core/Models/Relics/PaelsEye.cs",
-         "src/Core/Models/Relics/RunicPyramid.cs"],
+         "src/Core/Models/Relics/RunicPyramid.cs",
+         "src/Core/Models/Powers/BarricadePower.cs",
+         "src/Core/Models/Relics/CloakClasp.cs",
+         "src/Core/Models/Relics/Orichalcum.cs",
+         "src/Core/Models/Relics/RoyalPoison.cs",
+         "src/Core/Models/Relics/JossPaper.cs",
+         "src/Core/Models/Relics/UnceasingTop.cs",
+         "src/Core/Models/Enchantments/Imbued.cs"],
         ["sts2_rl/combat.py", "sts2_rl/player.py", "sts2_rl/hooks.py",
          "sts2_rl/creatures.py", "sts2_rl/monsters/base.py",
          "sts2_rl/powers.py", "sts2_rl/cards/base.py",
          "sts2_rl/relics/sturdy_clamp.py", "sts2_rl/relics/horn_cleat.py",
          "sts2_rl/relics/captains_wheel.py", "sts2_rl/relics/anchor.py",
-         "sts2_rl/relics/paels_eye.py", "sts2_rl/relics/runic_pyramid.py"],
+         "sts2_rl/relics/paels_eye.py", "sts2_rl/relics/runic_pyramid.py",
+         "sts2_rl/cards/barricade_card.py", "sts2_rl/relics/cloak_clasp.py",
+         "sts2_rl/relics/orichalcum.py", "sts2_rl/relics/royal_poison.py",
+         "sts2_rl/relics/joss_paper.py", "sts2_rl/relics/electric_shrymp.py",
+         "sts2_rl/relics/unceasing_top.py",
+         "sts2_rl/relics/whispering_earring.py",
+         "sts2_rl/cards/apparition.py", "sts2_rl/enchantments.py"],
     ),
     "hook_dispatch": (
         ["src/Core/Hooks/Hook.cs", "src/Core/Models/AbstractModel.cs"],

@@ -458,7 +458,7 @@ class TestCreatureCardCmdsOrder:
 class TestTurnStructureOrder:
     """turn_structure audit (docs/audit/seams/turn_structure.md,
     audits/seam/turn_structure.json): pins the whole end_turn hook pipeline
-    plus the seam's eight pinnable live gaps."""
+    plus the seam's eleven pinnable live gaps."""
 
     # Every turn-lifecycle hook one CombatState.end_turn touches, in the
     # order the sim fires them. Deliberately excludes the damage-pipeline
@@ -858,3 +858,82 @@ class TestTurnStructureOrder:
         # C#: Imbued sat at the bottom, so all 5 drawn cards are Strikes and
         # the auto-play comes out of the draw pile.
         assert len(cs.player.hand) == 5
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G17 (audits/seam/turn_structure.json, "
+               "spec step 53): C# passes the CAUSE of an exhaust to the hook -- "
+               "AfterCardExhausted(ctx, card, bool causedByEthereal) "
+               "(JossPaper.cs:102-114, dispatched from CardCmd.cs:237-244) -- "
+               "and `causedByEthereal: true` is passed from exactly two "
+               "turn-end sites in the whole game (CombatManager.cs:1240 and "
+               "CardModel.cs:1692). The play-time exhaust of an Exhaust-keyword "
+               "card passes FALSE (CardModel.cs:1985). relics/joss_paper.py:36 "
+               "has no cause parameter and branches on `card.is_ethereal`, a "
+               "property of the card, so it defers the credit for ANY mid-turn "
+               "exhaust of an Ethereal card. LIVE: Apparition is a ported "
+               "1-cost Ancient Skill with both Exhaust and Ethereal "
+               "(cards/apparition.py:12-38), granted by the ported relic "
+               "Distinguished Cape (relics/distinguished_cape.py:25), and Joss "
+               "Paper is a ported Uncommon relic -- so the real game draws the "
+               "5th-exhaust card immediately, mid-turn and still playable, "
+               "where the sim withholds it until on_hand_emptied fires from "
+               "the flush (and its card then survives into the next turn, "
+               "making the next hand 6 instead of 5). Distinct from G4: there "
+               "the credit is stranded, here it is merely late.",
+        strict=True,
+    )
+    def test_joss_paper_credits_a_mid_turn_ethereal_exhaust_at_once(self):
+        from sts2_rl.cmds import ExhaustCmd
+
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("joss_paper")])
+        p = cs.player
+        p.hand.clear()
+        p.draw_pile.clear()
+        p.discard_pile.clear()
+        p.draw_pile.extend([make_card("strike") for _ in range(20)])
+        # Four ordinary (non-Ethereal) exhausts: Joss Paper is now at 4.
+        for _ in range(4):
+            c = make_card("strike")
+            p.hand.append(c)
+            ExhaustCmd.exhaust(cs.hooks, p, c)
+        assert not p.hand
+        # Apparition exhausts itself on play. C#: causedByEthereal is FALSE
+        # here, so this is the 5th exhaust and Joss Paper draws right now.
+        app = make_card("apparition")
+        p.hand.append(app)
+        cs.play_card(p.hand.index(app))
+        assert len(p.hand) == 1  # C#: the Joss Paper draw landed this turn
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G18 (audits/seam/turn_structure.json, "
+               "spec step 65): PaelsEye.AnyCardsPlayedThisTurn "
+               "(PaelsEye.cs:149-156) has two clauses the sim's "
+               "relics/paels_eye.py:27-34 has neither of -- the turn-1 "
+               "short-circuit `if (TurnNumber == 1 && Owner.Relics.Any(r => r "
+               "is WhisperingEarring)) return true` (PaelsEye.cs:152) and the "
+               "auto-play exclusion `&& !e.CardPlay.IsAutoPlay` "
+               "(PaelsEye.cs:155). The sim scans history unfiltered, and "
+               "history.py:80-81 records a CardPlayedEntry for every play "
+               "including auto-plays (relics/whispering_earring.py:36 names "
+               "the missing auto flag as a known divergence). The two "
+               "omissions cancel whenever Whispering Earring actually plays a "
+               "card and diverge otherwise. LIVE on the auto-play leg with two "
+               "ported relics: Imbued, granted by Electric Shrymp "
+               "(relics/electric_shrymp.py:17-21), auto-plays on turn 1, so a "
+               "player holding Pael's Eye who ends turn 1 without playing "
+               "anything gets the extra turn in the real game and does NOT get "
+               "it in the sim. (The other leg: with [whispering_earring, "
+               "paels_eye] and an opening hand where nothing is playable, the "
+               "Earring plays nothing and the sim grants an extra turn "
+               "PaelsEye.cs:152 withholds.)",
+        strict=True,
+    )
+    def test_paels_eye_ignores_auto_plays(self):
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("paels_eye")])
+        card = make_card("defend")
+        cs.player.hand.append(card)
+        cs.auto_play(card)            # what Imbued does on turn 1
+        # C#: IsAutoPlay plays are excluded, so Pael's Eye still fires.
+        assert cs.hooks.should_take_extra_turn(cs.player)
