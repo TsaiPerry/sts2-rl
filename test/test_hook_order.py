@@ -363,3 +363,93 @@ class TestCreatureCardCmdsOrder:
         run.add_relic(make_relic("frozen_egg"))
         replacement = run.transform_card(run.deck[0], into=make_card("inflame"))
         assert replacement.upgrade_level == 1  # C#: Frozen Egg upgrades it
+
+    @pytest.mark.xfail(
+        reason="creature_card_cmds audit step 103b / guard G14 "
+               "(audits/seam/creature_card_cmds.json): CombatState."
+               "select_cards (combat.py:560-581) implements only the "
+               "0-candidate arm of CardSelectCmd's guards; it has no "
+               "CombatManager.IsEnding / IsOverOrEnding check, where every C# "
+               "selection screen returns an empty list once the combat is over "
+               "(CardSelectCmd.cs:194-199, 277-285, 382-394, 694-707). The sim "
+               "guards exactly one site in this whole family -- "
+               "CombatState.auto_play_card (combat.py:525). DORMANT: the sim "
+               "sets Phase.COMBAT_OVER only inside _end_combat, which the "
+               "card-play paths reach strictly after _resolve_card_play returns "
+               "(combat.py:417-420, 554-557), so no ported select_cards caller "
+               "can run with the phase already flipped; the observable effect "
+               "is that an out-of-band or future combat-ending effect would "
+               "still get a card handed to it.",
+        strict=True,
+    )
+    def test_select_cards_refuses_once_the_combat_is_over(self):
+        from sts2_rl.combat import Phase
+
+        cs = fresh()
+        cs.phase = Phase.COMBAT_OVER
+        candidates = [make_card("strike"), make_card("defend")]
+        assert cs.select_cards("exhaust", candidates, 1) == []  # C#: empty
+
+    @pytest.mark.xfail(
+        reason="creature_card_cmds audit step 52 "
+               "(audits/seam/creature_card_cmds.json): C#'s "
+               "CardModel.DowngradeInternal (CardModel.cs:2135-2147) re-derives "
+               "the card from its canonical ModelDb entry and then RE-APPLIES "
+               "its decorations -- `AfterDowngraded(); "
+               "Enchantment?.ModifyCard(); Affliction?.AfterApplied();`. The "
+               "sim's Card.downgrade (cards/base.py:150-165) rebuilds by "
+               "running _init_vars() and re-applying upgrades, and never "
+               "re-applies the enchantment. Discovery's _init_vars sets "
+               "`self.exhausts = True` (cards/colorless_skills.py:211-213), so "
+               "a Souls-enchanted Discovery (enchantments.py:209-212, from the "
+               "ported Grave of the Forgotten event) silently regains its "
+               "Exhaust keyword when downgraded. LIVE: every piece is ported -- "
+               "the downgrade verb has two ported callers, DampenPower "
+               "(powers.py:3149-3183, the Magi Knight's DAMPEN_MOVE, "
+               "monsters/glory/knights.py:69-72, mirroring DampenPower.cs:35) "
+               "and Reflections (events/reflections.py:36-41, mirroring "
+               "Reflections.cs:43).",
+        strict=True,
+    )
+    def test_downgrade_reapplies_the_cards_enchantment(self):
+        from sts2_rl.enchantments import SoulsEnchantment
+
+        card = make_card("discovery")
+        assert card.exhausts
+        SoulsEnchantment().attach(card)
+        assert not card.exhausts
+        card.upgrade()
+        card.downgrade()
+        assert not card.exhausts  # C#: Souls' ModifyCard runs again
+
+    @pytest.mark.xfail(
+        reason="creature_card_cmds audit step 38a "
+               "(audits/seam/creature_card_cmds.json): "
+               "PlayerCmd.MimicRestSiteHeal (PlayerCmd.cs:264-274) delegates to "
+               "HealRestSiteOption.ExecuteRestSiteHeal "
+               "(HealRestSiteOption.cs:106-113), which heals and THEN fires "
+               "Hook.AfterRestSiteHeal(player, isMimicked) and "
+               "Hook.ModifyRestSiteHealRewards. Its one gameplay caller, "
+               "Events/DenseVegetation.cs:90, is ported -- but the sim's "
+               "DenseVegetation._rest (events/dense_vegetation.py:65-68) calls "
+               "run.heal(run.rest_site_heal_amount()) directly instead of "
+               "RunState.rest_heal (run.py:1089-1095), so neither hook fires. "
+               "LIVE: Stone Humidifier (relics/stone_humidifier.py:15-16, +5 "
+               "Max HP, mirroring StoneHumidifier.cs:18-25) and Dream Catcher "
+               "(relics/dream_catcher.py:22-25, a 3-card reward, mirroring "
+               "DreamCatcher.cs:16-25) are both ported listeners, so the real "
+               "game grants the Max HP and the reward screen on Dense "
+               "Vegetation's Rest and the sim grants neither.",
+        strict=True,
+    )
+    def test_dense_vegetation_rest_fires_the_rest_site_heal_hooks(self):
+        from sts2_rl.events.dense_vegetation import DenseVegetation
+
+        run = RunState(string_seed="creature-card-cmds-rest")
+        run.add_relic(make_relic("stone_humidifier"))
+        run.hp = max(1, run.max_hp - 40)
+        before_max = run.max_hp
+        rest = next(o for o in DenseVegetation(run).initial_options()
+                    if o.key == "REST")
+        rest.on_chosen()
+        assert run.max_hp == before_max + 5  # C#: Stone Humidifier fires

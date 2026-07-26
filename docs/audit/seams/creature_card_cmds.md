@@ -56,6 +56,33 @@ seam):
   bookkeeping the brief's first seed fact is about is
   `_resolve_card_play`'s `_playing_card` marker.
 
+### Source correction, fix pass 1 (2026-07-25)
+
+Review found three more files the record cites as **primary evidence** but
+that carried no sha256 staleness pin. All three were added to
+`SEAM_SOURCES["creature_card_cmds"]` and the record's hash lists were
+regenerated (`py tools/audit_status.py` → not stale):
+
+- **`src/Core/Entities/Creatures/Creature.cs`** (note the path — `Creature.cs`
+  lives under `Entities/Creatures/`, not `Entities/`). Every `CreatureCmd`
+  verb delegates its actual mutation here: `GainBlockInternal` /
+  `LoseBlockInternal` (`Creature.cs:473-491`), `HealInternal` /
+  `SetCurrentHpInternal` / `SetMaxHpInternal` (`477-501`), `StunInternal`
+  (`524-542`), `RemoveAllPowersInternalExcept` (`658-666`). Cited at steps
+  8/16/18/20/25/30 and in guards **G4** and **G13**. Same relationship
+  `PowerModel.cs` has to `PowerCmd.cs` in the `power_cmd` seam.
+- **`src/Core/Hooks/Hook.cs`** — the four **block** dispatchers this record
+  claims (see the scope-boundary note below) are Hook.cs bodies:
+  `ModifyBlock` (`Hook.cs:1310-1340`) is **G1**'s primary evidence and
+  `AfterModifyingBlockAmount` (`Hook.cs:649-656`) is **G2**'s. Both prior
+  seams (`damage_pipeline`, `power_cmd`) already list `Hook.cs` for exactly
+  this reason.
+- **`sts2_rl/hooks.py`** — the sim side of the same claim: the block modifier
+  hooks return a bare aggregate with no companion event (`hooks.py:98-124`),
+  which is **G2**'s core evidence, and the absence of `modify_shuffle_order`
+  / `before_block_gained` / `after_card_changed_piles` from this file is what
+  **G10**, step 12 and **G8** rest on.
+
 ### Scope boundary — READ BEFORE TASK 8 (`turn_structure`) AND TASK 9 (`hook_dispatch`)
 
 Three of this seam's files are shared with later seams. The split is by
@@ -100,6 +127,26 @@ direct bodies of `CreatureCmd.GainBlock`'s four calls and no other seam covers
 them, so **this record claims those four**. Task 9 must not re-audit them; a
 block-dispatch finding belongs here as an amendment to
 `audits/seam/creature_card_cmds.json`.
+
+### Scope boundary — READ BEFORE TASK 10 (`monster_state_machine`)
+
+`CreatureCmd.Stun` (`CreatureCmd.cs:870-904`) is split between the two
+records. **This record owns only the Cmd-level contract** — who may be
+stunned and what `StunInternal` refuses (`Creature.cs:524-542`: throws for a
+non-monster, no-ops on a dead creature or one with no combat state) — which
+is step **30** and guard **N1**. **Task 10 owns the move-machine half** and
+must audit it there, not here: the `"STUNNED"` `MoveState` installed via
+`SetMoveImmediate`, its `MustPerformOnceBeforeTransitioning = true` flag, and
+the `nextMoveId` default derived from `Monster.MoveStateMachine.StateLog`'s
+last performed move. The sim's counterpart is a bare
+`target.stunned = True` plus an optional `_move_key` rewrite
+(`cmds.py:208-218`); everything about how that interacts with
+`monsters/state_machine.py` is Task 10's finding to record.
+
+Step **3** (`PrepareForNextTurn(rollNewMove: false)` for a monster spawned on
+the player's turn, `CreatureCmd.cs:72-75`) defers to Task 10 for the same
+reason: the sim has no separate intent-preparation step, and whether that
+matters is a state-machine question.
 
 ## Seed facts, verified
 
@@ -285,8 +332,16 @@ block-dispatch finding belongs here as an amendment to
 36. `GainMaxPotionCount` / `LoseMaxPotionCount` → `Player.AddToMaxPotionCount` /
     `SubtractFromMaxPotionCount`. `PlayerCmd.cs:220-230`.
 37. `AddPet<T>` / `AddPet` — `PlayerCmd.cs:237-257`. Waiver, no pet system.
-38. `MimicRestSiteHeal`, `EndTurn`, `CompleteQuest`. `PlayerCmd.cs:264-294`.
-    `EndTurn` is `turn_structure`'s (Task 8); the other two are waiver.
+38a. `MimicRestSiteHeal` → `HealRestSiteOption.ExecuteRestSiteHeal`
+    (`PlayerCmd.cs:264-274`, `HealRestSiteOption.cs:106-113`):
+    `CreatureCmd.Heal(GetHealAmount)` → `Hook.AfterRestSiteHeal(player,
+    isMimicked)` → `Hook.ModifyRestSiteHealRewards` →
+    `RewardsCmd.OfferCustom`. **Not a delegation stub — it runs two hooks**,
+    and its one gameplay caller (`Events/DenseVegetation.cs:90`) is ported.
+    See the fix-pass gap below.
+38b. `EndTurn` (`PlayerCmd.cs:279-289`) is `turn_structure`'s (Task 8);
+    `CompleteQuest` (`PlayerCmd.cs:291-294`) writes only
+    `CompletedQuests` run-history. Waiver.
 
 ### `CardCmd.AutoPlay` — `CardCmd.cs:51-137`
 
@@ -522,19 +577,24 @@ block-dispatch finding belongs here as an amendment to
 
 ### `CardPile` internals — `CardPile.cs`
 
-102. `MaxCardsInHand => 10` (`CardPile.cs:21`); `RandomizeOrderInternal` (the
-     combat-start draw-pile randomize) is `UnstableShuffle` — Fisher-Yates with
-     **no** stabilizing sort — followed by
-     `Hook.ModifyShuffleOrder(isInitialShuffle: true)` (`CardPile.cs:69-74`);
-     `AddInternal` throws on a duplicate instance and `index < 0` appends
-     (`CardPile.cs:83-107`); `RemoveInternal` throws if the card is absent
-     (`CardPile.cs:115-132`).
+102a. `MaxCardsInHand => 10` (`CardPile.cs:21`); `AddInternal`'s index
+     semantics — `index < 0` appends, `>= 0` inserts (`CardPile.cs:83-107`).
+102b. `RandomizeOrderInternal` (the combat-start draw-pile randomize) is
+     `UnstableShuffle` — Fisher-Yates with **no** stabilizing sort — followed
+     by `Hook.ModifyShuffleOrder(isInitialShuffle: true)`
+     (`CardPile.cs:69-74`). The second half is **G10**'s gap.
+102c. `AddInternal` **throws** if the pile already contains that `CardModel`
+     instance (`CardPile.cs:86-89`) and `RemoveInternal` **throws** if the
+     card is absent (`CardPile.cs:115-132`). This is **N4**, and the mechanism
+     behind **G7**.
 
 ### `CardSelectCmd` — `CardSelectCmd.cs`
 
-103. Every selection screen guards `CombatManager.IsEnding` / `IsOverOrEnding`
-     → empty, and 0 eligible candidates → empty (the deck/grid screens also
+103a. 0 eligible candidates → empty (the deck/grid screens also
      `ReportSoftlock`). `CardSelectCmd.cs:194-199, 277-285, 382-394, 694-707`.
+103b. Every selection screen **also** guards `CombatManager.IsEnding` /
+     `IsOverOrEnding` → empty, at the same call sites. The sim has no such
+     check anywhere in `CombatState.select_cards`; see **G14**.
 104. **Auto-select shortcut**: `!prefs.RequireManualConfirmation &&
      candidateCount <= prefs.MinSelect` → return **all** candidates with no
      player choice at all. `CardSelectCmd.cs:287-290, 396-399, 708-711`.
@@ -565,18 +625,37 @@ record:
   (`Relic.after_card_added_to_deck`), and nothing that sees an arbitrary
   pile-to-pile move.
 
-**Verdict counts** (recomputed directly from
-`audits/seam/creature_card_cmds.json`):
+**Verdict counts** — *fix pass 1, 2026-07-25* (recomputed programmatically
+from `audits/seam/creature_card_cmds.json`):
 
 ```
-steps    (106): faithful 35, gap 33, waiver 20, deliberate-divergence 18
-guards   ( 24): gap 13, deliberate-divergence 8, waiver 3
-combined (130): gap 46, faithful 35, deliberate-divergence 26, waiver 23
+steps    (110): gap 53, faithful 33, waiver 13, deliberate-divergence 11
+guards   ( 25): gap 20, waiver 3, deliberate-divergence 2
+combined (135): gap 73, faithful 33, waiver 16, deliberate-divergence 13
 unit verdict: "gap"  (= max(all verdicts, key=VERDICTS.index))
 ```
 
-**Gaps found** (short form; full text in the JSON). Three are **live on
-currently-ported content**; the rest are dormant with the trigger named.
+The first pass recorded `steps (106): faithful 35, gap 33, waiver 20, dd 18` /
+`guards (24): gap 13, dd 8, waiver 3` / `combined (130): gap 46, faithful 35,
+dd 26, waiver 23`. The fix pass split three steps into per-clause entries
+(38 → 38a/38b, 102 → 102a/102b/102c, 103 → 103a/103b), added guard **G14**,
+and re-verdicted 24 entries — every change moved *up* the precedence ladder
+except step 44 and step 92, which kept `faithful` and gained explanatory
+rationale. The two governing rules applied throughout:
+
+- **`waiver` means out of scope** (multiplayer, presentation/animation,
+  ascension values). It does **not** mean "nothing currently triggers this"
+  and it does **not** mean "the C# side is unported". A divergence no ported
+  content triggers is a **dormant gap**; dormancy describes today's content,
+  not the divergence's shape.
+- **A guard rollup carries `max(verdict)` of the steps it aggregates.** Six
+  `N`-guards sat below their own steps and were raised (**N2**, **N3**,
+  **N4**, **N5**, **N9**, **N10**).
+
+**Gaps found** (short form; full text in the JSON). **Five** are live on
+currently-ported content — **G1**, **G2**, **G3**, and the two the fix pass
+found, step **38a** (`MimicRestSiteHeal`) and step **52** (`Downgrade`); the
+rest are dormant with the trigger named.
 
 - **G1 — block modifiers are gated at the pipeline level on
   `is_powered_attack`. LIVE.** `BlockCmd.apply` (`cmds.py:145-147`) skips the
@@ -627,6 +706,13 @@ currently-ported content**; the rest are dormant with the trigger named.
   relics, Bing Bong, Book of Five Rings, Darkstone Periapt on one side, and
   Pandora's Box / Astrolabe / Wood Carvings / Morphic Grove / Symbiote as
   deck transformers on the other. Pinned with a strict xfail.
+  *Fix pass:* the third thing `CardCmd.Transform` does at that site,
+  `replacement.FloorAddedToDeck = runState.TotalFloor` (`CardCmd.cs:433`), is
+  **not** part of this gap — it is read nowhere in the game except the save
+  serializers (`SerializableCard.cs:32-69`) and the run-history screens
+  (`NDeckHistory.cs:93-94`, `NMapPointHistory.cs:76-78`), i.e. telemetry with
+  no gameplay reader, which is exactly how step 73 treats it. The two entries
+  now agree.
 - **G4 — `CreatureCmd.heal` refuses to heal a dead creature; C#'s `Heal`
   revives. Dormant (the one ported caller hand-rolls around it).**
   `cmds.py:160-161` early-returns 0 on `target.is_dead`; `CreatureCmd.Heal`
@@ -666,8 +752,13 @@ currently-ported content**; the rest are dormant with the trigger named.
 - **G7 — `ExhaustCmd.exhaust` only knows about the hand and the discard pile.
   Dormant.** `cmds.py:379-384` removes the card from `hand` or
   `discard_pile` and appends it to `exhaust_pile`; a card in the draw pile,
-  the exhaust pile, or mid-play ends up in **two** piles at once — verified by
-  execution against a draw-pile card. C# routes through
+  the exhaust pile, or mid-play ends up in **two** piles at once. Re-run
+  2026-07-25 with the observed values: a Strike placed alone in the draw pile
+  and passed to `ExhaustCmd.exhaust` ends with `card in draw_pile` **True**
+  and `card in exhaust_pile` **True**, `len(draw_pile) == 1`,
+  `len(exhaust_pile) == 1`; a Strike already in the exhaust pile and exhausted
+  again ends with `len(exhaust_pile) == 2` holding the same instance twice.
+  Both states are exceptions in the game. C# routes through
   `CardPileCmd.Add(card, PileType.Exhaust, Bottom)` whose
   `RemoveFromCurrentPile()` is pile-agnostic (`CardPileCmd.cs:496`) and whose
   `AddInternal` throws outright if the target already holds the instance
@@ -702,19 +793,36 @@ currently-ported content**; the rest are dormant with the trigger named.
   `PerfectFitEnchantment` hand-rolls it on `on_shuffle`
   (`enchantments.py:186-189`). The net effect is the same *only* while
   registration order happens to put Perfect Fit after the other `on_shuffle`
-  listeners; C# guarantees it by call sequence, the sim does not. Executed
-  with Perfect Fit + Biiig Hug together (the one ported `on_shuffle` listener
-  that mutates the draw pile): the Perfect Fit card did land on top, so **no
-  collision is demonstrated** — but nothing in the sim's architecture prevents
-  one.
+  listeners; C# guarantees it by call sequence, the sim does not. Re-run
+  2026-07-25 with the observed values: (1) `modify_shuffle_order` does not
+  exist in `sts2_rl/hooks.py`; the only `on_shuffle` definitions in the sim
+  are `hooks.py:433` (the dispatcher), `enchantments.py:186` (Perfect Fit),
+  `powers.py:3736`, `relics/biiig_hug.py:28` and `relics/the_abacus.py:22`.
+  (2) With Biiig Hug (the ported `on_shuffle` listener that mutates the draw
+  pile — it adds a Soot) and Perfect Fit on a Bash in the same combat, an
+  8-card discard reshuffled to
+  `['strike','soot','strike','defend','strike','strike','defend','defend','bash']`
+  (top last) — the Perfect Fit card **did** land on top, with registration
+  order `[BiiigHug, PerfectFitEnchantment]`, so **no collision is
+  demonstrated**; nothing in the sim's architecture prevents one if the order
+  were reversed. (3) The initial-shuffle variant has **no sim surface at
+  all**: wrapping the hook system across `_shuffle_draw_pile(stable=False)`
+  records **zero** hook invocations. Recorded at step level as **102b** (the
+  fix pass split it out of the old step 102, whose blanket `faithful`
+  contradicted this guard).
 - **G11 — `AfterCardDiscarded` fires before the card has moved, and in a
   batch. Dormant.** C# adds each card to the discard pile *first*, then fires
   the hook, one card at a time (`CardCmd.cs:186-195`). `discard_hand` fires
   `on_card_discarded` for every flushed card while they are **all** still in
-  `hand` and none is in `discard_pile` (`player.py:192-196`) — verified,
-  `(in_hand, in_discard) == (True, False)` at hook time. Dormant in the
-  strongest possible sense: a grep of `sts2_rl/` finds **zero**
-  `on_card_discarded` listeners, so nothing can observe it today.
+  `hand` and none is in `discard_pile` (`player.py:192-196`). Re-run
+  2026-07-25 with the observed values: flushing a hand of `[Strike, Defend]`
+  with a spy listener records
+  `[('strike', in_hand=True, in_discard=False), ('defend', in_hand=True,
+  in_discard=False)]` at hook time, where C# would give `(False, True)` for
+  each and would have moved Strike before Defend's hook ran. Dormant in the
+  strongest possible sense: a walk of every `.py` under `sts2_rl/` finds
+  `def on_card_discarded` in exactly **one** file, `hooks.py` (the
+  dispatcher) — **zero** listeners, so nothing can observe it today.
 - **G12 — no `Hook.AfterGoldGained`, and no gold-gain hook surface at all.**
   `PlayerCmd.GainGold` fires `Hook.ModifyGoldGained` →
   `Hook.AfterModifyingGoldGained` → `Hook.AfterGoldGained`
@@ -741,28 +849,152 @@ currently-ported content**; the rest are dormant with the trigger named.
   `is self.owner`. It becomes live for any escaping monster holding a power
   with a global (non-owner-scoped) hook.
 
-**Lower-severity / no-current-effect notes** (`deliberate-divergence` or
-`waiver`, full rationale in the JSON): **N1** `CreatureCmd.stun` accepts any
+- **G14 — the combat-over / `IsEnding` guard family has no sim counterpart
+  anywhere. Dormant.** *Added in fix pass 1* to give **one** treatment to a
+  mechanism the first pass verdicted three different ways. Every C# command in
+  this seam opens with a liveness check (`IsOverOrEnding` / `IsEnding` /
+  `!IsLiveCombat()`) and returns empty/zero/no-op: `CreatureCmd.Add` (55-67),
+  `Escape` (585-588), `GainBlock` (637-640), `LoseBlock` (668), `Heal`
+  (693-696), `CardCmd.AutoPlay` (53-56), `Discard` (174-177), `Downgrade`
+  (214), `Upgrade` (269), `Transform` (371-374), `Afflict` (627-634),
+  `CardPileCmd.Add` (308-319, 398-401), `AddDuringManualCardPlay` (649),
+  `Draw` (800-803), `Shuffle` (866-869, 914-918), `AutoPlayFromDrawPile`
+  (933), and every `CardSelectCmd` screen (194-199, 277-285, 382-394,
+  694-707). **The sim reproduces exactly one of them** —
+  `CombatState.auto_play_card` (`combat.py:525`), which is why step 39 stays
+  `faithful`. Every other site is unguarded and is now a dormant gap: steps
+  **1, 7, 11, 48, 54, 63, 71, 72, 74, 83, 90, 103b**. Dormant as a family for
+  one structural reason: the sim sets `Phase.COMBAT_OVER` only inside
+  `_end_combat`, which the card-play paths reach strictly *after*
+  `_resolve_card_play` returns (`combat.py:417-420` manual, `554-557`
+  auto), so no ported effect can be mid-resolution with the phase already
+  flipped. Verified by execution on the one site the reviewer probed: with
+  `phase = Phase.COMBAT_OVER`, `select_cards("exhaust", [Strike, Defend], 1)`
+  returns **1 card (`[Defend]`)** where every C# screen returns empty. Pinned
+  with a strict xfail. Cross-referenced by `damage_pipeline`'s **G5** and
+  `power_cmd`'s **G6**.
+- **Step 38a — `MimicRestSiteHeal` skips both rest-site-heal hooks. LIVE.**
+  *Found in fix pass 1; the first pass waived this as "rest-site
+  delegation".* `PlayerCmd.MimicRestSiteHeal` (`PlayerCmd.cs:264-274`) is not
+  a stub: it delegates to `HealRestSiteOption.ExecuteRestSiteHeal`
+  (`HealRestSiteOption.cs:106-113`), which heals and **then** fires
+  `Hook.AfterRestSiteHeal(player, isMimicked)` and
+  `Hook.ModifyRestSiteHealRewards`, offering the resulting rewards. Its one
+  gameplay caller, `Events/DenseVegetation.cs:90`, is ported — but the sim's
+  `DenseVegetation._rest` (`events/dense_vegetation.py:65-68`) calls
+  `run.heal(run.rest_site_heal_amount())` **directly**, bypassing
+  `RunState.rest_heal` (`run.py:1089-1095`, which does fire
+  `after_rest_site_heal`) and `RunState.rest_heal_rewards`
+  (`run.py:1097-1110`, which does fire `modify_rest_site_heal_rewards`). Both
+  listener sides are ported: **Stone Humidifier**
+  (`relics/stone_humidifier.py:15-16`, +5 Max HP, mirroring
+  `StoneHumidifier.cs:18-25`) and **Dream Catcher**
+  (`relics/dream_catcher.py:22-25`, a 3-card Monster-room reward, mirroring
+  `DreamCatcher.cs:16-25`). Verified by execution on a string-seeded run
+  holding Stone Humidifier at 40/80 HP: Dense Vegetation's Rest gives
+  `max_hp 80 → 80`, `hp 40 → 64`, where `RunState.rest_heal()` on the
+  identical run gives `max_hp 80 → 85`, `hp 40 → 69`. Pinned with a strict
+  xfail.
+- **Step 52 — `CardCmd.Downgrade` does not re-apply the card's enchantment.
+  LIVE.** *Found in fix pass 1; the first pass waived this as "no ported
+  content downgrades a card … the sim has no downgrade verb", which was wrong
+  on both clauses.* `DampenPower.cs:35` calls `CardCmd.Downgrade` and
+  `DampenPower` is ported (`powers.py:3149-3183`, applied by the Magi Knight's
+  `DAMPEN_MOVE`, `monsters/glory/knights.py:69-72`); `Reflections.cs:43` is a
+  second ported caller (`events/reflections.py:36-41`); and the sim's verb is
+  `Card.downgrade` (`cards/base.py:150-165`). Step by step against
+  `CardCmd.cs:212-223` + `CardModel.DowngradeInternal`
+  (`CardModel.cs:2135-2147`): the `IsEnding` guard is **G14**'s family
+  (dormant); the deck-pile history is telemetry; `CurrentUpgradeLevel = 0`
+  (reset to *base form*) versus the sim's one-level drop is **dormant**, since
+  `Card.max_upgrade_level` is 1 for all 168 upgradable cards and 0 for the 35
+  status/curse cards, so the two coincide; but `DowngradeInternal`'s tail —
+  `AfterDowngraded(); Enchantment?.ModifyCard(); Affliction?.AfterApplied();`
+  — has **no** sim counterpart, and the sim's `_init_vars()` rebuild
+  *un-does* the enchantment's card mutation. Verified by execution:
+  Discovery's `_init_vars` sets `self.exhausts = True`
+  (`cards/colorless_skills.py:211-213`); attaching the ported Souls
+  enchantment (`enchantments.py:209-212`, from the ported Grave of the
+  Forgotten event) clears it; after `upgrade()` then `downgrade()` the sim
+  reports `exhausts == True` **with Souls still attached**, where C# would
+  re-run Souls' `ModifyCard` and leave Exhaust removed. Prolong
+  (`colorless_skills.py:486-491`) and two more Exhaust-toggling colorless
+  skills have the same shape. Pinned with a strict xfail.
+- **Step 26 — `SetMaxAndCurrentHp` has no sim verb and two ported callers
+  hand-roll around it. Dormant.** *Re-verdicted in fix pass 1; the first pass
+  waived it on a false unreachability claim ("no ported caller … multiplayer
+  HP scaling and boss setup").* The C# callers are
+  `DecimillipedeSegment.cs:142`, `ToughEgg.cs:173` and
+  `WaterfallGiant.cs:305`, and **the first two are ported**:
+  `monsters/hive/decimillipede.py:68` and `:167` do a raw
+  `max_hp = hp = …`, and `monsters/hive/ovicopter.py:81-83` does the same for
+  the Tough Egg hatchling. The raw assignment skips `SetMaxHpInternal`'s
+  CurrentHp clamp (`Creature.cs:493-501`), `SetMaxHp`'s `MaxHp <= 0 → Kill`
+  (`CreatureCmd.cs:844-847`), and `SetCurrentHp`'s `AfterCurrentHpChanged` +
+  trailing death pipeline (`CreatureCmd.cs:766-778`). Dormant, verified by
+  execution: both ports assign `max_hp` and `hp` together so the clamp cannot
+  differ; every ported amount is strictly positive (segments come out
+  **46/44/42**, the hatchling rolls Niche 19–21) so neither `Kill` is
+  reachable; and while Ovicopter *does* hand-roll the event
+  (`ctx.hooks.on_hp_changed(self, delta)`) and Decimillipede fires **nothing**
+  (confirmed with a spy listener — zero calls), the only `on_hp_changed`
+  listener in the sim is Red Skull (`relics/red_skull.py:44-46`), which
+  early-returns unless `creature is self.player`, and both callers are
+  monsters.
+- **Step 104 — the auto-select shortcut costs RNG draws the game never
+  takes.** *Raised from `deliberate-divergence` in fix pass 1.* C#'s shortcut
+  (`!RequireManualConfirmation && candidateCount <= MinSelect` → return every
+  candidate in pile order, `CardSelectCmd.cs:287-290, 396-399, 708-711`)
+  consumes **nothing** from any stream. The sim has no shortcut: `select_cards`
+  clamps `count = min(count, len(candidates))` (`combat.py:577`) and, with no
+  `card_selector` installed, falls through to
+  `self._rng.sample(candidates, count)` (`combat.py:581`) — which both burns
+  draws C# never takes *and* takes them off-stream. Under seed parity a
+  differing draw count is an observable desync, so the same membership reached
+  by a different route is not enough to keep this a `deliberate-divergence`.
+  See step 105 for the off-stream fallback itself.
+
+**The `N`-guards.** Fix pass 1 raised six of these to `gap` (**N2**, **N3**,
+**N4**, **N5**, **N9**, **N10**) because a guard rollup must carry
+`max(verdict)` of the steps it aggregates — each of the six sat below its own
+step and therefore read as non-actionable. Their explanatory text is unchanged
+except for the added note of which steps each aggregates. Full rationale in
+the JSON.
+
+*Now `gap`:* **N2** `CardCmd.afflict` skips the `IsOverOrEnding` guard,
+`Hook.ShouldAfflict` (no C# override exists) and `CanAfflict`, and returns
+`None` on a type mismatch where C# throws — aggregates steps 63-66, three of
+which are gaps. **N3** the whole `CardPileAddResult` failure surface (dead
+owner, removed-from-state card, `ShouldAddToDeck` prevention) has no sim
+analogue — aggregates steps 70-74, all gaps. **N4** no duplicate-instance
+guard on any sim pile insert — this is **G7**'s mechanism and step **102c**.
+**N5** `EnergyCmd.gain` lacks C#'s `finalAmount > 0` guard, so a negative
+modifier would subtract energy; the only ported `modify_energy_gain` listener
+returns `0` (`powers.py:554-557`) — word-for-word step 31's claim, which is a
+gap. **N9** the sim has no Play pile: `_resolve_card_play` puts the played
+card straight into the discard pile and marks `player._playing_card`
+(`combat.py:452-454`); the reshuffle exclusion is **parity-only** (a genuine
+deliberate decision, see **N11**), but the undemonstrated exposure it carries
+— an effect counting the discard pile during its own `OnPlay` — is a dormant
+gap, and it aggregates step 82, which is a gap. **N10** `CardSelectCmd`'s
+auto-select shortcut and draw-pile `orderby Rarity, Id` have no sim
+counterpart, and `select_cards`' random fallback draws on the shared legacy
+`self._rng` rather than `combat_rng.card_selection` (`combat.py:575-581`) —
+aggregates steps 104 and 105, both gaps.
+
+*Still `deliberate-divergence`:* **N1** `CreatureCmd.stun` accepts any
 creature, including the player and a dead one, where `StunInternal` throws /
-no-ops. **N2** `CardCmd.afflict` skips `Hook.ShouldAfflict` (no C# override
-exists), `CanAfflict` and `AfterApplied`, and returns `None` on a type
-mismatch where C# throws. **N3** the whole `CardPileAddResult` failure surface
-(dead owner, removed-from-state card, `ShouldAddToDeck` prevention) has no sim
-analogue — no C# override of `ShouldAddToDeck`/`AfterAddToDeckPrevented`
-exists. **N4** no duplicate-instance guard on any sim pile insert. **N5**
-`EnergyCmd.gain` lacks C#'s `finalAmount > 0` guard, so a negative modifier
-would subtract energy; the only ported `modify_energy_gain` listener returns
-`0` (`powers.py:554-557`). **N6** stars are Regent-only. **N7** pets are
-unported. **N8** VFX/SFX/history/screen-shake/preview/thought-bubble paths and
-the whole local/remote `PlayerChoiceSynchronizer` layer. **N9** the sim has no
-Play pile: `_resolve_card_play` puts the played card straight into the discard
-pile and marks `player._playing_card` (`combat.py:452-454`); the resulting
-reshuffle exclusion is **parity-only**, so legacy runs still shuffle the
-in-flight card back into the draw pile (verified by execution). **N10**
-`CardSelectCmd`'s auto-select shortcut and draw-pile `orderby Rarity, Id` have
-no sim counterpart, and `CombatState.select_cards`' random fallback draws on
-the shared legacy `self._rng` rather than the `combat_rng.card_selection`
-stream (`combat.py:575-581`).
+no-ops (its step, 30, is also `dd`; the move-machine half is Task 10's — see
+the Task 10 boundary above). **N11** the parity-only card-ordering rules.
+
+*Still `waiver` — genuinely out of scope:* **N6** stars are the Regent's
+resource and the sim is Ironclad-only. **N7** pets: `PlayerCmd.AddPet<T>` and
+the whole `PetOwner` plumbing, cross-referenced by `damage_pipeline`'s
+already-shipped Osty waivers (steps 10 and 15 of that record) — kept a waiver
+here so the two seams do not disagree; if a later pass re-verdicts it, both
+records must move together. **N8** VFX/SFX/history/screen-shake/preview/
+thought-bubble paths and the whole local/remote `PlayerChoiceSynchronizer`
+layer.
 
 ## Existing test coverage (Step D)
 
@@ -794,3 +1026,32 @@ stream (`combat.py:575-581`).
   claim for steps 12-17): new order-tracing test,
   `test/test_hook_order.py::TestCreatureCardCmdsOrder::
   test_gain_block_hook_order`.
+
+### Pins added in fix pass 1 (2026-07-25)
+
+Three of the fix pass's verdict changes are pinnable and were unpinned; each
+got a `strict=True` xfail in the same class:
+
+- **G14 / step 103b** (`select_cards` has no combat-over guard):
+  `test_select_cards_refuses_once_the_combat_is_over`.
+- **Step 52** (`Downgrade` does not re-apply the card's enchantment):
+  `test_downgrade_reapplies_the_cards_enchantment`.
+- **Step 38a** (`MimicRestSiteHeal`'s hooks skipped on Dense Vegetation's
+  Rest): `test_dense_vegetation_rest_fires_the_rest_site_heal_hooks`.
+
+`py -m pytest test/test_hook_order.py -q` → **9 passed, 9 xfailed**; forced
+with `--runxfail` all nine fail at their stated assertions.
+
+### Sim-side follow-up for Perry (not an audit finding)
+
+`sts2_rl/player.py:253-258` — `_shuffle_draw_pile`'s docstring says the
+stabilizing sort compares "the sim card `id` … a lowercase slug whose ordinal
+order matches the game Entry ordinal". It does not: the code passes
+`_compare_to_key`, which **uppercases** first
+(`return (card.id.upper(), card.upgrade_level)`, `player.py:34`), precisely
+because an ordinal compare puts `_` (0x5F) after the uppercase letters but
+before the lowercase ones. `_compare_to_key`'s own docstring
+(`player.py:23-33`) is correct, and so is the code — step 92's `faithful`
+stands. Only the prose misleads, and engine files are outside this task's
+edit scope, so it is recorded here and in the JSON at step 92 rather than
+fixed.

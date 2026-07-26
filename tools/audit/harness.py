@@ -208,13 +208,28 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         # to CombatState.auto_play_card (combat.py). See the scope-boundary
         # section of docs/audit/seams/creature_card_cmds.md for the
         # method-level split against turn_structure and hook_dispatch.
+        # Three more files were added in the Task 7 fix pass because the record
+        # cites them as primary evidence and an unpinned source cannot go
+        # stale: Creature.cs holds the *Internal mutators every CreatureCmd
+        # verb delegates to (GainBlockInternal/LoseBlockInternal/HealInternal/
+        # SetCurrentHpInternal/SetMaxHpInternal/StunInternal/
+        # RemoveAllPowersInternalExcept — steps 8/16/18/20/25/30 and guards
+        # G4/G13); Hook.cs holds the four BLOCK dispatchers this record claims
+        # (ModifyBlock at 1310-1340 and AfterModifyingBlockAmount at 649-656
+        # are G1's and G2's primary evidence — the other Hook.cs regions belong
+        # to damage_pipeline / power_cmd / hook_dispatch, see the doc's
+        # scope-boundary section); and hooks.py is where the sim's block
+        # modifiers return a bare aggregate with no companion event, which is
+        # G2's core evidence. Both prior seams already list Hook.cs.
         ["src/Core/Commands/CreatureCmd.cs", "src/Core/Commands/PlayerCmd.cs",
          "src/Core/Commands/CardCmd.cs", "src/Core/Commands/CardPileCmd.cs",
          "src/Core/Commands/CardSelectCmd.cs",
          "src/Core/Entities/Cards/CardPile.cs",
+         "src/Core/Entities/Creatures/Creature.cs",
+         "src/Core/Hooks/Hook.cs",
          "src/Core/Extensions/ListExtensions.cs"],
         ["sts2_rl/cmds.py", "sts2_rl/player.py", "sts2_rl/run.py",
-         "sts2_rl/combat.py"],
+         "sts2_rl/combat.py", "sts2_rl/hooks.py"],
     ),
     "turn_structure": (
         ["src/Core/Combat/CombatManager.cs", "src/Core/Combat/PlayerTurnPhase.cs"],
