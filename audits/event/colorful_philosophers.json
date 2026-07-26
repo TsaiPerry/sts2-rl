@@ -1,0 +1,32 @@
+{
+  "unit": "event/colorful_philosophers",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\ColorfulPhilosophers.cs",
+    "sha256": "55f23ee2600a050c6bde86a3460eb6f02d01a57d5744a85ecff27d4796e9b996"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\colorful_philosophers.py",
+    "sha256": "881139ce18bdff6f52d546c039121548a5b69b2f630a0dab588d55d1743124b5"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "ColorfulPhilosophers.is_allowed (events/colorful_philosophers.py:28-32) hard-returns False where ColorfulPhilosophers.cs:29-32 asks `p.UnlockState.CharacterCardPools.Count() > 1`.",
+      "verdict": "waiver",
+      "rationale": "OTHER CHARACTERS -- the one waiver category the shared contract names outright. The whole event is 'take a card reward from ANOTHER character's colour': its option list is built by walking CardPoolColorOrder (Necrobinder, Ironclad, Regent, Silent, Defect) and keeping the pools that are not the player's own (ColorfulPhilosophers.cs:18-25, 39-45). In an Ironclad-only sim that set is empty by construction, so the gate is not merely unsatisfiable today -- it is unsatisfiable for as long as the sim's scope holds. This is NOT the 'no ported content triggers it' shape rule 1 calls a dormant gap."
+    }
+  },
+  "guards": [
+    {
+      "what": "the event still occupies its slot in the pool",
+      "maps_to": "events/colorful_philosophers.py:20-22 documents and the registry preserves it: the id stays registered so the shared-pool shuffle draw count and order match (SP2). is_allowed consumes no RNG, so gating it off costs no stream draws.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions' trim loop `while (list.Count > num) list.RemoveAt(base.Rng.NextInt(list.Count))` (ColorfulPhilosophers.cs:46-50) and the three uniform-odds Common/Uncommon/Rare CardRewards (ColorfulPhilosophers.cs:54-65)",
+      "verdict": "waiver",
+      "rationale": "unreachable behind the same other-characters waiver: the option list is empty before the trim loop is reached, so neither the RNG draws nor the reward construction can execute. Not an unexecuted claim -- is_allowed is a hard `return False` and begin() would present zero options (events/colorful_philosophers.py:34-37)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,46 @@
+{
+  "unit": "event/battleworn_dummy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\BattlewornDummy.cs",
+    "sha256": "51c34a3b9eb2e9412644c0eee3265aebf7c8879b8c5815d4d37281c0ff34e437"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\battleworn_dummy.py",
+    "sha256": "850d27050c4f39057ffb93a9124e5d0fd307db16f1a8320abc19c8a1109c2f42"
+  },
+  "hooks": {
+    "IsShared": {
+      "maps_to": "BattlewornDummy.cs:28 `IsShared => true`. The sim carries the shared pool as a registry list rather than a per-event flag; the unit is in the 18-id shared pool the SP2 event-shuffle parity depends on (events/__init__.py).",
+      "verdict": "faithful"
+    },
+    "Resume": {
+      "maps_to": "BattlewornDummy.resume_after_combat (events/battleworn_dummy.py:62-82). The RanOutOfTime -> DEFEAT branch maps to `dummy.escaped` and grants nothing, matching BattlewornDummy.cs:74-78; the three reward branches map one for one",
+      "verdict": "gap",
+      "issue": "All three reward branches diverge on the RNG stream and two on the selection shape. (1) Setting1: C# draws `base.Owner.PlayerRng.Rewards.NextItem(character pool + shared pool)` (BattlewornDummy.cs:84-85), the sim calls run.random_potion() (run.py:513-520), which is rng.choice over `in_reward_pool` -- a different stream AND a different population. (2) Setting2: C# is `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (BattlewornDummy.cs:97-98) -- a SORT then Fisher-Yates on the event stream; the sim is `self.rng.shuffle(upgradable)` (events/battleworn_dummy.py:75), an unsorted Fisher-Yates on the shared stream, so even given the same stream the pick differs whenever the deck's incidental order differs from the sorted order. (3) Setting3: PullNextRelicFromFront burns a per-player Rewards draw; run.obtain_relic_from_grab_bag (run.py:631-636) is called with rarity_rng=None so pull_relic_from_front rolls the rarity on the shared rng. See guard EV-3 for the stream mechanism; the StableShuffle shape is this unit's own divergence."
+    }
+  },
+  "guards": [
+    {
+      "what": "EV-3: Resume's Setting1 potion draw, Setting2 upgrade shuffle and Setting3 relic-rarity roll (BattlewornDummy.cs:85, 97, 109) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "StartCombat (BattlewornDummy.cs:118-123): EnterCombatWithoutExitingEvent(encounter, no extra rewards, shouldResumeAfterCombat: TRUE)",
+      "maps_to": "events/battleworn_dummy.py:47-60 set pending_encounter and _finish; the resume half is resume_after_combat, which the driver calls. No extra rewards are attached (pending_reward_extras stays empty), matching Array.Empty<Reward>().",
+      "verdict": "faithful"
+    },
+    {
+      "what": "CanonicalVars Setting{1,2,3}Hp and their Creature.ScaleHpForMultiplayer recomputation in GenerateInitialOptions (BattlewornDummy.cs:30-43)",
+      "verdict": "waiver",
+      "rationale": "presentation + multiplayer: the three vars are the HP numbers printed on the option text, and the only thing recomputed is the multiplayer scale (playerCount). Single-player scaling is the identity. Out of scope on both the presentation and the multiplayer clause."
+    },
+    {
+      "what": "the Setting1 potion is granted, not offered",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# wraps it in RewardsCmd.OfferCustom (BattlewornDummy.cs:88-92), a take-or-skip screen. The sim's resume_after_combat RETURNS the potion list rather than adding it (events/battleworn_dummy.py:72), and the base class documents that contract as 'potions to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122) -- so the skip is modelled at the driver, and the observable is the same. Same shape at every OfferCustom potion site."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
