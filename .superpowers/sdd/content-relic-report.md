@@ -201,6 +201,11 @@ ported events/shrines (Orobas ×2, Neow, Darv, Nonupeipe, Hungry for Mushrooms),
 
 ## Cost data
 
+**Measurement caveat:** wall time and token counts are the session's own
+estimates, not instrumented figures — no harness records them. The record
+counts, gap counts, execution counts and suite timings below are exact. Treat
+the two time/token rows as order-of-magnitude planning inputs.
+
 | Measure | Value |
 |---|---|
 | Units audited | 16 |
