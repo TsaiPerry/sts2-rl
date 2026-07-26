@@ -1,0 +1,82 @@
+{
+  "unit": "power/mangle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ManglePower.cs",
+    "sha256": "bcd39ae2678966e154491b11cbc17bf2d11fbf26e138de543f2aa1b9fc37e988"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "OriginModel": {
+      "maps_to": "no sim counterpart; powers.py:883 name literal",
+      "verdict": "waiver",
+      "rationale": "OriginModel is the only member the subclass declares. It is pure identity/presentation: TemporaryStrengthPower.cs:73-92 switches on it to pick Title, :94 picks the Description loc key from IsPositive, and :107-139 builds ExtraHoverTips from it. A whole-source grep for OriginModel outside src/Core/Models/Powers/ returns exactly one hit -- its own declaration on the ITemporaryPower interface (ITemporaryPower.cs:9) -- so nothing reads it behaviourally. The sim hard-codes name instead. Waiver: presentation."
+    },
+    "Type (inherited, TemporaryStrengthPower.cs:32-42)": {
+      "maps_to": "powers.py:883 power_type = PowerType.DEBUFF",
+      "verdict": "faithful",
+      "rationale": "IsPositive is false, so C#'s Type is Debuff and the sim's static attribute agrees. Third-file citation (TemporaryStrengthPower.cs), not hashed here."
+    },
+    "StackType (inherited, TemporaryStrengthPower.cs:44)": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter (inherited from TemporaryStrengthPower.cs:44 for the temp-strength family, declared locally otherwise). The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeApplied (inherited, TemporaryStrengthPower.cs:146-156)": {
+      "maps_to": "powers.py:844-853 TemporaryStrengthPower.__init__",
+      "verdict": "faithful",
+      "rationale": "The sim applies the inner StrengthPower from __init__, which PowerCmd.apply runs at cmds.py:324 -- BEFORE the wrapper is put on the creature (cmds.py:325) and registered (cmds.py:326). That is exactly C#'s ordering: BeforeApplied is step 15 of audits/seam/power_cmd.json and ApplyInternal (which sets Owner and registers) is step 17. The amount is the right one too -- C# hands BeforeApplied modifiedAmount, i.e. post-Lamp and post-Artifact, and the sim's __init__ receives an amount that has already been through hooks.modify_power_amount (cmds.py:297) and past the Artifact early-return (cmds.py:299-306). The one C# leg the sim cannot reach is a fully-Artifact-blocked application, where C# still calls BeforeApplied with 0 and the inner Apply then no-ops on PowerCmd.cs:103's amount == 0 guard, while the sim returns at cmds.py:306 instead. Same net effect, and the missing 0-amount no-op is already power_cmd's step-6 finding. Third-file citations, not hashed here."
+    },
+    "AfterPowerAmountChanged (inherited, TemporaryStrengthPower.cs:158-171)": {
+      "maps_to": "powers.py:855-858 TemporaryStrengthPower.on_stack",
+      "verdict": "faithful",
+      "rationale": "The re-stack leg. C# reaches it through ModifyAmount's step 33 (PowerCmd.cs:243-246, gated on modifiedOffset != 0) and guards !(amount == base.Amount) && power == this -- the amount-vs-total test is what stops the FIRST application double-applying the Strength, since step 23 fires the same hook for a brand-new power. The sim needs no such guard because the two cases are different methods (__init__ at cmds.py:324 vs on_stack at cmds.py:311), and it keeps C#'s internal order -- super().on_stack before PowerCmd.apply (powers.py:856-858) matches SetAmount at PowerCmd.cs:237 before the hook at :243. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd (inherited, TemporaryStrengthPower.cs:173-181)": {
+      "maps_to": "powers.py:866-872 on_player_turn_end / on_enemy_side_end -> _revert",
+      "verdict": "gap",
+      "issue": "SLOT, and LIVE. Inherited from TemporaryStrengthPower.cs:173-181 (a third file, not hashed by this record). AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end (powers.py:866-868) is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. EXECUTED WITNESS for this family, and the sharpest one found for the whole player-side AfterSideTurnEnd group so far, because the effect is a damage-relevant stat revert rather than a bookkeeping reset: with StampedePower 1 (powers.py:1025-1041, which auto-plays an Attack from its own on_player_turn_end) and SetupStrikePower 2, one Strike in hand, ending the turn deals 6 damage when the temp-strength power was applied FIRST (its revert runs first, so the auto-played Strike loses the +2) and 8 when Stampede was applied first. The game always deals 8. So the sim is wrong on exactly the registration orders where the temp power lands before Stampede -- decided by which card the player happened to play first. The enemy-owned leg (powers.py:870-872, on_enemy_side_end, combat.py:345) is in the RIGHT slot; only the player-owned leg is misplaced. Reproduce the affected population with py tools/audit/power_census.py slots."
+    }
+  },
+  "guards": [
+    {
+      "what": "TemporaryStrengthPower.cs:178-179 Remove-then-Apply ordering",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# does PowerCmd.Remove(this) and THEN PowerCmd.Apply<StrengthPower>(...) (TemporaryStrengthPower.cs:178-179, a third file not hashed here); the sim's _revert (powers.py:860-864) applies the Strength FIRST and _expires after. So during the restoring Strength application the wrapper is still on the creature and still a hook listener in the sim and is already gone in the game. No ported listener observes the difference: the only ported modify_power_amount listeners are Unsettling Lamp (needs a latched TriggeringCard, and this call passes no cardSource) and Ruined Helmet (gated on the applier being the player AND a positive StrengthPower), and the sim's on_power_amount_changed listeners do not read the wrapper. Kept as deliberate-divergence rather than faithful because it is a real ordering difference that a future listener reading HasPower<ManglePower>() would expose."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:154,:168,:179 explicit applier arguments",
+      "verdict": "deliberate-divergence",
+      "rationale": "MISSING applier= (the recurring shape). C# passes an explicit applier on both inner applications: applier (the original) at TemporaryStrengthPower.cs:154 and :168, and base.Owner on the revert at :179. The sim passes none at powers.py:853, :858 and :863. Already recorded at the seam as audits/seam/power_cmd.json note N2, which settled the BeforeApplied leg BY EXECUTION as observationally equivalent (Unsettling Lamp's applier is not self.player gate reaches the same do-not-double-twice result as C#'s HasDoubledTemporaryPowerSource). Same verdict here per binding rule 3. The revert leg (:179 vs powers.py:863) was NOT covered by N2 and is examined separately in its own guard entry."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:179 the revert applies a POSITIVE StrengthPower",
+      "verdict": "faithful",
+      "rationale": "IsPositive is false, so -Sign * Amount is POSITIVE and neither GetTypeForAmount arm can fire -- the sign-aware question that applies to the positive members of this family (Setup Strike, Reptile Trinket, Feeding Frenzy, Flex Potion) does not arise here. The FORWARD application is the negative one and has its own guard entry."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:141-144 IgnoreNextInstance",
+      "verdict": "gap",
+      "issue": "ITemporaryPower.IgnoreNextInstance / _shouldIgnoreNextInstance (TemporaryStrengthPower.cs:30, :141-144, consumed at :148-151 and :162-165) has NO sim counterpart at all. Its one caller is Misery.cs:59-61, which copies an enemy's debuffs and must not re-apply the wrapper's internal StrengthPower; without the flag the copy would double the Strength steal. DORMANT: Misery is unported (grep -rn misery sts2_rl/ --include=*.py returns nothing). Named trigger: porting Misery."
+    },
+    {
+      "what": "ITemporaryPower as a marker interface",
+      "verdict": "gap",
+      "issue": "The ITemporaryPower MARKER ITSELF is absent from the sim -- there is no is_temporary attribute, no InternallyAppliedPower, and no should_power_be_removed_on_death hook among hooks.py's 66 dispatchers. C# has five readers of power is ITemporaryPower: IllusionPower.cs:59-66 (Illusions keep their debuffs on death UNLESS the debuff is temporary, so that the wrapper's internal Strength goes away with it), Rend.cs:43-50 and SleightOfFleshPower.cs:23 (both count the target's non-temporary debuffs), Misery.cs:59, and DebufferModel.cs:15 (a badge, waived as hook_dispatch N4). DORMANT for this record: Rend, Sleight of Flesh and Misery are all unported. But IllusionPower IS ported (powers.py:1560ff) and is another record's unit, so this is flagged rather than re-verdicted -- whoever audits power/illusion owns the ShouldPowerBeRemovedOnDeath port and needs this marker to exist."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:175 participants.Contains(base.Owner), plus the is_dead test the sim adds",
+      "verdict": "faithful",
+      "rationale": "The sim ADDS if not self.owner.is_dead before restoring the Strength (powers.py:861) where C#'s only guard is participants.Contains(base.Owner) (TemporaryStrengthPower.cs:175). Harmless rather than divergent: a creature that died has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), so C# never reaches the hook on a dead owner either, and PowerCmd.Apply's step-2 CanReceivePowers guard (PowerCmd.cs:73-76) would refuse the application in any case. Note the sim still _expires the wrapper on that path, which is what C#'s Remove would do. Third-file citations, not hashed here."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:154 the forward application is a NEGATIVE StrengthPower on an ENEMY",
+      "verdict": "faithful",
+      "rationale": "Examined as a second candidate route to audits/seam/power_cmd.json's gap G1 -- the enemy-side direction G1 says needs Malaise or Resonance -- and found INERT, for a reason worth writing down. This power IS a ported route to a negative StrengthPower on an enemy with applier = the player: PowerCmd.Apply<StrengthPower>(target, Sign * amount, applier, cardSource) at TemporaryStrengthPower.cs:154, mirrored at powers.py:853; and five ported enemies self-apply Artifact (monsters/underdocks/punch_construct.py:40, monsters/overgrowth/cubex_construct.py:32, monsters/hive/chomper.py:38, monsters/glory/mecha_knight.py:36, monsters/glory/aeonglass.py:41), so both halves of binding rule 6 are satisfied for the trigger. It still cannot diverge, because the WRAPPER is itself a Debuff and is intercepted first: C# blocks the wrapper at power_cmd step 13, BeforeApplied then fires with modifiedAmount == 0 (step 15 is unconditional), and PowerCmd.cs:103's amount == 0 guard makes the inner Strength a no-op; the sim returns at cmds.py:306 before constructing the wrapper at all, so its inner Strength is likewise never applied. Both sides: one Artifact stack consumed, no Strength change. Recorded because the near-miss is exactly the shape rule 6 exists to catch."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

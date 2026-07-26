@@ -1,0 +1,51 @@
+{
+  "unit": "power/radiance",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RadiancePower.cs",
+    "sha256": "c62191ff61c078fe096901da2a272b884468c12aea287c65bf5ed6037e30a364"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:4029 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterEnergyReset": {
+      "maps_to": "powers.py:4032-4037 RadiancePower.on_energy_reset (player.py:168)",
+      "verdict": "faithful",
+      "rationale": "Same correct slot and order as power/energy_next_turn's -- C# CombatManager.cs:650, sim player.py:168, both immediately after the energy reset and before the hand draw. The one difference from EnergyNextTurn is the tail: C# Decrements (RadiancePower.cs:26) where EnergyNextTurn Removes, so Radiance pays out once per turn for Amount turns, and the sim mirrors that with _tick (powers.py:4037) rather than _expire. Correct on both counts."
+    }
+  },
+  "guards": [
+    {
+      "what": "RadiancePower.cs:23 player == base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "powers.py:4033-4034. Identical."
+    },
+    {
+      "what": "RadiancePower.cs:25 DynamicVars.Energy.IntValue is the amount gained, NOT base.Amount",
+      "verdict": "faithful",
+      "rationale": "The energy per turn is 1 and the STACK COUNT is the number of turns -- two different numbers, and the sim keeps them apart correctly: RadiancePower.cs:19's CanonicalVars is new EnergyVar(1) and powers.py:4030 sets ENERGY = 1, gained at :4036, while self.amount is what _tick decrements. Getting this backwards would make a 3-stack Radiance grant 3 energy per turn. Non-ascension by construction (no AscensionHelper call in the file). Third-file citation, not hashed here."
+    },
+    {
+      "what": "PowerCmd.Decrement vs the sim's _tick",
+      "verdict": "faithful",
+      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field directly and _expires at <= 0, where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250). Observationally identical for a Buff: the only unconditional modifier leg ModifyAmount runs is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only, ArtifactPower.cs:24) and RuinedHelmet (StrengthPower-only), and neither GetTypeForAmount arm can turn a Counter/!AllowNegative/Buff power into a Debuff at a negative amount (PowerModel.cs:460-471; py tools/audit/power_census.py typing). Same mechanism and same faithful verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3. Third-file citations, not hashed here."
+    },
+    {
+      "what": "The only applier is a potion",
+      "verdict": "waiver",
+      "rationale": "RadiantTincture.cs:27,34 is the sole applier -- PowerVar<RadiancePower>(3) applied with BaseValue and applier = base.Owner.Creature -- ported at potions.py:851-864 with RADIANCE = 3 and applier=ctx.player. Potions are out of scope by Perry's deferral; the POWER is audited in full above and the 3 matches."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

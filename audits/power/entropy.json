@@ -1,0 +1,51 @@
+{
+  "unit": "power/entropy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\EntropyPower.cs",
+    "sha256": "139d073dec2c97530f47b5de39b4ba25d0e99d098df13303b779b920f673b135"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3515 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "powers.py:3517-3525 on_player_turn_started (player.py:186)",
+      "verdict": "gap",
+      "issue": "The slot is post-draw on both sides, which is what matters for a hand-transform effect: C#'s Hook.AfterPlayerTurnStart is CombatManager.cs:675, the last statement of SetupPlayerTurn and therefore immediately after CardPileCmd.Draw at :673, and the sim fires on_player_turn_started at player.py:186 immediately after _draw at :183. The gap is that the sim has only ONE post-draw slot: PHASE COLLAPSE. The sim's on_player_turn_started (player.py:186) is a single slot serving THREE distinct C# phases that the game runs in a fixed order: Hook.AfterPlayerTurnStart (CombatManager.cs:675, inside the SetupPlayerTurn task launched at :514), then Hook.AfterSideTurnStart (:522), then Hook.AfterAutoPrePlayPhaseEntered (:568 -> RunAutoPrePlayPhase, :613-619). Collapsing them makes the relative order of this power and every other turn-start power a function of hook-REGISTRATION order, i.e. of which card the player happened to play first. Same shape as hook_dispatch's G3 (the Early/Late phase passes do not exist) one level up, and the AutoPrePlay/AutoPostPlay half of it is turn_structure's G8; neither is re-verdicted here per binding rule 3, but see this record's Mayhem guard for the executed consequence. For Entropy specifically the collapse is not merely theoretical -- AfterPlayerTurnStart (:675) strictly PRECEDES AfterSideTurnStart (:522, awaited after the setup task launched at :514), so in the game Entropy's transforms always happen before power/clarity's tick, power/draw_cards_next_turn's removal and power/prep_time's Vigor, and in the sim that order is registration order."
+    }
+  },
+  "guards": [
+    {
+      "what": "EntropyPower.cs:23-26 player != base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "powers.py:3519-3520 player is not self.owner. Identical."
+    },
+    {
+      "what": "EntropyPower.cs:27-28 CardSelectCmd.FromHand with a TransformSelectionPrompt for base.Amount cards",
+      "verdict": "faithful",
+      "rationale": "This is a PLAYER CHOICE in C#, not a random pick. The sim routes it through CardSelectCmd.from_hand (cmds.py:520-530) -> CombatState.select_cards (combat.py:560-581), which delegates to an installed card_selector -- the sim's modelled choice seam, used by the conformance replay and by the RL policy -- and falls back to a uniform random pick only when no selector is installed. That is the sim's standard representation of a selection screen and is faithful at the seam; the fallback is a policy default, not a divergence. Note C# passes `this` as the selection source (EntropyPower.cs:28), which the sim's purpose string 'transform' stands in for."
+    },
+    {
+      "what": "EntropyPower.cs:31 the transform rolls on Rng.CombatCardSelection",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM. C# threads player.RunState.Rng.CombatCardSelection into CardCmd.TransformToRandom (CardCmd.cs:323-326 -> Transform), so every replacement is drawn from the CombatCardSelection stream in a fixed order. The sim's CardCmd.transform_to_random picks with hooks.combat._rng.choice(options) (cmds.py:435), and combat._rng is the SHARED unseeded random.Random (combat.py:88), not the per-purpose accessor -- combat.combat_rng.card_selection (combat_rng.py:21,51) is the matching stream and exists. Identical defect to the one already recorded LIVE on power/aggression (report section 4 item 8), and live for the same reason: under seed parity any replay that plays Entropy diverges on the replacement card AND perturbs every later draw off the shared rng. Entropy is a ported Colorless power card (cards/colorless_powers.py:74-94), so both halves of binding rule 6 hold. The option set itself is faithful -- cards.pool.transform_options_in_combat (pool.py:212-226) is a documented port of CardFactory.GetDefaultTransformationOptions(isInCombat: true). Third-file citations, not hashed here."
+    },
+    {
+      "what": "Entropy is never removed",
+      "verdict": "faithful",
+      "rationale": "Neither side ticks or removes it; it transforms base.Amount cards every turn for the rest of the combat. Both agree."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
