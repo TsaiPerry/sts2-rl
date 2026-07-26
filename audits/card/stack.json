@@ -1,0 +1,46 @@
+{
+  "unit": "card/stack",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Stack.cs",
+    "sha256": "f76910ea32162fc6489ad4f3bb7f6153207a663d69de3576982070f775fece19"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<DefectCardPool>()` (Stack.cs:16) selects the card's ART pool. Presentation."
+    },
+    "GainsBlock": {
+      "maps_to": "StackCard.gains_block = True (trash_heap_cards.py:302)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Stack.cs:18) == the class attribute. Load-bearing because Stack has no printed block number -- the same case as card/entrench and card/fisticuffs."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:301-306) + _init_vars (308-310)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Event, TargetType.Self)` (Stack.cs:27-30) == cost 1 / SKILL / EVENT / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "StackCard._block = 0 as the CalculationBase (trash_heap_cards.py:310)",
+      "verdict": "faithful",
+      "rationale": "`CalculationBaseVar(0m)` + `CalculationExtraVar(1m)` + `CalculatedBlockVar(ValueProp.Move).WithMultiplier((card, _) => PileType.Discard.GetPile(card.Owner).Cards.Count())` (Stack.cs:20-25). `CalculatedVar.Calculate` is `base + extra * multiplier` (CalculatedVar.cs:62-71) = `0 + 1 * discardCount` == the sim's `self._block + discard_count`, with `_block` holding the CalculationBase so the upgrade can raise it. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "StackCard.on_play (trash_heap_cards.py:315-318)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.GainBlock(Owner.Creature, DynamicVars.CalculatedBlock.Calculate(cardPlay.Target), DynamicVars.CalculatedBlock.Props, cardPlay)` (Stack.cs:34) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block + discard_count, card=self)`. The `c is not self` filter (trash_heap_cards.py:317) is a CORRECT compensation, not a divergence: C# holds Stack in the Play pile while it resolves, so the game's discard count excludes it, and the sim parks it in the discard-pile limbo (combat.py:452-454) and so must exclude it by hand. The sim's docstring says so."
+    },
+    "OnUpgrade": {
+      "maps_to": "StackCard._on_upgrade (trash_heap_cards.py:312-313)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.CalculationBase.UpgradeValueBy(3m)` (Stack.cs:39) == `self._block += 3` (0 -> 3), i.e. upgraded Stack is 3 + discard count. The MULTIPLIER stays 1 per card on both sides -- the upgrade raises the flat base, which is the opposite of card/ashen_strike's and card/bully's per-item upgrades."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

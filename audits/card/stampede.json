@@ -1,0 +1,36 @@
+{
+  "unit": "card/stampede",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Stampede.cs",
+    "sha256": "606bca7a8b137c47f2def409ed5f287f6f9817d6bf32ff1503b4eb19219d041f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\stampede.py",
+    "sha256": "93dc487d8ffdaee6da147e8e5973ce3320af7c730019ff805075c6d2c7589647"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (stampede.py:55-59) + _init_vars (61-62)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Stampede.cs:17-20) == cost 2 / POWER / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim passes the literal 1 (stampede.py:70)",
+      "verdict": "gap",
+      "issue": "`new DynamicVar(\"Power\", 1m)` (Stampede.cs:15) is a printed var with no `_`-attribute in `_init_vars`, so `magic_number` returns None where the game prints 1. Contrast card/rage and card/shockwave, which store the same generic `Power` var in `_power_amount`. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "StampedeCard.on_play (stampede.py:67-70)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<StampedePower>(choiceContext, Owner.Creature, DynamicVars[\"Power\"].BaseValue, Owner.Creature, this)` (Stampede.cs:24) == `PowerCmd.apply(ctx.hooks, ctx.player, StampedePower, 1, applier=ctx.player)`. No animation on either side. StampedePower's end-of-turn auto-play of a random hand Attack is the power stream's -- and it is the same end-of-turn auto-play slot card/howl_from_beyond uses, which the sim maps to `on_player_turn_end`."
+    },
+    "OnUpgrade": {
+      "maps_to": "StampedeCard._on_upgrade (stampede.py:64-65)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Stampede.cs:29) == `self._energy_cost = max(0, self._energy_cost - 1)` (2 -> 1). The Power var stays 1 when upgraded on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
