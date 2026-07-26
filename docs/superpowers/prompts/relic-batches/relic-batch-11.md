@@ -26,8 +26,8 @@ GAME SOURCE (**READ-ONLY**): `c:\Users\Perry\Desktop\Slay the Spire 2`
 1. `docs/superpowers/prompts/_shared-audit-contract.md` — your binding
    contract: operational rules, the EIGHT BINDING VERDICT RULES, file
    ownership, the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` (**v4**) — the versioned instruction sheet and the
-   18-item bug-class checklist. Check EVERY class against EVERY unit.
+2. `tools/audit/PROMPT.md` (**v5**) — the versioned instruction sheet and the
+   23-item bug-class checklist. Check EVERY class against EVERY unit.
 3. `.superpowers/sdd/content-relic-sweeps.md` — five pool-wide sweeps already
    ran across all 258 relics. **Units in your batch that they diagnosed are
    listed below; read their sweep section before auditing them so you confirm
@@ -64,6 +64,33 @@ The pool-wide sweeps already reached these findings and recorded the evidence. Y
 - **`paels_eye`** — **Sweep A CONFIRMED LIVE.** `sweep-reset-exec` proved by execution that `used_this_combat` is never reset, so the extra turn fires in the first combat of a run only (C# clears it at `PaelsEye.cs:142-145 AfterCombatEnd`). Write the record with that executed evidence; do not re-derive it.
 - **`paels_growth`** — Sweep E (shallow clone): a sim rebuild site.
 - **`paels_legion`** — Sweep A candidate (`_affected_card`, `cooldown`; C# resets at BOTH `BeforeCombatStart` and `AfterCombatEnd`). Settle by execution.
+- **`paels_tears`** — Sweep A (rewritten): CONFIRMED carrying state across the
+  combat boundary. Executed diff: `self.had_leftover_energy` False -> True and
+  **player energy 3 -> 5** entering combat 2 with the same instance. C#'s
+  `AfterCombatEnd` does assign. This is an observable energy divergence, not just
+  a stale flag — settle it live/dormant with its own probe.
+
+## Sweeps A and B were REWRITTEN on 2026-07-26 — read the corrections
+
+Batches 4-8 each faulted the pool-wide sweeps they were told to trust, and all
+of the faults were real. Both sweeps are fixed and re-run; the corrected
+findings are in `.superpowers/sdd/content-relic-sweeps.md`. What changed:
+
+- **Sweep A** pooled turn-END resets with turn-START resets and never tested the
+  safety claim on either; counted `x = x + 1` as a reset; printed a **census of
+  C# overrides** as if it were a census of resets (so it credited relics with
+  resets they do not perform); and could not see a field written only in
+  `__init__` from a parameter nothing passes. Its "safe" bucket is now 13 units,
+  not 21, and 7 relics are confirmed carrying state, not 3.
+- **Sweep B** read only the FIRST LINE of each `IsAllowed` body, so multi-clause
+  bodies lost every gate after the first. The `IsBeforeAct3TreasureChest`
+  cluster is **17 relics, not 16**.
+
+**The lesson, which applies to your batch:** a sweep's output is evidence, not
+authority. If a bucket label makes a safety claim ("safe only if the reset runs
+before any reader"), that claim was probably never executed — execute it or move
+the unit out of the bucket. Report anything you find wrong in your lessons file;
+four of the five previous batches found something.
 
 ## Procedure per unit
 

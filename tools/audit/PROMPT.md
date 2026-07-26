@@ -1,4 +1,20 @@
-# Audit prompt — source-to-sim unit audits (v4)
+# Audit prompt — source-to-sim unit audits (v5)
+
+> **v5 (2026-07-26, after relic batches 4–8 ran as five concurrent subagents):**
+> bug classes 19–23 added, each from a defect a batch actually found. Two
+> calibration facts that cost real time are now stated outright — the
+> **`GetValueIfAscension` argument order** below, and the fact that **a sweep's
+> own output is evidence, not authority**. Sweeps A and B were both found
+> unsound by the batches that used them and have been rewritten; see
+> `.superpowers/sdd/content-relic-sweeps.md`. If a sweep's bucket label makes a
+> safety claim ("safe only if…"), either test the claim or do not put units in
+> that bucket.
+>
+> **`AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue)`
+> puts the ASCENSION value SECOND and the non-ascension value THIRD.** Reading a
+> call left-to-right takes the first numeric as the base and gets it backwards;
+> a batch nearly filed a correct sim value as a gap on that basis. Non-ascension
+> is the **last** argument.
 
 > **v2 (2026-07-26, relic Tier 1 pilot):** bug classes 11–16 added, all six
 > drawn from defects the pilot batch actually found. Classes 11, 12 and 14
@@ -144,6 +160,42 @@ checks completeness. Read BOTH files fully before writing any verdict.
     every later pull. `cauldron`'s C# has the same fork (a fixed five-potion
     list vs five pool rolls) and is the next place to get it wrong. Whenever a
     C# body has two arms, check which one ships **before** reading the code.
+19. **A docstring that misquotes the *source* — not the sim.** Class 12 covers a
+    false claim about what the sim can do. This is the other direction:
+    `relics/iron_club.py` pins `CARDS = 6` and its docstring asserts
+    "`CardsVar(6)`", where `IronClub.cs:38` is `new CardsVar(4)`. The wrong
+    constant is *protected* by a citation that looks verified, so both readers
+    and shape-level sweeps pass over it. Re-read every numeric against the C#
+    even when the port names the C# expression — especially then.
+20. **A hook can be dispatched from the wrong SITE, not just the wrong slot.**
+    Class 11 is about turn-order slots. This is about *which branch* calls the
+    hook at all. `Hook.ModifyGeneratedMapLate` has exactly one caller,
+    `RunManager.cs:740`, inside the **save-load** arm of `GenerateMap`; the
+    fresh-generation `else` arm calls `ModifyGeneratedMap` instead. `run.py:857`
+    runs Late on every generation, so `fur_coat` re-rolls its marks and burns an
+    extra shuffle. Method: grep every dispatch site of the C# hook and read its
+    *enclosing branch*, not just its file. `Cards/SpoilsMap.cs:63` is the same
+    exposure for the card stream.
+21. **Death is not removal.** The whole game has four `ShouldDie` implementers —
+    `FairyInABottle`, `LizardTail`, and two Mocks. `IllusionPower`,
+    `SteamEruptionPower` and `AdaptablePower` implement
+    `ShouldCreatureBeRemovedFromCombatAfterDeath`: the creature **really dies**,
+    fires `AfterDeath`, stays in `Enemies` and revives later. The sim ports all
+    three onto `should_die` (`powers.py:1566`, `:2016`, `:3365`), so it vetoes
+    the death itself and `on_death` never fires — `gremlin_horn` pays nothing
+    for a lethal hit on a Fogmog-summoned Eye With Teeth. Affects **every**
+    `on_death` listener, so it is a cross-stream defect.
+22. **Rerouting C# hook A onto sim hook B inherits B's CALLER SET.** Timing is
+    the obvious half; the callers are the half that bites. `lizard_tail`'s port
+    defers its heal onto `on_damage_received`, which `CreatureCmd.kill` and
+    `cards/breakthrough.py:49` never fire — so the relic is spent and the heal
+    never lands. Diff the callers of both hooks, not just their order.
+23. **A verify fluent-helper's name against its body.** `EventOption
+    .ThatDecreasesMaxHp` / `.ThatDoesDamage` are red-flash *presentation*
+    predicates that apply nothing. `distinguished_cape`'s port assumed the
+    helper paid the cost, dropped the relic's own −9 Max HP, and is right only
+    by accident because Vakuu's option pays it instead. `DrowningBeacon` and
+    `UnrestSite` are the other callers.
 
 ## Sweep the shape before you audit the units
 

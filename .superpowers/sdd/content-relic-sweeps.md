@@ -32,29 +32,79 @@ second combat with the same instance, and diff both the relic's own fields *and*
 the player/enemy state against a freshly-constructed instance entering its first
 combat.
 
-| Bucket | Count |
-|---|---|
-| Relics holding no state at all | 200 |
-| Reset every mid-combat field at a combat boundary | 5 |
-| Reset only at a **turn** boundary (`art_of_war` shape) | 21 |
-| **Never reset at a combat boundary** | **32** |
-| …of those, C# *does* reset at a combat boundary → executed | **16** |
-| **…of those, confirmed carrying state into combat 2** | **3** |
+### REWRITTEN 2026-07-26 after batches 4–8 — the first version was unsound
+
+**Every one of batches 4, 5, 6 and 7 independently faulted this sweep**, on four
+distinct grounds. All four were confirmed at the source and all four are now
+fixed. Read this before trusting any earlier sweep-A output:
+
+1. **Turn-*end* resets were pooled with turn-*start* resets.** The old output
+   filed 21 relics as "reset only at a turn boundary — safe only if the turn
+   reset runs before any reader" and then *never tested that condition*; the
+   prioritisation step ran the executable check on a different bucket entirely.
+   A turn-start reset really is safe (combat 2's turn 1 clears the field before
+   any reader). A turn-**end** reset is not: `CombatState.end_turn` opens with
+   `if self.phase != Phase.PLAYER_TURN: return` (`combat.py:639-642`), so the
+   turn that WINS the fight skips the whole turn-end pass and the field crosses
+   into the next combat. `_TURN_START` and `_TURN_END` are now separate sets and
+   turn-end-only resets are flagged, not cleared. Found by batch 4
+   (`diamond_diadem`), which remains the only turn-end-only relic in the pool.
+2. **Increments were counted as resets.** `self.turns_seen = self.turns_seen + 1`
+   is an `ast.Assign` like any other, so `happy_flower` was filed as
+   "reset at a turn boundary" when the field never returns to 0. `_is_reset_value`
+   now requires a fresh zero-ish constant and rejects any RHS that references the
+   attribute. Found by batch 7.
+3. **The "C# resets" column was an override census, not a reset census.** It came
+   from `list_overrides`, which proves only that the relic *overrides*
+   `BeforeCombatStart`/`AfterCombatEnd` — never that the body assigns anything.
+   It therefore credited `fishing_rod` and `fur_coat` with resets they do not
+   perform. The column now brace-matches the body and prints the **actual
+   assignments**; an override with no assignment reports `NONE`. Found by batch 6.
+4. **A never-written constructor field was invisible.** The sweep diffs a field
+   across two combats, so a field nothing ever writes looks identical on both
+   instances and gets cleared — but `make_relic` (`relics/base.py:74`) passes no
+   arguments, so such a field is frozen at its default for the whole run. New
+   `FROZEN CONSTRUCTOR STATE` bucket. Found by batch 5.
+
+Defect 3 cuts both ways, and that is the most useful thing to come out of the
+rewrite. `happy_flower` and `pendulum` both carry `turns_seen` into combat 2, and
+the old column said "C# resets: `AfterCombatEnd`" — implying a reset the sim
+drops. The new column shows what that override actually assigns:
+`base.Status = RelicStatus.Normal`, a display flag. The counter is **meant** to
+persist on both sides. So the fixed column prevents false gaps as well as
+catching false clears; batch 5's `faithful` on `fake_happy_flower` N1 was right
+and now has mechanical backing.
+
+| Bucket | Old (unsound) | Fixed |
+|---|---|---|
+| Relics holding no state at all | 200 | 200 |
+| Reset every mid-combat field at a combat boundary | 5 | 5 |
+| Reset every field at **turn start** — genuinely safe | 21 *(mixed)* | **13** |
+| **Frozen constructor state — relic cannot fire** | *(invisible)* | **2** |
+| **Not reset before a reader** | 32 | **38** |
+| …executed by `sweep-reset-exec` | 16 | **19** |
+| **…confirmed carrying state into combat 2** | 3 | **7** |
 
 ### CONFIRMED — carry state across the combat boundary
 
-| Relic | Field | Observed | C# reset site | Obtainable via |
+| Relic | Field | Observed | C# boundary assignment | Status |
 |---|---|---|---|---|
-| `belt_buckle` | `_applied` | player powers `[('dexterity', 2)]` → `[]` in combat 2 | `BeforeCombatStart` + `AfterCombatEnd` + `AfterCombatVictory` | Shop, grab bag |
-| `centennial_puzzle` | `_used_this_combat` | `False` → `True` at combat-2 start | `CentennialPuzzle.cs:AfterCombatEnd` | **Common**, grab bag |
-| `paels_eye` | `used_this_combat` | `False` → `True` at combat-2 start | `PaelsEye.cs:142-145 AfterCombatEnd` | ported Pael shrine |
+| `belt_buckle` | `_applied` | player powers `[('dexterity', 2)]` → `[]` | `DexterityApplied = false` ×2 | pilot G2 |
+| `centennial_puzzle` | `_used_this_combat` | `False` → `True` | `UsedThisCombat = false` | recorded |
+| `paels_eye` | `used_this_combat` | `False` → `True` | `AfterCombatEnd` | recorded |
+| `diamond_diadem` | `cards_played_this_turn` | stale `3` read at combat-2 turn 1 | turn-END only | batch 4, LIVE |
+| `venerable_tea_set` | `_pending` | frozen `False`, relic never fires | n/a | **UNAUDITED** |
+| `fake_venerable_tea_set` | `_pending` | turn-1 energy 3 vs 4 | n/a | batch 5, LIVE |
+| `paels_tears` | `had_leftover_energy` | player energy `3` → `5` | `AfterCombatEnd` | **UNAUDITED** |
 
-`belt_buckle` was already recorded in the pilot (`audits/relic/belt_buckle.json`
-guard G2). **`centennial_puzzle` and `paels_eye` are new** and share the defect
-exactly: each is a once-per-combat relic that latches after its first use and
-never fires again for the rest of the run. Centennial Puzzle draws 3 cards on
-first HP loss; Pael's Eye grants an extra turn. Both are the cheapest possible
-fix (clear the flag in `on_combat_start`).
+Two of the seven are still unaudited and are pre-populated work for their
+batches: **`venerable_tea_set`** (batch 17 — identical to the `fake_` sibling
+batch 5 proved LIVE, so confirm, do not re-derive) and **`paels_tears`** (batch
+13 — an energy divergence, not just a flag).
+
+`happy_flower`, `fake_happy_flower` and `pendulum` also diff across the boundary
+but are **intended persistence on both sides** — see the `base.Status` note
+above. `pendulum` is unaudited; its batch should cite this rather than file a gap.
 
 Note the pilot's field-only diff would have **missed `belt_buckle`** — its stale
 flag settles at `True` on both instances and the divergence is in the *player's*
@@ -62,24 +112,20 @@ Dexterity. The probe therefore snapshots player powers/block/energy/HP/hand and
 enemy powers alongside the relic's fields. Any future use of this sweep must
 keep that.
 
-### NOT confirmed, but not cleared either
+### Known limits of the fixed sweep
 
-- **13 of the 16 executed candidates agreed** with a fresh instance — their
-  fields are genuine per-run counters (Girya's lifts, Toy Box's combat count,
-  Fishing Rod, Sword of Stone, Pumpkin Candle, Wongo's ticket, …).
-- **16 candidates were not executed** because their C# relic has no
-  combat-boundary reset at all, which is decent evidence the state is per-run on
-  both sides: `bone_tea`, `dusty_tome`, `girya`, `golden_compass`, `iron_club`,
-  `lava_rock`, `lizard_tail`, `maw_bank`, `nunchaku`, `paels_wing`, `pen_nib`,
-  `permafrost`, `silken_tress`, `silver_crucible`, `tuning_fork`,
-  `winged_boots`. **`nunchaku`, `pen_nib`, `permafrost`, `tuning_fork` and
-  `iron_club` deserve a second look** in their own batches — all five hold
+- The executed diff **cannot see** the turn-end and frozen buckets — the harness
+  breaks out before `end_turn` when the combat is over, and a frozen field is
+  identical on both instances by construction. That is *why* both are separate
+  static buckets, and why a static hit there must be settled by a purpose-built
+  probe (batches 4 and 5 both wrote one).
+- 19 candidates remain unexecuted because their C# counterpart makes no
+  combat-boundary assignment at all — decent evidence the state is per-run on
+  both sides, not proof. `nunchaku`, `pen_nib`, `permafrost`, `tuning_fork` and
+  `iron_club` still deserve a second look in their own batches; all five hold
   attack/card counters whose names read per-combat.
-- **The 21 turn-boundary-only relics are NOT cleared.** `art_of_war` was
-  verdicted safe in the pilot only after tracing to the first *reader* of the
-  stale field (PROMPT.md bug class 13); the other 20 have had no such trace.
-  They are listed in the probe output and each needs that trace in its own
-  batch.
+- A cross-combat diff is a **candidate**, never a verdict. PROMPT.md bug class 13
+  still requires tracing to the first reader of the stale field.
 
 ---
 
@@ -92,17 +138,32 @@ no per-pull filter.
 
 **20 ported relics override `RelicModel.IsAllowed`.** They split three ways:
 
-**(a) 16 relics — `IsBeforeAct3TreasureChest(runState)` = `TotalFloor < 41`.
+> **CORRECTED 2026-07-26 (batch 8): the cluster is 17, not 16.** The first
+> version of this sweep captured `([^\n;]*)` after the method's opening brace —
+> the **first line only**. `LastingCandy.IsAllowed`
+> (`LastingCandy.cs:80-98`) opens with a multi-line
+> `runState.Players.Any(delegate(Player p) {...})` unlock test and only
+> *returns* `RelicModel.IsBeforeAct3TreasureChest(runState)` at the very end, so
+> the sweep saw the unlock clause and never reached the floor gate. It is now
+> brace-matched, every clause is summarised, and multi-clause bodies are marked
+> `**` in the output.
+>
+> This was the stream's **first under-report**, and it is the more dangerous
+> direction. An over-report wastes a reader's time and gets caught; an
+> under-report silently shrinks the work list and nothing downstream notices.
+> Batch 8 found it only because it audited `lasting_candy` on its merits.
+
+**(a) 17 relics — `IsBeforeAct3TreasureChest(runState)` = `TotalFloor < 41`.
 Entirely unmodelled → live pool-composition gap.**
 
 `amethyst_aubergine`, `book_of_five_rings`, `bowler_hat`, `dragon_fruit`,
-`frozen_egg`, `girya`, `juzu_bracelet`, `lucky_fysh`, `meal_ticket`,
-`molten_egg`, `old_coin`, `planisphere`, `shovel`, `toxic_egg`,
+`frozen_egg`, `girya`, `juzu_bracelet`, **`lasting_candy`**, `lucky_fysh`,
+`meal_ticket`, `molten_egg`, `old_coin`, `planisphere`, `shovel`, `toxic_egg`,
 `white_beast_statue`, `white_star`.
 
-These sixteen stay pullable for the whole run where the game stops offering them
-at floor 41. The sim already tracks `RunState.total_floor` (event gates use it),
-so this is **one base-class member plus one filter in the pull path** — the
+These seventeen stay pullable for the whole run where the game stops offering
+them at floor 41. The sim already tracks `RunState.total_floor` (event gates use
+it), so this is **one base-class member plus one filter in the pull path** — the
 single highest-leverage fix the sweeps found. A wrong pull also shifts every
 subsequent pull, so it is not a one-relic error.
 
@@ -112,9 +173,12 @@ in the transcribed grab bag and its only grant path, the ported Neow event,
 already filters on `is_allowed_at_neow=False`. `silver_crucible` and
 `winged_boots` (`Players.Count == 1`) are always allowed in single-player.
 
-**(c) 1 relic — `lasting_candy`, gated on the Ironclad's `UnlockState`.**
-An unlock/progression gate; the sim assumes full unlocks. Likely a waiver, but
-it needs the per-unit audit to say so — flagged, not decided.
+**(c) `lasting_candy` carries BOTH gates** — the Ironclad `UnlockState` clause
+*and* the floor gate, which is why it also appears in (a). Batch 8 settled it:
+the unlock clause is a waiver (the sim assumes full unlocks; `grep UnlockState`
+over `sts2_rl/` returns nothing), the floor gate is the same live gap as the
+other sixteen. Executed: at `total_floor=60` the grab bag still yields
+`lasting_candy`.
 
 **`IsAllowedAtNeow` (2 overrides).** `kaleidoscope` matches
 (`is_allowed_at_neow=False`). **`scroll_boxes` does not**: C# gates on

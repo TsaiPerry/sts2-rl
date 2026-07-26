@@ -375,13 +375,31 @@ _BASE_ATTRS = {"combat", "is_wax"}
 # highest-impact live gap.
 _COMBAT_BOUNDARY = {"on_combat_start", "on_combat_end", "attach"}
 
-# Hooks that run at a TURN boundary. A field cleared here is not reset at the
-# combat boundary, but a stale value may still be unreadable — relic/art_of_war
-# is the pilot's example. These are reported as "shadowed?", not as clean.
-_TURN_BOUNDARY = {
-    "on_player_turn_start", "on_player_turn_started", "on_player_turn_end",
-    "on_energy_reset", "on_block_cleared", "on_enemy_side_end",
+# Hooks that run at the START of the player's turn. A field cleared here is
+# not reset at the combat boundary, but the stale value is unreadable: combat
+# 2's turn 1 runs these before any reader, so the relic self-heals.
+# relic/art_of_war is the pilot's example.
+_TURN_START = {
+    "on_player_turn_start", "on_player_turn_started",
+    "on_energy_reset", "on_block_cleared",
 }
+
+# Hooks that run at the END of a turn. A reset here is NOT equivalent to a
+# turn-start reset and must never be treated as one.
+#
+# `CombatState.end_turn` opens with `if self.phase != Phase.PLAYER_TURN:
+# return` (combat.py:639-642), so on the turn that WINS the fight the whole
+# turn-end pass is skipped and the reset never runs. The field then crosses
+# into combat 2 with combat 1's final value and is read at combat 2's turn 1,
+# before any turn end. relic/diamond_diadem is the executed witness: its
+# `cards_played_this_turn` arrives at 3 and its "played <= 2 cards" bonus is
+# withheld in a fight where the game grants it.
+#
+# The first version of this sweep pooled these with _TURN_START and filed all
+# 21 hits as "safe only if the turn reset runs before any reader" -- a
+# condition it then never tested. Four of the five batch-4..8 audits faulted
+# it. Splitting the two is the fix; `sweep-reset-exec` now executes both.
+_TURN_END = {"on_player_turn_end", "on_enemy_side_end"}
 
 # C# members that DECLARE a property rather than implement behaviour. A relic
 # port that overrides only these is not thereby a no-op.
@@ -438,6 +456,53 @@ def _cs_overrides(game_path: str) -> list[str]:
     return list_overrides(p.read_text(encoding="utf-8-sig", errors="replace"))
 
 
+def _cs_method_body(text: str, name: str) -> str | None:
+    """The braced body of C# member `name`, brace-matched.
+
+    Both sweeps used to read C# bodies with a `[^\\n;]*` capture, i.e. the
+    first line only. That silently truncates every multi-clause body:
+    LastingCandy.IsAllowed opens with a multi-line `runState.Players.Any(...)`
+    unlock test and only RETURNS IsBeforeAct3TreasureChest at the end, so
+    sweep-isallowed filed it as an unlock gate and under-reported the
+    floor-gate cluster as 16 relics when it is 17. An under-report is worse
+    than an over-report: nothing in the pipeline catches it.
+    """
+    m = re.search(
+        r"(?:public|protected|private|internal)[\w\s]*?\b"
+        + re.escape(name) + r"\s*(?:\([^)]*\))?\s*\{", text)
+    if m is None:
+        return None
+    i = text.index("{", m.end() - 1)
+    depth = 0
+    for j in range(i, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[i + 1:j]
+    return None
+
+
+def _cs_body_assignments(body: str) -> list[str]:
+    """Assignment statements in a C# body, normalized to one line each.
+
+    `sweep-reset`'s "C# resets" column was a *census of overrides* -- it proved
+    only that the relic overrides BeforeCombatStart/AfterCombatEnd, never that
+    the body assigns anything. It therefore credited relics that override a
+    boundary hook for an unrelated reason (fishing_rod, fur_coat) with a reset
+    they do not perform. This turns the column into evidence.
+    """
+    out = []
+    for line in body.splitlines():
+        s = line.strip().rstrip(";")
+        if not s or s.startswith("//"):
+            continue
+        if re.match(r"^[\w.\[\]]+\s*(?:=|\+=|-=)\s*[^=]", s):
+            out.append(s)
+    return out
+
+
 def _class_node(cls) -> ast.ClassDef | None:
     try:
         src = textwrap.dedent(inspect.getsource(cls))
@@ -477,6 +542,98 @@ def _own_methods(cls) -> dict[str, ast.FunctionDef]:
     return out
 
 
+def _is_reset_value(attr: str, value: ast.expr) -> bool:
+    """Is `self.<attr> = value` a RESET rather than an accumulate?
+
+    A reset stores a fresh zero-ish constant. `self.turns_seen =
+    self.turns_seen + 1` is a plain ast.Assign too, and the first version of
+    this sweep counted it as a reset -- so relic/happy_flower was filed as
+    "reset at a turn boundary" when the write is an INCREMENT and the field
+    never returns to 0. Batch 7 caught it.
+    """
+    if any(isinstance(n, ast.Attribute) and n.attr == attr
+           for n in ast.walk(value)):
+        return False                       # references itself: accumulate
+    if isinstance(value, ast.Constant):
+        return value.value in (0, False, None, "") or value.value == 0
+    if isinstance(value, (ast.List, ast.Dict, ast.Set)):
+        return not getattr(value, "elts", None) and not getattr(
+            value, "keys", None)
+    if isinstance(value, ast.Call):        # set(), list(), dict()
+        return (isinstance(value.func, ast.Name)
+                and value.func.id in ("set", "list", "dict")
+                and not value.args)
+    return False
+
+
+def _ctor_param_fields(cls) -> dict[str, str]:
+    """`self.X = <param>` fields in __init__, mapped to the parameter name.
+
+    THE BLIND SPOT this closes: `sweep-reset` diffs a field across two combats,
+    so a field that is NEVER WRITTEN anywhere looks identical on both instances
+    and the sweep clears it. But `RunState.add_relic` builds relics with
+    `make_relic(id)` -> `_RELIC_CLASSES[id]()` (relics/base.py:74) and passes no
+    arguments, so such a field is frozen at its default for the whole run and
+    the relic is inert. venerable_tea_set and fake_venerable_tea_set both hold
+    their entire trigger in one of these; batch 5 executed the second and found
+    the relic does nothing in any run that buys it.
+
+    Girya is the near-miss that fixes the detector's shape: `times_lifted` is
+    also a constructor parameter, but `_lift()` does `times_lifted += 1` from a
+    rest-site option, so the field has a real in-run source and the relic works.
+    The defect is specific to a field whose ONLY non-constructor writes are
+    clears -- then no code path can ever make it truthy.
+    """
+    out: dict[str, str] = {}
+    for klass in _own_classes(cls):
+        node = _class_node(klass)
+        if node is None:
+            continue
+        for f in node.body:
+            if not isinstance(f, ast.FunctionDef) or f.name != "__init__":
+                continue
+            params = {a.arg for a in f.args.args} - {"self"}
+            for stmt in ast.walk(f):
+                if not isinstance(stmt, ast.Assign):
+                    continue
+                names = {n.id for n in ast.walk(stmt.value)
+                         if isinstance(n, ast.Name)}
+                if not (names & params):
+                    continue
+                for t in stmt.targets:
+                    if (isinstance(t, ast.Attribute)
+                            and isinstance(t.value, ast.Name)
+                            and t.value.id == "self"):
+                        out[t.attr] = sorted(names & params)[0]
+    return out
+
+
+def _only_ever_cleared(cls, attr: str) -> bool:
+    """True if every write to `self.<attr>` outside __init__ is a reset.
+
+    Such a field can never become truthy at runtime: its only non-clearing
+    source is the constructor parameter, which nothing passes.
+    """
+    for name, fn in _own_methods(cls).items():
+        if name == "__init__":
+            continue
+        for n in ast.walk(fn):
+            if isinstance(n, ast.AugAssign):
+                t = n.target
+                if (isinstance(t, ast.Attribute) and t.attr == attr
+                        and isinstance(t.value, ast.Name)
+                        and t.value.id == "self"):
+                    return False
+            elif isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if (isinstance(t, ast.Attribute) and t.attr == attr
+                            and isinstance(t.value, ast.Name)
+                            and t.value.id == "self"
+                            and not _is_reset_value(attr, n.value)):
+                        return False
+    return True
+
+
 def _self_writes(fn: ast.FunctionDef) -> tuple[set[str], set[str]]:
     """(plain-assigned, augmented-assigned) `self.X` names anywhere in fn."""
     plain: set[str] = set()
@@ -513,8 +670,10 @@ def probe_sweep_reset() -> None:
     """
     from sts2_rl.relics import ALL_RELICS
 
+    from tools.audit.harness import DEFAULT_GAME_ROOT
+
     rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
-    hits, shadowed, clean, stateless = [], [], [], 0
+    hits, shadowed, frozen, clean, stateless = [], [], [], [], 0
 
     for rid, cls in sorted(ALL_RELICS.items()):
         methods = _own_methods(cls)
@@ -522,65 +681,130 @@ def probe_sweep_reset() -> None:
             continue
         writers: dict[str, set[str]] = {}
         reset_at_combat: set[str] = set()
-        reset_at_turn: set[str] = set()
+        reset_at_turn_start: set[str] = set()
+        reset_at_turn_end: set[str] = set()
         in_play: set[str] = set()
         for name, fn in methods.items():
             plain, aug = _self_writes(fn)
             for attr in plain | aug:
                 writers.setdefault(attr, set()).add(name)
+            # Only a write that stores a fresh zero-ish constant is a RESET;
+            # `self.x = self.x + 1` is a plain Assign and an accumulate.
+            resets = {a for a in plain if any(
+                _is_reset_value(a, n.value) for n in ast.walk(fn)
+                if isinstance(n, ast.Assign)
+                and any(isinstance(t, ast.Attribute) and t.attr == a
+                        for t in n.targets))}
             if name in _COMBAT_BOUNDARY:
-                reset_at_combat |= plain
-            if name in _TURN_BOUNDARY:
-                reset_at_turn |= plain
-            # Anything written outside a boundary hook or the constructor is
-            # state the relic accumulates DURING a combat.
+                reset_at_combat |= resets
+            if name in _TURN_START:
+                reset_at_turn_start |= resets
+            if name in _TURN_END:
+                reset_at_turn_end |= resets
             if name not in _COMBAT_BOUNDARY and name != "__init__":
                 in_play |= plain | aug
+
+        # A field held ONLY in a constructor parameter is never written at all,
+        # so no cross-combat diff can see it -- and make_relic passes no args,
+        # so it is frozen at its default. Report it before the state test.
+        ctor = _ctor_param_fields(cls)
+        never_written = {a: p for a, p in ctor.items()
+                         if _only_ever_cleared(cls, a)}
+        if never_written:
+            frozen.append((rid, never_written,
+                           sorted(set(methods) - {"__init__"})))
+
         state = (in_play | set(writers)) - _BASE_ATTRS
         if not state:
             stateless += 1
             continue
-        # Only mid-combat state can go stale across a combat boundary; a field
-        # written solely in __init__ is run-level configuration.
         unreset = (in_play - _BASE_ATTRS) - reset_at_combat
         if not unreset:
             clean.append(rid)
             continue
-        cs = set(_cs_overrides(rows[rid]["game_path"])) if rid in rows else set()
-        boundary = sorted(cs & {"BeforeCombatStart", "AfterCombatEnd",
-                                "AfterCombatVictory", "AfterCombatDefeat"})
+
+        # 'C# resets' must be EVIDENCE, not a census of overrides. Show the
+        # assignments the boundary override actually makes; an override with no
+        # assignment in its body is not a reset.
+        boundary: dict[str, list[str]] = {}
+        row = rows.get(rid)
+        if row is not None:
+            p = DEFAULT_GAME_ROOT / row["game_path"]
+            if p.is_file():
+                text = p.read_text(encoding="utf-8-sig", errors="replace")
+                for h in _cs_overrides(row["game_path"]):
+                    if h not in ("BeforeCombatStart", "AfterCombatEnd",
+                                 "AfterCombatVictory", "AfterCombatDefeat"):
+                        continue
+                    body = _cs_method_body(text, h)
+                    if body is None:
+                        continue
+                    assigns = _cs_body_assignments(body)
+                    if assigns:
+                        boundary[h] = assigns
+
         entry = (rid, sorted(unreset), boundary,
-                 sorted(unreset & reset_at_turn),
+                 sorted(unreset & reset_at_turn_start),
+                 sorted(unreset & reset_at_turn_end),
                  {a: sorted(writers[a]) for a in sorted(unreset)})
-        (shadowed if (unreset <= reset_at_turn) else hits).append(entry)
+        # SAFE only if every unreset field is cleared at turn START. A field
+        # cleared only at turn END is NOT safe -- see _TURN_END. And a frozen
+        # constructor field is not "safely reset", it is DEAD: reporting the
+        # tea sets as safe was the misleading half of the old output.
+        if never_written:
+            pass                          # already reported under FROZEN
+        elif unreset and unreset <= reset_at_turn_start:
+            shadowed.append(entry)
+        else:
+            hits.append(entry)
 
     print(f"  {len(ALL_RELICS)} sim relics: {stateless} hold no state, "
           f"{len(clean)} reset every mid-combat field at a combat boundary, "
-          f"{len(shadowed)} reset only at a TURN boundary, "
-          f"{len(hits)} never reset")
-    print("\n  NEVER RESET AT A COMBAT BOUNDARY (candidate belt_buckle "
-          "shape). 'C# resets' = the combat-boundary hooks the C# relic\n"
-          "  overrides; a non-empty list means the source thought the reset "
-          "mattered:")
-    for rid, unreset, boundary, _turn, who in hits:
+          f"{len(shadowed)} reset every one at TURN START (safe), "
+          f"{len(hits)} do not")
+    print("\n  NEVER RESET BEFORE A READER (candidate belt_buckle shape). "
+          "'C# resets' now lists the ASSIGNMENTS the C# boundary\n"
+          "  override actually makes -- an override with no assignment is not "
+          "a reset, which the override-census version got wrong:")
+    for rid, unreset, boundary, t_start, t_end, who in hits:
         print(f"    {rid:<26} {unreset}")
         print(f"    {'':<26} written by: "
               f"{'; '.join(f'{a}<-{w}' for a, w in who.items())}")
+        if t_end:
+            print(f"    {'':<26} !! reset at TURN END only: {t_end} -- "
+                  f"end_turn early-returns on the winning turn, so this "
+                  f"crosses into the next combat")
+        if t_start:
+            print(f"    {'':<26} (partly reset at turn start: {t_start})")
         print(f"    {'':<26} C# resets: "
               f"{boundary or 'NONE (may be per-run by design)'}")
-    print("\n  RESET AT A TURN BOUNDARY ONLY (art_of_war shape -- safe only "
-          "if the turn reset runs before any reader):")
-    for rid, unreset, boundary, turn, _who in shadowed:
-        print(f"    {rid:<26} {unreset} turn-reset={turn} "
-              f"C# resets: {boundary or 'NONE'}")
+    print("\n  RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- "
+          "genuinely safe: combat 2's turn 1 clears it first):")
+    for rid, unreset, boundary, t_start, _t_end, _who in shadowed:
+        print(f"    {rid:<26} {unreset} turn-start-reset={t_start} "
+              f"C# resets: {sorted(boundary) or 'NONE'}")
+    print(f"\n  FROZEN CONSTRUCTOR STATE ({len(frozen)}): the field is written "
+          f"ONLY in __init__ from a parameter, and make_relic\n"
+          f"  (relics/base.py:74) passes no arguments -- so it holds its "
+          f"default for the whole run and no\n"
+          f"  cross-combat diff can see it. Check whether the relic can fire "
+          f"at all:")
+    for rid, nw, others in frozen:
+        print(f"    {rid:<26} "
+              f"{', '.join(f'self.{a} <- {p}' for a, p in sorted(nw.items()))}"
+              f"   other methods: {others or 'NONE'}")
 
-    graded = [h for h in hits if h[2]]
-    print(f"\n  PRIORITISED: {len(graded)} of the {len(hits)} never-reset "
-          f"candidates have a C# combat-boundary reset, i.e. the source\n"
-          f"  itself thought the field had to be cleared per combat. Those are "
-          f"the ones `sweep-reset-exec` runs:")
-    print(f"    {sorted(h[0] for h in graded)}")
-    return [h[0] for h in graded]
+    graded = sorted({h[0] for h in hits if h[2]}
+                    | {h[0] for h in hits if h[4]}
+                    | {f[0] for f in frozen})
+    print(f"\n  PRIORITISED for `sweep-reset-exec` ({len(graded)}): every "
+          f"candidate whose C# counterpart really assigns at a combat\n"
+          f"  boundary, PLUS every turn-END-only reset, PLUS every frozen "
+          f"constructor field. The first version ran only\n"
+          f"  the first group, which is why the turn-boundary bucket went "
+          f"21-relics-unexecuted:")
+    print(f"    {graded}")
+    return graded
 
 
 # ── sweep-reset-exec ──────────────────────────────────────────────────────
@@ -695,24 +919,56 @@ def probe_sweep_isallowed() -> None:
             continue
         text = p.read_text(encoding="utf-8-sig", errors="replace")
         body = {}
-        for m in re.finditer(
-                r"public override bool (IsAllowed|IsAllowedAtNeow)\("
-                r"[^)]*\)\s*\{\s*(?:return\s+)?([^\n;]*)", text):
-            body[m.group(1)] = m.group(2).strip()
+        for name in ("IsAllowed", "IsAllowedAtNeow"):
+            if not re.search(r"public override bool " + name + r"\(", text):
+                continue
+            # Brace-matched, NOT first-line. The first-line capture missed every
+            # clause after the opening statement and under-reported the
+            # IsBeforeAct3TreasureChest cluster as 16 relics when it is 17.
+            full = _cs_method_body(text, name)
+            if full is None:
+                continue
+            clauses = [ln.strip().rstrip(";") for ln in full.splitlines()
+                       if ln.strip() and not ln.strip().startswith("//")]
+            body[name] = clauses
         if "IsAllowed" in body:
             n_allowed.append((rid, body["IsAllowed"]))
         if "IsAllowedAtNeow" in body:
             n_neow.append((rid, body["IsAllowedAtNeow"],
                            ALL_RELICS[rid].is_allowed_at_neow))
 
+    def _summarize(clauses: list[str]) -> tuple[str, bool]:
+        """(one-line gist, is_multi_clause). Names EVERY gate, not the first."""
+        gates = []
+        joined = " ".join(clauses)
+        if "IsBeforeAct3TreasureChest" in joined:
+            gates.append("IsBeforeAct3TreasureChest (TotalFloor < 41)")
+        if "UnlockState" in joined or "NumberOfRuns" in joined:
+            gates.append("UnlockState/NumberOfRuns gate")
+        for m in re.finditer(r"\b([A-Z]\w+)\s*\(", joined):
+            g = m.group(1)
+            if g not in ("Any", "Where", "Select", "Count", "Contains",
+                         "IsBeforeAct3TreasureChest") and g not in gates:
+                gates.append(g + "(...)")
+        n = len([c for c in clauses if c.startswith("return")])
+        return ("; ".join(gates) or joined[:70]), n > 1
+
     print(f"\n  {len(n_allowed)} ported relic(s) override IsAllowed -- "
-          f"ALL unmodelled (no sim concept exists):")
-    for rid, expr in n_allowed:
-        print(f"    {rid:<28} {expr}")
+          f"ALL unmodelled (no sim concept exists). '**' marks a MULTI-CLAUSE\n"
+          f"  body, where the first-line reader saw only the first gate:")
+    floor_cluster = []
+    for rid, clauses in n_allowed:
+        gist, multi = _summarize(clauses)
+        if "IsBeforeAct3TreasureChest" in " ".join(clauses):
+            floor_cluster.append(rid)
+        print(f"    {'**' if multi else '  '} {rid:<26} {gist}")
+    print(f"\n  IsBeforeAct3TreasureChest cluster: {len(floor_cluster)} "
+          f"relic(s) -- {floor_cluster}")
     print(f"\n  {len(n_neow)} ported relic(s) override IsAllowedAtNeow "
           f"(the sim HAS this flag -- check each value):")
-    for rid, expr, simval in n_neow:
-        print(f"    {rid:<28} C#: {expr:<44} sim is_allowed_at_neow={simval}")
+    for rid, clauses, simval in n_neow:
+        gist, _ = _summarize(clauses)
+        print(f"    {rid:<28} C#: {gist:<52} sim is_allowed_at_neow={simval}")
 
 
 # ── sweep-stubs ───────────────────────────────────────────────────────────

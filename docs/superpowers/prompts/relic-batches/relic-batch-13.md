@@ -26,8 +26,8 @@ GAME SOURCE (**READ-ONLY**): `c:\Users\Perry\Desktop\Slay the Spire 2`
 1. `docs/superpowers/prompts/_shared-audit-contract.md` — your binding
    contract: operational rules, the EIGHT BINDING VERDICT RULES, file
    ownership, the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` (**v4**) — the versioned instruction sheet and the
-   18-item bug-class checklist. Check EVERY class against EVERY unit.
+2. `tools/audit/PROMPT.md` (**v5**) — the versioned instruction sheet and the
+   23-item bug-class checklist. Check EVERY class against EVERY unit.
 3. `.superpowers/sdd/content-relic-sweeps.md` — five pool-wide sweeps already
    ran across all 258 relics. **Units in your batch that they diagnosed are
    listed below; read their sweep section before auditing them so you confirm
@@ -68,6 +68,28 @@ The pool-wide sweeps already reached these findings and recorded the evidence. Y
 - **`royal_poison`** — Named witness in `audits/seam/turn_structure.json` G13 (turn-1 player-damage trigger). Cite and match.
 - **`royal_stamp`** — Sweep C stub: `AfterObtained` dispatched; 'no enchantments' is FALSE.
 - **`ruined_helmet`** — Sweep A candidate (`_used`; C# resets at `AfterCombatEnd`). Settle by execution. Also a named listener in `audits/seam/power_cmd.json` gaps G3/G4 — cite and match under rule 3.
+
+## Sweeps A and B were REWRITTEN on 2026-07-26 — read the corrections
+
+Batches 4-8 each faulted the pool-wide sweeps they were told to trust, and all
+of the faults were real. Both sweeps are fixed and re-run; the corrected
+findings are in `.superpowers/sdd/content-relic-sweeps.md`. What changed:
+
+- **Sweep A** pooled turn-END resets with turn-START resets and never tested the
+  safety claim on either; counted `x = x + 1` as a reset; printed a **census of
+  C# overrides** as if it were a census of resets (so it credited relics with
+  resets they do not perform); and could not see a field written only in
+  `__init__` from a parameter nothing passes. Its "safe" bucket is now 13 units,
+  not 21, and 7 relics are confirmed carrying state, not 3.
+- **Sweep B** read only the FIRST LINE of each `IsAllowed` body, so multi-clause
+  bodies lost every gate after the first. The `IsBeforeAct3TreasureChest`
+  cluster is **17 relics, not 16**.
+
+**The lesson, which applies to your batch:** a sweep's output is evidence, not
+authority. If a bucket label makes a safety claim ("safe only if the reset runs
+before any reader"), that claim was probably never executed — execute it or move
+the unit out of the bucket. Report anything you find wrong in your lessons file;
+four of the five previous batches found something.
 
 ## Procedure per unit
 
