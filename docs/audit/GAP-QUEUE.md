@@ -499,9 +499,9 @@ content.
 
 ### 14. `turn_structure/G3` — the extra-turn check short-circuits the entire turn-end pipeline  [LIVE] [pinned]
 
-- **sites** `turn_structure/step65`, `/step68`, `/G3`, plus `/N4` (RoundNumber vs
-  TurnNumber, which the record says carries G3's precedence) and its co-entry
-  (5 entries).
+- **sites** `turn_structure/step65`, `/step68`, `/G3`, plus `turn_structure/N4`
+  and `turn_structure/step66` — RoundNumber vs TurnNumber, which the record says
+  carries G3's precedence (5 entries).
 - **impact** B — an entire turn's worth of end-of-turn effects is skipped.
 - **divergence** `combat.py:648-652` tests `should_take_extra_turn` at the **top**
   of `end_turn` and, on success, runs only `on_extra_turn`, `turn += 1` and
@@ -1223,7 +1223,7 @@ C# powers declare an override (19 `Instanced`, 2 `InstancedPerApplier` —
 appliers of the same `InstancedPerApplier` power in one combat, or any ported
 `Instanced` power stacking where it should not.
 
-### 59. `power_cmd/step4` + `/step26` — one code path serves Apply and ModifyAmount  [DORMANT] [unpinned]
+### 59. `power_cmd/step4` and `power_cmd/step26` — one code path serves Apply and ModifyAmount  [DORMANT] [unpinned]
 
 C# has two independently-coded pipelines whose guards differ (`PowerCmd.cs:79-87`);
 the sim collapses them (`cmds.py:270-332`). It reaches the same steady state for
@@ -1267,7 +1267,10 @@ test**: Lizard Tail + Centennial Puzzle, both ported — C#'s
 does not draw; the sim's (`relics/centennial_puzzle.py:24-35`) fires and draws 3
 cards.
 
-### 63. `damage_pipeline/G6` + `/step17.4` — the dealer-side event fires after the victim-side one  [DORMANT] [unpinned]
+### 63. `damage_pipeline/G6` and `damage_pipeline/step17.4` — the dealer-side event fires after the victim-side one  [DORMANT] [unpinned]
+
+(Two mechanism ids, one finding: the guard and the step that records it each
+stand alone because the step names no guard.)
 
 `CreatureCmd.cs:388-395` fires `AfterDamageGiven` (unconditional) **before** the
 killing-blow-guarded `AfterDamageReceived`; `DamageCmd.deal` fires
@@ -1296,7 +1299,11 @@ and only when positive. Executed: healing 20 on a player 3 below max reports del
 `on_hp_changed` listener is Red Skull (`relics/red_skull.py:44-46`), which ignores
 the delta.
 
-### 66. `creature_card_cmds/G6` + `/step28` + `/step29` — `lose_max_hp` cannot kill  [DORMANT] [unpinned]
+### 66. `creature_card_cmds/G6` — `lose_max_hp` cannot kill  [DORMANT] [unpinned]
+
+- **sites** `creature_card_cmds/step28`, `/G6`; `creature_card_cmds/step29` is
+  the same finding recorded on its own step (the record files it separately
+  because the *order* is the load-bearing part).
 
 `CreatureCmd.LoseMaxHp` computes an **unfloored** `newMaxHp` and, when it is below
 `CurrentHp`, deals the difference as Unblockable|Unpowered damage through the
@@ -1446,6 +1453,8 @@ and not in the game.
 
 ### 80. `monster_state_machine/G5` — `stun`'s `next_move_key` is dropped for a machine monster  [DORMANT] [pinned]
 
+- **sites** `monster_state_machine/step36` (1 entry).
+
 Two halves: (a) no `CanTransitionAway` guard on the override path, so a move pinned
 by `must_perform_once_before_transitioning` can be replaced where the game refuses
 (`MonsterModel.cs:420-432`); (b) `cmds.py:216` gates `next_move_key` on
@@ -1532,3 +1541,227 @@ no-`IsDead`-guard half **is** faithfully ported (`combat.py:288-292` keeps a
 `retained_after_death` corpse in the loop — that is how a withered Decimillipede
 segment reaches REATTACH). The record could not construct a reachable C# path where
 the flag survives to `TakeTurn`. **radius** `monster_state_machine/G9`.
+
+
+---
+
+# Dormant-trigger watch list
+
+Every dormant gap names a concrete unported thing that would make it live.
+**Anyone porting a row's trigger needs to read that row's mechanisms first** —
+the port will otherwise be written against a sim seam that does not behave like
+the game's. Sorted roughly by how likely the trigger is to come up.
+
+| trigger — the unported thing | wakes | queue # |
+|---|---|---|
+| Any conformance replay through a card-selection / grid screen | `creature_card_cmds/N10`, `/step104` | 24 |
+| Any conformance replay containing an in-combat transform | `creature_card_cmds/step55` | 25 |
+| Any reshuffle in a replay where Perfect Fit is enchanted; a 2nd repositioning `on_shuffle` listener | `creature_card_cmds/G10` | 26 |
+| Porting **BufferPower** | `damage_pipeline/G2`, `hook_dispatch/G3` | 11, 6 |
+| Porting **Malaise** or **Resonance** (negative-Strength appliers) | `power_cmd/G1`, `/G2` | 55, 56 |
+| Porting **Unceasing Top** | `turn_structure/G16` | 45 |
+| Porting **SovereignBlade**, **Hoarder** or **SoulFysh** (combat-pile watchers) | `creature_card_cmds/G8` | 34 |
+| Porting **Hexed**'s `AfterCardEnteredCombat` | `hook_dispatch/G6` (needs `/G1` too) | 53, 51 |
+| Porting **SlumberingEssence** or **WellLaidPlansPower** (`BeforeFlush`); **Bookmark** (`AfterFlush`) | `turn_structure/step55`, `/G4` | 43, 18 |
+| Porting **any Sly card** | `creature_card_cmds/step51` (+ step 50's ordering) | 72 |
+| Porting **DoomPower** or **HailstormPower** onto the enemy-side `BeforeSideTurnEnd` | `turn_structure/G11` | 44 |
+| Porting **NoEnergyGainPower**'s `AfterModifyingEnergyGain`, or **BowlerHat**/**Ectoplasm**'s `AfterModifyingGoldGained` | `damage_pipeline/G2` | 11 |
+| Porting **PaleBlueDotPower**, or any gameplay `AfterModifyingHandDraw` | `turn_structure/step20` | 42 |
+| Un-stubbing **Dragon Fruit** or **Lucky Fysh** (both ported, both inert) | `creature_card_cmds/G12`, `/G8` | 35, 34 |
+| Porting any of the **11 unclaimed C# monster hook overrides** (table below) | `hook_dispatch/G5` | 52 |
+| Porting a monster with a **repeated state id** (`Fogmog.cs:44-45` is the near-miss) | `monster_state_machine/G8` | 77 |
+| A C# monster added with **`AddBranch(state, 0)`**, or a non-dyadic branch weight | `monster_state_machine/G7` | 78 |
+| Porting **CeremonialBeast** onto `MachineMonster`, or the DecimillipedeSegment / TestSubject / WaterfallGiant stun callers | `monster_state_machine/G5` | 80 |
+| Wiring **`Inklet.cs:69`'s INIT_RAND**, or porting Inklet / PhrogParasite onto `MachineMonster` | `monster_state_machine/G2` | 82 |
+| A monster model needing a **forward state reference** (`FollowUpStateId` without `FollowUpState`) | `monster_state_machine/G3` | 81 |
+| A sim consumer that reads an **enemy intent mid-enemy-side** (per-enemy obs build, interruptible enemy phase) | `monster_state_machine/G9` | 79 |
+| Porting any `CardModel` with a **run-level hook** (`AfterRoomEntered`, `AfterRewardTaken`, `ShouldAddToDeck`) | `hook_dispatch/N5`, `creature_card_cmds/N3` | 54, 30 |
+| A listener on a **guarded dispatcher** that mutates run-level state (HP, gold, deck); **the conformance exporter** | `hook_dispatch/G8` | 28 |
+| A listener that **removes another listener mid-dispatch** | `hook_dispatch/G7` | 50 |
+| A **card hook that reads state another card's hook writes** | `hook_dispatch/G1` | 51 |
+| A **non-dyadic block multiplier** (only `MultiplayerScalingModel.cs:52-68` exists, waived) | `hook_dispatch/G9` block site | 3 |
+| A **second implementer** of `ShouldForcePotionReward` / `ShouldAllowFreeTravel` | `hook_dispatch/step37` | 49 |
+| A **second corpse-heal**, or routing `ReattachPower` through the heal verb | `creature_card_cmds/G4` | 64 |
+| Any `AfterCurrentHpChanged` listener that **reads the amount** | `creature_card_cmds/G5` | 65 |
+| A model overriding **`BeforeBlockGained`** (zero overrides game-wide today) | `creature_card_cmds/step12` | 38 |
+| Porting a **multi-card transform** | `creature_card_cmds/step56` | 74 |
+| Porting a card that **plays more than one card from the draw pile** | `creature_card_cmds/step99`, `/N9` | 75, 76 |
+| Two appliers of the same **`InstancedPerApplier`** power in one combat | `power_cmd/G5` | 58 |
+| A **third `modify_power_amount` listener**, or Unsettling Lamp / Ruined Helmet widening | `power_cmd/G3` | 57 |
+| An **`AfterCombatVictory`-only** listener with an unconditional effect; any `on_combat_end` effect that outlives the combat | `turn_structure/G10` | 83 |
+| The first **side-effecting** `should_reset_energy` or `modify_max_energy` | `turn_structure/step17` | 48 |
+| The first **`ShouldEtherealTrigger`** implementation on either side | `turn_structure/G15` | 85 |
+| Porting a `BeforeCardRemoved` listener, or adding a removed-from-state flag | `creature_card_cmds/step68` | 41 |
+| A **new multi-hit / multi-target effect** that forgets the per-hit death check | `damage_pipeline/G5` | 29 |
+| Porting a second `on_damage_dealt` power | `damage_pipeline/G6`, `/step17.4` | 63 |
+
+---
+
+# Behaviour in no seam's scope
+
+Holes are queue items too. The six records cover engine *machinery*; these
+things are covered by nothing. Recorded in
+`docs/audit/seams/monster_state_machine.md`'s scope-boundary section (it is the
+last seam, so the holes are collected there) and reproduced here so the queue is
+the single view.
+
+1. **Per-monster move content.** What `SkitterMove` or `RitualMove` actually
+   does — its damage numbers, its intent list. The ~121
+   `src/Core/Models/Monsters/*.cs` models are a **content tier** with no audit
+   record. `state_machine_probes.py mismatch` covers the branch *parameters* of
+   the 13 ported `RandomBranchState`s (12 sim modules) and nothing else.
+2. **`AbstractIntent` and the intent vocabulary.** `src/Core/MonsterMoves/Intents/`
+   is unaudited: the sim collapses a C# `AbstractIntent[]` into one `Intent` with
+   an `also` tuple (`monsters/base.py:36-59`) and nothing checks that mapping.
+   `MonsterModel.IntendsToAttack` (`MonsterModel.cs:241-245`) reads the intent
+   list and gates ported content, so a wrong mapping is a gameplay bug, not a
+   display bug.
+3. **`MonsterModel`'s non-machine surface** — `GenerateBestiaryMoveList`,
+   `GetIntents`, `ResetStateMachine`, `CanonicalInstance`/`ToMutable`, HP
+   generation and the Niche roll. Only `SetUpForCombat` / `OnSideSwitch` are
+   claimed (by `turn_structure`). **HP generation and the Niche roll are
+   RNG-consuming**, which puts part of this hole on the convergence path.
+4. **`EncounterModel` / monster-slot generation.** Which monsters spawn, in what
+   slots, with what HP roll, is claimed by no seam. `hook_dispatch` names
+   `AfterCreatureAdded` and `monster_state_machine` names `SetUpForCombat`, but
+   the *selection* is unaudited — also RNG-consuming.
+5. **Eleven C# monster models' `AbstractModel` hook overrides.** The probe
+   `py tools/audit/dormancy_probes.py cs-monster-hooks` finds **12** models
+   overriding a hook; only `KinPriest` has been adjudicated
+   (`monster_state_machine` guard N6, waiver: a barks line plus a music
+   parameter). The other 11 are audited by no seam — a hook override is
+   per-monster behaviour, i.e. content tier, and hole 1 covers move content but
+   not hook overrides. Handed to the content-monster stream
+   (`docs/superpowers/prompts/2026-07-26-content-monster.md`).
+
+   | model | overridden hook(s) | note |
+   |---|---|---|
+   | `Aeonglass.cs` | `AfterCardGeneratedForCombat`, `AfterDeath` | |
+   | `Crusher.cs` | `AfterCurrentHpChanged`, `BeforeDeath` | |
+   | `DecimillipedeSegment.cs` | `AfterDeath` | ported monster |
+   | `LagavulinMatriarch.cs` | `AfterDamageReceived`, `AfterDeath` | **ported mechanic**: the wake-from-damage path, hand-rolled in the sim as `AsleepPower` → `wake_up(stunned=True)` (`monsters/underdocks/lagavulin_matriarch.py:75-87`) |
+   | `Queen.cs` | `AfterDeath` | |
+   | `Rocket.cs` | `AfterCurrentHpChanged`, `BeforeDeath` | Kaiser Crab's attack |
+   | `SoulFysh.cs` | `AfterCardChangedPilesLate`, `AfterDeath` | also `creature_card_cmds/G8`'s trigger |
+   | `TestSubject.cs` | `AfterDeath` | ported boss |
+   | `TheInsatiable.cs` | `AfterDeath` | |
+   | `Vantom.cs` | `AfterDeath` | |
+   | `WaterfallGiant.cs` | `AfterDeath` | |
+
+   Most are in ported pools (`rooms.py:124-207`).
+
+Two more holes this aggregation noticed, not recorded by any seam:
+
+6. **No record owns the `combat_rng` stream map.** Four queue entries are
+   "the sim draws from the wrong stream, or draws when the game does not"
+   (#2, #24, #25, #27) and each was found incidentally by the seam that happened
+   to touch the call site. Nothing audits the stream assignment as a subject.
+   Given that stream desync is the highest-impact failure class in this queue,
+   that is the largest structural hole here.
+7. **Relic and card *content* has no seam.** `creature_card_cmds/G12` names two
+   ported relics (Dragon Fruit, Lucky Fysh) whose sim implementations are inert
+   stubs with docstrings that are no longer true. The seam records the missing
+   hook; nothing owns the stubbed relic.
+
+---
+
+# Record inconsistencies found while aggregating
+
+Rule 3 signals: a gap whose text contradicts another record's, or its own. This
+class has already caught one live bug on this project, so they are reported, not
+fixed. **None of these was corrected in this pass — `audits/**` is untouched.**
+
+1. **Two stale sim citations, caught mechanically.**
+   `hook_dispatch`'s G2 evidence cites `relics/spiked_gauntlets.py:26-32`; the
+   file ends at line 31 (the method is 26-31). `creature_card_cmds`' G9 and
+   step 84 cite `relics/fiddle.py:26-31`; the file ends at 29 (the method is
+   26-29). Both are one-line overruns — harmless to a reader, fatal to a
+   `sed -n`. `py tools/audit/gap_queue.py cite-check` regenerates this check over
+   all 327 citations in this queue.
+
+2. **`hook_dispatch`/G7's executed evidence is from a stale tree.** It records
+   the stale-listener plugin run as "the whole suite (2476 passed / 30 xfailed)
+   and 191,270 instrumented listener calls". The suite is **2478 passed / 38
+   xfailed** today. The conclusion may well still hold — the record says the run
+   is reproducible from the committed tree — but the number in the record was
+   taken before 8 more xfails and 2 more tests existed, so **re-run it before
+   relying on the "only one hit" claim**.
+
+3. **One RE-AUDIT paragraph pasted onto four entries, one of which it does not
+   describe.** `damage_pipeline` steps 5, 9, 12 and guard G2 carry a
+   byte-identical "RE-AUDIT 2026-07-25 … PARTIALLY RESOLVED" block whose subject
+   is the **HpLost** variant. Step 5 is `AfterModifyingDamageAmount` — a
+   different variant, and one the same paragraph later lists among the 12 that
+   "remain absent". A fixer reading step 5 alone would conclude the damage-amount
+   variant is partially resolved when nothing about it changed. The G2 rollup is
+   the entry to trust.
+
+4. **One entry, two clauses, two liveness values.** `creature_card_cmds`' step 13
+   opens "See guard **G1 (LIVE)**" and its clause (c) is `hook_dispatch`'s G9,
+   which that record explicitly marks **DORMANT at this site** ("AMENDED (fix
+   pass 2): it carries the identical gap, but is DORMANT there"). Any tool — or
+   reader — that takes an entry's first liveness token as the entry's liveness
+   mis-files it. This queue files it under `damage_pipeline/G3` (live) and lists
+   it as a co-site of `hook_dispatch/G9`.
+
+5. **12 vs 11 monster models.** `hook_dispatch`'s step 3 states "exactly 12
+   monster models override a hook"; `monster_state_machine`'s boundary section
+   heads its table "**Eleven** C# monster models' `AbstractModel` hook
+   overrides". Both are right — 12 total, minus `KinPriest`, adjudicated as a
+   waiver — but the subtraction is invisible from the JSON records alone and the
+   probe prints 12. Anyone quoting a number here should quote the probe.
+
+6. **Gap-id collisions across records, unflagged by the records themselves.**
+   `G8` is the missing `IsEnding` gate in `hook_dispatch` and the missing
+   AutoPrePlay/AutoPostPlay phases in `turn_structure`; `G2`, `G3`, `G4`, `G9`
+   and `N5` each mean two different things in two records. The records
+   cross-reference by bare id in several places ("carries G8's precedence",
+   "see guard N3"), which is only unambiguous because those references happen to
+   be within-record. This is a latent mis-merge waiting for the next reader.
+
+7. **Self-corrections the records themselves record** — not outstanding
+   contradictions, but they establish that first-pass verdicts on this project
+   are not reliable without re-execution:
+   - `monster_state_machine` step 13: "A first pass stated '13 resolved / 8
+     match', having read the branch-state count as the pair count."
+   - `monster_state_machine` G2: the first pass's gap ids and step list
+     disagreed — "a recount found 8 distinct gap ids across the steps against 9
+     in the doc."
+   - `monster_state_machine` step 22: corrected from `deliberate-divergence`
+     whose rationale "cannot both hold".
+   - `monster_state_machine` step 35: the inherited **seed fact** "the sim uses
+     the shared combat stream" is **stale** for the machine itself.
+   - `creature_card_cmds` G14: the first pass verdicted one mechanism three
+     different ways — gap at steps 11/71/72, deliberate-divergence at 74/83/90,
+     faithful at 48/54/103.
+   - `turn_structure` G13: the inherited doc's dormancy claim is called "FALSE";
+     G11's inherited content list "was WRONG"; G12's "no ported pair contends for
+     the same event today" is "WRONG"; G4 is live "NOT for the reason the
+     inherited doc gave".
+   - `power_cmd` step 20: the previous rationale was "factually wrong".
+   - `monster_state_machine` G6: the first pass's **LIVE** label was refuted by
+     its own pin XPASSing.
+
+---
+
+# Appendix — regenerating this file
+
+```
+py tools/audit/gap_queue.py counts        # the summary table
+py tools/audit/gap_queue.py mechanisms    # every mechanism with its sites and pin
+py tools/audit/gap_queue.py list          # every gap entry, one line
+py tools/audit/gap_queue.py pins          # the 32 strict xfails
+py tools/audit/gap_queue.py unpinned      # the 59 unpinned mechanisms
+py tools/audit/gap_queue.py coverage      # every mechanism and entry appears here
+py tools/audit/gap_queue.py cite-check    # every file:line here resolves
+py tools/audit/harness.py validate        # 6 records, 0 invalid
+```
+
+`coverage` and `cite-check` are the two that fail loudly if this file drifts from
+the records: `coverage` asserts that all 90 mechanisms and all 224 entry ids are
+locatable in the prose, `cite-check` that all 327 `file:line` citations resolve
+in `sts2_rl/` or in the decompiled game tree.
+
+Both were run clean at the commit that added this line, together with
+`py -m pytest test/ -q` (2478 passed / 38 xfailed, unchanged — this stream adds
+no test code and no engine code).

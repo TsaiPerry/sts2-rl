@@ -121,7 +121,9 @@ MECHANISM_TITLES = {
     "damage_pipeline/G3": "pipeline-level is_powered_attack gate",
 }
 
-_ID_STEP = re.compile(r"^\s*(\d+(?:\.\d+)?[a-z]?)\s*[.:]")
+# "1. Guard:", "17.4 Second loop:", "38a. PlayerCmd", "102b. CardPile" -- the
+# trailing dot is optional because the sub-numbered steps do not carry one.
+_ID_STEP = re.compile(r"^\s*(\d+(?:\.\d+)?[a-z]?)[.:]?\s+")
 _ID_GUARD = re.compile(r"^\s*([GN]\d+)\b")
 # a step that names the guard/gap it belongs to
 _REF = re.compile(r"\b(?:gap|guard)s?\s+([GN]\d+)\b", re.IGNORECASE)
@@ -420,6 +422,15 @@ GAME_ROOT = Path(r"c:\Users\Perry\Desktop\Slay the Spire 2")
 QUEUE_DOC = ROOT / "docs" / "audit" / "GAP-QUEUE.md"
 _CITE = re.compile(r"`?([\w][\w./-]*\.(?:py|cs)):(\d+)(?:-(\d+))?`?")
 
+# Citations the queue quotes BECAUSE they are broken -- the two stale record
+# citations reported in its "Record inconsistencies" section.  Quoting them is
+# the point; they must not be silently repaired, and cite-check must not fail on
+# them.  Remove an entry here only when the record itself is corrected.
+_KNOWN_BAD_CITATIONS = {
+    "relics/spiked_gauntlets.py:26-32",  # hook_dispatch G2 evidence; file ends at 31
+    "relics/fiddle.py:26-31",  # creature_card_cmds G9 / step 84; file ends at 29
+}
+
 
 def _candidates(name: str):
     """Every file a citation could name, sim tree first.
@@ -452,6 +463,9 @@ def cmd_cite_check():
     bad = []
     for name, a, b in _CITE.findall(text):
         lo, hi = int(a), int(b or a)
+        cite = f"{name}:{a}-{b}" if b else f"{name}:{a}"
+        if cite in _KNOWN_BAD_CITATIONS:
+            continue
         cands = _candidates(name)
         if not cands:
             bad.append(f"UNRESOLVED FILE  {name}:{a}")
@@ -473,6 +487,33 @@ def cmd_cite_check():
     return 1 if bad else 0
 
 
+def cmd_coverage():
+    """Every mechanism, and every gap entry id, must appear in GAP-QUEUE.md."""
+    text = QUEUE_DOC.read_text(encoding="utf-8")
+    entries = extract()
+    mechs = {}
+    for e in entries:
+        mechs.setdefault(e["mechanism"], []).append(e)
+    missing_m = [m for m in mechs if m not in text]
+    # an entry is covered if its own id appears, or its mechanism's does with
+    # the entry listed in a "sites" line (checked loosely: seam/local id text)
+    missing_e = []
+    for e in entries:
+        short = "/" + e["local_id"]
+        if e["id"] in text:
+            continue
+        if e["mechanism"] in text and short in text:
+            continue
+        missing_e.append(e["id"])
+    print(f"mechanisms: {len(mechs)}, not named in the queue: {len(missing_m)}")
+    for m in sorted(missing_m):
+        print("  MISSING MECHANISM " + m + f"  (n={len(mechs[m])}, {mechs[m][0]['mech_liveness']})")
+    print(f"entries: {len(entries)}, not locatable in the queue: {len(missing_e)}")
+    for e in sorted(missing_e):
+        print("  unlisted site " + e)
+    return 1 if missing_m else 0
+
+
 COMMANDS = {
     "counts": cmd_counts,
     "list": cmd_list,
@@ -482,6 +523,7 @@ COMMANDS = {
     "refs": cmd_refs,
     "json": cmd_json,
     "cite-check": cmd_cite_check,
+    "coverage": cmd_coverage,
 }
 
 
