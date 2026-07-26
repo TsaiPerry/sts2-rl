@@ -1,0 +1,51 @@
+{
+  "unit": "power/cruelty",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CrueltyPower.cs",
+    "sha256": "9407d8e2f7a7c32fed9a29ad3868953e9e93f776560d3b9682eccc28c68948f5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:659 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "CrueltyPower.cs:17 ModifyVulnerableMultiplier is NOT a hook",
+      "verdict": "faithful",
+      "rationale": "It is `public decimal`, not `public override`, so the harness enumerates no hook for it and there is no dispatcher: VulnerablePower calls it directly off `dealer.GetPower<CrueltyPower>()` (VulnerablePower.cs:35-39). The sim reproduces exactly that shape -- CrueltyPower's class body is passive (powers.py:651-659) and VulnerablePower reads `dealer.powers.get('cruelty')` inline (powers.py:414-416). Faithful, and this is why the unit's hook list is only the two declaration properties."
+    },
+    {
+      "what": "CrueltyPower.cs:19-22 `target == base.Owner` -> unmodified",
+      "verdict": "gap",
+      "issue": "Cruelty's self-exclusion is dropped by its consumer. Recorded in full on power/vulnerable's matching guard -- the sim reads Cruelty's amount with no such test, so a Cruelty holder attacking its own Vulnerable self would get the bonus in the sim and not in the game. Per binding rule 3 the same mechanism carries the same verdict at both records, and it is DORMANT for the same executed reason: no ported effect deals POWERED attack damage from a creature to itself (the self-damage sites all pass NON_CARD_HP_LOSS, which is UNPOWERED and never reaches the multiplicative family, cmds.py:56). Carried here as well as on power/vulnerable because it is Cruelty's own guard and a reader of cruelty.json must not conclude the unit is clean."
+    },
+    {
+      "what": "CrueltyPower.cs:23-26 `!props.IsPoweredAttack()` -> unmodified",
+      "verdict": "faithful",
+      "rationale": "Enforced by DamageCmd.deal's is_powered_attack gate (cmds.py:56-58) before Vulnerable's hook -- and therefore before the Cruelty read -- runs at all."
+    },
+    {
+      "what": "CrueltyPower.cs:27 `amount + base.Amount / 100m`",
+      "verdict": "gap",
+      "issue": "The arithmetic is right and the TYPE is not: powers.py:416 computes `mult += cruelty.amount / 100.0` in float where C# uses decimal. `1.5 + n/100` is non-dyadic for most n (10 -> 1.6, 30 -> 1.8), so a Cruelty-boosted Vulnerable is a third non-dyadic damage multiplier beyond the two literals `py tools/audit/power_census.py multipliers` reports, widening hook_dispatch gap G9. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded at both this record and power/vulnerable because the factor is jointly theirs."
+    },
+    {
+      "what": "Cruelty has no turn hook and never decays",
+      "verdict": "faithful",
+      "rationale": "C# declares none and the sim's class body has none. Both keep Cruelty for the whole combat."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

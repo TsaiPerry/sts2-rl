@@ -1,0 +1,60 @@
+{
+  "unit": "power/no_energy_gain",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\NoEnergyGainPower.cs",
+    "sha256": "304884e9f63d266f3745e852c3f34fa0e198eb23e688d86a50f622f8cbc7aebc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:549 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:551-552 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "The sim overrides on_stack to a no-op citing PowerStackType.Single, but Single only means 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds the offset with no StackType branch. One of the 15 units making this misreading (`py tools/audit/power_census.py stack`). DORMANT for this unit: Amount is read nowhere in it, so the value is inert. Named trigger: any behaviour on this power that reads Amount. Third-file citations, not hashed here."
+    },
+    "ModifyEnergyGain": {
+      "maps_to": "powers.py:554-557 NoEnergyGainPower.modify_energy_gain",
+      "verdict": "faithful"
+    },
+    "AfterModifyingEnergyGain": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "NoEnergyGainPower.cs:28-32 is Flash() only. Presentation -- and note the sim genuinely has no AfterModifying* machinery for the energy family, which is the same shape as audits/seam/power_cmd.json's gap G4; nothing observable rides on it here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:559-561 on_player_turn_end -> Power._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), which CombatManager calls at :1307 for the player side -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654, before both); the sim's real AfterTurnEnd slot is after_player_turn_end (combat.py:665). Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. DORMANT for this unit: the sim removes No Energy Gain before the turn-end card effects rather than after, and an executed grep finds no ported turn-end effect that gains energy (the sim's energy gains are EnergyCmd.gain from EnergyNextTurnPower powers.py:2766-2771 and RadiancePower :4032-4037, both on on_energy_reset at the NEXT turn's start, and AutomationPower :3467-3472 on draw). Named trigger: any turn-end energy gain. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "NoEnergyGainPower.cs:21-24 `player != base.Owner.Player` -> unmodified",
+      "verdict": "faithful",
+      "rationale": "powers.py:555-557. Identical."
+    },
+    {
+      "what": "NoEnergyGainPower.cs:25 returns a hard 0m",
+      "verdict": "faithful",
+      "rationale": "powers.py:556 returns 0. Exact -- this is a chain hook, so returning 0 zeroes the running value rather than subtracting."
+    },
+    {
+      "what": "Turn-start energy is unaffected",
+      "verdict": "faithful",
+      "rationale": "C# hooks only ModifyEnergyGain, which is the mid-turn gain path; the turn-start reset runs through ResetEnergy / modify_max_energy instead (PyrePower and WasteAwayPower are the sim's listeners there, powers.py:991-994, :2691-2694). The sim's docstring states this and its implementation matches."
+    },
+    {
+      "what": "NoEnergyGainPower.cs:38 PowerCmd.Remove vs the sim's _expire",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same note as power/no_draw's."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
