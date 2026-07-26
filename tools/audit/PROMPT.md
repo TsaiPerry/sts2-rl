@@ -1,9 +1,15 @@
-# Audit prompt — source-to-sim unit audits (v2)
+# Audit prompt — source-to-sim unit audits (v3)
 
 > **v2 (2026-07-26, relic Tier 1 pilot):** bug classes 11–16 added, all six
 > drawn from defects the pilot batch actually found. Classes 11, 12 and 14
 > each caught a LIVE gap that reading the sim's own docstrings would have
 > talked you out of.
+>
+> **v3 (2026-07-26, relic pool-wide sweeps):** added the
+> "Sweep the shape before you audit the units" procedure section. Classes
+> 12, 13 and 16 turned out to be pool-wide shapes; sweeping all 258 relics
+> for them cost ~1 h and found two live gaps and a 16-relic single-fix
+> cluster that per-unit batches would have taken sixteen batches to reach.
 
 You are auditing ONE ported unit for behavioral fidelity: the decompiled C#
 model (ground truth) vs the sim implementation. You judge; the harness only
@@ -102,6 +108,31 @@ checks completeness. Read BOTH files fully before writing any verdict.
     whose stream argument defaults to `None` and silently falls back to the
     legacy shared `random.Random` (`run.transform_card`'s `pick_rng`). The
     second is invisible outside the conformance harness — check it anyway.
+
+## Sweep the shape before you audit the units
+
+Classes 12, 13 and 16 are **pool-wide shapes**, not per-unit quirks: the same
+mistake repeats across dozens of ports, and finding it fifteen units at a time
+wastes the budget. Before a kind's second batch, run one cheap scan per shape
+over the whole roster and let the batches confirm rather than discover.
+
+`tools/audit/relic_probes.py` has the relic versions and is the template —
+`sweep-reset` / `sweep-reset-exec` (class 13), `sweep-isallowed` (class 16),
+`sweep-stubs` / `sweep-stub-premises` (class 12); findings in
+`.superpowers/sdd/content-relic-sweeps.md`. They cost ~1 h and turned up two
+live gaps (`centennial_puzzle`, `paels_eye`) that batch 1 could not have seen,
+plus a 16-relic single-fix cluster. **Write the equivalent for your own kind.**
+
+Two rules learned building them, both the hard way:
+
+- **Scan the MRO, not the class body.** Several ports implement their behaviour
+  in a shared intermediate base (`relics/_eggs.py`'s `EggRelic`). A body-only
+  scan reported all three egg relics as unimplemented stubs. A sweep that
+  over-reports is worse than useless as a work list.
+- **Diff the observable, not just the object.** `belt_buckle`'s stale flag
+  settles at the same value on a carried and a fresh instance; the divergence
+  is 2 Dexterity on the *player*. Snapshot the game state the unit can move,
+  or the sweep will clear its own founding example.
 
 ## Recording lessons
 

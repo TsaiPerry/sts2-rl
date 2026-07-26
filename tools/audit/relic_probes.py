@@ -20,13 +20,26 @@ Probes (batch 1 = the Tier 1 pilot):
   aubergine-gold   amethyst_aubergine G1 — reward gold with vs without it
   mushroom-hp      big_mushroom G1 — +20 Max HP on the add_relic path
   buckle-potion    belt_buckle G1 — Dexterity when a potion is procured
+
+POOL-WIDE SWEEPS (all 258 relics at once). The pilot batch found that its live
+gaps cluster into a few repeating SHAPES rather than sixteen unique bugs, so
+each sweep chases one shape across the whole roster before the per-unit batches
+run — the batches then confirm rather than discover. Findings are triaged in
+`.superpowers/sdd/content-relic-sweeps.md`; these probes produce the raw hits.
+
+  sweep-reset      per-combat state the sim never resets (belt_buckle shape)
+  sweep-isallowed  C# IsAllowed/IsAllowedAtNeow pool gates vs the sim
+  sweep-stubs      behaviourless relic ports whose C# has real hooks
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import inspect
 import random
+import re
 import sys
+import textwrap
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -338,6 +351,481 @@ def probe_buckle_potion() -> None:
           f"{buckle._applied}")
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Pool-wide sweeps
+# ══════════════════════════════════════════════════════════════════════════
+
+# Attributes sts2_rl.relics.base.Relic.__init__ sets on every relic.
+_BASE_ATTRS = {"combat", "is_wax"}
+
+# The sim hooks that run at a COMBAT boundary, i.e. the places a per-combat
+# field may legitimately be cleared. `attach` is included because CombatState
+# calls it once per combat when wiring the listener.
+#
+# `__init__` is deliberately NOT here. It runs ONCE PER RUN, when
+# RunState.add_relic constructs the relic -- treating it as a reset is exactly
+# the mistake that makes relic/belt_buckle look clean when it is the pilot's
+# highest-impact live gap.
+_COMBAT_BOUNDARY = {"on_combat_start", "on_combat_end", "attach"}
+
+# Hooks that run at a TURN boundary. A field cleared here is not reset at the
+# combat boundary, but a stale value may still be unreadable — relic/art_of_war
+# is the pilot's example. These are reported as "shadowed?", not as clean.
+_TURN_BOUNDARY = {
+    "on_player_turn_start", "on_player_turn_started", "on_player_turn_end",
+    "on_energy_reset", "on_block_cleared", "on_enemy_side_end",
+}
+
+# C# members that DECLARE a property rather than implement behaviour. A relic
+# port that overrides only these is not thereby a no-op.
+_DECLARATIVE_CS = {
+    "Rarity", "IsAllowedInShops", "HasUponPickupEffect", "AddsPet",
+    "SpawnsPets", "MerchantCost", "IsTradable", "IsUsedUp", "IsWax",
+    "DisplayAmount", "HasDisplayAmount", "IsAllowedAtNeow", "IsAllowed",
+    "CanonicalVars", "ExtraHoverTips", "Description", "Title",
+}
+
+# C# RUN-level hooks the sim's Relic base already provides a method for
+# (sts2_rl/relics/base.py). A behaviourless port whose C# overrides one of
+# these is claiming the sim cannot do something the sim demonstrably can.
+_RUN_HOOK_MAP = {
+    "AfterObtained": "after_obtained",
+    "AfterRoomEntered": "after_room_entered",
+    "AfterShopEntered": "after_shop_entered",
+    "AfterItemPurchased": "after_item_purchased",
+    "AfterCardChangedPiles": "after_card_added_to_deck",
+    "ModifyGoldGained": "modify_gold_gained",
+    "ShouldProcurePotion": "should_procure_potion",
+    "AfterRestSiteHeal": "after_rest_site_heal",
+    "TryModifyRestSiteOptions": "modify_rest_site_options",
+    "ShouldDisableRemainingRestSiteOptions":
+        "should_disable_remaining_rest_site_options",
+    "TryModifyRestSiteHealRewards": "modify_rest_site_heal_rewards",
+    "AfterCombatEnd": "after_combat_end",
+    "ShouldAllowFreeTravel": "should_allow_free_travel",
+    "ShouldForcePotionReward": "should_force_potion_reward",
+    "ShouldGenerateTreasure": "should_generate_treasure",
+    "TryModifyRewards": "modify_combat_rewards",
+    "ModifyRewards": "modify_combat_rewards",
+    "TryModifyRewardsLate": "modify_combat_rewards",
+    "TryModifyCardRewardOptionsLate": "modify_card_reward_options",
+    "ModifyMerchantCardCreationResults": "modify_merchant_card_results",
+    "ModifyCardBeingAddedToDeck": "modify_card_being_added_to_deck",
+    "ModifyGeneratedMap": "modify_generated_map",
+    "ModifyGeneratedMapLate": "modify_generated_map_late",
+    "AfterMapGenerated": "after_map_generated",
+    "ModifyUnknownMapPointRoomTypes": "modify_unknown_map_point_room_types",
+}
+
+
+def _relic_roster() -> list[dict]:
+    from tools.audit.harness import roster
+    return roster("relic")
+
+
+def _cs_overrides(game_path: str) -> list[str]:
+    from tools.audit.harness import DEFAULT_GAME_ROOT, list_overrides
+    p = DEFAULT_GAME_ROOT / game_path
+    if not p.is_file():
+        return []
+    return list_overrides(p.read_text(encoding="utf-8-sig", errors="replace"))
+
+
+def _class_node(cls) -> ast.ClassDef | None:
+    try:
+        src = textwrap.dedent(inspect.getsource(cls))
+    except OSError:                                      # pragma: no cover
+        return None
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.ClassDef):
+            return node
+    return None
+
+
+def _own_classes(cls) -> list[type]:
+    """`cls` and every ancestor BELOW sts2_rl.relics.base.Relic.
+
+    Several relics implement their behaviour in a shared intermediate base --
+    relics/_eggs.py's EggRelic serves frozen_egg / toxic_egg / molten_egg, and
+    the Fake Merchant knock-offs subclass their originals. Reading only
+    `cls`'s own body reports those as behaviourless stubs, which is wrong: an
+    early version of this sweep flagged all three eggs, whose ports are
+    complete. Walk the MRO instead.
+    """
+    from sts2_rl.relics.base import Relic
+    return [c for c in cls.__mro__
+            if issubclass(c, Relic) and c is not Relic]
+
+
+def _own_methods(cls) -> dict[str, ast.FunctionDef]:
+    """Every method `cls` defines or inherits from a non-`Relic` ancestor."""
+    out: dict[str, ast.FunctionDef] = {}
+    for klass in reversed(_own_classes(cls)):
+        node = _class_node(klass)
+        if node is None:
+            continue
+        for f in node.body:
+            if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                out[f.name] = f
+    return out
+
+
+def _self_writes(fn: ast.FunctionDef) -> tuple[set[str], set[str]]:
+    """(plain-assigned, augmented-assigned) `self.X` names anywhere in fn."""
+    plain: set[str] = set()
+    aug: set[str] = set()
+    for node in ast.walk(fn):
+        targets = []
+        if isinstance(node, ast.Assign):
+            targets = [(t, plain) for t in node.targets]
+        elif isinstance(node, ast.AugAssign):
+            targets = [(node.target, aug)]
+        for tgt, bucket in targets:
+            if (isinstance(tgt, ast.Attribute)
+                    and isinstance(tgt.value, ast.Name)
+                    and tgt.value.id == "self"):
+                bucket.add(tgt.attr)
+    return plain, aug
+
+
+# ── sweep-reset ───────────────────────────────────────────────────────────
+def probe_sweep_reset() -> None:
+    """Per-combat relic state the sim never clears at a combat boundary.
+
+    THE SHAPE (relic/belt_buckle G2, the pilot's highest-impact live gap):
+    sim relic instances live on RunState.relics and are re-attached to every
+    new CombatState, so a field set during combat 1 and never cleared is still
+    set in combat 2. C# clears such fields in BeforeCombatStart and/or
+    AfterCombatEnd/AfterCombatVictory. Belt Buckle dropped BOTH and became a
+    first-combat-only relic; Art of War and Unsettling Lamp dropped one and are
+    safe because another reset runs before any reader.
+
+    A hit is NOT automatically a gap -- PROMPT.md bug class 13 says trace to
+    the first READER of the stale field. This sweep produces the candidate
+    list; `.superpowers/sdd/content-relic-sweeps.md` carries the triage.
+    """
+    from sts2_rl.relics import ALL_RELICS
+
+    rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
+    hits, shadowed, clean, stateless = [], [], [], 0
+
+    for rid, cls in sorted(ALL_RELICS.items()):
+        methods = _own_methods(cls)
+        if not methods and _class_node(cls) is None:
+            continue
+        writers: dict[str, set[str]] = {}
+        reset_at_combat: set[str] = set()
+        reset_at_turn: set[str] = set()
+        in_play: set[str] = set()
+        for name, fn in methods.items():
+            plain, aug = _self_writes(fn)
+            for attr in plain | aug:
+                writers.setdefault(attr, set()).add(name)
+            if name in _COMBAT_BOUNDARY:
+                reset_at_combat |= plain
+            if name in _TURN_BOUNDARY:
+                reset_at_turn |= plain
+            # Anything written outside a boundary hook or the constructor is
+            # state the relic accumulates DURING a combat.
+            if name not in _COMBAT_BOUNDARY and name != "__init__":
+                in_play |= plain | aug
+        state = (in_play | set(writers)) - _BASE_ATTRS
+        if not state:
+            stateless += 1
+            continue
+        # Only mid-combat state can go stale across a combat boundary; a field
+        # written solely in __init__ is run-level configuration.
+        unreset = (in_play - _BASE_ATTRS) - reset_at_combat
+        if not unreset:
+            clean.append(rid)
+            continue
+        cs = set(_cs_overrides(rows[rid]["game_path"])) if rid in rows else set()
+        boundary = sorted(cs & {"BeforeCombatStart", "AfterCombatEnd",
+                                "AfterCombatVictory", "AfterCombatDefeat"})
+        entry = (rid, sorted(unreset), boundary,
+                 sorted(unreset & reset_at_turn),
+                 {a: sorted(writers[a]) for a in sorted(unreset)})
+        (shadowed if (unreset <= reset_at_turn) else hits).append(entry)
+
+    print(f"  {len(ALL_RELICS)} sim relics: {stateless} hold no state, "
+          f"{len(clean)} reset every mid-combat field at a combat boundary, "
+          f"{len(shadowed)} reset only at a TURN boundary, "
+          f"{len(hits)} never reset")
+    print("\n  NEVER RESET AT A COMBAT BOUNDARY (candidate belt_buckle "
+          "shape). 'C# resets' = the combat-boundary hooks the C# relic\n"
+          "  overrides; a non-empty list means the source thought the reset "
+          "mattered:")
+    for rid, unreset, boundary, _turn, who in hits:
+        print(f"    {rid:<26} {unreset}")
+        print(f"    {'':<26} written by: "
+              f"{'; '.join(f'{a}<-{w}' for a, w in who.items())}")
+        print(f"    {'':<26} C# resets: "
+              f"{boundary or 'NONE (may be per-run by design)'}")
+    print("\n  RESET AT A TURN BOUNDARY ONLY (art_of_war shape -- safe only "
+          "if the turn reset runs before any reader):")
+    for rid, unreset, boundary, turn, _who in shadowed:
+        print(f"    {rid:<26} {unreset} turn-reset={turn} "
+              f"C# resets: {boundary or 'NONE'}")
+
+    graded = [h for h in hits if h[2]]
+    print(f"\n  PRIORITISED: {len(graded)} of the {len(hits)} never-reset "
+          f"candidates have a C# combat-boundary reset, i.e. the source\n"
+          f"  itself thought the field had to be cleared per combat. Those are "
+          f"the ones `sweep-reset-exec` runs:")
+    print(f"    {sorted(h[0] for h in graded)}")
+    return [h[0] for h in graded]
+
+
+# ── sweep-reset-exec ──────────────────────────────────────────────────────
+def probe_sweep_reset_exec() -> None:
+    """Execute the sweep-reset candidates: does state survive a combat?
+
+    `sweep-reset` is a static AST scan and cannot tell a genuine per-run
+    counter (Girya's lifts) from a stale per-combat flag (Belt Buckle's
+    `_applied`). This probe settles it the way the pilot settled belt_buckle,
+    generically: run one relic instance through a combat, start a SECOND combat
+    with the same instance, and diff its fields against a freshly-constructed
+    instance entering its first combat. Any field that differs is state the sim
+    carries across a combat boundary and C# does not.
+
+    A difference is still not automatically a gap -- PROMPT.md bug class 13
+    says trace to the first READER -- but it converts "read 32 relics" into
+    "read the handful that actually diverge".
+    """
+    import contextlib
+    import io
+
+    from sts2_rl import CombatState
+    from sts2_rl.relics import make_relic
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        candidates = probe_sweep_reset()
+
+    def _snapshot(relic, cs) -> dict:
+        """The relic's own fields PLUS the combat state it can move.
+
+        Belt Buckle is the reason the player half is here: its stale `_applied`
+        settles at True on both instances, so a fields-only diff calls it clean
+        while the OBSERVABLE -- 2 Dexterity granted or not -- diverges.
+        """
+        snap = {f"self.{k}": repr(v) for k, v in vars(relic).items()
+                if k not in _BASE_ATTRS and not k.startswith("__")}
+        p = cs.player
+        snap["player.powers"] = repr(
+            sorted((pid, pw.amount) for pid, pw in p.powers.items()))
+        snap["player.block"] = repr(p.block)
+        snap["player.energy"] = repr(p.energy)
+        snap["player.hp"] = repr(p.hp)
+        snap["player.hand"] = repr(len(p.hand))
+        snap["enemy.powers"] = repr(
+            sorted((pid, pw.amount) for pid, pw in cs.enemy.powers.items()))
+        return snap
+
+    diverged, agreed, errored = [], [], []
+    for rid in candidates:
+        try:
+            carried = make_relic(rid)
+            cs1 = CombatState(rng=random.Random(0), relics=[carried])
+            for _ in range(3):
+                if cs1.is_over:
+                    break
+                cs1.end_turn()
+            # Combat 2 with the SAME instance, exactly as RunState.relics does.
+            cs2 = CombatState(rng=random.Random(1), relics=[carried])
+            fresh = make_relic(rid)
+            cs_fresh = CombatState(rng=random.Random(1), relics=[fresh])
+            a, b = _snapshot(carried, cs2), _snapshot(fresh, cs_fresh)
+            delta = {k: (b.get(k), a.get(k)) for k in a | b.keys()
+                     if a.get(k) != b.get(k)}
+            (diverged if delta else agreed).append((rid, delta))
+        except Exception as exc:                          # pragma: no cover
+            errored.append((rid, f"{type(exc).__name__}: {exc}"))
+
+    print(f"  {len(candidates)} candidate(s) executed: {len(diverged)} carry "
+          f"state into combat 2, {len(agreed)} agree with a fresh instance, "
+          f"{len(errored)} could not be driven")
+    print("\n  CARRIES STATE ACROSS THE COMBAT BOUNDARY "
+          "(field: fresh-instance value -> carried-instance value):")
+    for rid, delta in diverged:
+        for k, (fresh_v, carried_v) in delta.items():
+            print(f"    {rid:<26} {k}: {fresh_v} -> {carried_v}")
+    if errored:
+        print("\n  NOT DRIVEN (needs a run/room context this probe does not "
+              "build -- audit by hand):")
+        for rid, err in errored:
+            print(f"    {rid:<26} {err}")
+
+
+# ── sweep-isallowed ───────────────────────────────────────────────────────
+def probe_sweep_isallowed() -> None:
+    """C# RelicModel.IsAllowed / IsAllowedAtNeow gates vs the sim.
+
+    THE SHAPE (relic/amethyst_aubergine, a live gap): C# relics can refuse to
+    spawn under run conditions (IsBeforeAct3TreasureChest, deck contents, ...).
+    The sim's Relic base has `is_allowed_at_neow` (relics/base.py:159) but NO
+    `is_allowed` member at all, and relic_pools.populate_relic_grab_bags
+    shuffles the pool once at run init with no per-pull filter. So every
+    IsAllowed override is unmodelled, and the pool composition diverges for the
+    whole rest of the run once one is reached.
+    """
+    from sts2_rl.relics import ALL_RELICS, base as relic_base
+
+    print(f"  sim Relic base defines is_allowed: "
+          f"{hasattr(relic_base.Relic, 'is_allowed')}")
+    print(f"  sim Relic base defines is_allowed_at_neow: "
+          f"{hasattr(relic_base.Relic, 'is_allowed_at_neow')}")
+
+    rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
+    from tools.audit.harness import DEFAULT_GAME_ROOT
+
+    n_allowed, n_neow = [], []
+    for rid in sorted(ALL_RELICS):
+        row = rows.get(rid)
+        if row is None:
+            continue
+        p = DEFAULT_GAME_ROOT / row["game_path"]
+        if not p.is_file():
+            continue
+        text = p.read_text(encoding="utf-8-sig", errors="replace")
+        body = {}
+        for m in re.finditer(
+                r"public override bool (IsAllowed|IsAllowedAtNeow)\("
+                r"[^)]*\)\s*\{\s*(?:return\s+)?([^\n;]*)", text):
+            body[m.group(1)] = m.group(2).strip()
+        if "IsAllowed" in body:
+            n_allowed.append((rid, body["IsAllowed"]))
+        if "IsAllowedAtNeow" in body:
+            n_neow.append((rid, body["IsAllowedAtNeow"],
+                           ALL_RELICS[rid].is_allowed_at_neow))
+
+    print(f"\n  {len(n_allowed)} ported relic(s) override IsAllowed -- "
+          f"ALL unmodelled (no sim concept exists):")
+    for rid, expr in n_allowed:
+        print(f"    {rid:<28} {expr}")
+    print(f"\n  {len(n_neow)} ported relic(s) override IsAllowedAtNeow "
+          f"(the sim HAS this flag -- check each value):")
+    for rid, expr, simval in n_neow:
+        print(f"    {rid:<28} C#: {expr:<44} sim is_allowed_at_neow={simval}")
+
+
+# ── sweep-stubs ───────────────────────────────────────────────────────────
+def probe_sweep_stubs() -> None:
+    """Behaviourless relic ports whose C# counterpart has real hooks.
+
+    THE SHAPE (relic/amethyst_aubergine and relic/big_mushroom, both live
+    gaps): a port with no methods at all, justified by a docstring claim about
+    what the sim cannot do -- "the sim has no gold", "RunState has no run-level
+    AfterObtained dispatch" -- where the sim in fact has exactly the hook
+    needed. PROMPT.md bug class 12. This sweep lists every behaviourless port
+    beside the C# hooks it drops, and marks the ones the sim's Relic base
+    already provides a method for, so a reader can check the premise instead of
+    trusting it.
+    """
+    from sts2_rl.hooks import HookSystem
+    from sts2_rl.relics import ALL_RELICS
+
+    combat_hooks = {n for n, v in vars(HookSystem).items()
+                    if callable(v) and not n.startswith("_")
+                    and n not in ("register", "unregister")}
+    rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
+
+    stubs = []
+    for rid, cls in sorted(ALL_RELICS.items()):
+        if _own_methods(cls):          # MRO-aware: EggRelic & friends count
+            continue
+        row = rows.get(rid)
+        dropped = [h for h in _cs_overrides(row["game_path"] if row else "")
+                   if h not in _DECLARATIVE_CS]
+        stubs.append((rid, dropped, (cls.__doc__ or "").strip()))
+
+    with_hooks = [s for s in stubs if s[1]]
+    print(f"  {len(stubs)} behaviourless relic port(s) of {len(ALL_RELICS)}; "
+          f"{len(with_hooks)} of them drop at least one C# behavioural hook")
+    print(f"  (sim Relic base provides run-level methods for "
+          f"{len(_RUN_HOOK_MAP)} C# hook names; HookSystem has "
+          f"{len(combat_hooks)} combat hooks)\n")
+    for rid, dropped, doc in with_hooks:
+        marked = []
+        for h in dropped:
+            sim = _RUN_HOOK_MAP.get(h)
+            if sim:
+                marked.append(f"{h} -> Relic.{sim} EXISTS")
+            elif h in combat_hooks:
+                marked.append(f"{h} -> HookSystem.{h} EXISTS")
+            else:
+                marked.append(h)
+        print(f"    {rid}")
+        print(f"      drops: {'; '.join(marked)}")
+        print(f"      premise: {(doc.splitlines() or [''])[0][:150]}")
+
+
+# ── sweep-stub-premises ───────────────────────────────────────────────────
+def probe_sweep_stub_premises() -> None:
+    """Is each stub's "the sim cannot do this" premise actually true?
+
+    Binding rule 1 turns on exactly this question: a waiver needs the behaviour
+    to be GENUINELY out of scope, and "no ported content triggers this" or "the
+    sim has no such system" is a dormant GAP, not a waiver. `sweep-stubs` lists
+    the behaviourless ports and the C# hooks they drop; this probe answers the
+    load-bearing half mechanically -- for every hook a stub drops, is there a
+    live DISPATCH SITE in the sim outside sts2_rl/relics/?
+
+    A dispatched hook means the sim already calls that method on every relic in
+    the run and the stub simply declines to implement it: gap, not waiver. An
+    undispatched one means the pipeline genuinely does not exist yet: still a
+    gap by rule 1, but a much larger one, and honestly labelled.
+    """
+    import subprocess
+
+    from sts2_rl.hooks import HookSystem
+    from sts2_rl.relics import ALL_RELICS, base as relic_base
+
+    combat_hooks = {n for n, v in vars(HookSystem).items()
+                    if callable(v) and not n.startswith("_")
+                    and n not in ("register", "unregister")}
+    run_hooks = {n for n, v in vars(relic_base.Relic).items()
+                 if callable(v) and not n.startswith("_")}
+
+    def dispatched(name: str) -> list[str]:
+        """Files outside relics/ that CALL this hook (i.e. the pipeline runs)."""
+        out = subprocess.run(
+            ["git", "grep", "-l", rf"\.{name}(", "--", "sts2_rl"],
+            capture_output=True, text=True, cwd=_REPO,
+        ).stdout.split()
+        return [f for f in out if "/relics/" not in f and "/hooks.py" not in f]
+
+    cache: dict[str, list[str]] = {}
+    for name in sorted(run_hooks | combat_hooks):
+        cache[name] = dispatched(name)
+
+    rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
+    live_pipeline, no_pipeline = [], []
+    for rid, cls in sorted(ALL_RELICS.items()):
+        if _own_methods(cls):          # MRO-aware: EggRelic & friends count
+            continue
+        row = rows.get(rid)
+        for h in _cs_overrides(row["game_path"] if row else ""):
+            if h in _DECLARATIVE_CS:
+                continue
+            sim = _RUN_HOOK_MAP.get(h) or (h if h in combat_hooks else None)
+            if sim is None:
+                continue
+            (live_pipeline if cache.get(sim) else no_pipeline).append(
+                (rid, h, sim, cache.get(sim, [])))
+
+    print(f"  Dropped C# hooks whose SIM PIPELINE IS LIVE -- the sim already "
+          f"calls this method on every relic,\n  so the stub's premise is "
+          f"FALSE and the verdict is a gap, not a waiver ({len(live_pipeline)}):")
+    for rid, cs_hook, sim, sites in live_pipeline:
+        print(f"    {rid:<24} {cs_hook:<34} -> {sim} "
+              f"dispatched by {sites[:2]}")
+    print(f"\n  Dropped C# hooks with NO sim dispatch site "
+          f"({len(no_pipeline)}) -- still gaps under binding rule 1, but the "
+          f"missing piece is the pipeline, not the relic:")
+    for rid, cs_hook, sim, _ in no_pipeline:
+        print(f"    {rid:<24} {cs_hook:<34} -> {sim} (never called)")
+
+
 PROBES = {
     "pool": probe_pool,
     "turn-order": probe_turn_order,
@@ -347,6 +835,11 @@ PROBES = {
     "aubergine-gold": probe_aubergine_gold,
     "mushroom-hp": probe_mushroom_hp,
     "buckle-potion": probe_buckle_potion,
+    "sweep-reset": probe_sweep_reset,
+    "sweep-reset-exec": probe_sweep_reset_exec,
+    "sweep-isallowed": probe_sweep_isallowed,
+    "sweep-stubs": probe_sweep_stubs,
+    "sweep-stub-premises": probe_sweep_stub_premises,
 }
 
 

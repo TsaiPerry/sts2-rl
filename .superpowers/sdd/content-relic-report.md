@@ -280,6 +280,11 @@ stub resting on a false premise about the sim, a hook mapped to the wrong turn
 slot, an unguarded upgrade, and a missing pool-eligibility concept. That
 changes what the remaining work should look like.
 
+> **DONE 2026-07-26** — the three sweeps below were built and run; results
+> in [`content-relic-sweeps.md`](content-relic-sweeps.md). They found two
+> further LIVE gaps (`centennial_puzzle`, `paels_eye`) and turned the
+> `IsAllowed` finding into a 16-relic single-fix cluster.
+
 **1. Run three cheap mechanical sweeps FIRST, before batch 2 (~1–2 h total).**
 Each targets one shape across all 258 relics at once and will cost far less than
 rediscovering it 15 units at a time:
