@@ -1,0 +1,42 @@
+{
+  "unit": "card/thunderclap",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Thunderclap.cs",
+    "sha256": "5c804682a7bfc32c1dcbc39bbb5550cdd10342b08fa8d4d8903fcf8a6d7fbb03"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\thunderclap.py",
+    "sha256": "6f0648608f7b31572768f647ae0214c7b6dabb534f4650ca8026fcc53061c284"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (thunderclap.py:92-97) + _init_vars (99-102)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AllEnemies)` (Thunderclap.cs:23-26) == cost 1 / ATTACK / COMMON / ALL_ENEMIES. `handles_own_routing = True` (97) is REQUIRED here rather than optional: the card has two passes over the enemies (damage, then Vulnerable), and letting the framework call `on_play` once per enemy would interleave them."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 4, _vulnerable = 1 (thunderclap.py:101-102)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(4m, ValueProp.Move)` + `new PowerVar<VulnerablePower>(1m)` (Thunderclap.cs:15-19) == both numbers, both declared. Powered damage on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "ThunderclapCard.on_play (thunderclap.py:107-118)",
+      "verdict": "gap",
+      "issue": "The TWO-PASS structure is faithful and is the point of the card: C# resolves the whole attack first (`DamageCmd.Attack(4).FromCard(this).TargetingAllOpponents(CombatState)`, Thunderclap.cs:30-32) and only then applies Vulnerable to `CombatState.HittableEnemies` through the multi-target `PowerCmd.Apply` overload (33), which iterates internally (PowerCmd.cs:36-47) -- so every enemy takes damage before any Vulnerable lands, and an enemy killed by the damage is no longer hittable and gets none. The sim reproduces exactly that with two separate loops (thunderclap.py:110-118), re-deriving the living set for the second pass. Getting this in one loop would apply Vulnerable to enemy 1 before enemy 2 was hit. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call (AttackCommand.cs:650), computing every DamageResult before any `Kill` (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage."
+    },
+    "OnUpgrade": {
+      "maps_to": "ThunderclapCard._on_upgrade (thunderclap.py:104-105)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Thunderclap.cs:38) == `self._damage += 3` (4 -> 7). The Vulnerable stays 1 when upgraded on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim `continue`s rather than breaking when an enemy is gone in the damage pass, and re-checks `ctx.player.is_dead` between the passes (thunderclap.py:111-115)",
+      "verdict": "faithful",
+      "rationale": "C#'s AttackCommand skips non-alive targets by re-deriving `validTargets` (AttackCommand.cs:544-546) and bails on `Attacker.IsDead` (540-543), so both behaviours are the source's. The mid-card `is_dead` return additionally skips the Vulnerable pass, which C# would still run -- dormant for the same reason as the other dead-player guards: a genuinely dead player has lost the combat on both sides."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

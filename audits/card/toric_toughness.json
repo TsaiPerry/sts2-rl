@@ -1,0 +1,47 @@
+{
+  "unit": "card/toric_toughness",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\ToricToughness.cs",
+    "sha256": "2d6e099df7dedd04fa377b45ff2acec7e1b29c1ff7830dc46860390bc3446bfd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "ToricToughnessCard.gains_block = True (event_cards.py:126)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (ToricToughness.cs:17) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:125-130) + _init_vars (132-135)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Event, TargetType.Self)` (ToricToughness.cs:27-30) == cost 2 / SKILL / EVENT / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_turns = 2, _block = 5 (event_cards.py:134-135)",
+      "verdict": "faithful",
+      "rationale": "`new DynamicVar(\"Turns\", 2m)` + `new BlockVar(5m, ValueProp.Move)` (ToricToughness.cs:19-23) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "ToricToughnessCard.on_play (event_cards.py:140-149)",
+      "verdict": "faithful",
+      "rationale": "`decimal blockAmount = await CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay);` then `(await PowerCmd.Apply<ToricToughnessPower>(..., DynamicVars[\"Turns\"].BaseValue, ...))?.SetBlock(blockAmount)` (ToricToughness.cs:34-35) == `gained = BlockCmd.apply(...)` then apply the power and `power.set_block(gained)`. The load-bearing detail is that the power carries the block ACTUALLY GAINED rather than the printed 5 -- so Vambrace's doubling or Frail's reduction propagates into the next two turns' regain -- and the sim threads `BlockCmd.apply`'s return value through in exactly the same way. The Turns value is the power's AMOUNT and the block is set separately, the same two-step shape as card/the_bomb. Presentation, folded in: the Block hover tip (25)."
+    },
+    "OnUpgrade": {
+      "maps_to": "ToricToughnessCard._on_upgrade (event_cards.py:137-138)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(2m)` (ToricToughness.cs:40) == `self._block += 2` (5 -> 7). The Turns var stays 2 when upgraded on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "C# skips SetBlock when Apply returns NULL via `?.`; the sim re-fetches by id and skips on None (ToricToughness.cs:35 vs event_cards.py:147-149)",
+      "verdict": "gap",
+      "issue": "Same mechanism and same verdict as card/crimson_mantle's and card/inferno's guards (rule 3): `PowerCmd.Apply<T>` returns null when combat is ending, when `!target.CanReceivePowers`, or when a stacking `ModifyAmount` resolves to 0 (PowerCmd.cs:29-34, 68-87), and the sim's re-fetch cannot distinguish those from a successful apply -- so a second Toric Toughness whose amount was zeroed would still overwrite the stored block. DORMANT: no ported effect modifies a positive self-applied buff down to exactly 0 (Artifact intercepts only debuffs, cmds.py:299-306), and the other two null cases imply the combat is over. This is the third of the pool's three `?.`-after-Apply sites."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

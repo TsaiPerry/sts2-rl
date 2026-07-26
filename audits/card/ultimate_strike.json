@@ -1,0 +1,41 @@
+{
+  "unit": "card/ultimate_strike",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\UltimateStrike.cs",
+    "sha256": "40b1dc1bcec4b728156039f9902e5d359efb89c7dad503b4f4fdea83ec734297"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:159-164) + _init_vars (166-168)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (UltimateStrike.cs:18-21) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalTags": {
+      "maps_to": "UltimateStrikeCard.tags = frozenset({\"strike\"}) (event_cards.py:164)",
+      "verdict": "faithful",
+      "rationale": "`new HashSet<CardTag> { CardTag.Strike }` (UltimateStrike.cs:14) == the tag set. Load-bearing: an Amalgamator run that combines its Strikes into this card must still count as holding a Strike for card/perfected_strike."
+    },
+    "CanonicalVars": {
+      "maps_to": "UltimateStrikeCard._damage = 14 (event_cards.py:168)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(14m, ValueProp.Move)` (UltimateStrike.cs:16) == `_damage = 14`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "UltimateStrikeCard.on_play (event_cards.py:173-178)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(14).FromCard(this).Targeting(cardPlay.Target)` (UltimateStrike.cs:26-28) == the sim's single `DamageCmd.deal(..., dealer=ctx.player, card=self)`. No follow-up effect and no guard on either side -- card/strike with bigger numbers."
+    },
+    "OnUpgrade": {
+      "maps_to": "UltimateStrikeCard._on_upgrade (event_cards.py:170-171)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(6m)` (UltimateStrike.cs:33) == `self._damage += 6` (14 -> 20)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}
