@@ -1,0 +1,86 @@
+{
+  "unit": "relic/fur_coat",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FurCoat.cs",
+    "sha256": "254d18b35af9316f668623f656aa08f136b91dc4606a71c2e56db874d1bbd803"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fur_coat.py",
+    "sha256": "2f138c290b29a64fe433d8a19e68c201fa8e58936b1d11c7da18740c4e03ea07"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (fur_coat.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (fur_coat.py:50-53), dispatched by RunState.add_relic (run.py:551-552)",
+      "verdict": "faithful",
+      "rationale": "FurCoat.cs:51-56 sets FurCoatActIndex = CurrentActIndex then AddMarkedRooms(RunState.Map); fur_coat.py:50-53 sets self.act_index = run.act_index then _mark_rooms(run, run.map), in the same order. Because FurCoatCoordsSet is still false at this point, C#'s AddMarkedRooms takes the marking branch unconditionally, which is what _mark_rooms does. The sim adds `if run.map is not None`, a defensive guard for a relic granted before an act has started -- C# would NullReference there, and no sim path reaches it either (add_relic during a run always has a map). Guards N1-N3 cover the marking itself."
+    },
+    "ModifyGeneratedMapLate": {
+      "maps_to": "modify_generated_map_late (fur_coat.py:55-69), dispatched by RunState._generate_map (run.py:857-860)",
+      "verdict": "gap",
+      "issue": "See guard G2. The sim dispatches the Late map pass on EVERY fresh map generation; the game dispatches it on exactly one code path -- the SavedActMap (save-load) branch of RunManager.GenerateMap (RunManager.cs:740). The fresh-generation branch (RunManager.cs:745-747) runs ModifyGeneratedMap and AfterMapGenerated only. So the sim re-marks (and can re-roll the marks) where the game does not. LIVE, executed."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "after_room_entered (fur_coat.py:73-77) latches `_armed`, and on_combat_start (fur_coat.py:79-83) applies the effect -- the sim SPLITS C#'s single hook into a room-entry test plus a combat-start action",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G3 per binding rule 4. The effect matches -- every hittable enemy is set to 1 HP -- but C#'s test is `GetMarkedCoords().Contains(RunState.CurrentMapPoint.coord)` with NO act check (FurCoat.cs:116-120), while the sim's latch adds `self.act_index == run.act_index` (fur_coat.py:75), so marks do not leak into later acts in the sim and do in the game (G1, LIVE). And `CreatureCmd.SetCurrentHp` is replaced by a raw `enemy.hp = 1` (G3, dormant)."
+    },
+    "AfterCreatureAddedToCombat": {
+      "maps_to": "on_creature_added (fur_coat.py:85-87), dispatched by HookSystem.on_creature_added (hooks.py:546-550) from cmds.py:266",
+      "verdict": "gap",
+      "issue": "Two divergences, both inherited rather than local. (a) C# fires Hook.AfterCreatureAddedToCombat for the STARTING creatures as well -- CombatManager.StartCombatInternal loops `foreach (Creature creature in _state.Creatures) await AfterCreatureAdded(creature)` (CombatManager.cs:394-398) BEFORE Hook.BeforeCombatStart (:403) -- whereas the sim's on_creature_added is dispatched only from the mid-combat summon path (cmds.py:266). For Fur Coat this is shadowed: on_combat_start covers the starting enemies with the identical effect, so the observable is the same. (b) The act check and the SetCurrentHp substitution are the same guards G1/G3 as BeforeCombatStart, which this entry carries as a rollup per binding rule 4. `creature.Side == CombatSide.Enemy` maps to `creature.side == 'enemy'` (fur_coat.py:86)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): FurCoat.BeforeCombatStart checks ONLY that the current MapCoord is in the marked list -- no act check -- so in the game the 1-HP effect fires again in LATER acts at any coord that happens to coincide; the sim gates the latch on `self.act_index == run.act_index` and never fires",
+      "verdict": "gap",
+      "issue": "MECHANISM: FurCoat.cs has an act check in exactly one place, AddMarkedRooms (line 65: `if (CurrentActIndex != FurCoatActIndex) return map;`), which controls only whether QUESTS get attached to map points. BeforeCombatStart (:114-128) and AfterCreatureAddedToCombat (:130-142) both test `GetMarkedCoords()` -- rebuilt from the persisted FurCoatCoordCols/Rows arrays (:144-160) -- against `RunState.CurrentMapPoint.coord`, and a MapCoord is a bare (col, row) pair with no act component. fur_coat.py:74-77 makes `_armed` require `self.act_index == run.act_index` as well as coord membership. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b06.py fur-coat-acts`): Fur Coat is granted by the ported Nonupeipe shrine (events/nonupeipe.py); the probe marks 7 act-0 coords on four seeds and then advances to act 1, and finds 1, 5, 7 and 4 of those coords still present on the act-1 map respectively -- including MONSTER and ELITE points (seed 23: all 7 survive, three of them MONSTER). In the game every one of those combats opens with all enemies at 1 HP; in the sim none does. So the sim UNDER-applies a run-defining effect, on essentially every run that takes the relic before the last act. (The point TYPE does not have to match: C# tests coord membership only, and BeforeCombatStart is reached from any combat room, including an Elite, a Boss, or an event combat -- EventModel.cs:625 builds a real CombatRoom.) Recorded as a gap against the source even though the source's behaviour looks like a bug: the audit's ground truth is the decompiled game."
+    },
+    {
+      "what": "G2 (LIVE): Hook.ModifyGeneratedMapLate has exactly ONE caller in the game -- the save-load branch of RunManager.GenerateMap -- and the sim runs it on every fresh map generation",
+      "verdict": "gap",
+      "issue": "MECHANISM: `grep -rn ModifyGeneratedMapLate src/` outside AbstractModel.cs/Hook.cs returns three lines: the two implementers (Cards/SpoilsMap.cs:63, Relics/FurCoat.cs:58) and the single dispatch at RunManager.cs:740, which sits inside `if (SavedMapsToLoad != null && SavedMapsToLoad.TryGetValue(...))` -- the branch that deserializes a saved ActMap. The else branch that GENERATES a map (RunManager.cs:745-747) runs ModifyGeneratedMap and AfterMapGenerated and NOT the Late pass. The hook's purpose is therefore to re-attach quests/shape to a deserialized map. RunState._generate_map (run.py:857-860) runs modify_generated_map_late over every listener on every generation. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b06.py b06-misc`, last block): with Fur Coat taken in act 0 (marks (1,2) (2,6) (3,12) (3,13) (4,12) (5,6) (6,13) on seed 11) and Golden Compass then taken in the SAME act, the sim's Late pass sees that the golden path invalidated the marked coords and RE-ROLLS them to (3,1) (3,3) (3,5) (3,13) (3,15) -- five instead of seven, on a fresh make_event_rng('FUR_COAT') shuffle. The game leaves FurCoatCoordCols/Rows untouched, so the old coords stay and only the ones that happen to fall on the golden path's single column 3 can ever fire. Both relics are ported and obtainable (fur_coat via events/nonupeipe.py, golden_compass via events/tezcatara.py, both Ancient), and Golden Compass' own AfterObtained calls the regeneration (golden_compass.py:33), so the two only have to be picked up in the same act. Two further consequences worth recording: the sim BURNS a Fur Coat rng shuffle the game does not (a parity divergence on its own), and the sim's Late pass also runs at every new act's generation -- harmless there only because of the act check. Filed on this record because Fur Coat is the sim's only ModifyGeneratedMapLate implementer; SpoilsMap (a card) has the same exposure and is reported for the card stream. NOTE per binding rule 7: run.py and RunManager.cs are not hashed by this record."
+    },
+    {
+      "what": "G3 (DORMANT): `CreatureCmd.SetCurrentHp(item, 1m)` (FurCoat.cs:126, 139) vs the sim's raw `enemy.hp = 1` (fur_coat.py:83, 87)",
+      "verdict": "gap",
+      "issue": "MECHANISM: CreatureCmd.SetCurrentHp (CreatureCmd.cs:762-779) does three things the raw assignment does not -- it fires `Hook.AfterCurrentHpChanged(runState, combatState, creature, delta)` whenever the value actually changed, it plays a revive animation when a dead creature is raised above 0, and it calls Kill(creature) if the new value leaves the creature dead. The sim HAS the notification hook (`on_hp_changed`, hooks.py:506-510) and fur_coat.py does not call it. DORMANT: the sim's only on_hp_changed implementer is relics/red_skull.py:45, which reads the PLAYER's HP, and Fur Coat only ever touches enemies; the C# implementers that would care are monster models (Crusher and Rocket both override AfterCurrentHpChanged, and Crusher's pairs it with BeforeDeath), and audits/seam/hook_dispatch.json gap G5 already records that MonsterModel is not a sim hook listener at all -- so there is no sim listener to notify even if the call were added. The Kill branch cannot fire here (the target value is 1, and the relic runs before any enemy is dead). Porting a player-side or power-side on_hp_changed listener that reads enemy HP, or making monsters listeners (hook_dispatch G5's fix), makes it live. The comment at fur_coat.py:83 ('SetCurrentHp: a raw set, no damage pipeline') is correct about the damage pipeline and silent about the notification."
+    },
+    {
+      "what": "N1 (SETTLED BY EXECUTION): sweep-reset flags `_armed`, `act_index` and `marked_coords` as never reset at a combat boundary (the belt_buckle shape), with 'C# resets: [BeforeCombatStart]'",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 13 requires tracing to the first READER of the stale field, and all three trace clean. (a) `_armed` is UNCONDITIONALLY re-assigned by after_room_entered (fur_coat.py:74 -- an assignment, not a conditional set), and RunState.enter_room dispatches after_room_entered for every room before its contents resolve (run.py:981-983), so every reader (on_combat_start, on_creature_added) runs after a fresh computation; the after_combat_end clear at fur_coat.py:89-90 is redundant, exactly like relic/unsettling_lamp's dropped AfterCombatEnd. Executed (`py tools/audit/relic_probes_b06.py fur-coat-acts`, part b): forcing _armed = True and then entering an UNMARKED point gives _armed = False, and entering a MARKED point gives True. (b) act_index and marked_coords are per-RUN state on both sides -- C# marks them [SavedProperty] (FurCoat.cs:26, 40-47) so they survive save/load, which is the opposite of per-combat. The sweep's 'C# resets' column is an AST fact about which combat-boundary hooks the C# relic overrides; FurCoat.BeforeCombatStart resets nothing, it applies the effect. `sweep-reset-exec` independently puts fur_coat in the 13 of 16 candidates that agree with a fresh instance."
+    },
+    {
+      "what": "N2: the marking RNG -- `new Rng(base.Owner, base.Id)` then `UnstableShuffle` (FurCoat.cs:77, 83) vs `make_event_rng(run.rng_set.seed, self.id.upper()).shuffle(candidates)` (fur_coat.py:41-45)",
+      "verdict": "faithful",
+      "rationale": "Rng(Player, ModelId, mixin=0, counter=0) seeds from `RunState.Rng.Seed + GetPlayerSlotIndex(player) + GetDeterministicHashCode(id.Entry)` (Rng.cs:47-50); in single player the slot index is 0, so it reduces to run seed + hash(Entry), which is exactly make_event_rng (rng.py:70-82). The Entry for FurCoat slugifies to 'FUR_COAT', which is `self.id.upper()`. Rng.shuffle (rng.py:270-273) is the same descending Fisher-Yates as ListExtensions.UnstableShuffle (ListExtensions.cs:45-60), drawing NextInt(i+1) per step. Note this is a per-relic stream that is NOT re-mixed, so a second marking in the same run repeats the same shuffle on both sides -- which is why G2's extra sim re-mark is a wrong-marks bug rather than a fresh-random one."
+    },
+    {
+      "what": "N3: the candidate set and its ORDER -- `map.GetAllMapPoints().Where(p => (uint)(p.PointType - 5) <= 1u && !p.Quests.Any(q => q is FurCoat))` (FurCoat.cs:78-82) vs `[p for p in act_map.all_points() if p.point_type in (MONSTER, ELITE)]` (fur_coat.py:33-36)",
+      "verdict": "faithful",
+      "rationale": "UnstableShuffle is order-dependent by construction (its own doc comment says so), so the enumeration order is load-bearing. ActMap.GetAllMapPoints iterates column-major, `for c in columns: for r in rows`, skipping nulls (ActMap.cs:34-47); actmap.py:388-394's all_points is the identical loop, and its docstring cites the source. MapPointType is Unassigned=0, Unknown=1, Shop=2, Treasure=3, RestSite=4, Monster=5, Elite=6, Boss=7, Ancient=8, so `(uint)(pointType - 5) <= 1u` is exactly {Monster, Elite}. The dropped `!p.Quests.Any(q => q is FurCoat)` clause is a no-op on the marking path: it only matters when re-marking a map that already carries this relic's quests, and the sim replaces marked_coords wholesale instead of accumulating (fur_coat.py:46-48), reaching the same set. Both sides Take(7) from the shuffled list (`Combats` = DynamicVar 7m, FurCoat.cs:49, no AscensionHelper branch; COMBATS = 7, fur_coat.py:18)."
+    },
+    {
+      "what": "N4: C#'s AddMarkedRooms re-validation -- `!markedCoords.TrueForAll(c => map.HasPoint(c) && (Monster || Elite))` decides between re-rolling and merely re-attaching quests (FurCoat.cs:69-110)",
+      "verdict": "faithful",
+      "rationale": "fur_coat.py:58-68 mirrors the predicate exactly (`still_valid` checks the point exists and is Monster/Elite; `if not all(...)` re-marks), and skips the else branch because the sim stores coords instead of attaching quest objects, so there is nothing to re-attach. The added `and self.marked_coords` on line 58 stands in for C#'s `markedCoords == null` case reaching the same re-roll branch -- with one asymmetry: if the marking ever produced an EMPTY coord set (a map with no Monster/Elite points), C# would re-roll on every generation and the sim would not. Not reachable on any generated act map. The whole method is only correct at all where the dispatch is correct, which is guard G2's subject."
+    },
+    {
+      "what": "N5: Flash(), VfxCmd.PlayOnCreatureCenter(s) and the InvalidOperationException on a loaded coord that no longer exists (FurCoat.cs:106, 121-123, 138)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The throw at FurCoat.cs:106 is a save-load integrity assertion on a path the sim has no counterpart for (it does not serialize maps); it signals a corrupt save rather than any in-game behaviour."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/fur_coat's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py tools/audit/citation_check.py audits/relic` prints: src/Core/Combat/CombatManager.cs, src/Core/Commands/CreatureCmd.cs, src/Core/Extensions/ListExtensions.cs, src/Core/Hooks/Hook.cs, src/Core/Map/ActMap.cs, src/Core/Models/Cards/SpoilsMap.cs, src/Core/Models/EventModel.cs, src/Core/Random/Rng.cs, src/Core/Runs/RunManager.cs, sts2_rl/actmap.py, sts2_rl/cmds.py, sts2_rl/events/nonupeipe.py, sts2_rl/events/tezcatara.py, sts2_rl/hooks.py, sts2_rl/relics/golden_compass.py, sts2_rl/relics/red_skull.py, sts2_rl/rng.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
