@@ -1,0 +1,42 @@
+{
+  "unit": "card/bludgeon",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Bludgeon.cs",
+    "sha256": "df23c71490a95963d367d2233981cdd66df931f32b60d31b9919389d40694d6b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\bludgeon.py",
+    "sha256": "5a44929d82de5b75f6b4860d6db383d000385a3bbde1980607b9f428658855bc"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (bludgeon.py:19-23) + _init_vars (25-27)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (Bludgeon.cs:17-20) == cost 3 / ATTACK / UNCOMMON / ANY_ENEMY. No keywords, no tags."
+    },
+    "CanonicalVars": {
+      "maps_to": "BludgeonCard._damage = 32 (bludgeon.py:27)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(32m, ValueProp.Move)` (Bludgeon.cs:15) == `_damage = 32`, dealt with the default `DamageProps.CARD` (MOVE, powered) -- matching prop sets."
+    },
+    "OnPlay": {
+      "maps_to": "BludgeonCard.on_play (bludgeon.py:32-34)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(DynamicVars.Damage.BaseValue).FromCard(this).Targeting(cardPlay.Target)` (Bludgeon.cs:25-29) == `DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)`. Single hit, no follow-up effect, no liveness guard on either side. Presentation, folded in: WithAttackerAnim / WithHitFx / WithHitVfxSpawnedAtBase and the Ironclad heavy-anim helpers select animations only."
+    },
+    "OnUpgrade": {
+      "maps_to": "BludgeonCard._on_upgrade (bludgeon.py:29-30)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(10m)` (Bludgeon.cs:34) == `self._damage += 10` (32 -> 42)."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (Bludgeon.cs:24)",
+      "verdict": "faithful",
+      "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the sim's equivalent contract."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

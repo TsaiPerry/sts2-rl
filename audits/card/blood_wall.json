@@ -1,0 +1,47 @@
+{
+  "unit": "card/blood_wall",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\BloodWall.cs",
+    "sha256": "9634914026afa0cdab3d7c03e0569c2c942239bed2f513d52de93ebc69c4681a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\blood_wall.py",
+    "sha256": "2ef9b0a19764b528dbf351c65d38af81f48aa4bc9fb303dcec6237dd1d174dbe"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "BloodWallCard.gains_block = True (blood_wall.py:21)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (BloodWall.cs:20) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (blood_wall.py:20-25) + _init_vars (27-30)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Common, TargetType.Self)` (BloodWall.cs:28-31) == cost 2 / SKILL / COMMON / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "_hp_loss = 2, _block = 16 (blood_wall.py:29-30)",
+      "verdict": "faithful",
+      "rationale": "`new HpLossVar(2m)` + `new BlockVar(16m, ValueProp.Move)` (BloodWall.cs:22-26) == both numbers, and both ARE declared in `_init_vars`, so `base_hp_loss` and `base_block` report them correctly (contrast Beckon/Bad Luck). The BlockVar carries Move WITHOUT Unpowered -> POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and this card is NOT in gap G1's blast radius; confirmed pool-wide by `py tools/audit/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
+    },
+    "OnPlay": {
+      "maps_to": "BloodWallCard.on_play (blood_wall.py:35-41)",
+      "verdict": "faithful",
+      "rationale": "Order matches: self-damage FIRST (`CreatureCmd.Damage(..., 2, Unblockable | Unpowered | Move, this)`, BloodWall.cs:36, == `DamageCmd.deal(..., props=DamageProps.CARD_HP_LOSS)`), then `CreatureCmd.GainBlock(..., DynamicVars.Block, cardPlay)` (line 40) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`. The order is load-bearing -- the HP loss lands before the block exists -- and is preserved. Presentation, folded in: VfxCmd.PlayOnCreatureCenter (35), TriggerAnim (37), SfxCmd.Play (38), VfxCmd.PlayOnCreature (39) and ExtraRunAssetPaths (18)."
+    },
+    "OnUpgrade": {
+      "maps_to": "BloodWallCard._on_upgrade (blood_wall.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(4m)` (BloodWall.cs:45) == `self._block += 4` (16 -> 20). The HP loss stays 2 when upgraded on both sides -- upgraded values checked, not just base."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early on `if ctx.player.is_dead` between the HP loss and the block gain (blood_wall.py:39-40)",
+      "verdict": "gap",
+      "issue": "BloodWall.cs has no such early return; C# would still await `CreatureCmd.GainBlock`, firing `Hook.ModifyBlock` and `AfterModifyingBlockAmount` on the dying player. C# has no such early return: if the HP loss is lethal it still awaits the next command on the dying player. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
