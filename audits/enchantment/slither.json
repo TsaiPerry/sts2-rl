@@ -1,0 +1,41 @@
+{
+  "unit": "enchantment/slither",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Slither.cs",
+    "sha256": "f696fb9ac48cc864dba7100ab8c2d25dcc0142eaca212190b82de6132f805452"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "CanEnchant": {
+      "maps_to": "SlitherEnchantment.can_enchant (enchantments.py:112-114) -- base plus `not card.energy_cost_x`, matching Slither.cs:31-38's `!card.Keywords.Contains(Unplayable) && !card.EnergyCost.CostsX`. The explicit Unplayable clause is already covered by the sim's base can_enchant (`not card.is_playable`, enchantments.py:59-60), which is if anything stricter -- C#'s base only rejects Unplayable when the card is in PileType.Deck, and every ported grant enchants a deck card. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "AfterCardDrawn": {
+      "maps_to": "SlitherEnchantment.on_card_drawn (enchantments.py:116-119), dispatched by HookSystem.on_card_drawn (hooks.py:391-400) from player._draw (player.py:292). `card.set_cost_this_combat(...)` matches Slither.cs:50's `EnergyCost.SetThisCombat(...)`, and NextInt(4) matches randrange(4)",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM. Slither.cs:55-62 rolls on `base.Card.Owner.RunState.Rng.CombatEnergyCosts.NextInt(4)`; the sim rolls on `self.combat._rng.randrange(4)` (enchantments.py:119), the shared combat random.Random, not the per-purpose accessor. The sim HAS the right accessor -- combat_rng.py:23 maps 'energy' -> the game's combat_energy_costs stream (rng.py:92, 384) and potions.py:1049 already uses `ctx.combat.combat_rng.energy` for Snecko Oil, which is the same `Rng.CombatEnergyCosts.NextInt(4)` call in C#. EXECUTED (`py tools/audit/enchantment_probes.py slither-rng`): the sim's line is `card.set_cost_this_combat(self.combat._rng.randrange(4))`. LIVE for any string-seeded parity run: Slither is granted by the ported Wood Carvings event (events/wood_carvings.py:67), and in parity mode every OTHER stream consumer is adapted, so a Slither draw both (a) takes a number the game never takes off the shared stream and (b) fails to advance CombatEnergyCosts, desyncing every later Snecko Oil / cost roll in the run. In legacy (RL) mode both are the same random.Random, so the divergence is parity-only -- but that is a reachable observable, not a waiver."
+    }
+  },
+  "guards": [
+    {
+      "what": "Slither.cs:46-49 `if (base.Card.Pile.Type != PileType.Hand) return;` -- the sim's on_card_drawn has no pile test",
+      "verdict": "faithful",
+      "maps_to": "structurally equivalent: the sim dispatches on_card_drawn from player._draw (player.py:290-292) immediately after `self.hand.append(card)`, so the card is in the hand at every sim call site, and player._draw is the ONLY caller of the hook (verified: `grep -n 'on_card_drawn' sts2_rl` gives the hooks.py definition, player.py:292, and listener implementations only). C# needs the guard because Hook.AfterCardDrawn is dispatched from CardPileCmd.cs:851 after an AfterCardDrawnEarly pass (Hook.cs:202-214) that could have moved the card."
+    },
+    {
+      "what": "Slither.cs:12-29 TestEnergyCostOverride",
+      "verdict": "waiver",
+      "rationale": "test-harness-only: the setter throws unless TestMode.IsOn (Slither.cs:22-25). Not player-reachable behavior."
+    },
+    {
+      "what": "Slither.cs:51 `NCard.FindOnTable(card)?.PlayRandomizeCostAnim()`",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

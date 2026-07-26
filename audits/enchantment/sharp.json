@@ -1,0 +1,34 @@
+{
+  "unit": "enchantment/sharp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Sharp.cs",
+    "sha256": "11ad3962e03491d6ef3bf2081d8213e6723c6a73219c4272ee5a4eebb9d89f2a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "ShowAmount": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "CanEnchantCardType": {
+      "maps_to": "SharpEnchantment.can_enchant (enchantments.py:398-402) -- `card_type == CardType.ATTACK`, matching Sharp.cs:10-13. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "EnchantDamageAdditive": {
+      "maps_to": "SharpEnchantment.modify_damage_additive (enchantments.py:404-408) -- returns `amount` for its own card, matching Sharp.cs:15-22's `base.Amount`; the `!props.IsPoweredAttack() -> 0m` guard is hoisted into the caller (cmds.py:56). The grant sets amount 2 (events/self_help_book.py:13). Additive-only, so BR-1's phase difference provably cannot bite -- this unit IS the executed control: Sharp(+2) with Strength(+3) on a base-6 Strike deals 11 in both engines (`py tools/audit/enchantment_probes.py order`).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "reachability: granted by the ported Self Help Book event (events/self_help_book.py:17, READ_THE_BACK, amount 2, restricted to Attacks). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,24 @@
+{
+  "unit": "enchantment/clone",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Clone.cs",
+    "sha256": "64fccd17ad5bdc9bc1db2a354557f951daa85072bfca13a08cf79d4016a253c3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {},
+  "guards": [
+    {
+      "what": "Clone.cs is an empty EnchantmentModel subclass -- it overrides nothing and exists only so CloneRestSiteOption can find the cards it marks (Clone.cs:3-8). Sim: CloneEnchantment (enchantments.py:507-514) is the same empty marker.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "reachability: granted by the ported Pael's Growth relic (relics/paels_growth.py:19-25, amount 4) and consumed by its Clone rest-site option (paels_growth.py:28-45), which is the C# consumer the Clone.cs doc-comment names. Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

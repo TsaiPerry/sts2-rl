@@ -1,0 +1,41 @@
+{
+  "unit": "enchantment/tezcataras_ember",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\TezcatarasEmber.cs",
+    "sha256": "0639f5ebd6cede554ba486be8bfedd119cc1f3290dec6272008a0b39176fc4a9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "EnchantDamageAdditive": {
+      "maps_to": "TezcatarasEmberEnchantment.modify_damage_additive (enchantments.py:333-337) -- returns the class constant 3 for its own card, matching TezcatarasEmber.cs:21-28's `DynamicVars.Damage.BaseValue` whose canonical value is `new DamageVar(3m, ValueProp.Move)` (TezcatarasEmber.cs:13). The `!props.IsPoweredAttack() -> 0m` guard is hoisted into the caller (cmds.py:56). Additive-only, so BR-1's phase difference cannot bite (executed control in `py tools/audit/enchantment_probes.py order`).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "OnEnchant (TezcatarasEmber.cs:15-19) -- `protected override`, not enumerated by harness.list_overrides; audited here. Two effects: `EnergyCost.UpgradeBy(-EnergyCost.GetWithModifiers(CostModifiers.None))` (i.e. drive the base cost to 0) and `AddKeyword(CardKeyword.Eternal)`",
+      "verdict": "faithful",
+      "maps_to": "TezcatarasEmberEnchantment.attach (enchantments.py:322-325) sets card._energy_cost = 0 and card.eternal = True; reset() (327-331) re-asserts both at every combat setup (combat.py:131). The cost zeroing is exact for the ported grant, which only ever enchants Basic Strikes (relics/nutritious_soup.py:18-26, matching NutritiousSoup.cs) -- a Strike's base cost is 1 and has no cost upgrade, so `UpgradeBy(-1)` and `= 0` coincide. Eternal is modelled at the run layer: RunState's removable-card filter reads it (run.py:362) and two ported events read it as a card filter (events/amalgamator.py:14, events/wood_carvings.py:33) -- executed, `py tools/audit/enchantment_probes.py eternal`."
+    },
+    {
+      "what": "GENERALISATION LIMIT of the cost-zeroing map: `_energy_cost = 0` is an absolute set, `UpgradeBy(-current)` is a relative adjustment to the upgrade delta. They diverge on any card whose cost later changes by upgrade",
+      "verdict": "faithful",
+      "maps_to": "dormant, and NOT on an unexecuted claim: the only ported grant is Nutritious Soup, whose C# and sim halves both restrict the target to Basic Strikes (relics/nutritious_soup.py:18-26), and a Strike has max_upgrade_level 1 with no cost change on upgrade. Recorded so a future grant that widens the target set is caught."
+    },
+    {
+      "what": "TezcatarasEmber.cs:11 ExtraHoverTips (the Eternal keyword tip)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    {
+      "what": "BR-3 (blast radius): creature_card_cmds step 52 -- a downgrade rebuilds the card from canonical without re-running ModifyCard, so both the zeroed cost and Eternal come back until the next combat's reset()",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Recorded because Tezcatara's Ember is the widest case in the radius -- it is the only enchantment that modifies a card's COST, so a downgrade restores a cost the player paid an event to remove. See the executed window bound on the souls record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

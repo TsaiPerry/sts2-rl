@@ -1,0 +1,34 @@
+{
+  "unit": "enchantment/glam",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Glam.cs",
+    "sha256": "ebaa7dbf63e737db9b23ce5c5f7b3a325d1d0c7abc86040b3b016275bb641618"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "EnchantPlayCount": {
+      "maps_to": "GlamEnchantment.modify_card_play_count (enchantments.py:232-235) -- `count + amount` while not disabled, mirroring Glam.cs:34-41's `originalPlayCount + DynamicVars[\"Times\"].IntValue` while not UsedThisCombat. Times' canonical value is 1m (Glam.cs:17) and the two sim grants (relics/silken_tress.py:34, relics/glitter.py:21) construct GlamEnchantment() with the default amount 1. POSITION: C# folds EnchantPlayCount into BaseReplayCount before Hook.ModifyCardPlayCount (CardModel.cs:1129-1131, 2015-2021) while the sim runs it as one listener inside that hook (combat.py:469-471); numerically identical because every ported modify_card_play_count implementation is additive (powers.py:966, 3919; relics/throwing_axe.py:30-36) -- verified by reading all four.",
+      "verdict": "faithful"
+    },
+    "AfterCardPlayed": {
+      "maps_to": "GlamEnchantment.on_card_played (enchantments.py:237-239) -- sets `disabled` for its own card, mirroring Glam.cs:43-56 setting both UsedThisCombat and Status = Disabled (the sim collapses the two flags into one, and Enchantment.reset (enchantments.py:70-72) clears it each combat, matching the game re-cloning the canonical enchantment). Unlike Corrupted/Vigorous/Goopy this port is NOT exposed to EG1's per-replay leg: playCount is computed once BEFORE the loop (CardModel.cs:1895), so a mid-loop disable cannot change it. Verified by execution -- see guard EG1-N.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "EG1-N (negative control for EG1): Glam rides the same once-per-card-play on_card_played hook as Vigorous and Goopy, but its only reader (EnchantPlayCount) is consumed before the replay loop starts, so the slot difference cannot be observed",
+      "verdict": "faithful",
+      "maps_to": "combat.py:469 computes play_count once, then loops (combat.py:477)"
+    },
+    {
+      "what": "reachability: granted by the ported Silken Tress relic (relics/silken_tress.py:34, first card reward's options) and Glitter (relics/glitter.py:21). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

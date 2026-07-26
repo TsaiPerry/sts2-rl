@@ -1,0 +1,51 @@
+{
+  "unit": "enchantment/corrupted",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Corrupted.cs",
+    "sha256": "ee1dc925f9e24daddc0139c6acb3b57cb868c84d98375eab67a7e97e464795a9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "CanEnchantCardType": {
+      "maps_to": "CorruptedEnchantment.can_enchant (enchantments.py:480-484) -- `card_type == CardType.ATTACK`, matching Corrupted.cs:15-18. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "EnchantDamageMultiplicative": {
+      "maps_to": "CorruptedEnchantment.modify_damage_multiplicative (enchantments.py:486-492). Returns 1.5 for its own card and 1 otherwise; the `!props.IsPoweredAttack() -> 1m` guard of Corrupted.cs:22-26 is hoisted into the caller (cmds.py:56 `if is_powered_attack(props)` gates the whole dispatch), so the same set of hits is multiplied. The value 1.5m is exact. WHERE the factor lands in the fold is BR-1, not this entry.",
+      "verdict": "faithful"
+    },
+    "OnPlay": {
+      "maps_to": "CorruptedEnchantment.before_card_played (enchantments.py:494-504) -- DamageCmd.deal(player, 2, UNBLOCKABLE|UNPOWERED|MOVE, card=card), matching Corrupted.cs:29-32's CreatureCmd.Damage(Card.Owner.Creature, 2m, Unblockable|Unpowered|Move, Card) in amount, props and target",
+      "verdict": "gap",
+      "issue": "The 2 damage is correct; WHEN it is dealt is not. See guard EG1: the sim wires OnPlay to before_card_played, so the self-damage lands BEFORE the card's own attack instead of after it, and only ONCE however many times the card is replayed."
+    }
+  },
+  "guards": [
+    {
+      "what": "BR-1 (blast radius, NOT a new mechanism): Hook.cs:1490-1499 applies the source card's Enchant*Additive then Enchant*Multiplicative to the running damage BEFORE either listener loop (Hook.cs:1314-1319 is the block twin); the sim registers the enchantment as an ordinary hook listener (combat.py:130-133) so its factor is pooled into the same sum/product as everyone else's (hooks.py:52-78, applied once at cmds.py:57-58)",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED, same verdict at every site (rule 3): audits/seam/damage_pipeline.json guard N3 names this explicitly (\"This includes card-enchantment bonuses, which the sim registers as ordinary hooks (combat.py:133) rather than as C#'s explicit pre-step (Hook.cs:1490-1499)\") and audits/seam/creature_card_cmds.json step 13 clause (b) carries the block half. NOT re-verdicted here; recorded because THIS unit is in the blast radius, and with a sharper witness than either seam record states. EXECUTED (`py tools/audit/enchantment_probes.py order`): a Corrupted Strike (base 6) with Strength 3 deals 13 in the sim and 12 in the game -- C# folds 6 * 1.5 = 9 and then adds Strength 3; the sim sums 6 + 3 = 9 and then multiplies by 1.5. The additive-only control in the same probe (Sharp +2 with Strength +3 = 11) MATCHES, which isolates the multiplicative phase as the cause. The seam records' own liveness evidence is the Shrink x Vulnerable float case; this witness needs no float at all -- it is a pure phase-order difference, and it should be folded into damage_pipeline N3 by that record's owner."
+    },
+    {
+      "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
+      "verdict": "gap",
+      "issue": "Corrupted is the site where both legs of EG1 are proven by execution (`py tools/audit/enchantment_probes.py onplay-slot replay`). (1) POSITION: with the ported Rupture power (powers.py:272-289, from the Ironclad card cards/rupture_card.py) at 1 stack, a Corrupted Strike deals 10 in the sim and 9 in the game -- the sim's self-damage fires first, Rupture grants +1 Strength, and the Strike is dealt at Strength 1; C# resolves the Strike at Strength 0 and only then takes the 2. (2) PER-REPLAY: with the ported Throwing Axe relic (relics/throwing_axe.py:30-36) the card is played twice; the sim takes 2 self-damage, the game takes 4. Both legs are reachable with ported content only -- Corrupted comes from the ported Symbiote event (events/symbiote.py:33-45), Rupture is an Ironclad pool card (cards/pool.py:30) and Throwing Axe is a ported Ancient relic. LIVE."
+    },
+    {
+      "what": "BR-2 (blast radius): audits/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
+      "extra": "Corrupted's OnPlay is the strongest witness of the replay leg: 2 vs 4 self-damage with Throwing Axe."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

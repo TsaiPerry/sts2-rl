@@ -1,0 +1,35 @@
+{
+  "unit": "enchantment/souls",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\SoulsPower.cs",
+    "sha256": "b14a2c28cbbff4411d4a9199965f10ed7ec5e1792c6368bfc72ceef1ff50614b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "CanEnchant": {
+      "maps_to": "SoulsEnchantment.can_enchant (enchantments.py:205-207) -- base plus `card.exhausts`, matching SoulsPower.cs:12-23's `card.GetKeywordsWithSources(KeywordSources.Local).Contains(Exhaust)`. The sim has no keyword-source split; Card.exhausts is the card's own flag, which is the Local source. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "OnEnchant (SoulsPower.cs:25-28, CardCmd.RemoveKeyword(Card, Exhaust)) -- a `protected override`, so harness.list_overrides does not enumerate it; audited here",
+      "verdict": "faithful",
+      "maps_to": "SoulsEnchantment.attach (enchantments.py:209-211) clears card.exhausts, and reset() (214-216) re-asserts the clear at every combat setup (combat.py:131). C# applies it once and permanently through CardCmd.Enchant -> ModifyCard (CardCmd.cs:539-543)."
+    },
+    {
+      "what": "BR-3 (blast radius): audits/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145); Card.downgrade (cards/base.py:150-165) does not",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted); Souls IS that record's named witness. CROSS-RECORD NOTE for its owner, executed here (`py tools/audit/enchantment_probes.py souls-reset`): on a Discovery with Souls attached, exhausts is False after attach, True after upgrade()+downgrade() -- as step 52 states -- and False AGAIN after the next combat's Enchantment.reset() (enchantments.py:214-216, called from combat.py:131). The sim's divergence window is therefore bounded by the next combat setup. That keeps step 52 LIVE on its in-combat leg (Dampen, powers.py:3149-3183) but not on the out-of-combat leg its rationale also cites (events/reflections.py:36-41), which self-heals before the card is next played. Recommend step 52's owner narrow the liveness argument to the in-combat downgrade."
+    },
+    {
+      "what": "reachability: granted by the ported Grave of the Forgotten event (events/grave_of_the_forgotten.py:45-47, Confront). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

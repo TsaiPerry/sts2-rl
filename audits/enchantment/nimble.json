@@ -1,0 +1,39 @@
+{
+  "unit": "enchantment/nimble",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Nimble.cs",
+    "sha256": "b730c1c94d6ec506575c5db5dd883f98d01880e700111936de1363ded34f685c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "ShowAmount": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "CanEnchant": {
+      "maps_to": "NimbleEnchantment.can_enchant (enchantments.py:424-426) -- base plus `card.gains_block`, matching Nimble.cs:7-14's `card.GainsBlock`. GainsBlock is an explicit per-card declaration in the source, mirrored as the Card.gains_block class attribute, and test_shared_enchantments.py::test_nimble_requires_gains_block pins the three interesting cases (Defend yes, Iron Wave yes, Strike no, Entrench yes with no printed number, Feel No Pain no). Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "EnchantBlockAdditive": {
+      "maps_to": "NimbleEnchantment.modify_block_additive (enchantments.py:428-431) -- returns `amount` for its own card, matching Nimble.cs:16-19's `base.Amount`. The grant sets amount 2 (events/self_help_book.py:13 _AMOUNT = 2, matching SelfHelpBook.cs's Enchantment2Amount). Additive-only, so BR-1's phase difference cannot bite (executed control in `py tools/audit/enchantment_probes.py order`).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "BR-6 (blast radius): audits/seam/creature_card_cmds.json guard G1 -- BlockCmd.apply (cmds.py:145-147) skips the whole block-modifier dispatch unless is_powered_attack(props), while Hook.ModifyBlock (Hook.cs:1310-1340) applies the source card's enchantment modifiers unconditionally and FIRST",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as creature_card_cmds G1, whose issue text names this exact consequence (\"The same gate also skips the source card's enchantment block modifiers, which C# applies unconditionally and FIRST\") -- rule 3, not re-verdicted. Recorded here because Nimble and Goopy are the two ported EnchantBlockAdditive implementers and so are the whole of that clause's content-side blast radius: an unpowered block gain on a Nimble-enchanted card (Entrench is the ported MOVE|UNPOWERED block card G1 uses as its witness, cards/trash_heap_cards.py:159-179) loses the +2 entirely in the sim."
+    },
+    {
+      "what": "reachability: granted by the ported Self Help Book event (events/self_help_book.py:18, READ_PASSAGE, amount 2, restricted to Skills). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

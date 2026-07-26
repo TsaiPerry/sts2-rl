@@ -1,0 +1,35 @@
+{
+  "unit": "enchantment/steady",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Steady.cs",
+    "sha256": "85831d5f0b55aade756bbaa0d7e1a6c0565682c76d47b5dd1f154fbab7dd7851"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {},
+  "guards": [
+    {
+      "what": "OnEnchant (Steady.cs:11-14, AddKeyword(CardKeyword.Retain)) -- Steady's only behaviour, and a `protected override`, so harness.list_overrides enumerates no hooks for this unit at all",
+      "verdict": "faithful",
+      "maps_to": "SteadyEnchantment.attach (enchantments.py:135-137) sets card.retain = True, and reset() (139-142) re-asserts it at every combat setup (combat.py:131). C# applies OnEnchant once, permanently, via CardCmd.Enchant -> ModifyCard (CardCmd.cs:539-543, EnchantmentModel.cs:355-364). Retain is honoured by the sim's end-of-turn flush (player.discard_hand, player.py:188-197), which is the C# ShouldRetainThisTurn skip."
+    },
+    {
+      "what": "Steady.cs:9 ExtraHoverTips (the Retain keyword tip)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    {
+      "what": "BR-3 (blast radius): audits/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` and the sim's Card.downgrade rebuilds from _init_vars without it",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Steady is in the blast radius alongside Souls and Goopy: Retain is a keyword flag set at attach time, so a downgrade clears it until the next combat's reset(). See the cross-record note on the souls record for the executed bound on that window."
+    },
+    {
+      "what": "reachability: granted by the ported Waterlogged Scriptorium event (events/waterlogged_scriptorium.py:51-53). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
