@@ -1,0 +1,56 @@
+{
+  "unit": "relic/miniature_cannon",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\MiniatureCannon.cs",
+    "sha256": "a0317953478b46aaff273f7dbb69c95b80a3e5ebf8d567165eea4e86d7234610"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\miniature_cannon.py",
+    "sha256": "feb3bdebc5fb0b00dc1cd4724cbf0b805f6e89f2551a1e23ef1cd204079508bb"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (miniature_cannon.py:18)",
+      "verdict": "faithful"
+    },
+    "ModifyDamageAdditive": {
+      "maps_to": "modify_damage_additive (miniature_cannon.py:22-33), summed by HookSystem.modify_damage_additive (hooks.py:52-63) and consumed at three sites -- cmds.py:57 (the real pipeline), previews.py:56 (intent display) and cards/thrash.py:46 (Thrash's absorb)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Three of C#'s four early returns are reproduced exactly (N1-N3, all executed); the fourth is an AND that the port narrows to one of its two disjuncts."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): `if (dealer != base.Owner.Creature && cardSource.Owner != base.Owner) return 0` (MiniatureCannon.cs:31-34) is an AND, so C# adds the damage when EITHER the dealer is the owner OR the card belongs to the owner; the port keeps only the first disjunct",
+      "verdict": "gap",
+      "issue": "MECHANISM: miniature_cannon.py:31 requires `dealer is self.player`, dropping C#'s `cardSource.Owner == base.Owner` alternative. In single-player the two disjuncts coincide for ordinary card play, so the divergence needs a player-OWNED card whose damage is dealt by something that is not the player -- including a null dealer, which C#'s clause admits (`Creature? dealer`) and the sim's `is` test rejects. REACHABILITY (DORMANT, checked by execution rather than asserted -- py tools/audit/relic_probes_b09.py b09-simple): the probe drives the real pipeline through five combinations and the `upgraded card, dealer=None` row returns 10 where C# returns 13. But no ported path reaches it: every DamageCmd.deal call under sts2_rl/ that passes `card=` without a `dealer=` is a self-damage drawback (cards/bloodletting.py:37, blood_wall.py:38, hemokinesis.py:37, offering.py:40) and all four use DamageProps.CARD_HP_LOSS, which carries UNPOWERED and so never reaches the additive hook at all (guard N1). The concrete unported things that make it live: a player-side minion or summon dealing damage with a player-owned card, or any reflected/redirected damage that keeps the cardSource but changes the dealer. Rule 7: leans on cmds.py, previews.py and the four card files, none hashed here."
+    },
+    {
+      "what": "N1: `if (!props.IsPoweredAttack()) return 0` (MiniatureCannon.cs:19-22) is absent from the port, which justifies itself with a claim about the pipeline (miniature_cannon.py:29-30: \"the pipeline only calls this for powered attacks\")",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 12 says check the claim rather than accept it, so it was checked exhaustively. `git grep hooks.modify_damage_additive -- sts2_rl` returns exactly THREE call sites and every one is inside an `if is_powered_attack(props):` block -- cmds.py:56-57, previews.py:55-56 and cards/thrash.py:45-46 -- and is_powered_attack is `MOVE in props and UNPOWERED not in props` (valueprops.py:47-49), which is IsPoweredAttack. EXECUTED: the same upgraded card returns +3 with DamageProps.CARD and +0 with DamageProps.NON_CARD_UNPOWERED. So the claim holds today, but it is a claim about a THIRD file rather than a guard in this one, and a fourth unguarded dispatch site would silently make Miniature Cannon boost Poison and Thorns. Recorded as faithful-with-a-fragility-note, not as a divergence. Rule 7: leans on cmds.py, previews.py, cards/thrash.py and valueprops.py, none hashed here."
+    },
+    {
+      "what": "N2: `if (cardSource == null) return 0` (MiniatureCannon.cs:23-26)",
+      "verdict": "faithful",
+      "rationale": "`card is not None` (miniature_cannon.py:31) is the same test. EXECUTED: the `no card` row returns 10 unmodified. Load bearing -- it is what keeps the relic off Poison, Thorns, relic AoE (relic/mercury_hourglass, relic/mr_struggles and relic/lost_wisp in this same batch all pass no card) and monster moves."
+    },
+    {
+      "what": "N3: `if (!cardSource.IsUpgraded) return 0` (MiniatureCannon.cs:27-30) vs `card.upgrade_level > 0` (miniature_cannon.py:31)",
+      "verdict": "faithful",
+      "rationale": "CardModel.IsUpgraded is literally `CurrentUpgradeLevel > 0` (CardModel.cs:783), so the two are the same expression. EXECUTED: an un-upgraded Strike returns 10 and the same card upgraded returns 13. Note this reads the LIVE upgrade level, so a card upgraded mid-combat (relic/bellows, relic/bone_tea, Armaments) starts qualifying immediately on both sides."
+    },
+    {
+      "what": "N4: `DynamicVar(\"ExtraDamage\", 3m)` (MiniatureCannon.cs:11-15) read as `.BaseValue` (line 35) vs EXTRA_DAMAGE = 3 (miniature_cannon.py:20)",
+      "verdict": "faithful",
+      "rationale": "3 is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file -- and `.BaseValue` bypasses hook modification of the var. The decimal 3m vs the sim's int 3 is immaterial: the sim's additive chain sums ints and applies them before the multiplicative pass (cmds.py:56-58), matching Hook.ModifyDamage's additive-then-multiplicative fold, so Vulnerable multiplies the +3 on both sides."
+    },
+    {
+      "what": "N5: the relic contributes at previews.py:56 and cards/thrash.py:46 as well as the real pipeline",
+      "verdict": "faithful",
+      "rationale": "Both extra sites are correct rather than accidental. previews.py is the intent/preview mirror of DamageCmd steps 1-2, which is what CardModel's UpdateCardPreview does with Hook.ModifyDamage (DamageVar.cs:41-45). Thrash's absorb passes `target=None, dealer=ctx.player, card=victim` (cards/thrash.py:46), and Thrash.cs:70 passes exactly the same shape -- a null target, the owner's creature as dealer and the victim card as cardSource -- so an absorbed UPGRADED Attack gains the +3 on both sides. Checked because the argument order at that call site is easy to misread as a bug."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

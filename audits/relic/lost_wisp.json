@@ -1,0 +1,66 @@
+{
+  "unit": "relic/lost_wisp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LostWisp.cs",
+    "sha256": "42140e529bb8554a89903d8d7cfbe455ec9b33bb822681bc7dbd77d49bc82f0a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lost_wisp.py",
+    "sha256": "1683f4656e1d9d2b128bf5c9e4cf0243d6f7332a5a8a343b36c000a50aa7f20a"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (lost_wisp.py:22)",
+      "verdict": "faithful"
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (lost_wisp.py:26-36)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Every guard, constant, prop flag and target set matches; what does not is that C# fires Hook.AfterCardPlayed once per Replay ITERATION and the sim fires on_card_played once per play, so a replayed Power card deals 8 damage in the sim and 8 per iteration in C#."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# and once per play in the sim, so a replayed Power card triggers Lost Wisp once instead of once per replay",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop. LostWisp.AfterCardPlayed (LostWisp.cs:19-26) therefore runs once per iteration and deals 8 each time. The sim's _resolve_card_play runs the whole play-count loop (combat.py:477-494) and calls hooks.on_card_played only afterwards (combat.py:514), so Lost Wisp deals 8 total no matter how many times the card played. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b09.py b09-wisp-replay): Lost Wisp alone deals 8 from a played Power (correct); Lost Wisp + Throwing Axe still deals 8, where C# deals 8 + 8 = 16. Both sides ported: Lost Wisp is granted by the ported Lost Wisp event -- its Claim option calls run.add_relic(\"lost_wisp\") (sts2_rl/events/lost_wisp.py; cited without a line number because the citation checker resolves by BASENAME and relics/lost_wisp.py shadows it), Throwing Axe -- which makes the FIRST card of each combat play twice (relics/throwing_axe.py:30-36) -- is granted by the ported Tanx shrine (events/tanx.py), and there are 33 ported Power cards to be that first card (executed census). Two further ported replay sources reach the same combat.py:469 play-count hook: the Spiral and Glam enchantments and Hidden Gem's base_replay_count. This is the site-specific observable of audits/seam/hook_dispatch.json gap G4 (the per-Replay CardPlay loop) and of relic/unsettling_lamp guard G1, both of which label the mechanism LIVE -- one verdict per mechanism, binding rule 3, so this entry records Lost Wisp's number and does not re-derive the machinery. Rule 7: leans on combat.py, CardModel.cs and throwing_axe.py, none hashed here."
+    },
+    {
+      "what": "N1: C# does NOT exclude auto-plays here -- there is no `cardPlay.IsAutoPlay` guard in LostWisp.cs:21, unlike BrilliantScarf.cs:84-87",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because relic/brilliant_scarf's LIVE guard G1 is exactly the opposite shape (C# excludes auto-plays, the sim counts them). Here BOTH sides count auto-plays: C# has no such guard and the sim's auto_play_card routes through the same _resolve_card_play bracket (combat.py:516+), which ends in hooks.on_card_played. An auto-played Power therefore deals the 8 on both sides. The paired-hook lesson of PROMPT.md class 15 in reverse: do not assume the guard set carries over between relics that share a hook."
+    },
+    {
+      "what": "N2: `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (LostWisp.cs:21)",
+      "verdict": "faithful",
+      "rationale": "The owner check is single-player-structural (one player, all cards are the player's). The IsInProgress check is mirrored explicitly by `self.combat is None or self.combat.is_over` (lost_wisp.py:27) -- stronger than most ports, which rely on the hook only being dispatched by a live CombatState."
+    },
+    {
+      "what": "N3: `cardPlay.Card.Type == CardType.Power` (LostWisp.cs:21) vs `card.card_type != CardType.POWER` (lost_wisp.py:27)",
+      "verdict": "faithful",
+      "rationale": "Same test, negated. The type is read off the CardPlay's card in C# and off the played card in the sim; both are the card that was played, and no ported effect changes a card's type mid-play."
+    },
+    {
+      "what": "N4: `combatState.HittableEnemies` (LostWisp.cs:24) vs Relic.living_enemies() (lost_wisp.py:31)",
+      "verdict": "faithful",
+      "rationale": "C# passes `combatState.HittableEnemies` == `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim passes Relic.living_enemies() (relics/base.py:294-297), which filters only `not e.is_gone` (dead or escaped) -- but the missing predicate IS applied, one target later, by DamageCmd.deal itself: `if not hooks.should_allow_hitting(target): return 0` (cmds.py:51-52). So for a DAMAGE call site the two sets are observationally identical (an alive-but-unhittable enemy is iterated and then takes 0). DELIBERATELY DISTINGUISHED from relic/bag_of_marbles guard G2, which records the same call-site substitution as a gap: that site routes through PowerCmd.apply, which has NO such backstop (audits/seam/power_cmd.json gap G6, the missing CanReceivePowers check). Same substitution, different downstream, so different verdicts -- and binding rule 3 is satisfied because the MECHANISM under verdict there is the missing PowerCmd backstop, not living_enemies() itself. The `escaped` half is also covered: an escaped creature is IsDead-or-removed in C# and is_gone in the sim."
+    },
+    {
+      "what": "N5: `DamageVar(8m, ValueProp.Unpowered)` (LostWisp.cs:17) read as `.BaseValue` with `.Props`, dealer = Owner.Creature, cardSource = **null** (LostWisp.cs:24)",
+      "verdict": "faithful",
+      "rationale": "The constant is 8 with no AscensionHelper branch anywhere in the file, so 8 is the pinned non-ascension value (lost_wisp.py:24 DAMAGE = 8). The props match EXACTLY and the detail matters: DamageVar's ctor stores the props verbatim (DamageVar.cs:16-20), so this is `ValueProp.Unpowered` with NO Move flag, and DamageProps.NON_CARD_UNPOWERED (valueprops.py:42) is also `ValueProp.UNPOWERED` alone. Consequences on both sides: is_powered_attack is False so Strength/Vulnerable/Weak do not apply, the damage IS blockable (no Unblockable flag), and it is not a 'hit' -- cmds.py:69 gates on_attacked on ValueProp.MOVE, so Curl Up does not trigger. cardSource = null is mirrored by omitting `card=` (lost_wisp.py:32-35), which also means card-keyed damage modifiers such as relic/miniature_cannon correctly do not apply."
+    },
+    {
+      "what": "N6: the sim adds a `self._check_win()` (lost_wisp.py:36) that has no line-for-line C# counterpart",
+      "verdict": "faithful",
+      "rationale": "It stands in for the CheckWinCondition the game runs after the card-play command; without it a Lost Wisp kill would not end the fight, because relic damage fires outside play_card's own checks (Relic._check_win's docstring, relics/base.py:299-304). Recorded because the sibling relic/mr_struggles OMITS the same call and that omission is a LIVE gap in this batch -- the two ports disagree about the same compensation, which is what made it worth checking here."
+    },
+    {
+      "what": "N7: Flash() (LostWisp.cs:23) and CanonicalVars' display side (LostWisp.cs:17)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

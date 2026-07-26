@@ -1,0 +1,41 @@
+{
+  "unit": "relic/mango",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Mango.cs",
+    "sha256": "60aa9ac08a3feb291f2987e6eee622f8d13810d55108cd9bae912c2158b9b3cf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\mango.py",
+    "sha256": "d2b64598ef79c67210d82b46f7bf9c951958276525d7e06b15e2ff92f3d29d95"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (mango.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (mango.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches Mango.cs:13; also excludes the relic from the trade events via Relic.is_tradable (relics/base.py:132)."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (mango.py:18-19), plus the sim-only undo_after_obtained (mango.py:21-25)",
+      "verdict": "gap",
+      "issue": "The forward direction is faithful (guard N1): run.gain_max_hp(14) is CreatureCmd.GainMaxHp's SetMaxHp-then-Heal pair exactly. The gap is guard G1 -- the sim-only undo, which the conformance runner depends on, gives back the max HP but not the heal."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `undo_after_obtained` (mango.py:21-25) does NOT give back the heal, contradicting its own comment, so a speculatively-granted-then-dropped Mango leaves up to 14 HP behind",
+      "verdict": "gap",
+      "issue": "MECHANISM: after_obtained calls run.gain_max_hp(14), which raises max HP by 14 AND heals 14 (run.py:311-314, mirroring CreatureCmd.cs:786-799). The undo calls run.lose_max_hp(14) and then `run.hp = min(run.hp, run.max_hp)` -- a CLAMP, not a subtraction -- so the healed HP survives whenever the post-heal HP is at or below the restored max, which is the common case. EXECUTED (py tools/audit/relic_probes_b09.py b09-simple): from 50/80, granting Mango gives 64/94 and undoing gives 64/80 -- 14 HP too high; the comment at mango.py:22-23 says it gives back \"the heal that came with it\". REACHABILITY (LIVE): undo_after_obtained has no C# counterpart -- nothing in the game un-picks a relic -- but it exists solely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was picked, and the runner really does call it (verified by grep per binding rule 8: conformance/runner.py:461 and :694). Its own base docstring names Mango as a motivating case (relics/base.py:143-150). The observable is therefore a player-state parity failure of up to 14 HP on any recorded run whose relic node offered Mango and was not taken -- precisely what DETECTOR 3's act-boundary HP assertion reports. POOL-WIDE: this is not a Mango-only slip. All FIVE relics with an undo use the identical clamp -- mango.py:24-25, pear.py:24-25 (10), strawberry.py:24-25 (7), looming_fruit.py:24-25 (31) and lees_waffle.py:24-25 (7, which also heals to full in after_obtained and so leaks even more) -- so the fix is one shared helper and four other records will meet it. Only mango is in this batch, so only mango is verdicted; the shape is reported in .superpowers/sdd/relic-batch-09-lessons.md. Rule 7: leans on run.py, relics/base.py, conformance/runner.py and the four sibling relic files, none hashed here."
+    },
+    {
+      "what": "N1: `CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)` (Mango.cs:19) with `MaxHpVar(14m)` (Mango.cs:15)",
+      "verdict": "faithful",
+      "rationale": "14 is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension call anywhere in Mango.cs -- and `.BaseValue` is the unmodified var, so no hook can change it. run.gain_max_hp (run.py:311-314) is CreatureCmd.GainMaxHp's exact shape: `SetMaxHp(MaxHp + amount)` then `Heal(num)` where num is the max-HP delta actually applied (CreatureCmd.cs:792-798). EXECUTED: 80 -> 94 max, 50 -> 64 current. The MapPointHistoryEntry.MaxHpGained bookkeeping (CreatureCmd.cs:793-797) is replay history, not state."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

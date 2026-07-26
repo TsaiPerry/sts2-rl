@@ -1,0 +1,56 @@
+{
+  "unit": "relic/mercury_hourglass",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\MercuryHourglass.cs",
+    "sha256": "6bb62618305f9fa0519293143fe55a91574ef2daa3ca3aeb44dfce7d7aaeda89"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\mercury_hourglass.py",
+    "sha256": "4f94633f5fb0c0fb47611158dea7f1f1795490a36eab853471931b4663fb757f"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (mercury_hourglass.py:18)",
+      "verdict": "faithful"
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "on_player_turn_started (mercury_hourglass.py:22-29) -- the sim's single post-draw turn-start slot, which serves BOTH C#'s AfterPlayerTurnStart (audits/seam/turn_structure.json step 22) and AfterSideTurnStart (step 23); executed order via `py tools/audit/relic_probes.py turn-order`: on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The SLOT is right -- step 22 is 'Draw then Hook.AfterPlayerTurnStart' and the sim draws then fires on_player_turn_started -- and the damage, props, dealer, target set and turn-1 firing all match (N1-N4). What diverges is that the sim's one pass also carries the 14 ported step-23 relics, which C# guarantees run strictly LATER."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: the sim collapses C#'s two ordered turn-start passes (AfterPlayerTurnStart, step 22; AfterSideTurnStart, step 23) into one flat on_player_turn_started pass in relic order",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# runs turn-start relics in TWO complete, ordered passes -- every `Hook.AfterPlayerTurnStart` listener (audits/seam/turn_structure.json step 22, CombatManager.cs:673-675) finishes before any `Hook.AfterSideTurnStart` listener (step 23, CombatManager.cs:520-524) begins. The sim has ONE flat pass, `on_player_turn_started` (hooks.py:285-295), dispatched in RunState.relics order, so a step-22 relic can run after a step-23 relic. EXECUTED CENSUS (py tools/audit/relic_probes_b09.py b09-simple): 9 ported relics whose C# hook is AfterPlayerTurnStart land on the sim's on_player_turn_started (bellows, choices_paradox, festive_popper, gambling_chip, mercury_hourglass, mr_struggles, pendulum, royal_poison, vexing_puzzlebox) and 14 whose C# hook is AfterSideTurnStart land on the SAME method (akabeko, bone_tea, bread, brimstone, candelabra, chandelier, crossbow, fake_happy_flower, happy_flower, lantern, paels_tears, sai, seal_of_gold, very_hot_cocoa). THE MECHANISM IS LIVE, proved by execution on a step-22 x step-23 pair: Gambling Chip (GamblingChip.cs:16, step 22) mulligans the opening hand and Bone Tea (step 23) upgrades it, so C# always upgrades the POST-mulligan hand. The sim gives hand upgrade levels [1,1,1,1,1] for relic order [gambling_chip, bone_tea] and [0,0,0,0,1] for [bone_tea, gambling_chip] -- and Bone Tea's single charge is spent either way. Both relics are ported and obtainable (Gambling Chip is Rare in the grab bag, Bone Tea is bought at the ported Tea Master event), and either acquisition order is possible. This relic's OWN observable at this site is not separately demonstrated: the site inherits the mechanism's verdict per binding rule 3. Related but NOT identical to audits/seam/turn_structure.json guard G12, which flattens the Late/VeryEarly SUB-phases of one hook; this is two DIFFERENT C# hooks collapsed, with a wider blast radius (9 x 14 relic pairs). Reported as a pool-wide shape in .superpowers/sdd/relic-batch-09-lessons.md. Rule 7: leans on hooks.py, GamblingChip.cs and BoneTea.cs, none hashed here."
+    },
+    {
+      "what": "N1: `player == base.Owner` (MercuryHourglass.cs:20) and the relic firing on turn 1 as well as every later turn",
+      "verdict": "faithful",
+      "rationale": "The owner check is single-player-structural -- on_player_turn_started only ever fires for the player. There is no turn guard in either implementation, and the turn-1 firing is real on both sides: C# calls SetupPlayerTurn (and so step 22) for the first turn as well, and the sim's CombatState.__init__ ends with `self.player.start_turn()` (combat.py:208-209). EXECUTED (py tools/audit/relic_probes_b09.py b09-simple): the turn-1 enemy is at 53/56 with the relic attached."
+    },
+    {
+      "what": "N2: `DamageVar(3m, ValueProp.Unpowered)` (MercuryHourglass.cs:16) passed as the WHOLE var to CreatureCmd.Damage (line 23), and dealer = base.Owner.Creature with no cardSource",
+      "verdict": "faithful",
+      "rationale": "3 is the pinned non-ascension value (no AscensionHelper.GetValueIfAscension anywhere in the file) and matches DAMAGE = 3 (mercury_hourglass.py:20). Passing the DamageVar itself carries its Props verbatim (DamageVar.cs:14-20), i.e. `ValueProp.Unpowered` with NO Move flag, which is exactly DamageProps.NON_CARD_UNPOWERED (valueprops.py:42): not a powered attack (no Strength/Vulnerable/Weak), blockable, and not a 'hit' for on_attacked/Curl Up purposes (cmds.py:69 gates that on ValueProp.MOVE). The port passes the hook's own `player` as dealer and omits `card=`, matching the C# overload, which takes no cardSource at all."
+    },
+    {
+      "what": "N3: `player.Creature.CombatState.HittableEnemies` (MercuryHourglass.cs:23) vs Relic.living_enemies() (mercury_hourglass.py:24)",
+      "verdict": "faithful",
+      "rationale": "C# passes `combatState.HittableEnemies` == `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim passes Relic.living_enemies() (relics/base.py:294-297), which filters only `not e.is_gone` (dead or escaped) -- but the missing predicate IS applied, one target later, by DamageCmd.deal itself: `if not hooks.should_allow_hitting(target): return 0` (cmds.py:51-52). So for a DAMAGE call site the two sets are observationally identical (an alive-but-unhittable enemy is iterated and then takes 0). DELIBERATELY DISTINGUISHED from relic/bag_of_marbles guard G2, which records the same call-site substitution as a gap: that site routes through PowerCmd.apply, which has NO such backstop (audits/seam/power_cmd.json gap G6, the missing CanReceivePowers check). Same substitution, different downstream, so different verdicts -- and binding rule 3 is satisfied because the MECHANISM under verdict there is the missing PowerCmd backstop, not living_enemies() itself. The `escaped` half is also covered: an escaped creature is IsDead-or-removed in C# and is_gone in the sim."
+    },
+    {
+      "what": "N4: the port adds `self._check_win()` (mercury_hourglass.py:29), which has no line-for-line C# counterpart",
+      "verdict": "faithful",
+      "rationale": "It stands in for CheckWinCondition, which C# runs immediately after the player's turn setup (CombatManager.cs:573 == audits/seam/turn_structure.json step 27) and which the sim omits on two paths -- turn-1 construction (combat.py:208-209) and the extra-turn path (combat.py:648-652). That omission is turn_structure's LIVE guard G13, whose issue text names this very file as one of the two relics that 'hand-roll a self._check_win() call precisely because this check is missing'. Faithful here, and recorded because the sibling relic/mr_struggles -- the same hook, the same AoE shape -- does NOT hand-roll it, which is that unit's LIVE gap in this batch. Rule 7: leans on combat.py, relics/base.py and audits/seam/turn_structure.json, none hashed here."
+    },
+    {
+      "what": "N5: Flash() (MercuryHourglass.cs:22) and CanonicalVars' display side",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
