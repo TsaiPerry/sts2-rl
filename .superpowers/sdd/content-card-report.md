@@ -17,9 +17,13 @@ The final section tracks what is done and what is left.
 | 2 | beckon, blood_wall, bloodletting, bludgeon, body_slam, bolas, brand, break, breakthrough, brightest_flame, bully, burn, burning_pact, byrd_swoop, byrdonis_egg | 10 gap, 5 faithful | `716f023e` |
 | 3 | calamity, caltrops, cascade, catastrophe, cinder, clash, clumsy, colossus, conflagration, corruption, crimson_mantle, cruelty, curse_of_the_bell, dark_embrace, dark_shackles | 8 gap, 6 faithful, 1 dd | `2c8b3c35` |
 | 4 | dazed, debt, decay, defend, demon_form, discovery, disintegration, dismantle, distraction, dominate, doubt, dramatic_entrance, drum_of_battle, dual_wield, enlightenment | 11 gap, 4 faithful | `935bc8da` |
+| 5 | enthralled, entrench, entropy, equilibrium, eternal_armor, evil_eye, expect_a_fight, exterminate, fasten, feed, feeding_frenzy, feel_no_pain, fiend_fire, fight_me, finesse | 7 gap, 8 faithful | `6cd22260` |
+| 6 | fisticuffs, flame_barrier, flash_of_steel, folly, forgotten_ritual, frantic_escape, giant_rock, gold_axe, greed, guilty, hand_of_greed, havoc, headbutt, hello_world, hellraiser | 8 gap, 7 faithful | `f5e3e3e8` |
+| 7 | hemokinesis, hidden_gem, howl_from_beyond, impatience, impervious, infection, infernal_blade, inferno, inflame, injury, iron_wave, jack_of_all_trades, jackpot, juggernaut, juggling | 9 gap, 5 faithful, 1 dd | `437c0134` |
+| 8 | lantern_key, luminesce, mad_science, mangle, master_of_strategy, maul, mayhem, metamorphosis, mind_blast, mind_rot, molten_fist, neows_fury, normality, nostalgia, not_yet | 8 gap, 7 faithful | `708a6a37` |
 
-`py tools/audit_status.py --kind card` after batch 4: **60 / 203 audited, 0
-invalid, 0 stale, 37 with gaps.** `py -m pytest test/ -q` is unchanged at
+`py tools/audit_status.py --kind card` after batch 8: **120 / 203 audited, 0
+invalid, 0 stale, 69 with gaps.** `py -m pytest test/ -q` is unchanged at
 **2476 passed, 31 xfailed** after both batches — audits add no executable code;
 the only non-record file added is the probe script.
 
@@ -386,6 +390,66 @@ KEYWORD pattern: it sets `exhausts` in `_init_vars` rather than as a class
 attribute, which is exactly why it survives the downgrade rebuild that catches
 aggression and apparition.
 
+## 7c. Additional live gaps from batches 5-8
+
+Grouped by what they teach, not by unit.
+
+**Port-shape defects - a whole engine verb reimplemented or skipped.**
+
+| Unit | Gap |
+|---|---|
+| `havoc` | The worst port defect found. C# is one line (`AutoPlayFromDrawPile(..., 1, Top, forceExhaust: true)`); the sim reimplements the verb inline AND calls `card.on_play()` directly instead of `CombatState.auto_play_card`, skipping the entire play bracket (combat.py:441-513): `on_energy_spent` (Free Attack never fires), `before_card_played`, the `modify_card_play_count` replay loop (a Spiral or Hidden-Gem'd card plays once instead of twice), the `before/after_attack` bracket (Akabeko's Vigor is not consumed), and `captured_x` (a Havoc'd Whirlwind does nothing). It also rolls the random target on `combat._rng`. `cascade` reimplements the same verb correctly and `howl_from_beyond` routes through `auto_play_card` - both are the fix shape. |
+| `debt` | `HasTurnEndInHandEffect` and the whole `OnTurnEndInHand` gold loss are absent. The docstring's "the sim has no gold" is false: `RunState.gold` + `RunState.lose_gold` (run.py:335-337). |
+| `guilty` | `AfterCombatEnd` absent, so Guilty never removes itself from the deck after 5 combats. "The sim doesn't model the persistent deck" is false - `RunState.deck` is it. |
+| `lantern_key` | `ModifyUnknownMapPointRoomTypes` not overridden even though the sim's `Card` base HAS the hook and `spoils_map` already uses the same pipeline. "The sim has no map" is false. |
+| `maul` | `AfterDowngraded` absent, so `downgrade()` destroys the damage accumulated from Maul plays this combat. A *second, distinct* downgrade defect from the five sticky-keyword cards, and one the probe cannot see (it compares a fresh card, and Maul's loss only shows after a play). |
+
+**Wrong quantity or wrong hook.**
+
+| Unit | Gap |
+|---|---|
+| `fisticuffs` | Block = C#'s `TotalDamage + OverkillDamage` (blocked + hp lost + overkill, DamageResult.cs:64 + Creature.cs:445-457); the sim uses `DamageCmd.deal`'s return, which is hp_lost only. Hit a 5-HP enemy for 7: game grants 7, sim grants 5; against a blocking enemy the sim can grant 0. |
+| `feed`, `hand_of_greed` | Both Fatal cards drop the power-veto half of the test. C# requires `Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` as well as `WasTargetKilled`; `MinionPower` (unconditionally) and `ReattachPower` both veto, both are ported, and MinionPower is applied by three ported monsters (Fabricator bots, Queen, Ovicopter eggs). `hand_of_greed`'s docstring asserts no power vetoes fatal - false. |
+| `clash` | `IsPlayable` routed through `should_play_card`. C# reads `IsPlayable` only in `CardModel.CanPlay` (the manual path); `CardCmd.AutoPlay` checks only the Unplayable keyword and `Hook.ShouldPlay`. `enthralled` and `normality` show what a real `ShouldPlay` port looks like. |
+| `normality` | Right hook, wrong counter: C# counts plays STARTED, the sim counts finished. Play two cards then Havoc: C# blocks the auto-play, the sim allows it. |
+| `drum_of_battle` | Feeds a bare `1` into `modify_card_play_count` where C# feeds `GetEnchantedReplayCount() + 1`, dropping `base_replay_count`. Hidden Gem + Drum of Battle: game pays twice, sim once. |
+| `hidden_gem` | The already-replaying filter checks only for a spiral/glam enchantment; C#'s `GetEnchantedReplayCount() < 1` returns `BaseReplayCount` on the null branch, so any already-replaying card is excluded. Two Hidden Gems can stack on one card in the sim. |
+| `mad_science` | `GainsBlock` is TYPE-dependent in C# (`Type == Skill`) and never set in the sim, so Nimble refuses a Skill Mad Science. Notable because the parallel `base_block` type-dependence WAS handled. |
+| `feel_no_pain` | Stores the power's block-per-exhaust amount in `_block`, the attribute `base_block` reads - so the sim reports a card that grants 3 block on play. `cards/base.py:65-69` warns about this exact confusion by name. `eternal_armor` stores the same shape correctly, in `_plating`. |
+| `enlightenment` | Relative delta where C# registers an absolute `LocalCostModifier`; they diverge once the card's base cost changes in the same turn, which `armaments` and `apotheosis` both do. |
+| `frantic_escape` | `AddThisCombat(1)` implemented as `self._energy_cost += 1`, mutating the BASE cost, which `reset_combat_state` never clears - the bump leaks into later combats. |
+| `metamorphosis` | Adds its generated Attacks at `CardPilePosition.Random` in C# (one CombatCardSelection draw each); the sim appends to the top of the draw pile and takes no draw. |
+| `catastrophe` | The sim breaks its pick loop on combat-over; C# has no loop-level bail and does the StableShuffle pick BEFORE `AutoPlay`'s own `IsOverOrEnding` return, so C# burns a full StableShuffle per remaining iteration and the sim burns none. Opposite polarity to `beat_down`'s target-roll guard. |
+| `bolas` | Returns to hand from any non-hand pile in C#; the sim searches only draw and discard, so an exhausted Bolas never comes back. `thrumming_hatchet` shares the helper. |
+| `dual_wield` | Copies are fresh instances, not `CreateClone` deep clones (same as `anger`), and this is the card where it matters most. |
+| `breakthrough` | Hand-rolls its 1 HP self-loss instead of `DamageCmd`, so `on_damage_received` never fires and Rupture does not trigger. |
+| `entrench` | The entire ported blast radius of seam gap G1. |
+| `discovery`, `distraction`, `jack_of_all_trades`, `jackpot`, `hidden_gem`, `metamorphosis`, `havoc`, `anointed`, `beat_down` | Nine of the 21 shared-RNG cards audited, all nine gaps. `cinder`, `infernal_blade` and `mad_science`'s Chaos rider show the correct shape - branch on `crng.is_parity`, use the named accessor. |
+| `aggression`, `apparition`, `hello_world`, `juggling` | Four of the five sticky-keyword cards audited; `wish` remains. |
+
+**Dormant additions.** `neows_fury` is the first unit whose C# selector prefs
+use a RANGE (MinSelect 0), which the sim's fixed `count` cannot express - the
+min/max half of seam guard N10 at a card site. `inferno` repeats
+`crimson_mantle`'s `?.IncrementSelfDamage()` null-check divergence (these two
+are the pool's only such sites). `mind_rot` and `frantic_escape` repeat
+`disintegration`'s mismatched-flag error; `neows_fury` relies on rarity instead
+of the flag - three different treatments of `CanBeGeneratedInCombat` across six
+cards, against `feed` / `hand_of_greed` / `hidden_gem` / `not_yet`, which set it
+correctly. `breakthrough` filters its AoE loop on `is_dead` where every other
+AoE card uses `is_gone`. `dramatic_entrance`, `exterminate` and
+`howl_from_beyond` inherit `conflagration`'s per-enemy fan-out finding.
+
+**Faithful ports worth copying.** `molten_fist` is the one card in the
+liveness-guard family whose `is_gone` check is faithful, because C# writes the
+`IsAlive` test itself. `enthralled` is the model `ShouldPlay` port - all four
+clauses, same short-circuit order, and the sim's `auto_play` flag really is
+C#'s `autoPlayType != None`. `fiend_fire` gets snapshot-then-exhaust-then-hit
+exactly right. `iron_wave` gets the counter-intuitive block-before-attack order
+right. `maul` correctly includes the just-played card in its own buff.
+`jackpot` transcribes the *canonical*-cost filter rather than the current cost.
+`mad_science` accounts for all eleven of its C# vars and exposes the two
+printed ones through type-dependent properties.
+
 ## 8. Remaining work
 
 173 units, batches 3–14, alphabetically from `calamity`. Findings already
@@ -393,4 +457,5 @@ banked for units not yet audited, so they are not lost if the stream stops:
 `hello_world` / `juggling` / `wish` (downgrade-sticky, §3.1), `entrench` (the
 sole ported member of G1's blast radius, §3.2), `hidden_gem` and
 `drum_of_battle` (G4, §3.3), the 18 remaining shared-RNG cards (§3.4), and
-`thrumming_hatchet` (shares Bolas's return-to-hand helper).
+`thrumming_hatchet` (shares Bolas's return-to-hand helper), and `wish` (the
+last of the five sticky-keyword cards).
