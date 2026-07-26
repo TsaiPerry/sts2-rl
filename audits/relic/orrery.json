@@ -1,0 +1,51 @@
+{
+  "unit": "relic/orrery",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Orrery.cs",
+    "sha256": "1e14f14c3db789ac56b47053661019f25cf20ab2cde218a9ddbab2083ccfd88f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\orrery.py",
+    "sha256": "1d6a4ff45b8261d728c78cfd83061dab97303c91d599a3dde23496f56b279955"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (orrery.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (orrery.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches Orrery.cs:15, and it is load-bearing here rather than belt-and-braces: Orrery is SHOP rarity, not Ancient, so this flag is the only thing keeping it out of the trade events via Relic.is_tradable (relics/base.py:126-136). Rule 7: relics/base.py is unhashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart -- the port defines no methods; the hook it needs is dispatched by RunState.add_relic (run.py:546-553)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 -- the relic's entire effect (five 3-card choices added to the deck) is missing."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the whole relic is a no-op stub, and the stub's premise -- 'an out-of-combat card reward, so this is a no-op stub' -- is FALSE",
+      "verdict": "gap",
+      "issue": "MECHANISM: Orrery.cs:19-28 builds FIVE CardRewards of 3 options each -- `new CardCreationOptions([Owner.Character.CardPool], CardCreationSource.Other, CardRarityOddsType.RegularEncounter)` (Orrery.cs:22), `for i < DynamicVars.Cards.IntValue` with CardsVar(5) (:17, :23), `new CardReward(options, 3, Owner)` (:25) -- and offers them with RewardsCmd.OfferCustom (:27). orrery.py:8-9 implements nothing. PREMISE FALSE (PROMPT.md bug class 12, and .superpowers/sdd/content-relic-sweeps.md Sweep C lists orrery under exactly the 'out-of-combat pickup effect, stub' family whose premise it disproves): after_obtained IS dispatched (run.py:552), the card-reward generator exists (rewards.create_reward_cards, rewards.py:235-302), the choice mechanism exists (run.select_cards, run.py:371-390), and the EXACT SIBLING relic/lost_coffer already composes all three in its own after_obtained (lost_coffer.py:16-24). EXECUTED (py tools/audit/relic_probes_b10.py orrery): add_relic('orrery') leaves the deck at 1 card, where the game offers five 3-card choices; add_relic('lost_coffer') on the same path takes the deck from 1 to 2 and adds a potion; and create_reward_cards(run, RarityOddsType.REGULAR, count=3) returns ['drum_of_battle','blood_wall','true_grit'], i.e. the capability is there and works. LIVE: Orrery is SHOP rarity in the transcribed grab bag (relic_pools.py, executed by this module's `pool` probe) and up to five cards is one of the largest deck edits in the pool. TWO NOTES FOR THE FIX, both checked at the source: (a) C# passes CardCreationSource.Other, and CardRarityOdds only mutates the pity counter for CardCreationSource.Encounter, so the port must use the non-mutating roll -- create_reward_cards(..., mutate_pity=False), which is exactly why lost_coffer passes it; (b) CardRarityOddsType.RegularEncounter (CardRarityOddsType.cs:17) is the sim's RarityOddsType.REGULAR (rewards.py:75) -- the sim dropped the 'Encounter' suffix, so the names do not line up by string. Rule 7: rewards.py, run.py, relics/lost_coffer.py, relic_pools.py, CardRarityOddsType.cs and the sweeps document are NOT hashed by this record."
+    },
+    {
+      "what": "G2: `RewardsCmd.OfferCustom` (Orrery.cs:27) is SKIPPABLE -- unlike relic/neows_bones in this batch, Orrery does not call WithSkippingDisallowed",
+      "verdict": "gap",
+      "issue": "Recorded separately from G1 because it changes what a correct port must do, and because the sim's auto-keep house rule is the WRONG default here. relic/calling_bell G3 verdicts auto-keep as a deliberate-divergence for offers the player cannot decline; Orrery's five screens can each be skipped, so a port that unconditionally adds five cards would add up to five cards the player would have refused -- five extra cards in a deck is a strictly worse outcome than none in many decks, so this is a gap and not the same divergence. DORMANT in the sense that nothing is added today (G1 subsumes the observable), but it is the trap waiting for the fix; the sim already has the machinery to model a decline (run.select_cards returns a list, and passing count=0 or an empty selection adds nothing, run.py:384-385). Rule 7: relics/calling_bell.py and run.py are NOT hashed by this record."
+    },
+    {
+      "what": "N1: Orrery.cs declares no IsAllowed, no IsAllowedInShops and no combat hooks",
+      "verdict": "faithful",
+      "rationale": "Rarity, HasUponPickupEffect, CanonicalVars and AfterObtained are the whole class, so closing G1 and G2 completes the port. Checked against .superpowers/sdd/content-relic-sweeps.md Sweep B's 20-relic IsAllowed census, which does not list orrery -- worth confirming for a SHOP relic, since eight of the seventeen IsBeforeAct3TreasureChest relics are shop-legal. The sim's default is_allowed_in_shops=True is therefore correct, which matters because Orrery is a shop relic by rarity. Rule 7: the sweeps document is unhashed here."
+    },
+    {
+      "what": "N2: `Owner.Character.CardPool` (Orrery.cs:22) as the single pool entry",
+      "verdict": "faithful",
+      "rationale": "The sim is Ironclad-only and create_reward_cards' default pool IS the character pool (rewards.py:258-267 -- reward_pool_card_ids() on the parity path, pool_card_ids() on the legacy one), so a port needs to pass no pool override. Contrast relic/lead_paperweight, which passes the Colorless pool explicitly and is the reason the `pool` parameter exists. Recorded because getting this wrong is how the reward pool findings in batch 3 arose (the full GetUnlockedCards pool vs FilterForCombat). Rule 7: rewards.py and relics/lead_paperweight.py are unhashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
