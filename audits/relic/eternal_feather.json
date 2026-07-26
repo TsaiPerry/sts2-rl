@@ -1,0 +1,47 @@
+{
+  "unit": "relic/eternal_feather",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\EternalFeather.cs",
+    "sha256": "d01b91f28cbd2725e9ce9c3869ca89a3736f9b965265b69540e24e31023a4ac1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\eternal_feather.py",
+    "sha256": "12ebb50025729e4f4e7d9e022cdf7d578efa2d199add9dc838b36d8db189d475"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (eternal_feather.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches EternalFeather.cs:16, and it is load-bearing for obtainability: executed (py tools/audit/relic_probes_b05.py b05-pool) the relic is in the transcribed grab bag at Uncommon rarity, so the whole record's reachability rests on the rarity being right."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "after_room_entered (eternal_feather.py:19-25), dispatched by run.py:982-983",
+      "verdict": "faithful",
+      "rationale": "EternalFeather.cs:24-37: on `room is RestSiteRoom`, heal Heal.BaseValue (HealVar(3m), line 21) times floor(deck size / Cards.IntValue) (CardsVar(5), line 20) -- integer division on line 29 because Cards.Count and IntValue are both int, then a decimal multiply on line 30 that is therefore exact. eternal_feather.py:19-25 computes `len(run.deck) // 5` and heals `3 * groups`, with the same RoomType.REST_SITE filter, and C#'s hook site (RestSiteRoom.cs:37, inside EnterInternal before any option is chosen) matches the sim's dispatch point (run.py:982-983, 'before its contents resolve'). Executed (py tools/audit/relic_probes_b05.py cage-feather): a 10-card deck at 30 HP heals to 36 = 3 * (10 // 5), and a MONSTER room heals nothing. The sim's `if groups:` guard (eternal_feather.py:24) is a no-op shortcut -- CreatureCmd.Heal(0) and run.heal(0) both do nothing. Rule 7: RestSiteRoom.cs and run.py are unhashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: CreatureCmd.Heal takes a DECIMAL (CreatureCmd.cs:691) and truncates the SUM at Creature.SetCurrentHpInternal (Creature.cs:488-491, `CurrentHp = (int)Math.Min(amount, MaxHp)`); run.heal takes an int and caps after (run.py:288-292)",
+      "verdict": "faithful",
+      "rationale": "The heal amount here is 3 * an integer, so it is already an exact integer on both sides and no rounding question arises -- unlike relic/fake_lees_waffle in this same batch, whose 10%-of-Max-HP heal genuinely is fractional and needed an exhaustive check. The cap is the same on both sides: C# clamps to MaxHp inside SetCurrentHpInternal, the sim clamps with `min(amount, max_hp - hp)`. Rule 7: CreatureCmd.cs, Creature.cs and run.py are unhashed here."
+    },
+    {
+      "what": "N2: `PileType.Deck.GetPile(base.Owner).Cards.Count` (EternalFeather.cs:29) vs `len(run.deck)` (eternal_feather.py:23)",
+      "verdict": "faithful",
+      "rationale": "Both count the run deck, unfiltered -- curses, statuses and Eternal cards all count toward the 5s on both sides. Worth stating explicitly because the sibling relic in this batch, relic/empty_cage, DOES filter the same pile (on IsRemovable) and the two must not be conflated."
+    },
+    {
+      "what": "N3: EternalFeather.cs declares no MerchantCost override, so its shop price is the rarity default",
+      "verdict": "faithful",
+      "rationale": "relics/base.py:111-117 falls through to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62) = 225 for Uncommon, which is value-for-value RelicModel.cs:304-315's switch. Checked because 11 of the 15 units in this batch DO pin a price and the asymmetry is easy to mis-port. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
+    },
+    {
+      "what": "N4: Flash(), PlayerFullscreenHealVfx.Play and the LocalContext.IsMe(Owner) guard around it (EternalFeather.cs:28, 32-35)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / VfxCmd / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, the damage/heal numbers and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. LocalContext.IsMe is additionally a multiplayer guard: it selects whose screen the fullscreen heal plays on, and it wraps ONLY the vfx call -- the heal itself at line 31 is outside it, so no mechanical effect is gated by it."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}
