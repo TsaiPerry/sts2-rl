@@ -1,0 +1,46 @@
+{
+  "unit": "relic/dollys_mirror",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DollysMirror.cs",
+    "sha256": "99b9c95e83710132971f5ad0a44ee466d36a30dbfa8fd8bf54ad53ed50f647f5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\dollys_mirror.py",
+    "sha256": "25d58c2109659477dad8ca7f46d64a3b2fa045639202402a42098b6e56b77cd9"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (dollys_mirror.py:12)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (dollys_mirror.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches DollysMirror.cs:14, and it is the only declaration the port does keep. It is load-bearing: relics/base.py:132-136's is_tradable refuses any relic with an upon-pickup effect, so the Mirror correctly cannot be traded away after being spent -- which makes the missing effect (guard G1) strictly a loss."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart. dollys_mirror.py is a behaviourless port -- id, name, rarity and the pickup flag (dollys_mirror.py:6-13) -- justified by the docstring 'out-of-combat pickup effect, stub'.",
+      "verdict": "gap",
+      "issue": "Carries guard G1's LIVE label. The relic's whole effect (duplicate a chosen deck card) never happens."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the 'out-of-combat pickup effect, stub' premise is FALSE -- RunState.add_relic dispatches after_obtained for every relic, and the sim has the card selector and the deck-add path the effect needs (PROMPT.md bug class 12)",
+      "verdict": "gap",
+      "issue": "MECHANISM: DollysMirror.cs:16-24 selects one non-Quest card from the deck (CardSelectCmd.FromDeckGeneric with a CardSelectorPrefs count of 1), clones it with RunState.CloneCard and adds the clone to PileType.Deck. dollys_mirror.py implements no method at all. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py stubs): `run.add_relic(make_relic('dollys_mirror'))` leaves the deck at 10 cards where C# leaves 11, and `'after_obtained' not in type(make_relic('dollys_mirror')).__dict__` is True. EVERY PIECE THE FIX NEEDS IS ALREADY PORTED: run.py:552 calls relic.after_obtained(self) for every relic (the same dispatch site that made relic/big_mushroom's stub a live gap in batch 1, and that relic/cursed_pearl and relic/distinguished_cape in this very batch use successfully); run.select_cards (run.py:371-384) is the sim's CardSelectCmd.FromDeck* mirror and takes a purpose label plus a candidate list; run.add_card (run.py:341-354) is the deck-add path. Dingy Rug's sibling entry in .superpowers/sdd/content-relic-sweeps.md sweep C already flagged this premise family ('out-of-combat pickup effect, stub' -> after_obtained IS dispatched by run.py:552) across 14 relics; this record settles it for this one. Both sides ported: Dolly's Mirror is Shop rarity in the transcribed grab bag (relic_pools.py:64 'RELIC.DOLLYS_MIRROR'), so any run that visits a merchant can buy it. IMPLEMENTATION WARNING (PROMPT.md bug class 17): the C# call is RunState.CloneCard, i.e. CardModel.CreateClone -> ClonePreservingMutability, which carries the card's enchantment, affliction, keyword edits and local energy-cost modifiers as well as its upgrade level. The sim has no clone helper -- .superpowers/sdd/content-relic-sweeps.md sweep E found all five existing sim sites rebuild from the id and keep only the level, and audits/relic/burning_sticks.json G3 records that as LIVE. A fix that writes `make_card(card.id)` here would add a SIXTH instance of that defect, and it matters more here than in combat: out of combat, deck cards carry enchantments from relic/beautiful_bracelet and relic/silken_tress. RULE 7: run.py, relic_pools.py, cards/base.py and the two sweep documents are not hashed here."
+    },
+    {
+      "what": "G2: `private bool Filter(CardModel c) => c.Type != CardType.Quest` (DollysMirror.cs:26-29) and the CardSelectorPrefs count of 1 (DollysMirror.cs:18)",
+      "verdict": "gap",
+      "issue": "Carries G1's verdict -- with no method there is nothing to filter -- and recorded because the filter is NOT the one a reader would guess and the sim has no matching predicate. The C# filter excludes only Quest cards: Curses, Statuses and Eternal cards ARE duplicable by Dolly's Mirror, unlike almost every other deck-selection effect in the sim, whose candidate lists come from run.removable_cards (run.py:360-362, 'everything except Eternal cards') or run.transformable_cards / run.upgradable_cards. So a fix that reuses removable_cards would be wrong in two directions at once: it would refuse an Eternal card the game allows, and (because removable_cards has no Quest clause) it would offer a Quest card the game refuses. The count of 1 is a single pick, not a screen of many, and `.FirstOrDefault()` plus the `!= null` check at DollysMirror.cs:19 make a cancelled selection a clean no-op, which run.select_cards' empty-list return already models."
+    },
+    {
+      "what": "N1: CardCmd.PreviewCardPileAdd (DollysMirror.cs:22) and base.SelectionScreenPrompt (:18)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
