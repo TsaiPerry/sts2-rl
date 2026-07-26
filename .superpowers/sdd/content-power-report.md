@@ -3,21 +3,28 @@
 Branch `audit-power`, worktree `c:\Users\Perry\Desktop\sts2-rl-power`, based on
 `audit-pipeline` at `3d63f3b0`. Written 2026-07-26, updated as batches land.
 
-**Status: 30 of 134 units audited and committed; 104 remain.** The stream did
+**Status: 45 of 134 units audited and committed; 89 remain.** The stream did
 not finish. What DID finish is the part Perry asked for by name — the
 sign-awareness determination is **complete for all 134 units**, because it was
 settled by a committed census rather than unit by unit. Section 2 is therefore
-final; sections 4-6 cover only the 30 audited units, and section 8 is the
-residual queue with the work already scoped per unit.
+final, and so are the other four census-derived findings; sections 4-6 cover
+only the 45 audited units, and section 10 is the residual queue with the work
+already scoped per group.
 
 | | |
 |---|---|
-| units audited | 30 / 134 |
-| unit rollups | 26 gap, 2 faithful, 1 waiver, 1 deliberate-divergence |
-| entries (hooks + guards) | 256 — 169 faithful, 59 gap, 21 waiver, 7 dd |
-| gap rate | 87% of units carry at least one gap |
+| units audited | 45 / 134 |
+| unit rollups | 40 gap, 2 faithful, 2 deliberate-divergence, 1 waiver |
+| entries (hooks + guards) | 394 — 262 faithful, 90 gap, 28 waiver, 14 dd |
+| gap rate | 89% of units carry at least one gap; 23% of entries are gaps |
 | suite | 2476 passed / 31 xfailed, unchanged at every batch boundary |
-| commits | `e6170905` (batch 1), `e9a046ad` (batch 2) |
+| commits | `e6170905` (batch 1), `e9a046ad` (batch 2), `62b0d42f` (batch 3) |
+
+Batches, in the order they were done and why: **1** the core buff/debuff set
+(the sign-awareness question lives here), **2** the Ironclad card powers,
+**3** the player-side `AfterSideTurnEnd` group that batch 1-2's census had
+identified as the highest-yield remaining cluster. Batch 3 was chosen *by* the
+report rather than in advance, which is the workflow to keep.
 
 ## 1. The tool this stream added
 
@@ -178,6 +185,51 @@ number a different way should check that first.
    Skill is never exhausted. Both are ported Ironclad-pool powers.
 10. **`no_draw` — removed at `BeforeTurnEnd` instead of `AfterTurnEnd`**, so a
     turn-end draw the game blocks succeeds in the sim.
+11. **The whole player-side `AfterSideTurnEnd` group, via one concrete route
+    found in batch 3.** `StampedePower` (`powers.py:1025-1041`) auto-plays
+    Attack cards from *its own* `on_player_turn_end`, and
+    `_process_turn_end_cards` (`combat.py:658`) runs more card effects
+    immediately after — both *before* the sim removes or resets these powers,
+    and both *after* the game does (`Hook.AfterTurnEnd` at
+    `CombatManager.cs:1307`). So `rage` (block per Attack), `one_two_punch` and
+    `duplication` (double the play), `tender` (restores Strength), `juggling`
+    (counts Attacks), `ringing` and `tangled` (clear card afflictions) are all
+    reliably present for those turn-end plays in the game and present in the
+    sim only if hook-registration order happens to favour them. `constrict` and
+    `demise` deal *damage* in that slot, so a lethal tick cancels turn-end card
+    effects the game already ran.
+12. **`rebound` — the same pile-hook defect as `corruption`, with an extra
+    consequence.** `NostalgiaPower` uses `modify_card_play_result_pile`
+    (dispatched first, `combat.py:510`) and Rebound reaches into the piles from
+    `on_card_played` instead, so Nostalgia moves the card first and Rebound
+    finds nothing in the discard pile — getting its effect for free *and*
+    keeping its stack, where C# consumes exactly one.
+13. **`tangled` — the sim adds an `Affliction == null` test C# does not have.**
+    `TangledPower.cs:23-30` afflicts every Attack unconditionally and
+    *overwrites*; `powers.py:1476` skips already-afflicted Attacks. After
+    Ringing (also ported) the game re-afflicts Attacks as Entangled and taxes
+    them; the sim leaves them Ringing and taxes nothing.
+14. **`skittish` — `AfterAttack` ported onto `on_damage_received`**, so the
+    block lands per hit instead of after the attack command, absorbing later
+    hits of a multi-hit card. Identical defect to `curl_up`'s, and the sim's
+    `after_attack` slot (`hooks.py:361-370`) exists and is used by Vigor and
+    Gigantification.
+15. **`disintegration` — the only unit losing both a phase and a slot.** It is
+    `AfterSideTurnEndLate`, i.e. deliberately last in the game (the second
+    complete pass at `Hook.cs:1284-1291`); the sim fires it in the earliest of
+    the three places it could go. Dormant only because nothing ports a
+    Disintegration applier.
+
+**A new bug class this batch surfaced — `all_cards` misses the Play pile.**
+`ringing`, `smoggy` and `tangled` all sweep `player.all_cards`, which is
+`hand + draw + discard + exhaust` (`player.py:100-103`), where C#'s
+`PlayerCombatState.AllCards` is those four **plus Play**
+(`PlayerCombatState.cs:70-80`). This is `PROMPT.md` bug class 7 (pile limbo) in
+its *power* form, and it is sharpest on `smoggy`: its affliction sweep runs
+from `AfterCardPlayed` while the triggering Skill is itself mid-resolution, so
+in the game that Skill is in the Play pile and *is* Smogged, and in the sim it
+is in neither `all_cards` nor the discard pile yet and is skipped — so an effect
+that returns it to hand can replay it where the game would refuse.
 
 ## 5. The systematic finding: side-hook → sim-slot mapping
 
@@ -207,11 +259,11 @@ different owners:
   before the turn-end card effects and the hand flush, where C# is after both.
   Affected: `constrict`, `demise`, `disintegration`, `duplication`, `juggling`,
   `no_draw`, `no_energy_gain`, `one_two_punch`, `panache`, `rage`, `rebound`,
-  `ringing`, `shrink`, `skittish`, `smoggy`, `tangled`, `tender`. Of the four
-  audited so far, `no_draw` is live and the other three are dormant with named
-  triggers; **the 13 unaudited ones are the highest-value part of the residual
-  queue**, because `constrict`/`demise`/`disintegration` all deal damage in
-  that slot and `tender` restores Strength there.
+  `ringing`, `shrink`, `skittish`, `smoggy`, `tangled`, `tender`.
+  **All 17 are now audited** (batches 1-3), and the group turned out to be
+  worth prioritising: batch 3 found the concrete route (section 4 item 11) that
+  turns the shape into a live gap for seven of them, and the fix is the same
+  one line each — move to `after_player_turn_end` (`combat.py:665`).
 
 ## 6. Cross-record disagreements spotted under rule 3
 
@@ -241,6 +293,15 @@ different owners:
 The relic stream owns `PROMPT.md`; I did not touch it. Proposed additions, in
 descending order of how much time they would have saved me:
 
+0. **New bug class — `all_cards` is not `AllCards`: the Play pile is missing.**
+   See the end of section 4. Three of the 45 audited units sweep the sim's
+   `player.all_cards` where C# reads `PlayerCombatState.AllCards`, which
+   additionally contains the Play pile, so a card mid-resolution is invisible to
+   the sim's sweep. This is bug class 7 in a form the current wording does not
+   cover — the existing entry is about a *reshuffle* excluding a card in Play,
+   not about an enumeration missing it. Checklist line: *when a unit walks the
+   owner's cards, check the sim helper's pile list against
+   `PlayerCombatState.cs:70-80` — `all_cards` omits Play.*
 1. **New bug class — "the applied `props` are the block/damage typing."** Two
    of my ten live gaps are `BlockCmd.apply(...)`/`DamageCmd.deal(...)` calls
    that omit `props=ValueProp.UNPOWERED`, silently defaulting to powered and
@@ -293,7 +354,9 @@ descending order of how much time they would have saved me:
    finding. `name_overrides.json` cannot express it — the fix is four lines in
    `ALL_POWERS`.
 2. **`harness.list_overrides` misses overrides with a tuple return type.**
-   `CorruptionPower.ModifyCardPlayResultPileTypeAndPosition` returns
+   Hit twice — `CorruptionPower` (batch 2) and `ReboundPower` (batch 3) — so it
+   is a general defect, not a one-off.
+   `ModifyCardPlayResultPileTypeAndPosition` returns
    `(PileType, CardPilePosition)`, and `_OVERRIDE_RE`'s
    `[\w<>,.?\[\] ]+?` return-type class does not match the parentheses — the
    **exact** 147-vs-146 defect `hook_dispatch` documented for `Hook.cs`, now
@@ -312,47 +375,59 @@ Wall-clock is dominated by the suite, not the auditing: `py -m pytest test/ -q`
 is **~4m15s** and runs once per batch, so 2 batches spent ~8.5 minutes of the
 session on a gate that (correctly) never moved off 2476 passed / 31 xfailed.
 
-- **30 units in 2 batches.** Batch 1 (15 units) and batch 2 (15 units) each
-  took roughly the same effort, but batch 1's cost was front-loaded: reading
-  `sts2_rl/powers.py` in full (4221 lines), the four binding documents, and
-  building `power_census.py`. That shared cost is now paid for all 134.
+- **45 units in 3 batches**, and the batches got cheaper: batch 1's cost was
+  front-loaded (reading `sts2_rl/powers.py` in full — 4221 lines — the four
+  binding documents, and building `power_census.py`), batch 2 cost roughly half
+  of it, and batch 3 less again because the recurring findings had already been
+  named and could be cross-referenced instead of re-derived. That shared cost is
+  now paid for all 134, which is the main reason the residual queue should be
+  cheaper per unit than what is behind it.
 - **Marginal cost is ~4 units per C# dump.** The efficient loop is:
   `grep -n "" X.cs | grep -v using` for 6-8 files at a time (real line numbers
   — an `awk` filter that renumbers makes every citation wrong, which I did
   once and had to redo), then write records through one Python filler rather
   than hand-writing JSON.
-- **7 of 30 units needed execution to settle** (ritual, thorns ×2, shrink,
-  demon_form, and the two slot-semantics probes). Execution was decisive every
-  time: it confirmed 5 gaps as live, corrected one wrong claim of mine
-  (Shriek's stun *is* faithful — `TerrorEel.trigger_terror` does call
+- **7 of 45 units needed execution to settle** (ritual, thorns ×2, shrink,
+  demon_form, and the two slot-semantics probes, all in batch 1). Execution was
+  decisive every time: it confirmed 5 gaps as live, corrected one wrong claim of
+  mine (Shriek's stun *is* faithful — `TerrorEel.trigger_terror` does call
   `CreatureCmd.stun`, which I had asserted it did not before reading it), and
   falsified one claim in the *sim's own docstring* (Hellraiser's
-  infinite-HP-enemy justification).
-- **Gap rate 87% of units, 23% of entries.** The high unit rate is mostly
+  infinite-HP-enemy justification). Batches 2-3 needed none, because the
+  mechanisms they found were already-executed ones being cross-referenced or
+  were settled by reading two files side by side.
+- **Gap rate 89% of units, 23% of entries.** The high unit rate is mostly
   cross-references to already-recorded seam mechanisms — a unit inherits `gap`
   from one cross-referenced entry — so the unit rollup is a poor severity
-  signal. The 59 gap *entries* split roughly 10 live / 49 dormant.
+  signal. **Use the entry counts, not the unit rollups:** the 90 gap entries
+  split roughly 15 live / 75 dormant, and the 262 faithful entries are the real
+  measure of how much of the port is right.
+- **One process cost worth naming:** the batch gate is dominated by
+  `py -m pytest test/ -q` at ~4 minutes, run 3 times for ~12 minutes total, and
+  it correctly never moved off 2476 passed / 31 xfailed because audits add no
+  code. It is still the right gate — it is what would catch an accidental edit —
+  but a resumed session should expect it, not be surprised by it.
 
 ## 10. Residual queue — the 104 unaudited units
 
 Ordered by expected yield, with what is already known about each group:
 
-1. **The 13 unaudited player-side `AfterSideTurnEnd` units** (section 5):
-   `constrict`, `demise`, `disintegration`, `duplication`, `juggling`,
-   `one_two_punch`, `panache`, `rage`, `rebound`, `ringing`, `skittish`,
-   `smoggy`, `tangled`, `tender`. The slot is known wrong; what is unknown is
-   observability per unit. Three of them deal damage in that slot.
+1. ~~The player-side `AfterSideTurnEnd` units~~ — **done in batch 3.**
 2. **The 15 `on_stack`-no-op units** (section 7 item 5): `adaptable`,
    `burrowed`, `confused`, `corruption`✓, `dampen`, `hellraiser`✓, `hex`,
-   `imbalanced`, `nemesis`, `no_draw`✓, `no_energy_gain`✓, `smoggy`, `soar`,
-   `surrounded`, `the_gambit`. Four are done; the rest need only the
-   "does anything read `Amount`" question answered.
+   `imbalanced`, `nemesis`, `no_draw`✓, `no_energy_gain`✓, `smoggy`✓, `soar`,
+   `surrounded`, `the_gambit`. Five are done; the rest need only the
+   "does anything read `Amount`" question answered, which is a one-grep answer
+   per unit.
 3. **The 9 `PowerInstanceType` units** (`power_census.py instance`):
-   `automation`, `panache`, `rolling_boulder`, `sandpit`, `strangle`
+   `automation`, `panache`✓, `rolling_boulder`, `sandpit`, `strangle`
    (`InstancedPerApplier`), `swipe`, `the_bomb`, `toric_toughness`,
    `withering_presence`. `power_cmd`'s G5 already owns the mechanism; what is
    per-unit is whether two simultaneous instances are reachable. `strangle` is
    the interesting one — it is the only ported `InstancedPerApplier` power.
+   Panache is done and was a clean instance of the pattern: it neither
+   documents the approximation nor works around it, unlike `toric_toughness`
+   and `the_bomb`.
 4. **The remaining enemy powers** (Overgrowth / Hive / Glory, ~50 units).
    Expect more of the `props` omission (bug class new-1) and more
    per-creature-slot instances. `asleep`, `plating` and `slumber` are already
