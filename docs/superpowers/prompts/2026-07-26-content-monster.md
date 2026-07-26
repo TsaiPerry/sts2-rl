@@ -4,7 +4,7 @@
 committed on `audit-pipeline`.** Check with:
 
 ```bash
-cd /c/Users/Perry/Desktop/sts2-rl-audit && py tools/audit_status.py
+cd C:/Users/Perry/Desktop/sts2-rl-audit && py tools/audit_status.py
 ```
 
 `seam` must read `6 audited`. Task 10 establishes the `AddState`/`AddBranch`
@@ -13,8 +13,8 @@ monsters against an unsettled contract means auditing them twice.
 
 Setup, once the gate clears:
 ```bash
-cd /c/Users/Perry/Desktop/sts2-rl
-git worktree add /c/Users/Perry/Desktop/sts2-rl-monster -b audit-monster audit-pipeline
+cd C:/Users/Perry/Desktop/sts2-rl
+git worktree add C:/Users/Perry/Desktop/sts2-rl-monster -b audit-monster audit-pipeline
 ```
 Copy everything below the line into a fresh Claude Code session.
 

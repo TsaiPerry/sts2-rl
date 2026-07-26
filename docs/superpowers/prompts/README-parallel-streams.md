@@ -44,11 +44,11 @@ Each stream gets its own worktree branched off the seam tier's current HEAD,
 so it inherits the harness, the validator, the status tool and `PROMPT.md`:
 
 ```bash
-cd /c/Users/Perry/Desktop/sts2-rl
-git worktree add /c/Users/Perry/Desktop/sts2-rl-relic    -b audit-relic    audit-pipeline
-git worktree add /c/Users/Perry/Desktop/sts2-rl-power    -b audit-power    audit-pipeline
-git worktree add /c/Users/Perry/Desktop/sts2-rl-card     -b audit-card     audit-pipeline
-git worktree add /c/Users/Perry/Desktop/sts2-rl-event    -b audit-event    audit-pipeline
+cd C:/Users/Perry/Desktop/sts2-rl
+git worktree add C:/Users/Perry/Desktop/sts2-rl-relic    -b audit-relic    audit-pipeline
+git worktree add C:/Users/Perry/Desktop/sts2-rl-power    -b audit-power    audit-pipeline
+git worktree add C:/Users/Perry/Desktop/sts2-rl-card     -b audit-card     audit-pipeline
+git worktree add C:/Users/Perry/Desktop/sts2-rl-event    -b audit-event    audit-pipeline
 ```
 
 Gated streams branch off later, once their dependency lands.

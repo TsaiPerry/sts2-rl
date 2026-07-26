@@ -2,8 +2,8 @@
 
 Setup:
 ```bash
-cd /c/Users/Perry/Desktop/sts2-rl
-git worktree add /c/Users/Perry/Desktop/sts2-rl-relic -b audit-relic audit-pipeline
+cd C:/Users/Perry/Desktop/sts2-rl
+git worktree add C:/Users/Perry/Desktop/sts2-rl-relic -b audit-relic audit-pipeline
 ```
 Copy everything below the line into a fresh Claude Code session.
 
