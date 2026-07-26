@@ -1226,3 +1226,409 @@ class TestHookDispatchOrder:
                        card=StrikeCard())
         # C#: 20m * 1.5m = 30m, 30m * 0.7m = 21m.
         assert hp_before - cs.enemy.hp == 21
+
+
+class TestMonsterStateMachineOrder:
+    """Task 10 (`monster_state_machine`) pins.
+
+    The spec is `docs/audit/seams/monster_state_machine.md`; verdicts are in
+    `audits/seam/monster_state_machine.json`. Every number a reason cites is
+    reproducible from `tools/audit/state_machine_probes.py`.
+
+    Pin-table note: the "repeat-rule enforcement" pin is already carried by
+    `test/test_new_features.py::TestStateMachine` --
+    `test_mawler_roar_used_at_most_once_per_combat` (USE_ONLY_ONCE +
+    CANNOT_REPEAT on Mawler), `test_fogmog_branch_only_yields_legal_sequences`
+    (Fogmog) and `test_use_only_once_and_cannot_repeat_weights` (both rules,
+    60 transitions) -- and the "weight-vs-cooldown" pin by
+    `test/test_monster_branch_audit.py` for the hand-rolled overgrowth ports.
+    The two holes those leave, CAN_REPEAT_X_TIMES and the five MachineMonster
+    ports, are closed here.
+    """
+
+    @staticmethod
+    def _machine(cls, **fields):
+        """Build a monster's machine without a combat (build_machine only
+        reads ctor-set fields, which the caller supplies)."""
+        obj = cls.__new__(cls)
+        for k, v in fields.items():
+            setattr(obj, k, v)
+        return obj.build_machine()
+
+    def test_can_repeat_x_times_blocks_the_n_plus_first_repeat(self):
+        """RandomBranchState.GetStateWeight's CanRepeatXTimes arm
+        (RandomBranchState.cs:142-157): a branch is blocked iff the last
+        `maxTimes` logged moves are ALL that move. Covered by no existing
+        test -- test_new_features.py exercises CANNOT_REPEAT and
+        USE_ONLY_ONCE only -- and it is the rule the five ports in the xfail
+        below drop, so the sim's correct implementation of it is pinned here.
+        FossilStalker is the ported monster whose whole branch is
+        CanRepeatXTimes(2) (FossilStalker.cs:58-60,
+        monsters/underdocks/fossil_stalker.py:54-60)."""
+        from sts2_rl.monsters.state_machine import MoveRepeatType
+        from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
+
+        machine = self._machine(FossilStalker)
+        branch = machine.states["RAND"]
+        assert len(branch._branches) == 3
+        for b in branch._branches:
+            assert b["repeat_type"] is MoveRepeatType.CAN_REPEAT_X_TIMES
+            assert b["max_times"] == 2
+
+        class _Owner:
+            pass
+
+        owner = _Owner()
+        owner.machine = machine
+        machine._performed_first_move = True
+        rng = random.Random(11)
+        ids = []
+        for _ in range(300):
+            move = machine.roll_move(owner, rng)
+            machine.on_move_performed(move)
+            ids.append(move.id)
+        assert len(set(ids)) == 3                    # all three stay reachable
+        for a, b, c in zip(ids, ids[1:], ids[2:]):   # never three in a row
+            assert not (a == b == c)
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G1 (audits/seam/"
+               "monster_state_machine.json step 13), LIVE. C#'s "
+               "RandomBranchState.AddBranch puts cooldown-or-maxRepeats in "
+               "positional slot 2 and NEVER a weight -- every weight is a "
+               "float or Func<float> defaulting to 1f (RandomBranchState.cs:"
+               "46-113) -- while the sim's add_branch puts WEIGHT there "
+               "(monsters/state_machine.py:160-167), so a positional port "
+               "turns a repeat limit into a weight. This is the shipped "
+               "TwigSlimeM/Flyconid bug class, still present in FIVE ported "
+               "monsters (tools/audit/state_machine_probes.py mismatch): "
+               "FlailKnight.cs:50,51 AddBranch(FLAIL, 2) / AddBranch(RAM, 2) "
+               "= maxRepeats 2 weight 1, ported at "
+               "monsters/hive/flail_knight.py:51-52 as weight=2.0 "
+               "CAN_REPEAT_FOREVER; HunterKiller.cs:43 -> "
+               "monsters/hive/hunter_killer.py:45; ScrollOfBiting.cs:90 -> "
+               "monsters/glory/scroll_of_biting.py:65; SpectralKnight.cs:52 "
+               "-> monsters/glory/knights.py:111; and "
+               "FakeMerchantMonster.cs:58 AddBranch(ENRAGE, 3, CannotRepeat) "
+               "= COOLDOWN 3 -> monsters/fake_merchant.py:72-75 "
+               "weight=_ENRAGE_WEIGHT (3.0). Observable, executed over "
+               "100000 rolls (probe `distribution`): FlailKnight telegraphs "
+               "FLAIL/RAM/WAR_CHANT at 41.6/41.6/16.8% where the game gives "
+               "36.2/36.4/27.4%, and the game's CanRepeatXTimes(2) bar on "
+               "three FLAILs in a row is gone entirely. All five are in "
+               "ported encounter pools (monsters/hive/__init__.py:26,31, "
+               "monsters/glory/__init__.py:30,35, "
+               "monsters/fake_merchant.py:117-120), so a player sees the "
+               "wrong intent and a replay records the wrong MonsterAi draw. "
+               "FossilStalker.cs:58-60 and TwoTailedRat.cs:127 read the same "
+               "argument shapes CORRECTLY, so this is a port defect, not a "
+               "machinery one.",
+        strict=True,
+    )
+    def test_addbranch_int_args_are_repeat_limits_not_weights(self):
+        from sts2_rl.monsters.hive.flail_knight import FlailKnight
+        from sts2_rl.monsters.state_machine import MoveRepeatType
+
+        branch = self._machine(FlailKnight).states["RAND"]
+        by_id = {b["state_id"]: b for b in branch._branches}
+        for move_id in ("FLAIL_MOVE", "RAM_MOVE"):
+            b = by_id[move_id]
+            # FlailKnight.cs:50-51 -> overload #9 (:105) -> #7 (:95) -> #3
+            # (:75) -> #2 (:62): maxTimes 2, CanRepeatXTimes, weight 1f.
+            assert b["weight"] == 1.0, move_id
+            assert b["repeat_type"] is MoveRepeatType.CAN_REPEAT_X_TIMES
+            assert b["max_times"] == 2
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G4 (audits/seam/"
+               "monster_state_machine.json steps 39, 40, 44), LIVE. "
+               "Creature.StunInternal (Creature.cs:524-544) makes the stun a "
+               "REAL move: it builds MoveState('STUNNED', stunMove, new "
+               "StunIntent()) with FollowUpStateId = StateLog.Last().Id and "
+               "MustPerformOnceBeforeTransitioning = true, and force-sets it "
+               "(MonsterModel.cs:420-432). The sim's CreatureCmd.stun "
+               "(cmds.py:208-218) sets a boolean, combat.py:313-329 skips "
+               "the turn, and state_machine.py:315-318 special-cases the "
+               "intent -- machine.current, machine.state_log and "
+               "_current_move are all untouched (executed: probe "
+               "stun-machine). Observable: because the game's post-stun roll "
+               "transitions STUNNED -> the deferred move id, it APPENDS that "
+               "id to StateLog a second time "
+               "(MonsterMoveStateMachine.cs:76-79), which by "
+               "RandomBranchState.cs:142-157 blocks that move's "
+               "CanRepeatXTimes/CannotRepeat branch on the FOLLOWING roll "
+               "while the sim still offers it -- a different enemy intent. "
+               "LIVE: the stun is player-reachable via Whistle, the ported "
+               "Tanx Ancient Attack (cards/whistle.py:30-38, CreatureCmd."
+               "stun with no next move), and monster-reachable via the "
+               "ported MachineMonsters SlumberingBeetle "
+               "(monsters/hive/slumbering_beetle.py:68), LagavulinMatriarch "
+               "(monsters/underdocks/lagavulin_matriarch.py:87) and "
+               "TerrorEel (monsters/underdocks/terror_eel.py:65); "
+               "FossilStalker is a ported monster whose every branch is "
+               "CanRepeatXTimes(2), i.e. exactly the rule the duplicate "
+               "changes.",
+        strict=True,
+    )
+    def test_stun_makes_the_stun_a_move_and_relogs_the_deferred_one(self):
+        from sts2_rl.cmds import CreatureCmd
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
+
+        enc = Encounter(id="pin_stun", monster_classes=[FossilStalker])
+        cs = CombatState(rng=random.Random(3), encounter=enc)
+        mon = cs.enemies[0]
+        deferred = mon._current_move.id
+        log_before = [s.id for s in mon.machine.state_log]
+
+        CreatureCmd.stun(cs.hooks, mon)
+        # C#: SetMoveImmediate force-sets the synthetic STUNNED MoveState.
+        assert mon.machine.current.id == "STUNNED"
+        # C#: performing it, then rolling, re-logs the deferred move.
+        mon.machine.on_move_performed(mon.machine.current)
+        mon.machine.roll_move(mon, mon._move_rng)
+        assert [s.id for s in mon.machine.state_log] == log_before + [deferred]
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G5 (audits/seam/"
+               "monster_state_machine.json step 36), DORMANT. "
+               "CreatureCmd.stun's next_move_key override is gated on "
+               "hasattr(target, '_move_key') (cmds.py:216-217) -- _move_key "
+               "is the HAND-ROLLED monsters' field -- so for a "
+               "MachineMonster the caller's explicit next move evaporates "
+               "with no error (executed: probe stun-machine reports "
+               "next_move_key='LASH_MOVE' SILENTLY DROPPED). C# threads it "
+               "into the synthetic stun state's FollowUpStateId "
+               "(Creature.cs:532-541), so the monster resumes on exactly "
+               "that move. DORMANT: the one ported caller that passes a next "
+               "move is monsters/overgrowth/ceremonial_beast.py:45 and "
+               "CeremonialBeast is a hand-rolled Monster "
+               "(ceremonial_beast.py:32) that does have _move_key. Named "
+               "trigger: porting CeremonialBeast -- or DecimillipedeSegment "
+               "/ TestSubject / WaterfallGiant, the other "
+               "MustPerformOnceBeforeTransitioning users "
+               "(CeremonialBeast.cs:150, DecimillipedeSegment.cs:155, "
+               "TestSubject.cs:194, WaterfallGiant.cs:202) -- onto "
+               "MachineMonster, or stunning any existing MachineMonster with "
+               "an explicit next move.",
+        strict=True,
+    )
+    def test_stun_next_move_key_reaches_a_machine_monster(self):
+        from sts2_rl.cmds import CreatureCmd
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
+
+        enc = Encounter(id="pin_stun_key", monster_classes=[FossilStalker])
+        cs = CombatState(rng=random.Random(3), encounter=enc)
+        mon = cs.enemies[0]
+        CreatureCmd.stun(cs.hooks, mon, next_move_key="LASH_MOVE")
+        # C#: the stun's FollowUpStateId is LASH_MOVE, so that is the move
+        # performed on the turn after the stunned one.
+        assert mon._current_move.id == "LASH_MOVE"
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G6 (audits/seam/"
+               "monster_state_machine.json steps 35, 41), LIVE. The machine "
+               "itself is already on the right stream -- "
+               "MachineMonster._move_rng is combat_rng.monster_ai "
+               "(monsters/state_machine.py:306-312), matching "
+               "MonsterModel.cs:417's RunRng.MonsterAi, so the brief's seed "
+               "fact 'the sim uses the shared combat stream' is STALE. One "
+               "site is not: FlutterPower's stun splice calls "
+               "machine.roll_move(self.owner, self.owner._rng) "
+               "(powers.py:2226-2235), the SHARED combat random.Random -- "
+               "executed, it is the only one of the sim's three "
+               "machine.roll_move call sites that is off-stream (probe "
+               "move-rng). Worse, roll_move walks all the way to a MoveState "
+               "and so CONSUMES a branch draw, where FlutterPower.cs:47 "
+               "calls StateLog.Last().GetNextState(...), which by "
+               "MoveState.cs:67-70 is DETERMINISTIC and consumes nothing -- "
+               "the game defers the branch to the post-stun roll. DORMANT, "
+               "and this label CORRECTS a first-pass LIVE claim that this "
+               "very pin refuted by XPASSing: FlutterPower has exactly one "
+               "applier on each side, ThievingHopper "
+               "(monsters/hive/thieving_hopper.py:113-114; in C# only "
+               "ThievingHopper.cs), and its machine is a pure deterministic "
+               "CHAIN with no RandomBranchState on either side "
+               "(thieving_hopper.py:61-65 THIEVERY->FLUTTER->HAT_TRICK->NAB"
+               "->ESCAPE, matching ThievingHopper.cs's FollowUpState "
+               "assignments), so a chain roll consumes no draw from any "
+               "stream and neither clause is observable today. Named "
+               "trigger: a FlutterPower user whose current move's follow-up "
+               "is a RandomBranchState -- any of the 13 ported branch "
+               "machines would do. THIS TEST CONSTRUCTS THAT TRIGGER, "
+               "splicing a branch behind FLUTTER_MOVE so the splice must "
+               "draw, and then asserts the draw did not come off the shared "
+               "stream. Cross-referenced to turn_structure's G9, which owns "
+               "WHEN the roll happens and is a different mechanism.",
+        strict=True,
+    )
+    def test_flutter_stun_splice_consumes_no_shared_stream_draw(self):
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.hive.thieving_hopper import ThievingHopper
+        from sts2_rl.monsters.state_machine import RandomBranchState
+        from sts2_rl.powers import FlutterPower
+
+        class _Counting(random.Random):
+            """Counts random() calls -- the primitive every move roll uses
+            (state_machine.py:44) and that randint() does not."""
+
+            def __init__(self, seed):
+                super().__init__(seed)
+                self.floats = 0
+
+            def random(self):
+                self.floats += 1
+                return super().random()
+
+        rng = _Counting(5)
+        enc = Encounter(id="pin_flutter", monster_classes=[ThievingHopper])
+        cs = CombatState(rng=rng, encounter=enc)
+        hopper = cs.enemies[0]
+
+        # Construct the named trigger: give FLUTTER_MOVE a RandomBranchState
+        # follow-up so the splice roll MUST draw, and park the machine on it.
+        machine = hopper.machine
+        branch = RandomBranchState("PIN_RAND")
+        branch.add_branch(machine.states["HAT_TRICK_MOVE"])
+        branch.add_branch(machine.states["NAB_MOVE"])
+        machine.states["PIN_RAND"] = branch
+        machine.states["FLUTTER_MOVE"].follow_up = branch
+        machine._performed_first_move = True
+        machine.force_current_state(machine.states["FLUTTER_MOVE"])
+
+        PowerCmd.apply(cs.hooks, hopper, FlutterPower, 1, applier=cs.player)
+        before = rng.floats
+        # Flutter halves powered damage, so 10 lands as 5 -- enough for
+        # on_damage_received's amount > 0 guard to consume the last stack.
+        DamageCmd.deal(cs.hooks, hopper, 10, dealer=cs.player,
+                       card=StrikeCard(), props=ValueProp.MOVE)
+        assert hopper._current_move.id in ("HAT_TRICK_MOVE", "NAB_MOVE")
+        # C#: FlutterPower.cs:47 draws off RunRng.MonsterAi, never the shared
+        # combat stream.
+        assert rng.floats == before
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G7 clause (a) (audits/seam/"
+               "monster_state_machine.json step 21), DORMANT. C# treats "
+               "CanRepeatXTimes with maxTimes == 0 as a PERMANENTLY DISABLED "
+               "branch -- RandomBranchState.cs:144-147 computes n = 0, "
+               "allowed = (Count < 0) ? 1 : 0 = 0, and the while-loop's "
+               "num3 < num2 guard is false so nothing can revive it -- and "
+               "the machine is built and played with one fewer option. The "
+               "sim raises ValueError at construction instead "
+               "(monsters/state_machine.py:168-169), so a faithful "
+               "transliteration of such a branch would crash at combat "
+               "start. DORMANT: probe cs-addbranch enumerates all 15 "
+               "non-default integer arguments across the 61 monster "
+               "AddBranch call sites and every one is 2 or 3 -- no shipped "
+               "monster passes 0 as maxRepeats. Named trigger: a C# monster "
+               "model added with AddBranch(state, 0) or AddBranch(state, 0, "
+               "weight).",
+        strict=True,
+    )
+    def test_max_times_zero_disables_the_branch_instead_of_raising(self):
+        from sts2_rl.monsters.base import Intent, MoveType
+        from sts2_rl.monsters.state_machine import (
+            MonsterMoveStateMachine, MoveRepeatType, MoveState,
+            RandomBranchState,
+        )
+
+        a = MoveState("A", lambda ctx: None, Intent(MoveType.ATTACK, damage=1))
+        b = MoveState("B", lambda ctx: None, Intent(MoveType.ATTACK, damage=2))
+        branch = RandomBranchState("BR")
+        branch.add_branch(b)
+        # C#: AddBranch(a, 0) builds a branch that simply never wins.
+        branch.add_branch(a, repeat_type=MoveRepeatType.CAN_REPEAT_X_TIMES,
+                          max_times=0)
+        for m in (a, b):
+            m.follow_up = branch
+        machine = MonsterMoveStateMachine([a, b, branch], b)
+
+        class _Owner:
+            pass
+
+        owner = _Owner()
+        owner.machine = machine
+        machine._performed_first_move = True
+        rng = random.Random(0)
+        ids = {machine.roll_move(owner, rng).id for _ in range(200)}
+        assert ids == {"B"}
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G8 (audits/seam/"
+               "monster_state_machine.json step 3), DORMANT. Every C# "
+               "RegisterStates implementation is monsterStates.Add(Id, this) "
+               "(RandomBranchState.cs:171, MoveState.cs:74, "
+               "ConditionalBranchState.cs:58) and Dictionary.Add THROWS "
+               "ArgumentException on a duplicate key, so a monster with two "
+               "states sharing an id fails loudly at machine construction. "
+               "The sim's states[self.id] = self "
+               "(monsters/state_machine.py:86-87) silently OVERWRITES, so "
+               "the second definition wins and every follow_up aimed at the "
+               "first resolves to the second -- a mis-ported monster gets a "
+               "quietly wrong move graph instead of a crash. DORMANT: probe "
+               "zero-weight builds 59 ported machines over 4,720,008 "
+               "transitions and none collides. Named trigger: porting a "
+               "monster with a repeated state id -- Fogmog.cs:44-45 is the "
+               "shipped near-miss, two distinct MoveStates (SWIPE_MOVE and "
+               "SWIPE_RANDOM_MOVE) sharing one SwipeMove delegate and "
+               "differing only in id.",
+        strict=True,
+    )
+    def test_duplicate_state_id_is_rejected_at_machine_construction(self):
+        from sts2_rl.monsters.base import Intent, MoveType
+        from sts2_rl.monsters.state_machine import (
+            MonsterMoveStateMachine, MoveState,
+        )
+
+        first = MoveState("DUP", lambda ctx: None,
+                          Intent(MoveType.ATTACK, damage=1))
+        second = MoveState("DUP", lambda ctx: None,
+                           Intent(MoveType.ATTACK, damage=99))
+        first.follow_up = first
+        second.follow_up = second
+        with pytest.raises((ValueError, KeyError, RuntimeError)):
+            MonsterMoveStateMachine([first, second], first)
+
+    @pytest.mark.xfail(
+        reason="monster_state_machine audit gap G3 (audits/seam/"
+               "monster_state_machine.json step 10), DORMANT. "
+               "MoveState.GetNextState is (FollowUpState?.Id ?? "
+               "FollowUpStateId) ?? throw (MoveState.cs:23-25, 67-70) -- the "
+               "game accepts EITHER an object follow-up or a bare state id "
+               "string, resolving the object first. The sim's MoveState has "
+               "only follow_up: MonsterState | None "
+               "(monsters/state_machine.py:116, 136-139), so a monster "
+               "needing a forward reference to a state constructed later in "
+               "GenerateMoveStateMachine cannot be transliterated without "
+               "restructuring build_machine into two passes. DORMANT: "
+               "executed, grep -rn FollowUpStateId over the game tree "
+               "returns exactly two sites -- the declaration itself "
+               "(MoveState.cs:23) and Creature.cs:539, the Stun path, which "
+               "the sim does not model at all (gap G4) -- so no monster "
+               "model uses the string form today. Named trigger: any monster "
+               "model that sets FollowUpStateId on a MoveState.",
+        strict=True,
+    )
+    def test_move_state_accepts_a_string_follow_up_id(self):
+        from sts2_rl.monsters.base import Intent, MoveType
+        from sts2_rl.monsters.state_machine import (
+            MonsterMoveStateMachine, MoveState,
+        )
+
+        target = MoveState("TARGET", lambda ctx: None,
+                           Intent(MoveType.ATTACK, damage=1))
+        target.follow_up = target
+        # C#: `new MoveState(...) { FollowUpStateId = "TARGET" }`.
+        source = MoveState("SOURCE", lambda ctx: None, Intent(MoveType.BUFF))
+        source.follow_up_id = "TARGET"
+        machine = MonsterMoveStateMachine([source, target], source)
+
+        class _Owner:
+            pass
+
+        owner = _Owner()
+        owner.machine = machine
+        machine._performed_first_move = True
+        assert machine.roll_move(owner, random.Random(0)).id == "TARGET"
