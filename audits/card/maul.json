@@ -1,0 +1,47 @@
+{
+  "unit": "card/maul",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Maul.cs",
+    "sha256": "e1aa634fe0602463cdc9a47069dc93a758c51f6754de7f849f17d97b8a0d68c1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\maul.py",
+    "sha256": "c16db597006c2f9e5f4e0a1cffbe25d567a4a13eea0651970e5c4b5ad1b604bc"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (maul.py:278-282) + _init_vars (284-288)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Ancient, TargetType.AnyEnemy)` (Maul.cs:40-43) == cost 1 / ATTACK / ANCIENT / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 5, _hits = 2, _increase = 1 (maul.py:286-288)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(5m, ValueProp.Move)` + `new DynamicVar(\"Increase\", 1m)` (Maul.cs:34-38) == `_damage = 5` and `_increase = 1`; the hit count of 2 is a literal `WithHitCount(2)` in C# (Maul.cs:48) rather than a RepeatVar, and the sim stores it as `_hits = 2` so `base_hits` reports it -- a small improvement on the source, not a divergence."
+    },
+    "OnPlay": {
+      "maps_to": "MaulCard.on_play (maul.py:294-306)",
+      "verdict": "faithful",
+      "rationale": "Attack 5 twice, then buff EVERY Maul in AllCards by `Increase` (Maul.cs:48-57) == the sim's two-hit loop then `for card in ctx.player.all_cards: if isinstance(card, MaulCard): card._damage += self._increase`. The self-inclusion is right on both sides: C#'s `AllCards.OfType<Maul>()` includes the Play pile where the playing Maul sits, and the sim's `all_cards` includes the discard pile where the sim parks it (combat.py:452-454), so the card that was just played also gets the buff. Presentation, folded in: the NScratchVfx hit node."
+    },
+    "OnUpgrade": {
+      "maps_to": "MaulCard._on_upgrade (maul.py:290-292)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(1m)` + `DynamicVars[\"Increase\"].UpgradeValueBy(1m)` (Maul.cs:62-63) == `_damage += 1` (5 -> 6) and `_increase += 1` (1 -> 2). Both upgraded numbers checked."
+    },
+    "AfterDowngraded": {
+      "maps_to": "NOT PORTED -- MaulCard has no downgrade hook, and `downgrade()` therefore DESTROYS the accumulated buff (maul.py)",
+      "verdict": "gap",
+      "issue": "`AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamageFromMaulPlays` (Maul.cs:66-70) -- i.e. after `DowngradeInternal` has rebuilt the damage var from canonical (CardModel.cs:2140) it RE-ADDS the total this Maul has accumulated from Maul plays this combat, which the card tracks in a private field written by `BuffFromMaulPlay` (72-76). The sim accumulates into `_damage` directly (maul.py:306) and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) resets `_damage` to 5 and the accumulated increase is lost. Observable: play three upgraded Mauls (damage 6 -> 12), then have one downgraded -- the game leaves it at 5 + 6 accumulated = 11, the sim drops it to 5. LIVE: `downgrade()` is reachable from `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards, IN COMBAT, which is exactly when the accumulation exists) as well as from `events/reflections.py:40` and `events/welcome_to_wongos.py:90`. This is a DIFFERENT downgrade defect from the five sticky-keyword cards -- there the flag survives when it should not, here a value is destroyed when it should not be -- so `card_probes.py downgrade` does not catch it: the probe compares a FRESH card against upgrade+downgrade, and Maul's loss only shows after a play. RATIONALE CITES THIRD FILES (rule 7): cards/base.py, CardModel.cs and powers.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "the buff is applied to all Mauls AFTER the attack, so this play's own damage is not increased (Maul.cs:48-57)",
+      "verdict": "faithful",
+      "rationale": "The sim has the same order (maul.py:298-306): the two hits use the pre-buff `_damage`, then every Maul including this one is raised. Getting this backwards would make a single Maul deal 5 then 6."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,41 @@
+{
+  "unit": "card/mind_blast",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\MindBlast.cs",
+    "sha256": "d0c7152a84fbbf425785fe321e0df1c3f6991a84f4683e969f1ef40bd56c5073"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "MindBlastCard.innate = True (colorless_attacks.py:270)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Innate }` (MindBlast.cs:22) == `innate = True`. A CANONICAL Innate rather than an upgrade-added one, so no downgrade-rebuild hazard -- and it is load-bearing for the card's own damage, since Innate means it is in the opening hand while the draw pile is still large."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:265-270) + _init_vars (272-273)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (MindBlast.cs:24-27) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "MindBlastCard.calc_damage (colorless_attacks.py:278-279)",
+      "verdict": "faithful",
+      "rationale": "`CalculationBaseVar(0m)` + `ExtraDamageVar(1m)` + `CalculatedDamageVar(ValueProp.Move).WithMultiplier((card, _) => PileType.Draw.GetPile(card.Owner).Cards.Count)` (MindBlast.cs:15-20). `CalculatedVar.Calculate` is `base + extra * multiplier` (CalculatedVar.cs:62-71) = `0 + 1 * drawPileCount` == the sim's `len(ctx.player.draw_pile)`. Move without Unpowered -> powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "MindBlastCard.on_play (colorless_attacks.py:281-287)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(DynamicVars.CalculatedDamage).FromCard(this).Targeting(cardPlay.Target)` (MindBlast.cs:32-34) == `DamageCmd.deal(ctx.hooks, target, self.calc_damage(ctx, target), dealer=ctx.player, card=self)`. The draw pile is counted at play time on both sides, and Mind Blast itself is never in it (Play pile in C#, discard-pile limbo in the sim)."
+    },
+    "OnUpgrade": {
+      "maps_to": "MindBlastCard._on_upgrade (colorless_attacks.py:275-276)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (MindBlast.cs:39) == `self._energy_cost = max(0, self._energy_cost - 1)` (1 -> 0). The damage formula is untouched by the upgrade on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}
