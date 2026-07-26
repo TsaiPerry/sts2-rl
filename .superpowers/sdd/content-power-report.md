@@ -3,28 +3,76 @@
 Branch `audit-power`, worktree `c:\Users\Perry\Desktop\sts2-rl-power`, based on
 `audit-pipeline` at `3d63f3b0`. Written 2026-07-26, updated as batches land.
 
-**Status: 45 of 134 units audited and committed; 89 remain.** The stream did
-not finish. What DID finish is the part Perry asked for by name — the
-sign-awareness determination is **complete for all 134 units**, because it was
-settled by a committed census rather than unit by unit. Section 2 is therefore
-final, and so are the other four census-derived findings; sections 4-6 cover
-only the 45 audited units, and section 10 is the residual queue with the work
-already scoped per group.
+**Status: COMPLETE — 134 of 134 units audited and committed.** The stream ran in
+three passes: this session's first 45 units (sections 2-10 below), then two
+concurrent continuation sessions in sibling worktrees that took the remaining 89
+as disjoint halves. Both halves finished and merged back into `audit-power`
+without conflict.
 
 | | |
 |---|---|
-| units audited | 45 / 134 |
-| unit rollups | 40 gap, 2 faithful, 2 deliberate-divergence, 1 waiver |
-| entries (hooks + guards) | 394 — 262 faithful, 90 gap, 28 waiver, 14 dd |
-| gap rate | 89% of units carry at least one gap; 23% of entries are gaps |
+| units audited | **134 / 134** |
+| unit rollups | 112 gap, 12 waiver, 7 faithful, 3 deliberate-divergence |
+| entries (hooks + guards) | 1145 — 705 faithful, 248 gap, 149 waiver, 43 dd |
+| gap rate | 84% of units carry at least one gap; 22% of entries are gaps |
 | suite | 2476 passed / 31 xfailed, unchanged at every batch boundary |
-| commits | `e6170905` (batch 1), `e9a046ad` (batch 2), `62b0d42f` (batch 3) |
+| commits, first 45 | `e6170905`, `e9a046ad`, `62b0d42f` (+ `e90f112f`, `370ce70c`) |
+| commits, half A (41) | `dfca8463`, `5ff2baf8`, `625e94bb` |
+| commits, half B (48) | `c27003a4`, `8696d479`, `4f795978` |
+
+**Where the detail lives.** Sections 2-10 of this file are the first 45 units
+plus the census results, which are final for all 134. The two halves' per-unit
+detail is in `content-power-report-a.md` (41 player-side units) and
+`content-power-report-b.md` (48 enemy units), both committed alongside this file
+and both worth reading in full — this file's sections 3, 4, 6, 8 and 10 have
+been updated to carry their conclusions, but not their evidence.
 
 Batches, in the order they were done and why: **1** the core buff/debuff set
 (the sign-awareness question lives here), **2** the Ironclad card powers,
 **3** the player-side `AfterSideTurnEnd` group that batch 1-2's census had
 identified as the highest-yield remaining cluster. Batch 3 was chosen *by* the
-report rather than in advance, which is the workflow to keep.
+report rather than in advance, which is the workflow to keep — and the A/B split
+that followed was likewise chosen by the census, not by alphabet.
+
+## 0. What the whole stream turned up, in one place
+
+Three findings overturn or widen a **committed seam record**, and are the most
+consequential output of the stream:
+
+1. **`turn_structure` G8's AutoPrePlay half is LIVE, not dormant** (half A).
+   G8's dormancy argument enumerates Whispering Earring and Imbued and misses
+   `MayhemPower`, C#'s third ported `AfterAutoPrePlayPhaseEntered` implementer —
+   and Mayhem *reads other turn-start listeners' output*. The game runs it at
+   `CombatManager.cs:568`, strictly after `AfterSideTurnStart` (`:522`); the sim
+   shares one `on_player_turn_started` slot, so the order is registration order.
+   Three executed witnesses, incl. Prep Time × Mayhem (auto-played Strike deals
+   9 vs 6).
+2. **`power_cmd` G6 is LIVE** (half B), where its own text says no interaction
+   is demonstrated. `AdaptablePower.ShouldAllowHitting` exists precisely so the
+   reviving Test Subject receives no powers; the sim wires that predicate into
+   `DamageCmd.deal` but not `PowerCmd.apply`, so Vulnerable 2 lands on the
+   reviving boss (damage in the same window is correctly refused — the control).
+3. **`power_cmd` G5 now has three reachable arithmetically-divergent witnesses**
+   (half A: `rolling_boulder`, `automation`, `toric_toughness`) against a text
+   that says "no currently-demonstrated collision"; and its documentation count
+   is **3 of 11, not 2** — `SwipePower` documents the instancing too (half B).
+
+Two systematic bug classes, each hitting many units:
+
+4. **Wrong RNG stream.** Eight power units draw on a shared rng where C# names a
+   stream — `hello_world`, `entropy`, `stampede`, `confused`, `juggernaut`,
+   `calamity`, `aggression` (all `combat._rng`, half A) and `flutter`
+   (`owner._rng` instead of `_move_rng`, half B). The correct accessor exists
+   one line away in `combat.py` in every case. Any parity replay that touches
+   one of these diverges.
+5. **A before/per-hit hook ported onto an after/aggregate hook.** `thorns`,
+   `curl_up`, `skittish` (first 45) and `suck` (half B, Fossil Stalker's 2-hit
+   LASH deals 9 vs 6). Two consequences each: the killing-blow guard
+   (`cmds.py:121`) suppresses the after-hook, and inline-granted effects become
+   visible to later hits of the same card.
+
+Both halves independently confirmed there is **no fourth non-dyadic
+multiplicative factor** — see section 3, now closed for all 134 units.
 
 ## 1. The tool this stream added
 
@@ -119,7 +167,33 @@ float, so the obvious dyadic test calls `0.7` dyadic. The committed probe
 parses the literal with `Fraction(str(val))` instead. Anyone re-deriving this
 number a different way should check that first.
 
+**CLOSED for all 134 units.** Both continuation halves were asked to report a
+fourth factor loudly and neither found one: half A's candidates (`no_block`
+×0.0, `diamond_diadem` ×0.5, `unmovable` ×2.0, `gigantification` ×3) are all
+dyadic, and half B enumerated 26 literal operands across the enemy powers of
+which the only two non-dyadic are the two already named here. **`hook_dispatch`
+G9's population is final at three, and all three are on damage** — every ported
+*block* multiplier is dyadic, so G9's block-site dormancy survives the full
+census.
+
 ## 4. LIVE gaps found (all executed, all on ported content)
+
+Sections 4.1-4.15 below are the first 45 units. The two halves add **13 more
+live gaps**, evidenced in their own reports: half A's `mayhem` (see section 0),
+`plating`, `nostalgia`, `rolling_boulder`, `automation`, `toric_toughness`,
+`retain_hand`, `free_attack`, `unmovable`, `buffer` and the seven-unit
+`combat._rng` class; half B's `rampart`, `flutter`, `adaptable`,
+`minion`/`reattach` and `suck`. Two of half B's are worth restating here because
+they change *run outcomes* rather than intermediate state:
+
+- **`rampart` drops `RampartPower.cs:23`'s `PlayersTakingExtraTurn` guard.**
+  With ported Pael's Eye the sim grants the Turret Operator 25 block on the
+  extra turn; the game grants 0.
+- **`minion`/`reattach` have no sim hook for `ShouldOwnerDeathTriggerFatal`**, so
+  Feed into a Minion-marked Tough Egg gives +3 max HP where the game gives 0 —
+  and `adaptable` diverges the *other* way, the game paying out for Feeding the
+  Test Subject where the sim does not, which contradicts `cards/feed.py`'s own
+  docstring.
 
 1. **`ritual` — the skip-first-trigger flag keys on the wrong thing.**
    `RitualPower.cs:36-43` sets the skip whenever **`Owner.IsEnemy`**; the sim
@@ -267,19 +341,42 @@ different owners:
 
 ## 6. Cross-record disagreements spotted under rule 3
 
-1. **`turn_structure` G5's dormancy argument is narrower than its dormancy
-   claim.** G5 rests on "every ported listener on these hooks self-filters to
-   its own owner", which is true and does establish that *ordering within one
-   hook* is unobservable. It does not cover a listener whose effect changes
-   state other creatures then read, and three audited or scoped units do
-   exactly that: `battleworn_dummy_time_limit` **escapes** its owner in that
-   slot (and the Battle Friend encounters field more than one dummy, so the
-   sim can remove dummy #1 before dummy #2 acts), `asleep` **removes another
-   power** (`Plating`) and wakes the owner, and `slumber` stuns. I have not
-   executed a two-dummy witness, so I am **not** asserting G5 is live — I am
-   reporting that its dormancy argument does not reach these three cases and
-   that the seam session should re-examine it. The verdict itself is `gap` on
-   both sides, so rule 3 is satisfied either way.
+1. **`turn_structure` G5 — SETTLED by half B: dormant, but for a different
+   reason than the record gives, and one of my premises here was false.**
+   I originally reported (correctly) that G5's dormancy rests on "every ported
+   listener on these hooks self-filters to its own owner", which establishes
+   only that *ordering within one hook* is unobservable and does not cover a
+   listener whose effect changes state other creatures then read. I named three
+   units as escaping that argument and asked for a two-dummy Battle Friend
+   witness. Half B executed the question and both halves independently
+   established that **the two-dummy witness is not constructible**:
+   `BattlewornDummyEventEncounter.GenerateMonsters` (`:63-72`) returns a
+   `_ReadOnlySingleElementList`, and that file is the only one in the game
+   mentioning `BattleFriend`. So `battleworn_dummy_time_limit` does not make G5
+   live. (It is also in **half A**, not half B — the continuation prompt's split
+   list misassigned it.) `asleep` removes `Plating` from *itself*, so it was
+   inside G5's original argument all along. That leaves `slumber` as the only
+   real test, and `SLUMBERING_BEETLE_NORMAL` does field three creatures — it
+   passes **only because the beetle is last in the enemy list**, which is where
+   a per-creature turn-end slot coincides exactly with a side-end slot.
+   **The correct dormancy argument is therefore the encounter rosters, not
+   listener self-filtering**, and the seam record should be restated in those
+   terms with its Battle Friend sentence deleted. Executed via half B's
+   committed `tools/audit/power_slot_probes.py` (`rosters`, `g5-witness`,
+   `enemy-hook-order`). G5's *verdict* stands.
+
+1b. **`turn_structure` G8's AutoPrePlay half is LIVE, not dormant** — half A,
+   see section 0 item 1. This is the stream's largest single correction to a
+   committed seam record, and unlike G5 it changes the verdict, not just the
+   rationale.
+
+1c. **`power_cmd` G6 is LIVE** — half B, section 0 item 2. G6's own text says
+   the interaction is undemonstrated; `adaptable` demonstrates it.
+
+1d. **`power_cmd` G5 understates itself twice** — half A supplies three
+   reachable arithmetically-divergent witnesses against "no currently-
+   demonstrated collision", and half B corrects its documentation count from
+   2 of 11 to 3 of 11 (`SwipePower`).
 2. **`hook_dispatch` G9's factor population was incomplete.** It names Shrink
    `0.7` and reasons about block factors; it does not name `SlowPower`'s `0.1`
    or the `Vulnerable + Cruelty` computed factor. Both widen the damage-site
@@ -354,8 +451,8 @@ descending order of how much time they would have saved me:
    finding. `name_overrides.json` cannot express it — the fix is four lines in
    `ALL_POWERS`.
 2. **`harness.list_overrides` misses overrides with a tuple return type.**
-   Hit twice — `CorruptionPower` (batch 2) and `ReboundPower` (batch 3) — so it
-   is a general defect, not a one-off.
+   Hit three times — `CorruptionPower` (batch 2), `ReboundPower` (batch 3) and
+   `NostalgiaPower` (half A) — so it is a general defect, not a one-off.
    `ModifyCardPlayResultPileTypeAndPosition` returns
    `(PileType, CardPilePosition)`, and `_OVERRIDE_RE`'s
    `[\w<>,.?\[\] ]+?` return-type class does not match the parentheses — the
@@ -365,9 +462,26 @@ descending order of how much time they would have saved me:
    I added the hook to `audits/power/corruption.json` by hand; validation
    accepts extra keys, so the record is complete. Any other content unit whose
    C# file has a tuple-returning override has the same blind spot.
+2b. **`harness.list_overrides` does not follow a C# base class** — found by
+   half A, same silent-under-enumeration failure mode as the tuple defect above
+   and arguably worse. Six half-A units subclass `TemporaryStrengthPower`; their
+   own `.cs` file declares one member while the unit needs six verdicts, and the
+   harness asks for one. Half A added the missing hooks by hand. Half B checked
+   all 46 of its own C# files for both defects and found neither, so the
+   exposure is confined to the player-side powers — but a future content tier
+   (cards, relics) should assume both are present.
 3. **`audit_status.py` reports no live/dormant split.** Not a defect, but with
-   59 gap entries of which 10 are live, `gaps` as a single column understates
+   248 gap entries of which ~28 are live, `gaps` as a single column understates
    how much of the ledger is a queue and overstates how much is a fire.
+4. **The `PROMPT.md` improvement loop never closed.** As of half A's last batch
+   `tools/audit/PROMPT.md` was still **v1** — none of section 7's seven proposed
+   lessons had landed, and both halves added more (half A seven, half B four).
+   The relic stream owns the file and the powers stream cannot write it, so the
+   pipeline has a structural bottleneck: the stream that learns the lessons is
+   not the stream that can record them. Worth fixing at the pipeline level
+   before the next content tier starts, or the same traps get paid for a third
+   time. All proposed additions are collected in section 7 here plus section 7
+   of report-a and section 6 of report-b.
 
 ## 9. Cost data
 
@@ -408,9 +522,37 @@ session on a gate that (correctly) never moved off 2476 passed / 31 xfailed.
   code. It is still the right gate — it is what would catch an accidental edit —
   but a resumed session should expect it, not be surprised by it.
 
-## 10. Residual queue — the 104 unaudited units
+## 10. Residual queue — EMPTY for auditing; 5 items handed to other streams
 
-Ordered by expected yield, with what is already known about each group:
+**All 134 auditable units are audited.** The queue below is kept as the merge
+record — it is the plan the two continuation halves executed, and each item's
+outcome is noted. What actually remains is not audit work:
+
+1. **The 4 unauditable units** (section 8 item 1) — `flex_potion`, `heist`,
+   `speed_potion`, `thievery` are still absent from `ALL_POWERS`, so they cannot
+   be skeletoned and are absent from the observation vector. Blocked on a 4-line
+   engine fix this stream must not make. **This is the only coverage hole left in
+   the power tier.**
+2. **Three seam records need amending** by the seam session: `turn_structure` G8
+   (verdict change — the AutoPrePlay half is live), `power_cmd` G6 (verdict
+   change — live), `power_cmd` G5 (text: three demonstrated witnesses, doc count
+   3 of 11), plus `turn_structure` G5's *rationale* restated in roster terms with
+   its Battle Friend sentence deleted.
+3. **`PROMPT.md` has 18 unlanded lessons** across this report's section 7,
+   report-a's section 7 and report-b's section 6 — see section 8 item 4 on why
+   the loop never closed.
+4. **Two harness defects** (section 8 items 2 and 2b), both silent
+   under-enumeration.
+5. **The gap-fix stream's highest-value targets**, in order: the eight-unit wrong
+   RNG-stream class (section 0 item 4 — one-line fixes, and every one of them
+   breaks parity replay), the four before/per-hit hook mis-ports (section 0 item
+   5), and `props`-omitted-on-block (`feel_no_pain`, `curl_up`). Report-a's
+   section 10 handover names the three fixes that clear most of half A's live
+   ledger.
+
+### The plan as it stood, kept for the record
+
+Ordered by expected yield, with what was already known about each group:
 
 1. ~~The player-side `AfterSideTurnEnd` units~~ — **done in batch 3.**
 2. **The 15 `on_stack`-no-op units** (section 7 item 5): `adaptable`,
@@ -439,10 +581,11 @@ Ordered by expected yield, with what is already known about each group:
    potion-sourced ones are dormant by scope, though the *power* still has to
    be audited.
 6. **The 4 unauditable units** (section 8 item 1) — blocked on a 4-line
-   `ALL_POWERS` fix that this stream must not make.
+   `ALL_POWERS` fix that this stream must not make. **Still open.**
 
-**Suggested entry point for whoever resumes:** re-read
-`tools/audit/PROMPT.md` first (the relic stream may have hardened it), then
-run all nine census commands and start at queue item 1. The per-unit procedure
-that worked is in section 9; `power_census.py` means the population questions
-do not need re-deriving.
+**Outcome:** items 1-5 are all done. Item 4 (the enemy powers) was the largest
+and split off as half B; items 2, 3 and 5 were absorbed into halves A and B. The
+prediction that the residual units would be *cheaper per unit* than the first 45
+held — see the cost sections of report-a and report-b. The prediction that item 5
+was "lower yield" did **not** hold: `mayhem`, `nostalgia` and `plating` are all
+in it, and `mayhem` produced the stream's biggest finding.
