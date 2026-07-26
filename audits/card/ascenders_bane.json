@@ -1,0 +1,52 @@
+{
+  "unit": "card/ascenders_bane",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\AscendersBane.cs",
+    "sha256": "cfce7f465f8817f145017e96bec6cc0adf99324db766b18c1e153e297f789b50"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\ascenders_bane.py",
+    "sha256": "3900e893c3ab5dcf69bf14829cc272d80a127991640e5cf09744e26a44e14bdd"
+  },
+  "hooks": {
+    "CanBeGeneratedByModifiers": {
+      "maps_to": "AscendersBaneCard.can_be_generated_by_modifiers = False (ascenders_bane.py:30)",
+      "verdict": "faithful",
+      "rationale": "`public override bool CanBeGeneratedByModifiers => false` (AscendersBane.cs:8) == the class attribute, which cards/base.py:88-91 documents as the random-curse-pool filter used by the CursedRun modifier, Neow's Bones and Sere Talon."
+    },
+    "MaxUpgradeLevel": {
+      "maps_to": "AscendersBaneCard.max_upgrade_level = 0 (ascenders_bane.py:28)",
+      "verdict": "faithful",
+      "rationale": "`public override int MaxUpgradeLevel => 0` (AscendersBane.cs:10) == the class attribute, so `is_upgradable` (cards/base.py:167-170) is False and Apotheosis / Armaments / Aggression skip it exactly as C#'s `IsUpgradable` does."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "eternal = True, is_playable = False, is_ethereal = True (ascenders_bane.py:25-27)",
+      "verdict": "faithful",
+      "rationale": "`{ Eternal, Unplayable, Ethereal }` (AscendersBane.cs:12-17) maps one-for-one: Eternal -> `eternal` (cards/base.py:79-83), Unplayable -> `is_playable = False` (61), Ethereal -> `is_ethereal` (62)."
+    },
+    "ctor": {
+      "maps_to": "class attrs (ascenders_bane.py:21-30) + _init_vars (32-33)",
+      "verdict": "gap",
+      "issue": "`base(-1, CardType.Curse, CardRarity.Curse, TargetType.None)` (AscendersBane.cs:19-22): the type, rarity and target type map exactly (CURSE / CURSE / NONE), but the canonical energy cost is **-1** in C# and **0** in the sim (`_init_vars`: `self._energy_cost = 0`, ascenders_bane.py:33). -1 is not a cosmetic 'no cost' marker: `CardEnergyCost.GetWithModifiers` short-circuits on `if (_base < 0) return num;` (CardEnergyCost.cs:100-103) BEFORE any local or global cost modifier is applied, so in the game an unplayable curse is immune to every cost modifier and keeps reporting -1, while the sim's `Card.energy_cost` property (cards/base.py:222-232) runs the full `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` chain over a base of 0. `GetAmountToSpend()` clamps to `Math.Max(0, ...)` (CardEnergyCost.cs:134-139), so the two agree on what is SPENT -- the divergence is confined to what is READ. DORMANT: no ported reader distinguishes them today. The three ported cost readers were checked -- `relics/mummified_hand.py:25` and `potions.py:168` filter on `energy_cost > 0` (both sides exclude it), `cards/event_cards.py:328` (Enlightenment) `continue`s at `<= 1` (both sides skip it), and `events/infested_automaton.py:35` filters `pool_card_ids()`, which contains no curses. It goes LIVE the moment any effect reads the cost of an unplayable card without a `> 0` filter, or applies a cost modifier to one and displays the result. The same -1 -> 0 mapping is used by every other unplayable curse/status in the sim (bad_luck, burn, clumsy, dazed, ...), so this is a POOL-WIDE finding recorded once per unit."
+    },
+    "OnPlay": {
+      "maps_to": "AscendersBaneCard.on_play -> pass (ascenders_bane.py:35-36)",
+      "verdict": "faithful",
+      "rationale": "AscendersBane.cs declares NO OnPlay override, so `CardModel.OnPlay`'s no-op base (CardModel.cs:1643) applies; the card is Unplayable anyway. The sim's abstract `on_play` must be implemented, so it is a `pass`. Same behaviour."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (ascenders_bane.py:29), which has no counterpart in AscendersBane.cs",
+      "verdict": "faithful",
+      "rationale": "`is_unpowered` is only consulted when the CARD deals damage -- `cmds.py:44-47` picks `DamageProps.CARD_UNPOWERED` from it, and the readers at powers.py:116/1260/1385/1911/3965, previews.py:157 and relics/the_boot.py:37 all require a damaging card. AscendersBane has no OnPlay and deals no damage, so the flag is inert and no behaviour depends on it. Recorded because it is an unsourced extra attribute, not because it diverges."
+    },
+    {
+      "what": "AscendersBane is declared `public class`, not `sealed` -- the only card in this batch that is subclassable (AscendersBane.cs:6)",
+      "verdict": "faithful",
+      "rationale": "No subclass exists in src/Core/Models/Cards. Nothing to mirror."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

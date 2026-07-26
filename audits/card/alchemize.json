@@ -1,0 +1,47 @@
+{
+  "unit": "card/alchemize",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Alchemize.cs",
+    "sha256": "5f5318507b2ee1d0c58c0ec1bf38299e6d57b3867f03eb8c0641a267440686bb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "hooks": {
+    "CanBeGeneratedInCombat": {
+      "maps_to": "AlchemizeCard.can_be_generated_in_combat = False (colorless_skills.py:29)",
+      "verdict": "faithful",
+      "rationale": "`public override bool CanBeGeneratedInCombat => false` (Alchemize.cs:12) == the class attribute, which `CardModel.CanBeGeneratedInCombat`'s sim mirror (cards/base.py:96) documents as the FilterForCombat gate used by Infernal Blade / Discovery / Jack of All Trades."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "AlchemizeCard.exhausts = True (colorless_skills.py:28)",
+      "verdict": "faithful",
+      "rationale": "Single-element list `{ CardKeyword.Exhaust }` (Alchemize.cs:14) == `exhausts = True`. No Ethereal/Innate/Retain/Unplayable on either side."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:23-29) + _init_vars (31-32)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Alchemize.cs:16-19) == cost 1 / SKILL / RARE / SELF."
+    },
+    "OnPlay": {
+      "maps_to": "AlchemizeCard.on_play (colorless_skills.py:37-53)",
+      "verdict": "waiver",
+      "rationale": "The entire body is potion procurement -- `PotionCmd.TryToProcure(PotionFactory.CreateRandomPotionInCombat(Owner, Rng.CombatPotionGeneration).ToMutable(), Owner)` (Alchemize.cs:24). Potions are out of scope entirely per the shared contract (deferred by Perry). Recorded for completeness: the sim DOES take the generation draws on the correct named stream when one exists (`rng_set.combat_potion_generation`, colorless_skills.py:43-48) and falls back to the unseeded shared `combat._rng` only when `rng_set is None` (50-52), and it reproduces the create-then-maybe-drop order (`add_potion` returns False on a full belt, player.py:107) that keeps the stream moving on a full belt. The animation trigger (Alchemize.cs:23) is presentation."
+    },
+    "OnUpgrade": {
+      "maps_to": "AlchemizeCard._on_upgrade (colorless_skills.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Alchemize.cs:29) == `self._energy_cost = max(0, self._energy_cost - 1)`: 1 -> 0 on both sides, and the clamp is never reached from base cost 1. Downgrade is safe here -- `_init_vars` re-seeds `_energy_cost`, so `card_probes.py downgrade` does not list alchemize."
+    }
+  },
+  "guards": [
+    {
+      "what": "PotionCmd.TryToProcure silently drops the potion when the belt is full, AFTER the generation draws (Alchemize.cs:24)",
+      "verdict": "waiver",
+      "rationale": "Potions out of scope. The sim's comment at colorless_skills.py:38-41 states the same create-then-drop ordering, and `Player.add_potion` (player.py:107-112) mirrors `AddPotionInternal`'s `IndexOf(null)` failure mode, so no divergence is visible even though the area is waived."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

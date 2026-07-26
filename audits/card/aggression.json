@@ -1,0 +1,31 @@
+{
+  "unit": "card/aggression",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Aggression.cs",
+    "sha256": "3cf741e6c5bb10dfd327ad300a59a9027d1711c809eb3dd1ce442f085bd3a8a0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\aggression.py",
+    "sha256": "c878454d35a639c856f3045d0b53f45ff458dcc6268cfdf87ae305f15fb08240"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs on AggressionCard (aggression.py:21-25) + _init_vars (27-28)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Rare, TargetType.Self)` (Aggression.cs:11-14) == `_energy_cost = 1`, `card_type = POWER`, `rarity = RARE`, `target_type = SELF`. No CanonicalKeywords / CanonicalVars / CanonicalTags on the C# side and none on the sim side. NOTE (harness): `harness.py list_overrides` only matches `public override`, so the generated skeleton's `hooks` map came back EMPTY for this unit -- the ctor / OnPlay / OnUpgrade entries here were added by hand."
+    },
+    "OnPlay": {
+      "maps_to": "AggressionCard.on_play (aggression.py:33-36)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<AggressionPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (Aggression.cs:19) == `PowerCmd.apply(ctx.hooks, ctx.player, AggressionPower, 1, applier=ctx.player)`. Literal amount 1 on both sides (no DynamicVar), self-target, self-applier. AggressionPower's own behaviour belongs to the power stream, not this record. Presentation, folded in per the record policy: Aggression.cs:18 first runs CreatureCmd.TriggerAnim(Owner.Creature, \"PowerUp\", Owner.Character.PowerUpAnimDelay), an animation trigger with no state effect and no sim counterpart."
+    },
+    "OnUpgrade": {
+      "maps_to": "AggressionCard._on_upgrade (aggression.py:30-31)",
+      "verdict": "gap",
+      "issue": "The UPGRADE is faithful; the DOWNGRADE is not. `AddKeyword(CardKeyword.Innate)` (Aggression.cs:24) maps to `self.innate = True`, correct at upgrade level 1. But `Card.downgrade` (cards/base.py:150-165) rebuilds printed state by zeroing `upgrade_level`, re-running `_init_vars` and re-applying upgrades -- and `AggressionCard._init_vars` (aggression.py:27-28) sets only `_energy_cost`, never re-seeding `innate`, so the instance attribute set by `_on_upgrade` survives the rebuild. C# `CardModel.DowngradeInternal` (CardModel.cs:2135-2148) rebuilds the whole keyword set from canonical (`_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()`, line 2143), so the game always drops Innate. Observable: a downgraded Aggression still starts every combat in the opening hand in the sim; in the game it does not. EXECUTED: `py tools/audit/card_probes.py downgrade` prints `aggression: innate: False -> True` after upgrade+downgrade (5 of 203 sim cards affected). LIVE -- `downgrade()` is reachable from three ported sites: `events/reflections.py:40` (Reflections, registered at `events/__init__.py:104`), `events/welcome_to_wongos.py:90` (registered at `events/__init__.py:135`), and `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards). RATIONALE CITES A THIRD FILE (rule 7): `sts2_rl/cards/base.py` and `src/Core/Models/CardModel.cs` are not hashed by this record."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
