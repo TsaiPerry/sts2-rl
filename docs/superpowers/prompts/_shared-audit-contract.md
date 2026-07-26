@@ -39,6 +39,7 @@ Merges stay trivial only while ownership holds.
 | `audits/card/**` | card stream |
 | `audits/event/**`, `audits/enchantment/**` | event+enchantment stream |
 | `audits/monster/**` | monster stream |
+| `docs/audit/content/<kind>/**` | that kind's stream (narration docs, if you write any — never `docs/audit/content/` directly) |
 | `tools/audit/PROMPT.md`, `tools/audit/name_overrides.json` | **relic stream only** |
 | `docs/audit/GAP-QUEUE.md` | gap-queue stream |
 | `sts2_rl/**` | gap-fix stream only, and only once authorised |
