@@ -1,0 +1,66 @@
+{
+  "unit": "relic/old_coin",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\OldCoin.cs",
+    "sha256": "01505b6abb0e448cf765e6d515e5bbb1bbe02cc061301b0a05465c650ce15378"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\old_coin.py",
+    "sha256": "0b339112adc551a4ac2231fe841509b461c3ba80c14429719a30db8bbcbb92c3"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (old_coin.py:13)",
+      "verdict": "faithful"
+    },
+    "IsAllowedInShops": {
+      "maps_to": "is_allowed_in_shops = False (old_coin.py:15)",
+      "verdict": "faithful",
+      "rationale": "Matches OldCoin.cs:14. The flag is real in the sim, not decorative: RunState.pull_relic_from_front applies it as the `shop_legal` filter (run.py:592) and pull_relic_from_back is shop-legal by construction. EXECUTED (py tools/audit/relic_probes_b10.py old-coin): ALL_RELICS['old_coin'].is_allowed_in_shops is False. Rule 7: run.py is unhashed here."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (old_coin.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches OldCoin.cs:16, and it matters here rather than being belt-and-braces: Old Coin is RARE, not Ancient, so this flag is what keeps it out of the trade events via Relic.is_tradable (relics/base.py:126-136). EXECUTED: True. Rule 7: relics/base.py is unhashed here."
+    },
+    "IsAllowed": {
+      "maps_to": "no counterpart -- `Relic` declares no is_allowed member at all",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart -- the port defines no methods; the hook it needs is dispatched by RunState.add_relic (run.py:546-553)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 -- the relic's entire effect (+300 gold on pickup) is missing."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the 300 gold is missing, and the stub's stated premise -- 'no gold system in the sim' -- is FALSE",
+      "verdict": "gap",
+      "issue": "MECHANISM: OldCoin.cs:25-28 is `await PlayerCmd.GainGold(DynamicVars.Gold.BaseValue, Owner)` with GoldVar(300) declared at OldCoin.cs:18. old_coin.py:8-9 implements nothing and says 'no gold system in the sim, so this is a no-op stub'. PREMISE FALSE (PROMPT.md bug class 12, and .superpowers/sdd/content-relic-sweeps.md Sweep C lists old_coin under exactly this false premise family): RunState has `gold`, `gain_gold` (run.py:325-333, which already runs the Hook.ModifyGoldGained chain a correct port needs) and `lose_gold`, and the EXACT SIBLING relic/golden_pearl does the same thing correctly -- `run.gain_gold(self.GOLD)` in after_obtained (golden_pearl.py:16-17). EXECUTED (py tools/audit/relic_probes_b10.py old-coin): add_relic('old_coin') leaves gold at 99 where C# gives 399, while add_relic('golden_pearl') on the same path takes 99 to 249. LIVE: Old Coin is RARE in the transcribed grab bag (relic_pools.py, executed by this module's `pool` probe), gold is spent at the sim's shop (sts2_rl/shop.py) and is diffed per floor by the conformance runner, and 300 gold is more than a Rare relic's list price. The constant is 300 with no AscensionHelper call anywhere in OldCoin.cs, and the port pins no constant at all. Rule 7: PlayerCmd.cs, run.py, relics/golden_pearl.py, relic_pools.py, sts2_rl/shop.py and the sweeps document are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): `IsAllowed(runState) => RelicModel.IsBeforeAct3TreasureChest(runState)` has no sim counterpart, so Old Coin stays pullable for the whole run",
+      "verdict": "gap",
+      "issue": "MECHANISM: OldCoin.cs:20-23 overrides IsAllowed to `IsBeforeAct3TreasureChest(runState)`, which is `runState.TotalFloor < 41` in single-player (RelicModel.cs:452-456; the 38 is the multiplayer branch). The sim's Relic base declares NO is_allowed member (EXECUTED: hasattr(Relic, 'is_allowed') is False) and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. This is .superpowers/sdd/content-relic-sweeps.md Sweep B's 17-relic IsBeforeAct3TreasureChest cluster, of which old_coin is a named member, and the mechanism already carries a `gap` verdict at relic/amethyst_aubergine and relic/lasting_candy -- one verdict per mechanism, binding rule 3, confirmed here rather than re-derived. EXECUTED at this site (py tools/audit/relic_probes_b10.py old-coin): a RunState at total_floor=60 still has old_coin in relic_grab_bag AND actually yields it from pull_relic_from_front. LIVE, and not a one-relic error: the sim offers a relic the game would have withheld, and the wrong pull also shifts every subsequent pull for the rest of the run. The fix is one base-class member plus one filter in the pull path, shared with the other sixteen. Rule 7: RelicModel.cs, relics/base.py, relic_pools.py, run.py, relics/amethyst_aubergine.py, relics/lasting_candy.py and the sweeps document are NOT hashed by this record."
+    },
+    {
+      "what": "N1: `PlayerCmd.GainGold`'s companion event `Hook.AfterModifyingGoldGained` (PlayerCmd.cs:145) has no sim counterpart",
+      "verdict": "gap",
+      "issue": "This is the missing-AfterModifying-companion family that audits/seam/power_cmd.json gap G4 records and that relic/bag_of_preparation N1 already verdicted `gap` at the hand-draw dispatcher; one verdict per mechanism, binding rule 3. Observed at the GOLD dispatcher: run.gain_gold (run.py:325-333) chains modify_gold_gained over the run's relics and returns a bare number, with no modifiers list and no companion event. DORMANT, checked rather than assumed: `grep -rn 'def modify_gold_gained' sts2_rl/ --include=*.py` returns exactly one listener outside the base class, relics/ectoplasm.py:26, which overrides no companion, so nothing of any ported behaviour is lost. Recorded here rather than at G1 because a correct Old Coin port lands squarely in this pipeline and should not be blamed for inheriting the gap. Also noted: C# additionally fires Hook.AfterGoldGained, which .superpowers/sdd/content-relic-sweeps.md Sweep C correctly lists as having no sim hook at all. Rule 7: PlayerCmd.cs, run.py, relics/ectoplasm.py, relics/bag_of_preparation.py, the power_cmd record and the sweeps document are NOT hashed by this record."
+    },
+    {
+      "what": "N2: `PlayerCmd.GainGold`'s truncation and non-positive bail (PlayerCmd.cs:141-149) vs run.gain_gold",
+      "verdict": "faithful",
+      "rationale": "C# runs the modify chain, bails on `!(amount > 0)`, and banks `(int)amount`; run.gain_gold (run.py:325-333) runs the chain, computes `gained = int(amount)` and adds it only `if amount > 0`. Same order, same truncation toward zero, same guard. Recorded because it is the pipeline a fixed G1 lands in, and because the guard is load-bearing for relic/ectoplasm, which returns 0 from modify_gold_gained. Rule 7: PlayerCmd.cs, run.py and relics/ectoplasm.py are unhashed here."
+    },
+    {
+      "what": "N3: OldCoin.cs declares no combat hooks, no ShowCounter and no IsAllowedAtNeow",
+      "verdict": "faithful",
+      "rationale": "Rarity, IsAllowedInShops, HasUponPickupEffect, CanonicalVars, IsAllowed and AfterObtained are the whole class, so once G1 and G2 are closed the port is complete. The default is_allowed_at_neow=True is correct: Old Coin is not in Neow.AllPossibleOptions (Neow.cs:49-64), so the flag is never consulted for it. Rule 7: Neow.cs is unhashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
