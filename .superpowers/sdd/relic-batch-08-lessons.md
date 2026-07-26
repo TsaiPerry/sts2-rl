@@ -231,4 +231,4 @@ Three shapes worth folding into the existing classes rather than adding new ones
 - **No engine code was touched and no gap was fixed.** `docs/audit/GAP-QUEUE.md`
   is the gap-queue stream's file; this report is its input.
 
-**Commit:** `d59fdca` (`audit-relic-b08`).
+**Commit:** `465e9e62` (`audit-relic-b08`).
