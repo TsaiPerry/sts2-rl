@@ -1,0 +1,76 @@
+{
+  "unit": "power/panache",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PanachePower.cs",
+    "sha256": "9d57377900654c1ad4f909a78f2e1897a1988025e53d03e188bd9cc4737046af"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3622 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "DisplayAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "PanachePower.cs:33 shows the CardsLeft counter instead of Amount in the UI. The sim keeps the two values apart the same way (`self.amount` is the damage, `self.cards_left` the counter, powers.py:3633) but has no display concept. Presentation."
+    },
+    "InstanceType": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "PanachePower.cs:35 declares PowerInstanceType.Instanced, so every Panache play is an independently-tracked instance with its own CardsLeft counter; the sim keeps one instance per power id (cmds.py:308) and a second play stacks the damage while sharing one counter. This is audits/seam/power_cmd.json's gap G5, which already names PanachePower among the 11 ported InstanceType powers; per binding rule 3 the same verdict, cross-referenced rather than re-argued. Unlike ToricToughness and TheBomb, Panache does NOT document the approximation or hand-roll a workaround. DORMANT: two simultaneous Panaches need two plays of a Rare colourless card in one combat. Named trigger: a second Panache play."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:3638-3655 PanachePower.on_card_played",
+      "verdict": "gap",
+      "issue": "The sim iterates `combat.enemies` filtered on `not enemy.is_gone` where C# uses CombatState.HittableEnemies, which additionally consults Hook.ShouldAllowHitting (Creature.cs:308-322). The sim therefore aims at creatures the game considers unhittable -- a mid-revival Illusion (powers.py:1572-1575) or a withered Decimillipede segment (powers.py:2354-2357). DORMANT: DamageCmd.deal re-checks should_allow_hitting at entry (cmds.py:51-52) and returns 0, so no damage lands; what still differs is that the command runs at all. Same finding as power/inferno's HittableEnemies guard, same verdict per binding rule 3. Named trigger: an unhittable-creature effect that depends on being targeted rather than damaged. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:3657-3659 on_player_turn_end resets cards_left",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "PanachePower.cs:46-49 `cardPlay.Card.Owner != base.Owner.Player`",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; the sim omits it."
+    },
+    {
+      "what": "PanachePower.cs:22,51,63 the alreadyApplied flag",
+      "verdict": "faithful",
+      "rationale": "C# sets the flag on the FIRST AfterCardPlayed it sees and only starts counting on the second, so the Panache card play does not count towards itself; powers.py:3636,3641-3643 reproduces that exactly, including setting the flag on the way out rather than up front."
+    },
+    {
+      "what": "PanachePower.cs:25,59,72 CardsLeft resets to the literal 5",
+      "verdict": "faithful",
+      "rationale": "powers.py:3623 `CARDS_PER_TRIGGER = 5` and both reset sites (powers.py:3647, :3659) use it. Matches the C# const, and 5 is not an ascension-scaled value."
+    },
+    {
+      "what": "PanachePower.cs:58 ValueProp.Unpowered, dealer = base.Owner",
+      "verdict": "faithful",
+      "rationale": "powers.py:3652-3655 passes DamageProps.NON_CARD_UNPOWERED and dealer=self.owner. Matches."
+    },
+    {
+      "what": "The sim's extra `combat.is_over` guard",
+      "verdict": "faithful",
+      "rationale": "powers.py:3649-3650. C# needs none because Hook.IterateCombatHookListeners yields nothing after combat starts ending (Hook.cs:53-63); the sim's missing gate is hook_dispatch G8 and this power hand-rolls the case, making it MORE like the game."
+    },
+    {
+      "what": "PanachePower.cs:57 Cmd.Wait(0.5f) and InvokeDisplayAmountChanged",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

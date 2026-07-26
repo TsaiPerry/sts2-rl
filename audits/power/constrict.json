@@ -1,0 +1,51 @@
+{
+  "unit": "power/constrict",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ConstrictPower.cs",
+    "sha256": "069a2e46a07864b5c22f0940e0aa9fa850b2436393126529f751de38aa1cfd75"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1431 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1433-1447 ConstrictPower._squeeze via on_player_turn_end / on_enemy_side_end",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. For Constrict the slot matters more than usual because the effect is DAMAGE: the sim squeezes before the turn-end card effects and the flush, so a lethal squeeze cancels turn-end card effects the game has already run. The enemy leg (powers.py:1445-1447) is in the right slot (on_enemy_side_end, combat.py:345). The sim also adds an `is_dead` guard to the enemy leg that C# does not have (powers.py:1446) and omits `dealer = base.Owner` (ConstrictPower.cs:23 vs powers.py:1437-1439) -- the missing dealer suppresses on_damage_dealt and any reflect, but every reflect listener needs IsPoweredAttack and this damage is Unpowered, so that half is dormant with no reachable route."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:1449-1451 ConstrictPower.on_death",
+      "verdict": "gap",
+      "issue": "The `wasRemovalPrevented` guard is missing. C# removes this power only when `!wasRemovalPrevented && creature == base.Applier`; the sim tests only the applier (hooks.py:574-580 carries no wasRemovalPrevented argument at all), so a death whose corpse the combat keeps drops the power in the sim and keeps it in the game. DORMANT: the sim's one retained-corpse mechanism is ReattachPower's Decimillipede (powers.py:2338-2341) and no segment applies this power. Same shape and same verdict as power/shrink's AfterDeath entry. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "ConstrictPower.cs:21 `participants.Contains(base.Owner)`",
+      "verdict": "faithful",
+      "rationale": "The sim's two legs self-filter to the owner instead (powers.py:1442, :1446). The per-creature-vs-per-side question does not arise: the enemy leg already uses the side-scoped slot."
+    },
+    {
+      "what": "ConstrictPower.cs:23 ValueProp.Unpowered (BLOCKABLE)",
+      "verdict": "faithful",
+      "rationale": "powers.py:1438 passes DamageProps.NON_CARD_UNPOWERED, which is UNPOWERED alone (valueprops.py:42) and so is absorbed by block -- matching C# omitting Unblockable. Contrast power/demise, whose C# damage IS Unblockable and whose sim port correctly uses NON_CARD_HP_LOSS."
+    },
+    {
+      "what": "The amount never decrements",
+      "verdict": "faithful",
+      "rationale": "Neither side ticks Constrict; it damages for Amount every round until the applier dies. Both agree."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

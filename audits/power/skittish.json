@@ -1,0 +1,81 @@
+{
+  "unit": "power/skittish",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SkittishPower.cs",
+    "sha256": "b7fcc40241e8edfedc2de36404537e61f5b454ee32faa797e248bd9252acdfe7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1786 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audits/seam/power_cmd.json."
+    },
+    "GetScaledAmountForMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audits/seam/power_cmd.json."
+    },
+    "AfterAttack": {
+      "maps_to": "powers.py:1798-1818 SkittishPower.on_damage_received",
+      "verdict": "gap",
+      "issue": "C#'s hook is AfterAttack, which fires ONCE per AttackCommand after every hit has landed (SkittishPower.cs:56-69 searches command.Results for a DamageResult whose Receiver is the owner); the sim uses on_damage_received, which fires PER HIT. The once-per-turn gate makes the totals agree, but the TIMING does not: the sim grants the block after the first qualifying hit, so the second and later hits of a multi-hit Attack card are absorbed by block the game has not granted yet. Identical shape to power/curl_up's, whose C# also defers to the end of the card play, and reachable the same way -- the ported Phantasmal Gardener plus any multi-hit Attack. The sim does have the AfterAttack slot available: hooks.py:361-370 after_attack, used by VigorPower and GigantificationPower. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1820-1822 on_player_turn_end resets _blocked_this_turn",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. Additionally the sim's reset has NO owner or side test (powers.py:1820-1822 fires for any player turn end), where C# tests `side != base.Owner.Side` (SkittishPower.cs:73). For an enemy-owned Skittish -- the only ported case -- those agree, because the player's side is the not-owner side. They stop agreeing for a player-owned Skittish, which nothing ported creates."
+    }
+  },
+  "guards": [
+    {
+      "what": "SkittishPower.cs:58 `command.DamageProps.HasFlag(ValueProp.Move)`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1810 `ValueProp.MOVE in props`. Identical -- and note this is the weaker Move test, NOT IsPoweredAttack, so an UNPOWERED Move (a status card damaging the player) does qualify on both sides. The sim gets the distinction right where power/thorns and power/curl_up drop their gates entirely."
+    },
+    {
+      "what": "SkittishPower.cs:58 `command.ModelSource is CardModel`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1809 `card is not None`. Identical: only card attacks trigger Skittish, not monster moves or powers."
+    },
+    {
+      "what": "SkittishPower.cs:61 `damageResult.UnblockedDamage != 0`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1811 `amount > 0`; the sim's amount is the post-block unblocked loss (cmds.py:122). C#'s `!= 0` and the sim's `> 0` agree because unblocked damage is never negative."
+    },
+    {
+      "what": "SkittishPower.cs:58 `!HasGainedBlockThisTurn`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1808 `not self._blocked_this_turn`, set at :1814 before the block gain exactly as C# sets its flag at :63 before its GainBlock."
+    },
+    {
+      "what": "SkittishPower.cs:66 ValueProp.Unpowered on the block",
+      "verdict": "faithful",
+      "rationale": "powers.py:1816-1818 passes `props=ValueProp.UNPOWERED` explicitly. One of the eight powers that get this right."
+    },
+    {
+      "what": "The sim's extra `not self.owner.is_dead` test",
+      "verdict": "faithful",
+      "rationale": "powers.py:1812. C# reaches AfterAttack only through the attack pipeline and would gain block on a dying creature; the sim's guard is defensive and cannot produce a divergence, because block on a dead creature is discarded either way."
+    },
+    {
+      "what": "SkittishPower.cs:65,78 TriggerAnim BlockStart / BlockEnd",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
