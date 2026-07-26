@@ -1,0 +1,42 @@
+{
+  "unit": "card/pacts_end",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\PactsEnd.cs",
+    "sha256": "42df84e877716a849390c1bf089b11fa6597605f11fa73329e242a5a38e678ed"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\pacts_end.py",
+    "sha256": "cd2494ef8e81910674a4e9b32e92fb7b24ce50215497a3f6b80b88f3173aa88e"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (pacts_end.py:102-106) + _init_vars (108-111)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Rare, TargetType.AllEnemies)` (PactsEnd.cs:25-28) == cost 0 / ATTACK / RARE / ALL_ENEMIES."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 17 declared; the CardsVar threshold is stored as `_required_exhausted` (pacts_end.py:110-111)",
+      "verdict": "gap",
+      "issue": "`new DamageVar(17m, ValueProp.Move)` maps to `_damage = 17`, and the second var `new CardsVar(3)` (PactsEnd.cs:15-19) IS stored -- but under the name `_required_exhausted`, which is not in `Card._MAGIC_ATTRS` (cards/base.py:185-189), so `magic_number` returns None where the game prints 3. The VALUE is right and the behaviour is right; only the printed-number API misses it, which for this card is the number that decides whether the play does anything at all. A one-word rename to `_cards` would surface it. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "PactsEndCard.on_play, routed per-enemy by the framework (pacts_end.py:116-120; combat.py:481-487)",
+      "verdict": "gap",
+      "issue": "The gate and the damage are faithful: `CanDealDamage` is `CardPile.GetCards(Owner, PileType.Exhaust).Count() >= Cards.IntValue` (PactsEnd.cs:23) == `if len(ctx.player.exhaust_pile) < self._required_exhausted: return`, and the whole play is a no-op below the threshold on both sides. Leaving `handles_own_routing` False is correct for a one-hit AoE. One nuance recorded rather than verdicted: because the framework calls `on_play` once per living enemy, the sim re-evaluates the exhaust-pile gate PER ENEMY where C# evaluates it once -- harmless, since nothing in the attack changes the exhaust pile, but it would matter for a gate that the attack itself could flip. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call (AttackCommand.cs:650), computing every DamageResult before any `Kill` (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy, so each death resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage."
+    },
+    "OnUpgrade": {
+      "maps_to": "PactsEndCard._on_upgrade (pacts_end.py:113-114)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(6m)` (PactsEnd.cs:44) == `self._damage += 6` (17 -> 23). The threshold stays 3 when upgraded on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "ShouldGlowGoldInternal => CanDealDamage (PactsEnd.cs:21)",
+      "verdict": "faithful",
+      "rationale": "The gold-glow highlight reuses the same predicate. Presentation, and the sim has no card-visual layer."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

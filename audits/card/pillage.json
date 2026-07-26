@@ -1,0 +1,42 @@
+{
+  "unit": "card/pillage",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Pillage.cs",
+    "sha256": "f3cf665bd21d5ac1ec4ff09a6ede117b46cf1b2f029c4ec5e3b247d141532ed8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\pillage.py",
+    "sha256": "0cf55f5722322d0537bfee7e4dba2a86ce2da8eb187a6f530d8e1b50d11f3088"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (pillage.py:65-69) + _init_vars (71-73)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (Pillage.cs:17-20) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "PillageCard._damage = 6 (pillage.py:73)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(6m, ValueProp.Move)` (Pillage.cs:15) == `_damage = 6`, powered on both sides. The draw count is unbounded and so has no var on either side."
+    },
+    "OnPlay": {
+      "maps_to": "PillageCard.on_play (pillage.py:78-90)",
+      "verdict": "faithful",
+      "rationale": "Attack first, then C#'s do/while: `do { cardModel = await CardPileCmd.Draw(choiceContext, Owner); } while (cardModel != null && cardModel.Type == CardType.Attack && CardPile.GetCards(Owner, PileType.Hand).Count() < CardPile.MaxCardsInHand)` (Pillage.cs:29-33). All three termination conditions are reproduced, and the DO-WHILE shape matters -- at least one card is always drawn, even if the hand is already at 9 and the first draw fills it. The sim's loop draws first (pillage.py:84), then breaks if nothing came (85-86, standing in for C#'s `cardModel != null` when the piles are empty), then if the drawn card is not an Attack (87-88), then if the hand is now full (89-90) -- the same order as C#'s three `while` clauses. MaxCardsInHand is 10 on both sides (CardPile.cs:21, player.py:56)."
+    },
+    "OnUpgrade": {
+      "maps_to": "PillageCard._on_upgrade (pillage.py:75-76)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Pillage.cs:38) == `self._damage += 3` (6 -> 9)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim identifies the drawn card as `player.hand[-1]` (pillage.py:87) where C# uses the value the single-card Draw overload returns",
+      "verdict": "faithful",
+      "rationale": "Equivalent while draws append to the end of the hand, which `PlayerCombatState._draw` does. It would diverge only if a draw-time hook inserted a card after the drawn one; no ported hook does (the draw hooks add to the DRAW pile or exhaust, not to a hand position). Recorded because it is an inference from list order rather than a returned value."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,41 @@
+{
+  "unit": "card/pommel_strike",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\PommelStrike.cs",
+    "sha256": "fb29018c646413468ca54c6f10cb708c3ed8c4bb6cddb8bba4f8de99d8b9933a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\pommel_strike.py",
+    "sha256": "edbf893641430705abf54e2557fc7c81e936923f534b32e741fd9e136dd4a706"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (pommel_strike.py:109-114) + _init_vars (116-119)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (PommelStrike.cs:22-25) == cost 1 / ATTACK / COMMON / ANY_ENEMY."
+    },
+    "CanonicalTags": {
+      "maps_to": "PommelStrikeCard.tags = frozenset({\"strike\"}) (pommel_strike.py:114)",
+      "verdict": "faithful",
+      "rationale": "`new HashSet<CardTag> { CardTag.Strike }` (PommelStrike.cs:14) == the tag set, which card/perfected_strike counts and the Sharpened enchantment keys on."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 9, _cards = 1 (pommel_strike.py:118-119)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(9m, ValueProp.Move)` + `new CardsVar(1)` (PommelStrike.cs:16-20) == both numbers, both declared."
+    },
+    "OnPlay": {
+      "maps_to": "PommelStrikeCard.on_play (pommel_strike.py:125-128)",
+      "verdict": "faithful",
+      "rationale": "Order matches: attack FIRST (PommelStrike.cs:30-32), then `CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (33) == `DrawCmd.draw(ctx.player, self._cards)`. The draw is unconditional on both sides."
+    },
+    "OnUpgrade": {
+      "maps_to": "PommelStrikeCard._on_upgrade (pommel_strike.py:121-123)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(1m)` + `DynamicVars.Cards.UpgradeValueBy(1m)` (PommelStrike.cs:38-39) == `_damage += 1` (9 -> 10) and `_cards += 1` (1 -> 2). Both upgraded numbers checked -- and the +1 damage is unusually small, so transcribing it as the more common +3 would be easy."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

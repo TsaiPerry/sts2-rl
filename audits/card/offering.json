@@ -1,0 +1,47 @@
+{
+  "unit": "card/offering",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Offering.cs",
+    "sha256": "fa615e1a41ee749779ce89dab2d542ac3e4c8d2cb7b0d3d196b83ad64a218534"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\offering.py",
+    "sha256": "a65394e8ceb35c3380c37fb169951e957507379cf734c601b50ee6ec3b5ff652"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "OfferingCard.exhausts = True (offering.py:26)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Offering.cs:21) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (offering.py:21-26) + _init_vars (28-32)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Offering.cs:25-28) == cost 0 / SKILL / RARE / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_hp_loss = 6, _energy = 2, _cards = 3 (offering.py:30-32)",
+      "verdict": "faithful",
+      "rationale": "`new HpLossVar(6m)` + `new EnergyVar(2)` + `new CardsVar(3)` (Offering.cs:14-19) == all three numbers, all declared, so `base_hp_loss` and `magic_number` both report correctly."
+    },
+    "OnPlay": {
+      "maps_to": "OfferingCard.on_play (offering.py:37-44)",
+      "verdict": "faithful",
+      "rationale": "All three steps and their order match: self-damage 6 (Unblockable | Unpowered | Move, Offering.cs:32) == `DamageCmd.deal(..., props=DamageProps.CARD_HP_LOSS)` -- through the full pipeline, so `on_damage_received` and Rupture fire, unlike card/breakthrough's hand-rolled loss -- then `PlayerCmd.GainEnergy(Energy.IntValue)` (33) == `EnergyCmd.gain`, then `CardPileCmd.Draw(Cards.BaseValue)` (34) == `DrawCmd.draw`. Presentation, folded in: the energy hover tip (23)."
+    },
+    "OnUpgrade": {
+      "maps_to": "OfferingCard._on_upgrade (offering.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(2m)` (Offering.cs:39) == `self._cards += 2` (3 -> 5). Note the upgrade adds TWO and touches neither the HP loss nor the energy -- all three checked."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early on `if ctx.player.is_dead` after the 6 HP loss, skipping BOTH the energy and the draw (offering.py:41-42)",
+      "verdict": "gap",
+      "issue": "C# has no such early return: if the HP loss is lethal it still awaits the next command. DORMANT: the sim floors a death-prevented creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. Same mechanism and same verdict as card/blood_wall's, card/bloodletting's and card/brand's guards (rule 3)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
