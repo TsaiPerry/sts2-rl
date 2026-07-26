@@ -294,4 +294,4 @@ for all 15 (`relic_probes_b10.py pool`): 6 via the transcribed grab bag
   was touched.** The suite is at its 2476/31 baseline, which is the mechanical
   proof of that.
 
-**Commit:** see the `audit-relic-b10` tip (recorded in the return message).
+**Commit:** `6458e73a` on `audit-relic-b10` (not pushed).
