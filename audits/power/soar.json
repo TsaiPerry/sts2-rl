@@ -1,0 +1,46 @@
+{
+  "unit": "power/soar",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SoarPower.cs",
+    "sha256": "a1b35adba4b08d7c4e0334cce2ce935aeaa71c0f9211592780a8a3d9d4370298"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3057 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:3060-3061 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single, and the sim overrides on_stack to `pass` citing it. Per the settled census (`py tools/audit/power_census.py stack`) that reasoning is wrong: Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch. DORMANT here for a reason specific to this power and worth stating: Soar's multiplier reads `DynamicVars[\"DamageDecrease\"]`, NOT Amount (SoarPower.cs:29), so no C# behaviour depends on the amount either. The only ported applier applies it once and removes it on the dive (monsters/glory/owl_magistrate.py:59-60; OwlMagistrate.cs:134 apply, :146 PowerCmd.Remove<SoarPower>). Third-file citations, not hashed here."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:3063-3072 modify_damage_multiplicative",
+      "verdict": "faithful",
+      "rationale": "Constant checked: C# returns `DynamicVars[\"DamageDecrease\"].BaseValue / 100m` and CanonicalVars declares `new DynamicVar(\"DamageDecrease\", 50m)` (SoarPower.cs:17), i.e. exactly 0.5, which is what powers.py:3071 hard-codes. 0.5 is dyadic, so it is outside hook_dispatch G9's float-product problem (`py tools/audit/power_census.py multipliers` lists it as dyadic). `target != base.Owner -> 1m` matches powers.py:3070. The `!props.IsPoweredAttack() -> 1m` guard is carried separately below."
+    }
+  },
+  "guards": [
+    {
+      "what": "SoarPower.cs:25 `!props.IsPoweredAttack()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "The sim omits the per-power test and relies on the PIPELINE-level gate instead: cmds.py:56-58 runs modify_damage_additive/modify_damage_multiplicative only when `is_powered_attack(props)` (valueprops.py:47-49, Move && !Unpowered). C# never gates the dispatcher -- CreatureCmd.cs:261 calls Hook.ModifyDamage with ModifyDamageHookType.All for every damage type and Hook.ModifyDamageInternal (Hook.cs:2515-2538) calls every listener -- so the gate lives in each override. Equivalent HERE because this power's C# override does self-gate. The hoisting itself is damage_pipeline gap G3 and is not re-verdicted per rule 3. Independently reproduced: `py tools/audit/power_slot_probes.py ungated-modifiers` finds 37 gated vs 9 ungated C# Modify{Damage,Block}{Additive,Multiplicative} overrides. Third-file citations, not hashed here."
+    },
+    {
+      "what": "Hard-coding 0.5 where C# reads a DynamicVar",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no DynamicVar system, so the canonical default (50) is inlined as 0.5. Observably identical today; it would diverge if anything ever wrote DynamicVars[\"DamageDecrease\"] at runtime, and nothing in the decompiled source does (the key is only read, SoarPower.cs:11/29). Same shape as FlutterPower's."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

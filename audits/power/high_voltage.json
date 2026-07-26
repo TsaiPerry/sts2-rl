@@ -1,0 +1,51 @@
+{
+  "unit": "power/high_voltage",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HighVoltagePower.cs",
+    "sha256": "015990a50c382afc81255522b6147972d6140f704ba06f502e602a9ea951568a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3249 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:3251-3254 on_enemy_side_end",
+      "verdict": "faithful",
+      "rationale": "One of the minority of AfterSideTurnEnd overrides the sim puts in the RIGHT slot: AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267) at CombatManager.cs:1256 for the enemy side, and on_enemy_side_end (combat.py:345) is the sim's side-scoped enemy slot, fired once after every enemy has moved -- the same shape audits/power/tainted.json records. Amount: Zapbot.cs:37 applies HighVoltage 2 and monsters/glory/fabricator.py:101-102 applies _HIGH_VOLTAGE; non-ascension values, checked. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "HighVoltagePower.cs:26 `applier: base.Owner`",
+      "verdict": "gap",
+      "issue": "MISSING `applier=`. C# passes `base.Owner` as the applier (`PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, base.Amount, base.Owner, null)`); the sim calls `PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)` with no applier, so `applier` is None through hooks.modify_power_amount (cmds.py:297), hooks.on_power_applied (cmds.py:327) and hooks.on_power_amount_changed (cmds.py:312), and the granted StrengthPower's .applier is left None (powers.py:59). Recurring gap shape 5 from the power stream's continuation prompt. DORMANT, and executed rather than asserted: the sim's only applier readers are RitualPower.__init__ (powers.py:195, an applier-side test that fires only when Ritual itself is applied), PossessStrengthPower/PossessSpeedPower._track (powers.py:3092-3099, which requires `applier is self.owner` AND `target.side == \"player\"` AND `delta < 0` -- this application targets an enemy with a positive delta), UnsettlingLamp (relics/unsettling_lamp.py:47, which requires `applier is self.player`), and the `creature is self.applier` on_death tests of shrink/constrict/dampen/hex (powers.py:1398, 1450, 3177, 3230), none of which is StrengthPower. Reproduce with `py tools/audit/power_slot_probes.py applier-readers`. Trigger: any future on_power_applied / on_power_amount_changed listener that keys on the applier of an enemy self-buff -- or porting Malaise/Resonance, which is power_cmd G1/G2's named trigger too. Third-file citations, not hashed here."
+    },
+    {
+      "what": "HighVoltagePower.cs:23 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "The sim substitutes `if not self.owner.is_dead` (powers.py:3252) -- recurring gap shape 8, a guard the sim changes rather than drops. The two are not the same predicate: a corpse the combat RETAINED is still a side participant in C# (the \"death does not mean removal\" finding; combat.py:292 keeps a retained corpse taking turns), so C# would grant it Strength where the sim refuses. DORMANT: the only ported retain-after-death mechanism is ReattachPower on Decimillipede segments (monsters/hive/decimillipede.py), which never carry High Voltage, and a dead Zapbot/Fabricator is removed outright. Trigger: High Voltage on a creature that is retained after death -- i.e. on a Decimillipede segment or an Illusion/Reattach holder, all ported classes."
+    },
+    {
+      "what": "HighVoltagePower.cs:19 ExtraHoverTips",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal, so IsVisible is provably always true for every power in the decompiled game."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

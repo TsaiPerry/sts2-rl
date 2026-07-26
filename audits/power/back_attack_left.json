@@ -1,0 +1,36 @@
+{
+  "unit": "power/back_attack_left",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\BackAttackLeftPower.cs",
+    "sha256": "9f8ef0a68efa3833bd7384c5d916a2db8d708d90ab26552a4f48a5345c906819"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2490 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Nothing reads the Amount. This is the CORRECT handling of Single; the census's wrong 15 are the ones that override on_stack to `pass` (`py tools/audit/power_census.py stack`)."
+    }
+  },
+  "guards": [
+    {
+      "what": "The whole power is a marker with no behaviour",
+      "verdict": "faithful",
+      "rationale": "BackAttackLeftPower.cs:5-13 is Type + StackType and a doc comment saying \"This is just a marker power for SurroundedPower to check for\"; powers.py:2490 is the same two attributes with the same comment. The only reader on either side is Surrounded (SurroundedPower.cs:59/65 `dealer.HasPower<BackAttack*Power>()` vs powers.py:2561/2563 `\"back_attack_left\" in dealer.powers`), and the only appliers are the Kaiser Crab arms (Crusher.cs:117 / Rocket.cs:94 vs monsters/hive/kaiser_crab.py:46 and :115). Nothing reads the Amount, so the StackType question is inert. This is one of the two genuinely clean units in half B. Third-file citations, not hashed here."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

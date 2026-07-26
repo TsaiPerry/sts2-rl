@@ -1,0 +1,56 @@
+{
+  "unit": "power/crab_rage",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CrabRagePower.cs",
+    "sha256": "22f7549ab14eff908bf14cb06f23c79542347cf1792b09fee0008c6905b6d0f1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2508 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py tools/audit/power_census.py stack`). Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:2513-2520 CrabRagePower.on_death",
+      "verdict": "gap",
+      "issue": "Constants and props both checked and both right: `DynamicVars.Strength` is `new PowerVar<StrengthPower>(6m)` and `DynamicVars.Block` is `new BlockVar(99m, ValueProp.Unpowered)` (CrabRagePower.cs:25-29), matching powers.py:2510-2511's STRENGTH_GAIN = 6 / BLOCK_GAIN = 99 and powers.py:2519's explicit `props=VP.UNPOWERED` -- one more of the eight siblings that gets the `props` argument right where feel_no_pain and curl_up do not. Guard order matches too (`creature != base.Owner && creature.Side == base.Owner.Side`, CrabRagePower.cs:33 vs powers.py:2514), as does the effect order (Strength, then Block, then remove itself). Note both sides LACK an `IsDead` guard, unlike RavenousPower's identical shape -- so a dead-but-retained crab arm rages in both models, which is a rare case of the sim faithfully reproducing an asymmetry rather than tidying it. The gap is the missing `applier=` on the Strength grant, below. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "CrabRagePower.cs:36 `applier: base.Owner`",
+      "verdict": "gap",
+      "issue": "MISSING `applier=`. C# passes `base.Owner` (`PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, ..., base.Owner, null)`); the sim omits it, so `applier` is None through hooks.modify_power_amount (cmds.py:297), hooks.on_power_applied (cmds.py:327) and hooks.on_power_amount_changed (cmds.py:312), and the granted power's .applier is left None (powers.py:59). Recurring gap shape 5. DORMANT, executed: the sim's applier readers are RitualPower.__init__ (powers.py:195), _PossessPower._track (powers.py:3092-3099 -- needs `applier is self.owner` AND a player target AND a negative delta), UnsettlingLamp (relics/unsettling_lamp.py:47 -- needs `applier is self.player`) and the `creature is self.applier` on_death tests of shrink/constrict/dampen/hex; none matches an enemy self-buff with a positive delta. Reproduce with `py tools/audit/power_slot_probes.py applier-readers`. Same verdict as power/high_voltage's and power/territorial's (rule 3). Third-file citations, not hashed here."
+    },
+    {
+      "what": "CrabRagePower.cs:38 PowerCmd.Remove(this) vs _expire()",
+      "verdict": "deliberate-divergence",
+      "rationale": "CrabRage overrides no AfterRemoved, so the observable is identical -- the same mechanism note as power/no_draw's and power/tainted's."
+    },
+    {
+      "what": "Both arms carry CrabRage, so the FIRST arm to die triggers the other's rage",
+      "verdict": "faithful",
+      "rationale": "monsters/hive/kaiser_crab.py:47 and :116 both apply it, matching Crusher.cs and Rocket.cs. The `creature != base.Owner` guard is what stops the dying arm raging itself, and it is present on both sides."
+    },
+    {
+      "what": "CrabRagePower.cs:35 Vfx on the rage",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

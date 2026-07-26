@@ -1,0 +1,41 @@
+{
+  "unit": "power/hard_to_kill",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HardToKillPower.cs",
+    "sha256": "a5c6ec0b52940cb28eed69afe0353428f5383b6bc2e764d3ee41ce1f4afa5e97"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2080 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyDamageCap": {
+      "maps_to": "powers.py:2082-2090 modify_damage_cap (hooks.py, applied at cmds.py:61-63)",
+      "verdict": "faithful",
+      "rationale": "`target != base.Owner -> decimal.MaxValue` maps to `return None` (powers.py:2090), which cmds.py:62 reads as \"no cap\"; otherwise both return base.Amount. Two things checked. (1) The cap is applied to EVERY damage type on both sides -- cmds.py:60-63 sits OUTSIDE the `is_powered_attack` gate, and C# runs ModifyDamageCap in the same unconditional ModifyDamageInternal pass as the additive/multiplicative families (Hook.cs:2533-2542) -- so the pipeline-level gate that makes SurroundedPower a gap does not touch this power. (2) The MIN-of-all-caps aggregation matches: C# folds `if (num5 < num4) num4 = num5` over the listeners and the sim's dispatcher returns the minimum, so multiple caps compose identically (Intangible's cap 1 plus this power's). Owner is the ported Hive Exoskeleton. Third-file citations, not hashed here."
+    },
+    "AfterModifyingDamageAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "The whole body is `Flash();` -- presentation only. Recorded rather than skipped because it is the companion notification for a modifier chain, i.e. power_cmd gap G4's shape one family over, and here it costs nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

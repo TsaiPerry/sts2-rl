@@ -1,0 +1,61 @@
+{
+  "unit": "power/dampen",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DampenPower.cs",
+    "sha256": "66cb5be80b0b7575bcf55a783f224dedb4cf65c5f0514eec980972560492fa4d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3157 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:3173-3174 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.None (DampenPower.cs:22) with the sim's on_stack overridden to `pass` citing it -- the census's wrong-reasoning class (`py tools/audit/power_census.py stack`, which lists this unit as the single StackType=None member). PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally regardless of StackType, so a second application really does reach Amount 2 in C#. DORMANT: nothing on either side reads Dampen's Amount (the downgrade is one level per card and the restore is per-card bookkeeping), and monsters/glory/knights.py:71-72 applies it with amount 1. Third-file citations, not hashed here."
+    },
+    "AfterApplied": {
+      "maps_to": "powers.py:3159-3171 DampenPower.__init__",
+      "verdict": "gap",
+      "issue": "Two findings. (1) MECHANISM, the same substitution as illusion's: C#'s AfterApplied runs after PowerCmd registers the power; the sim does the work in __init__, i.e. inside `power_cls(...)` at cmds.py:324 and therefore BEFORE hooks.register and hooks.on_power_applied. Unobservable today (nothing reacts to a Dampen application) but it is the mechanism note the main report's section 7 item 6 asks for. (2) `all_cards` vs `AllCards` -- the NEW bug class: C# sweeps `base.Owner.Player.PlayerCombatState.AllCards.Where(c => c.IsUpgraded)` (DampenPower.cs:31), which is Hand+Draw+Discard+Exhaust+**Play** (PlayerCombatState.cs:70-80), where the sim's `owner.all_cards` (player.py:100-103) omits Play. DORMANT: Dampen is applied by the Magi Knight's move during the ENEMY turn (monsters/glory/knights.py:71-72), and the sim's Play limbo is only occupied between combat.py:433 (`hand.remove(card)`) and combat.py:498 (`_playing_card = None`), i.e. inside a player card play -- so no card can be in Play when this fires. Trigger: any Dampen application from a player-turn source. Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:3176-3179 DampenPower.on_death",
+      "verdict": "gap",
+      "issue": "C# tracks a SET of casters (`Data.casters`, added through the public non-override `AddCaster`, DampenPower.cs:15/73-76) and removes the power only when the LAST caster dies (`casters.Remove(creature); if (casters.Count == 0) PowerCmd.Remove(this)`, DampenPower.cs:47-55). The sim keeps a single `self.applier` and expires on that one creature's death (powers.py:3176-3179). With two Magi Knights the game would keep the downgrade until both are dead and the sim would restore the upgrades on the first death. DORMANT, by enumeration rather than assertion: KNIGHTS_ELITE is `monster_classes=[FlailKnight, SpectralKnight, MagiKnight]` (monsters/glory/knights.py:129-131) -- exactly ONE Magi Knight -- and no other ported content applies Dampen (`grep DampenPower` outside powers.py finds only knights.py:71-72). Trigger: a second Dampen applier in one combat. Third-file citations, not hashed here."
+    },
+    "AfterRemoved": {
+      "maps_to": "powers.py:3181-3186 DampenPower._expire override",
+      "verdict": "faithful",
+      "rationale": "C# restores `num` upgrade levels per card where `num` is the level recorded at downgrade time (DampenPower.cs:60-69); the sim restores with `while card.upgrade_level < level: card.upgrade()` (powers.py:3182-3184). Those agree only because C#'s CardCmd.Downgrade is a FULL reset -- CardCmd.cs:221 -> CardModel.DowngradeInternal (CardModel.cs:2135-2148) sets `CurrentUpgradeLevel = 0` and re-clones the canonical DynamicVars -- so re-applying `num` upgrades lands exactly on `num`. The sim's `card.downgrade()` (cards/base.py:150-165) drops ONE level and its docstring claims it \"Mirrors CardCmd.Downgrade\", which is wrong in wording; it is right in EFFECT, and that was checked rather than assumed: **no card in the game has MaxUpgradeLevel > 1.** `grep -rn 'override int MaxUpgradeLevel' src/Core/Models/Cards/` returns only overrides to 0 plus Mocks/MockCardModel.cs, and `grep -rn 'max_upgrade_level = [2-9]' sts2_rl/` returns nothing -- so upgrade_level is always 0 or 1 and drop-one == drop-to-zero. Faithful, with the wording flagged for the card stream. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "DampenPower.cs:43 `wasRemovalPrevented`",
+      "verdict": "faithful",
+      "rationale": "`wasRemovalPrevented: true` is passed when Hook.ShouldDie returned FALSE, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the real-death path (CreatureCmd.cs:519) -- the parameter is misnamed in the decompiled source and is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath (computed separately at CreatureCmd.cs:508). So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing on the prevented branch, so the guard is satisfied structurally. Third-file citations, not hashed here."
+    },
+    {
+      "what": "DampenPower.cs:34 `downgradedCardsToOldUpgradeLevels.Add(item, ...)` -- Dictionary.Add throws on a duplicate key",
+      "verdict": "faithful",
+      "rationale": "The sim guards with `if card.upgrade_level > 0 and card not in self._downgraded` (powers.py:3169). C# is protected by AfterApplied firing once per new power; the sim's extra test is defensive and cannot change the outcome."
+    },
+    {
+      "what": "DampenPower.cs:73-76 public void AddCaster(Creature)",
+      "verdict": "gap",
+      "issue": "A public non-override method, so the harness does not enumerate it -- recorded so a reader does not think it was skipped (the same courtesy the main report gives CrueltyPower.ModifyVulnerableMultiplier). It is the writer of the `casters` set the AfterDeath entry is about, and the sim has no analogue: the sim's applier is set once by PowerCmd.apply (cmds.py:324) and never added to."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

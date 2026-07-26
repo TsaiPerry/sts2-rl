@@ -1,0 +1,61 @@
+{
+  "unit": "power/galvanic",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\GalvanicPower.cs",
+    "sha256": "a5ab939011e8a3d9e9c54da251db9fb3a066a762a063df6d868267396b10c11e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3012 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "powers.py:3028-3031 on_combat_start (hooks.py:265, fired at combat.py:208)",
+      "verdict": "gap",
+      "issue": "Right slot -- combat.py:208 fires on_combat_start immediately before `start_turn()` at :209, which turn_structure identifies as the sim's BeforeCombatStart. The divergence is an ADDED GUARD (recurring shape 8): C# afflicts EVERY Power card unconditionally (GalvanicPower.cs:34-38 has no `Affliction == null` test at this site, and `CardCmd.Afflict` overwrites) while the sim skips already-afflicted cards (powers.py:3030 `card.affliction is None`). This is the same shape as the already-recorded tangled gap (main report section 4 item 13), where the added test changed the outcome. DORMANT here: at combat start the only other ported BeforeCombatStart afflicter is VitalSparkPower, which afflicts SKILLS (powers.py:2426-2429) -- a disjoint card set -- and no affliction survives across combats. Trigger: a second Power-card afflicter, or a persistent affliction. Also note the sim iterates `combat.player.all_cards` where C# iterates every ALLY player's `PlayerCombatState.AllCards`; single-player equivalent, and the Play-pile omission (player.py:100-103 vs PlayerCombatState.cs:70-80) cannot bite at combat start because no card is mid-play. Third-file citations, not hashed here."
+    },
+    "AfterCardEnteredCombat": {
+      "maps_to": "powers.py:3033-3035 on_card_entered_combat",
+      "verdict": "faithful",
+      "rationale": "`card.Affliction == null && card.Type == CardType.Power` (GalvanicPower.cs:44) maps exactly to powers.py:3034. This is the site where C# DOES have the null test, which is what makes its absence at BeforeCombatStart deliberate rather than an oversight -- and is why the previous entry is a gap."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:3037-3048 on_card_played",
+      "verdict": "gap",
+      "issue": "**PROPS.** C# deals the Galvanized damage with `ValueProp.Unpowered | ValueProp.Move` (GalvanicPower.cs:55); the sim passes `DamageProps.NON_CARD_UNPOWERED`, which valueprops.py:42 defines as `UNPOWERED` **alone** -- the MOVE flag is missing. The right constant exists and is one line up: `DamageProps.CARD_UNPOWERED` (valueprops.py:36) is exactly `UNPOWERED | MOVE`. This is the recurring omitted-props shape (main report section 4 item 4) in its damage form. Consequence: cmds.py:69 fires `hooks.on_attacked(...)` only when `ValueProp.MOVE in props`, so in the game this damage counts as a HIT and in the sim it does not -- the pre-block hit event that CurlUp-family powers and Flame Barrier-style reactors listen on. `is_powered_attack` is false either way (UNPOWERED is set on both), so no damage modifier changes. DORMANT: the damage targets the PLAYER and every ported on_attacked implementer is an enemy-side reactor (CurlUp, Skittish), so nothing on the player currently listens. Trigger: any player-side on_attacked listener -- and the fix is a one-word constant change. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "GalvanicPower.cs:55 damaging `cardPlay.Card.Owner.Creature`",
+      "verdict": "faithful",
+      "rationale": "powers.py:3046-3048 damages `combat.player`. Single-player equivalent."
+    },
+    {
+      "what": "GalvanicPower.cs:52 `cardPlay.Card.Affliction is Galvanized`",
+      "verdict": "faithful",
+      "rationale": "powers.py:3039 `isinstance(card.affliction, GalvanizedAffliction)`. Identical, and it means an overwritten affliction stops paying out on both sides."
+    },
+    {
+      "what": "GalvanicPower.cs:22 the AfflictionTitle StringVar",
+      "verdict": "waiver",
+      "rationale": "Localization only."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
