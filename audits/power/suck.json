@@ -1,0 +1,46 @@
+{
+  "unit": "power/suck",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SuckPower.cs",
+    "sha256": "5ebaf91333d36fa92c1fecf8a2627cbfda340d399e95016b4fa8e562e60c20e3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1612 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterAttack": {
+      "maps_to": "powers.py:1614-1630 on_damage_received",
+      "verdict": "gap",
+      "issue": "**LIVE.** WRONG HOOK, and the sim HAS the right one and does not use it. C#'s `AfterAttack(choiceContext, AttackCommand command)` fires ONCE per attack command, after every hit of every target, and is handed the whole `command.Results` (a List<List<DamageResult>>) so it can count hits and act once. The sim ports it onto `on_damage_received` (cmds.py:122), which fires PER HIT and inside the damage pipeline. `hooks.py:344` (before_attack) and `hooks.py:361` (after_attack) both exist -- the main report records them as used by Vigor and Gigantification -- so this is an unused-slot omission, not an absence. Same defect as curl_up's and skittish's (main report section 4 items 5 and 14). Two standing consequences: the KILLING-BLOW guard (cmds.py:121 skips the victim's on_damage_received on a kill, where C#'s AfterAttack is not guarded at all), and effects granted inline being visible to LATER HITS OF THE SAME attack. Third-file citations, not hashed here. Here the inline-effect consequence is a straight damage divergence, because the effect is Strength on the ATTACKER. C# counts the hit groups with any unblocked damage (`num`) and applies `base.Amount * num` ONCE after the whole attack (SuckPower.cs:28-46); the sim applies `self.amount` from inside each hit (powers.py:1629-1630), so hit 2 of a multi-hit attack is boosted by the Strength hit 1 earned. **EXECUTED** with the ported Underdocks Fossil Stalker, whose LASH is `_LASH_DMG = 3` x `_LASH_HITS = 2` (monsters/underdocks/fossil_stalker.py:22-23, 72): the sim takes the player from 80 to **71** (9 damage) where the game deals **6** (3 + 3, both hits unboosted); the final Strength is 6 on both sides, so the total Strength is right and only the mid-attack damage is wrong. Reachable from the first Fossil Stalker LASH the player fails to fully block -- ported act-1 Underdocks content, no co-occurrence needed. The guards themselves are faithful: `command.Attacker != base.Owner`, `command.TargetSide == base.Owner.Side` and `!command.DamageProps.IsPoweredAttack()` map to powers.py:1624-1627. Also note the sim omits the `applier=` C# passes (`base.Owner`, SuckPower.cs:45) -- the same dormant shape as power/high_voltage's, folded in here rather than raised again. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "SuckPower.cs:32-36 the pet de-duplication (RemoveAll on the pet owner's results)",
+      "verdict": "waiver",
+      "rationale": "Pets/Osty belong to the other characters; in Ironclad scope each hit group has one receiver and the de-duplication is a no-op."
+    },
+    {
+      "what": "Counting GROUPS with unblocked damage, not individual results",
+      "verdict": "gap",
+      "issue": "C#'s `num` counts outer lists (per-hit result groups) in which ANY result had unblocked damage, so a single AoE hit that connects with three creatures counts 1. The sim's per-hit hook counts every connecting RESULT, so the same AoE would grant 3x. Folded into the hook entry's rollup; carried separately because it survives an after_attack-slot fix. Dormant: the Fossil Stalker has no AoE move (monsters/underdocks/fossil_stalker.py -- TACKLE, LATCH and LASH are all single-target)."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

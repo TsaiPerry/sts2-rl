@@ -16,23 +16,26 @@ list.
 
 | | |
 |---|---|
-| half-B units audited | 30 / 48 (batches 1-2) |
-| power kind overall | 75 / 134 audited, 0 invalid, 0 stale |
+| half-B units audited | **48 / 48 — COMPLETE** (batches 1-3) |
+| power kind overall | 93 / 134 audited, 0 invalid, 0 stale |
 | suite | 2476 passed / 31 xfailed at every batch gate, unchanged |
-| commits | batch 1 `c27003a4`; batch 2 see the branch log |
+| commits | batch 1 `c27003a4`; batch 2 `8696d479`; batch 3 see the branch log |
 
 ## 0. Headline findings
 
 1. **`turn_structure` G5 is settled and stays DORMANT — but its dormancy
    argument is wrong and one of its premises is false.** Section 1.
-2. **Four NEW live gaps**, all executed. Section 2:
+2. **Five NEW live gaps**, all executed. Section 2:
    - **`rampart`** drops C#'s extra-turn guard (Pael's Eye witness);
    - **`flutter`** re-rolls the stunned hopper's move on the **wrong RNG
      stream**;
    - **`power_cmd` G6 is LIVE** — its own record says "no concrete broken
      interaction is demonstrated"; `adaptable` demonstrates one;
    - **`minion` / `reattach`** — the missing `ShouldOwnerDeathTriggerFatal`
-     hook lets Feed pay out on a minion's death.
+     hook lets Feed pay out on a minion's death;
+   - **`suck`** — C#'s `AfterAttack` ported onto the per-hit
+     `on_damage_received`, so the Fossil Stalker's 2-hit LASH deals 9 in the sim
+     and 6 in the game.
 3. **No fourth non-dyadic multiplicative factor** in half B. Section 4.
 4. Two new **recurring gap shapes** for `PROMPT.md`, plus independent
    reproductions of two existing seam findings' populations and two
@@ -108,6 +111,17 @@ Three specific corrections to the main report's section 6:
    the sim clearing the beetle's block only after the Bowlbugs have moved cannot
    lose block the game kept — the same shape as G5's existing Guardbot argument,
    one encounter over.
+
+**Note on the split (coordinator correction, folded in):**
+`battleworn_dummy_time_limit` is **half A's** unit, not half B's — the
+continuation prompt's split list is wrong about it, and half A has audited it.
+Half B did not write that record. Half A independently reached the same
+single-element-list finding. So the G5 question comes down to **`asleep` and
+`slumber` alone**, which is what the two paragraphs below settle: `asleep`'s
+effect never leaves its own owner, and `slumber`'s owner is the last creature in
+its (genuinely 3-strong) encounter. Neither produces a witness, and **both are
+labelled dormant-with-reason rather than asserted** — the reason being the
+roster, which is checkable by a committed probe.
 
 **What this means for the seam record** (reported, not edited — half B owns
 neither `audits/seam/**` nor `docs/audit/seams/**`): G5's verdict does not
@@ -263,6 +277,34 @@ docstring asserts the opposite ("death-prevented targets such as Illusions don't
 count, which falls out of the is_dead check here"). That reasoning is right for
 Illusion (which auto-applies Minion) and **wrong for Adaptable**.
 
+### 2.5 `suck` — `AfterAttack` ported onto the per-hit hook, and here it costs damage
+
+C#'s `AfterAttack(choiceContext, AttackCommand command)` fires **once** per attack
+command with the whole `command.Results`, so `SuckPower` counts the connecting
+hit groups and applies `base.Amount * num` Strength once, *after* the attack
+(`SuckPower.cs:28-46`). The sim ports it onto `on_damage_received`
+(`powers.py:1614-1630`), which fires **per hit and inside the damage pipeline**,
+so hit 2 of a multi-hit attack is boosted by the Strength hit 1 earned. The sim
+has the right slot and does not use it: `hooks.py:361` `after_attack`, which
+Vigor and Gigantification already use.
+
+**Executed.** The ported Underdocks Fossil Stalker's LASH is `_LASH_DMG = 3` ×
+`_LASH_HITS = 2` (`monsters/underdocks/fossil_stalker.py:22-23,72`):
+
+```
+player hp: 80 -> 71   total lost: 9     <- sim
+stalker strength after: Strength(6)     <- correct on both sides
+game: AfterAttack fires once after the whole 2-hit LASH -> 3 + 3 = 6
+```
+
+The total Strength is right (6 on both sides); only the mid-attack damage is
+wrong, by 50%. No co-occurrence needed — it is the first Fossil Stalker LASH the
+player fails to fully block, in ported act-1 content. This is the third instance
+of the main report's `curl_up` / `skittish` defect (section 4 items 5 and 14),
+and the first where the inline effect is **damage** rather than block.
+`painful_stabs` is the fourth instance and is dormant, because its inline effect
+is Wounds in the discard, which nothing mid-attack reads.
+
 ## 3. New recurring gap shape: the *substituted* guard `is_dead` for `participants.Contains(Owner)`
 
 Four half-B units (`high_voltage`, `territorial`, `nemesis`, and — for the
@@ -339,10 +381,49 @@ recorded here and each unit's record cross-references them:
   none — those hand-rolled expiries are the sim compensating for the missing
   strip, one power at a time.
 
+### 3d. Batch 3's shape: the dealer-side after-damage event the sim cannot express
+
+`imbalanced` and `paper_cuts` both override C#'s **`AfterDamageGiven`** and both
+are ported onto the victim's `on_damage_received`, filtered on
+`dealer is self.owner`. The sim *has* a dealer-side event — `on_damage_dealt`
+(`hooks.py:469`) — and neither uses it, for a reason that is itself the finding:
+`cmds.py:123` fires it only `if dealer is not None and hp_lost > 0`, so **the
+sim's dealer-side event cannot see a fully blocked or zero-damage hit at all**,
+which is precisely what `ImbalancedPower` keys on (`result.WasFullyBlocked`).
+
+Consequences of the substitution: `cmds.py:121`'s killing-blow guard suppresses
+the sim's hook when the hit killed the *victim* — and `cmds.py:119-120`'s own
+comment says "AfterDamageGiven (on_damage_dealt) is not guarded and still fires
+on the kill" — so both powers silently stop working on a lethal blow in the sim
+and keep working in the game. Both are dormant (the lethal-blow case is only
+observable through a death prevention, and on that path `cmds.py:112` sets
+`hp = 1` so the sim fires after all), but the fix is a real one: give
+`on_damage_dealt` the C# firing condition.
+
+### 3e. Two more `AfterRemoved` bodies hand-inlined at a single call site
+
+`burrowed` (dump all block) and `vital_spark` (clear every Tainted affliction)
+both have behavioural C# `AfterRemoved` bodies and no sim `AfterRemoved` slot, so
+both hand-inline the work at *one* removal site — `on_block_broken` and
+`on_death` respectively. Every other removal route therefore skips it. Both are
+dormant **only because the sim never strips powers on death either** (section
+3c), so death is not currently a second removal route — the two gaps cancel, and
+**fixing either one alone re-opens the other.** That coupling is worth carrying
+into the gap queue as a pair rather than as two independent items.
+
 ## 4. Non-dyadic multiplicative factors — no fourth one in half B
 
-Answering the prompt's loud question: **no.** Half B's four multiplicative
-factors are Flutter `0.5`, Soar `0.5`, Surrounded `1.5` and Slow `0.1`. The
+Answering the prompt's loud question: **no**, and now for all 48 units rather
+than for a batch. The census enumerates **26 literal multiplicative operands
+across all 134 ported powers, of which 2 are non-dyadic** — and both were already
+named. Half B's four factors are Flutter `0.5`, Soar `0.5`, Surrounded `1.5` and
+Slow `0.1`. The four shapes the coordinator flagged as worth a close look turn
+out not to be multiplicative at all: `hardened_shell` is a `min()` HP-loss cap,
+`rampart` is an unpowered block *grant*, `dampen` has no numeric modifier, and
+`withering_presence` is an integer countdown. Combined with half A's finding
+(`no_block` ×0.0, `diamond_diadem` ×0.5, `unmovable` ×2.0, `gigantification` ×3,
+all dyadic), **`hook_dispatch` G9's factor population is now closed at three:
+Shrink `0.7`, Slow `0.1`, and the computed `Vulnerable + Cruelty` factor.** The
 first three are dyadic; `0.1` is the one the main report's section 3 already
 raised as G9's second missing factor, and it is in half B (`slow`). Both `0.5`s
 were checked against the game data rather than assumed: `SoarPower.cs:17` and
@@ -473,13 +554,56 @@ of which earned their keep this batch):
 
 ## 7. Harness / roster problems (half B owns neither; reporting per the contract)
 
-Nothing new beyond the main report's section 8. Specifically checked:
+Nothing new beyond the main report's section 8. Both of the harness defects the
+coordinator warned about were checked against all 48 half-B files and **neither
+bites in half B**:
 
-- `harness.list_overrides`'s tuple-return blind spot (section 8 item 2) did
-  **not** bite in batch 1: no half-B C# file has a `public override (A, B) Name`.
-  Verified by reading all 15 files in full.
-- The roster resolved all 15 units correctly; no `name_overrides.json` change is
-  needed for them.
+- **Tuple-return overrides** (`public override (A, B) Name`): a grep of all 46
+  half-B `*Power.cs` files returns nothing, so no hook is silently
+  under-enumerated. Confirmed by reading every file in full as well.
+- **A C# base class other than `PowerModel`**: every one of the 46 files declares
+  `public sealed class XPower : PowerModel`. So the base-class blind spot half A
+  hit on six units does not apply here. Note the near-miss worth recording: the
+  **sim** side *does* subclass — `PossessStrengthPower` and `PossessSpeedPower`
+  both extend `_PossessPower` (`powers.py:3075`) — but the harness enumerates the
+  **C#** file's overrides, so the sim-side hierarchy is invisible to it either
+  way and the records simply cite the base class's line numbers.
+- The roster resolved all 48 units correctly; no `name_overrides.json` change is
+  needed for any of them.
+- **Roster mis-resolution in the *prompt*, not the harness:** the continuation
+  prompt's half-B list includes `battleworn_dummy_time_limit`, which is really
+  half A's (half A has audited it). Half B did **not** write that record. The
+  live-roster check the prompt itself recommends is what caught it, which is an
+  argument for keeping that step.
+
+### 7b. The `combat._rng` class half A found — checked on all of half B, and it does not bite
+
+Half A found **seven** power units reaching for `combat._rng` (the shared legacy
+`random.Random`) where C# names a stream. Half B has exactly **three**
+`combat._rng` uses, all in the same shape — a mid-combat monster spawn's
+constructor, whose `Monster.__init__` rolls HP from the passed rng
+(`monsters/base.py:78-79`): `infested` (`powers.py:1420`, Wriggler),
+`surprise` (`powers.py:1703`, Sneaky/Fat Gremlin) and `stock`
+(`powers.py:2981`, Axebot). **All three are repaired one level up and are
+therefore faithful:** `CreatureCmd.add` calls `combat.assign_parity_hp(creature)`
+(`cmds.py:254` → `combat.py:259-267`), which re-rolls a mid-combat spawn's HP on
+the **Niche** stream against the current siblings, mirroring
+`CombatState.CreateCreature`'s `SetUniqueMonsterHpValue`, and is a no-op in
+legacy mode where the shared rng *is* the model. The repair is load-bearing
+rather than vacuous — all three spawns really have HP variance (Wriggler 17-21,
+Axebot 70-78, Gremlins 10-17). The constructor's `randint` still consumes a draw
+from the unseeded shared rng in parity mode, which is harmless because no parity
+content reads that stream. A guard entry recording this was added to each of the
+three records.
+
+The remaining `combat._rng` sites in `powers.py` (`:514` Aggression, `:792`,
+`:1041` Stampede, `:2826`, `:3493`, `:3873`) are **half A's units**, which is
+consistent with half A's count of seven.
+
+**Where the RNG class DOES bite in half B is not `combat._rng` at all — it is
+`flutter`'s use of the monster's own `_rng` instead of `_move_rng` for a move
+re-roll (section 2.2), which is LIVE.** So the checklist line should be about the
+*move-roll* accessor, not only about `combat._rng`.
 
 Additionally confirmed for batch 2: **`ThieveryPower` and `HeistPower` — two of
 the four unauditable powers (main report section 8 item 1) — are load-bearing
@@ -511,7 +635,29 @@ can record.
   script, commit the script" rule. It is the reproduction path for every number
   in section 1 and for the `ungated-modifiers` population in section 5.
 
-## 9. Half B's residual queue — 18 units
+## 9. Half B is COMPLETE — 48 / 48, nothing residual
+
+Batch 3 (18 units) finished the half: `back_attack_left`, `back_attack_right`,
+`hard_to_kill`, `mind_rot`, `waste_away`, `burrowed`, `slippery`,
+`personal_hive`, `suck`, `painful_stabs`, `paper_cuts`, `imbalanced`, `plow`,
+`galvanic`, `vital_spark`, `sloth`, `chains_of_binding`, `withering_presence`.
+
+**Five half-B units came out fully `faithful`** — `personal_hive`,
+`hard_to_kill`, `mind_rot`, `waste_away` and (modulo their marker-only nature)
+`back_attack_left`/`back_attack_right`. That is a better ratio than the main
+report's 2-in-45 and is worth carrying: the enemy powers that touch a single
+well-defined modifier hook (`ModifyDamageCap`, `ModifyHandDraw`,
+`ModifyMaxEnergy`) are ported cleanly; the ones that touch *turn structure*,
+*death* or *whole-attack* hooks are where every gap lives.
+
+What remains for the power kind overall is the **41 units of half A's original
+scope plus the 4 unauditable ones**, not half B's business. The one thing half B
+would flag for whoever picks the kind back up: of the four unauditable units
+(`flex_potion`, `heist`, `speed_potion`, `thievery`), **two are load-bearing
+dependencies of an audited half-B unit** (`surprise`), so the 4-line `ALL_POWERS`
+fix has a real correctness consequence and not just a coverage one.
+
+### The queue as it stood after batch 2, kept for the merge record — 18 units
 
 Batch 2 (the death / minion / removal family, 15 units) is **done**:
 `adaptable`, `illusion`, `infested`, `minion`, `ravenous`, `reattach`,

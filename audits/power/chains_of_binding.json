@@ -1,0 +1,51 @@
+{
+  "unit": "power/chains_of_binding",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ChainsOfBindingPower.cs",
+    "sha256": "24b13c2fd3f33f6ad639b4f3bf40b001a3a8253eb5162243fe1f0159331bf9a2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3300 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterCardDrawn": {
+      "maps_to": "powers.py:3313-3318 on_card_drawn (hooks.py:391)",
+      "verdict": "gap",
+      "issue": "Two divergences. (1) A DROPPED GUARD: C# requires `base.CombatState.CurrentSide == base.Owner.Side` (ChainsOfBindingPower.cs:38), so only cards drawn during the PLAYER's own turn are Bound; the sim has no side test (powers.py:3313-3314), so a card drawn during the ENEMY turn is Bound in the sim and not in the game. Enemy-turn draws are ported and ordinary (any enemy effect that makes the player draw), so this is the live-shaped half. (2) The BUDGET is counted differently: C# counts `CardAfflictedEntry` history entries this turn by this actor with a Bound affliction (ChainsOfBindingPower.cs:40) -- so an affliction the player OVERWRITES still consumes budget, and the history is the source of truth -- where the sim keeps its own `_afflicted_this_turn` counter reset at turn end (powers.py:3311, 3335). Equivalent while nothing else writes Bound; the sim's counter is the cheaper model of the same number. Also `Affliction<Bound>().CanAfflict(card)` becomes `card.affliction is None`, which is the sim's affliction-slot rule. DORMANT overall pending an executed enemy-turn-draw witness against the Queen (monsters/glory/queen.py); labelled dormant per binding rule 6 rather than asserted live. Third-file citations, not hashed here."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "powers.py:3326-3329 on_card_played (combat.py:514)",
+      "verdict": "gap",
+      "issue": "WRONG SIDE OF THE PLAY, the same shape as SlothPower's: C# sets `boundCardPlayed` in BeforeCardPlayed (ChainsOfBindingPower.cs:48-65) and the sim sets it in on_card_played, after resolution -- while the sim's `before_card_played` slot (combat.py:466) exists and is used by StranglePower and SurroundedPower. Consequence: a Bound card that plays a second Bound card during its own resolution is refused by the game's ShouldPlay and allowed by the sim's. C#'s `card.IsDupe -> return` guard is also dropped, which matters for exactly the Replay case hook_dispatch gap G4 covers: a doubled Bound card must not consume the once-per-turn allowance twice, and the sim has no IsDupe notion. DORMANT on the same undemonstrated-co-occurrence basis as sloth's. Third-file citations, not hashed here."
+    },
+    "ShouldPlay": {
+      "maps_to": "powers.py:3320-3323 should_play_card (hooks.py:682)",
+      "verdict": "faithful",
+      "rationale": "`card.Owner.Creature != base.Owner -> true`, `!(card.Affliction is Bound) -> true`, else `!boundCardPlayed` (ChainsOfBindingPower.cs:67-78) maps to powers.py:3320-3323, the owner test being a single-player tautology. The `AutoPlayType` parameter maps to the sim's `auto_play` flag, which neither side reads."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "powers.py:3331-3340 on_player_turn_end (combat.py:654)",
+      "verdict": "faithful",
+      "rationale": "CORRECT slot: AbstractModel.BeforeSideTurnEnd is dispatched by Hook.BeforeTurnEnd, which for the player side is the sim's on_player_turn_end (combat.py:654) -- the section-5 slot table's `BeforeSideTurnEnd -> on_player_turn_end` row, and one of the few rows the sim gets right. Both the flag reset and the Bound-affliction sweep match (ChainsOfBindingPower.cs:86-94 vs powers.py:3334-3340); the sim additionally resets `_afflicted_this_turn`, which is its stand-in for the history query. The `all_cards`-omits-Play concern does not bite: the sweep runs at turn end, when nothing is mid-play (the sim's Play limbo spans combat.py:433 to :498 only)."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,46 @@
+{
+  "unit": "power/burrowed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\BurrowedPower.cs",
+    "sha256": "cb3883038f4216255583b135beadf5e91ae334f9d732778d827a5c2df6093956"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2283 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:2285-2286 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the census's 15-unit wrong-reasoning class (`py tools/audit/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing on either side reads Burrowed's Amount (it is a pure block-persistence marker), and monsters/hive/tunneler.py applies it once."
+    },
+    "ShouldClearBlock": {
+      "maps_to": "powers.py:2288-2291 should_clear_block (hooks.py:613, consulted at combat.py:296 for enemies and player.py:157 for the player)",
+      "verdict": "faithful",
+      "rationale": "`base.Owner != creature -> true, else false` maps exactly to powers.py:2288-2291. This is the power's whole point (the Tunneler's block persists between turns) and it is right. Note the cross-reference: turn_structure gap G2 is about WHICH listener is the ShouldClearBlock preventer in each model (Barricade vs Sturdy Clamp) -- a listener-order question, not re-verdicted here, and inert for this power because it is the only preventer in a Tunneler fight."
+    },
+    "AfterBlockBroken": {
+      "maps_to": "powers.py:2293-2300 on_block_broken (hooks.py:490, fired at cmds.py:80-81)",
+      "verdict": "gap",
+      "issue": "The trigger condition is right and the trigger POINT is right -- C# fires on the block actually breaking and cmds.py:78-81 reproduces the exact `Block <= 0 && blockedDamage > 0` semantics its own comment quotes (an exact break counts). Two divergences. (1) The STUN's follow-up state is dropped: C# calls `tunneler.GetStunned()` and THEN `CreatureCmd.Stun(base.Owner, tunneler.StillDizzyMove, \"BITE_MOVE\")` (BurrowedPower.cs:31-32), naming the state the Tunneler resumes on; the sim calls only `self.owner.get_stunned()` (powers.py:2298) and leaves the stun and the resume state to the monster. Whether that is observable is the Tunneler's record to settle, but it is the same shape as FlutterPower's -- where the follow-up-state re-roll turned out to be a LIVE wrong-RNG-stream gap (audits/power/flutter.json) -- so it is flagged, not waived. (2) ORDER: C# stuns first and removes the power SECOND (BurrowedPower.cs:32-33); the sim expires first (powers.py:2299) and then zeroes the block. Since AfterRemoved is what dumps the block, C#'s stun happens while the block is still there and the sim's after it is gone. Third-file citations, not hashed here."
+    },
+    "AfterRemoved": {
+      "maps_to": "powers.py:2300 the inline `self.owner.block = 0`",
+      "verdict": "gap",
+      "issue": "C#'s AfterRemoved is `CreatureCmd.LoseBlock(oldOwner, 999999999m)` -- dump ALL the block -- and it runs on EVERY removal path, including the automatic strip when the owner dies (CreatureCmd.cs:533 then each power's AfterRemoved). The sim has no AfterRemoved analogue and hand-inlines the block dump at the single on_block_broken call site (powers.py:2300, comment `# AfterRemoved: LoseBlock(all)`). So a Burrowed removed any OTHER way keeps its block in the sim: notably on the owner's DEATH, where C# strips the power, fires AfterRemoved and dumps the block. DORMANT today only because the sim never strips powers on death either (see content-power-report-b.md section 3c) so no other removal path exists -- which means these two gaps cancel, and fixing either one alone re-opens this. Named trigger: any second Burrowed removal route, e.g. wiring ShouldPowerBeRemovedAfterOwnerDeath's default. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

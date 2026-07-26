@@ -31,6 +31,11 @@
   },
   "guards": [
     {
+      "what": "powers.py:2981 passes `combat._rng` for the spawn's HP roll",
+      "verdict": "faithful",
+      "rationale": "The sim passes `combat._rng` -- the shared LEGACY random.Random -- to the spawned monster's constructor (powers.py:2981), and Monster.__init__ rolls the spawn's HP from it (monsters/base.py:78-79 `hp = rng.randint(self.min_hp, self.max_hp)`), where the game rolls a mid-combat spawn's HP on a NAMED stream. Half A found seven power units reaching for `combat._rng` where C# names a stream, so this was checked as a systematic class rather than trusted: the sim REPAIRS it one level up. `CreatureCmd.add` calls `combat.assign_parity_hp(creature)` (cmds.py:254 -> combat.py:259-267), which re-rolls a mid-combat spawn's HP on the **Niche** stream against the current siblings, mirroring CombatState.CreateCreature's SetUniqueMonsterHpValue -- and it is a no-op in legacy mode, where the shared rng IS the model. The Axebot really does have HP variance (min_hp 70, max_hp 78), so the repair is load-bearing rather than vacuous. Faithful, with the caveat that the constructor's `randint` still consumes a draw from the unseeded shared rng in parity mode -- harmless, because no parity content reads that stream. Third-file citations, not hashed here."
+    },
+    {
       "what": "StockPower.cs:18 `!wasRemovalPrevented`",
       "verdict": "faithful",
       "rationale": "`wasRemovalPrevented: true` is passed when Hook.ShouldDie returned FALSE, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the real-death path (CreatureCmd.cs:519) -- the parameter is misnamed in the decompiled source and is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath (computed separately at CreatureCmd.cs:508). So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing on the prevented branch, so the guard is satisfied structurally. Third-file citations, not hashed here."

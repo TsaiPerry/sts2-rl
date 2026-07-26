@@ -1,0 +1,51 @@
+{
+  "unit": "power/slippery",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SlipperyPower.cs",
+    "sha256": "f9d568f0b566404d1dee89e8e2a3a93fda5f2b7ee02993a3acf12333d5aef51f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1511 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only scaling (MultiplayerScalingModel). Out of scope; the sim is single-player."
+    },
+    "ModifyHpLostAfterOsty": {
+      "maps_to": "powers.py:1513-1521 modify_hp_lost (hooks.py:126-147, called at cmds.py:86)",
+      "verdict": "gap",
+      "issue": "The formula is exact: `target != base.Owner -> amount`, `amount < 1m -> amount`, else `1m` (SlipperyPower.cs:19-30) vs powers.py:1520-1522. The BeforeOsty/AfterOsty phase collapse is already resolved as faithful by damage_pipeline (Osty redirection is waived, so its steps 8 and 11 fold into one call). What is left is that the sim runs ALL seven HP-loss modifiers in one registration-order chain where C# runs a BeforeOsty pass then an AfterOsty pass then an AfterOstyLate pass -- hook_dispatch gap G3, not re-verdicted. It matters for THIS power because HardenedShellPower is the only `ModifyHpLostBeforeOsty*` implementer in the game and must therefore run before this one, and min-then-cap is not cap-then-min; see audits/power/hardened_shell.json, where the ordering was EXECUTED and found to coincide today (sim order ['HardenedShellPower', 'TheBoot', 'TungstenRod']). DORMANT by that executed check. Third-file citations, not hashed here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:1524-1533 on_damage_received -> Power._tick",
+      "verdict": "gap",
+      "issue": "Right slot (AfterDamageReceived -> cmds.py:122, killing-blow guard on both sides) and the right condition in shape: `target == base.Owner && result.UnblockedDamage >= 1` vs `target is self.owner and amount >= 1`. The divergence is WHICH NUMBER is tested. C#'s `UnblockedDamage` is post-block but PRE-HP-loss-modifier, so the stack is consumed whenever any damage got through the block. The sim's `amount` is `hp_lost`, i.e. post-block AND post-`modify_hp_lost` (cmds.py:86 then :122) -- and this power's own cap is one of those modifiers. It still reaches 1, so a stack is consumed either way HERE; but with HardenedShellPower's cap (or a future 0-flooring modifier) on the same creature the sim can see 0 where C# sees a positive UnblockedDamage and so FAIL to consume a stack, making Slippery last longer in the sim. Same `hp_lost`-for-`UnblockedDamage` substitution as power/hardened_shell.json's AfterDamageReceived entry -- one mechanism, one verdict (rule 3). DORMANT: no ported creature carries both Slippery and a second HP-loss modifier. Third-file citations, not hashed here."
+    },
+    "GetScaledAmountForMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "`amount * combatState.Players.Count` -- multiplayer-only. Out of scope."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
