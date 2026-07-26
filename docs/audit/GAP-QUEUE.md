@@ -135,9 +135,11 @@ content.
   `MoveRepeatType.CANNOT_REPEAT`-plus-counter shape. Failing test asserts the
   branch's *selection frequency* over a fixed seed matches the C# semantics
   (e.g. Flail Knight cannot pick `FLAIL` a third consecutive time).
-- **radius** This is the bug class whose earlier fix (TwigSlimeM + Flyconid)
-  greened 89U's act-0 player HP; the same misreading survives in five more
-  monsters. Content units: Flail Knight, Hunter Killer, Scroll of Biting,
+- **radius** This is the bug class whose earlier fix greened a conformance seed
+  (the TwigSlimeM + Flyconid fix that closed 89U's act-0 player-HP delta — that
+  attribution is project history, not something the record states); the same
+  misreading survives in five more monsters. Content units: Flail Knight,
+  Hunter Killer, Scroll of Biting,
   Spectral Knight (the `knights` elite), Fake Merchant. Related but distinct:
   `monster_state_machine/G7` (maxTimes == 0) and `/G8` (construction validation)
   are the other two `AddBranch`-semantics mechanisms.
