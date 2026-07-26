@@ -1,0 +1,36 @@
+{
+  "unit": "card/infernal_blade",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\InfernalBlade.cs",
+    "sha256": "4f8468b90c24c666b20437b60cd5c06e8c910d6cdae7ef29395fae4e50f10e94"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\infernal_blade.py",
+    "sha256": "37ff6079bd824334debd034331858e9b884ddbfc2eb0adf0e45bec24427deb61"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "InfernalBladeCard.exhausts = True (infernal_blade.py:191)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (InfernalBlade.cs:13) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (infernal_blade.py:186-191) + _init_vars (193-194)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (InfernalBlade.cs:15-18) == cost 1 / SKILL / UNCOMMON / SELF."
+    },
+    "OnPlay": {
+      "maps_to": "InfernalBladeCard.on_play (infernal_blade.py:199-212)",
+      "verdict": "faithful",
+      "rationale": "THE STREAM IS HANDLED CORRECTLY HERE, and this is the pattern the other generation cards need. C# is `CardFactory.GetDistinctForCombat(Owner, characterPool.Where(c => c.Type == Attack), 1, Owner.RunState.Rng.CombatCardGeneration)` then `SetToFreeThisTurn()` then `AddGeneratedCardToCombat(cardModel, PileType.Hand, Owner)` (InfernalBlade.cs:22-29). The sim branches on `crng.is_parity` and calls `get_distinct_for_combat_parity(crng.card_gen, 1, CardType.ATTACK)` (infernal_blade.py:203-205), keeping the shared legacy rng only for non-parity RL runs (207-209) -- exactly what card/discovery, card/distraction, card/jack_of_all_trades, card/jackpot and card/hidden_gem fail to do. The free-this-turn-then-add order matches, and `set_free_this_turn` is cleared by the turn-start reset (cards/base.py:265-269) like C#'s EndOfTurn expiration. The C# filter is the CHARACTER pool restricted to Attacks; `random_pool_cards`/`get_distinct_for_combat_parity` default to IRONCLAD_POOL, the same membership."
+    },
+    "OnUpgrade": {
+      "maps_to": "InfernalBladeCard._on_upgrade (infernal_blade.py:196-197)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (InfernalBlade.cs:34) == `self._energy_cost -= 1` (1 -> 0). No clamp is needed at this base cost, so the missing `max(0, ...)` other cards use is harmless here."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

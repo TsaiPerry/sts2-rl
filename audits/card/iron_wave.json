@@ -1,0 +1,41 @@
+{
+  "unit": "card/iron_wave",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\IronWave.cs",
+    "sha256": "44ef49a18d0726e3f8c2cb897b8aa0274fcde7158ca4612f6b9aac5436476281"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\iron_wave.py",
+    "sha256": "40da30b2f429fba04abb2091ddefc7a908bd11b97b921c315812c9444b5dfcb4"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "IronWaveCard.gains_block = True (iron_wave.py:342)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (IronWave.cs:14) == the class attribute -- notable because this is an ATTACK that gains block, so the flag cannot be inferred from the card type."
+    },
+    "ctor": {
+      "maps_to": "class attrs (iron_wave.py:341-346) + _init_vars (348-351)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (IronWave.cs:22-25) == cost 1 / ATTACK / COMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 5, _block = 5 (iron_wave.py:350-351)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(5m, ValueProp.Move)` + `new BlockVar(5m, ValueProp.Move)` (IronWave.cs:16-20) == both numbers, both declared. The BlockVar is Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "IronWaveCard.on_play (iron_wave.py:357-360)",
+      "verdict": "faithful",
+      "rationale": "Order matches and it is the counter-intuitive one: BLOCK FIRST (`CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)`, IronWave.cs:30), THEN the attack (31-33). The sim has it the same way round (iron_wave.py:359-360), which matters because thorns or a Flame Barrier retaliation from the attack lands against the block this card just gained. Presentation, folded in: WithHitFx."
+    },
+    "OnUpgrade": {
+      "maps_to": "IronWaveCard._on_upgrade (iron_wave.py:353-355)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` + `DynamicVars.Block.UpgradeValueBy(2m)` (IronWave.cs:38-39) == `_damage += 2` (5 -> 7) and `_block += 2` (5 -> 7). Both upgraded numbers checked."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,31 @@
+{
+  "unit": "card/juggling",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Juggling.cs",
+    "sha256": "f80bc151ffc077d238aff0266f86f352f1d11a4fa85ed214b0ac1f1230002526"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\juggling.py",
+    "sha256": "ac1997de172ed84d331ba6c2c525f97c5532bdf6ae6d8875288ef2f167088ea3"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (juggling.py:420-424) + _init_vars (426-427)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Juggling.cs:11-14) == cost 1 / POWER / UNCOMMON / SELF. No keywords, no CanonicalVars (the power amount is the literal 1)."
+    },
+    "OnPlay": {
+      "maps_to": "JugglingCard.on_play (juggling.py:432-435)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<JugglingPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (Juggling.cs:19) == `PowerCmd.apply(ctx.hooks, ctx.player, JugglingPower, 1, applier=ctx.player)`. Presentation, folded in: TriggerAnim (18)."
+    },
+    "OnUpgrade": {
+      "maps_to": "JugglingCard._on_upgrade (juggling.py:429-430)",
+      "verdict": "gap",
+      "issue": "`AddKeyword(CardKeyword.Innate)` (Juggling.cs:24) maps to `self.innate = True`, correct at upgrade level 1. DOWNGRADE IS STICKY: `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars` and re-applying upgrades, and `_init_vars` does not re-seed the flag, so the instance attribute written by `_on_upgrade` survives. C# `DowngradeInternal` rebuilds the whole keyword set from canonical (CardModel.cs:2143). EXECUTED: `py tools/audit/card_probes.py downgrade` lists this card among the 5 of 203 that do not restore. LIVE -- `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` and `powers.py:3171` (DampenPower). Same mechanism and same verdict as card/aggression's OnUpgrade entry (rule 3). The fix is one line: re-seed the flag in `_init_vars`, as card/entropy and card/gold_axe do. Observable: a downgraded Juggling still starts every combat in the opening hand in the sim; in the game it does not. Fourth of the five sticky cards, and the third with this exact Innate shape (card/aggression, card/hello_world)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
