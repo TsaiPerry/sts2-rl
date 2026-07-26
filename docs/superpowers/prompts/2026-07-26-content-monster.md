@@ -87,6 +87,64 @@ weight-vs-cooldown misreading. Prioritise them.
   skipping the clamp, the `MaxHp <= 0 → Kill`, and `AfterCurrentHpChanged`.
   Dormant today; check whether any monster you audit makes it live.
 
+## Unclaimed by any seam — you MUST audit these (11 hook overrides)
+
+The opposite of the section above: this is work **no seam record covers**, handed
+to you deliberately rather than findings you should leave alone.
+
+`hook_dispatch` (`docs/audit/seams/hook_dispatch.md:184-190`) told Task 10 to
+start from the **12** C# monster models that override an `AbstractModel` hook.
+Task 10 addressed exactly **one** — `KinPriest`, as its guard **N6**, verdict
+`waiver` because the whole override is a barks line plus a music parameter. The
+other **11 are audited by no seam**, and Task 10 recorded that explicitly as
+hole 5 of its "Behaviour in NO seam's scope" list
+(`docs/audit/seams/monster_state_machine.md`). They are **yours**, per monster,
+because a hook override is per-monster behaviour and therefore content tier.
+
+Enumerate them yourself — do not trust this list to stay current:
+
+```bash
+py tools/audit/dormancy_probes.py cs-monster-hooks
+```
+
+At the time of writing it reports 12 of 127 `src/Core/Models/Monsters/*.cs`
+files overriding at least one hook:
+
+| model | overridden hook(s) | claimed? |
+|---|---|---|
+| `Aeonglass.cs` | `AfterCardGeneratedForCombat`, `AfterDeath` | **no — yours** |
+| `Crusher.cs` | `AfterCurrentHpChanged`, `BeforeDeath` | **no — yours** |
+| `DecimillipedeSegment.cs` | `AfterDeath` | **no — yours** |
+| `KinPriest.cs` | `AfterDeath` | yes, Task 10 **N6** (`waiver`) |
+| `LagavulinMatriarch.cs` | `AfterDamageReceived`, `AfterDeath` | **no — yours** |
+| `Queen.cs` | `AfterDeath` | **no — yours** |
+| `Rocket.cs` | `AfterCurrentHpChanged`, `BeforeDeath` | **no — yours** |
+| `SoulFysh.cs` | `AfterCardChangedPilesLate`, `AfterDeath` | **no — yours** |
+| `TestSubject.cs` | `AfterDeath` | **no — yours** |
+| `TheInsatiable.cs` | `AfterDeath` | **no — yours** |
+| `Vantom.cs` | `AfterDeath` | **no — yours** |
+| `WaterfallGiant.cs` | `AfterDeath` | **no — yours** |
+
+Most of the 11 are in ported pools (`rooms.py:124-207`), so expect live findings
+rather than dormant ones. For each: read the override to the end (Task 10's
+`KinPriest` finding is that an override which *looks* mechanical can be entirely
+presentation — check before recording a gap), then find the sim counterpart and
+verdict the **mechanical** behaviour. Note the sim has **no `MonsterModel`
+listener category at all** (`hook_dispatch`'s **G5**, dormant, `monsters/base.py:
+78-81` stores `_hooks` but never calls `register`), so a ported equivalent will
+be open-coded somewhere else — e.g. `LagavulinMatriarch.AfterDamageReceived` is
+the wake-from-damage path, and the sim implements it through `AsleepPower` →
+`wake_up(stunned=True)` (`monsters/underdocks/lagavulin_matriarch.py:75-87`).
+Do **not** re-verdict `hook_dispatch`'s G5 itself; verdict the per-monster
+behaviour.
+
+Two Task 10 findings that bear on this list and are **not** yours to re-verdict:
+`DecimillipedeSegment`, `TestSubject` and `WaterfallGiant` are also the
+`MustPerformOnceBeforeTransitioning` monsters named as **G5**'s trigger, and
+`LagavulinMatriarch` is one of the three monsters Task 10's fix pass showed
+**cannot** exhibit gap **G4**'s repeat-bar observable (its only branch is a
+`ConditionalBranchState`).
+
 ## Ascension
 
 Monster stats are the place ascension values bite hardest. Every number goes

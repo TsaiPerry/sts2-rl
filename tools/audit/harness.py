@@ -532,7 +532,12 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "src/Core/Models/Monsters/ThievingHopper.cs",
          "src/Core/Models/Powers/IllusionPower.cs",
          "src/Core/Models/Powers/FlutterPower.cs",
-         "src/Core/Models/AbstractModelSubtypes.cs"],
+         "src/Core/Models/AbstractModelSubtypes.cs",
+         # Added in the fix pass, all cited with line numbers by G4's corrected
+         # (Whistle -> Glory) liveness argument and by steps 47-48's spawn-roll
+         # truth table.
+         "src/Core/Combat/CombatSide.cs",
+         "src/Core/Models/Monsters/SoulNexus.cs"],
         ["sts2_rl/monsters/state_machine.py",
          "sts2_rl/monsters/base.py",
          "sts2_rl/cmds.py",
@@ -567,7 +572,20 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "sts2_rl/monsters/hive/__init__.py",
          "sts2_rl/monsters/glory/__init__.py",
          "sts2_rl/cards/whistle.py",
-         "sts2_rl/events/fake_merchant.py"],
+         "sts2_rl/events/fake_merchant.py",
+         # Added in the fix pass. rooms.py / tanxs_whistle.py / run.py carry
+         # G4's corrected liveness route (tanx is Glory-only and Glory is the
+         # last act); bowlbugs.py is where ImbalancedPower's only applier sets
+         # is_off_balance, which is why that stun site is inert; the four spawn
+         # callers are cited by step 48's dormancy argument.
+         "sts2_rl/rooms.py",
+         "sts2_rl/run.py",
+         "sts2_rl/relics/tanxs_whistle.py",
+         "sts2_rl/monsters/hive/bowlbugs.py",
+         "sts2_rl/monsters/underdocks/corpse_slug.py",
+         "sts2_rl/monsters/hive/ovicopter.py",
+         "sts2_rl/monsters/hive/the_obscura.py",
+         "sts2_rl/monsters/underdocks/living_fog.py"],
     ),
 }
 SEAMS: tuple[str, ...] = tuple(SEAM_SOURCES)

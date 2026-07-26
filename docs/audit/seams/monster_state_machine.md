@@ -71,8 +71,31 @@ were corrected or added (all in the committed version):
   console's cp1252 codec, and `distribution` crashed on the monsters whose
   `build_machine` reads a constructor-set field. Both fixed.
 
-`branch-order`, `hand-rolled`, `sim-addbranch` and `zero-weight` were kept
-as-is and are correct.
+`branch-order`, `hand-rolled` and `sim-addbranch` were kept as-is and are
+correct.
+
+**What the fix pass then found wrong in the *committed* version.** Six probe
+changes, each forced by a number that would not reproduce:
+
+- **`zero-weight` skipped 24 of the 83 ported machines** and only disclosed it in
+  one line of prose, while three verdicts (steps 3, 15, 21) leaned on its
+  coverage. Worse, the skipped set contained **`TwoTailedRat`, the named trigger
+  of the very clause it was proving dormant.** A second pass now builds a **live
+  instance** for anything the detached build cannot serve: 59 → **82 machines**,
+  4,720,008 → **6,560,008 transitions**, one residual (`_Cultist`).
+- **`nondyadic-weights` (new)** because breadth was still not enough: the one
+  ported non-dyadic weight is a *lambda* the machine-only fuzz can never open.
+- **`mismatch` printed no totals**, which is how "12 pairs / 7 match" drifted
+  into "13 / 8". It now prints them.
+- **`stun-sites` (new)** and **`whistle-route` (new)**: **G4** was LIVE on an
+  unexecuted reachability claim, and all three monsters it named turned out
+  unable to exhibit the observable. These two probes derive the real route.
+- **`spawn-roll` (new)** for the `rollNewMove` hand-off that this record
+  originally dropped (see the boundary section).
+- **`raise-sites` (new)** to count what guard **N7** does and does not cover; its
+  note said "two places" where the true answer is six.
+- **`sources-sweep` resolved by basename**, a false-positive risk; now path-aware
+  and line-number-aware (see the sweep note below).
 
 ## Source correction (Step A)
 
@@ -83,7 +106,7 @@ core — but the C# file listed is the *driver loop only*: it holds no branch
 semantics, no repeat rules, no weights, and no stun handling. Everything this
 seam's seed facts are about lives in its four siblings.
 
-The table is now **38 game files + 35 sim files** (verified by the `sources-sweep` probe: every `.cs`/`.py` file the record or this doc cites with a line number is hashed). Added on the game side:
+The table is now **40 game files + 43 sim files** (verified by the `sources-sweep` probe: every `.cs`/`.py` file the record or this doc cites with a line number is hashed). Added on the game side:
 
 - **`.../MonsterMoveStateMachine/RandomBranchState.cs`** — the 10 `AddBranch`
   overloads (46-113), `GetNextState` (115-128) and `GetStateWeight` (130-167).
@@ -146,12 +169,46 @@ where the seam is actually violated):
   (**N3**), `overgrowth/ceremonial_beast.py` (**G5**),
   `overgrowth/the_kin.py` (**N6**).
 
+The fix pass added, all cited with line numbers by **G4**'s corrected liveness
+route or by steps 47-49: on the game side `src/Core/Combat/CombatSide.cs` (the
+three-value enum behind step 48's truth table) and
+`src/Core/Models/Monsters/SoulNexus.cs` (the Glory control monster whose three
+branches are all `CannotRepeat`); on the sim side `sts2_rl/rooms.py` and
+`sts2_rl/run.py` (the `tanx`-is-Glory-only and Glory-is-the-last-act facts),
+`sts2_rl/relics/tanxs_whistle.py` (the grant), `sts2_rl/monsters/hive/bowlbugs.py`
+and `sts2_rl/monsters/underdocks/corpse_slug.py` (why the two power-side stun
+sites are inert), and `sts2_rl/monsters/hive/ovicopter.py`,
+`.../hive/the_obscura.py`, `.../underdocks/living_fog.py` (spawn callers cited
+by step 48's dormancy argument).
+
 The rule applied is Task 8's, restated by `hook_dispatch`: *if a verdict's
 liveness or dormancy argument cites a file with line numbers, that file is part
 of the audited unit's evidence and must be hashed.* Deliberately **not**
 hashed, for the reasons `hook_dispatch` gives: `test/*.py` (the pins),
-`tools/audit/harness.py` and `tools/audit/state_machine_probes.py` (the
-record's own machinery, re-runnable by definition).
+`tools/audit/harness.py`, `tools/audit/dormancy_probes.py` and
+`tools/audit/state_machine_probes.py` (the record's own machinery, re-runnable
+by definition).
+
+`sources-sweep` **now enforces that rule as written**, in two ways the first
+pass did not. (1) **Resolution is path-aware.** It used to resolve every token
+by *basename*, so a citation of `sts2_rl/cards/base.py` would have been
+satisfied by the hashed `sts2_rl/monsters/base.py`. A token carrying a directory
+must now match a hashed path by suffix; a bare basename is resolved against the
+real trees first, and if several real files share the name the token is reported
+as **AMBIGUOUS** with all candidates listed. One ambiguity survives and is
+benign: `fake_merchant.py`, where **both** real files (`monsters/` and `events/`)
+are hashed. The residual limitation is stated in the probe's docstring — for an
+ambiguous bare basename the probe cannot know which candidate the prose meant,
+so it accepts the token and flags it for a human. (2) **Only line-numbered
+citations count.** Rule 7 says "cites a file *with line numbers*", so a bare
+mention is reported as **NAME ONLY** rather than as a miss. Nine tokens land
+there: the eight unclaimed hook-override models of boundary hole 5
+(`Aeonglass.cs`, `Crusher.cs`, `LagavulinMatriarch.cs`, `Queen.cs`, `Rocket.cs`,
+`SoulFysh.cs`, `TheInsatiable.cs`, `Vantom.cs`), named in a hole table and used
+as evidence for nothing, plus the `sts2_rl/cards/base.py` in the paragraph
+above, which is a worked example of the false positive rather than a citation.
+Current output: **194 tokens cited, 179 hashed, 0 NOT hashed, 6 excluded,
+9 name-only, 1 ambiguous.**
 
 ### Scope boundary — what the six seams together do NOT cover
 
@@ -169,22 +226,34 @@ re-verdicted.
 **Split with `creature_card_cmds`.** It owns `Creature.StunInternal` as a
 *creature mutator*; this record owns the same lines as a *move-machine
 override* — the `MoveState("STUNNED", …)` construction and the
-`FollowUpStateId` semantics. No overlap of observable.
+`FollowUpStateId` semantics. No overlap of observable. It also deferred **two**
+things here, and both are now audited: its step 30 / guard N1 hand-off of the
+stun's move-machine half (steps 38-41, **G4**, **G5**) and — picked up in the
+fix pass, having been dropped by the first — its **step 3**,
+`PrepareForNextTurn(rollNewMove: false)` for a monster added while
+`CurrentSide != Enemy` (`creature_card_cmds.md:174-177`,
+`CreatureCmd.cs:72-75`). That is steps **47** (`faithful`, the exactly-once
+spawn roll) and **48** (**G9 clause b**, the suppression arms), executed by
+probe `spawn-roll`.
 
 **Split with `hook_dispatch`.** It owns the fact that the sim has no
 `MonsterModel` listener category (its **G5**, dormant). It handed this record
 `KinPriest.cs:81-108`'s `AfterDeath` as "Task 10's content finding". Picked up
 and answered by execution below (**N6**) — the answer is that it is
-presentation.
+presentation. It also told this record to start from the **12** C# monster
+models that override an `AbstractModel` hook; only `KinPriest` was addressed,
+and the other **11** are recorded as a hole below (item 5) and handed to the
+content-monster stream.
 
-**Behaviour in NO seam's scope.** Four things fall outside all six records and
-are named here so the hole is documented:
+**Behaviour in NO seam's scope.** Five things fall outside all six records and
+are named here so the holes are documented:
 
 1. **Per-monster move *content*** — what `SkitterMove` or `RitualMove` actually
    does, its damage numbers, its intent list. The six seams audit engine
    machinery; the ~121 `src/Core/Models/Monsters/*.cs` models are a
    **content tier** with no audit record of their own. `mismatch` covers the
-   branch *parameters* of the 13 ported `RandomBranchState`s only.
+   branch *parameters* of the 13 ported `RandomBranchState`s (12 sim modules)
+   only.
 2. **`AbstractIntent` and the intent vocabulary.** `src/Core/MonsterMoves/
    Intents/` is unaudited: the sim collapses a C# `AbstractIntent[]` into one
    `Intent` with an `also` tuple (`monsters/base.py:36-59`) and nothing checks
@@ -198,6 +267,36 @@ are named here so the hole is documented:
    what slots, with what HP roll, is claimed by no seam. `hook_dispatch` names
    `AfterCreatureAdded` and this record names `SetUpForCombat`, but the
    selection itself is unaudited.
+5. **Eleven C# monster models' `AbstractModel` hook overrides.** `hook_dispatch`
+   (`hook_dispatch.md:184-190`) told this record to start from the **12** C#
+   monster models that override an `AbstractModel` hook — enumerate them with
+   `py tools/audit/dormancy_probes.py cs-monster-hooks`. Only **`KinPriest`** was
+   addressed (guard **N6**, `waiver`: the whole override is a barks line plus a
+   music parameter). The other **11 are audited by no seam and are not this
+   record's to audit** — a hook override is per-monster *behaviour*, i.e.
+   content tier, and boundary item 1 covers move content but not hook overrides:
+
+   | model | overridden hook(s) |
+   |---|---|
+   | `Aeonglass.cs` | `AfterCardGeneratedForCombat`, `AfterDeath` |
+   | `Crusher.cs` | `AfterCurrentHpChanged`, `BeforeDeath` |
+   | `DecimillipedeSegment.cs` | `AfterDeath` |
+   | `LagavulinMatriarch.cs` | `AfterDamageReceived`, `AfterDeath` |
+   | `Queen.cs` | `AfterDeath` |
+   | `Rocket.cs` | `AfterCurrentHpChanged`, `BeforeDeath` |
+   | `SoulFysh.cs` | `AfterCardChangedPilesLate`, `AfterDeath` |
+   | `TestSubject.cs` | `AfterDeath` |
+   | `TheInsatiable.cs` | `AfterDeath` |
+   | `Vantom.cs` | `AfterDeath` |
+   | `WaterfallGiant.cs` | `AfterDeath` |
+
+   Most are in ported pools (`rooms.py:124-207`), and at least one carries a
+   *ported* mechanic that the hook is how the game implements —
+   `LagavulinMatriarch.AfterDamageReceived` is the wake-from-damage path whose
+   sim counterpart is `AsleepPower` → `wake_up(stunned=True)`
+   (`underdocks/lagavulin_matriarch.py:75-87`). **Handed to the content-monster
+   stream** with its own heading in
+   `docs/superpowers/prompts/2026-07-26-content-monster.md`.
 
 ## Seed facts, verified
 
@@ -366,8 +465,10 @@ are named here so the hole is documented:
     `num3 < 0` guard is false so it never runs. The sim **raises `ValueError`
     at construction** instead (`state_machine.py:168-169`). See **G7**.
 22. Only overload #1 validates its `repeatType` (throwing on
-    `CanRepeatXTimes`, 48-51); the sim's `add_branch` has no equivalent guard
-    but has the `max_times <= 0` one instead.
+    `CanRepeatXTimes`, 48-51). The sim's `add_branch` has **no analogue** of
+    that guard — its `max_times <= 0` check is a *different, wider* predicate
+    (it also rejects `AddBranch(state, 0)`, which C# accepts: step 21). See
+    **G8 clause c**.
 23. `RegisterStates` adds **only itself** — a branch does not register the
     states it points at. `RandomBranchState.cs:169-172`. Every monster
     therefore passes a flat list of all its states to the machine constructor,
@@ -453,8 +554,10 @@ are named here so the hole is documented:
     `MonsterModel.cs:420-432`. See **G5**.
 37. `SetUpForCombat` builds the machine, and the `MoveStateMachine` setter
     **throws if it is set twice** (`MonsterModel.cs:228-236`);
-    `ResetStateMachine` (389-392) is the only way to clear it.
-    `turn_structure` owns the call placement.
+    `ResetStateMachine` (389-392) is the only way to clear it. The sim's
+    `self.machine = …` (`state_machine.py:300`) is a plain attribute with no
+    setter, no guard and no reset, so a rebind silently replaces a live machine.
+    See **G8 clause b**. `turn_structure` owns the call placement.
 38. **Stun, the move-machine half** (`Creature.StunInternal`,
     `Creature.cs:524-544`; entry `CreatureCmd.Stun`, `CreatureCmd.cs:863-890`).
     Guarded by `Monster != null` (throws for a player) and
@@ -501,10 +604,48 @@ are named here so the hole is documented:
     (`monsters/base.py:96-105`), so a hand-rolled monster that forgets to
     override it never advances — silently.
 
+### The spawn-roll contract (`CreatureCmd.Add`) — `creature_card_cmds`' hand-off
+
+47. **A mid-combat monster spawn rolls its move exactly once, or not at all.**
+    `CreatureCmd.Add` runs, in this order: (i)
+    `await CombatManager.AfterCreatureAdded(creature)`, which rolls **iff**
+    `creature.IsEnemy && _state.CurrentSide == CombatSide.Player`
+    (`CombatManager.cs:860-867`); then (ii)
+    `if (combatState.CurrentSide != CombatSide.Enemy && creature.IsMonster)` →
+    `creature.PrepareForNextTurn(players, rollNewMove: false)`
+    (`CreatureCmd.cs:72-75`). With the flag **false**, the whole body of
+    `PrepareForNextTurn` (`Creature.cs:546-554`) reduces to
+    `NCombatRoom…RefreshIntents()` — so step (ii) adds no mechanics, and the
+    flag is a **double-roll guard**: it stops (ii) re-rolling what (i) already
+    rolled. `PrepareForNextTurn` has exactly two call sites and only this one
+    passes `false` (`CombatManager.cs:482` takes the default `true`; executed:
+    probe `spawn-roll`).
+48. The **suppression** side of the same flag. `CombatSide` has three values
+    (`CombatSide.cs:3-8`), so the truth table is:
+
+| `CurrentSide` | monster kind | rolls at (i) | (ii) reached | net rolls |
+|---|---|---|---|---|
+| `Player` | enemy | **yes** | yes, but `rollNewMove: false` | **1** |
+| `Player` | non-enemy | no (`IsEnemy` fails) | yes, suppressed | **0** → `UNSET_MOVE` |
+| `Enemy` | any | no (side fails) | no | **0** → `UNSET_MOVE` |
+| `None` | any | no | yes, suppressed | **0** → `UNSET_MOVE` |
+
+    The sim has no separate intent-preparation step at all: `CreatureCmd.add`
+    (`cmds.py:237-266`) never rolls and `MachineMonster.__init__` rolls once
+    (`state_machine.py:300-301`), unconditionally. The exactly-once row matches
+    (step 47, `faithful`); every zero-roll row is **G9 clause b** (step 48).
+49. A `RandomBranchState` the game **constructs and registers but never
+    wires**: `Inklet.cs:69-71` builds `INIT_RAND` with two branches (one of
+    them `AddBranch(JAB, 2, 1f)` = maxRepeats 2, overload #7), and nothing
+    assigns it to a `FollowUpState`; it is not the initial state either.
+    `PhrogParasite.cs:6-10` is the same shape. By step 23 registration says
+    nothing about reachability, so the game holds a dead branch dispatcher.
+    See **G2**.
+
 ## Sim comparison (Step C summary — full verdicts in the JSON)
 
 The **machinery** is a close transliteration: steps 1-2, 4-9, 12, 14, 16-20,
-23-26, 28-34 and 42-45 are `faithful`, and the two branch classes'
+23-26, 28-34, 42-45 and 47 are `faithful`, and the two branch classes'
 `get_next_state` walks are line-for-line equivalents including the single
 `NextFloat(total)` primitive. The seam's failures are concentrated in three
 places:
@@ -513,10 +654,11 @@ places:
   `maxRepeats`/`cooldown` into a sim `weight`.
 - **The stun override** (**G4**, **G5**) — the sim models the *intent* of a
   stun and none of the *machine* consequences.
-- **Two machinery details** — the missing string follow-up (**G3**), the
-  duplicate-id registration (**G8**), the degenerate-weight arms (**G7**), and
+- **Machinery details** — the missing string follow-up (**G3**), the
+  unrepresentable unwired branch (**G2**), the three unvalidated machine
+  constructions (**G8**, steps 3/22/37), the degenerate-weight arms (**G7**),
   one wrong RNG stream at the one `roll_move` call site outside the machine
-  (**G6**).
+  (**G6**), and the ungated spawn roll (**G9**, steps 11/48).
 
 **Verdict counts**, recomputed programmatically from
 `audits/seam/monster_state_machine.json`, are stated in the JSON's own summary
@@ -527,9 +669,13 @@ and in `.superpowers/sdd/task-10-report.md`; do not copy them by hand.
 **Two are LIVE on currently-ported content** — **G1** and **G4** — and
 **seven are dormant** — **G2**, **G3**, **G5**, **G6**, **G7**, **G8**,
 **G9** — each with its concrete unported (or un-contended) trigger named and
-its dormancy argument **executed**, not asserted. **G6** was written LIVE on
-the first pass and demoted when its own strict xfail XPASSed; the corrected
-argument is under **G6** below.
+its dormancy argument **executed**, not asserted. Two labels were CORRECTED
+after the first pass. **G6** was written LIVE and demoted when its own strict
+xfail XPASSed (argument under **G6** below). **G8** absorbed steps 22 and 37,
+which the first pass verdicted `deliberate-divergence` and `faithful`: all
+three sites are one mechanism and rule 3 forces one verdict (see **G8**). **G4**
+keeps its LIVE label but on a different — and executed — reachability argument
+(see **G4**); only the route was wrong.
 
 - **G1 — five ported monsters read a C# `maxRepeats`/`cooldown` argument as a
   sim `weight`. LIVE, and it is the same bug class as the shipped
@@ -537,8 +683,12 @@ argument is under **G6** below.
   is `cooldown` or `maxRepeats` (never a weight — see seed fact 1); the sim's
   `add_branch(state, weight=1.0, repeat_type=…, max_times=0, cooldown=0)`
   (`state_machine.py:160-167`) puts **`weight`** there. Executed
-  (`mismatch`): of the **13** ported `RandomBranchState`s whose C# parameters
-  were resolved, **8 match exactly** and **5 do not** —
+  (`mismatch`, which now **prints these totals** so they cannot drift again):
+  of the **12** resolved C#↔sim pairs — one per ported sim *module*, together
+  covering **13** C# `RandomBranchState`s because `fake_merchant.py` folds two
+  (`RAND_MOVE`, `FakeMerchantMonster.cs:55-58`, and `RAND_ATTACK_MOVE`, `:66-68`)
+  into one row — **7 match exactly** and **5 do not**. (A first pass said "13
+  resolved / 8 match", having read the branch-state count as the pair count.)
   - `FlailKnight.cs:50,51` `AddBranch(FLAIL, 2)` / `AddBranch(RAM, 2)` =
     maxRepeats 2, weight 1 → `hive/flail_knight.py:51,52` `weight=2.0`,
     `CAN_REPEAT_FOREVER`;
@@ -586,7 +736,9 @@ argument is under **G6** below.
   in it.
 
 - **G2 — the sim silently drops a `RandomBranchState` that C# builds but never
-  wires. DORMANT.** `Inklet.cs:69-71` constructs `INIT_RAND` and gives it two
+  wires. DORMANT** (step 49 — the fix pass gave it a numbered step, which it
+  had lacked while appearing in this list, so the record's gap ids and its step
+  list now agree). `Inklet.cs:69-71` constructs `INIT_RAND` and gives it two
   branches, one of them `AddBranch(JAB, 2, 1f)` = maxRepeats 2; it is never
   assigned to any `FollowUpState` and is not the initial state, so it is dead
   in the game too. `PhrogParasite.cs:6-10` is the same shape. The sim's
@@ -627,14 +779,75 @@ argument is under **G6** below.
   `state_log ['LATCH_MOVE'] -> ['LATCH_MOVE']`. C# would reach
   `['LATCH_MOVE', 'LATCH_MOVE']` after the post-stun roll, which by step 19
   **blocks** LATCH's `CanRepeatXTimes(2)` branch on the following roll while
-  the sim still allows it. **LIVE and player-reachable**: the stun source is
-  **Whistle**, a ported Ancient Attack card from Tanx (`cards/whistle.py:30-38`
-  → `CreatureCmd.stun(ctx.hooks, target)` with no next-move override), and
-  `FossilStalker` is a ported Underdocks monster with the sensitive branch
-  rule. It is also monster-reachable through `SlumberingBeetle`
-  (`monsters/hive/slumbering_beetle.py:68`), `LagavulinMatriarch`
-  (`.../lagavulin_matriarch.py:87`) and `TerrorEel` (`.../terror_eel.py:65`),
-  all three `MachineMonster`s.
+  the sim still allows it.
+
+  **LIVE, and the route is Whistle into Glory** — executed end to end, because
+  the first pass's liveness list was inert and its subject unreachable.
+
+  1. **Only one sim stun takes an external target.** Probe `stun-sites`
+     enumerates all **8** `CreatureCmd.stun` call sites in `sts2_rl/`: seven are
+     self-stuns (`self` / `self.owner`, so the target is by construction the
+     monster owning the move or power and can never be the player) —
+     `hive/slumbering_beetle.py:68`, `overgrowth/ceremonial_beast.py:45`,
+     `underdocks/lagavulin_matriarch.py:87`, `underdocks/terror_eel.py:65`,
+     `powers.py:1601` (`RavenousPower`), `powers.py:2071` (`ImbalancedPower`),
+     `powers.py:2227` (`FlutterPower`) — and one is external,
+     `cards/whistle.py:38`.
+  2. **Whistle is Glory-only.** `rooms.py:206` puts `tanx` in **Glory's**
+     `ancient_keys` and in no other act's (overgrowth and underdocks are
+     `('neow',)`, hive is `('orobas','pael','tezcatara')`), and
+     `relics/tanxs_whistle.py:17` grants `make_card("whistle")` on pickup.
+     Glory is act index **2**, the last act
+     (`run._ACTS_BY_INDEX = [[overgrowth, underdocks], [hive], [glory]]`), so
+     the stun-reachable population is Glory's own pools — **not** any earlier
+     act's monster, because a relic cannot be carried backwards.
+  3. **Glory's pools hold four `RandomBranchState` machines whose weights read
+     the state log** (probe `whistle-route` walks every monster in Glory's
+     weak/normal/elite/boss keys): `ScrollOfBiting` (`scrolls_of_biting_weak` /
+     `_normal`), `FlailKnight` and `SpectralKnight` (the `knights` elite,
+     `glory/knights.py:131`) and `SoulNexus` (`soul_nexus`).
+  4. **Executed observable** on `ScrollOfBiting` (probe `stun-machine`, 100000
+     rolls, seed 7, the machine parked telegraphing `CHEW` after the reachable
+     prefix `CHOMP → MORE_TEETH → CHEW`). The move the branch picks on the turn
+     **after** the deferred `CHEW`:
+
+  | | CHEW | CHOMP |
+  |---|---|---|
+  | sim as shipped (G4 gap **and** G1 gap) | **66.5%** | 33.5% |
+  | duplicate restored, C# params still mis-read (G1 gap only) | 66.5% | 33.5% |
+  | C# params restored, duplicate still missing (G4 gap only) | 50.0% | 50.0% |
+  | **the game** (both fixed) | 0% | **100%** |
+
+  The game's post-stun branch is **forced** to `CHOMP`, because the duplicated
+  `CHEW` fills `CanRepeatXTimes(2)`'s window (step 19). The 2×2 also shows the
+  two gaps are genuinely two: neither can be closed by fixing the other, which
+  is why **G1** and **G4** stay separate under rule 3. `SoulNexus` is the
+  control — its three branches are all `CannotRepeat` (`SoulNexus.cs:70-72`,
+  *n* = 1), and a duplicate at the tail of the log cannot change a last-1
+  window, so it is both correctly ported **and** insensitive.
+
+  *Correction to the first pass.* It cited `SlumberingBeetle`,
+  `LagavulinMatriarch` and `TerrorEel` as making G4 live. **None of the three
+  can exhibit this observable**: `SlumberingBeetle`'s only branch is a
+  `ConditionalBranchState` (`hive/slumbering_beetle.py:50-52`, reading
+  `self.powers`, never `state_log`), `LagavulinMatriarch`'s likewise
+  (`underdocks/lagavulin_matriarch.py:63-65`), and `TerrorEel` has **no branch
+  state at all** (`underdocks/terror_eel.py:53-56` is a pure chain) — a log
+  duplicate cannot move any of their weights. All three additionally
+  hand-splice the follow-up themselves (`force_current_state` +
+  `_current_move`: `slumbering_beetle.py:65-66`, `lagavulin_matriarch.py:83-84`,
+  `terror_eel.py:62-63`), so they already emulate the machine half. All three
+  are also in earlier acts than the Whistle. The clause "`FossilStalker` is a
+  ported Underdocks monster" is withdrawn too: it is the probe vehicle for a
+  correctly-ported `CanRepeatXTimes(2)` branch and for G5's `next_move_key`
+  drop, but **no ported caller can stun it** (its powers are Suck and Latch,
+  not Ravenous/Imbalanced/Flutter, and Whistle cannot reach act 0 from act 2).
+  The two power-side stuns are inert for the same reason, and probe
+  `stun-sites` resolves them: `RavenousPower`'s only applier is `CorpseSlug`, a
+  pure chain, and `ImbalancedPower`'s only applier is `BowlbugRock`, which sets
+  `is_off_balance` in its constructor (`hive/bowlbugs.py:43`) and therefore
+  takes the flag arm at `powers.py:2069` rather than the stun arm — and whose
+  branch is conditional anyway.
 
 - **G5 — the sim's `next_move_key` is silently dropped for every
   `MachineMonster`, and `SetMoveImmediate`'s `CanTransitionAway` guard has no
@@ -681,7 +894,8 @@ argument is under **G6** below.
   roll consumes **no draw from any stream**, neither clause is observable
   today, and the resulting `state_log` is identical on both sides. Named
   trigger: a `FlutterPower` user whose current move's follow-up is a
-  `RandomBranchState` — any of the 13 ported branch machines would do. The pin
+  `RandomBranchState` — any of the 12 resolved ported branch ports would do
+  (probe `mismatch`). The pin
   **constructs that trigger** (it splices a branch behind `FLUTTER_MOVE` and
   parks the machine there) and then fails on `rng.floats == before` with
   `10 == 9`, the one extra shared-stream draw. **Cross-referenced to
@@ -696,32 +910,110 @@ argument is under **G6** below.
   does `rng.NextFloat(0)` → 0, then `0 - 0 <= 0` on the **first** branch and
   returns it — **burning a draw and picking branch 0**
   (`RandomBranchState.cs:117-124`); the sim raises `RuntimeError("No valid
-  branch …")` **before** drawing (`state_machine.py:182-183`). Executed
-  (`zero-weight`): **59** ported machines fuzzed over **4,720,008** random
-  transitions, **0** `No valid branch` hits (24 machines need a live monster
-  instance and are listed by name in the probe output). Arm (a) is likewise
-  unreachable — no C# call site passes `0` as `maxRepeats` (`cs-addbranch`
-  lists all 15 non-default int arguments; they are all `2` or `3`). Concrete
-  trigger: a `RandomBranchState` all of whose branches are simultaneously
-  blocked — the natural construction is every branch `CannotRepeat` **with
-  only one branch**, or a lambda weight that can return `0f` on every branch at
-  once (`TwoTailedRat.cs:127`'s `CanSummon()` lambda is one `0f` away from
-  this shape).
+  branch …")` **before** drawing (`state_machine.py:182-183`). There is a third
+  arm, **(c)**, at step 15: the float fall-through, where C# throws and the sim
+  returns the last branch.
 
-- **G8 — duplicate state ids throw in C# and silently overwrite in the sim.
-  DORMANT.** Every `RegisterStates` implementation is
-  `monsterStates.Add(Id, this)` (`RandomBranchState.cs:171`,
-  `MoveState.cs:74`, `ConditionalBranchState.cs:58`) and
-  `Dictionary<K,V>.Add` **throws `ArgumentException`** on a duplicate key, so a
-  monster with two states sharing an id fails loudly at machine construction.
-  The sim's `states[self.id] = self` (`state_machine.py:86-87`) overwrites, so
-  the second definition wins and every `follow_up` pointing at the first
-  resolves to the second. Executed dormancy: the `zero-weight` fuzz builds
-  **59** ported machines and none raises, and `MonsterMoveStateMachine.__init__`
-  would be where a collision surfaced. Concrete trigger: porting a monster with
-  a repeated state id — `Fogmog.cs:44-45` shows the game's own near-miss, two
-  distinct `MoveState`s (`SWIPE_MOVE` and `SWIPE_RANDOM_MOVE`) sharing one
-  `SwipeMove` delegate and differing only in id.
+  **Executed coverage, and its bound.** `zero-weight` now runs **two passes**,
+  because the first pass's detached `cls.__new__(cls).build_machine()` cannot
+  serve a monster whose graph reads constructor-set fields or live combat
+  state. Pass 1 (detached) fuzzes **59** machines over **4,720,008**
+  transitions — the numbers this record cited from the start. Pass 2 builds a
+  **live instance** (a one-monster `Encounter` in a real `CombatState`) for
+  every machine pass 1 deferred and fuzzes **23** more over **1,840,000**
+  transitions. **Total 82 machines / 6,560,008 transitions / 0 `No valid
+  branch` hits.** That second pass matters: the 24 machines the first pass
+  **skipped** included `TwoTailedRat` — this gap's own named trigger — plus
+  `ScrollOfBiting`, `LagavulinMatriarch`, `SlumberingBeetle`, `Queen`,
+  `Fabricator`, `Exoskeleton` and all four Decimillipede segments, so the
+  dormancy claim did not cover its own trigger. **One machine is still
+  unbuildable and dormancy is unproven for it: `_Cultist`**, which needs a
+  constructor argument.
+
+  **Depth on the trigger.** Breadth alone still could not reach the non-dyadic
+  arm. The only ported non-dyadic weight is `TwoTailedRat.cs:127`'s `1f/12f`
+  (`underdocks/two_tailed_rat.py:75-86`) and it is a **lambda** gated on
+  `_can_summon()`, which reads `turns_until_summonable` — decremented by a
+  move's *perform* delegate, which a machine-only fuzz never runs. So the fuzz
+  reached that machine with weights `[1, 1, 1, 0]` and never `[1/12, …]`. Probe
+  **`nondyadic-weights`** closes it: it finds the one ported branch with a
+  callable weight (`TwoTailedRat`), searches the monster's own integer fields
+  for one that opens the gate (`turns_until_summonable` 2 → 0 yields
+  `RAND=[0.083333, 0.0, 0.083333, 0.75]`), and fuzzes **80,000** transitions
+  with that fractional vector live — **0 fall-throughs**.
+
+  Arm (a) is likewise unreachable — no C# call site passes `0` as `maxRepeats`
+  (`cs-addbranch` lists all 15 non-default int arguments; they are all `2` or
+  `3`), and no ported *port* does either, since 82 of the 83 machines build
+  without tripping the sim's `ValueError`. Concrete trigger: a
+  `RandomBranchState` all of whose branches are simultaneously blocked — the
+  natural construction is every branch `CannotRepeat` **with only one branch**,
+  or a lambda weight that can return `0f` on every branch at once
+  (`TwoTailedRat.cs:127`'s `CanSummon()` lambda is one `0f` away from this
+  shape).
+
+- **G8 — C# validates a malformed machine construction and raises; the sim's
+  corresponding API has no equivalent validation. Three sites, ONE verdict.
+  DORMANT.** This is the fix pass's biggest verdict change: steps 3, 22 and 37
+  are the *same mechanism* at three sites and by governing rule 3 must carry the
+  same verdict. They previously carried three different ones (`gap`,
+  `deliberate-divergence`, `faithful`). Site census: probe `raise-sites`.
+
+  - **(a) duplicate state ids** (step 3). Every `RegisterStates` implementation
+    is `monsterStates.Add(Id, this)` (`RandomBranchState.cs:171`,
+    `MoveState.cs:74`, `ConditionalBranchState.cs:58`) and
+    `Dictionary<K,V>.Add` **throws `ArgumentException`** on a duplicate key, so
+    a monster with two states sharing an id fails loudly at machine
+    construction. The sim's `states[self.id] = self`
+    (`state_machine.py:86-87`) overwrites, so the second definition wins and
+    every `follow_up` pointing at the first resolves to the second.
+  - **(b) the machine set twice** (step 37, was `faithful`). The
+    `MoveStateMachine` setter throws (`MonsterModel.cs:228-236`) and
+    `ResetStateMachine` (389-392) is the only legal clear. The first pass called
+    this `faithful` on the grounds that "a double-build is unrepresentable
+    rather than rejected" — **it is not unrepresentable**:
+    `monster.machine = other` is a legal Python attribute rebind that silently
+    replaces a live machine, losing its `state_log` and current state. What is
+    missing is the *validation*, i.e. clause (a) at a second site.
+  - **(c) `AddBranch` overload #1 given `CanRepeatXTimes`** (step 22, was
+    `deliberate-divergence`). See **rule 2** below.
+
+  **Why one verdict, and why `gap`.** Governing rule 1: `waiver` is
+  out-of-scope only, so "nothing ported triggers this" is *dormancy*, not a
+  waiver — none of the three may be waived. `deliberate-divergence` needs the
+  **same observable**, which clauses (a) and (b) plainly lack (C# raises; the
+  sim carries on with a silently wrong machine). And clause (c) cannot be `dd`
+  either, once its rationale is stated honestly: the first pass wrote "same
+  observable … reached by different routes", which cannot both hold. C#'s check
+  is an artifact of positional overload resolution — overload #1 accepts a
+  `repeatType` but has no `maxRepeats` slot, so `CanRepeatXTimes` must be
+  rejected *there* and expressed through overload #2 instead. The sim's
+  `add_branch` is a single keyword signature in which `max_times` is always
+  addressable, so **C#'s guard is inapplicable and the sim has no analogue of
+  it**. The `ValueError` the sim raises on the closest transliteration comes
+  from an unrelated, *wider* predicate — `max_times <= 0` — which also rejects
+  `AddBranch(state, 0)`, a construction C# **accepts** (that is **G7 clause a**,
+  step 21). So the sim's apparent coverage of C#'s guard is incidental to a
+  different divergence, and it would **disappear** the moment G7a were fixed
+  toward the game: a sim that permanently disabled a `max_times == 0` branch as
+  C# does would then silently accept the very construction C# rejects here.
+  Probe `raise-sites` buckets it as the one **one-sided guard** site.
+
+  **Executed dormancy, all three clauses.** (a) the `zero-weight` fuzz now
+  builds **82** ported machines (59 detached + 23 live) and none raises at
+  construction; only `_Cultist` is unbuilt. (b)
+  `grep -rn 'self\.machine\s*=' sts2_rl/` returns exactly **one** assignment
+  site, `MachineMonster.__init__` (`state_machine.py:300`), and probe
+  `spawn-roll` confirms `CreatureCmd.add` (`cmds.py:237-266`) never touches a
+  machine, so no ported path rebinds one. (c) `cs-addbranch` resolves all 61
+  monster call sites: exactly **one** uses overload #1 at all and none pairs it
+  with `CanRepeatXTimes`, and none passes `0` as `maxRepeats`.
+  **Concrete triggers.** (a) porting a monster with a repeated state id —
+  `Fogmog.cs:44-45` is the game's own near-miss, two distinct `MoveState`s
+  (`SWIPE_MOVE`, `SWIPE_RANDOM_MOVE`) sharing one `SwipeMove` delegate and
+  differing only in id. (b) any sim code that rebuilds a machine mid-combat (a
+  transform, a re-port of `ResetStateMachine`, a fixture reusing a monster).
+  (c) the same as G7a's.
 
 - **G9 — the sim has no UNSET_MOVE placeholder, so a monster rolls at
   construction. DORMANT.** C# initialises `MonsterModel.NextMove` to a
@@ -786,12 +1078,28 @@ argument is under **G6** below.
   verdict — that the sim has no `MonsterModel` listener category to hang a
   monster hook on (its **G5**, dormant) — is unaffected and is not
   re-verdicted here.
-- **N7 — the machine's exception messages.** `deliberate-divergence`: C# throws
-  `InvalidOperationException` where the sim throws `RuntimeError`
-  (`MonsterMoveStateMachine.cs:39, 58, 70`, `RandomBranchState.cs:29, 127`,
-  `ConditionalBranchState.cs:53` vs `state_machine.py:138, 252, 271, 183, 232`).
-  Same observable — the run crashes in both — and no ported content catches
+- **N7 — the machine's exception messages.** `deliberate-divergence`, and
+  **recounted** in the fix pass (probe `raise-sites`, which prints the raw
+  `throw new` / `raise` greps and then buckets the resolved pairing). This guard
+  covers the **five symmetric** sites, where both implementations raise on the
+  same input and only the type differs: `MonsterMoveStateMachine.cs:39` vs
+  `state_machine.py:252`, `:58` vs `:271`, `:70` vs `:271`, `MoveState.cs:69`
+  vs `state_machine.py:138`, `ConditionalBranchState.cs:53` vs
+  `state_machine.py:232`. Same observable — the run crashes in both — and
+  `grep -rn 'except RuntimeError' sts2_rl/` finds no ported content catching
   either type.
+
+  The first pass's note said this guard "does **not** cover the **two** places
+  where one side raises and the other does not". There are **six**, not two:
+  five **asymmetric** (exactly one side raises) — **G7c** (step 15: C# throws on
+  the fall-through, the sim returns the last branch), **G7b**
+  (`RandomBranchState.cs:117-124` burns a draw and picks branch 0;
+  `state_machine.py:183` raises before drawing), **G7a** (step 21: the sim
+  raises, C# builds a dead branch), **G8a** (step 3) and **G8b** (step 37) — plus
+  one **one-sided guard**, **G8c** (step 22). One further C# throw is in neither
+  bucket and is `faithful` at step 12: `RandomBranchState.cs:29`'s
+  null-`weightLambda` check is dead on both sides, because no overload can leave
+  the lambda null and the sim has no such field.
 
 ## Pins (Step D)
 
@@ -799,6 +1107,12 @@ argument is under **G6** below.
 |---|---|
 | Weight-vs-cooldown arg handling | **Partly pre-existing.** `test/test_monster_branch_audit.py` (whole file, 211 lines, 5 classes) is the verified regression file for the hand-rolled overgrowth ports and the two previously-fixed monsters — `TestPreviouslyFixedBugClassRegression::test_twig_slime_m_draws_every_turn` and `::test_flyconid_draws_every_turn` are the direct descendants of the shipped fix. It does **not** reach the five machine ports of **G1**, so `TestMonsterStateMachineOrder::test_addbranch_int_args_are_repeat_limits_not_weights` was added as a strict xfail. |
 | Repeat-rule enforcement | **Pre-existing, verified by path.** `test/test_new_features.py::TestStateMachine::test_mawler_roar_used_at_most_once_per_combat` (line 148) covers `USE_ONLY_ONCE` **and** `CANNOT_REPEAT` on **Mawler**, one of the brief's named monsters; `::test_fogmog_branch_only_yields_legal_sequences` (line 126) covers **Fogmog**; `::test_use_only_once_and_cannot_repeat_weights` (line 168) covers both rules on a synthetic machine over 60 transitions. **`CAN_REPEAT_X_TIMES` was covered by none of them**, and it is the rule the five bugged ports drop, so `test_can_repeat_x_times_blocks_the_n_plus_first_repeat` was added (passing) to close that hole. |
+| Spawn-roll exactly-once | **New, passing.** `creature_card_cmds` step 3's deferred `PrepareForNextTurn(rollNewMove: false)` site (steps 47-48) had no coverage: nothing asserted that a mid-combat spawn rolls its move exactly once, so a future `telegraph_next_move` inside `CreatureCmd.add` would silently double-roll (one extra `MonsterAi` draw plus a second log entry). `test_a_mid_combat_spawn_rolls_its_move_exactly_once` closes it. |
 
-Three further strict xfails pin **G4** and **G6**; all five new tests live in
-`test/test_hook_order.py::TestMonsterStateMachineOrder`.
+**Nine tests** live in `test/test_hook_order.py::TestMonsterStateMachineOrder`:
+**two passing** (the `CAN_REPEAT_X_TIMES` rule and the spawn-roll exactly-once
+property) and **seven strict xfails** pinning **G1**, **G3**, **G4**, **G5**,
+**G6**, **G7a** and **G8**. **G2** and **G9** are not pinned: G2's observable is
+already asserted by `test/test_monster_branch_audit.py`'s zero-draw tests, and
+G9's (both clauses) is a non-observable, because the sim's enemy side is
+atomic — neither has an assertion that would fail today for the reason stated.

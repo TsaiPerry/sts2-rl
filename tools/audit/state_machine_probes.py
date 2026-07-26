@@ -35,11 +35,29 @@ Probes:
                     mismatched sim machine 100000 times and, beside it, the
                     same machine with the C# branch parameters restored.
   sources-sweep     rule 7 mechanised: every .cs/.py file the record or the
-                    spec doc cites must appear in SEAM_SOURCES.
+                    spec doc cites must appear in SEAM_SOURCES. PATH-AWARE.
   stun-machine      EXECUTED: what a stun does to the move machine on each
                     side (sim keeps _current_move and never touches the
                     machine; C# force-sets a synthetic STUNNED MoveState and
-                    re-logs the deferred move).
+                    re-logs the deferred move) — plus the 2x2 that separates
+                    G4's missing duplicate from G1's mis-read parameters on
+                    the stun-REACHABLE monster.
+  stun-sites        EXECUTED: every CreatureCmd.stun call site in the sim, self
+                    vs external target, and the branch class of every monster
+                    that can hold a stunning power. Backs step 38 (rule 5) and
+                    completes G4/G5's caller inventories.
+  whistle-route     EXECUTED: the only player-reachable stun end to end —
+                    tanx -> Tanx's Whistle -> the Whistle card -> which act's
+                    monsters — and the branch class of every monster in that
+                    act's pools. This is G4's liveness proof.
+  nondyadic-weights EXECUTED: G7 clause c's named trigger. Finds every ported
+                    branch with a CALLABLE weight, opens the gate that makes
+                    the weight non-dyadic, and fuzzes it.
+  spawn-roll        EXECUTED: the `PrepareForNextTurn(rollNewMove: false)`
+                    hand-off from creature_card_cmds step 3 — C#'s spawn-roll
+                    truth table vs the sim's roll-at-construction.
+  raise-sites       the raise/throw census, bucketed. Backs guard N7's count
+                    of what it does and does not cover.
 """
 from __future__ import annotations
 
@@ -337,6 +355,25 @@ def move_rng() -> None:
             print(f"      {ln}")
 
 
+def _fractional_branch_weights(machine) -> list[str]:
+    """Every RandomBranchState in `machine` whose CURRENT effective weights are
+    not all whole numbers. Float rounding in GetNextState's sequential
+    subtraction (step 15 / G7 clause c) can only bite on a non-dyadic weight,
+    and the record names TwoTailedRat's 1f/12f as the concrete route — so the
+    fuzz has to be able to say whether it reached such a vector at all."""
+    out = []
+    for state in machine.states.values():
+        if type(state).__name__ != "RandomBranchState":
+            continue
+        try:
+            ws = [state._effective_weight(b, machine) for b in state._branches]
+        except Exception:
+            continue
+        if any(w != int(w) for w in ws):
+            out.append(f"{state.id}={[round(w, 6) for w in ws]}")
+    return out
+
+
 def zero_weight(walks: int = 200, steps: int = 400) -> None:
     """Can a ported RandomBranchState reach total weight 0?
 
@@ -346,7 +383,24 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
     (state_machine.py:182-183).
 
     Executed reachability: drive every ported MachineMonster's machine through
-    `walks` random walks of `steps` transitions each and count RuntimeErrors."""
+    `walks` random walks of `steps` transitions each and count RuntimeErrors.
+
+    TWO passes, because `cls.__new__(cls).build_machine()` cannot serve a
+    monster whose graph reads constructor-set fields or live combat state:
+      pass 1  the cheap detached build (this is the pass whose 59 machines /
+              4,720,008 transitions the record has always cited);
+      pass 2  a LIVE instance for everything pass 1 could not fuzz — a real
+              one-monster Encounter in a real CombatState, then the same walk.
+              Pass 2 exists because the first version of this probe skipped 24
+              machines, among them TwoTailedRat (the named G7-clause-c trigger),
+              ScrollOfBiting, LagavulinMatriarch, SlumberingBeetle, Queen,
+              Fabricator, Exoskeleton and the Decimillipede segments, so the
+              dormancy claim did not actually cover its own trigger.
+    Pass 2's caveat, stated because it bounds the claim: the walk drives the
+    MACHINE, not the combat, so a state-dependent weight lambda is evaluated
+    against a turn-0 combat. The `fractional weight vectors reached` line below
+    is how far that goes — it names every machine whose weights were observed
+    off the whole numbers."""
     import random as _random
 
     import sts2_rl.monsters  # noqa: F401
@@ -360,27 +414,202 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
     from sts2_rl.monsters.fake_merchant import FakeMerchantMonster
     units["fake_merchant_monster"] = FakeMerchantMonster
 
-    fuzzed, skipped, hits, transitions = [], [], [], 0
+    def _walk_machine(machine, owner, seed) -> tuple[int, str | None, str | None]:
+        """(transitions, 'No valid branch' text or None, other error or None)"""
+        rng = _random.Random(seed)
+        machine._performed_first_move = True
+        n = 0
+        try:
+            for _ in range(steps):
+                move = machine.roll_move(owner, rng)
+                machine.on_move_performed(move)
+                n += 1
+        except RuntimeError as exc:
+            if "No valid branch" in str(exc):
+                return n, str(exc), None
+            return n, None, f"{type(exc).__name__}: {exc}"
+        except Exception as exc:                    # pragma: no cover
+            return n, None, f"{type(exc).__name__}: {exc}"
+        return n, None, None
+
+    fuzzed, deferred, hits, transitions = [], [], [], 0
+    fractional: list[str] = []
     for unit_id, cls in sorted(units.items()):
         if not issubclass(cls, MachineMonster):
             continue
         try:
             probe = cls.__new__(cls).build_machine()
         except Exception as exc:
-            skipped.append((cls.__name__, f"build_machine: {type(exc).__name__}"))
+            deferred.append((cls.__name__, f"build_machine: {type(exc).__name__}"))
             continue
         del probe
         ok, err = 0, None
         for w in range(walks):
-            rng = _random.Random(w)
             machine = cls.__new__(cls).build_machine()
             owner = _Owner()
             owner.machine = machine
-            machine._performed_first_move = True
+            n, hit, err = _walk_machine(machine, owner, w)
+            ok += n
+            if w == 0:
+                fractional += [f"{cls.__name__}.{f}"
+                               for f in _fractional_branch_weights(machine)]
+            if hit:
+                hits.append((cls.__name__, hit))
+                break
+            if err:
+                break
+        transitions += ok
+        (deferred if err else fuzzed).append(
+            (cls.__name__, err or f"{ok} transitions"))
+    print(f"pass 1 (detached build) machines fuzzed: {len(fuzzed)}  "
+          f"transitions: {transitions}")
+    print(f"pass 1 could not fuzz: {len(deferred)}")
+    for s in deferred:
+        print(f"  {s[0]}: {s[1]}")
+
+    # ── pass 2: a live instance for everything pass 1 deferred ──────────────
+    from sts2_rl.combat import CombatState
+    from sts2_rl.monsters import Encounter
+
+    live_ok, live_bad, live_transitions = [], [], 0
+    by_name = {c.__name__: c for c in units.values()}
+    for name, _reason in deferred:
+        cls = by_name.get(name)
+        if cls is None:                             # pragma: no cover
+            live_bad.append((name, "class not in the roster"))
+            continue
+        try:
+            enc = Encounter(id="probe_zero_weight", monster_classes=[cls])
+            base = CombatState(rng=_random.Random(0), encounter=enc)
+            mon = base.enemies[0]
+        except Exception as exc:
+            live_bad.append((name, f"CombatState: {type(exc).__name__}: {exc}"))
+            continue
+        fractional += [f"{name}.{f}"
+                       for f in _fractional_branch_weights(mon.machine)]
+        ok, err, hit_here = 0, None, None
+        for w in range(walks):
+            enc = Encounter(id="probe_zero_weight", monster_classes=[cls])
+            cs = CombatState(rng=_random.Random(w), encounter=enc)
+            m = cs.enemies[0]
+            n, hit, err = _walk_machine(m.machine, m, w)
+            ok += n
+            if hit:
+                hit_here = hit
+                hits.append((name, hit))
+                break
+            if err:
+                break
+        live_transitions += ok
+        if err and not hit_here:
+            live_bad.append((name, err))
+        else:
+            live_ok.append((name, f"{ok} transitions"))
+    print(f"\npass 2 (live instance) machines fuzzed: {len(live_ok)}  "
+          f"transitions: {live_transitions}")
+    for s in live_ok:
+        print(f"  {s[0]}: {s[1]}")
+    print(f"\nmachines STILL not fuzzed (dormancy unproven for these): "
+          f"{len(live_bad)}")
+    for s in live_bad:
+        print(f"  {s[0]}: {s[1]}")
+
+    print(f"\nTOTAL machines fuzzed: {len(fuzzed) + len(live_ok)}  "
+          f"transitions: {transitions + live_transitions}")
+    print(f"'No valid branch' (total weight 0) hits: {len(hits)}")
+    for h in hits:
+        print(f"  {h[0]}: {h[1]}")
+    print(f"fractional (non-whole) branch weight vectors reached: "
+          f"{len(fractional)}")
+    for f in sorted(set(fractional)):
+        print(f"  {f}")
+
+
+_WEIGHT_FIELD_DENY = {
+    "hp", "max_hp", "block", "net_id", "slot", "side", "min_hp",
+}
+
+
+def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
+    """Step 15 / G7 clause c names TwoTailedRat's `1f/12f` as the ONLY ported
+    non-dyadic branch weight and therefore as the concrete fall-through route.
+    `zero-weight` fuzzes TwoTailedRat but cannot reach that arm: the weight is a
+    LAMBDA gated on `_can_summon()` (two_tailed_rat.py:75-79, 101-113), which
+    reads `turns_until_summonable`, and the fuzz drives the MACHINE only — it
+    never runs a move's perform delegate, which is what decrements the counter
+    (two_tailed_rat.py:115-117 etc.). So the gate is never open.
+
+    This probe closes that hole mechanically: for every ported machine holding a
+    callable branch weight, it searches the monster's own integer fields for a
+    setting that opens the gate (each candidate set to 0, then restored), prints
+    the resulting weight vector, and fuzzes the machine with the gate open,
+    counting `No valid branch` fall-throughs."""
+    import random as _random
+
+    import sts2_rl.monsters  # noqa: F401
+    from tools.audit.harness import _monster_units
+    from sts2_rl.combat import CombatState
+    from sts2_rl.monsters import Encounter
+    from sts2_rl.monsters.state_machine import MachineMonster
+
+    units = dict(_monster_units())
+    from sts2_rl.monsters.fake_merchant import FakeMerchantMonster
+    units["fake_merchant_monster"] = FakeMerchantMonster
+
+    def _live(cls, seed=0):
+        enc = Encounter(id="probe_nondyadic", monster_classes=[cls])
+        return CombatState(rng=_random.Random(seed), encounter=enc).enemies[0]
+
+    callable_weight, opened, hits, transitions = [], [], [], 0
+    for _uid, cls in sorted(units.items()):
+        if not issubclass(cls, MachineMonster):
+            continue
+        try:
+            mon = _live(cls)
+        except Exception:
+            continue
+        branches = [s for s in mon.machine.states.values()
+                    if type(s).__name__ == "RandomBranchState"
+                    and any(callable(b["weight"]) for b in s._branches)]
+        if not branches:
+            continue
+        callable_weight.append(cls.__name__)
+        as_built = _fractional_branch_weights(mon.machine)
+        print(f"  {cls.__name__}: {len(branches)} RandomBranchState(s) with a "
+              f"callable weight")
+        print(f"     as constructed, fractional vectors: {as_built or 'NONE'}")
+        # search the monster's own int fields for one that opens the gate
+        found = None
+        for field_name, val in sorted(vars(mon).items()):
+            if (field_name in _WEIGHT_FIELD_DENY or not isinstance(val, int)
+                    or isinstance(val, bool) or val == 0):
+                continue
+            try:
+                setattr(mon, field_name, 0)
+                frac = _fractional_branch_weights(mon.machine)
+            except Exception:
+                setattr(mon, field_name, val)
+                continue
+            if frac:
+                found = (field_name, val, frac)
+                print(f"     {field_name}={val} -> 0 OPENS the gate: {frac}")
+                break
+            setattr(mon, field_name, val)
+        if found is None:
+            print("     no single int field opens a fractional vector")
+            continue
+        opened.append(f"{cls.__name__}.{found[0]}")
+        ok, err = 0, None
+        for w in range(walks):
+            m = _live(cls, w)
+            setattr(m, found[0], 0)
+            m.machine._performed_first_move = True
+            rng = _random.Random(w)
             try:
                 for _ in range(steps):
-                    move = machine.roll_move(owner, rng)
-                    machine.on_move_performed(move)
+                    setattr(m, found[0], 0)      # keep the gate open
+                    mv = m.machine.roll_move(m, rng)
+                    m.machine.on_move_performed(mv)
                     ok += 1
             except RuntimeError as exc:
                 if "No valid branch" in str(exc):
@@ -388,19 +617,20 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
                     break
                 err = f"{type(exc).__name__}: {exc}"
                 break
-            except Exception as exc:
+            except Exception as exc:               # pragma: no cover
                 err = f"{type(exc).__name__}: {exc}"
                 break
         transitions += ok
-        (skipped if err else fuzzed).append(
-            (cls.__name__, err or f"{ok} transitions"))
-    print(f"machines fuzzed: {len(fuzzed)}  transitions: {transitions}")
-    print(f"'No valid branch' (total weight 0) hits: {len(hits)}")
+        print(f"     fuzzed with the gate OPEN: {ok} transitions"
+              f"{'  ERROR ' + err if err else ''}")
+    print(f"\nported machines with a CALLABLE branch weight: "
+          f"{len(callable_weight)}  ({', '.join(callable_weight) or 'none'})")
+    print(f"of those, gate opened to a fractional weight vector: {len(opened)}"
+          f"  ({', '.join(opened) or 'none'})")
+    print(f"transitions fuzzed with a fractional vector live: {transitions}")
+    print(f"'No valid branch' fall-throughs: {len(hits)}")
     for h in hits:
         print(f"  {h[0]}: {h[1]}")
-    print(f"machines skipped (need a live monster instance): {len(skipped)}")
-    for s in skipped:
-        print(f"  {s[0]}: {s[1]}")
 
 
 # ── ConditionalBranchState census ────────────────────────────────────────
@@ -504,6 +734,13 @@ def _norm_repeat(tok: str) -> str:
     return tok.rsplit(".", 1)[-1]
 
 
+# How many C# RandomBranchStates each _CS_BRANCHES row folds together. Every
+# row is one sim MODULE; FakeMerchantMonster.cs builds TWO RandomBranchStates
+# (RAND_MOVE :55-58 and RAND_ATTACK_MOVE :66-68) and the row lists both their
+# branch sets, so the module count and the branch-state count differ by one.
+_ROW_BRANCH_STATES = {"sts2_rl/monsters/fake_merchant.py": 2}
+
+
 def mismatch() -> None:
     print("C# branch parameters vs the sim port's, per branch, in add order.")
     print("A '2' or '3' appearing as the sim's WEIGHT where C# has it as")
@@ -542,7 +779,16 @@ def mismatch() -> None:
         print("\n".join(lines))
         if monster_bad:
             bad.append(path)
-    print(f"\n  monsters whose sim port MISREADS the C# branch arguments: "
+    # Explicit totals. The record's headline arithmetic comes from HERE and
+    # nowhere else -- an earlier pass stated "13 resolved / 8 match" by reading
+    # the branch-state count (13) as the pair count (12).
+    pairs = len(_CS_BRANCHES)
+    branch_states = sum(_ROW_BRANCH_STATES.get(p, 1) for p in _CS_BRANCHES)
+    print(f"\n  resolved C#<->sim pairs (one per sim MODULE): {pairs}")
+    print(f"  C# RandomBranchStates those pairs cover: {branch_states} "
+          f"(fake_merchant.py folds 2)")
+    print(f"  pairs that MATCH the C# branch arguments exactly: {pairs - len(bad)}")
+    print(f"  monsters whose sim port MISREADS the C# branch arguments: "
           f"{len(bad)}")
     for b in bad:
         print(f"    {b}")
@@ -668,6 +914,72 @@ def stun_machine() -> None:
           "state_log unchanged now, then +1 duplicate of the deferred move "
           "at the next RollMove (Creature.cs:534-541 + "
           "MonsterMoveStateMachine.cs:76-79).")
+    print("  NOTE FossilStalker is the G5 vehicle only: it is an UNDERDOCKS "
+          "monster and no ported caller can stun it (probe stun-sites: every "
+          "stun but Whistle's is a self-stun, and Whistle is Glory-only -- "
+          "probe whistle-route). The stun-REACHABLE case is below.")
+
+    # ── the reachable case: a Glory monster a player can actually stun ──
+    from sts2_rl.monsters.glory.scroll_of_biting import ScrollOfBiting
+    from sts2_rl.monsters.state_machine import MoveRepeatType
+
+    enc = Encounter(id="probe_stun_route", monster_classes=[ScrollOfBiting])
+    cs = CombatState(rng=_random.Random(3), encounter=enc)
+    scroll = cs.enemies[0]
+    m = scroll.machine
+    # park it where a Whistle stun bites: telegraphing CHEW, whose follow-up is
+    # the RandomBranchState. Reachable prefix CHOMP -> MORE_TEETH -> CHEW.
+    prefix = ["CHOMP", "MORE_TEETH", "CHEW"]
+    m.state_log[:] = [m.states[i] for i in prefix]
+    m.force_current_state(m.states["CHEW"])
+    m._performed_first_move = True
+    scroll._current_move = m.states["CHEW"]
+    before_log = [s.id for s in m.state_log]
+    CreatureCmd.stun(cs.hooks, scroll)
+    print("\n  sim ScrollOfBiting (Glory, the Whistle-reachable case):")
+    print(f"    stunned={scroll.stunned}  machine.current="
+          f"{m.current.id!r}  (no 'STUNNED' state was created)")
+    print(f"    state_log {before_log} -> {[s.id for s in m.state_log]}")
+    print(f"    C# would reach {before_log + ['CHEW']} after the post-stun roll")
+
+    branch = next(s for s in m.states.values()
+                  if type(s).__name__ == "RandomBranchState")
+
+    def _pick_dist(log_ids, corrected, trials=100000, seed=7):
+        from collections import Counter
+        saved = [dict(b) for b in branch._branches]
+        if corrected:                       # restore the C# parameters (G1)
+            for b in branch._branches:
+                if b["state_id"] == "CHEW":
+                    b["weight"] = 1.0
+                    b["repeat_type"] = MoveRepeatType.CAN_REPEAT_X_TIMES
+                    b["max_times"] = 2
+        counts: Counter = Counter()
+        rng = _random.Random(seed)
+        for _ in range(trials):
+            m.state_log[:] = [m.states[i] for i in log_ids]
+            m.force_current_state(m.states["CHEW"])
+            counts[m.roll_move(scroll, rng).id] += 1
+        branch._branches[:] = saved
+        return {k: v / trials for k, v in counts.items()}
+
+    dup = prefix + ["CHEW"]
+    cells = (
+        ("sim as shipped        (G4 gap + G1 gap)", prefix, False),
+        ("duplicate restored    (G1 gap only)    ", dup, False),
+        ("C# params restored    (G4 gap only)    ", prefix, True),
+        ("the GAME              (both fixed)     ", dup, True),
+    )
+    print("\n    the move the branch picks on the turn AFTER the deferred CHEW"
+          " (100000 rolls, seed 7):")
+    for label, log_ids, corrected in cells:
+        d = _pick_dist(log_ids, corrected)
+        print(f"      {label}  "
+              + "  ".join(f"{k} {v:5.1%}" for k, v in sorted(d.items())))
+    print("    -> the game's post-stun branch is FORCED to CHOMP because the "
+          "duplicated CHEW fills CanRepeatXTimes(2)'s window; the sim offers "
+          "CHEW. Both gaps must be fixed to close it, which is why G1 and G4 "
+          "are recorded separately (rule 3).")
 
 
 
@@ -680,13 +992,24 @@ def sources_sweep() -> None:
     it against the real trees, and report any that SEAM_SOURCES does not hash.
 
     This is governing rule 7 mechanised — it has been a review finding on
-    three consecutive seam tasks, so it is executable rather than a promise."""
-    import json
+    three consecutive seam tasks, so it is executable rather than a promise.
 
+    RESOLUTION IS PATH-AWARE, and the difference matters. A token that carries
+    a directory (`sts2_rl/monsters/hive/flail_knight.py`) must match a hashed
+    path by suffix. A BARE BASENAME (`Creature.cs`, `base.py` — the normal form
+    for a C# citation) is resolved against the real trees first:
+      * exactly one real file with that basename -> it must be the hashed one;
+      * several real files -> AMBIGUOUS. An earlier version of this probe
+        resolved every token by basename alone, so a citation of
+        `sts2_rl/cards/base.py` would have been satisfied by the hashed
+        `sts2_rl/monsters/base.py`. Ambiguous tokens are now listed with all
+        their candidates so the reader can see which file was meant.
+    Residual limitation, stated rather than hidden: for an ambiguous bare
+    basename the probe cannot know WHICH candidate the prose meant, so it
+    accepts the token if any candidate is hashed and flags it for a human."""
     from tools.audit.harness import SEAM_SOURCES
 
     game_paths, sim_paths = SEAM_SOURCES["monster_state_machine"]
-    hashed = {p.rsplit("/", 1)[-1] for p in game_paths + sim_paths}
     hashed_full = set(game_paths) | set(sim_paths)
 
     texts = []
@@ -699,33 +1022,544 @@ def sources_sweep() -> None:
         print("  nothing to sweep yet")
         return
 
+    # Rule 7's wording is "cites a file WITH LINE NUMBERS", so track whether any
+    # citation of a token is line-numbered. A bare mention (a name in a
+    # hole-list table, say) is not evidence and does not pull the file into the
+    # unit; it is reported separately instead of counted as a miss.
     cited: dict[str, set[str]] = {}
+    lineno_cited: set[str] = set()
     for rel, text in texts:
-        for tok in re.findall(r"[\w./\-]+\.(?:cs|py)", text):
-            tok = tok.replace("\\", "/").lstrip("./")
+        for m in re.finditer(r"([\w./\-]+\.(?:cs|py))(:\d+)?", text):
+            tok = m.group(1).replace("\\", "/").lstrip("./")
             cited.setdefault(tok, set()).add(rel)
+            if m.group(2):
+                lineno_cited.add(tok)
 
-    missing, resolved = [], 0
-    for tok in sorted(cited):
-        base = tok.rsplit("/", 1)[-1]
-        if any(tok.startswith(x) or f"/{x}" in tok for x in _SWEEP_EXCLUDE):
-            continue
-        if tok in hashed_full or base in hashed:
-            resolved += 1
-            continue
-        # does it exist at all? (a bare basename may be a real unhashed file)
-        hits = ([p.relative_to(DEFAULT_GAME_ROOT).as_posix()
+    def _real(base: str) -> list[str]:
+        return ([p.relative_to(DEFAULT_GAME_ROOT).as_posix()
                  for p in (DEFAULT_GAME_ROOT / "src").rglob(base)]
                 + [p.relative_to(_REPO).as_posix()
                    for p in (_REPO / "sts2_rl").rglob(base)])
-        missing.append((tok, sorted(cited[tok]), hits[:3]))
+
+    missing, ambiguous, excluded, name_only = [], [], [], []
+    resolved = 0
+    for tok in sorted(cited):
+        base = tok.rsplit("/", 1)[-1]
+        if any(tok.startswith(x) or f"/{x}" in tok for x in _SWEEP_EXCLUDE):
+            excluded.append(tok)
+            continue
+        if "/" in tok:
+            # a token carrying a directory must match a hashed PATH by suffix
+            hit = any(h == tok or h.endswith("/" + tok) for h in hashed_full)
+            hashed_candidates = []
+        else:
+            # a bare basename: resolve it against the real trees first
+            hashed_candidates = [h for h in hashed_full
+                                 if h.rsplit("/", 1)[-1] == base]
+            hit = bool(hashed_candidates)
+        if hit:
+            resolved += 1
+            real = _real(base)
+            if hashed_candidates and len(real) > 1:
+                ambiguous.append((tok, sorted(real), hashed_candidates))
+        elif tok not in lineno_cited:
+            name_only.append((tok, sorted(cited[tok])))
+        else:
+            missing.append((tok, sorted(cited[tok]), _real(base)[:3]))
     print(f"  {len(cited)} distinct .cs/.py tokens cited; {resolved} hashed; "
-          f"{len(missing)} NOT hashed (excluding {_SWEEP_EXCLUDE})")
-    for tok, where, hits in missing:
-        tag = "REAL FILE, UNHASHED" if hits else "no such file (prose token?)"
+          f"{len(missing)} NOT hashed; {len(excluded)} excluded "
+          f"{_SWEEP_EXCLUDE}; {len(name_only)} cited by NAME ONLY (no line "
+          f"number, so rule 7 does not pull them into the unit)")
+    for tok in excluded:
+        print(f"    excluded: {tok}")
+    for tok, where, real in missing:
+        tag = "REAL FILE, UNHASHED" if real else "no such file (prose token?)"
         print(f"    {tok:<44} {tag}  cited in {', '.join(w.split('/')[-1] for w in where)}")
-        for h in hits:
+        for h in real:
             print(f"        -> {h}")
+    if name_only:
+        print("\n  NAME-ONLY citations (no `:line` anywhere; a bare mention is "
+              "not evidence):")
+        for tok, where in name_only:
+            print(f"    {tok:<44} cited in "
+                  f"{', '.join(w.split('/')[-1] for w in where)}")
+    print(f"\n  AMBIGUOUS bare basenames (several real files share the name, so "
+          f"basename resolution alone could false-positive): {len(ambiguous)}")
+    for tok, real, hashed_candidates in ambiguous:
+        print(f"    {tok:<24} real: {real}")
+        print(f"    {'':<24} hashed: {hashed_candidates}")
+
+
+# ── stun caller inventory (rule 5: no unexecuted unreachability claims) ──
+def stun_sites() -> None:
+    """EXECUTED inventory of every sim stun. Step 38's `faithful` rests on "no
+    ported caller can stun a player" (C# StunInternal throws for a player,
+    Creature.cs:524-531) and G4/G5's liveness rests on WHICH callers exist, so
+    both need enumerating rather than asserting.
+
+    Reports, per `CreatureCmd.stun(...)` call site: the target expression, and
+    whether the target is the caller itself (a monster self-stun, which can
+    never be the player) or an externally supplied creature."""
+    import sts2_rl.monsters  # noqa: F401
+    from tools.audit.harness import _monster_units
+    from sts2_rl.monsters.state_machine import MachineMonster
+
+    rows = []
+    for path in sorted((_REPO / "sts2_rl").rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:                          # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "stun"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "CreatureCmd"):
+                continue
+            args = [ast.unparse(a) for a in node.args]
+            kw = {k.arg: ast.unparse(k.value) for k in node.keywords}
+            target = args[1] if len(args) > 1 else "?"
+            rows.append((path.relative_to(_REPO).as_posix(), node.lineno,
+                         target, kw.get("next_move_key")))
+    self_stun = [r for r in rows
+                 if r[2] in ("self", "self.owner", "self.owner.creature")]
+    external = [r for r in rows if r not in self_stun]
+    print(f"CreatureCmd.stun(...) call sites in sts2_rl/: {len(rows)}")
+    for path, line, target, nmk in rows:
+        kind = "SELF (a monster stunning itself)" if (path, line, target, nmk) in self_stun \
+            else "EXTERNAL target"
+        print(f"  {path}:{line}  target={target:<12} "
+              f"next_move_key={nmk or '-':<14} {kind}")
+    print(f"\n  self-stuns (target can never be the player): {len(self_stun)}")
+    print(f"  externally-targeted stuns: {len(external)}")
+    for path, line, target, _nmk in external:
+        print(f"    {path}:{line}  target={target}")
+    print("  -> the only externally-targeted stun is the Whistle card, whose "
+          "target comes from ctx.resolve_target (an ENEMY slot), so no ported "
+          "caller can reach C#'s player guard (Creature.cs:524-531).")
+    print(f"  sites passing next_move_key: "
+          f"{[f'{r[0]}:{r[1]}' for r in rows if r[3]]}")
+
+    # which of the stunnable monsters is a MachineMonster (G5's hasattr gate)
+    units = _monster_units()
+    hand, machine = [], []
+    for path, line, target, _nmk in rows:
+        mod = path.rsplit("/", 1)[-1][:-3]
+        for cls in units.values():
+            if cls.__module__.endswith(mod):
+                (machine if issubclass(cls, MachineMonster) else hand).append(
+                    f"{cls.__name__} ({path}:{line})")
+                break
+    print(f"\n  stun-calling monsters that are MachineMonsters: {sorted(set(machine))}")
+    print(f"  stun-calling monsters that are hand-rolled: {sorted(set(hand))}")
+
+    # The three POWER-side stun sites: which power, who applies it, and what
+    # that applier's machine is (a chain cannot show the G4 repeat-bar at all).
+    print("\n  the power-side stun sites, resolved to their appliers:")
+    pw_src = (_REPO / "sts2_rl/powers.py").read_text(encoding="utf-8")
+    pw_tree = ast.parse(pw_src)
+    owner_of: dict[int, str] = {}
+    for node in ast.walk(pw_tree):
+        if isinstance(node, ast.ClassDef):
+            for sub in ast.walk(node):
+                if (isinstance(sub, ast.Call)
+                        and isinstance(sub.func, ast.Attribute)
+                        and sub.func.attr == "stun"
+                        and isinstance(sub.func.value, ast.Name)
+                        and sub.func.value.id == "CreatureCmd"):
+                    owner_of[sub.lineno] = node.name
+    for line in sorted(owner_of):
+        power = owner_of[line]
+        appliers = []
+        for p in sorted((_REPO / "sts2_rl").rglob("*.py")):
+            if p.name == "powers.py":
+                continue
+            if power in p.read_text(encoding="utf-8"):
+                appliers.append(p.relative_to(_REPO).as_posix())
+        print(f"    powers.py:{line}  {power}  applied in {appliers}")
+        for ap in appliers:
+            for cls in units.values():
+                if not cls.__module__.endswith(ap.rsplit("/", 1)[-1][:-3]):
+                    continue
+                classes = _branch_classes(cls)
+                print(f"        {cls.__name__}: machine branch classes = "
+                      f"{classes or ['NONE (pure chain)']}")
+
+
+def _branch_classes(cls) -> list[str]:
+    """The branch-state classes a monster's machine actually contains, from a
+    LIVE instance (a detached build cannot serve every monster)."""
+    import random as _random
+
+    from sts2_rl.combat import CombatState
+    from sts2_rl.monsters import Encounter
+    from sts2_rl.monsters.state_machine import MachineMonster
+
+    if not issubclass(cls, MachineMonster):
+        return ["hand-rolled (no machine)"]
+    try:
+        enc = Encounter(id="probe_branch_classes", monster_classes=[cls])
+        mon = CombatState(rng=_random.Random(0), encounter=enc).enemies[0]
+    except Exception as exc:                          # pragma: no cover
+        return [f"UNBUILDABLE {type(exc).__name__}"]
+    return sorted({type(s).__name__ for s in mon.machine.states.values()
+                   if type(s).__name__.endswith("BranchState")})
+
+
+# ── the Whistle -> Glory reachability route for G4 ───────────────────────
+_HISTORY_RULES = ("CANNOT_REPEAT", "CAN_REPEAT_X_TIMES", "USE_ONLY_ONCE")
+
+
+def whistle_route() -> None:
+    """EXECUTED end-to-end reachability for G4: which ported monsters a player
+    can actually stun, and which of those have a history-sensitive branch.
+
+    Whistle is the only externally-targeted stun in the sim (`stun-sites`) and it
+    is granted by ONE relic, Tanx's Whistle, whose shrine key `tanx` belongs to
+    exactly one act's ancient pool. So the population of stunnable monsters is
+    that act's encounter pools — and NOT any monster of an earlier act, because
+    a relic obtained in act N cannot be carried backwards."""
+    import random as _random
+
+    from sts2_rl.monsters.state_machine import MachineMonster
+    from sts2_rl.rooms import act_rooms
+    from sts2_rl.run import _ACTS_BY_INDEX
+
+    acts = ["overgrowth", "underdocks", "hive", "glory"]
+    print("  which act's ancient pool holds `tanx` (the Whistle relic's shrine):")
+    tanx_acts = []
+    for name in acts:
+        keys = act_rooms(name).ancient_keys
+        if "tanx" in keys:
+            tanx_acts.append(name)
+        print(f"    {name:<12} ancient_keys={keys}")
+    print(f"    -> tanx is in {tanx_acts}")
+    print(f"  act order (run._ACTS_BY_INDEX): {_ACTS_BY_INDEX}")
+    for name in tanx_acts:
+        idx = [i for i, a in enumerate(_ACTS_BY_INDEX) if name in a]
+        print(f"    -> {name} is act index {idx}; acts at a LOWER index "
+              f"({[a for i, l in enumerate(_ACTS_BY_INDEX) if i < min(idx) for a in l]}) "
+              f"are already past when the relic is obtained")
+
+    print("\n  the grant chain, read from the ported files:")
+    for rel, pat in (("sts2_rl/relics/tanxs_whistle.py", r"make_card\(\"(\w+)\"\)"),
+                     ("sts2_rl/cards/whistle.py", r"CreatureCmd\.stun\(([^)]*)\)")):
+        src = (_REPO / rel).read_text(encoding="utf-8")
+        for m in re.finditer(pat, src):
+            line = src[:m.start()].count("\n") + 1
+            print(f"    {rel}:{line}  {m.group(0)}")
+
+    print("\n  every monster in the stun-reachable act's pools, with its "
+          "branch classes and repeat rules:")
+    hits = []
+    for name in tanx_acts:
+        rooms = act_rooms(name)
+        registry = rooms.encounters()
+        keys = (rooms.weak_keys + rooms.normal_keys + rooms.elite_keys
+                + rooms.boss_keys)
+        seen = {}
+        for key in keys:
+            enc = registry.get(key)
+            if enc is None:
+                continue
+            try:
+                from sts2_rl.combat import CombatState
+                mons = CombatState(rng=_random.Random(0), encounter=enc).enemies
+            except Exception as exc:                 # pragma: no cover
+                print(f"    {key}: could not instantiate ({type(exc).__name__})")
+                continue
+            for mon in mons:
+                cls = type(mon)
+                if cls.__name__ in seen:
+                    continue
+                if not isinstance(mon, MachineMonster):
+                    seen[cls.__name__] = (key, "hand-rolled (no machine)", [])
+                    continue
+                classes, rules = set(), []
+                for st in mon.machine.states.values():
+                    tn = type(st).__name__
+                    if tn in ("RandomBranchState", "ConditionalBranchState"):
+                        classes.add(tn)
+                    if tn == "RandomBranchState":
+                        for b in st._branches:
+                            rules.append(
+                                f"{b['state_id']}:{b['repeat_type'].name}"
+                                + (f"({b['max_times']})"
+                                   if b["repeat_type"].name == "CAN_REPEAT_X_TIMES"
+                                   else "")
+                                + (f"+cd{b['cooldown']}" if b["cooldown"] else ""))
+                seen[cls.__name__] = (key, ", ".join(sorted(classes)) or "chain only",
+                                      rules)
+        for cls_name in sorted(seen):
+            key, classes, rules = seen[cls_name]
+            mark = ""
+            if "RandomBranchState" in classes and any(
+                    r.split(":")[1].startswith(x) for r in rules
+                    for x in _HISTORY_RULES):
+                mark = "   <== RandomBranchState + a history-sensitive rule"
+                hits.append(f"{cls_name} ({key})")
+            print(f"    {cls_name:<24} [{key}] {classes}{mark}")
+            if rules:
+                print(f"        {rules}")
+    print(f"\n  stun-reachable RandomBranchState machines whose weights read "
+          f"the state log: {len(hits)}")
+    for h in hits:
+        print(f"    {h}")
+
+    print("\n  the monsters the record USED to cite as making G4 live, and what "
+          "their machines actually are:")
+    for mod, cls_name in (
+            ("sts2_rl.monsters.hive.slumbering_beetle", "SlumberingBeetle"),
+            ("sts2_rl.monsters.underdocks.lagavulin_matriarch", "LagavulinMatriarch"),
+            ("sts2_rl.monsters.underdocks.terror_eel", "TerrorEel"),
+            ("sts2_rl.monsters.underdocks.fossil_stalker", "FossilStalker")):
+        import importlib
+        cls = getattr(importlib.import_module(mod), cls_name)
+        from sts2_rl.combat import CombatState
+        from sts2_rl.monsters import Encounter
+        enc = Encounter(id="probe_route", monster_classes=[cls])
+        mon = CombatState(rng=_random.Random(0), encounter=enc).enemies[0]
+        classes = sorted({type(s).__name__ for s in mon.machine.states.values()
+                          if type(s).__name__.endswith("BranchState")})
+        act = [a for a in acts
+               if cls.__name__ in {type(m).__name__
+                                   for k in (act_rooms(a).weak_keys
+                                             + act_rooms(a).normal_keys
+                                             + act_rooms(a).elite_keys
+                                             + act_rooms(a).boss_keys)
+                                   if (e := act_rooms(a).encounters().get(k))
+                                   for m in _safe_monsters(e)}]
+        print(f"    {cls_name:<20} branch classes={classes or ['NONE (pure chain)']}"
+              f"  act(s)={act}")
+
+
+def _safe_monsters(enc):
+    import random as _random
+    from sts2_rl.combat import CombatState
+    try:
+        return CombatState(rng=_random.Random(0), encounter=enc).enemies
+    except Exception:                                # pragma: no cover
+        return []
+
+
+# ── the spawn-roll hand-off dropped by creature_card_cmds step 3 ─────────
+def spawn_roll() -> None:
+    """`creature_card_cmds` step 3 deferred `PrepareForNextTurn(rollNewMove:
+    false)` for a monster added while `CurrentSide != Enemy`
+    (CreatureCmd.cs:72-75) to this record. EXECUTED here.
+
+    The C# side, read in order out of CreatureCmd.Add (:56-80):
+      1. `await CombatManager.AfterCreatureAdded(creature)` -- CombatManager.cs
+         :860-867 rolls a move IFF `creature.IsEnemy && CurrentSide == Player`.
+      2. `if (CurrentSide != CombatSide.Enemy && creature.IsMonster)` ->
+         `PrepareForNextTurn(players, rollNewMove: false)`. With the flag FALSE
+         the whole body of PrepareForNextTurn (Creature.cs:546-554) reduces to
+         `NCombatRoom...RefreshIntents()`, i.e. presentation -- so the CALL adds
+         no mechanics, and the FLAG is a double-roll guard: it stops step 2
+         re-rolling what step 1 already rolled.
+    Net rolls per spawn, from those two guards (CombatSide has three values:
+    None, Player, Enemy -- CombatSide.cs:3-8):
+      Player + enemy monster    -> 1 roll   (step 1 rolls; step 2 suppressed)
+      Player + NON-enemy monster-> 0 rolls  (step 1's IsEnemy fails; step 2
+                                             suppressed)      -> UNSET_MOVE
+      Enemy  + any monster      -> 0 rolls  (step 1's side fails; step 2 not
+                                             reached)          -> UNSET_MOVE
+      None   + any monster      -> 0 rolls                     -> UNSET_MOVE
+    The sim has no separate intent-preparation step at all: `CreatureCmd.add`
+    (cmds.py:237-266) never rolls, and `MachineMonster.__init__` rolls once at
+    construction (state_machine.py:300-301)."""
+    import random as _random
+
+    from sts2_rl.cmds import CreatureCmd
+    from sts2_rl.combat import CombatState
+    from sts2_rl.monsters import Encounter
+    from sts2_rl.monsters.state_machine import (
+        MachineMonster, MonsterMoveStateMachine,
+    )
+    from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
+
+    print("  C# PrepareForNextTurn call sites and their rollNewMove argument:")
+    for rel in ("src/Core/Combat/CombatManager.cs",
+                "src/Core/Commands/CreatureCmd.cs",
+                "src/Core/Entities/Creatures/Creature.cs"):
+        src = (DEFAULT_GAME_ROOT / rel).read_text(encoding="utf-8-sig",
+                                                  errors="replace")
+        for i, ln in enumerate(src.splitlines(), 1):
+            if "PrepareForNextTurn" in ln:
+                flag = ("rollNewMove: false" if "rollNewMove: false" in ln
+                        else "rollNewMove: (default true)"
+                        if "(" in ln and "bool rollNewMove" not in ln
+                        else "the DECLARATION")
+                print(f"    {rel.rsplit('/', 1)[-1]}:{i}  {flag}")
+    print("    -> exactly one call site passes false, and it is the one "
+          "creature_card_cmds deferred here.")
+
+    # sim: does adding a MachineMonster mid-combat roll, and how many times?
+    enc = Encounter(id="probe_spawn", monster_classes=[FossilStalker])
+    cs = CombatState(rng=_random.Random(5), encounter=enc)
+    real_roll = MonsterMoveStateMachine.roll_move
+    calls = {"n": 0}
+
+    def _counting(self, owner, rng):
+        calls["n"] += 1
+        return real_roll(self, owner, rng)
+
+    MonsterMoveStateMachine.roll_move = _counting
+    try:
+        spawn = FossilStalker(cs.hooks, _random.Random(6))
+        after_ctor = calls["n"]
+        log_after_ctor = [s.id for s in spawn.machine.state_log]
+        CreatureCmd.add(cs.hooks, spawn)
+        after_add = calls["n"]
+    finally:
+        MonsterMoveStateMachine.roll_move = real_roll
+    print(f"\n  sim, a MachineMonster spawned mid-combat:")
+    print(f"    roll_move calls during __init__      : {after_ctor}")
+    print(f"    roll_move calls during CreatureCmd.add: {after_add - after_ctor}")
+    print(f"    state_log after construction         : {log_after_ctor}")
+    print(f"    state_log after add                  : "
+          f"{[s.id for s in spawn.machine.state_log]}")
+    print(f"    _current_move                        : {spawn._current_move.id}"
+          f"   (never an UNSET_MOVE placeholder)")
+    print(f"    creature.side                        : {spawn.side!r}")
+
+    # is the non-enemy-monster arm representable in the sim at all?
+    import sts2_rl.monsters  # noqa: F401
+    from tools.audit.harness import _monster_units
+    sides = set()
+    for _uid, cls in sorted(_monster_units().items()):
+        if not issubclass(cls, MachineMonster):
+            continue
+        try:
+            e = Encounter(id="probe_side", monster_classes=[cls])
+            sides.add(CombatState(rng=_random.Random(0),
+                                  encounter=e).enemies[0].side)
+        except Exception:
+            continue
+    print(f"\n  distinct `side` values over every buildable ported monster: "
+          f"{sorted(sides)}")
+    print("    -> C#'s `Player + NON-enemy monster -> 0 rolls` arm has no sim "
+          "representative: creatures.py:21 defaults side='enemy' and no ported "
+          "monster changes it.")
+
+    # which sim spawn callers run during the enemy side (the reachable arm)
+    callers = []
+    for path in sorted((_REPO / "sts2_rl").rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:                           # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "add"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "CreatureCmd"):
+                callers.append(f"{path.relative_to(_REPO).as_posix()}:"
+                               f"{node.lineno}")
+    print(f"\n  sim CreatureCmd.add call sites: {len(callers)}")
+    for c in callers:
+        print(f"    {c}")
+    print("    -> all of them fire from a monster move, a monster death or a "
+          "power, i.e. during the ENEMY side, which is exactly the arm where "
+          "C# leaves the spawn on UNSET_MOVE (step 11 / G9).")
+
+
+# ── raise/throw asymmetry census (backs guard N7's recount) ──────────────
+# Hand-resolved pairing, re-checked against the greps this probe prints.
+# Buckets: SYM = both sides raise on the same input, so only the exception TYPE
+# differs (guard N7's whole scope). ASYM = exactly one side raises (a gap).
+# ONE-SIDED-GUARD = only one side has a deliberate guard, but the other happens
+# to raise anyway for an unrelated reason. DEAD = a defensive throw on a state
+# the API on that side cannot produce, with no field to mirror.
+_RAISE_PAIRS = [
+    # (bucket, what, C# site, sim site)
+    ("SYM", "machine: RollMove landed on a non-move",
+     "MonsterMoveStateMachine.cs:39", "state_machine.py:252"),
+    ("SYM", "machine: no initial state to fall back to",
+     "MonsterMoveStateMachine.cs:58", "state_machine.py:271"),
+    ("SYM", "machine: unknown state id from GetNextState",
+     "MonsterMoveStateMachine.cs:70", "state_machine.py:271"),
+    ("SYM", "MoveState: no follow-up at all",
+     "MoveState.cs:69", "state_machine.py:138"),
+    ("SYM", "conditional: no branch evaluated > 0",
+     "ConditionalBranchState.cs:53", "state_machine.py:232"),
+    ("ASYM", "branch: the subtract-and-check loop falls through (step 15, G7c)",
+     "RandomBranchState.cs:127", "state_machine.py:189 returns the LAST branch"),
+    ("ASYM", "branch: every weight is 0 (G7 clause b)",
+     "RandomBranchState.cs:117-124 burns a draw and picks branch 0",
+     "state_machine.py:183 raises before drawing"),
+    ("ASYM", "branch: CanRepeatXTimes with maxTimes == 0 (step 21, G7a)",
+     "RandomBranchState.cs:144-147 builds a permanently dead branch",
+     "state_machine.py:168-169 raises ValueError"),
+    ("ASYM", "register: duplicate state id (step 3, G8 clause a)",
+     "MonsterState.cs:19 -> Dictionary.Add throws",
+     "state_machine.py:87 silently overwrites"),
+    ("ASYM", "model: the MoveStateMachine setter set twice (step 37, G8 clause b)",
+     "MonsterModel.cs:228-236 throws",
+     "no setter; `self.machine = ...` silently rebinds"),
+    ("ONE-SIDED-GUARD",
+     "AddBranch overload #1 given CanRepeatXTimes (step 22, G8 clause c)",
+     "RandomBranchState.cs:48-51 throws ArgumentException",
+     "no analogue of C#'s guard; state_machine.py:168-169 happens to raise for "
+     "a DIFFERENT predicate (max_times <= 0), which is itself G7 clause a"),
+    ("DEAD", "branch: StateWeight.GetWeight with a null lambda (step 12)",
+     "RandomBranchState.cs:29 -- unreachable, no overload can leave it null",
+     "no such field; the sim's weight default is in the add_branch signature"),
+]
+
+
+def raise_sites() -> None:
+    """Guard N7 claims the exception TYPE never matters and excludes "the places
+    where one side raises and the other does not". That exclusion list has to be
+    counted, not guessed — this probe counts it.
+
+    Prints the raw greps (C# `throw` in the five machine files + MonsterModel,
+    sim `raise` in state_machine.py) and then the resolved pairing, bucketed."""
+    cs_files = [
+        "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+        "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterState.cs",
+        "src/Core/MonsterMoves/MonsterMoveStateMachine/MoveState.cs",
+        "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+        "src/Core/MonsterMoves/MonsterMoveStateMachine/ConditionalBranchState.cs",
+    ]
+    total_cs = 0
+    for rel in cs_files:
+        src = (DEFAULT_GAME_ROOT / rel).read_text(encoding="utf-8-sig",
+                                                  errors="replace")
+        lines = [i + 1 for i, ln in enumerate(src.splitlines())
+                 if re.search(r"\bthrow new\b", ln)]
+        total_cs += len(lines)
+        print(f"  {rel.rsplit('/', 1)[-1]:<28} throw new at {lines}")
+    sim = (_REPO / "sts2_rl/monsters/state_machine.py").read_text(encoding="utf-8")
+    sim_lines = [i + 1 for i, ln in enumerate(sim.splitlines())
+                 if re.search(r"^\s*raise \w", ln)]
+    print(f"  {'state_machine.py':<28} raise at {sim_lines}")
+    print(f"\n  C# throw sites in the machine files: {total_cs}   "
+          f"sim raise sites in state_machine.py: {len(sim_lines)}")
+
+    labels = {
+        "SYM": "SYMMETRIC (both sides raise -> only the TYPE differs; "
+               "this is guard N7's ENTIRE scope)",
+        "ASYM": "ASYMMETRIC (exactly one side raises -> a gap, NOT N7's)",
+        "ONE-SIDED-GUARD": "ONE-SIDED GUARD (only C# guards it deliberately; "
+                           "the sim's raise is a different predicate's "
+                           "side effect -> also a gap)",
+        "DEAD": "DEAD ON BOTH SIDES (a defensive throw the API cannot reach; "
+                "faithful)",
+    }
+    for bucket, label in labels.items():
+        rows = [p for p in _RAISE_PAIRS if p[0] == bucket]
+        print(f"\n  {label}: {len(rows)}")
+        for _b, what, cs, py in rows:
+            print(f"    {what}\n        C#: {cs}\n        sim: {py}")
+    n_sym = sum(1 for p in _RAISE_PAIRS if p[0] == "SYM")
+    n_gap = sum(1 for p in _RAISE_PAIRS if p[0] in ("ASYM", "ONE-SIDED-GUARD"))
+    print(f"\n  => guard N7 covers {n_sym} sites; {n_gap} raise-behaviour sites "
+          f"are gaps and are NOT N7's (G7 x3, G8 x3)")
 
 
 PROBES = {
@@ -741,6 +1575,11 @@ PROBES = {
     "hand-rolled": hand_rolled,
     "move-rng": move_rng,
     "zero-weight": zero_weight,
+    "nondyadic-weights": nondyadic_weights,
+    "stun-sites": stun_sites,
+    "whistle-route": whistle_route,
+    "raise-sites": raise_sites,
+    "spawn-roll": spawn_roll,
 }
 
 

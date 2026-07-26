@@ -1291,6 +1291,51 @@ class TestMonsterStateMachineOrder:
         for a, b, c in zip(ids, ids[1:], ids[2:]):   # never three in a row
             assert not (a == b == c)
 
+    def test_a_mid_combat_spawn_rolls_its_move_exactly_once(self):
+        """`creature_card_cmds` step 3 handed this record
+        `PrepareForNextTurn(rollNewMove: false)` for a monster added while
+        `CurrentSide != Enemy` (`CreatureCmd.cs:72-75`). Audited as step 47:
+        with the flag false, `PrepareForNextTurn` (`Creature.cs:546-554`)
+        reduces to `RefreshIntents()`, so the flag exists to stop that call
+        re-rolling what `CombatManager.AfterCreatureAdded`
+        (`CombatManager.cs:860-867`) already rolled -- C# rolls a spawn's move
+        EXACTLY ONCE, never twice. The sim reaches the same property by a
+        different split: `CreatureCmd.add` (`cmds.py:237-266`) never rolls and
+        `MachineMonster.__init__` rolls once (`state_machine.py:300-301`).
+        Pinned because nothing else asserts it and a future
+        `telegraph_next_move` call inside `CreatureCmd.add` would silently
+        double-roll (one extra MonsterAi draw plus a second log entry).
+        Executed equivalently by `tools/audit/state_machine_probes.py
+        spawn-roll`."""
+        from sts2_rl.cmds import CreatureCmd
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.state_machine import MonsterMoveStateMachine
+        from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
+
+        enc = Encounter(id="pin_spawn", monster_classes=[FossilStalker])
+        cs = CombatState(rng=random.Random(5), encounter=enc)
+
+        real = MonsterMoveStateMachine.roll_move
+        calls = []
+
+        def counting(self, owner, rng):
+            calls.append(1)
+            return real(self, owner, rng)
+
+        MonsterMoveStateMachine.roll_move = counting
+        try:
+            spawn = FossilStalker(cs.hooks, random.Random(6))
+            during_ctor = len(calls)
+            CreatureCmd.add(cs.hooks, spawn)
+            during_add = len(calls) - during_ctor
+        finally:
+            MonsterMoveStateMachine.roll_move = real
+
+        assert during_ctor == 1                 # C#: AfterCreatureAdded's roll
+        assert during_add == 0                  # C#: rollNewMove: false
+        assert len(spawn.machine.state_log) == 1
+        assert spawn._current_move.id == spawn.machine.current.id
+
     @pytest.mark.xfail(
         reason="monster_state_machine audit gap G1 (audits/seam/"
                "monster_state_machine.json step 13), LIVE. C#'s "
@@ -1358,24 +1403,38 @@ class TestMonsterStateMachineOrder:
                "RandomBranchState.cs:142-157 blocks that move's "
                "CanRepeatXTimes/CannotRepeat branch on the FOLLOWING roll "
                "while the sim still offers it -- a different enemy intent. "
-               "LIVE: the stun is player-reachable via Whistle, the ported "
-               "Tanx Ancient Attack (cards/whistle.py:30-38, CreatureCmd."
-               "stun with no next move), and monster-reachable via the "
-               "ported MachineMonsters SlumberingBeetle "
-               "(monsters/hive/slumbering_beetle.py:68), LagavulinMatriarch "
-               "(monsters/underdocks/lagavulin_matriarch.py:87) and "
-               "TerrorEel (monsters/underdocks/terror_eel.py:65); "
-               "FossilStalker is a ported monster whose every branch is "
-               "CanRepeatXTimes(2), i.e. exactly the rule the duplicate "
-               "changes.",
+               "LIVE, on the one route that closes end to end (probes "
+               "stun-sites, whistle-route, stun-machine): of the sim's 8 "
+               "CreatureCmd.stun call sites exactly one takes an EXTERNAL "
+               "target, cards/whistle.py:38 (the ported Tanx Ancient Attack, "
+               "CreatureCmd.stun with no next move); Whistle comes only from "
+               "Tanx's Whistle (relics/tanxs_whistle.py:17) and `tanx` is in "
+               "GLORY's ancient pool and no other act's (rooms.py:206), and "
+               "Glory is the LAST act (run._ACTS_BY_INDEX), so the "
+               "stun-reachable population is Glory's pools -- in which four "
+               "RandomBranchState machines read the state log: ScrollOfBiting "
+               "(scrolls_of_biting_*), FlailKnight and SpectralKnight "
+               "(glory/knights.py:131) and SoulNexus. THIS TEST USES "
+               "ScrollOfBiting, whose C# CHEW branch is CanRepeatXTimes(2) "
+               "(ScrollOfBiting.cs:90) -- exactly the rule the duplicate "
+               "fills. Executed consequence (probe stun-machine, 100000 "
+               "rolls, seed 7): after a Whistle stun on a CHEW telegraph the "
+               "game's next-but-one intent is CHOMP 100% of the time and the "
+               "sim's is CHEW 66.5% / CHOMP 33.5%. The three monsters an "
+               "earlier pass cited here -- SlumberingBeetle, "
+               "LagavulinMatriarch, TerrorEel -- CANNOT show this observable: "
+               "the first two branch on ConditionalBranchState (reads "
+               "self.powers, never state_log) and TerrorEel has no branch "
+               "state at all, and all three are in earlier acts than the "
+               "Whistle.",
         strict=True,
     )
     def test_stun_makes_the_stun_a_move_and_relogs_the_deferred_one(self):
         from sts2_rl.cmds import CreatureCmd
         from sts2_rl.monsters import Encounter
-        from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
+        from sts2_rl.monsters.glory.scroll_of_biting import ScrollOfBiting
 
-        enc = Encounter(id="pin_stun", monster_classes=[FossilStalker])
+        enc = Encounter(id="pin_stun", monster_classes=[ScrollOfBiting])
         cs = CombatState(rng=random.Random(3), encounter=enc)
         mon = cs.enemies[0]
         deferred = mon._current_move.id
@@ -1400,10 +1459,14 @@ class TestMonsterStateMachineOrder:
                "next_move_key='LASH_MOVE' SILENTLY DROPPED). C# threads it "
                "into the synthetic stun state's FollowUpStateId "
                "(Creature.cs:532-541), so the monster resumes on exactly "
-               "that move. DORMANT: the one ported caller that passes a next "
-               "move is monsters/overgrowth/ceremonial_beast.py:45 and "
-               "CeremonialBeast is a hand-rolled Monster "
-               "(ceremonial_beast.py:32) that does have _move_key. Named "
+               "that move. DORMANT: executed, probe stun-sites enumerates all "
+               "8 sim CreatureCmd.stun call sites and reports exactly one "
+               "passing next_move_key -- monsters/overgrowth/"
+               "ceremonial_beast.py:45 -- and CeremonialBeast is a "
+               "hand-rolled Monster (ceremonial_beast.py:32) that does have "
+               "_move_key, while the other three monster self-stunners "
+               "(SlumberingBeetle, LagavulinMatriarch, TerrorEel) are "
+               "MachineMonsters that pass none. Named "
                "trigger: porting CeremonialBeast -- or DecimillipedeSegment "
                "/ TestSubject / WaterfallGiant, the other "
                "MustPerformOnceBeforeTransitioning users "
@@ -1428,7 +1491,8 @@ class TestMonsterStateMachineOrder:
 
     @pytest.mark.xfail(
         reason="monster_state_machine audit gap G6 (audits/seam/"
-               "monster_state_machine.json steps 35, 41), LIVE. The machine "
+               "monster_state_machine.json steps 35, 41), DORMANT -- see the "
+               "demotion below. The machine "
                "itself is already on the right stream -- "
                "MachineMonster._move_rng is combat_rng.monster_ai "
                "(monsters/state_machine.py:306-312), matching "
@@ -1455,8 +1519,9 @@ class TestMonsterStateMachineOrder:
                "assignments), so a chain roll consumes no draw from any "
                "stream and neither clause is observable today. Named "
                "trigger: a FlutterPower user whose current move's follow-up "
-               "is a RandomBranchState -- any of the 13 ported branch "
-               "machines would do. THIS TEST CONSTRUCTS THAT TRIGGER, "
+               "is a RandomBranchState -- any of the 12 resolved ported "
+               "branch ports would do (probe mismatch). "
+               "THIS TEST CONSTRUCTS THAT TRIGGER, "
                "splicing a branch behind FLUTTER_MOVE so the splice must "
                "draw, and then asserts the draw did not come off the shared "
                "stream. Cross-referenced to turn_structure's G9, which owns "
@@ -1522,9 +1587,14 @@ class TestMonsterStateMachineOrder:
                "start. DORMANT: probe cs-addbranch enumerates all 15 "
                "non-default integer arguments across the 61 monster "
                "AddBranch call sites and every one is 2 or 3 -- no shipped "
-               "monster passes 0 as maxRepeats. Named trigger: a C# monster "
-               "model added with AddBranch(state, 0) or AddBranch(state, 0, "
-               "weight).",
+               "monster passes 0 as maxRepeats -- and probe zero-weight now "
+               "builds 82 of the 83 ported machines (only _Cultist, which "
+               "needs a constructor argument, is unbuilt) without tripping "
+               "this ValueError, so no ported PORT passes 0 either. Named "
+               "trigger: a C# monster model added with AddBranch(state, 0) "
+               "or AddBranch(state, 0, weight). This same guard is why step "
+               "22's apparent coverage of C#'s overload-#1 check is "
+               "incidental (G8 clause c).",
         strict=True,
     )
     def test_max_times_zero_disables_the_branch_instead_of_raising(self):
@@ -1556,8 +1626,10 @@ class TestMonsterStateMachineOrder:
         assert ids == {"B"}
 
     @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G8 (audits/seam/"
-               "monster_state_machine.json step 3), DORMANT. Every C# "
+        reason="monster_state_machine audit gap G8 clause (a) (audits/seam/"
+               "monster_state_machine.json step 3; clauses (b) and (c) are "
+               "steps 37 and 22, the same mechanism at two more sites and so "
+               "the same verdict by rule 3), DORMANT. Every C# "
                "RegisterStates implementation is monsterStates.Add(Id, this) "
                "(RandomBranchState.cs:171, MoveState.cs:74, "
                "ConditionalBranchState.cs:58) and Dictionary.Add THROWS "
@@ -1568,8 +1640,11 @@ class TestMonsterStateMachineOrder:
                "the second definition wins and every follow_up aimed at the "
                "first resolves to the second -- a mis-ported monster gets a "
                "quietly wrong move graph instead of a crash. DORMANT: probe "
-               "zero-weight builds 59 ported machines over 4,720,008 "
-               "transitions and none collides. Named trigger: porting a "
+               "zero-weight builds and fuzzes 82 ported machines over "
+               "6,560,008 transitions (59 via a detached build, the other 23 "
+               "via a live instance) and none collides; ONE machine, "
+               "_Cultist, is still unbuildable, so dormancy is unproven for "
+               "that one. Named trigger: porting a "
                "monster with a repeated state id -- Fogmog.cs:44-45 is the "
                "shipped near-miss, two distinct MoveStates (SWIPE_MOVE and "
                "SWIPE_RANDOM_MOVE) sharing one SwipeMove delegate and "
