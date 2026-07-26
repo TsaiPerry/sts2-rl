@@ -1,0 +1,56 @@
+{
+  "unit": "relic/pandoras_box",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PandorasBox.cs",
+    "sha256": "db85af4910816592c10fe4c353a1901f6a91544bc3af9d1790b4b166ee1eb99a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\pandoras_box.py",
+    "sha256": "c5d6cba8c90a265d74278852730402aafc017e0ce324b0eb7a7f4796f34615a8"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (pandoras_box.py:14)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (pandoras_box.py:15)",
+      "verdict": "faithful",
+      "rationale": "PandorasBox.cs:19 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:126-136. Matches."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained(run) (pandoras_box.py:17-32), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "PandorasBox.cs:21-30. TARGET SET: `c != null && c.IsBasicStrikeOrDefend && c.IsRemovable`. IsBasicStrikeOrDefend is `Rarity == CardRarity.Basic && (Tags.Contains(Strike) || Tags.Contains(Defend))` (CardModel.cs:677-694) and it is `virtual` with ZERO overrides anywhere in the game (executed grep), so pandoras_box.py:22-26's `c.rarity == CardRarity.BASIC and (\"strike\" in c.tags or \"defend\" in c.tags)` over `run.removable_cards()` (IsRemovable = not Eternal, run.py:360-362) is the same set. REPLACEMENTS: `CardFactory.CreateRandomCardForTransform(c, isInCombat: false, base.Owner.RunState.Rng.Niche)` per card, and run.transform_card(card, pick_rng=niche) is the sim's equivalent with the same stream (see N1). ORDER: C#'s `Select` is lazy but `CardCmd.Transform` forces it with `transformations.ToArray()` (CardCmd.cs:375) before removing anything, then sorts the appends by the originals' pile index (PileIndexSort, CardCmd.cs:353-360, :405) -- for a single Deck pile that is ascending deck order, which is also the order the sim's loop rolls and appends in. The rolls are order-independent anyway: GetFilteredTransformationOptions depends only on the ORIGINAL card's rarity and id (CardFactory.cs:189-212), never on the current deck, so rolling all five up front and rolling them one at a time consume the Niche stream identically. Line 26-28's NSimpleCardsViewScreen is presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (PROMPT.md bug class 16): C# names `RunState.Rng.Niche` explicitly (PandorasBox.cs:24) and the sim DOES pass it",
+      "verdict": "faithful",
+      "rationale": "pandoras_box.py:30 is `niche = run.rng_set.niche if run.rng_set is not None else None`, and run.transform_card's `pick_rng` parameter is documented as exactly this argument, naming Pandora's Box as the caller (run.py:430-435). Checked because this is the failure mode class 16 warns about and audits/relic/astrolabe.json N1 filed as a live gap for the same helper: there the port left pick_rng at its None default and silently fell back to the legacy shared random.Random. Here it does not. The stream is genuinely CONSUMED rather than merely named -- CreateRandomCardForTransform calls `rng.NextItem(...)` directly (CardFactory.cs:177-181), unlike the `claws` case class 16 cites where an explicit Replacement means GetReplacement never touches the Rng. The `else None` branch is the legacy RL path, the repo-wide convention for runs with no rng_set."
+    },
+    {
+      "what": "N2 (PROMPT.md bug class 8): deck placement -- an out-of-combat transform APPENDS at the deck's end rather than replacing in place",
+      "verdict": "faithful",
+      "rationale": "run.transform_card's docstring records the rule and cites CardCmd.cs:437, and names Pandora's Box as the reason it matters ('appends its 8 rolls after the deck's existing cards') because the combat-start UnstableShuffle is order-dependent. Verified against CardCmd.Transform itself: the originals are all removed first (CardCmd.cs:402) and the replacements added afterwards in PileIndexSort order (:405-407). NOTE per binding rule 7: this leans on sts2_rl/run.py, which this record does NOT hash."
+    },
+    {
+      "what": "N3: the replacements are not upgraded, and a transformed card can roll into any Common/Uncommon/Rare of the same pool except itself",
+      "verdict": "faithful",
+      "rationale": "GetFilteredTransformationOptions keeps only rarities 2-4 (Common/Uncommon/Rare) for a non-Curse original, excludes `c.Id == original.Id`, and applies FilterForPlayerCount (CardFactory.cs:189-212); `isInCombat: false` means the CanBeGeneratedInCombat filter is NOT applied, so out-of-run cards stay offerable -- the same reading audits/relic/burning_sticks.json records for the reward pool (binding rule 3). run.transform_card's docstring states the same rules for the deck-level path. The port's docstring statement 'Replacements are not upgraded' is correct: CreateCard produces a level-0 card and nothing upgrades it."
+    },
+    {
+      "what": "N4: no RelicModel.IsAllowed override; and this unit is NOT one of sweep A's unreset-state candidates",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's fifteen C# relic files finds no IsAllowed override, so sweep B's cluster excludes this unit. The relic holds no state at all -- its whole effect is the one-shot pickup -- so PROMPT.md bug class 13 has nothing to bite on, consistent with pandoras_box being absent from sweep-reset's candidate list. Obtainability confirmed by execution (`py tools/audit/relic_probes_b11.py pool`): Ancient, granted by the ported Darv shrine (events/darv.py), and it is the only unit in this batch not granted by Pael."
+    },
+    {
+      "what": "N5: `LocalContext.IsMe(base.Owner)` on the results screen (PandorasBox.cs:26)",
+      "verdict": "waiver",
+      "rationale": "A multiplayer local-player check gating a UI screen; both halves are out of scope (multiplayer + presentation) under the shared contract."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}
