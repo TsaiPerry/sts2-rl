@@ -1,0 +1,41 @@
+{
+  "unit": "card/setup_strike",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\SetupStrike.cs",
+    "sha256": "45b59d06baf4b6ae58921a4be9babff48204ae8ec88a836a5a728ec18ca351f9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\setup_strike.py",
+    "sha256": "598198b681324563a8dcbab420659d25cb6ed3908a4c839c55b3cf17d2a3f3ef"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (setup_strike.py:61-66) + _init_vars (68-71)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (SetupStrike.cs:26-29) == cost 1 / ATTACK / COMMON / ANY_ENEMY."
+    },
+    "CanonicalTags": {
+      "maps_to": "SetupStrikeCard.tags = frozenset({\"strike\"}) (setup_strike.py:66)",
+      "verdict": "faithful",
+      "rationale": "`new HashSet<CardTag> { CardTag.Strike }` (SetupStrike.cs:18) == the tag set."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 7, _strength = 2 (setup_strike.py:70-71)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(7m, ValueProp.Move)` + `new PowerVar<StrengthPower>(2m)` (SetupStrike.cs:20-24) == both numbers. Note the second var is keyed on StrengthPower but is the amount handed to SETUPSTRIKEPower (SetupStrike.cs:37), the temporary-Strength wrapper -- the same key/target mismatch as card/demon_form, card/feeding_frenzy and card/rupture, checked rather than assumed."
+    },
+    "OnPlay": {
+      "maps_to": "SetupStrikeCard.on_play (setup_strike.py:77-86)",
+      "verdict": "faithful",
+      "rationale": "Order matches: attack FIRST (SetupStrike.cs:34-36), then `PowerCmd.Apply<SetupStrikePower>(..., DynamicVars.Strength.BaseValue, ...)` (37) == `PowerCmd.apply(..., SetupStrikePower, self._strength, applier=ctx.player)`. The sim correctly uses `PowerCmd.apply` and NOT `StrengthCmd.apply` here, because SetupStrikePower is a TemporaryStrength wrapper rather than raw Strength -- the same distinction card/feeding_frenzy gets right and card/inflame deliberately diverges on. Presentation, folded in: WithHitFx and the Strength hover tip (16)."
+    },
+    "OnUpgrade": {
+      "maps_to": "SetupStrikeCard._on_upgrade (setup_strike.py:73-75)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` + `DynamicVars.Strength.UpgradeValueBy(1m)` (SetupStrike.cs:42-43) == `_damage += 2` (7 -> 9) and `_strength += 1` (2 -> 3). Both upgraded numbers checked."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

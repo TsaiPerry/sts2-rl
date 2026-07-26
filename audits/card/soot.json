@@ -1,0 +1,47 @@
+{
+  "unit": "card/soot",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Soot.cs",
+    "sha256": "176af6de2e34afabf8eb1d2a409a2fa4987fa1739470bd2fa47157891c21bb1d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\soot.py",
+    "sha256": "9f897149a6551b8358e30f0eceb4b5f80d84fee2094f6402baf1a131d7662538"
+  },
+  "hooks": {
+    "CanBeGeneratedInCombat": {
+      "maps_to": "SootCard.can_be_generated_in_combat = False (soot.py:222)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (Soot.cs:8) == the class attribute -- correctly mapped, unlike the three Knowledge-Demon statuses, which set `can_be_generated_by_modifiers` instead. Worth naming because Soot is a Status like they are, so the sim clearly knows the right mapping."
+    },
+    "MaxUpgradeLevel": {
+      "maps_to": "SootCard.max_upgrade_level = 0 (soot.py:220)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Soot.cs:10) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "SootCard.is_playable = False (soot.py:219)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Soot.cs:12) == `is_playable = False`. No Ethereal and no Exhaust, so Soot sits in hand for the rest of the turn -- the dead-draw shape."
+    },
+    "ctor": {
+      "maps_to": "class attrs (soot.py:214-222) + _init_vars (224-225)",
+      "verdict": "gap",
+      "issue": "STATUS / STATUS / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
+    },
+    "OnPlay": {
+      "maps_to": "SootCard.on_play -> pass (soot.py:227-228)",
+      "verdict": "faithful",
+      "rationale": "Soot.cs has no members beyond the three overrides -- no OnPlay, no OnTurnEndInHand, no vars. A pure dead draw on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (soot.py:221), which has no counterpart in Soot.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the flag only steers `DamageCmd.deal`'s prop inference and Soot deals no damage."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
