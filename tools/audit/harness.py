@@ -195,9 +195,26 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
         ["sts2_rl/cmds.py", "sts2_rl/hooks.py", "sts2_rl/powers.py"],
     ),
     "creature_card_cmds": (
+        # The four Cmd files are the orchestration, but three of the seam's
+        # behaviours live outside them: the sim's `CardSelectCmd` class has no
+        # counterpart other than CardSelectCmd.cs (auto-select-when-few,
+        # draw-pile ordering); every CardPileCmd pile mutation delegates to
+        # CardPile.AddInternal/RemoveInternal/RandomizeOrderInternal (index
+        # semantics, MaxCardsInHand); and the shuffle semantics the seed facts
+        # rest on (StableShuffle = sort-then-Fisher-Yates, UnstableShuffle)
+        # live in ListExtensions. Sim side: cmds.py holds only part of the
+        # counterpart — the pile verbs are on PlayerCombatState (player.py),
+        # the deck/gold verbs on RunState (run.py), and CardCmd.AutoPlay maps
+        # to CombatState.auto_play_card (combat.py). See the scope-boundary
+        # section of docs/audit/seams/creature_card_cmds.md for the
+        # method-level split against turn_structure and hook_dispatch.
         ["src/Core/Commands/CreatureCmd.cs", "src/Core/Commands/PlayerCmd.cs",
-         "src/Core/Commands/CardCmd.cs", "src/Core/Commands/CardPileCmd.cs"],
-        ["sts2_rl/cmds.py"],
+         "src/Core/Commands/CardCmd.cs", "src/Core/Commands/CardPileCmd.cs",
+         "src/Core/Commands/CardSelectCmd.cs",
+         "src/Core/Entities/Cards/CardPile.cs",
+         "src/Core/Extensions/ListExtensions.cs"],
+        ["sts2_rl/cmds.py", "sts2_rl/player.py", "sts2_rl/run.py",
+         "sts2_rl/combat.py"],
     ),
     "turn_structure": (
         ["src/Core/Combat/CombatManager.cs", "src/Core/Combat/PlayerTurnPhase.cs"],

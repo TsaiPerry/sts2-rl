@@ -1,0 +1,672 @@
+{
+  "unit": "seam/creature_card_cmds",
+  "game_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8"
+    },
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. CreatureCmd.Add guards: !IsInProgress throw / CombatState null throw / !IsLiveCombat return",
+      "verdict": "deliberate-divergence",
+      "rationale": "cmds.py:246-249 keeps only the `combat is None` guard; C#'s two throws and the IsLiveCombat early return (CreatureCmd.cs:55-67) are absent. The sim does not model C# exceptions as game mechanics anywhere, and an add into an ending combat is a caller-discipline question rather than an observable rule difference; recorded as a deliberate simplification, not a gap."
+    },
+    {
+      "what": "2. AddCreature -> CombatManager.AddCreature -> AfterCreatureAdded",
+      "verdict": "faithful"
+    },
+    {
+      "what": "3. Monster spawned on the player's turn: PrepareForNextTurn(rollNewMove: false)",
+      "verdict": "deliberate-divergence",
+      "rationale": "CreatureCmd.cs:72-75 pre-rolls the spawn's turn state without choosing a new move, purely so an intent is showable before the enemy side acts. The sim has no separate intent-preparation step at all: a spawned monster's first move is produced when the state machine first advances on the enemy turn (monsters/state_machine.py -- the monster_state_machine seam, Task 10). Evidenced as behaviourally equivalent for ported spawns by the SP3 floor_34 fixture, where Ovicopter's egg spawns replay with zero observable divergences."
+    },
+    {
+      "what": "4. MapPointRoomHistoryEntry.MonsterIds bookkeeping",
+      "verdict": "waiver",
+      "rationale": "Run-history telemetry (CreatureCmd.cs:76-80); no gameplay effect."
+    },
+    {
+      "what": "5. Hook.AfterCreatureAddedToCombat",
+      "verdict": "faithful"
+    },
+    {
+      "what": "6. Escape guard: creature.IsDead -> no-op",
+      "verdict": "faithful"
+    },
+    {
+      "what": "7. Escape guard: CombatState null / !IsLiveCombat -> no-op",
+      "verdict": "deliberate-divergence",
+      "rationale": "cmds.py:227-234 has no combat-liveness guard; it instead checks the win condition inline afterwards. Same class of simplification as step 1; escapes are only ever issued from a monster's own move, which cannot run outside a live combat."
+    },
+    {
+      "what": "8. Escape: creature.RemoveAllPowersInternalExcept() strips every power SILENTLY (no AfterRemoved)",
+      "verdict": "gap",
+      "issue": "See guard G13. CreatureCmd.cs:589 removes all of the escaper's powers via PowerModel.RemoveInternal (Creature.cs:658-666) -- deliberately without AfterRemoved, the contrast with death (CreatureCmd.cs:533-537, which awaits it). The sim's escape (cmds.py:221-234) leaves every power on the creature and registered as a live hook listener."
+    },
+    {
+      "what": "9. Escape: creature-node teardown",
+      "verdict": "waiver",
+      "rationale": "Presentation (CreatureCmd.cs:590-599)."
+    },
+    {
+      "what": "10. Escape: RemoveCreature + CombatState.CreatureEscaped; NO hook fires",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim marks `creature.escaped = True`, fires an invented `on_creature_escaped` hook (C# fires none) and then checks the win condition inline (cmds.py:229-234). The invented hook is how the sim replaces CombatState.CreatureEscaped's bookkeeping for listeners; the inline win check stands in for CombatManager's CheckWinCondition, which the sim's combat loop does not run at arbitrary points. No ported listener of on_creature_escaped changes state a C# listener could not have reached through CheckWinCondition."
+    },
+    {
+      "what": "11. GainBlock guard: CombatManager.IsOverOrEnding -> return 0",
+      "verdict": "gap",
+      "issue": "BlockCmd.apply (cmds.py:131-151) has no combat-over guard, so block gained by an end-of-combat effect still lands. Dormant: no ported content gains block after the combat-over transition (CombatState._end_combat sets Phase.COMBAT_OVER and the loop stops dispatching). Structural, mirroring damage_pipeline's G5 and power_cmd's G6."
+    },
+    {
+      "what": "12. Event: Hook.BeforeBlockGained (unconditional, raw amount, pre-modifier)",
+      "verdict": "waiver",
+      "rationale": "The sim has no before_block_gained hook. A full-source grep for `override.*BeforeBlockGained` across src/**/*.cs returns ZERO matches -- no power, relic, card, monster or enchantment in the entire game implements it, so the event is provably inert today. Same treatment as power_cmd's N1 (IsVisible)."
+    },
+    {
+      "what": "13. Hook.ModifyBlock: enchantment additive/multiplicative FIRST, then per-listener additive chain, then per-listener multiplicative chain; NO pipeline-level props gate",
+      "verdict": "gap",
+      "issue": "See guard G1 (LIVE). Two divergences in one step: (a) BlockCmd.apply (cmds.py:145-147) skips the entire dispatch unless is_powered_attack(props), while Hook.ModifyBlock (Hook.cs:1310-1340) calls every listener for every block gain -- and Vambrace.cs:59-63 / PaelsLegion.cs:132-134 self-gate only on IsCardOrMonsterMove() (Move alone); (b) C# applies the source card's own enchantment modifiers before any listener (Hook.cs:1314-1319), whereas the sim's enchantments are ordinary modify_block_additive listeners (enchantments.py:298, 428) ordered only by registration -- and are additionally skipped by the same (a) gate."
+    },
+    {
+      "what": "14. modifiedAmount = Math.Max(modifiedAmount, 0)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "15. Event: Hook.AfterModifyingBlockAmount(modifiers) -- only the listeners that changed it",
+      "verdict": "gap",
+      "issue": "See guard G2 (LIVE). No sim counterpart at all: hooks.py:98-124's block modifiers return a bare aggregate with no out-param modifier list, so all three ported C# listeners (Vambrace.cs:78-90, PaelsLegion.cs:146-158, FastenPower.cs:36-40) hand-roll their 'I actually fired' side effect onto a different event, and Vambrace's hand-roll lands on the wrong one."
+    },
+    {
+      "what": "16. if (modifiedAmount > 0): GainBlockInternal (clamped at 999999999) + history + wait",
+      "verdict": "faithful"
+    },
+    {
+      "what": "17. Event: Hook.AfterBlockGained -- unconditional, fires even at 0",
+      "verdict": "faithful"
+    },
+    {
+      "what": "18. LoseBlock: guards, LoseBlockInternal (floors at 0), AfterBlockBroken when block crosses to 0",
+      "verdict": "gap",
+      "issue": "The sim has no LoseBlock verb at all; the four block-zeroing sites assign `block = 0` directly (combat.py:297, player.py:158, powers.py:1208, powers.py:2300). The last of these is BurrowedPower, whose C# original calls CreatureCmd.LoseBlock(owner, all) from AfterRemoved -- so where C# would re-fire Hook.AfterBlockBroken on residual block, the sim fires nothing. Not demonstrated on ported content (BurrowedPower zeroes block from inside its own on_block_broken, by which point the sim's block is already 0), but Hand Drill (relics/hand_drill.py:21) is a live on_block_broken listener that would see the difference."
+    },
+    {
+      "what": "19. Heal guard: IsEnding && !IsPlayer -> return. There is NO dead guard",
+      "verdict": "gap",
+      "issue": "See guard G4. cmds.py:160-161 early-returns 0 on target.is_dead; CreatureCmd.cs:693-696 guards only combat-ending-for-a-monster."
+    },
+    {
+      "what": "20. HealInternal: CurrentHp + amount clamped at MaxHp; a dead creature is REVIVED",
+      "verdict": "gap",
+      "issue": "See guard G4. Creature.cs:477-491 raises CurrentHp and fires Revived/ActivateHooks when it crosses 0. Verified by execution: the sim's heal on a 0-HP retained creature returns 0 and leaves it at 0."
+    },
+    {
+      "what": "21. Heal anim / vfx / run-history",
+      "verdict": "waiver",
+      "rationale": "Presentation and telemetry (CreatureCmd.cs:704-750)."
+    },
+    {
+      "what": "22. Event: Hook.AfterCurrentHpChanged gated on and carrying the RAW requested amount",
+      "verdict": "gap",
+      "issue": "See guard G5. cmds.py:162-166 fires on_hp_changed(target, healed) -- the clamped amount -- and only when healed > 0; C# fires whenever the requested amount > 0 and passes that raw amount (CreatureCmd.cs:751-754). Verified by execution: healing 20 on a player 3 below max reports delta 3, and a heal at full HP reports nothing."
+    },
+    {
+      "what": "23. SetCurrentHp: SetCurrentHpInternal, AfterCurrentHpChanged(delta) if changed, then Kill if now dead",
+      "verdict": "gap",
+      "issue": "The sim has no set_current_hp verb; the sites that need one assign hp directly (e.g. powers.py:2360-2365, cmds.py:112). None of them run the death pipeline the way CreatureCmd.cs:775-778 does, so setting HP to 0 through those paths would leave a 0-HP creature that never fired BeforeDeath/ShouldDie/AfterDeath. Dormant: every ported direct assignment sets a POSITIVE hp (a revive), never 0."
+    },
+    {
+      "what": "24. GainMaxHp: throw on negative; SetMaxHp returns the actual delta; history; Heal(delta)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "25. SetMaxHp: SetMaxHpInternal(max(0, amount)) clamps CurrentHp down; Kill if MaxHp <= 0; returns delta",
+      "verdict": "deliberate-divergence",
+      "rationale": "There is no standalone set_max_hp verb; gain_max_hp/lose_max_hp inline their own arithmetic (cmds.py:169-189) and RunState.gain_max_hp/lose_max_hp do the out-of-combat twin (run.py). The CurrentHp clamp is reproduced in lose_max_hp (cmds.py:185-189); the MaxHp <= 0 kill is unreachable because the sim floors max HP at 1 in both places."
+    },
+    {
+      "what": "26. SetMaxAndCurrentHp: SetMaxHp then SetCurrentHp",
+      "verdict": "waiver",
+      "rationale": "No ported caller (CreatureCmd.cs:856-859); used by multiplayer HP scaling and boss setup."
+    },
+    {
+      "what": "27. LoseMaxHp: throw on negative; run-history",
+      "verdict": "deliberate-divergence",
+      "rationale": "cmds.py:179-183 returns early on amount <= 0 instead of throwing; history is telemetry."
+    },
+    {
+      "what": "28. LoseMaxHp: newMaxHp = MaxHp - amount UNFLOORED; if below CurrentHp, deal the difference as Unblockable|Unpowered(|Move) through the FULL damage pipeline",
+      "verdict": "gap",
+      "issue": "See guard G6. cmds.py:185-189 clamps hp with a bare on_hp_changed and never calls DamageCmd.deal, so no modify_hp_lost / on_damage_received / should_die / on_death fires and the creature cannot die of max-HP loss. Verified by execution: a 10/10 player losing 30 max HP ends alive at 1/1 where C# deals 30 unblockable damage and kills."
+    },
+    {
+      "what": "29. LoseMaxHp: SetMaxHp(max(1, newMaxHp)) AFTER the damage",
+      "verdict": "gap",
+      "issue": "Same finding as step 28 recorded on its own step: the sim floors max HP at 1 FIRST (cmds.py:185) and derives the HP clamp from the floored value, which is exactly what makes the damage non-lethal. The order is load-bearing, not incidental."
+    },
+    {
+      "what": "30. Stun: StunInternal throws for a non-monster, no-ops when dead, defaults nextMoveId to the last performed move, installs a STUNNED MoveState via SetMoveImmediate",
+      "verdict": "deliberate-divergence",
+      "rationale": "See guard N1. cmds.py:208-218 sets `target.stunned = True` on any creature (including the player and a dead one), optionally rewrites `_move_key`, and fires an invented on_stunned hook. The move-machine half (STUNNED state, MustPerformOnceBeforeTransitioning, StateLog default) belongs to the monster_state_machine seam (Task 10); what this record judges is the Cmd-level contract, where the sim is strictly more permissive. No ported caller stuns the player or a corpse."
+    },
+    {
+      "what": "31. GainEnergy: amount<=0 / IsEnding guards; ModifyEnergyGain -> AfterModifyingEnergyGain; then `if (finalAmount > 0)` gain",
+      "verdict": "gap",
+      "issue": "See guard N5 for the missing `finalAmount > 0` guard and N8 for AfterModifyingEnergyGain (a Flash() in its only implementation, NoEnergyGainPower.cs). EnergyCmd.gain (cmds.py:547-554) applies the modifier and then does `player.energy += amount` unconditionally, so a modifier returning a negative value would SUBTRACT energy where C# adds nothing. Dormant: the one ported modify_energy_gain listener returns 0 (powers.py:554-557)."
+    },
+    {
+      "what": "32. LoseEnergy guards; SetEnergy routes through GainEnergy/LoseEnergy",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no LoseEnergy/SetEnergy verbs; energy spending is inline in CombatState.play_card (combat.py:412) and turn-start reset is inline in PlayerCombatState.start_turn (player.py:163-168, turn_structure's scope). The consequence C# gets from routing SetEnergy through GainEnergy -- that raising energy to a target runs the modifier chain -- has no ported caller."
+    },
+    {
+      "what": "33. GainStars / LoseStars / SetStars (ShouldGainStars, AfterStarsGained)",
+      "verdict": "waiver",
+      "rationale": "Stars are the Regent's resource; the sim is Ironclad-only and models no star pool (PlayerCmd.cs:90-133)."
+    },
+    {
+      "what": "34. GainGold: ModifyGoldGained -> AfterModifyingGoldGained -> `if (!(amount > 0)) return` -> history -> Gold += (int)amount -> AfterGoldGained",
+      "verdict": "gap",
+      "issue": "See guard G12. RunState.gain_gold (run.py:325-333) runs a relic modify_gold_gained loop, truncates, and adds when positive -- faithful as far as it goes -- but fires neither AfterModifyingGoldGained nor AfterGoldGained. DragonFruit.cs:22-29 (+1 Max HP whenever you gain gold) is a ported relic and is consequently an inert stub (relics/dragon_fruit.py)."
+    },
+    {
+      "what": "35. LoseGold: history keyed by GoldLossType; Gold = max(0, Gold - (int)amount)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "36. GainMaxPotionCount / LoseMaxPotionCount",
+      "verdict": "faithful"
+    },
+    {
+      "what": "37. AddPet<T> / AddPet",
+      "verdict": "waiver",
+      "rationale": "No pet/companion system in the sim (PlayerCmd.cs:237-257); cross-referenced by damage_pipeline's Osty waivers."
+    },
+    {
+      "what": "38. MimicRestSiteHeal / EndTurn / CompleteQuest",
+      "verdict": "waiver",
+      "rationale": "EndTurn belongs to the turn_structure seam (Task 8, CombatManager.SetReadyToEndTurn); MimicRestSiteHeal and CompleteQuest are a rest-site delegation and run-history telemetry respectively."
+    },
+    {
+      "what": "39. AutoPlay guard: IsOverOrEnding || owner dead -> return",
+      "verdict": "faithful"
+    },
+    {
+      "what": "40. AutoPlay guard: Unplayable keyword -> MoveToResultPileWithoutPlaying (via the Play pile)",
+      "verdict": "deliberate-divergence",
+      "rationale": "combat.py:536-539 appends the card straight to the discard pile and returns without firing on_play or on_card_played, which is the observable half of MoveToResultPileWithoutPlaying (CardCmd.cs:58-62, 133-137). The Play-pile transit it skips is guard N9's missing Play pile."
+    },
+    {
+      "what": "41. AutoPlay guard: !Hook.ShouldPlay -> result-pile move + preventer dialogue",
+      "verdict": "faithful"
+    },
+    {
+      "what": "42. AutoPlay: AnyEnemy with no target -> Rng.CombatTargets.NextItem(HittableEnemies); still null -> result-pile move",
+      "verdict": "faithful"
+    },
+    {
+      "what": "43. AutoPlay: AnyAlly targeting",
+      "verdict": "waiver",
+      "rationale": "Multiplayer only -- CardCmd.cs:85-97 selects among other living player allies."
+    },
+    {
+      "what": "44. AutoPlay: CapturedXValue = current Energy (captured, not spent); LastStarsSpent",
+      "verdict": "faithful"
+    },
+    {
+      "what": "45. AutoPlay: `if (card.Pile == null) CardPileCmd.Add(card, PileType.Play)`",
+      "verdict": "deliberate-divergence",
+      "rationale": "See guard N9. combat.py:532-535 removes the card from whichever of the four piles holds it, then _resolve_card_play puts it in the discard pile with the _playing_card limbo marker (combat.py:452-454). C#'s conditional Play-pile add is a no-op for any card that already has a pile, which is every ported auto-play source except AutoPlayFromDrawPile."
+    },
+    {
+      "what": "46. AutoPlay: Hook.BeforeCardAutoPlayed (distinct from BeforeCardPlayed)",
+      "verdict": "gap",
+      "issue": "The sim has no before_card_auto_played hook; combat.py:552 fires on_energy_spent(card, 0) and then _resolve_card_play fires the ordinary before_card_played. Dormant: a grep of src/**/*.cs finds the hook is declared and dispatched but the sim ports none of its implementations, and the sim's auto-play path currently needs no auto-play-only listener."
+    },
+    {
+      "what": "47. AutoPlay: ResourceInfo{EnergySpent=0,...} then OnPlayWrapper(isAutoPlay: true)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "48. Discard/DiscardAndDraw guards: IsOverOrEnding; empty list -> return",
+      "verdict": "faithful"
+    },
+    {
+      "what": "49. Per card, IN ORDER: collect Sly; CardPileCmd.Add(card, discardPile) FIRST; history; Hook.AfterCardDiscarded",
+      "verdict": "gap",
+      "issue": "See guard G11. player.py:192-196 fires on_card_discarded for EVERY flushed card while they are all still in `hand` and none is in `discard_pile`, then moves them as a batch -- inverting both the move/hook order and the per-card interleaving. Sly is unported (waived at step 51)."
+    },
+    {
+      "what": "50. InvokeContentsChanged, then Draw(cardsToDraw) AFTER every discard hook",
+      "verdict": "deliberate-divergence",
+      "rationale": "DiscardAndDraw's whole purpose -- deferring the draw until all discard hooks have run (CardCmd.cs:196-200) -- has no sim counterpart because no ported card uses the combined verb; the sim's discard-then-draw callers issue the two separately, which is the ordering C# explicitly warns against for Sly. Dormant while Sly is unported."
+    },
+    {
+      "what": "51. Then AutoPlay every collected Sly card (AutoPlayType.SlyDiscard)",
+      "verdict": "waiver",
+      "rationale": "The Sly keyword is unported (no CardKeyword.Sly / IsSlyThisTurn analogue anywhere in sts2_rl)."
+    },
+    {
+      "what": "52. Downgrade: guard IsEnding; deck-pile history; card.DowngradeInternal()",
+      "verdict": "waiver",
+      "rationale": "No ported content downgrades a card (CardCmd.cs:212-223); the sim has no downgrade verb."
+    },
+    {
+      "what": "53. Upgrade: guard IsEnding; skip !IsUpgradable; deck history; UpgradeInternal then FinalizeUpgradeInternal",
+      "verdict": "faithful"
+    },
+    {
+      "what": "54. Transform guards: IsEnding; empty set -> empty",
+      "verdict": "faithful"
+    },
+    {
+      "what": "55. Transform pass 1: AssertMutable, !IsTransformable throw, Pile null throw, record the original's index, GetReplacement(rng), RemoveFromCurrentPile",
+      "verdict": "gap",
+      "issue": "The in-combat sim path (cmds.py:432-444) searches hand/draw/discard/exhaust and returns None if the card is in none of them -- it does NOT look in the Play pile, so a card transformed while mid-play is silently not transformed. It also rolls the replacement on `hooks.combat._rng` (cmds.py:435), the shared legacy random.Random, rather than a game stream, so the roll is off-stream under parity where C# takes an explicit Rng argument (CardCmd.cs:323, 369). Dormant for the Play-pile half (Entropy, the only ported in-combat transformer, targets the hand); the off-stream roll is a parity defect whenever an in-combat transform runs in a conformance replay."
+    },
+    {
+      "what": "56. Transform: sort recorded tuples by (pile type, original index) -- PileIndexSort",
+      "verdict": "waiver",
+      "rationale": "Ordering only matters for a multi-card transform whose replacements must be re-inserted deterministically; the sim's in-combat transform is single-card and its deck transform appends, so no ordering is observable."
+    },
+    {
+      "what": "57. Transform, DECK ONLY: Hook.ModifyCardBeingAddedToDeck, FloorAddedToDeck = TotalFloor, run-history",
+      "verdict": "gap",
+      "issue": "See guard G3 (LIVE). RunState.transform_card (run.py:459-469) never calls add_card (run.py:341-354), so the egg relics' substitution hook never runs on a transform. Verified by execution: holding Frozen Egg, add_card(Inflame) yields upgrade_level 1 but transform_card(..., into=Inflame) yields 0. FloorAddedToDeck likewise is never stamped."
+    },
+    {
+      "what": "58. Transform PLACEMENT: Deck -> AddInternal(replacement) = APPEND at the end; any other pile -> AddInternal(replacement, originalIndex) + CardGenerated + AfterCardEnteredCombat",
+      "verdict": "faithful"
+    },
+    {
+      "what": "59. Transform: AfterCardChangedPiles -> InvokeCardAddFinished -> AfterTransformedFrom -> AfterTransformedTo",
+      "verdict": "gap",
+      "issue": "See guards G3 and G8. Neither the deck path (run.py:459-469) nor the combat path (cmds.py:432-450) fires an AfterCardChangedPiles equivalent, and the sim has no AfterTransformedFrom/AfterTransformedTo hooks at all. LIVE on the deck side: Bing Bong, Book of Five Rings, Darkstone Periapt and Lucky Fysh are all ported deck-pile listeners; verified by execution that Bing Bong clones a card added via add_card but not one arriving via transform_card."
+    },
+    {
+      "what": "60. Transform VFX / shine",
+      "verdict": "waiver",
+      "rationale": "Presentation (CardCmd.cs:453-498)."
+    },
+    {
+      "what": "61. Transform tail: AfterCardGeneratedForCombat for combat piles; original.RemoveFromState()",
+      "verdict": "gap",
+      "issue": "cmds.py:445-450 unregisters the original and fires only on_card_entered_combat; the sim has no after_card_generated_for_combat hook, and C# fires BOTH events for a combat-pile transform (CardCmd.cs:445 and 504). Dormant: none of the seven C# AfterCardGeneratedForCombat implementations is ported."
+    },
+    {
+      "what": "62. Enchant: AssertMutable; !CanEnchant throw; new -> EnchantInternal + ModifyCard(); same type -> Amount +=; different type -> throw; FinalizeUpgradeInternal; deck history",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim enchants by assigning card.enchantment directly at the (out-of-combat) event call sites rather than through a Cmd; CanEnchant is enforced by each event's own candidate filter (e.g. the Souls enchantment's Exhaust requirement, enchantments.py:192-204). The throw-on-mismatch contract has no ported caller that could hit it -- every enchanting event picks from unenchanted cards."
+    },
+    {
+      "what": "63. Afflict guard: IsOverOrEnding AND the card is in a combat pile -> null",
+      "verdict": "deliberate-divergence",
+      "rationale": "See guard N2. CardCmd.afflict (cmds.py:389-408) has no combat-state guard at all; it is a pure card-model mutation. The asymmetry C# encodes (an out-of-combat card can still be afflicted while combat ends) is preserved trivially, since the sim never refuses."
+    },
+    {
+      "what": "64. Afflict guard: combatState null || !Hook.ShouldAfflict -> null",
+      "verdict": "waiver",
+      "rationale": "See guard N2. A full-source grep for `override.*ShouldAfflict` across src/**/*.cs returns ZERO matches -- nothing in the game implements the veto, so the hook is provably inert (same treatment as step 12 and power_cmd's N1)."
+    },
+    {
+      "what": "65. Afflict guard: !affliction.CanAfflict(card) -> null",
+      "verdict": "gap",
+      "issue": "See guard N2. cmds.py:400-408 never consults a CanAfflict predicate; the sim's Affliction base class has no such method. Dormant: the ported afflictions (Ringing/Tangled-style) are applied by powers that already filter their targets, so no ported call could be refused."
+    },
+    {
+      "what": "66. Afflict: new -> AfflictInternal + AfterApplied; same type -> Amount +=; different type -> THROW; history",
+      "verdict": "deliberate-divergence",
+      "rationale": "cmds.py:400-408 matches the first two branches exactly (new instance, or stack the amount on the same type) but returns None on a type mismatch where C# throws, and never calls an AfterApplied equivalent (the sim's Affliction has no such hook). Returning None is the safer contract for an RL sim and no ported caller distinguishes the two."
+    },
+    {
+      "what": "67. ApplyKeyword / RemoveKeyword / ApplySingleTurnSly / Preview* / FlashRelics",
+      "verdict": "waiver",
+      "rationale": "Keyword mutation is done by the sim's card models directly (Card.exhausts / retain / innate are instance attributes the porting code sets); Sly is unported (step 51); the entire Preview family is presentation (CardCmd.cs:711-887)."
+    },
+    {
+      "what": "68. RemoveFromDeck: Deck-pile assert; run-history; Hook.BeforeCardRemoved; RemoveFromCurrentPile; preview; RemoveFromState",
+      "verdict": "gap",
+      "issue": "RunState.remove_cards (run.py:356-358) is a bare `self.deck.remove(card)` loop: no BeforeCardRemoved hook and no removed-from-state marking. Dormant: no ported relic or power implements BeforeCardRemoved, and the sim's cards carry no HasBeenRemovedFromState flag for anything to read."
+    },
+    {
+      "what": "69. RemoveFromCombat: combat-pile assert; RemoveFromCurrentPile; then per card AfterCardChangedPiles + RemoveFromState",
+      "verdict": "gap",
+      "issue": "See guard G8. The sim's in-combat removals are direct list mutations (e.g. cmds.py:445-448 in transform, monsters/hive/thieving_hopper.py:100-103 for a stolen card) with no AfterCardChangedPiles. Dormant for the same reason as G8: every ported listener filters to the Deck pile."
+    },
+    {
+      "what": "70. AddGeneratedCardsToCombat guards (no pile / combat pile / IsInProgress / combatState) then per card: history CardGenerated -> Add -> Hook.AfterCardGeneratedForCombat",
+      "verdict": "gap",
+      "issue": "CardPileCmd.add_to_hand/add_to_draw/add_to_discard (cmds.py:463-512) each place the card and call _enter_combat, which fires only on_card_entered_combat -- C# fires AfterCardEnteredCombat (inside Add) AND AfterCardGeneratedForCombat (after it), two distinct events with different listener sets. Dormant: none of the seven C# AfterCardGeneratedForCombat implementations is ported. The guards themselves are guard N3."
+    },
+    {
+      "what": "71. Add guards: empty -> empty; combat pile while IsEnding -> every result success=false",
+      "verdict": "gap",
+      "issue": "See guard N3: the sim's three pile helpers have no result object and no combat-ending guard, so a card generated as combat ends still enters a pile. Dormant, same reasoning as step 11."
+    },
+    {
+      "what": "72. Add per-card validation: no owner throw; dead owner / removed-from-state / detached combat card -> success=false; deck adds must be in the RunState; combat adds must be in the CombatState; preview card throw; mixed owners throw",
+      "verdict": "gap",
+      "issue": "See guard N3. None of this exists in the sim. The behaviourally significant one is `creature.IsDead -> success = false` (CardPileCmd.cs:329-340): in C# a card generated onto a dead player is silently dropped, whereas the sim appends it. Dormant -- the sim ends the combat as soon as the player dies (combat.py:419-420), so nothing generates cards afterwards."
+    },
+    {
+      "what": "73. Add, DECK only: Hook.ShouldAddToDeck -> history CardsGained + FloorAddedToDeck, else preventer.AfterAddToDeckPrevented + success=false",
+      "verdict": "waiver",
+      "rationale": "A full-source grep for `override.*ShouldAddToDeck` and `override.*AfterAddToDeckPrevented` across src/**/*.cs returns ZERO matches for both -- no content in the game can prevent a deck add, so the branch is provably inert. FloorAddedToDeck is run-history."
+    },
+    {
+      "what": "74. Add guards: combat pile while !IsInProgress -> return; no successful result -> return",
+      "verdict": "deliberate-divergence",
+      "rationale": "Both are early-outs around C#'s result/visual machinery, which the sim has no analogue for (guard N3); neither changes what ends up in a pile."
+    },
+    {
+      "what": "75. Add: FULL-HAND REDIRECT -- target Hand with >= MaxCardsInHand (10) -> silently retarget the Discard pile",
+      "verdict": "faithful"
+    },
+    {
+      "what": "76. Add: node/visual classification",
+      "verdict": "waiver",
+      "rationale": "Presentation (CardPileCmd.cs:424-491)."
+    },
+    {
+      "what": "77. Add: `if (oldPile != null) RemoveFromCurrentPile()` ELSE IF the target is the Deck -> Hook.ModifyCardBeingAddedToDeck may swap the card",
+      "verdict": "faithful"
+    },
+    {
+      "what": "78. Add: AddInternal(card, Bottom => -1 / Top => 0 / Random => Rng.Shuffle.NextInt(Count+1)); throws on a duplicate instance",
+      "verdict": "faithful"
+    },
+    {
+      "what": "79. Add: `if (oldPile == null && targetPile.IsCombatPile) Hook.AfterCardEnteredCombat` -- entering combat only, not pile-to-pile",
+      "verdict": "faithful"
+    },
+    {
+      "what": "80. Add: hand-full thought bubble, visuals, tweens",
+      "verdict": "waiver",
+      "rationale": "Presentation (CardPileCmd.cs:521-629)."
+    },
+    {
+      "what": "81. Add: per successful result, Hook.AfterCardChangedPiles(..., oldPile?.Type ?? None, clonedBy) AFTER every card has moved",
+      "verdict": "gap",
+      "issue": "See guard G8. No sim counterpart; the deck side is shimmed by Relic.after_card_added_to_deck (relics/base.py:208-210) and the combat side by four transition-specific hooks. The batched-after-all-moves ordering is likewise unmodelled."
+    },
+    {
+      "what": "82. AddDuringManualCardPlay: guard; CombatState assert; RemoveFromCurrentPile; Play pile AddInternal; AfterCardChangedPiles",
+      "verdict": "gap",
+      "issue": "See guard N9 -- this is seed fact 1's mechanism. The sim has no Play pile: _resolve_card_play (combat.py:452-454) appends the played card straight to the DISCARD pile and sets player._playing_card as a limbo marker, and the reshuffle exclusion that marker drives is applied in PARITY MODE ONLY (player.py:203, 232). Verified by execution: a parity run holds the in-flight card back from the reshuffle; a legacy run shuffles it into the new draw pile. Also live for any effect that counts the discard pile during a card's own OnPlay, which would see the resolving card in the sim and not in the game -- not demonstrated, as no ported card reads the discard-pile size mid-play."
+    },
+    {
+      "what": "83. Draw guard: IsOverOrEnding -> empty",
+      "verdict": "deliberate-divergence",
+      "rationale": "PlayerCombatState._draw (player.py:276-292) has no combat-over guard of its own; every caller is either the turn-start draw (gated by the phase machine) or a card/power effect that only runs during a live combat."
+    },
+    {
+      "what": "84. Draw: Hook.ShouldDraw evaluated ONCE before the loop; on false, Hook.AfterPreventingDraw and return empty",
+      "verdict": "gap",
+      "issue": "See guard G9. player.py:280-281 evaluates should_draw inside the per-card loop, and there is no after_preventing_draw hook. Dormant: Fiddle (relics/fiddle.py:26-31) is the only ported should_draw listener and is stateless, and AfterPreventingDraw's one C# implementation is a Flash() (Fiddle.cs:36-40)."
+    },
+    {
+      "what": "85. Draw: drawsRequested = ceil(count); no hand room at all -> thought bubble + return",
+      "verdict": "faithful"
+    },
+    {
+      "what": "86. Draw loop breaks on: no hand room / IsOverOrEnding / draw+discard both empty / hand full",
+      "verdict": "faithful"
+    },
+    {
+      "what": "87. Draw: ShuffleIfNecessary then RE-CHECK that a draw is still possible",
+      "verdict": "faithful"
+    },
+    {
+      "what": "88. Draw: card = drawPile.Cards.FirstOrDefault() (index 0 = top); null or hand full -> break",
+      "verdict": "faithful"
+    },
+    {
+      "what": "89. Draw: Add(card, hand) [full Add pipeline] -> history -> Hook.AfterCardDrawn -> card.InvokeDrawn() -> recompute room",
+      "verdict": "gap",
+      "issue": "player.py:290-292 appends to the hand directly and fires on_card_drawn. Routing the drawn card through the full Add pipeline is what gives C# an AfterCardChangedPiles on every draw (guard G8) and a MaxCardsInHand redirect the sim reimplements as a break; InvokeDrawn (the card's own per-instance event) has no sim analogue."
+    },
+    {
+      "what": "90. Shuffle guard: IsOverOrEnding",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same class as step 83; the sim's reshuffle is only reached from _draw and from explicit card effects."
+    },
+    {
+      "what": "91. Shuffle: list = discard.ToList() then AddRange(drawPile) -- discard FIRST, current draw pile second, both in the shuffled set",
+      "verdict": "faithful"
+    },
+    {
+      "what": "92. Shuffle: list.StableShuffle(Rng.Shuffle) -- canonical sort, then Fisher-Yates consuming Count-1 draws",
+      "verdict": "faithful"
+    },
+    {
+      "what": "93. Shuffle: Hook.ModifyShuffleOrder mutates the shuffled list IN PLACE, before any card is placed and strictly before AfterShuffle",
+      "verdict": "gap",
+      "issue": "See guard G10. The sim has no modify_shuffle_order hook; PerfectFitEnchantment hand-rolls it on on_shuffle (= AfterShuffle) instead (enchantments.py:186-189), so the guaranteed C# ordering becomes registration-order-dependent in the sim."
+    },
+    {
+      "what": "94. Shuffle: silently empty the draw pile (RemoveInternal silent)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "95. Shuffle: DebugForcedTopCardOnNextShuffle override",
+      "verdict": "waiver",
+      "rationale": "Debug/test affordance (CardPileCmd.cs:882-890)."
+    },
+    {
+      "what": "96. Shuffle re-add: discard-sourced cards go through the full Add (hooks + per-card wait); draw-pile-sourced cards are re-seated with AddInternal(silent)",
+      "verdict": "gap",
+      "issue": "See guard G8. The sim rebuilds both piles as plain lists, so neither class of card gets an AfterCardChangedPiles. The asymmetry itself (only discard-sourced cards fire hooks) is exactly the kind of detail the sim's list rebuild erases. Dormant for the same reason as G8."
+    },
+    {
+      "what": "97. Shuffle: wait, then `if (!IsOverOrEnding) Hook.AfterShuffle`",
+      "verdict": "faithful"
+    },
+    {
+      "what": "98. ShuffleIfNecessary shuffles ONLY when the draw pile is empty AND the discard pile is not",
+      "verdict": "faithful"
+    },
+    {
+      "what": "99. AutoPlayFromDrawPile: per count -> ShuffleIfNecessary -> Bottom/Top/Rng.CombatCardSelection.NextItem -> Add(card, PileType.Play); THEN play each with ExhaustOnNextPlay, stopping if the owner dies",
+      "verdict": "gap",
+      "issue": "The sim has no AutoPlayFromDrawPile verb; the cards that need it (Havoc-shaped effects) pull from the draw pile themselves and call CombatState.auto_play_card one at a time. The two-phase structure -- move EVERY card to the Play pile first, then play them -- is what makes C# immune to the second card's reshuffle disturbing the first card's selection; the sim's interleaved loop is not. Dormant: no ported card plays more than one card from the draw pile in a single effect."
+    },
+    {
+      "what": "100. AddToCombatAndPreview<T>: dead owner -> return; create count cards and route each through AddGeneratedCardToCombat; then preview",
+      "verdict": "faithful"
+    },
+    {
+      "what": "101. AddCurseToDeck / AddCursesToDeck: non-Curse throw; create on the RunState; Add(card, PileType.Deck); preview",
+      "verdict": "faithful"
+    },
+    {
+      "what": "102. CardPile internals: MaxCardsInHand = 10; RandomizeOrderInternal = UnstableShuffle (NO stabilizing sort) + ModifyShuffleOrder(isInitialShuffle: true); AddInternal throws on a duplicate and index<0 appends; RemoveInternal throws if absent",
+      "verdict": "faithful"
+    },
+    {
+      "what": "103. CardSelectCmd: every screen guards IsEnding/IsOverOrEnding -> empty; 0 candidates -> empty (+ ReportSoftlock)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "104. CardSelectCmd AUTO-SELECT: !RequireManualConfirmation && count <= MinSelect -> return ALL candidates with no player choice",
+      "verdict": "deliberate-divergence",
+      "rationale": "See guard N10. combat.py:577 clamps `count = min(count, len(candidates))` and the random fallback then samples that many from that many, i.e. returns every candidate -- the same membership C# returns, reached by a different route. The difference is that the sim's fallback consumes RNG draws to produce a random ORDER where C# consumes none and preserves pile order."
+    },
+    {
+      "what": "105. CardSelectCmd: Selector asked for MinSelect..MaxSelect; a DRAW pile is pre-sorted `orderby Rarity, Id` before the chooser sees it",
+      "verdict": "gap",
+      "issue": "See guard N10. The sim's select_cards takes a single `count` (no min/max range) and never re-orders a draw-pile candidate list, so an installed card_selector sees the true draw order where C#'s would see a rarity/id sort. Additionally the random fallback draws on the shared legacy `self._rng` (combat.py:581) rather than the combat_rng.card_selection stream, which is an off-stream draw under parity. Dormant for the sort (no ported policy exploits draw order); the off-stream fallback is only reached when no card_selector is installed, which conformance replays never leave unset."
+    },
+    {
+      "what": "106. CardSelectCmd: local screen / remote-choice synchronisation, LogChoice",
+      "verdict": "waiver",
+      "rationale": "Presentation and multiplayer (CardSelectCmd.cs:411-431, 716-732); the sim delegates the choice to CombatState.card_selector / RunState.card_selector."
+    }
+  ],
+  "guards": [
+    {
+      "what": "G1 (LIVE) -- block modifiers gated at the pipeline level on is_powered_attack",
+      "verdict": "gap",
+      "issue": "BlockCmd.apply (cmds.py:145-147) skips the whole modify_block_additive/modify_block_multiplicative dispatch unless props is Move && !Unpowered. C#'s Hook.ModifyBlock (Hook.cs:1310-1340) calls every listener for every block gain and leaves the gate to each implementation: Dexterity (DexterityPower.cs:33), Frail (FrailPower.cs:28) and Fasten (FastenPower.cs:27) self-gate on IsPoweredCardOrMonsterMoveBlock, but Vambrace (Vambrace.cs:59-63) and Pael's Legion (PaelsLegion.cs:132-134) self-gate only on IsCardOrMonsterMove() -- Move alone, ignoring Unpowered (ValuePropExtensions.cs:22-25). LIVE: Entrench is a ported Ironclad Event card that gains block with MOVE|UNPOWERED (cards/trash_heap_cards.py:159-179, mirroring Entrench.cs:23), and Vambrace is a ported Uncommon relic, so both sides of the scenario are constructible in one run. Verified by execution: a player at 10 Block holding Vambrace plays Entrench and gains 10 (the game gains 20); the control powered card block (Defend 5 -> 10) shows the doubling is otherwise wired up. Pinned: test/test_hook_order.py::TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers. The same gate also skips the source card's enchantment block modifiers, which C# applies unconditionally and FIRST (Hook.cs:1314-1319)."
+    },
+    {
+      "what": "G2 (LIVE) -- no AfterModifyingBlockAmount machinery; Vambrace's latch is hand-rolled onto the wrong event",
+      "verdict": "gap",
+      "issue": "Hook.ModifyBlock returns `out modifiers` and CreatureCmd.cs:646 notifies exactly the listeners that changed the value (Hook.cs:649-656) -- the same two-phase try/after split power_cmd's G4 found missing on the power-amount side. The sim's block modifier hooks (hooks.py:98-124) return a bare aggregate with no companion event. All THREE current C# listeners on the event are ported: Vambrace.cs:78-90, PaelsLegion.cs:146-158 and FastenPower.cs:36-40. Pael's Legion's port survives by latching in modify_block_multiplicative and burning the cooldown in on_card_played (relics/paels_legion.py:33-51), which nets the same; Vambrace's port does not -- relics/vambrace.py:36-40 sets its once-per-combat `_used` flag on the FIRST block gain, whereas C# latches only TriggeringCard = cardSource there and does not set BlockGainedThisCombat until AfterCardPlayed (Vambrace.cs:92-105), so in the game EVERY block instance of the same card play is doubled. LIVE: two ported cards gain block more than once in one play -- Evil Eye (cards/evil_eye.py:37-42, two gains after an exhaust) and Second Wind (cards/second_wind.py:34-39, one gain per exhausted non-Attack). Verified by execution: two BlockCmd.apply calls carrying the same card= yield 10 then 5; C# yields 10 then 10. Pinned: test_vambrace_doubles_every_block_gain_of_one_card_play."
+    },
+    {
+      "what": "G3 (LIVE) -- a deck transform bypasses the entire card-entering-the-deck pipeline",
+      "verdict": "gap",
+      "issue": "CardCmd.Transform runs Hook.ModifyCardBeingAddedToDeck (CardCmd.cs:430), stamps FloorAddedToDeck (433) and fires Hook.AfterCardChangedPiles (447) for Deck-pile transforms -- the same hooks CardPileCmd.Add runs (CardPileCmd.cs:501, 635). RunState.transform_card (run.py:459-469) deletes the original and appends the replacement directly, never routing through add_card (run.py:341-354), which is where both sim-side hooks live. Verified by execution: holding Frozen Egg, add_card(Inflame) yields upgrade_level 1 but transform_card(..., into=Inflame) yields upgrade_level 0; holding Bing Bong, add_card grows the deck by 2 but transform_card adds 0 clones. LIVE -- every participant is ported: the three egg relics (Frozen/Toxic/Molten, which upgrade deck adds), Bing Bong, Book of Five Rings, Darkstone Periapt and Lucky Fysh on the listener side, and Pandora's Box, Astrolabe, Wood Carvings, Morphic Grove and Symbiote as deck-level transformers on the trigger side. Pinned: test_deck_transform_runs_modify_card_being_added_to_deck."
+    },
+    {
+      "what": "G4 (dormant) -- CreatureCmd.heal refuses to heal a dead creature; C#'s Heal revives",
+      "verdict": "gap",
+      "issue": "cmds.py:160-161 early-returns 0 on target.is_dead. CreatureCmd.Heal guards only `IsEnding && !IsPlayer` (CreatureCmd.cs:693-696) and HealInternal raises CurrentHp, clamps at MaxHp, and fires Revived / re-activates the player's hooks when it crosses 0 (Creature.cs:477-491) -- healing a corpse is a supported operation. Verified by execution: healing a 0-HP retained creature returns 0 and leaves it at 0 HP. Dormant: the one ported site that needs a corpse heal is ReattachPower.DoReattach, which is literally CreatureCmd.Heal(Owner, Amount) in C# (ReattachPower.cs:47) and hand-rolls a direct `owner.hp = self.amount` assignment in the sim (powers.py:2360-2365), netting the same value and the same on_hp_changed delta. Live the moment a second corpse-heal is ported, or the moment anyone routes Reattach back through the Cmd."
+    },
+    {
+      "what": "G5 (dormant) -- Heal reports the RAW requested amount, and reports it even at full HP",
+      "verdict": "gap",
+      "issue": "CreatureCmd.cs:751-754 fires Hook.AfterCurrentHpChanged when the REQUESTED amount > 0, carrying that same raw amount; the sim (cmds.py:162-166) fires on_hp_changed(target, healed) with the CLAMPED amount and only when it is positive. Verified by execution: healing 20 on a player 3 below max reports delta 3 in the sim (C#: 20); healing at full HP reports nothing in the sim (C#: reports +amount). Dormant: the only ported on_hp_changed listener is Red Skull (relics/red_skull.py:44-46), which ignores the delta entirely and recomputes its strength idempotently from current HP, so neither the wrong magnitude nor the missing no-op event is observable. Trigger: porting any AfterCurrentHpChanged listener that reads the amount."
+    },
+    {
+      "what": "G6 (dormant) -- lose_max_hp does not route through the damage pipeline and can never kill",
+      "verdict": "gap",
+      "issue": "CreatureCmd.LoseMaxHp computes an UNFLOORED newMaxHp = MaxHp - amount and, when that is below CurrentHp, deals CurrentHp - newMaxHp as Unblockable|Unpowered damage (plus Move when isFromCard, which is how Rupture-style triggers see it) through the FULL damage pipeline -- hooks, death check, Kill -- and only afterwards floors MaxHp at 1 (CreatureCmd.cs:823-827). The sim (cmds.py:179-189) floors max HP first and clamps HP with a bare on_hp_changed, so no modify_hp_lost / on_damage_received / should_die / on_death fires and no creature can die of max-HP loss. Verified by execution: a 10/10 player losing 30 max HP ends alive at 1/1; C# would deal 10 - (-20) = 30 unblockable damage and kill. Dormant: the two in-combat callers are Brightest Flame (cards/brightest_flame.py:37) and PaperCutsPower (powers.py:2959), neither of which reaches a fatal magnitude, and the isFromCard Move flag exists for cards that are not ported."
+    },
+    {
+      "what": "G7 (dormant) -- ExhaustCmd.exhaust only knows about the hand and the discard pile",
+      "verdict": "gap",
+      "issue": "cmds.py:379-384 removes the card from `hand` or `discard_pile` and appends it to `exhaust_pile`; a card in the draw pile, the exhaust pile, or mid-play stays where it is AND lands in the exhaust pile, i.e. it exists in two piles at once. Verified by execution against a draw-pile card. C# routes through CardPileCmd.Add(card, PileType.Exhaust, Bottom), whose RemoveFromCurrentPile() is pile-agnostic (CardPileCmd.cs:496) and whose CardPile.AddInternal throws outright if the target pile already holds the instance (CardPile.cs:86-89). Dormant: all twelve ported callers pass hand cards (spot-checked cards/cinder.py:40-45, cards/true_grit.py:48-55, cards/second_wind.py:34-39, relics/paels_eye.py:44-46)."
+    },
+    {
+      "what": "G8 (dormant for combat piles) -- no Hook.AfterCardChangedPiles at all",
+      "verdict": "gap",
+      "issue": "Every C# pile move funnels through it: CardPileCmd.cs:635 (Add), 188 (RemoveFromCombat), 683 (manual play) and CardCmd.cs:447 (transform). The sim has one hook per transition -- on_card_drawn, on_card_discarded, on_card_exhausted, on_card_entered_combat -- plus a deck-only relic shim, Relic.after_card_added_to_deck (relics/base.py:208-210), and nothing that observes an arbitrary pile-to-pile move. All four ported C# listeners filter to pile.Type == Deck (BingBong.cs:31, BookOfFiveRings.cs:84, DarkstonePeriapt.cs:19, LuckyFysh.cs:27), so the shim covers them everywhere except the transform path (G3). Dormant: the three C# listeners that watch COMBAT piles -- SovereignBlade, Hoarder and SoulFysh -- are all unported; porting any of them makes this live."
+    },
+    {
+      "what": "G9 (dormant) -- ShouldDraw re-evaluated per drawn card; no AfterPreventingDraw",
+      "verdict": "gap",
+      "issue": "CardPileCmd.Draw evaluates Hook.ShouldDraw exactly ONCE before the loop and fires Hook.AfterPreventingDraw on refusal (CardPileCmd.cs:804-808); PlayerCombatState._draw calls should_draw inside the per-card loop (player.py:280-281) and has no after_preventing_draw counterpart. Same result while every listener is stateless -- Fiddle (relics/fiddle.py:26-31) is the only ported should_draw listener and returns a pure function of fromHandDraw -- but a listener that flipped mid-draw would truncate the draw in the sim and be ignored entirely in C#. AfterPreventingDraw's only C# implementation is a Flash() (Fiddle.cs:36-40), i.e. presentation."
+    },
+    {
+      "what": "G10 (dormant) -- ModifyShuffleOrder modelled as an AfterShuffle listener",
+      "verdict": "gap",
+      "issue": "C# mutates the shuffled list INSIDE the shuffle, on the shuffled-but-not-yet-placed list, and therefore strictly before AfterShuffle (CardPileCmd.cs:876-877 vs 917); the combat-start randomize calls it too, with isInitialShuffle: true (CardPile.cs:69-74), which the sim's _shuffle_draw_pile(stable=False) also does not hook. The sim has no modify_shuffle_order hook at all: PerfectFitEnchantment hand-rolls the reposition on on_shuffle (enchantments.py:186-189), i.e. on the AfterShuffle event. The net order is therefore decided by hook-REGISTRATION order rather than by C#'s fixed call sequence. Executed with Perfect Fit and Biiig Hug (the one ported on_shuffle listener that mutates the draw pile) in the same combat: the Perfect Fit card did land on top, so NO collision is demonstrated -- but nothing in the sim's architecture prevents one, and the initial-shuffle variant has no sim surface at all."
+    },
+    {
+      "what": "G11 (dormant) -- AfterCardDiscarded fires before the card has moved, and in a batch",
+      "verdict": "gap",
+      "issue": "C# adds each card to the discard pile FIRST and only then fires the hook, one card at a time, so the next card is not moved until the previous card's hook has run (CardCmd.cs:186-195). PlayerCombatState.discard_hand fires on_card_discarded for EVERY flushed card while they are all still in `hand` and none is in `discard_pile`, then moves them as a batch (player.py:192-196). Verified by execution: (in_hand, in_discard) == (True, False) at hook time, where C# would give (False, True). Dormant in the strongest sense available: a grep of sts2_rl/ finds ZERO on_card_discarded listeners, so nothing can observe it today."
+    },
+    {
+      "what": "G12 -- no Hook.AfterGoldGained and no gold-gain hook surface",
+      "verdict": "gap",
+      "issue": "PlayerCmd.GainGold fires Hook.ModifyGoldGained -> Hook.AfterModifyingGoldGained -> Hook.AfterGoldGained (PlayerCmd.cs:144-169). RunState.gain_gold (run.py:325-333) runs a relic modify_gold_gained loop and nothing else. The consequence is visible in the sim today: DragonFruit.cs:22-29 grants +1 Max HP on every gold gain and is a ported relic whose sim implementation is an inert stub (relics/dragon_fruit.py, docstring still claiming 'no gold system' although run.gold exists), and LuckyFysh.cs:24-32 is stubbed for the same reason on the AfterCardChangedPiles side (relics/lucky_fysh.py). The relics' own stubbing is a Tier-1 relic-audit item; what this seam records is that there is no hook for a correct implementation to attach to."
+    },
+    {
+      "what": "G13 (dormant) -- escape does not remove the escaper's powers",
+      "verdict": "gap",
+      "issue": "CreatureCmd.Escape calls creature.RemoveAllPowersInternalExcept() (CreatureCmd.cs:589), stripping every power via PowerModel.RemoveInternal -- silently, with no AfterRemoved, the deliberate contrast with death, which DOES await each power's AfterRemoved (CreatureCmd.cs:533-537). The sim's escape (cmds.py:221-234) sets escaped = True, fires an invented on_creature_escaped hook and leaves every power on the creature and registered as a live hook listener. Dormant: the three ported escape sites -- Thieving Hopper (monsters/hive/thieving_hopper.py:125), Gremlin Merc (monsters/underdocks/gremlin_merc.py:137) and BattlewornDummyTimeLimitPower (powers.py:2928) -- leave behind only owner-scoped powers (SwipePower, FlutterPower, the time-limit power itself), every one of which self-filters on `is self.owner` and so cannot fire for a creature that no longer takes turns or receives damage. Live for any escaping monster holding a power with a global, non-owner-scoped hook."
+    },
+    {
+      "what": "N1 -- stun is more permissive than StunInternal",
+      "verdict": "deliberate-divergence",
+      "rationale": "Creature.StunInternal THROWS for a non-monster ('Can't stun a player') and no-ops when the creature is dead or has no combat state (Creature.cs:524-542); cmds.py:208-218 sets `target.stunned = True` on any creature and fires on_stunned. The sim does not model C# exceptions as game rules anywhere, and no ported caller stuns the player or a corpse; the move-machine half of Stun (the STUNNED MoveState, MustPerformOnceBeforeTransitioning, the StateLog-derived default nextMoveId) belongs to the monster_state_machine seam (Task 10)."
+    },
+    {
+      "what": "N2 -- CardCmd.afflict skips ShouldAfflict / CanAfflict / AfterApplied and returns None where C# throws",
+      "verdict": "deliberate-divergence",
+      "rationale": "Recorded across steps 63-66. ShouldAfflict is provably inert (zero overrides game-wide, so a waiver at step 64); CanAfflict has no sim surface at all (step 65, a dormant gap); AfterApplied and the type-mismatch throw are deliberate: the sim's Affliction model has no lifecycle hook and returning None is the safer contract for an RL environment than raising."
+    },
+    {
+      "what": "N3 -- the whole CardPileAddResult failure surface is unmodelled",
+      "verdict": "deliberate-divergence",
+      "rationale": "C#'s Add returns a per-card result carrying success / oldPile / modifyingModels and marks success = false for a dead owner, a removed-from-state card, a detached combat card, or a ShouldAddToDeck prevention (CardPileCmd.cs:322-397). The sim's three pile helpers (cmds.py:463-512) return None and always succeed. ShouldAddToDeck/AfterAddToDeckPrevented have ZERO overrides game-wide (step 73), and the sim ends the combat the instant the player dies (combat.py:419-420), so the dead-owner drop has no ported window; the result object itself is plumbing for the preview/VFX layer this record waives at step 76/80."
+    },
+    {
+      "what": "N4 -- no duplicate-instance guard on any sim pile insert",
+      "verdict": "deliberate-divergence",
+      "rationale": "CardPile.AddInternal throws if the pile already contains that CardModel instance and RemoveInternal throws if it does not (CardPile.cs:86-89, 117-120). The sim's piles are plain lists with no such invariant, which is what lets G7's double-membership bug exist silently. Recorded as a deliberate divergence at the container level and as the mechanism behind G7 at the verb level."
+    },
+    {
+      "what": "N5 -- EnergyCmd.gain lacks C#'s `finalAmount > 0` guard",
+      "verdict": "deliberate-divergence",
+      "rationale": "PlayerCmd.cs:37-41 adds energy only when the modified amount is positive; cmds.py:553-554 does `player.energy += amount` unconditionally, so a modifier returning a negative value would subtract energy. The only ported modify_energy_gain listener returns 0 (NoEnergyGainPower, powers.py:554-557, mirroring NoEnergyGainPower.cs), and 0 is a no-op under both rules -- verified by reading both implementations."
+    },
+    {
+      "what": "N6 -- stars are Regent-only",
+      "verdict": "waiver",
+      "rationale": "PlayerCmd.GainStars/LoseStars/SetStars, Hook.ShouldGainStars and Hook.AfterStarsGained (PlayerCmd.cs:90-133) belong to a character the Ironclad-only sim does not implement."
+    },
+    {
+      "what": "N7 -- pets are unported",
+      "verdict": "waiver",
+      "rationale": "PlayerCmd.AddPet<T>/AddPet (PlayerCmd.cs:237-257) and the PetOwner plumbing; cross-referenced by damage_pipeline's Osty waivers (its steps 10 and 15)."
+    },
+    {
+      "what": "N8 -- presentation and telemetry throughout",
+      "verdict": "waiver",
+      "rationale": "VFX/SFX/tweens/screen shake/thought bubbles/card previews, CombatManager.History and MapPointHistoryEntry run-history, and the whole PlayerChoiceContext / PlayerChoiceSynchronizer local-vs-remote layer. Also AfterModifyingEnergyGain and AfterPreventingDraw, whose only implementations anywhere are Flash() calls (NoEnergyGainPower.cs, Fiddle.cs:36-40)."
+    },
+    {
+      "what": "N9 -- the sim has no Play pile; the limbo exclusion is parity-only",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# holds a card being played in PileType.Play for the whole of OnPlay (CardPileCmd.cs:669-670 for manual play, CardCmd.cs:114-117 for auto-play), and CardPileCmd.Shuffle reads only the Draw and Discard piles (CardPileCmd.cs:870-871) -- that is the entire mechanism behind seed fact 1. The sim appends the played card to the DISCARD pile and sets player._playing_card as a marker (combat.py:452-454), then holds it back from a reshuffle IN PARITY MODE ONLY (player.py:203, 232), because legacy RL runs are kept byte-for-byte. Verified by execution: parity holds the card back, legacy shuffles it into the new draw pile. Deliberate and documented in-source; the remaining exposure -- an effect that counts the discard pile during its own OnPlay would see the resolving card in the sim and not in the game -- is not demonstrated, as no ported card reads the discard-pile size mid-play."
+    },
+    {
+      "what": "N10 -- CardSelectCmd's auto-select shortcut, min/max range and draw-pile sort",
+      "verdict": "deliberate-divergence",
+      "rationale": "CombatState.select_cards (combat.py:560-581) takes a single `count` rather than C#'s MinSelect/MaxSelect range and RequireManualConfirmation flag, and never re-orders a draw-pile candidate list the way CardSelectCmd.cs:403-408 does. The membership C#'s auto-select shortcut produces (take every candidate when there are no more than MinSelect of them) falls out of the sim's `count = min(count, len(candidates))` clamp. Two residues are recorded as the gap at step 105: an installed card_selector sees the true draw order where C#'s would see a rarity/id sort, and the random FALLBACK draws on the shared legacy self._rng rather than combat_rng.card_selection."
+    },
+    {
+      "what": "N11 -- parity-only card ordering rules",
+      "verdict": "deliberate-divergence",
+      "rationale": "The stabilizing sort (player.py:270-271), the top-at-index-0 reorientation (player.py:273-274), the Random-position Shuffle-stream draw (cmds.py:490-496), the Play-limbo reshuffle exclusion (player.py:203, 232) and the deck-append transform (run.py:459-469) are ALL gated on combat_rng.is_parity / rng_set, with the legacy RL path keeping its pre-SP3 byte-for-byte behaviour. That is a project-level decision (see the sim-to-replay epic), not an accident: legacy is the trained-agent stream and parity is the conformance stream. Every one of the seed facts this record verifies therefore holds in parity mode only."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-25"
+}

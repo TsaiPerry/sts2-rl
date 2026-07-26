@@ -22,7 +22,11 @@ from sts2_rl import (
     VulnerablePower,
     DamageProps,
 )
-from sts2_rl.cards import StrikeCard
+from sts2_rl.cards import StrikeCard, make_card
+from sts2_rl.cmds import BlockCmd
+from sts2_rl.relics import make_relic
+from sts2_rl.rng import RunRngSet
+from sts2_rl.run import RunState
 
 
 def trace(hooks, names):
@@ -229,3 +233,133 @@ class TestPowerCmdOrder:
         vuln.skip_next_tick = False  # that first tick has now been consumed
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 2, applier=cs.enemy)
         assert not cs.player.powers["vulnerable"].skip_next_tick
+
+
+class TestCreatureCardCmdsOrder:
+    """creature_card_cmds audit (docs/audit/seams/creature_card_cmds.md):
+    pins the two seed-fact behaviours from the brief's pin table plus the
+    three live gaps the seam audit found."""
+
+    BLOCK_PIPELINE = [
+        "modify_block_additive",
+        "modify_block_multiplicative",
+        "on_block_gained",
+    ]
+
+    def test_gain_block_hook_order(self):
+        """Spec steps 12-17 (CreatureCmd.cs:642-662): the block modifiers run
+        additive-then-multiplicative, and the post-gain event fires last,
+        after the block has actually landed."""
+        cs = fresh()
+        calls = trace(cs.hooks, self.BLOCK_PIPELINE)
+        gained = BlockCmd.apply(cs.hooks, cs.player, 5, card=make_card("defend"))
+        assert calls == self.BLOCK_PIPELINE
+        assert gained == 5 and cs.player.block == 5
+
+    def test_card_mid_play_is_excluded_from_a_reshuffle_it_triggers(self):
+        """Seed fact 1 / spec step 82 (CardPileCmd.cs:669-670): a card being
+        played sits in PileType.Play, and CardPileCmd.Shuffle only ever reads
+        the Draw and Discard piles (CardPileCmd.cs:870-871) -- so a reshuffle
+        the card's own effect triggers must not shuffle it back into the draw
+        pile. The sim models the limbo with PlayerCombatState._playing_card
+        (combat.py:452-454, player.py:202-215)."""
+        cs = CombatState(
+            starting_deck=[make_card("strike") for _ in range(3)],
+            rng_set=RunRngSet("creature-card-cmds-limbo"),
+        )
+        p = cs.player
+        p.hand.clear()
+        p.draw_pile.clear()
+        p.discard_pile.clear()
+        held = make_card("pommel_strike")
+        p.discard_pile.extend([held, make_card("strike")])
+        p._playing_card = held           # mid-OnPlay: the card is in Play limbo
+        p.reshuffle_discard_into_draw()
+        assert held not in p.draw_pile
+        assert p.discard_pile == [held]  # it lands in its result pile after OnPlay
+
+    def test_deck_transform_appends_at_the_end_under_parity(self):
+        """Seed fact 2 / spec step 58 (CardCmd.cs:436-439): a Deck-pile
+        transform calls AddInternal(replacement) with no index, and
+        CardPile.AddInternal's index = -1 default appends (CardPile.cs:83-97);
+        only combat-pile transforms re-insert at the original's index. Pins
+        the parity path -- test_events.py::
+        test_transform_replaces_in_place_with_pool_card pins the legacy
+        in-place behaviour on an unseeded run."""
+        run = RunState(string_seed="creature-card-cmds-transform")
+        original = run.deck[0]
+        replacement = run.transform_card(original)
+        assert original not in run.deck
+        assert run.deck[-1] is replacement
+        assert run.deck.index(replacement) == len(run.deck) - 1
+
+    @pytest.mark.xfail(
+        reason="creature_card_cmds audit gap G1 "
+               "(audits/seam/creature_card_cmds.json): BlockCmd.apply "
+               "(cmds.py:145-147) gates the WHOLE modify_block_additive/"
+               "modify_block_multiplicative dispatch on is_powered_attack "
+               "(Move && !Unpowered). C#'s Hook.ModifyBlock (Hook.cs:1310-1340) "
+               "calls every listener for every block gain and leaves the gate "
+               "to each implementation, and Vambrace.cs:59-63 (like "
+               "PaelsLegion.cs:132-134) self-gates only on "
+               "IsCardOrMonsterMove() -- Move alone, ignoring Unpowered "
+               "(ValuePropExtensions.cs:22-25). This is LIVE on ported "
+               "content: Entrench gains block with MOVE|UNPOWERED "
+               "(cards/trash_heap_cards.py:159-179, mirroring Entrench.cs:23) "
+               "and Vambrace is a ported Uncommon relic, so the real game "
+               "doubles Entrench's block and the sim does not.",
+        strict=True,
+    )
+    def test_unpowered_card_block_still_runs_block_modifiers(self):
+        cs = CombatState(rng=random.Random(0), relics=[make_relic("vambrace")])
+        cs.player.block = 10
+        gained = BlockCmd.apply(
+            cs.hooks, cs.player, cs.player.block, card=make_card("entrench"),
+            props=ValueProp.MOVE | ValueProp.UNPOWERED,
+        )
+        assert gained == 20  # C#: Vambrace doubles unpowered card block too
+
+    @pytest.mark.xfail(
+        reason="creature_card_cmds audit gap G2 "
+               "(audits/seam/creature_card_cmds.json): the sim has no "
+               "AfterModifyingBlockAmount event (CreatureCmd.cs:646, "
+               "Hook.cs:649-656), so Vambrace's port hand-rolls its "
+               "once-per-combat latch onto on_block_gained "
+               "(relics/vambrace.py:36-40) and burns it on the FIRST block "
+               "gain. C# latches only TriggeringCard = cardSource there "
+               "(Vambrace.cs:78-90) and does not set BlockGainedThisCombat "
+               "until AfterCardPlayed (Vambrace.cs:92-105), so every block "
+               "instance of the same card play is doubled. LIVE with ported "
+               "content: Evil Eye (cards/evil_eye.py:37-42) gains block twice "
+               "in one play and Second Wind (cards/second_wind.py:34-39) once "
+               "per exhausted non-Attack.",
+        strict=True,
+    )
+    def test_vambrace_doubles_every_block_gain_of_one_card_play(self):
+        cs = CombatState(rng=random.Random(0), relics=[make_relic("vambrace")])
+        card = make_card("evil_eye")
+        first = BlockCmd.apply(cs.hooks, cs.player, 5, card=card)
+        second = BlockCmd.apply(cs.hooks, cs.player, 5, card=card)
+        assert (first, second) == (10, 10)  # C#: same CardPlay, still doubled
+
+    @pytest.mark.xfail(
+        reason="creature_card_cmds audit gap G3 "
+               "(audits/seam/creature_card_cmds.json): RunState.transform_card "
+               "(run.py:459-469) deletes the original and appends the "
+               "replacement directly instead of routing through add_card "
+               "(run.py:341-354), so it skips both deck-entry hooks that C#'s "
+               "CardCmd.Transform runs for a Deck pile -- "
+               "Hook.ModifyCardBeingAddedToDeck (CardCmd.cs:430, the egg "
+               "relics' substitution) and Hook.AfterCardChangedPiles "
+               "(CardCmd.cs:447, Bing Bong / Book of Five Rings / Darkstone "
+               "Periapt / Lucky Fysh). LIVE: Frozen Egg and every deck-level "
+               "transformer (Pandora's Box, Astrolabe, Wood Carvings, Morphic "
+               "Grove, Symbiote) are ported, so the real game hands back an "
+               "upgraded Power and the sim hands back an un-upgraded one.",
+        strict=True,
+    )
+    def test_deck_transform_runs_modify_card_being_added_to_deck(self):
+        run = RunState(string_seed="creature-card-cmds-egg")
+        run.add_relic(make_relic("frozen_egg"))
+        replacement = run.transform_card(run.deck[0], into=make_card("inflame"))
+        assert replacement.upgrade_level == 1  # C#: Frozen Egg upgrades it
