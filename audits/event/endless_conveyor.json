@@ -1,0 +1,95 @@
+{
+  "unit": "event/endless_conveyor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\EndlessConveyor.cs",
+    "sha256": "7039ef349c6d7f57f66b3284117cf70a26d80a0052bd0f72ad6418d826ee027e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\endless_conveyor.py",
+    "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "EndlessConveyor.is_allowed (events/endless_conveyor.py:44-46) `run.gold >= 120`, matching EndlessConveyor.cs:94-97. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    },
+    "CalculateVars": {
+      "maps_to": "EndlessConveyor.calculate_vars (events/endless_conveyor.py:48-49) calls _roll_dish, matching EndlessConveyor.cs:99-103 (RollDish, then a StringVar write that is display only). The first dish is therefore rolled before the initial page in both, which fixes the roll ORDER relative to everything else the event does.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "RollDish's forced-Seapunk rule (EndlessConveyor.cs:205-213): NumOfGrabs++ FIRST, then `if (NumOfGrabs % 5 == 0)` returns SEAPUNK_SALAD and sets _lastDishId to it -- skipping the weighted roll entirely, so no RNG is consumed on those grabs",
+      "maps_to": "events/endless_conveyor.py:53-59 reproduces all four details: the pre-increment, the modulo, the _lastDishId write, and the early return before any draw.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the dish table and its conditional entries (EndlessConveyor.cs:214-238): CAVIAR 6, SPICY_SNAPPY 3, JELLY_LIVER 3, FRIED_EEL 3 always; SUSPICIOUS_CONDIMENT 3 if HasOpenPotionSlots; CLAM_ROLL 6 if CurrentHp != MaxHp; GOLDEN_FYSH 1 if NumOfGrabs > 1; then RemoveAll(id == _lastDishId)",
+      "maps_to": "events/endless_conveyor.py:60-72 -- same seven ids, same weights, same three conditions (has_open_potion_slot, `hp != max_hp`, `num_of_grabs > 1`), same last-dish exclusion, and crucially the same ORDER, which is what the cumulative-weight walk depends on.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the weighted walk itself (EndlessConveyor.cs:240-256): sum the weights, `base.Rng.NextFloat() * total`, then walk accumulating and take the first entry with `roll < acc`",
+      "maps_to": "events/endless_conveyor.py:74-83 is the same fold with the same strict `<`. Stream aside (EV-3), the mapping from a uniform [0,1) draw to a dish is identical.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GrabSomethingOffTheBelt (EndlessConveyor.cs:114-129): pay 40 unless the dish is GOLDEN_FYSH, run the action, THEN re-roll, then present grab/leave",
+      "maps_to": "events/endless_conveyor.py:133-141 in the same order.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateGrabSomethingOffTheBeltOption (EndlessConveyor.cs:131-138): the affordability check is `Owner.Gold >= Gold.IntValue` and is applied even when the current dish is the FREE Golden Fysh",
+      "maps_to": "events/endless_conveyor.py:120-125 reproduces the quirk and says so in a comment. A broke player cannot take the free fish in either engine.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ClamRoll heal 10, Caviar +4 Max HP, GoldenFysh +75 gold, SeapunkSalad adds Feeding Frenzy (EndlessConveyor.cs:140-148, 174-176, 185-188)",
+      "maps_to": "events/endless_conveyor.py:12-15 constants (_GRAB_COST 40, _GOLDEN_FYSH_GOLD 75, _CLAM_ROLL_HEAL 10, _CAVIAR_MAX_HP 4) and events/endless_conveyor.py:87-116. All four exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "FriedEel (EndlessConveyor.cs:178-183) draws from the COLORLESS card pool: `ForNonCombatWithDefaultOdds(ModelDb.CardPool<ColorlessCardPool>())` -> CreateForReward(1) -> CardPileCmd.Add(card, Deck)",
+      "verdict": "gap",
+      "issue": "events/endless_conveyor.py:99-103 calls `random_pool_cards(self.rng, 1)` -- the CHARACTER pool -- and the comment claims 'ColorlessCardPool has no sim equivalent'. That claim is FALSE: cards/pool.py exports COLORLESS_POOL and events/brain_leech.py:54, 63 already passes it to create_reward_cards for exactly this shape of colourless reward (BrainLeech's RIP branch uses the same C# pool). So the wrong pool is rolled: the player gets an Ironclad card where the game gives a colourless one. LIVE -- Endless Conveyor needs only 120 gold, and FRIED_EEL carries weight 3 of the base 15, so it is a common dish. The rarity odds are also unmodelled (ForNonCombatWithDefaultOdds vs a flat pool pick), but the pool is the observable part."
+    },
+    {
+      "what": "SuspiciousCondiment (EndlessConveyor.cs:150-161) draws `base.Owner.PlayerRng.Rewards.NextItem(character potion pool + SharedPotionPool)` and offers it",
+      "verdict": "gap",
+      "issue": "events/endless_conveyor.py:105-107 calls run.random_potion() (run.py:513-520), which is `rng.choice` over every potion class flagged in_reward_pool -- a different stream (EV-3) AND a different population (the sim's flag is not the character-pool + shared-pool union the source composes). Same defect as battleworn_dummy's Setting1 potion; recorded at both sites with the same verdict (rule 3). The sim additionally re-checks has_open_potion_slot, which the source does not -- harmless, since the dish is only offered when a slot was open."
+    },
+    {
+      "what": "EV-4: SuspiciousCondiment's potion (EndlessConveyor.cs:156-159) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a colourless card reward can be a card the player does not want in the deck, and a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` on its grid pick (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all of which are reachable event branches with no exotic gate."
+    },
+    {
+      "what": "SpicySnappy and ObserveChef both upgrade ONE random upgradable deck card via `base.Rng.NextItem(list)`, guarded on the list being non-empty (EndlessConveyor.cs:190-199, 262-272)",
+      "maps_to": "events/endless_conveyor.py:90-93 and 143-147: `if upgradable: self.rng.choice(upgradable).upgrade()`. NextItem maps to choice (this is a single uniform pick, NOT a StableShuffle, so EV-5 does not apply here); only the stream diverges (EV-3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BR-G3 (blast radius): EndlessConveyor's JELLY_LIVER dish (EndlessConveyor.cs:163-170) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as audits/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py tools/audit/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+    },
+    {
+      "what": "EV-3: RollDish's `base.Rng.NextFloat()` (EndlessConveyor.cs:245), SpicySnappy's and ObserveChef's NextItem (EndlessConveyor.cs:195, 268), JellyLiver's TransformToRandom stream (EndlessConveyor.cs:168) and SuspiciousCondiment's Rewards draw (EndlessConveyor.cs:153) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "`runState.Players.All(p => p.Gold >= 120)` (EndlessConveyor.cs:96)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "CurrentDishTitle / LastDishTitle StringVars and the per-dish hover tips (EndlessConveyor.cs:90-91, 102, 122-123)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
