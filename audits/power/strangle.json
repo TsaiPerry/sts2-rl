@@ -1,0 +1,71 @@
+{
+  "unit": "power/strangle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\StranglePower.cs",
+    "sha256": "c1a2932f962be486559c73985d104f06e0d6d5b0b96ad54d5c1b7eeda60e3736"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2845 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "InstanceType": {
+      "maps_to": "cmds.py:308 `if power_cls.id in target.powers`",
+      "verdict": "gap",
+      "issue": "PowerInstanceType.InstancedPerApplier (StranglePower.cs:29) -- and per power_cmd gap G5's corrected census this is the ONLY ported InstancedPerApplier power in the game (the other is OblivionPower, unported). The sim keys stacking on the power id alone (cmds.py:308), so two appliers' Strangles on one target merge into a single instance with a single `_amounts` dict and a single amount, where C# keeps one instance per applier -- each of which deals its own damage per card play. Mechanism owned by power_cmd G5; not re-verdicted (rule 3). DORMANT in Ironclad scope: the only ported applier is the player, via Mad Science's Choking rider (cards/mad_science.py:128-130, `applier=ctx.player`), and there is exactly one player, so a second applier needs multiplayer or a monster-applied Strangle -- neither of which exists. This is the cleanest available statement of G5's InstancedPerApplier half: it is dormant *by scope*, not by content, so it will not become live by porting more Ironclad content. Third-file citations, not hashed here."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "powers.py:2855-2856 before_card_played (combat.py:466)",
+      "verdict": "faithful",
+      "rationale": "StranglePower.cs:36-48 records `amountsForPlayedCards[cardPlay.Card] = base.Amount` for each card the applier's player plays; powers.py:2853-2856 keeps `self._amounts[id(card)] = self.amount`. The two C# guards -- `base.Applier?.Player == null` and `cardPlay.Card.Owner != base.Applier.Player` -- are single-player tautologies here because the only applier is the player. The DESIGN INTENT is preserved and is the subtle part: recording at BeforeCardPlayed is what stops Strangle triggering on the very card that applied it, since that card is already past its own BeforeCardPlayed -- the source's own comment (StranglePower.cs:18-21) says so and the sim's (powers.py:2849-2852) repeats it."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:2858-2866 on_card_played (combat.py:514)",
+      "verdict": "gap",
+      "issue": "The damage TYPING is exact -- C# is `ValueProp.Unblockable | ValueProp.Unpowered` with dealer null and cardSource null (StranglePower.cs:55) and the sim passes `props=DamageProps.NON_CARD_HP_LOSS`, which valueprops.py:44 defines as exactly `UNBLOCKABLE | UNPOWERED`, with no dealer and no card. That is the recurring omitted-`props` shape (power report section 4 item 4) got RIGHT, and it is worth recording as such. The gap is hook_dispatch gap G4, the per-CardPlay bracket: CardModel.cs:1904-1965 builds a fresh CardPlay per Replay iteration and fires BeforeCardPlayed at :1929 and AfterCardPlayed at :1959 INSIDE the `for (int i = 0; i < playCount; i++)` loop, so a doubled card runs Add-then-Remove twice and Strangle deals its damage TWICE; combat.py:466 fires before_card_played once before the `for _ in range(play_count)` loop and combat.py:514 fires on_card_played once after it, so the sim deals it ONCE. G4 is already LIVE with an executed witness and is not re-verdicted; the per-unit consequence is N-times-less Strangle damage on any replayed card. Co-occurrence is reachable: Strangle comes from Mad Science (the ported Act-3 Glory event Tinker Time) and the ported replay sources are Throwing Axe (the Act-3 Tanx shrine), One-Two Punch (powers.py:966), Duplication (powers.py:3919) and two enchantments. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2868-2869 on_enemy_side_end",
+      "verdict": "faithful",
+      "rationale": "Correct slot. The owner is an ENEMY -- Mad Science applies Strangle to its target (cards/mad_science.py:128-130) -- so C#'s `participants.Contains(base.Owner)` (StranglePower.cs:61) selects the enemy side, and Hook.AfterTurnEnd for the enemy side (Hook.cs:1267, CombatManager.cs:1256) is the sim's on_enemy_side_end (combat.py:345). Same correct-slot shape as tainted / high_voltage / territorial, and it means Strangle survives the whole enemy turn as C# intends. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "StranglePower.cs:63 PowerCmd.Remove(this) vs _expire()",
+      "verdict": "deliberate-divergence",
+      "rationale": "Strangle overrides no AfterRemoved, so the observable is identical -- the same mechanism note as power/no_draw's and power/tainted's."
+    },
+    {
+      "what": "StranglePower.cs:52 `amountsForPlayedCards.Remove(card, out value)` keyed by CardModel",
+      "verdict": "faithful",
+      "rationale": "The sim keys by `id(card)` (powers.py:2853, 2859). Equivalent for live cards -- the entry is written and popped inside one card play, so the object cannot be collected and its id cannot be recycled in between. Recorded because an id()-keyed dict is exactly the sort of shortcut that would be a gap if the entry outlived the play."
+    },
+    {
+      "what": "powers.py:2860 `self.owner.is_gone` -> return, added by the sim",
+      "verdict": "faithful",
+      "rationale": "C# has no such test; it relies on CreatureCmd.Damage refusing a dead target (damage_pipeline's step 1). The sim's check is earlier but the outcome is the same, and the dict entry is popped before the check on both sides, so no stale entry survives."
+    },
+    {
+      "what": "The amount snapshot: damage = the amount AT BeforeCardPlayed, not at resolution",
+      "verdict": "faithful",
+      "rationale": "C# stores base.Amount at BeforeCardPlayed and deals THAT value (StranglePower.cs:46, 55); powers.py:2856, 2859-2866 does the same. This is what makes a Strangle stacked mid-play deal the old amount, and it is preserved."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

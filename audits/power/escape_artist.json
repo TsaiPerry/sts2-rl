@@ -1,0 +1,51 @@
+{
+  "unit": "power/escape_artist",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\EscapeArtistPower.cs",
+    "sha256": "ee57a2996eb2307c23959f721c9a90b8ffc6491c284d93101b3b2d771a1b2657"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2181 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2183-2186 on_enemy_turn_end",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py tools/audit/power_slot_probes.py rosters` and `enemy-hook-order`. Executed: THIEVING_HOPPER_WEAK is a solo encounter (n=1, order=['ThievingHopper'], `py tools/audit/power_slot_probes.py rosters`), so the per-creature slot and the side slot coincide. Trigger: any multi-hopper encounter."
+    }
+  },
+  "guards": [
+    {
+      "what": "EscapeArtistPower.cs:25 `base.Amount > 1` before decrementing",
+      "verdict": "faithful",
+      "rationale": "powers.py:2184 `self.amount > 1`. Identical, and it is why this power never expires: it floors at 1 and the escape itself is the hopper's ESCAPE move (monsters/hive/thieving_hopper.py), not this power. The sim correspondingly hand-decrements (powers.py:2185-2186) instead of calling Power._tick, which would _expire() it -- a deliberate and correct choice, and the one place in this batch where NOT using _tick is right."
+    },
+    {
+      "what": "EscapeArtistPower.cs:29-32 `base.Amount == 1` -> StartPulsing()",
+      "verdict": "waiver",
+      "rationale": "Presentation only -- the class doc comment (EscapeArtistPower.cs:12-14) says this power is \"Just a visual timer\"."
+    },
+    {
+      "what": "EscapeArtistPower.cs:23 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Folded into the AfterSideTurnEnd entry; the sim's `enemy is self.owner` on a per-creature dispatch is the same intent on the wrong dispatcher."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal, so IsVisible is provably always true for every power in the decompiled game."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
