@@ -1,0 +1,61 @@
+{
+  "unit": "relic/fishing_rod",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FishingRod.cs",
+    "sha256": "541ac89e243c0e3916d3b6cb4226a090b9e86f1ae5753640ffe3875507ed9938"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fishing_rod.py",
+    "sha256": "ae3a7caf55d4b59f67ad2dd7c25f2808e55a122807cc70baecb934cfbe674da6"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (fishing_rod.py:13)",
+      "verdict": "faithful"
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. FishingRod.cs:21 is `CombatsSeen % Combats`, a counter readout only; the sim keeps the raw combats_seen (fishing_rod.py:18) and derives the same modulo where it matters (fishing_rod.py:26)."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "after_combat_end (fishing_rod.py:20-32), dispatched by RunState.finish_combat (run.py:1206-1208)",
+      "verdict": "faithful",
+      "rationale": "FishingRod.cs:42-59 maps clause for clause: the `room.Encounter.RoomType != RoomType.Monster` bail is `if room_type != RoomType.MONSTER: return` (fishing_rod.py:23-24, executed -- an ELITE combat leaves combats_seen at 0); `CombatsSeen++` then `% Combats == 0` is fishing_rod.py:25-26 with COMBATS = 3 from DynamicVar('Combats', 3m) (FishingRod.cs:40) and no AscensionHelper branch in the file; the candidate set `PileType.Deck.GetPile(Owner).Cards.Where(c => c.IsUpgradable)` is `[c for c in run.deck if c.is_upgradable]` (fishing_rod.py:27) in the same deck order; `RunState.Rng.Niche.NextItem(items)` is `run.rng_set.niche.next_item(upgradable)` (fishing_rod.py:31) on the same run-level stream; and C#'s `if (cardModel != null)` empty-list guard is `if upgradable` (fishing_rod.py:28). Executed (`py tools/audit/relic_probes_b06.py b06-misc`): four Monster combats give combats_seen 1,2,3,4 with exactly one deck card upgraded, on the third."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `CombatsSeen` is written only in AfterCombatEnd and never reset -- sweep-reset lists fishing_rod among the 32 relics that never reset a mid-combat field, with 'C# resets: [AfterCombatEnd]'",
+      "verdict": "faithful",
+      "rationale": "The sweep's 'C# resets' column is an AST fact about which combat-boundary hooks the C# relic OVERRIDES, not about what those hooks do -- FishingRod.AfterCombatEnd (FishingRod.cs:42-59) INCREMENTS the counter, it does not clear it, and nothing anywhere in FishingRod.cs assigns CombatsSeen = 0. The field is a per-RUN counter on both sides (C# marks it [SavedProperty], FishingRod.cs:25, i.e. it is meant to survive save/load), and `sweep-reset-exec` puts it in the 13 of 16 executed candidates that agree with a freshly constructed instance. Confirmed independently by execution here (`py tools/audit/relic_probes_b06.py b06-misc`). This entry exists because the batch brief listed fishing_rod as a Sweep A candidate 'C# resets at AfterCombatEnd' -- that reading is wrong, and settling it by execution rather than by reading is binding rule 5."
+    },
+    {
+      "what": "N2: `CardCmd.Upgrade(cardModel)` is called on a card the Where clause already filtered to IsUpgradable, and the sim's `.upgrade()` (cards/base.py:146-147) is unguarded",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 14 / sweep D: the sim's Card.upgrade() has no IsUpgradable guard, so every caller must supply its own. fishing_rod.py:27 builds the candidate list with `if c.is_upgradable` BEFORE the pick, so the class-14 hit is closed at this site. Sweep D's own published correction names fishing_rod as one of five sites its first 3-line-window version over-reported for exactly this reason; recorded here so the confirmation is on the record rather than in the sweep's footnote."
+    },
+    {
+      "what": "N3: RunState.finish_combat dispatches after_combat_end only when `room_type is not None and not self.is_dead` (run.py:1207); C#'s guard is structural",
+      "verdict": "faithful",
+      "rationale": "Hook.AfterCombatEnd is reached only from CombatManager's victory path (EndCombatInternal), so a lost combat fires no relic hook at all -- the same fact audits/relic/chosen_cheese-era batch-3 probe work recorded for AfterCombatEnd generally. The sim's `not self.is_dead` guard stands in for it, and a combat the sim ends with player_won=False is itself gated on player death, so the two agree. NOTE per binding rule 7: run.py and CombatManager.cs are not hashed by this record."
+    },
+    {
+      "what": "N4: the legacy branch `run.rng.choice(upgradable)` (fishing_rod.py:33) when run.rng_set is None -- a different stream from Rng.Niche",
+      "verdict": "deliberate-divergence",
+      "rationale": "The port carries both arms explicitly: the parity arm uses the run-level Niche stream the source names, and the legacy arm keeps the shared random.Random so pre-SP2 sim seeds stay byte-for-byte reproducible. This is the sim's established two-arm house style for named RNG streams (PROMPT.md bug class 16's second half), and the observable -- which card gets upgraded -- is identical in distribution; only a parity run against a recording can tell them apart, and parity runs always have rng_set. Contrast relic/astrolabe N1, which is a gap precisely because it has NO parity arm."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/fishing_rod's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py tools/audit/citation_check.py audits/relic` prints: src/Core/Combat/CombatManager.cs, sts2_rl/cards/base.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

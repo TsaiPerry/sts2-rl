@@ -1,0 +1,61 @@
+{
+  "unit": "relic/glitter",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Glitter.cs",
+    "sha256": "e2394bb75b61ac2ab906a4031f28e3127ecea186d6c932847c4de6b5c5001acb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\glitter.py",
+    "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (glitter.py:14)",
+      "verdict": "faithful"
+    },
+    "TryModifyCardRewardOptionsLate": {
+      "maps_to": "modify_card_reward_options (glitter.py:16-21), dispatched by rewards.py:298-301 over run.relics",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect matches Glitter.cs:18-36 clause for clause -- every reward option Glam can enchant gets Glam at amount 1, and unlike Silken Tress it is not one-shot -- but C# enchants a CLONE and substitutes it through `cardReward.ModifyCard(card2, this)` where the sim enchants in place (G1), and the hook is the Late phase collapsed into the sim's single flat pass (G2). The owner guard is N1 (waived); the `return true` is a bookkeeping value with no sim counterpart."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): `base.Owner.RunState.CloneCard(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` then `cardReward.ModifyCard(card2, this)` (Glitter.cs:30-32) vs `GlamEnchantment().attach(card)` in place (glitter.py:21)",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 17. CardScope.CloneCard -> ClonePreservingMutability (CardModel.cs:2168-2179) carries upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers, and the sim has no clone helper at all -- sweep E lists five sim sites that rebuild from the id and keep only the upgrade level. Same mechanism, same verdict as audits/relic/burning_sticks.json G3 and audits/relic/frozen_egg.json G3, binding rule 3. DORMANT, settled by execution rather than by argument (`py tools/audit/relic_probes_b06.py b06-misc`): a reward option is a freshly created card with no per-instance state to lose, and the one collision that could matter -- a second enchanting relic on the same option -- is closed on BOTH sides by the same rule, that a card holds one enchantment. C#'s EnchantmentModel.CanEnchant refuses an already-enchanted card unless `IsStackable && same type`, and `grep IsStackable src/Core/Models/Enchantments/` finds NO override of the `=> false` default (EnchantmentModel.cs:173, 289); the sim's Enchantment.can_enchant returns `card.enchantment is None` (enchantments.py:51-58). Probe: a Strike already carrying Swift reports `Glam.can_enchant = False`, matching C#. The residual divergence is identity -- the game keeps the un-enchanted original alive for the reward screen's 'modified by' display and hands the deck a new model -- which is presentation plus the reverse of sweep E's data loss. Porting a stackable enchantment, or any effect holding a handle on a reward option across the pick, makes it live."
+    },
+    {
+      "what": "G2 (DORMANT): the hook is TryModifyCardRewardOptions**Late** and rewards.py:298-301 is a single flat pass over run.relics",
+      "verdict": "gap",
+      "issue": "audits/seam/hook_dispatch.json gap G3 (missing phase passes) at the site step 28 names by hook (TryModifyCardRewardOptionsLate, Hook.cs:1988); one verdict per mechanism, binding rule 3. Hook.TryModifyCardRewardOptions (Hook.cs:1445-1468) runs the plain pass over every listener and THEN the Late pass; the sim runs one loop. DORMANT for the same reason recorded on audits/relic/frozen_egg.json G4: the ported reward-option relics either upgrade (the three eggs, Silver Crucible) or enchant (Silken Tress, Glitter, Fresnel Lens once implemented), and the two families commute -- EnchantmentModel.CanEnchant does not read the upgrade level (EnchantmentModel.cs:273-294) and the eggs' `_applies` does not read the enchantment (relics/_eggs.py:34-37). Two ENCHANTING relics in one run do interact -- whichever runs first wins the single slot -- but that race exists in C# too, between its own plain and Late passes, and both of the sim's enchanters are Late-phase in C#, so the sim's registration order stands in for C#'s listener order at the same phase. Porting a plain-phase reward-option listener whose decision reads the enchantment or the upgrade level makes it live."
+    },
+    {
+      "what": "N1: `player != base.Owner` (Glitter.cs:20-23)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only ownership filter; the sim has one player and one reward screen. Waived under the shared contract's multiplayer exclusion."
+    },
+    {
+      "what": "N2: `CardCmd.Enchant<Glam>(card2, 1m)` -- amount 1 -- vs `GlamEnchantment()` with the base class's default amount (enchantments.py:42)",
+      "verdict": "faithful",
+      "rationale": "Enchantment.__init__ defaults amount to 1, so the sim's bare constructor is Glam 1. No AscensionHelper branch in Glitter.cs, so 1m is the pinned non-ascension value, and Glam's own port is a faithful EnchantPlayCount +Amount once per combat (enchantments.py:220-241 vs Glam.cs). Recorded because the amount is invisible at the sim's call site -- a fixer changing the default would silently change this relic."
+    },
+    {
+      "what": "N3: `glam.CanEnchant(card)` (Glitter.cs:28) vs `GlamEnchantment.can_enchant(card)` (glitter.py:20)",
+      "verdict": "faithful",
+      "rationale": "Glam adds no CanEnchant/CanEnchantCardType override, so C# uses EnchantmentModel.CanEnchant's base clauses: not Status/Curse/Quest (`(uint)(type - 4) <= 2u`), the type check, no Unplayable card sitting in the Deck pile, and no existing enchantment. Enchantment.can_enchant (enchantments.py:51-58) has the same four with one narrowing: it refuses an unplayable card in ANY pile, where C# only refuses one in the Deck pile. Not a divergence at this site -- a reward option is not in any pile yet -- so it is recorded here rather than verdicted; if it matters anywhere it belongs to the enchantment kind's own records, which are not on this branch (audits/enchantment/** lives on the event+enchantment stream's branch). Executed (`py tools/audit/relic_probes_b06.py b06-misc`): given options [strike, dazed], Glitter Glams the Strike and leaves the Dazed (a Status) alone."
+    },
+    {
+      "what": "N4: ExtraHoverTips (Glitter.cs:16) and the `return true` 'did modify' bookkeeping value",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The bool return feeds Hook.TryModifyCardRewardOptions' modifiers list, which exists to drive Hook.AfterModifyingCardRewardOptions -- and every ported implementer of AfterModifyingRewards is a Flash. The sim's hook shape returns nothing and mutates the list, which is the same observable."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/glitter's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py tools/audit/citation_check.py audits/relic` prints: src/Core/Hooks/Hook.cs, src/Core/Models/CardModel.cs, src/Core/Models/EnchantmentModel.cs, src/Core/Models/Enchantments/Glam.cs, sts2_rl/enchantments.py, sts2_rl/relics/_eggs.py, sts2_rl/rewards.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,66 @@
+{
+  "unit": "relic/fragrant_mushroom",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FragrantMushroom.cs",
+    "sha256": "0c9bb8fc7e261cbc721e4a361522cba3e00bac1513ba8eff13d030155c24a792"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fragrant_mushroom.py",
+    "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fragrant_mushroom.py:18)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (fragrant_mushroom.py:19)",
+      "verdict": "faithful",
+      "rationale": "Matches FragrantMushroom.cs:21. Load-bearing: Relic.is_tradable (relics/base.py:132-136) excludes upon-pickup relics from the trade events, as RelicModel.IsTradable does."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (fragrant_mushroom.py:24-40), dispatched by RunState.add_relic (run.py:551-552)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The shape and both constants match FragrantMushroom.cs:29-38 -- HpLossVar(15).BaseValue then CardsVar(2) random upgradable deck cards, damage FIRST -- but the StableShuffle sort key is the sim's LOWERCASE slug where the game compares the UPPERCASE ModelId Entry ordinally, so the wrong cards are upgraded (G1, LIVE), and CreatureCmd.Damage is replaced by RunState.lose_hp (G2, dormant)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the StableShuffle key is `(c.id, c.upgrade_level)` -- the sim's lowercase slug -- where CardModel.CompareTo compares the game's UPPERCASE ModelId Entry with StringComparison.Ordinal, and `_` (0x5F) sorts AFTER uppercase letters but BEFORE lowercase ones",
+      "verdict": "gap",
+      "issue": "MECHANISM: ListExtensions.StableShuffle (ListExtensions.cs:22-31) sorts the list with T's IComparable, then UnstableShuffles it -- so the SORT fixes the pre-shuffle order and the Fisher-Yates draws then permute that exact order. For cards the comparer is CardModel.CompareTo (CardModel.cs:2242-2263) -> AbstractModel.CompareTo (AbstractModel.cs:87-98) -> ModelId.CompareTo (ModelId.cs:42-50), `string.Compare(Entry, other.Entry, StringComparison.Ordinal)` over the UPPERCASE entry, then CurrentUpgradeLevel. fragrant_mushroom.py:32-36 calls stable_shuffle (actmap.py:193-201) with `key=lambda c: (c.id, c.upgrade_level)`. Because '_' is 0x5F, uppercase A-Z are 0x41-0x5A and lowercase a-z are 0x61-0x7A, any two ids that first differ at a '_'-versus-letter position sort the OPPOSITE way in the two cases. The sim already has the correct key and its docstring names the failure: player.py:23-35's `_compare_to_key` returns `(card.id.upper(), card.upgrade_level)` and says in so many words that the lowercase slug 'orders blood_wall/bloodletting and jack_of_all_trades/jackpot the opposite way round from the game'. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b06.py mushroom-sort`): a census over all 203 ported card ids finds exactly 3 inverting pairs, and one of them -- `blood_wall` / `bloodletting` -- is BOTH in the Ironclad reward pool, both Common, both max_upgrade_level 1, so both are upgradable deck cards at the same time. Fragrant Mushroom is granted by the ported Hungry for Mushrooms event (events/hungry_for_mushrooms.py). With a deck holding blood_wall, bloodletting, strike and defend, the sim upgrades a DIFFERENT pair from the game on 8 of 8 Niche seeds tested (seed 0: sim [bloodletting, blood_wall], game [blood_wall, bloodletting]; seed 1: sim [blood_wall, strike], game [bloodletting, strike]; ...). Not cosmetic: conformance/runner.py compares the deck as (id, upgrade_level) pairs against the save, so any seed that takes Fragrant Mushroom with both cards in the deck diverges. FIX NOTE: the one-line fix is to pass player._compare_to_key, and relics/stone_cracker.py:29 has the identical defect at the CombatCardSelection stream -- reported for its own batch, not verdicted here."
+    },
+    {
+      "what": "G2 (DORMANT): `CreatureCmd.Damage(ThrowingPlayerChoiceContext, Owner.Creature, HpLoss.BaseValue, Unblockable|Unpowered, null, null)` (FragrantMushroom.cs:31) vs `run.lose_hp(15)` (fragrant_mushroom.py:25)",
+      "verdict": "gap",
+      "issue": "MECHANISM: the source routes the 15 through the full damage command even out of combat, so the run-level Hook pipeline runs -- ModifyHpLostBeforeOsty / AfterOsty, the damage-received notifications, and the death check. RunState.lose_hp (run.py:294-302) runs ONLY the relic chain `modify_run_hp_loss` and then subtracts, so an out-of-combat HP loss fires no after-damage notification at all. DORMANT: the one modifier family that changes the NUMBER is present -- Tungsten Rod's ModifyHpLostAfterOsty maps to modify_run_hp_loss, which lose_hp does dispatch -- and the sim has no run-level HookSystem for the notification half, which is audits/seam/hook_dispatch.json's own finding (step 46, 'no run-level HookSystem'); one verdict per mechanism, binding rule 3. The concrete thing that would make it live is porting a relic that reacts to HP LOSS rather than modifying it out of combat (Centennial Puzzle's on_damage_received is combat-only), or an out-of-combat block/thorns concept. Unblockable is a no-op out of combat on both sides, and lose_hp can take HP to 0 or below exactly as CreatureCmd.Damage can, so death behaviour agrees."
+    },
+    {
+      "what": "N1: HpLossVar(15).**BaseValue** and CardsVar(2).**IntValue** (FragrantMushroom.cs:31, 33) vs the sim's HP_LOSS = 15 / CARDS = 2",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in FragrantMushroom.cs, and `public const int hpLoss = 15` (line 17) pins the same number a second time, so both constants are the non-ascension values. The BaseValue/IntValue asymmetry is the source idiom batch 1 already recorded for big_mushroom vs bag_of_preparation, not a port error."
+    },
+    {
+      "what": "N2: `.Take(Cards.IntValue)` on a possibly shorter list vs `count = min(self.CARDS, len(upgradable))` (fragrant_mushroom.py:27)",
+      "verdict": "faithful",
+      "rationale": "LINQ Take clamps silently; min() is the same clamp made explicit. It also protects the legacy arm's rng.sample, which would raise on count > len."
+    },
+    {
+      "what": "N3: `PileType.Deck.GetPile(Owner).Cards.Where(c => c?.IsUpgradable ?? false)` vs `run.upgradable_cards()` (run.py:368-369)",
+      "verdict": "faithful",
+      "rationale": "Same pile (the run deck) and same predicate; C#'s `c?` null-coalesce guards a null slot in the pile list, which the sim's deck list cannot hold. The filter also closes PROMPT.md bug class 14 at this site -- sweep D's published correction names fragrant_mushroom as one of five sites its first version over-reported for building the candidate list several lines earlier, and this confirms it. NOTE per binding rule 7: run.py is not hashed by this record."
+    },
+    {
+      "what": "N4: the legacy branch `run.rng.sample(upgradable, count)` (fragrant_mushroom.py:38) when run.rng_set is None",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same two-arm house style as relic/fishing_rod N4: the parity arm names the Niche stream the source names, the legacy arm keeps the shared random.Random so pre-SP2 sim seeds stay reproducible. Note that rng.sample is a genuinely different DRAW as well as a different stream (it does not burn the shuffle's n-1 draws), so only the parity arm can be conformance-correct -- and the parity arm is the one G1 says picks the wrong cards."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/fragrant_mushroom's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py tools/audit/citation_check.py audits/relic` prints: src/Core/Extensions/ListExtensions.cs, src/Core/Models/AbstractModel.cs, src/Core/Models/CardModel.cs, src/Core/Models/ModelId.cs, sts2_rl/actmap.py, sts2_rl/cards/base.py, sts2_rl/conformance/runner.py, sts2_rl/events/hungry_for_mushrooms.py, sts2_rl/player.py, sts2_rl/relics/stone_cracker.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
