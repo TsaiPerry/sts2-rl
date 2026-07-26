@@ -1,6 +1,6 @@
 # Gap queue — the six engine-seam audits, aggregated
 
-Every `"verdict": "gap"` entry from `audits/seam/*.json`, de-duplicated by
+Every `"verdict": "gap"` entry from `audit/records/seam/*.json`, de-duplicated by
 mechanism, ordered for work, and left **queued, not fixed** (Perry's standing
 decision). The audits found far more than recorded-run convergence ever
 surfaced; this file is the single actionable view of it.
@@ -8,10 +8,10 @@ surfaced; this file is the single actionable view of it.
 Generated, not transcribed. Regenerate the numbers with:
 
 ```
-py tools/audit/gap_queue.py counts        # the summary header below
-py tools/audit/gap_queue.py mechanisms    # the grouping, largest first
-py tools/audit/gap_queue.py pins          # the 32 strict xfails and what they pin
-py tools/audit/gap_queue.py unpinned      # mechanisms with no pin
+py audit/tools/gap_queue.py counts        # the summary header below
+py audit/tools/gap_queue.py mechanisms    # the grouping, largest first
+py audit/tools/gap_queue.py pins          # the 32 strict xfails and what they pin
+py audit/tools/gap_queue.py unpinned      # mechanisms with no pin
 ```
 
 Do not trust a count stated in prose anywhere in this project — including this
@@ -66,7 +66,7 @@ radius     other mechanisms sharing machinery; content units the record names
 **Stable ids** are `<seam>/<step-or-guard-id>` — `hook_dispatch/G9`,
 `monster_state_machine/step13`, `creature_card_cmds/G14`. A mechanism is named
 by its anchor entry; where a mechanism was recorded in two records, the merge is
-declared in `tools/audit/gap_queue.py::_CROSS_RECORD` with the record text that
+declared in `audit/tools/gap_queue.py::_CROSS_RECORD` with the record text that
 asserts it.
 
 **Watch the id collisions.** `G8` is the missing `IsEnding` gate in
@@ -1118,7 +1118,7 @@ Trigger: a second ported implementer with a side effect.
   set or whose owner is not `IsActiveForHooks`; every sim dispatcher walks a
   `list(self._listeners)` snapshot with no re-check.
 - **observable** Dormancy is *executed and reproducible from the committed tree*:
-  `py -m pytest test/ -q -p tools.audit.stale_listener_plugin` instruments every
+  `py -m pytest test/ -q -p audit.tools.stale_listener_plugin` instruments every
   listener call with C#'s lazy re-check. The only hit across the suite is
   `on_enemy_side_end -> IntangiblePower`. **Caveat: the record quotes that run as
   "2476 passed / 30 xfailed", which is a stale tree — the suite is 2478 passed /
@@ -1145,7 +1145,7 @@ Trigger: a second ported implementer with a side effect.
 `CombatState.cs:420` adds `creature.Monster` to the listener list and
 `MonsterModel.cs:51` declares `ShouldReceiveCombatHooks => true`. Exactly **12** C#
 monster models override an `AbstractModel` hook
-(`py tools/audit/dormancy_probes.py cs-monster-hooks`); only `KinPriest` has been
+(`py audit/tools/dormancy_probes.py cs-monster-hooks`); only `KinPriest` has been
 adjudicated (waiver: presentation). **The other 11 are in no seam's scope — see
 the holes section.** Trigger: porting any of them onto their real hook.
 
@@ -1603,7 +1603,7 @@ the game's. Sorted roughly by how likely the trigger is to come up.
 
 Holes are queue items too. The six records cover engine *machinery*; these
 things are covered by nothing. Recorded in
-`docs/audit/seams/monster_state_machine.md`'s scope-boundary section (it is the
+`audit/seams/monster_state_machine.md`'s scope-boundary section (it is the
 last seam, so the holes are collected there) and reproduced here so the queue is
 the single view.
 
@@ -1628,13 +1628,13 @@ the single view.
    `AfterCreatureAdded` and `monster_state_machine` names `SetUpForCombat`, but
    the *selection* is unaudited — also RNG-consuming.
 5. **Eleven C# monster models' `AbstractModel` hook overrides.** The probe
-   `py tools/audit/dormancy_probes.py cs-monster-hooks` finds **12** models
+   `py audit/tools/dormancy_probes.py cs-monster-hooks` finds **12** models
    overriding a hook; only `KinPriest` has been adjudicated
    (`monster_state_machine` guard N6, waiver: a barks line plus a music
    parameter). The other 11 are audited by no seam — a hook override is
    per-monster behaviour, i.e. content tier, and hole 1 covers move content but
    not hook overrides. Handed to the content-monster stream
-   (`docs/superpowers/prompts/2026-07-26-content-monster.md`).
+   (`audit/prompts/2026-07-26-content-monster.md`).
 
    | model | overridden hook(s) | note |
    |---|---|---|
@@ -1671,14 +1671,14 @@ Two more holes this aggregation noticed, not recorded by any seam:
 
 Rule 3 signals: a gap whose text contradicts another record's, or its own. This
 class has already caught one live bug on this project, so they are reported, not
-fixed. **None of these was corrected in this pass — `audits/**` is untouched.**
+fixed. **None of these was corrected in this pass — `audit/records/**` is untouched.**
 
 1. **Two stale sim citations, caught mechanically.**
    `hook_dispatch`'s G2 evidence cites `relics/spiked_gauntlets.py:26-32`; the
    file ends at line 31 (the method is 26-31). `creature_card_cmds`' G9 and
    step 84 cite `relics/fiddle.py:26-31`; the file ends at 29 (the method is
    26-29). Both are one-line overruns — harmless to a reader, fatal to a
-   `sed -n`. `py tools/audit/gap_queue.py cite-check` regenerates this check over
+   `sed -n`. `py audit/tools/gap_queue.py cite-check` regenerates this check over
    all 327 citations in this queue.
 
 2. **`hook_dispatch`/G7's executed evidence is from a stale tree.** It records
@@ -1749,14 +1749,14 @@ fixed. **None of these was corrected in this pass — `audits/**` is untouched.*
 # Appendix — regenerating this file
 
 ```
-py tools/audit/gap_queue.py counts        # the summary table
-py tools/audit/gap_queue.py mechanisms    # every mechanism with its sites and pin
-py tools/audit/gap_queue.py list          # every gap entry, one line
-py tools/audit/gap_queue.py pins          # the 32 strict xfails
-py tools/audit/gap_queue.py unpinned      # the 59 unpinned mechanisms
-py tools/audit/gap_queue.py coverage      # every mechanism and entry appears here
-py tools/audit/gap_queue.py cite-check    # every file:line here resolves
-py tools/audit/harness.py validate        # 6 records, 0 invalid
+py audit/tools/gap_queue.py counts        # the summary table
+py audit/tools/gap_queue.py mechanisms    # every mechanism with its sites and pin
+py audit/tools/gap_queue.py list          # every gap entry, one line
+py audit/tools/gap_queue.py pins          # the 32 strict xfails
+py audit/tools/gap_queue.py unpinned      # the 59 unpinned mechanisms
+py audit/tools/gap_queue.py coverage      # every mechanism and entry appears here
+py audit/tools/gap_queue.py cite-check    # every file:line here resolves
+py audit/tools/harness.py validate        # 6 records, 0 invalid
 ```
 
 `coverage` and `cite-check` are the two that fail loudly if this file drifts from

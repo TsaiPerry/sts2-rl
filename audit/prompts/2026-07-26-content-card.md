@@ -18,20 +18,20 @@ GAME SOURCE (READ-ONLY): `c:\Users\Perry\Desktop\Slay the Spire 2`
 
 ## Read first, in order
 
-1. `docs/superpowers/prompts/_shared-audit-contract.md` — **your binding
+1. `audit/prompts/_shared-audit-contract.md` — **your binding
    contract**: operational rules, the eight verdict rules, file ownership,
    the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` — the audit instruction sheet and bug-class
+2. `audit/tools/PROMPT.md` — the audit instruction sheet and bug-class
    checklist. **Read-only for you**; the relic stream owns it. Send it
    lessons via your report.
-3. `docs/audit/seams/creature_card_cmds.md` — the completed card/pile command
+3. `audit/seams/creature_card_cmds.md` — the completed card/pile command
    seam audit. Read its gap list first so you record card-level findings
    rather than re-reporting machinery ones.
 
 ## Your scope
 
-`audits/card/**` — **203 units**, the largest content pool. Roster:
-`py tools/audit/harness.py roster card`.
+`audit/records/card/**` — **203 units**, the largest content pool. Roster:
+`py audit/tools/harness.py roster card`.
 
 ## What makes cards different
 
@@ -80,7 +80,7 @@ commands.
 
 The relic stream is running the Tier 1 pilot and will harden `PROMPT.md` from
 it. Either wait for that to land and branch after it, or start now and
-**re-read `tools/audit/PROMPT.md` at each batch boundary**.
+**re-read `audit/tools/PROMPT.md` at each batch boundary**.
 
 Because this pool is the largest and cheapest per unit, it is also the best
 source of throughput data. Report your per-unit cost after the **first two**

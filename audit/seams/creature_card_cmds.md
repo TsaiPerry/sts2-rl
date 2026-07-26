@@ -2,7 +2,7 @@
 
 Audited 2026-07-25 (Task 7 of the six seam audits, Tier 2 of the
 source-audit-pipeline design). Verdicts and rationale live in
-`audits/seam/creature_card_cmds.json`; this file is the durable ordering spec
+`audit/records/seam/creature_card_cmds.json`; this file is the durable ordering spec
 extracted from the C# source that the JSON record judges the sim against.
 
 This seam is the *rest of the command layer*: every creature verb that is not
@@ -13,7 +13,7 @@ afflict, pile add/remove, draw, shuffle, card selection).
 
 ## Source correction (Step A)
 
-`tools/audit/harness.py`'s `SEAM_SOURCES["creature_card_cmds"]` listed four C#
+`audit/tools/harness.py`'s `SEAM_SOURCES["creature_card_cmds"]` listed four C#
 files and one sim file. All four C# files are real and do contain seam logic,
 but **three files carrying logic this seam audits were missing, and the sim
 side named only one of the four files that implement the counterpart.** The
@@ -61,7 +61,7 @@ seam):
 Review found three more files the record cites as **primary evidence** but
 that carried no sha256 staleness pin. All three were added to
 `SEAM_SOURCES["creature_card_cmds"]` and the record's hash lists were
-regenerated (`py tools/audit_status.py` → not stale):
+regenerated (`py audit/tools/audit_status.py` → not stale):
 
 - **`src/Core/Entities/Creatures/Creature.cs`** (note the path — `Creature.cs`
   lives under `Entities/Creatures/`, not `Entities/`). Every `CreatureCmd`
@@ -94,7 +94,7 @@ product equals C#'s sequential decimal fold. That claim breaks the moment any
 one of those files grows a non-dyadic factor, so the **whole block-modifier
 population** is now pinned. Thirteen files were added to
 `SEAM_SOURCES["creature_card_cmds"]` and the record's hash lists were
-regenerated (`py tools/audit_status.py` → not stale; no pre-existing hash
+regenerated (`py audit/tools/audit_status.py` → not stale; no pre-existing hash
 drifted):
 
 - the **8** C# `ModifyBlockMultiplicative` overrides —
@@ -154,7 +154,7 @@ modifiers), `power_cmd` (the six power-amount dispatchers) and `hook_dispatch`
 direct bodies of `CreatureCmd.GainBlock`'s four calls and no other seam covers
 them, so **this record claims those four**. Task 9 must not re-audit them; a
 block-dispatch finding belongs here as an amendment to
-`audits/seam/creature_card_cmds.json`.
+`audit/records/seam/creature_card_cmds.json`.
 
 ### Scope boundary — READ BEFORE TASK 10 (`monster_state_machine`)
 
@@ -662,7 +662,7 @@ record:
 
 **Verdict counts** — *re-recomputed in fix pass 2, 2026-07-26*
 (`collections.Counter` over `steps + guards` of
-`audits/seam/creature_card_cmds.json`):
+`audit/records/seam/creature_card_cmds.json`):
 
 ```
 steps    (110): gap 53, faithful 33, waiver 13, deliberate-divergence 11
@@ -1017,7 +1017,7 @@ is still five.*
   divergence, same verdict: **gap**. **Dormant here** where the damage site is
   live, evidence executed:
   1. The base-vs-running *argument* is inert at this site too —
-     `py tools/audit/dormancy_probes.py cs-running-value` finds **0 of 46** C#
+     `py audit/tools/dormancy_probes.py cs-running-value` finds **0 of 46** C#
      `Modify{Damage,Block}{Additive,Multiplicative}` overrides reading the
      value they are handed, **10** of those 46 being the block pair
      (`DexterityPower.cs:20`, `FastenPower.cs:20`; `FrailPower.cs:22`,

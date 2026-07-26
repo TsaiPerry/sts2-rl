@@ -10,9 +10,9 @@ sim encodes the same rules as the decompiled game source without run
 recordings.
 
 **Architecture:** Agents read both codebases and write per-unit JSON verdict
-records into `audits/`; a deliberately dumb harness (`tools/audit/harness.py`)
+records into `audit/records/`; a deliberately dumb harness (`audit/tools/harness.py`)
 enumerates units and C# hook overrides, hashes sources, and rejects incomplete
-records; `tools/audit_status.py` reports coverage/staleness/gaps. Ordering
+records; `audit/tools/audit_status.py` reports coverage/staleness/gaps. Ordering
 semantics are pinned by hook-trace tests in `test/test_hook_order.py`.
 
 **Tech Stack:** Python stdlib only (no new dependencies). Pytest for tests.
@@ -49,8 +49,8 @@ The decompiled C# game source is read-only ground truth.
 ### Task 1: Harness core — roster, override enumeration, hashing
 
 **Files:**
-- Create: `tools/audit/harness.py`
-- Create: `tools/audit/name_overrides.json`
+- Create: `audit/tools/harness.py`
+- Create: `audit/tools/name_overrides.json`
 - Test: `test/test_audit_harness.py`
 
 **Interfaces:**
@@ -64,19 +64,19 @@ The decompiled C# game source is read-only ground truth.
     — rows `{"unit", "sim_path", "game_path", "game_exists"}` (paths as str)
   - `harness.unported(kind: str, game_root: Path | None = None) -> list[str]`
   - `harness._pascal(unit_id: str) -> str`, `harness._snake(name: str) -> str`
-  - CLI: `py tools/audit/harness.py roster [KIND]`
+  - CLI: `py audit/tools/harness.py roster [KIND]`
 
 - [ ] **Step 1: Write the failing tests**
 
 Create `test/test_audit_harness.py`:
 
 ```python
-"""Tests for the audit completeness harness (tools/audit/harness.py)."""
+"""Tests for the audit completeness harness (audit/tools/harness.py)."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from tools.audit import harness
+from audit.tools import harness
 
 FIXTURE_CS = """\
 using System;
@@ -158,9 +158,9 @@ class TestRoster:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `py -m pytest test/test_audit_harness.py -q`
-Expected: FAIL at collection with `ModuleNotFoundError: No module named 'tools.audit'` (namespace-package import of a file that doesn't exist yet).
+Expected: FAIL at collection with `ModuleNotFoundError: No module named 'audit.tools'` (namespace-package import of a file that doesn't exist yet).
 
-- [ ] **Step 3: Create `tools/audit/name_overrides.json`**
+- [ ] **Step 3: Create `audit/tools/name_overrides.json`**
 
 ```json
 {}
@@ -169,7 +169,7 @@ Expected: FAIL at collection with `ModuleNotFoundError: No module named 'tools.a
 (Keys will be `"kind/unit_id"` → repo-relative C# path under the game root,
 filled in as roster runs surface name mismatches.)
 
-- [ ] **Step 4: Write `tools/audit/harness.py`**
+- [ ] **Step 4: Write `audit/tools/harness.py`**
 
 ```python
 """Completeness harness for the source-to-sim audit pipeline.
@@ -180,9 +180,9 @@ never judges faithfulness. Agents write the audit records; this tool makes
 sure they cannot skip a unit, skip a hook, or leave a verdict vague.
 
 Usage:
-  py tools/audit/harness.py roster [KIND]       # work queue + unmatched units
-  py tools/audit/harness.py skeleton UNIT       # (Task 2) write record skeleton
-  py tools/audit/harness.py validate [PATH...]  # (Task 2) validate records
+  py audit/tools/harness.py roster [KIND]       # work queue + unmatched units
+  py audit/tools/harness.py skeleton UNIT       # (Task 2) write record skeleton
+  py audit/tools/harness.py validate [PATH...]  # (Task 2) validate records
 """
 from __future__ import annotations
 
@@ -377,10 +377,10 @@ harness against the actual registry, never the assertion's intent.
 
 - [ ] **Step 6: Run the roster once for real; record name mismatches**
 
-Run: `py tools/audit/harness.py roster`
+Run: `py audit/tools/harness.py roster`
 Expected: per-kind lines. For each `UNMATCHED` line, find the real C# file
 (`Grep` for `class <PascalName>` under the game root's `src/Core/Models/`)
-and add an entry to `tools/audit/name_overrides.json`, e.g.:
+and add an entry to `audit/tools/name_overrides.json`, e.g.:
 
 ```json
 {
@@ -400,7 +400,7 @@ harness tests).
 - [ ] **Step 8: Stage and commit (on `audit-pipeline` only)**
 
 ```powershell
-git add tools/audit/harness.py tools/audit/name_overrides.json test/test_audit_harness.py
+git add audit/tools/harness.py audit/tools/name_overrides.json test/test_audit_harness.py
 git commit -m "feat(audit): completeness harness roster, override enumeration, hashing"
 ```
 
@@ -409,9 +409,9 @@ git commit -m "feat(audit): completeness harness roster, override enumeration, h
 ### Task 2: Skeleton generation, record validation, and the audit prompt
 
 **Files:**
-- Modify: `tools/audit/harness.py` (append functions; extend `main`)
-- Create: `tools/audit/PROMPT.md`
-- Create: `audits/` (directory; created on first skeleton)
+- Modify: `audit/tools/harness.py` (append functions; extend `main`)
+- Create: `audit/tools/PROMPT.md`
+- Create: `audit/records/` (directory; created on first skeleton)
 - Test: `test/test_audit_harness.py` (append test classes)
 
 **Interfaces:**
@@ -422,8 +422,8 @@ git commit -m "feat(audit): completeness harness roster, override enumeration, h
   - `harness.skeleton(unit: str, game_root: Path | None = None, audits_dir: Path | None = None) -> Path`
   - `harness.validate_record(record: dict, game_root: Path | None = None) -> list[str]`
     (empty list = valid)
-  - CLI: `py tools/audit/harness.py skeleton relic/unsettling_lamp`,
-    `py tools/audit/harness.py validate [PATH...]` (no paths = all of `audits/`)
+  - CLI: `py audit/tools/harness.py skeleton relic/unsettling_lamp`,
+    `py audit/tools/harness.py validate [PATH...]` (no paths = all of `audit/records/`)
   - Record schema (content kinds): `unit`, `game_source{path,sha256}`,
     `sim_source{path,sha256}`, `hooks{<Name>: {maps_to, verdict, rationale?, issue?}}`,
     `guards[{what, verdict, rationale?, issue?}]`, `verdict`, `audited` (YYYY-MM-DD)
@@ -537,7 +537,7 @@ Run: `py -m pytest test/test_audit_harness.py -q`
 Expected: new tests FAIL with `AttributeError` (`validate_record`,
 `skeleton` not defined); Task 1 tests still pass.
 
-- [ ] **Step 3: Append the implementation to `tools/audit/harness.py`**
+- [ ] **Step 3: Append the implementation to `audit/tools/harness.py`**
 
 ```python
 # ── Seams (Tier 2) ────────────────────────────────────────────────────────
@@ -580,7 +580,7 @@ def _hash_sources(paths: list[str], base: Path) -> list[dict]:
 
 def skeleton(unit: str, game_root: Path | None = None,
              audits_dir: Path | None = None) -> Path:
-    """Write audits/<kind>/<id>.json with hooks/steps enumerated and
+    """Write audit/records/<kind>/<id>.json with hooks/steps enumerated and
     verdicts empty, ready for an agent to fill in. Refuses to overwrite."""
     root = game_root or DEFAULT_GAME_ROOT
     adir = audits_dir or DEFAULT_AUDITS_DIR
@@ -738,12 +738,12 @@ Expected: all PASS.
 
 - [ ] **Step 5: Verify every SEAM_SOURCES path exists**
 
-Run: `py -c "from tools.audit import harness; from pathlib import Path; [print(p, (harness.DEFAULT_GAME_ROOT / p).is_file()) for ps in (v[0] for v in harness.SEAM_SOURCES.values()) for p in ps]"`
+Run: `py -c "from audit.tools import harness; from pathlib import Path; [print(p, (harness.DEFAULT_GAME_ROOT / p).is_file()) for ps in (v[0] for v in harness.SEAM_SOURCES.values()) for p in ps]"`
 Expected: every line ends `True`. For any `False`, locate the real file
 (Grep for its class name under the game root `src/`) and correct
 `SEAM_SOURCES`. Also spot-check the sim side the same way against `_REPO`.
 
-- [ ] **Step 6: Write `tools/audit/PROMPT.md`**
+- [ ] **Step 6: Write `audit/tools/PROMPT.md`**
 
 ```markdown
 # Audit prompt — source-to-sim unit audits (v1)
@@ -754,7 +754,7 @@ checks completeness. Read BOTH files fully before writing any verdict.
 
 ## Procedure
 
-1. `py tools/audit/harness.py skeleton <kind>/<id>` (skip if the record
+1. `py audit/tools/harness.py skeleton <kind>/<id>` (skip if the record
    exists from a previous incomplete pass — then re-read it critically).
 2. Read the C# file top to bottom. List for yourself: every override, every
    guard clause / early return, every numeric constant (take the
@@ -770,7 +770,7 @@ checks completeness. Read BOTH files fully before writing any verdict.
    on purpose — rationale required) | `gap` (real divergence — `issue`
    required, describing the observable wrong behavior). NEVER fix engine
    code during an audit; record the gap.
-6. `py tools/audit/harness.py validate audits/<kind>/<id>.json` must pass.
+6. `py audit/tools/harness.py validate audit/records/<kind>/<id>.json` must pass.
 
 ## Known bug classes — check EVERY one against your unit
 
@@ -808,15 +808,15 @@ themselves.
 - [ ] **Step 7: Smoke the CLI end-to-end on the real Lamp**
 
 ```powershell
-py tools/audit/harness.py skeleton relic/unsettling_lamp
-py tools/audit/harness.py validate audits/relic/unsettling_lamp.json
+py audit/tools/harness.py skeleton relic/unsettling_lamp
+py audit/tools/harness.py validate audit/records/relic/unsettling_lamp.json
 ```
 
 Expected: skeleton written listing `Rarity`, `BeforeCombatStart`,
 `BeforePowerAmountChanged`, `ModifyPowerAmountGivenMultiplicative`,
 `AfterCardPlayed`, `AfterCombatEnd`; validate reports errors (empty
 verdicts) and exits 1 — that's the harness doing its job. Delete the
-skeleton afterwards (`Remove-Item audits/relic/unsettling_lamp.json`) —
+skeleton afterwards (`Remove-Item audit/records/relic/unsettling_lamp.json`) —
 Task 11 audits it for real.
 
 - [ ] **Step 8: Run the full suite, then stage**
@@ -824,16 +824,16 @@ Task 11 audits it for real.
 Run: `py -m pytest test/ -q` — no regressions.
 
 ```powershell
-git add tools/audit/harness.py tools/audit/PROMPT.md test/test_audit_harness.py
+git add audit/tools/harness.py audit/tools/PROMPT.md test/test_audit_harness.py
 git commit -m "feat(audit): record skeletons, validation, and the audit prompt"
 ```
 
 ---
 
-### Task 3: `tools/audit_status.py` — coverage, staleness, gaps
+### Task 3: `audit/tools/audit_status.py` — coverage, staleness, gaps
 
 **Files:**
-- Create: `tools/audit_status.py`
+- Create: `audit/tools/audit_status.py`
 - Test: `test/test_audit_status.py`
 
 **Interfaces:**
@@ -842,7 +842,7 @@ git commit -m "feat(audit): record skeletons, validation, and the audit prompt"
 - Produces:
   - `audit_status.collect(kinds=None, game_root=None, audits_dir=None) -> dict`
     — `{kind: {"total", "audited", "invalid", "stale", "gaps", "unaudited": [...]}}`
-  - CLI: `py tools/audit_status.py [--strict] [--kind KIND]`
+  - CLI: `py audit/tools/audit_status.py [--strict] [--kind KIND]`
     Exit codes: 2 = invalid records; 1 = (`--strict` only) stale or open
     gaps or unaudited > 0; 0 otherwise.
 
@@ -851,7 +851,7 @@ git commit -m "feat(audit): record skeletons, validation, and the audit prompt"
 Create `test/test_audit_status.py`:
 
 ```python
-"""Tests for tools/audit_status.py using a synthetic game root + ledger.
+"""Tests for audit/tools/audit_status.py using a synthetic game root + ledger.
 
 Self-contained on purpose: `test/` shadows CPython's stdlib `test` package,
 so importing fixtures from test.test_audit_harness would resolve to the
@@ -862,8 +862,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools import audit_status
-from tools.audit import harness
+from audit.tools import audit_status
+from audit.tools import harness
 
 FIXTURE_CS = """\
 public sealed class FixtureRelic : RelicModel
@@ -993,18 +993,18 @@ into argument defaults, so the monkeypatching above works.)
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `py -m pytest test/test_audit_status.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'tools.audit_status'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'audit.tools.audit_status'`.
 
-- [ ] **Step 3: Write `tools/audit_status.py`**
+- [ ] **Step 3: Write `audit/tools/audit_status.py`**
 
 ```python
 """Audit ledger status: coverage, staleness, open gaps.
 
-Aggregates audits/ against the harness roster and both source trees.
+Aggregates audit/records/ against the harness roster and both source trees.
 
-  py tools/audit_status.py                # report, exit 0 (2 if invalid records)
-  py tools/audit_status.py --strict       # also exit 1 on stale/gaps/unaudited
-  py tools/audit_status.py --kind relic   # one kind (or "seam")
+  py audit/tools/audit_status.py                # report, exit 0 (2 if invalid records)
+  py audit/tools/audit_status.py --strict       # also exit 1 on stale/gaps/unaudited
+  py audit/tools/audit_status.py --kind relic   # one kind (or "seam")
 
 Success statement this enables: "N of M in-scope units audited faithful,
 zero stale, zero open gaps."
@@ -1020,7 +1020,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from tools.audit import harness
+from audit.tools import harness
 
 
 def _is_stale(record: dict, game_root: Path) -> bool:
@@ -1104,7 +1104,7 @@ Expected: all PASS.
 
 - [ ] **Step 5: Run against the real (empty) ledger**
 
-Run: `py tools/audit_status.py`
+Run: `py audit/tools/audit_status.py`
 Expected: a table with every kind fully unaudited, seams total 6, exit 0.
 This is the baseline the audit batches burn down.
 
@@ -1113,7 +1113,7 @@ This is the baseline the audit batches burn down.
 Run: `py -m pytest test/ -q` — no regressions.
 
 ```powershell
-git add tools/audit_status.py test/test_audit_status.py
+git add audit/tools/audit_status.py test/test_audit_status.py
 git commit -m "feat(audit): audit_status coverage/staleness/gap reporting"
 ```
 
@@ -1239,12 +1239,12 @@ tests differ, and those are tabulated per task.
 
 **Shared procedure (every step applies to each of Tasks 5–10):**
 
-- [ ] **Step A: Skeleton.** `py tools/audit/harness.py skeleton seam/<seam>`
+- [ ] **Step A: Skeleton.** `py audit/tools/harness.py skeleton seam/<seam>`
   (fix `SEAM_SOURCES` paths first if the skeleton errors on a missing file —
   locate the real C# file by grepping for its class name under the game
-  root, correct the table in `tools/audit/harness.py`, and stage that edit).
+  root, correct the table in `audit/tools/harness.py`, and stage that edit).
 - [ ] **Step B: Extract the ordering spec.** Read every listed C# file fully.
-  Write `docs/audit/seams/<seam>.md`: a numbered list of steps, guards, and
+  Write `audit/seams/<seam>.md`: a numbered list of steps, guards, and
   early returns in execution order, each annotated with the C# file:line it
   came from. Start from the seed facts in the task's table below — they are
   known-correct anchors from past convergence work — then complete the list
@@ -1253,7 +1253,7 @@ tests differ, and those are tabulated per task.
 - [ ] **Step C: Compare the sim.** Read the sim files listed for the seam.
   For every numbered step in the spec doc, add an entry to the record's
   `steps` array: `{"what": "<n>. <one-line step>", "verdict": ...}` with
-  rationale/issue per the vocabulary rules. Follow `tools/audit/PROMPT.md`'s
+  rationale/issue per the vocabulary rules. Follow `audit/tools/PROMPT.md`'s
   bug-class checklist. Gaps are recorded, never fixed inline.
 - [ ] **Step D: Pin with order-tracing tests.** For each behavior in the
   task's "pin" table: first check whether an equivalent regression test
@@ -1265,19 +1265,19 @@ tests differ, and those are tabulated per task.
   deal damage via `DamageCmd.deal(cs.hooks, ...)`, mirroring
   `test/test_powers.py` idioms).
 - [ ] **Step E: Fill `audited` (today's date) and unit `verdict` (rollup),
-  then validate.** `py tools/audit/harness.py validate audits/seam/<seam>.json`
+  then validate.** `py audit/tools/harness.py validate audit/records/seam/<seam>.json`
   → exit 0.
 - [ ] **Step F: Full suite.** `py -m pytest test/ -q` — no regressions
   (xfails added for recorded gaps are allowed and expected).
 - [ ] **Step G: Commit.**
-  `git add audits/seam/<seam>.json docs/audit/seams/<seam>.md test/test_hook_order.py tools/audit/harness.py`
+  `git add audit/records/seam/<seam>.json audit/seams/<seam>.md test/test_hook_order.py audit/tools/harness.py`
   then `git commit -m "audit(seam): <seam> ordering audit + pins"` (on
   `audit-pipeline` only).
 
 ### Task 5: Seam audit — `damage_pipeline`
 
-**Files:** Create `docs/audit/seams/damage_pipeline.md`,
-`audits/seam/damage_pipeline.json`; Modify `test/test_hook_order.py`.
+**Files:** Create `audit/seams/damage_pipeline.md`,
+`audit/records/seam/damage_pipeline.json`; Modify `test/test_hook_order.py`.
 **Sources:** `harness.SEAM_SOURCES["damage_pipeline"]`.
 
 Seed facts for Step B (verify each against source; they anchor, not replace, the extraction):
@@ -1299,8 +1299,8 @@ Pins for Step D (search terms → add if absent):
 
 ### Task 6: Seam audit — `power_cmd`
 
-**Files:** Create `docs/audit/seams/power_cmd.md`,
-`audits/seam/power_cmd.json`; Modify `test/test_hook_order.py`.
+**Files:** Create `audit/seams/power_cmd.md`,
+`audit/records/seam/power_cmd.json`; Modify `test/test_hook_order.py`.
 **Sources:** `harness.SEAM_SOURCES["power_cmd"]`.
 
 Seed facts:
@@ -1321,8 +1321,8 @@ Pins:
 
 ### Task 7: Seam audit — `creature_card_cmds`
 
-**Files:** Create `docs/audit/seams/creature_card_cmds.md`,
-`audits/seam/creature_card_cmds.json`; Modify `test/test_hook_order.py`.
+**Files:** Create `audit/seams/creature_card_cmds.md`,
+`audit/records/seam/creature_card_cmds.json`; Modify `test/test_hook_order.py`.
 **Sources:** `harness.SEAM_SOURCES["creature_card_cmds"]`.
 
 Seed facts:
@@ -1344,8 +1344,8 @@ Pins:
 
 ### Task 8: Seam audit — `turn_structure`
 
-**Files:** Create `docs/audit/seams/turn_structure.md`,
-`audits/seam/turn_structure.json`; Modify `test/test_hook_order.py`.
+**Files:** Create `audit/seams/turn_structure.md`,
+`audit/records/seam/turn_structure.json`; Modify `test/test_hook_order.py`.
 **Sources:** `harness.SEAM_SOURCES["turn_structure"]`.
 
 Seed facts:
@@ -1365,8 +1365,8 @@ Pins:
 
 ### Task 9: Seam audit — `hook_dispatch`
 
-**Files:** Create `docs/audit/seams/hook_dispatch.md`,
-`audits/seam/hook_dispatch.json`; Modify `test/test_hook_order.py`.
+**Files:** Create `audit/seams/hook_dispatch.md`,
+`audit/records/seam/hook_dispatch.json`; Modify `test/test_hook_order.py`.
 **Sources:** `harness.SEAM_SOURCES["hook_dispatch"]`.
 
 Seed facts:
@@ -1386,8 +1386,8 @@ Pins:
 
 ### Task 10: Seam audit — `monster_state_machine`
 
-**Files:** Create `docs/audit/seams/monster_state_machine.md`,
-`audits/seam/monster_state_machine.json`; Modify `test/test_hook_order.py`.
+**Files:** Create `audit/seams/monster_state_machine.md`,
+`audit/records/seam/monster_state_machine.json`; Modify `test/test_hook_order.py`.
 **Sources:** `harness.SEAM_SOURCES["monster_state_machine"]` (add the
 RandomBranchState / ConditionalBranchState C# files to the table when
 located in Step A — they live beside MonsterMoveStateMachine.cs under
@@ -1413,9 +1413,9 @@ Pins:
 ### Task 11: Tier 1 pilot — first relic batch (15 units) + prompt hardening
 
 **Files:**
-- Create: `audits/relic/<id>.json` × 15
-- Modify: `tools/audit/PROMPT.md` (lessons learned)
-- Modify: `tools/audit/name_overrides.json` (as needed)
+- Create: `audit/records/relic/<id>.json` × 15
+- Modify: `audit/tools/PROMPT.md` (lessons learned)
+- Modify: `audit/tools/name_overrides.json` (as needed)
 
 **Interfaces:**
 - Consumes: Task 2's `skeleton`/`validate` CLI and `PROMPT.md`; Task 3's
@@ -1423,12 +1423,12 @@ Pins:
 - Produces: the proven per-unit audit procedure Tasks 12–16 repeat, and a
   hardened PROMPT.md.
 
-- [ ] **Step 1: Pick the batch.** `py tools/audit/harness.py roster relic` —
+- [ ] **Step 1: Pick the batch.** `py audit/tools/harness.py roster relic` —
   take the first 15 units alphabetically. `relic/unsettling_lamp` is
   audited in whichever batch alphabetically contains it; if it is not in
   this first 15, swap it in anyway — it is the worked example from the
   design and calibrates the guard-level depth expected.
-- [ ] **Step 2: Audit each unit** following `tools/audit/PROMPT.md` exactly:
+- [ ] **Step 2: Audit each unit** following `audit/tools/PROMPT.md` exactly:
   skeleton → read C# fully → read sim fully → fill hooks/guards/verdicts →
   validate. For Unsettling Lamp specifically, the record must contain guard
   entries for `power.IsVisible`, sign-aware `GetTypeForAmount`, and the
@@ -1436,17 +1436,17 @@ Pins:
   worked example — waiver rationales must name what makes them unreachable,
   not just say "out of scope").
 - [ ] **Step 3: Validate the batch.**
-  `py tools/audit/harness.py validate` → exit 0.
-- [ ] **Step 4: Status check.** `py tools/audit_status.py --kind relic` —
+  `py audit/tools/harness.py validate` → exit 0.
+- [ ] **Step 4: Status check.** `py audit/tools/audit_status.py --kind relic` —
   audited count = batch size, invalid 0.
-- [ ] **Step 5: Harden the prompt.** Append to `tools/audit/PROMPT.md` (bump
+- [ ] **Step 5: Harden the prompt.** Append to `audit/tools/PROMPT.md` (bump
   the version header) any bug class or procedure lesson the batch surfaced —
   e.g. a recurring C# idiom the checklist missed. If nothing surfaced, state
   that in the task report; do not pad the prompt.
 - [ ] **Step 6: Full suite** (`py -m pytest test/ -q`) — audits add no code,
   so any failure means an accidental engine edit; revert it.
 - [ ] **Step 7: Commit.**
-  `git add audits/relic tools/audit/PROMPT.md tools/audit/name_overrides.json`
+  `git add audit/records/relic audit/tools/PROMPT.md audit/tools/name_overrides.json`
   then `git commit -m "audit(relic): pilot batch records"` (on
   `audit-pipeline` only).
 
@@ -1457,20 +1457,20 @@ Pins:
 Each task repeats Task 11's Steps 1–7 verbatim with a different roster
 slice; batch size 15 units (smaller for the final partial batch of each
 kind). One task = one kind; within a task, run batches sequentially until
-`py tools/audit_status.py --kind <kind>` shows `unaudited 0`. Batches are
+`py audit/tools/audit_status.py --kind <kind>` shows `unaudited 0`. Batches are
 independent — if executing with subagents, one subagent per batch, each
-given `tools/audit/PROMPT.md` plus its unit list.
+given `audit/tools/PROMPT.md` plus its unit list.
 
 | Task | Kind | Roster command | Notes |
 |---|---|---|---|
-| 12 | relic (remainder) | `py tools/audit/harness.py roster relic` | Includes event/Neow/Ancient-shrine pools; out-of-combat no-op stub relics get `waiver` verdicts naming the stubbed behavior |
-| 13 | power | `py tools/audit/harness.py roster power` | Sign-aware typing (bug class 3) applies to every stack-amount power |
-| 14 | monster | `py tools/audit/harness.py roster monster` | MachineMonster ports: compare graphs node-by-node against the C# AddState/AddBranch calls (bug class 6). Hand-rolled monsters (~18): the audit must reconstruct the equivalent graph from the C# and verify the hand-rolled `_move_key` logic emits identical move sequences for the reachable state space, or record a `gap` recommending a state-machine port |
-| 15 | card | `py tools/audit/harness.py roster card` | Mostly numbers/keywords; verify upgrade (`+`) values too — sim models upgrades inside one class, C# may use fields or separate branches |
-| 16 | event + enchantment | `py tools/audit/harness.py roster event` / `roster enchantment` | Combat-facing effects only; pure-UI event text is out of audit scope (waiver) |
+| 12 | relic (remainder) | `py audit/tools/harness.py roster relic` | Includes event/Neow/Ancient-shrine pools; out-of-combat no-op stub relics get `waiver` verdicts naming the stubbed behavior |
+| 13 | power | `py audit/tools/harness.py roster power` | Sign-aware typing (bug class 3) applies to every stack-amount power |
+| 14 | monster | `py audit/tools/harness.py roster monster` | MachineMonster ports: compare graphs node-by-node against the C# AddState/AddBranch calls (bug class 6). Hand-rolled monsters (~18): the audit must reconstruct the equivalent graph from the C# and verify the hand-rolled `_move_key` logic emits identical move sequences for the reachable state space, or record a `gap` recommending a state-machine port |
+| 15 | card | `py audit/tools/harness.py roster card` | Mostly numbers/keywords; verify upgrade (`+`) values too — sim models upgrades inside one class, C# may use fields or separate branches |
+| 16 | event + enchantment | `py audit/tools/harness.py roster event` / `roster enchantment` | Combat-facing effects only; pure-UI event text is out of audit scope (waiver) |
 
 Completion criterion for the whole plan:
-`py tools/audit_status.py --strict` exits 0 except for open `gap` records
+`py audit/tools/audit_status.py --strict` exits 0 except for open `gap` records
 (gaps are expected output, queued as follow-up fixes — each fix lands later
 with its own failing-then-passing test and flips its record to `faithful`
 on re-audit). Report the final table plus the list of open gaps.

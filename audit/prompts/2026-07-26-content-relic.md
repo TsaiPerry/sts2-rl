@@ -18,22 +18,22 @@ GAME SOURCE (READ-ONLY): `c:\Users\Perry\Desktop\Slay the Spire 2`
 
 ## Read first, in order
 
-1. `docs/superpowers/prompts/_shared-audit-contract.md` — **your binding
+1. `audit/prompts/_shared-audit-contract.md` — **your binding
    contract**: operational rules, the eight verdict rules, file ownership,
    the per-unit procedure. Follow it exactly.
 2. `docs/superpowers/specs/2026-07-24-source-audit-pipeline-design.md` — what
    this pipeline is and why.
-3. `tools/audit/PROMPT.md` — the versioned audit instruction sheet and
+3. `audit/tools/PROMPT.md` — the versioned audit instruction sheet and
    bug-class checklist. **You are its sole owner** (see below).
 4. `docs/superpowers/plans/2026-07-24-source-audit-pipeline.md`, **Task 11
    only** (search `### Task 11`) — the pilot's exact steps.
 
 ## Your scope
 
-`audits/relic/**` — **258 units**. Roster: `py tools/audit/harness.py roster relic`.
+`audit/records/relic/**` — **258 units**. Roster: `py audit/tools/harness.py roster relic`.
 
-You additionally own `tools/audit/PROMPT.md` and
-`tools/audit/name_overrides.json`. No other stream may edit them; the others
+You additionally own `audit/tools/PROMPT.md` and
+`audit/tools/name_overrides.json`. No other stream may edit them; the others
 will send you lessons to fold in. When you change `PROMPT.md`, bump its
 version header.
 
@@ -62,13 +62,13 @@ Two live findings from the seam tier bear directly on Unsettling Lamp and are
 already settled; do not re-derive them, but make sure your record is
 consistent with both (rule 3):
 - the Lamp's `modify_power_amount` correctly runs BEFORE the Artifact
-  early-return (`audits/seam/power_cmd.json`, the ordering pin)
+  early-return (`audit/records/seam/power_cmd.json`, the ordering pin)
 - the Lamp × `TemporaryStrength` double-dip equivalence was verified by
   execution and holds (`power_cmd` guard N2)
 
 ## Then harden the prompt
 
-Append to `tools/audit/PROMPT.md` any bug class or procedure lesson the pilot
+Append to `audit/tools/PROMPT.md` any bug class or procedure lesson the pilot
 surfaced — a recurring C# idiom the checklist misses, a systematic way the
 sim's relic ports differ. Bump the version header. **If nothing surfaced, say
 so in your report; do not pad the file.**

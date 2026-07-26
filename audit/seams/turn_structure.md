@@ -2,7 +2,7 @@
 
 Audited 2026-07-25 (Task 8 of the six seam audits, Tier 2 of the
 source-audit-pipeline design). Verdicts and rationale live in
-`audits/seam/turn_structure.json`; this file is the durable ordering spec
+`audit/records/seam/turn_structure.json`; this file is the durable ordering spec
 extracted from the C# source that the JSON record judges the sim against.
 
 This seam is the **combat turn loop**: combat start, the player-turn setup
@@ -13,7 +13,7 @@ Vulnerable/Weak/Frail duration tick), and the win/loss check.
 
 ## Source correction (Step A)
 
-`tools/audit/harness.py`'s `SEAM_SOURCES["turn_structure"]` listed
+`audit/tools/harness.py`'s `SEAM_SOURCES["turn_structure"]` listed
 `src/Core/Combat/CombatManager.cs` + `src/Core/Combat/PlayerTurnPhase.cs` on
 the game side and `sts2_rl/combat.py` + `sts2_rl/player.py` on the sim side.
 `CombatManager.cs` is the right primary file, but **`PlayerTurnPhase.cs` is a
@@ -21,7 +21,7 @@ bare 61-line `enum` with no logic at all** (it is kept, because it is the
 normative statement of the six turn phases this record's steps 10/26/47 are
 about), and **every other file the ordering spec rests on was missing**. Both
 lists were widened; the edit is staged in this branch and the record's hashes
-were regenerated from it (`py tools/audit_status.py` → not stale).
+were regenerated from it (`py audit/tools/audit_status.py` → not stale).
 
 Added on the game side:
 
@@ -105,7 +105,7 @@ were not. Both lists are now consistent:
 
 `SEAM_SOURCES["turn_structure"]` is therefore **25 game files + 23 sim
 files**, and the record's hashes were regenerated from it with
-`harness._hash_sources` (`py tools/audit_status.py` → not stale).
+`harness._hash_sources` (`py audit/tools/audit_status.py` → not stale).
 
 Added on the sim side (`combat.py` + `player.py` cover under half of it):
 
@@ -143,7 +143,7 @@ dispatchers (`BeforeBlockGained`, `AfterBlockGained`,
 `AfterModifyingBlockAmount`, `ModifyBlock`). **This record claims the 27
 turn-lifecycle dispatchers below, and Task 9 must not re-audit them** — a
 turn-dispatcher finding belongs here as an amendment to
-`audits/seam/turn_structure.json`:
+`audit/records/seam/turn_structure.json`:
 
 `AfterBlockCleared` (119-125), `BeforeCombatStart` (311-324), `AfterCombatEnd`
 (328-336), `AfterCombatVictory` (340-348), `AfterEnergyReset` (503-509),
@@ -603,7 +603,7 @@ deferral. Three structural differences run through the whole record:
   action (**G2**, **G4**, **G10**).
 
 **Verdict counts**, recomputed programmatically from
-`audits/seam/turn_structure.json` (`collections.Counter` over
+`audit/records/seam/turn_structure.json` (`collections.Counter` over
 `steps + guards`) **after the fix pass**, are **97 entries: 67 gap, 21
 faithful, 8 waiver, 1 deliberate-divergence** — 74 steps (46 gap / 21
 faithful / 6 waiver / 1 dd) and 23 guards (21 gap / 2 waiver). The unit

@@ -18,10 +18,10 @@ GAME SOURCE (READ-ONLY): `c:\Users\Perry\Desktop\Slay the Spire 2`
 
 ## Read first, in order
 
-1. `docs/superpowers/prompts/_shared-audit-contract.md` — **your binding
+1. `audit/prompts/_shared-audit-contract.md` — **your binding
    contract**: operational rules, the eight verdict rules, file ownership,
    the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` — the audit instruction sheet and bug-class
+2. `audit/tools/PROMPT.md` — the audit instruction sheet and bug-class
    checklist. **Read-only for you**; the relic stream owns it. Send it
    lessons via your report.
 
@@ -30,8 +30,8 @@ GAME SOURCE (READ-ONLY): `c:\Users\Perry\Desktop\Slay the Spire 2`
 Two kinds, **82 units total** — the smallest content stream, so you are also
 the most likely to finish and free up capacity.
 
-- `audits/event/**` — 65 units. Roster: `py tools/audit/harness.py roster event`
-- `audits/enchantment/**` — 17 units. Roster: `py tools/audit/harness.py roster enchantment`
+- `audit/records/event/**` — 65 units. Roster: `py audit/tools/harness.py roster event`
+- `audit/records/enchantment/**` — 17 units. Roster: `py audit/tools/harness.py roster enchantment`
 
 ## Scope boundary for events
 
@@ -82,7 +82,7 @@ finishing a whole kind gives the status report its first `unaudited 0` row.
 
 The relic stream is running the Tier 1 pilot and will harden `PROMPT.md` from
 it. Either wait for that to land and branch after it, or start now and
-**re-read `tools/audit/PROMPT.md` at each batch boundary**.
+**re-read `audit/tools/PROMPT.md` at each batch boundary**.
 
 ## Report
 

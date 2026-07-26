@@ -1,17 +1,18 @@
-# Stream 5 — content audits: monsters  ⚠️ GATED
+# Stream 5 — content audits: monsters  (gate CLEARED)
 
-**Do not start this stream until Task 10 (`monster_state_machine`) is
-committed on `audit-pipeline`.** Check with:
+This stream was gated on Task 10 (`monster_state_machine`), which establishes
+the `AddState`/`AddBranch` argument contract the whole stream's method depends
+on. **Task 10 has landed** — re-confirm before you start:
 
 ```bash
-cd C:/Users/Perry/Desktop/sts2-rl-audit && py tools/audit_status.py
+cd C:/Users/Perry/Desktop/sts2-rl-audit && py audit/tools/audit_status.py
 ```
 
-`seam` must read `6 audited`. Task 10 establishes the `AddState`/`AddBranch`
-argument contract that this entire stream's method depends on; auditing 109
-monsters against an unsettled contract means auditing them twice.
+`seam` must read `6 audited` and `0 stale`. If it reads anything else, a sim
+edit has invalidated a seam record and the AddBranch contract may have moved;
+stop and re-audit that record rather than auditing 109 monsters twice.
 
-Setup, once the gate clears:
+Setup:
 ```bash
 cd C:/Users/Perry/Desktop/sts2-rl
 git worktree add C:/Users/Perry/Desktop/sts2-rl-monster -b audit-monster audit-pipeline
@@ -29,19 +30,19 @@ GAME SOURCE (READ-ONLY): `c:\Users\Perry\Desktop\Slay the Spire 2`
 
 ## Read first, in order
 
-1. `docs/superpowers/prompts/_shared-audit-contract.md` — **your binding
+1. `audit/prompts/_shared-audit-contract.md` — **your binding
    contract**: operational rules, the eight verdict rules, file ownership,
    the per-unit procedure.
-2. `docs/audit/seams/monster_state_machine.md` — **the contract this stream
+2. `audit/seams/monster_state_machine.md` — **the contract this stream
    rests on.** It contains the enumerated `AddBranch` overload table with each
    integer argument's role. Read it before your first unit; every graph
    comparison you make is against that table.
-3. `tools/audit/PROMPT.md` — bug-class checklist. **Read-only for you**; the
+3. `audit/tools/PROMPT.md` — bug-class checklist. **Read-only for you**; the
    relic stream owns it. Send lessons via your report.
 
 ## Your scope
 
-`audits/monster/**` — **109 units**. Roster: `py tools/audit/harness.py roster monster`.
+`audit/records/monster/**` — **109 units**. Roster: `py audit/tools/harness.py roster monster`.
 
 ## Method — two populations, two procedures
 
@@ -92,19 +93,19 @@ weight-vs-cooldown misreading. Prioritise them.
 The opposite of the section above: this is work **no seam record covers**, handed
 to you deliberately rather than findings you should leave alone.
 
-`hook_dispatch` (`docs/audit/seams/hook_dispatch.md:184-190`) told Task 10 to
+`hook_dispatch` (`audit/seams/hook_dispatch.md:184-190`) told Task 10 to
 start from the **12** C# monster models that override an `AbstractModel` hook.
 Task 10 addressed exactly **one** — `KinPriest`, as its guard **N6**, verdict
 `waiver` because the whole override is a barks line plus a music parameter. The
 other **11 are audited by no seam**, and Task 10 recorded that explicitly as
 hole 5 of its "Behaviour in NO seam's scope" list
-(`docs/audit/seams/monster_state_machine.md`). They are **yours**, per monster,
+(`audit/seams/monster_state_machine.md`). They are **yours**, per monster,
 because a hook override is per-monster behaviour and therefore content tier.
 
 Enumerate them yourself — do not trust this list to stay current:
 
 ```bash
-py tools/audit/dormancy_probes.py cs-monster-hooks
+py audit/tools/dormancy_probes.py cs-monster-hooks
 ```
 
 At the time of writing it reports 12 of 127 `src/Core/Models/Monsters/*.cs`

@@ -1,6 +1,7 @@
 # Parallel audit streams — index and dependency graph
 
-Eight streams. Five can start now; three are gated. Every stream reads
+Eight streams. The seam tier and the gap queue have landed; the five content
+streams can all start now; the gap-fix stream is gated. Every stream reads
 `_shared-audit-contract.md` first — that file carries the operational rules,
 the eight binding verdict rules, and the file-ownership matrix that keeps the
 branches mergeable.
@@ -8,9 +9,9 @@ branches mergeable.
 ## Dependency graph
 
 ```
-seam tier (Tasks 5-10) ──┬── [running] Task 10 monster_state_machine
+seam tier (Tasks 5-10) ──┬── [DONE] all 6 seams audited
                          │
-                         ├──> gap-queue stream        (needs all 6 seams)
+                         ├──> gap-queue stream        [DONE] audit/GAP-QUEUE.md
                          └──> content-monster stream  (needs Task 10's AddBranch contract)
 
 content-relic (pilot) ───┬──> content-power
@@ -27,13 +28,13 @@ gap-queue ──> gap-fix stream   (also needs Perry's go-ahead; see below)
 
 | # | Stream | Prompt | Branch | Units | Status |
 |---|---|---|---|---|---|
-| 0 | seam tier | — | `audit-pipeline` | 6 seams | running (Task 10 last) |
+| 0 | seam tier | — | `audit-pipeline` | 6 seams | **complete** (6/6, 0 stale) |
 | 1 | content — relic + **pilot** | `2026-07-26-content-relic.md` | `audit-relic` | 258 | ready |
 | 2 | content — power | `2026-07-26-content-power.md` | `audit-power` | 134 | ready |
 | 3 | content — card | `2026-07-26-content-card.md` | `audit-card` | 203 | ready |
 | 4 | content — event + enchantment | `2026-07-26-content-event-enchantment.md` | `audit-event` | 82 | ready |
-| 5 | content — monster | `2026-07-26-content-monster.md` | `audit-monster` | 109 | **gated on Task 10** |
-| 6 | gap queue | `2026-07-26-gap-queue.md` | `audit-gapqueue` | — | **gated on Task 10** |
+| 5 | content — monster | `2026-07-26-content-monster.md` | `audit-monster` | 109 | ready (Task 10 landed) |
+| 6 | gap queue | `2026-07-26-gap-queue.md` | `audit-gapqueue` | — | **complete** — `audit/GAP-QUEUE.md` |
 | 7 | gap fixes | `2026-07-26-gap-fixes.md` | `audit-fixes` | ~20 live | **gated — read the warning** |
 
 Content total: 786 units.
@@ -56,10 +57,12 @@ Gated streams branch off later, once their dependency lands.
 ## Why these merge cleanly
 
 Each content stream creates files in a directory no other stream touches
-(`audits/relic/`, `audits/power/`, …), none of which exists yet. The seam
-tier's churn is confined to `tools/audit/harness.py`, `test/test_hook_order.py`,
-`audits/seam/` and `docs/audit/seams/`. The only genuinely shared files are
-`tools/audit/PROMPT.md` and `tools/audit/name_overrides.json`, and the
+(`audit/records/relic/`, `audit/records/power/`, …). Each exists already but
+holds nothing but a `.gitkeep`, so no two streams can produce the same path.
+The seam tier's churn is confined to `audit/tools/harness.py`,
+`test/test_hook_order.py`, `audit/records/seam/` and `audit/seams/`. The only
+genuinely shared files are
+`audit/tools/PROMPT.md` and `audit/tools/name_overrides.json`, and the
 contract assigns both to the relic stream alone.
 
 ## Why the gap-fix stream cannot run in parallel
@@ -79,7 +82,7 @@ gaps queued and documented, not fixed**.
 ## Merge order
 
 Merge `audit-pipeline` first (it owns the harness), then the content branches
-in any order, then the gap queue. Re-run `py tools/audit_status.py` after each
+in any order, then the gap queue. Re-run `py audit/tools/audit_status.py` after each
 merge — a stale count above zero means a merge brought in a sim change that
 invalidates a record, and the record needs re-auditing rather than a hash
 rewrite.

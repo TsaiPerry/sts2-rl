@@ -4,6 +4,11 @@ Binding for every parallel audit session. Your stream prompt tells you what
 to audit; this file tells you how, and what you may touch. Read it in full
 before your first unit.
 
+Everything the pipeline owns lives under `audit/`. `audit/README.md` is the
+map: current status, the tools and their commands, how staleness works, and
+how a new stream plugs in. Read it once if you have not seen this folder
+before.
+
 ## Operational rules
 
 - Run every command in the FOREGROUND with a generous timeout (600000 ms).
@@ -18,7 +23,7 @@ before your first unit.
   died at usage limits; committed files and written reports are what survive.
   Do not polish before committing.
 - If a number you record comes from a script, commit the script under
-  `tools/audit/` (see `tools/audit/dormancy_probes.py` for the pattern) so it
+  `audit/tools/` (see `audit/tools/dormancy_probes.py` for the pattern) so it
   is reproducible. Otherwise use the scratchpad.
 
 ## File ownership — the concurrency contract
@@ -27,29 +32,29 @@ Several sessions run against sibling worktrees of one repo and merge later.
 Merges stay trivial only while ownership holds.
 
 **Nobody but the seam session touches:**
-`tools/audit/harness.py` · `test/test_hook_order.py` · `audits/seam/**` ·
-`docs/audit/seams/**` · `.superpowers/sdd/progress.md`
+`audit/tools/harness.py` · `test/test_hook_order.py` · `audit/records/seam/**` ·
+`audit/seams/**` · `.superpowers/sdd/progress.md`
 
 **One owner each:**
 
 | Path | Owner |
 |---|---|
-| `audits/relic/**` | relic stream |
-| `audits/power/**` | power stream |
-| `audits/card/**` | card stream |
-| `audits/event/**`, `audits/enchantment/**` | event+enchantment stream |
-| `audits/monster/**` | monster stream |
-| `docs/audit/content/<kind>/**` | that kind's stream (narration docs, if you write any — never `docs/audit/content/` directly) |
-| `tools/audit/PROMPT.md`, `tools/audit/name_overrides.json` | **relic stream only** |
-| `docs/audit/GAP-QUEUE.md` | gap-queue stream |
+| `audit/records/relic/**` | relic stream |
+| `audit/records/power/**` | power stream |
+| `audit/records/card/**` | card stream |
+| `audit/records/event/**`, `audit/records/enchantment/**` | event+enchantment stream |
+| `audit/records/monster/**` | monster stream |
+| `audit/content/<kind>/**` | that kind's stream (narration docs, if you write any — never `audit/content/` directly) |
+| `audit/tools/PROMPT.md`, `audit/tools/name_overrides.json` | **relic stream only** |
+| `audit/GAP-QUEUE.md` | gap-queue stream |
 | `sts2_rl/**` | gap-fix stream only, and only once authorised |
 
 If you need a change in a file you do not own — e.g. the roster mis-resolves
 a unit and you want `harness.py` fixed — **do not make it.** Record the need
-in your report. If `tools/audit/name_overrides.json` can express it and you
+in your report. If `audit/tools/name_overrides.json` can express it and you
 are not the relic stream, report it for the relic stream to apply.
 
-Every stream except the relic stream: **treat `tools/audit/PROMPT.md` as
+Every stream except the relic stream: **treat `audit/tools/PROMPT.md` as
 read-only.** Report lessons; the relic stream folds them in and bumps the
 version header.
 
@@ -110,27 +115,27 @@ Numeric constants are checked against the **non-ascension** branch of
 ## Per-unit procedure
 
 ```
-py tools/audit/harness.py skeleton <kind>/<id>    # generates the record shell
+py audit/tools/harness.py skeleton <kind>/<id>    # generates the record shell
 ```
 
 Then: read the C# model **in full** → read the sim counterpart **in full** →
 fill a verdict for every enumerated hook, plus a guard entry per conditional
 the C# applies → check numeric constants → validate.
 
-Follow `tools/audit/PROMPT.md`'s bug-class checklist on every unit.
+Follow `audit/tools/PROMPT.md`'s bug-class checklist on every unit.
 
 **Batch size 15.** After each batch:
 
 ```
-py tools/audit/harness.py validate          # 0 invalid
-py tools/audit_status.py --kind <kind>
+py audit/tools/harness.py validate          # 0 invalid
+py audit/tools/audit_status.py --kind <kind>
 py -m pytest test/ -q                       # must be unchanged; audits add no code
-git add audits/<kind> && git commit         # name the units and the gap count
+git add audit/records/<kind> && git commit         # name the units and the gap count
 ```
 
 ## Depth calibration
 
-Read `docs/audit/seams/hook_dispatch.md` once before starting. You are not
+Read `audit/seams/hook_dispatch.md` once before starting. You are not
 redoing seam work — it calibrates the expected depth, the `file:line`
 citation discipline, and the rationale style. A verdict with no citation and
 no executed evidence is not an audit finding.

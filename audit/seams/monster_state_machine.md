@@ -2,7 +2,7 @@
 
 Audited 2026-07-26 (Task 10, the **last** of the six seam audits, Tier 2 of the
 source-audit-pipeline design). Verdicts and rationale live in
-`audits/seam/monster_state_machine.json`; this file is the durable ordering
+`audit/records/seam/monster_state_machine.json`; this file is the durable ordering
 spec extracted from the C# source that the JSON record judges the sim against.
 
 This seam is the **monster move-selection machinery**: the state graph
@@ -15,11 +15,11 @@ of Stun). It does **not** own *when* the roll is called — that is
 `turn_structure`'s, by its own boundary section.
 
 Every "executed evidence" number below is reproducible from
-`tools/audit/state_machine_probes.py` (probe name given at each site).
+`audit/tools/state_machine_probes.py` (probe name given at each site).
 
 ## Inherited prior art — verified, and what was wrong with it
 
-`tools/audit/state_machine_probes.py` arrived from an interrupted earlier
+`audit/tools/state_machine_probes.py` arrived from an interrupted earlier
 attempt at this task: 396 lines, runnable, never validated, never reported,
 never committed. Both of its load-bearing claims were re-derived independently
 before anything was built on them.
@@ -185,8 +185,8 @@ The rule applied is Task 8's, restated by `hook_dispatch`: *if a verdict's
 liveness or dormancy argument cites a file with line numbers, that file is part
 of the audited unit's evidence and must be hashed.* Deliberately **not**
 hashed, for the reasons `hook_dispatch` gives: `test/*.py` (the pins),
-`tools/audit/harness.py`, `tools/audit/dormancy_probes.py` and
-`tools/audit/state_machine_probes.py` (the record's own machinery, re-runnable
+`audit/tools/harness.py`, `audit/tools/dormancy_probes.py` and
+`audit/tools/state_machine_probes.py` (the record's own machinery, re-runnable
 by definition).
 
 `sources-sweep` **now enforces that rule as written**, in two ways the first
@@ -270,7 +270,7 @@ are named here so the holes are documented:
 5. **Eleven C# monster models' `AbstractModel` hook overrides.** `hook_dispatch`
    (`hook_dispatch.md:184-190`) told this record to start from the **12** C#
    monster models that override an `AbstractModel` hook — enumerate them with
-   `py tools/audit/dormancy_probes.py cs-monster-hooks`. Only **`KinPriest`** was
+   `py audit/tools/dormancy_probes.py cs-monster-hooks`. Only **`KinPriest`** was
    addressed (guard **N6**, `waiver`: the whole override is a barks line plus a
    music parameter). The other **11 are audited by no seam and are not this
    record's to audit** — a hook override is per-monster *behaviour*, i.e.
@@ -296,7 +296,7 @@ are named here so the holes are documented:
    sim counterpart is `AsleepPower` → `wake_up(stunned=True)`
    (`underdocks/lagavulin_matriarch.py:75-87`). **Handed to the content-monster
    stream** with its own heading in
-   `docs/superpowers/prompts/2026-07-26-content-monster.md`.
+   `audit/prompts/2026-07-26-content-monster.md`.
 
 ## Seed facts, verified
 
@@ -661,7 +661,7 @@ places:
   (**G6**), and the ungated spawn roll (**G9**, steps 11/48).
 
 **Verdict counts**, recomputed programmatically from
-`audits/seam/monster_state_machine.json`, are stated in the JSON's own summary
+`audit/records/seam/monster_state_machine.json`, are stated in the JSON's own summary
 and in `.superpowers/sdd/task-10-report.md`; do not copy them by hand.
 
 ### Gaps found

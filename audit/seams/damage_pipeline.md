@@ -2,12 +2,12 @@
 
 Audited 2026-07-25 (Task 5 of the six seam audits, Tier 2 of the
 source-audit-pipeline design). Verdicts and rationale live in
-`audits/seam/damage_pipeline.json`; this file is the durable ordering spec
+`audit/records/seam/damage_pipeline.json`; this file is the durable ordering spec
 extracted from the C# source that the JSON record judges the sim against.
 
 ## Source correction (Step A)
 
-`tools/audit/harness.py`'s `SEAM_SOURCES["damage_pipeline"]` originally listed
+`audit/tools/harness.py`'s `SEAM_SOURCES["damage_pipeline"]` originally listed
 only `src/Core/Commands/DamageCmd.cs`. That file is real but contains only two
 `AttackCommand`-builder factory methods (`DamageCmd.Attack(...)`) — no
 pipeline logic. The actual per-hit pipeline (block order, modifier order,
@@ -30,7 +30,7 @@ each other:
   — the other creature verbs (heal, stun, escape, block, power application
   helpers, …) — and should NOT re-audit the `Damage`/`Kill` region. If Task 7
   finds a `Damage`/`Kill` behavior this record missed, it belongs here as an
-  amendment to `audits/seam/damage_pipeline.json`, not as a second verdict
+  amendment to `audit/records/seam/damage_pipeline.json`, not as a second verdict
   under a different unit id.
 
 ## Sim entry point
@@ -221,7 +221,7 @@ filter; re-check this step when porting one.
   no defense-in-depth guarantee the way `CreatureCmd.Damage` does.
 - **N3 — parallel sum/product vs C#'s sequential running-value chain. LIVE.**
   *Raised from `deliberate-divergence` to `gap` in the Task 9 fix pass; see
-  `docs/audit/seams/hook_dispatch.md` gap **G9**, which is the same mechanism
+  `audit/seams/hook_dispatch.md` gap **G9**, which is the same mechanism
   and carries the identical verdict (governing rule 3).* `Hook.cs:2515-2538`
   folds each contribution into a running `decimal` — `num +=
   item.ModifyDamageAdditive(target, num, …)`, then `num *=
@@ -229,7 +229,7 @@ filter; re-check this step when porting one.
   every listener the same pre-step base and aggregates afterwards;
   `cmds.py:57-58` applies the aggregate once. The old rationale — "every ported
   implementation returns a value independent of the running amount" — was
-  re-verified and is true (`py tools/audit/dormancy_probes.py cs-running-value`
+  re-verified and is true (`py audit/tools/dormancy_probes.py cs-running-value`
   / `sim-running-value`: 0 of 46 C# overrides, 0 of 9 C# `Enchant*` overrides
   and 0 of 31 sim implementations read the value they are handed). **But it
   settles only the argument, not the aggregation shape.** The additive family

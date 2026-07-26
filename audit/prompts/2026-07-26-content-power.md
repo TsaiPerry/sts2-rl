@@ -18,20 +18,20 @@ GAME SOURCE (READ-ONLY): `c:\Users\Perry\Desktop\Slay the Spire 2`
 
 ## Read first, in order
 
-1. `docs/superpowers/prompts/_shared-audit-contract.md` — **your binding
+1. `audit/prompts/_shared-audit-contract.md` — **your binding
    contract**: operational rules, the eight verdict rules, file ownership,
    the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` — the audit instruction sheet and bug-class
+2. `audit/tools/PROMPT.md` — the audit instruction sheet and bug-class
    checklist. **Read-only for you**; the relic stream owns it. Send it
    lessons via your report.
-3. `docs/audit/seams/power_cmd.md` — the completed `PowerCmd` seam audit.
+3. `audit/seams/power_cmd.md` — the completed `PowerCmd` seam audit.
    This is the machinery your units plug into; read its gap list before
    verdicting anything, so you record power-level findings rather than
    re-reporting machinery ones.
 
 ## Your scope
 
-`audits/power/**` — **134 units**. Roster: `py tools/audit/harness.py roster power`.
+`audit/records/power/**` — **134 units**. Roster: `py audit/tools/harness.py roster power`.
 
 ## Why this stream is the highest-yield one
 
@@ -82,7 +82,7 @@ commands.
 
 The relic stream is running the Tier 1 pilot and will harden `PROMPT.md` from
 it. Either wait for that to land and branch after it, or start now and
-**re-read `tools/audit/PROMPT.md` at each batch boundary** so you pick up
+**re-read `audit/tools/PROMPT.md` at each batch boundary** so you pick up
 hardening as it arrives.
 
 ## Report

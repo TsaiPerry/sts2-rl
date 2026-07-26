@@ -2,7 +2,7 @@
 
 Audited 2026-07-25 (Task 9 of the six seam audits, Tier 2 of the
 source-audit-pipeline design). Verdicts and rationale live in
-`audits/seam/hook_dispatch.json`; this file is the durable ordering spec
+`audit/records/seam/hook_dispatch.json`; this file is the durable ordering spec
 extracted from the C# source that the JSON record judges the sim against.
 
 This seam is the **generic dispatch machinery**: how listeners are enumerated
@@ -14,7 +14,7 @@ none of the four earlier seams claims.
 
 ## Source correction (Step A)
 
-`tools/audit/harness.py`'s `SEAM_SOURCES["hook_dispatch"]` listed **two** game
+`audit/tools/harness.py`'s `SEAM_SOURCES["hook_dispatch"]` listed **two** game
 files (`src/Core/Hooks/Hook.cs`, `src/Core/Models/AbstractModel.cs`) and **one**
 sim file (`sts2_rl/hooks.py`). All three are real and all three are genuinely
 part of the unit — but **neither `Hook.cs` nor `AbstractModel.cs` decides which
@@ -100,7 +100,7 @@ evidence and must be hashed.*
 
 The rule above was **stated and then only half-applied**, for the third task
 running. The fix pass swept it mechanically instead: every `.py`/`.cs` token in
-`audits/seam/hook_dispatch.json` **and** in this file was extracted, resolved
+`audit/records/seam/hook_dispatch.json` **and** in this file was extracted, resolved
 against the real trees, and checked against `SEAM_SOURCES["hook_dispatch"]`.
 Ten files were cited and unhashed, and the fix pass's own corrected evidence
 cites ten more; all twenty are now in the table (the record's `game_sources` /
@@ -136,8 +136,8 @@ reader when it reads no history at all (`grep -n history` on it returns
 nothing), so that file is *not* hashed here.
 
 What is deliberately **not** hashed, and is the only thing the sweep still
-reports: `test/*.py`, `tools/audit/harness.py`,
-`tools/audit/dormancy_probes.py`, `tools/audit/stale_listener_plugin.py`, and
+reports: `test/*.py`, `audit/tools/harness.py`,
+`audit/tools/dormancy_probes.py`, `audit/tools/stale_listener_plugin.py`, and
 `relics/whispering_earring.py`. The first four are the record's *pins* and its
 *own machinery*, not evidence about the audited unit — a test edit that broke
 a pin fails loudly on its own, hashing the harness would make every record
@@ -148,7 +148,7 @@ what the first pass said it was, a negative citation with nothing to go stale.
 ### Scope boundary — READ BEFORE TASK 10 (`monster_state_machine`)
 
 **`src/Core/Hooks/Hook.cs` is split by method across five seams.** Counted
-programmatically off the file (`py tools/audit/dormancy_probes.py
+programmatically off the file (`py audit/tools/dormancy_probes.py
 hook-buckets`), it declares **147** public dispatchers plus two private helpers
 (`IterateCombatHookListeners` 53-63, `ModifyDamageInternal` 2511-2558).
 
@@ -183,7 +183,7 @@ game (`CombatState.cs:420`, `MonsterModel.cs:51`) and is not one in the sim**
 gap **G5** here, recorded as **dormant** because an executed scan finds zero
 sim `Monster` subclasses defining any `HookSystem` hook name. Task 10 should
 start from the **12** C# monster models that actually override an
-`AbstractModel` hook (`py tools/audit/dormancy_probes.py cs-monster-hooks`) —
+`AbstractModel` hook (`py audit/tools/dormancy_probes.py cs-monster-hooks`) —
 and note that **`KinPriest.cs:81-108`'s `AfterDeath` is already contended**:
 its all-followers-dead `AllFollowerDeathResponse` has no counterpart in the
 ported sim `KinPriest` (`monsters/overgrowth/the_kin.py:67-110`). **That
@@ -364,7 +364,7 @@ a verdict on every entry. Doc and JSON now agree on the policy above.
     `RunState.cs:563-576`. The sim's run-scoped hooks walk `run.relics` only
     (`relics/base.py:205-235`) and never the belt, so the `faithful` verdict
     needs the potions leg to be empty of run listeners — **executed**
-    (`py tools/audit/dormancy_probes.py cs-potion-run-hooks`): of 65 files
+    (`py audit/tools/dormancy_probes.py cs-potion-run-hooks`): of 65 files
     under `src/Core/Models/Potions`, exactly one overrides any
     `AbstractModel` hook (`FairyInABottle.cs`: `ShouldDie`,
     `AfterPreventingDeath`), and both are dispatched off
@@ -391,7 +391,7 @@ a verdict on every entry. Doc and JSON now agree on the policy above.
     the initial shuffle must still reach listeners; and a few hooks bypass the
     guard deliberately.
 21. Bucketed programmatically over brace-matched bodies
-    (`py tools/audit/dormancy_probes.py hook-buckets`): **73** of the 147
+    (`py audit/tools/dormancy_probes.py hook-buckets`): **73** of the 147
     dispatchers go through this guard; **63** call
     `runState.IterateHookListeners` directly (that iterator never consults the
     guard); **10** are combat-side dispatchers that bypass it deliberately by
@@ -661,7 +661,7 @@ and it is missing two listener **categories** entirely (`MonsterModel` **G5**,
 (`CombatHistory`, **N3**).
 
 **Verdict counts**, recomputed programmatically from
-`audits/seam/hook_dispatch.json` (`collections.Counter` over `steps + guards`),
+`audit/records/seam/hook_dispatch.json` (`collections.Counter` over `steps + guards`),
 are **55 entries: 30 gap, 10 faithful, 12 waiver, 3 deliberate-divergence** —
 46 steps (27 gap / 9 faithful / 8 waiver / 2 dd) and 9 guards (3 gap /
 1 faithful / 4 waiver / 1 dd). The unit verdict is the rollup `gap`.
@@ -685,7 +685,7 @@ the "no ported content triggers this" cases (**G1**, **G5**, **G6**) and the
 **G2**, **G3**, **G4**, **G9**. **Five are dormant** — **G1**, **G5**, **G6**,
 **G7**, **G8** — each with its concrete unported (or un-contended) trigger
 named and its dormancy argument **executed**, not asserted, and each executed
-by a probe committed under `tools/audit/` so the next auditor can re-derive
+by a probe committed under `audit/tools/` so the next auditor can re-derive
 the number rather than trust it.
 
 - **G1 — the card listener block is re-derived per dispatch in pile order and
@@ -696,7 +696,7 @@ the number rather than trust it.
   `player.all_cards` once at `combat.py:124` in the fixed order
   `hand + draw + discard + exhaust` (`player.py:100-103`) and never reorders.
   Dormancy evidence (**executed**, reproducible: `py
-  tools/audit/dormancy_probes.py card-hooks` — an MRO-aware scan of all **203**
+  audit/tools/dormancy_probes.py card-hooks` — an MRO-aware scan of all **203**
   classes in `_CARD_CLASSES` against `HookSystem`'s **66** hook names, ignoring
   anything defined on the `Card` base): sim card classes implement exactly six
   hooks, and none of the six can observe cross-card order —
@@ -791,7 +791,7 @@ the number rather than trust it.
   (`monsters/base.py:78-81`) and never calls `register`.
   **Fix-pass correction — the game-side number was wrong.** The first pass said
   **71** monster models override at least one `AbstractModel` hook. Re-derived
-  with `py tools/audit/dormancy_probes.py cs-monster-hooks` (every `public
+  with `py audit/tools/dormancy_probes.py cs-monster-hooks` (every `public
   override <name>` in the 127 files under `src/Core/Models/Monsters`
   intersected with `AbstractModel.cs`'s 181 `public virtual` methods), it is
   **12**: `Aeonglass` (`AfterCardGeneratedForCombat`, `AfterDeath`), `Crusher`
@@ -803,7 +803,7 @@ the number rather than trust it.
   override` in those files — 123 `MinInitialHp`/`MaxInitialHp`, 84
   `TakeDamageSfxType`, 82 `GenerateAnimator`, 65 `AfterAddedToRoom` and so on,
   none of which is an `AbstractModel` hook.
-  Sim-side dormancy evidence (executed: `py tools/audit/dormancy_probes.py
+  Sim-side dormancy evidence (executed: `py audit/tools/dormancy_probes.py
   monster-hooks`): across **113** sim `Monster` subclasses, **0** define any of
   `HookSystem`'s 66 hook names and the base never calls `hooks.register`.
   Concrete trigger, **already contended in ported content**:
@@ -818,7 +818,7 @@ the number rather than trust it.
   card and `AfflictionModel.cs:146` declares `ShouldReceiveCombatHooks => true`;
   the sim registers the card and its `enchantment` (`combat.py:127-133`) and
   never the affliction. Dormancy evidence, executed at both ends:
-  `py tools/audit/dormancy_probes.py affliction-hooks` finds **0** of the 7 sim
+  `py audit/tools/dormancy_probes.py affliction-hooks` finds **0** of the 7 sim
   `Affliction` subclasses defining any `HookSystem` hook name, and
   `cs-affliction-hooks` finds that of the 10 files under
   `src/Core/Models/Afflictions` exactly **one** overrides an `AbstractModel`
@@ -839,10 +839,10 @@ the number rather than trust it.
   because the instrumentation was a throwaway script):
 
   ```
-  py -m pytest test/ -q -p tools.audit.stale_listener_plugin
+  py -m pytest test/ -q -p audit.tools.stale_listener_plugin
   ```
 
-  `tools/audit/stale_listener_plugin.py` shadows every listener's bound hook
+  `audit/tools/stale_listener_plugin.py` shadows every listener's bound hook
   method for the duration of one dispatch with a probe that re-checks
   `listener in hooks._listeners` **at the moment the dispatcher calls it** —
   exactly C#'s lazy `Contains` — so a listener removed by an *earlier* listener
@@ -896,7 +896,7 @@ the number rather than trust it.
   hooks.modify_damage_multiplicative(...))` (`cmds.py:57-58`; `145-147` for
   block). **Settled by execution, in three parts:**
   1. The base-vs-running *argument* is inert. `py
-     tools/audit/dormancy_probes.py cs-running-value` finds **0 of 46** C#
+     audit/tools/dormancy_probes.py cs-running-value` finds **0 of 46** C#
      `Modify{Damage,Block}{Additive,Multiplicative}` overrides — and 0 of the
      9 `Enchant*` ones — reading the value they are handed; `sim-running-value`
      finds **0 of 31** sim implementations reading theirs. Not "no *ported*
@@ -954,7 +954,7 @@ the number rather than trust it.
   mutators loaded from `save.Modifiers` (`RunState.cs:296, 344`) and empty in a
   standard run; `BadgeModels` are cloned into every run (`RunState.cs:332`) but
   `BadgeModel.cs:3-9` says they exist to "keep track of stats for badges", and
-  an executed scan (`py tools/audit/dormancy_probes.py cs-badge-hooks`) finds
+  an executed scan (`py audit/tools/dormancy_probes.py cs-badge-hooks`) finds
   that of the 29 files under `src/Core/Models/Badges/` only two override any
   `AbstractModel` hook at all (`CccComboModel`: `AfterCardPlayed`,
   `AfterSideTurnStart`; `DebufferModel`: `AfterPowerAmountChanged`) and **none**

@@ -2,7 +2,7 @@
 
 Audited 2026-07-25 (Task 6 of the six seam audits, Tier 2 of the
 source-audit-pipeline design). Verdicts and rationale live in
-`audits/seam/power_cmd.json`; this file is the durable ordering spec
+`audit/records/seam/power_cmd.json`; this file is the durable ordering spec
 extracted from the C# source that the JSON record judges the sim against.
 
 This is the seam the whole project exists because of: the Unsettling Lamp
@@ -14,7 +14,7 @@ that bug.
 
 ## Source correction (Step A)
 
-`tools/audit/harness.py`'s `SEAM_SOURCES["power_cmd"]` originally listed only
+`audit/tools/harness.py`'s `SEAM_SOURCES["power_cmd"]` originally listed only
 `src/Core/Commands/PowerCmd.cs`. That file is real and is the orchestration
 layer (`Apply`/`ModifyAmount`/`Remove`/`FindExistingInstanceForStacking`), but
 it delegates all of its actual modifier/event dispatch to static methods on
@@ -43,7 +43,7 @@ re-audit these six power-amount dispatchers: `BeforePowerAmountChanged`
 `AfterModifyingPowerAmountGiven` (796-809),
 `AfterModifyingPowerAmountReceived` (811-824) — nor the damage-modifier
 methods `damage_pipeline` owns. A power-amount-dispatch finding Task 9 makes
-belongs here as an amendment to `audits/seam/power_cmd.json`, not as a
+belongs here as an amendment to `audit/records/seam/power_cmd.json`, not as a
 second verdict under `seam/hook_dispatch`.
 
 ## Sim entry point
@@ -275,7 +275,7 @@ actually fired" side effect (`_used = True` / `TriggeringCard = card`)
 **inside** the single `modify_power_amount` call itself instead of via a
 proper two-phase try/after split — see **G4**.
 
-**Verdict counts** (recomputed directly from `audits/seam/power_cmd.json`
+**Verdict counts** (recomputed directly from `audit/records/seam/power_cmd.json`
 after fix pass 1):
 
 ```
