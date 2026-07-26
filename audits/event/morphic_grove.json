@@ -1,0 +1,70 @@
+{
+  "unit": "event/morphic_grove",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\MorphicGrove.cs",
+    "sha256": "1a1f37cdab4f130ca7556226417414612fa6e547d95f653341a5d8b8cb8553a4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\morphic_grove.py",
+    "sha256": "ce535850554ab449755eae4274e742dcb077e5424734e14dcf5d628e9a58c049"
+  },
+  "hooks": {
+    "IsShared": {
+      "maps_to": "MorphicGrove.cs:20 `IsShared => true`; the sim carries shared membership as registry position (events/__init__.py) and this unit is in the 18-id pool.",
+      "verdict": "faithful"
+    },
+    "IsAllowed": {
+      "maps_to": "MorphicGrove.is_allowed (events/morphic_grove.py:28-30) `run.gold >= 100 and len(run.transformable_cards()) >= 2`, matching MorphicGrove.cs:24-27's `p.Gold >= 100 && p.Deck.Cards.Count(c => c.IsTransformable) >= 2`. IsTransformable in the deck equals IsRemovable, which run.transformable_cards mirrors (run.py:364-366). The literal 2 matches the `_transformCount` const (MorphicGrove.cs:18) the sim ports as _TRANSFORMS. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars MaxHpVar(5) and the _transformCount const 2 (MorphicGrove.cs:18, 22)",
+      "maps_to": "events/morphic_grove.py:10-12 _MAX_HP_GAIN = 5, _TRANSFORMS = 2, _MIN_GOLD = 100. All three exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Loner (MorphicGrove.cs:38-42): CreatureCmd.GainMaxHp(5)",
+      "maps_to": "events/morphic_grove.py:47-49 gain_max_hp(5), which raises max HP then heals the same amount, as GainMaxHp does.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Group (MorphicGrove.cs:44-53): LoseGold(Owner.Gold) -- ALL of it -- THEN select 2 for transformation, then TransformToRandom each in turn",
+      "maps_to": "events/morphic_grove.py:38-45: lose_gold(self.run.gold) then select 2 then a transform loop. The gold-first order matters because the sim's own lose_gold floors at 0 (run.py:335-337) and the source's LoseGold does too, so `LoseGold(Gold)` is exactly 'set gold to 0' in both.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the transform count is a selection of 2, not 2 independent picks",
+      "maps_to": "MorphicGrove.cs:47 passes `new CardSelectorPrefs(..., 2)` to a single FromDeckForTransformation call and loops the RESULT; events/morphic_grove.py:40-44 does the same -- one select_cards(..., 2) then a loop -- so a card cannot be picked twice in either.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GoldLossType.Stolen is not modelled",
+      "verdict": "deliberate-divergence",
+      "rationale": "MorphicGrove.cs:46 passes GoldLossType.Stolen where most sites pass Spent; run.lose_gold (run.py:335-337) takes no type. Verified the distinction has no ported consumer: `grep -rn GoldLossType src` shows it selects the loss VFX/SFX and the run-history bucket, and no ported relic reads it (the sim's Relic base has no gold-loss hook at all). Same observable, so deliberate-divergence rather than gap -- but it is a run-history field, so a future history/telemetry port would need it."
+    },
+    {
+      "what": "BR-G3 (blast radius): MorphicGrove's GROUP (MorphicGrove.cs:50) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as audits/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py tools/audit/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+    },
+    {
+      "what": "EV-3: Group's two `CardCmd.TransformToRandom(item, base.Rng, ...)` calls (MorphicGrove.cs:50) -- events/morphic_grove.py:44 calls run.transform_card with no pick_rng, so run.py:457-458 falls back to `self.rng.choice` rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "`runState.Players.All(...)` (MorphicGrove.cs:26)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the Transform static hover tip (MorphicGrove.cs:33)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,77 @@
+{
+  "unit": "event/orobas",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Orobas.cs",
+    "sha256": "eeb3c17628455969b8b77c28240c2954adf0d5d8b4a15898fa701ab411742d61"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\orobas.py",
+    "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d"
+  },
+  "hooks": {
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Orobas.cs:13-19 flattens the three pools plus every per-character Sea Glass and the Prismatic Gem for the compendium listing. No gameplay reader; GenerateInitialOptions builds its own list."
+    }
+  },
+  "guards": [
+    {
+      "what": "OptionPool1 and OptionPool2 (Orobas.cs:20-29)",
+      "maps_to": "events/orobas.py:20-21 OPTION_POOL_1 = electric_shrymp, glass_eye, sand_castle; OPTION_POOL_2 = alchemical_coffer, driftwood, radiant_pearl. Both in source order.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Sea Glass character pick (Orobas.cs:59-62): `base.Rng.NextItem(UnlockState.Characters.Where(c => c.Id != character.Id))`, falling back to the player's own character on null",
+      "maps_to": "events/orobas.py:54-55 draws next_item over ALL_CHARACTERS minus Ironclad and DISCARDS the result. That is right for two reasons the record should state together: the draw itself must happen (dropping it would shift all three later picks off the same stream), and its value only selects which character's Sea Glass is offered -- a relic whose payload is another character's pool and therefore a documented stub in an Ironclad-only sim. The fully-unlocked convention makes the candidate set the full ModelDb.AllCharacters minus Ironclad, matching the pools' convention (events/orobas.py:25-28).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Prismatic Gem / Sea Glass roll (Orobas.cs:65-71): `base.Rng.NextFloat() < 0.3333333f` picks the Gem, else a Sea Glass for the character rolled above; the winner is APPENDED to OptionPool1 before the first pick",
+      "maps_to": "events/orobas.py:56-59 in the same order -- the float draw comes after the character draw and before the three NextItem picks -- and appends to pool1 rather than replacing. NOTE the constant: C# is the float literal `0.3333333f`, the sim is `1 / 3` = 0.3333333333333333. A draw landing in the ~3.3e-8 window between them would diverge; recorded rather than waived because it is a real if vanishingly narrow difference, and it costs nothing to pin the literal if a seed ever lands there.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three picks and their order (Orobas.cs:72-76): NextItem(pool1 + the rolled entry), NextItem(OptionPool2), NextItem(OptionPool3)",
+      "maps_to": "events/orobas.py:59, 61, 78 in the same order on the same stream.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "OptionPool3's two gates (Orobas.cs:39-53): Touch of Orobas is included only if SetupForPlayer succeeds, likewise Archaic Tooth",
+      "maps_to": "events/orobas.py:67-74 approximates SetupForPlayer with the conditions those relics actually test: a STARTER-rarity relic whose id is in TouchOfOrobas.REFINEMENTS, and a deck card in ArchaicTooth.TRANSCENDENCE. Both gates present and in source order, so the resulting list order (and hence the NextItem outcome) matches.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "OptionPool3's LOCKED path skips an RNG draw. Orobas.cs:54-56 adds a null-onChosen OPTION_POOL_3_LOCKED option INTO the list when both gates fail, and Orobas.cs:75 then calls `base.Rng.NextItem(OptionPool3)` unconditionally -- so the game takes a NextItem draw over a one-element list",
+      "verdict": "gap",
+      "issue": "events/orobas.py:76-81 branches instead: `if pool3: pick(pool3) else: EventOption('OPTION_POOL_3_LOCKED', None)`. The locked branch never calls pick, so the sim takes ONE FEWER draw off the event stream than the game does. The offered options are identical -- the locked option is the only candidate either way -- so this is invisible in legacy mode, but in a string-seeded parity run it desyncs the event stream for the rest of that event and any later consumer of it. LIVE for the parity path: the both-gates-fail state is ordinary (a run with no Touch-of-Orobas-refinable starter and no transcendence card in the deck), and Orobas is one of the three act-2 Ancients."
+    },
+    {
+      "what": "this unit is one of the six with a parity RNG branch, so EV-3 does NOT apply (the locked-path missing draw above is a separate defect)",
+      "maps_to": "events/orobas.py:49-56 uses self.event_rng for next_item and next_float when present.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(), the between-acts heal every Ancient does. Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so this is NOT in turn_structure step 38a's radius.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() -- an option whose choice obtains the relic and finishes the event",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -8,9 +8,9 @@ Written 2026-07-26. Three commits on top of `8583546a`.
 | kind | total | audited | invalid | gaps | unaudited |
 |---|---|---|---|---|---|
 | `enchantment` | 17 | **17** | 0 | 12 | **0** |
-| `event` | 65 | 20 | 0 | 13 | 45 |
+| `event` | 65 | 29 | 0 | 20 | 36 |
 
-`py tools/audit/harness.py validate` → 42 records, 0 invalid.
+`py tools/audit/harness.py validate` → 51 records, 0 invalid.
 `py -m pytest test/ -q` → 2476 passed, 31 xfailed, unchanged at every commit
 (audits add no executable code; the two probe modules under `tools/audit/` are
 not imported by the suite).
@@ -20,9 +20,11 @@ Commits:
 - `3abf27d9` audit(enchantment): all 17 units, 12 gaps
 - `c3c9f8de` audit(event): batch 1/5 — 13 units, 8 gaps
 - `53b54670` audit(event): batch 2/5 — 7 units, 5 gaps
+- `4432d5e1` docs(audit): stream 4 report (first cut)
+- (this commit) audit(event): batch 3 — 9 units, 7 gaps
 
 **The enchantment kind is complete — the status report's first `unaudited 0`
-row.** The event kind is 20/65; the residual queue is at the bottom of this
+row.** The event kind is 29/65; the residual queue is at the bottom of this
 file, with the shared machinery already established so a follow-up session is
 mostly per-unit mapping.
 
@@ -143,6 +145,23 @@ the pick independent of the pile's incidental order. `actmap.stable_shuffle`
 `battleworn_dummy` Setting2 (bare `shuffle`). `fake_merchant`'s stock roll is
 `UnstableShuffle` in the source, so its shape is right and only EV-3 applies.
 
+### EV-6 — `CreateForReward` replaced by `GetForCombat`
+
+Several events call `CardFactory.CreateForReward(owner, n,
+CardCreationOptions.ForNonCombatWithDefaultOdds(pool, filter))`; the sim uses
+`random_pool_cards` (`cards/pool.py:136-161`), whose own docstring says it
+"Mirrors CardFactory.GetForCombat (uniform, with replacement)" — the in-combat
+generator behind Infernal Blade and Stoke. The sim **has** a faithful
+`CreateForReward` port: `rewards.create_reward_cards` (`rewards.py:235-275`),
+which does the rarity roll with escalation, the act-scaled upgrade draw, the
+distinct constraint, the `GetUnlockedCards` reward pool and the per-player
+Rewards stream — and `brain_leech` already uses it for this exact shape.
+
+Three observables at every wrong site: no rarity odds (Rares appear at pool
+frequency), no upgrade draw, and the wrong stream. Sites: `infested_automaton`
+STUDY and TOUCH_CORE, `endless_conveyor` FRIED_EEL (which also gets the *pool*
+wrong — see below).
+
 ### Unit-level gaps
 
 - **`endless_conveyor` FRIED_EEL** rolls the CHARACTER pool where C# rolls the
@@ -163,6 +182,19 @@ the pick independent of the pile's incidental order. `actmap.stable_shuffle`
   is wider than strictly required. Keeping the id in the pool is correct and
   costs no stream draws.
 - **`brain_leech` RIP** force-takes a card (EV-4's first site).
+- **`orobas` skips an RNG draw on the locked path.** `Orobas.cs:54-56` puts the
+  null-onChosen `OPTION_POOL_3_LOCKED` option *into* the list and then calls
+  `NextItem(OptionPool3)` unconditionally, so the game takes a draw over a
+  one-element list. `events/orobas.py:76-81` branches instead and never calls
+  `pick`, so the sim takes **one fewer draw** off the event stream. The offered
+  options are identical, so this is invisible in legacy mode and desyncs the
+  event stream in parity mode. LIVE for parity — the both-gates-fail state is
+  ordinary run state.
+- **`neow`'s run-modifier branch is unported** (`Neow.cs:116-129` plus
+  `OnModifierOptionSelected` and the `InitialDescription` swap). Under rule 1
+  that is a gap, not a waiver. **Dormant**, with the concrete unported thing
+  named: `ModifierModel` has no sim port at all, so `RunState.Modifiers` is
+  permanently empty and Neow always takes the relic branch.
 - **`hungry_for_mushrooms`**: BigMushroom's +20 Max HP pickup effect lives on
   the **event** instead of the relic, while its twin FragrantMushroom does it
   correctly via `after_obtained`. **Dormant** — verified by grep that the event
@@ -340,15 +372,17 @@ case-insensitive filesystem; the class is `Bugslayer` and the mapping is correct
    grant path exists (`enchantment_probes.py grants`) turns 17 reachability
    claims from assertions into evidence. Worth naming in the procedure.
 
-## Residual queue — 45 events
+## Residual queue — 36 events
 
-The shared machinery is done: EV-1…EV-5, the two heal verbs, the deck verbs, the
+The shared machinery is done: EV-1…EV-6, the two heal verbs, the deck verbs, the
 blast-radius tables and both probe modules are in place, so the remaining work
 is per-unit mapping against known mechanisms.
 
-Batch 3 (13): `infested_automaton`, `jungle_maze_adventure`, `lost_wisp`,
-`luminous_choir`, `morphic_grove`, `neow`, `nonupeipe`, `orobas`, `pael`,
+Batch 3 is **partly done** — `infested_automaton`, `jungle_maze_adventure`,
+`lost_wisp`, `luminous_choir`, `morphic_grove` and the four Ancients (`neow`,
+`nonupeipe`, `orobas`, `pael`) are audited. Still open from it (4):
 `potion_courier`, `punch_off`, `ranwid_the_elder`, `reflections`.
+
 Batch 4 (13): `relic_trader`, `room_full_of_cheese`, `round_tea_party`,
 `sapphire_seed`, `self_help_book`, `slippery_bridge`, `spiraling_whirlpool`,
 `spirit_grafter`, `stone_of_all_time`, `sunken_statue`, `sunken_treasury`,
@@ -367,7 +401,13 @@ Known leads not yet audited:
   gap shape.
 - The six events with a parity RNG branch (`neow`, `orobas`, `pael`,
   `tablet_of_truth`, `tezcatara`, `whispering_hollow`) are the ones EV-3 does
-  **not** apply to — check the branch, do not assume it.
+  **not** apply to — check the branch, do not assume it. Four are now audited
+  and three were clean; `orobas` was not, and its defect was a **missing** draw
+  rather than a wrong stream. When auditing the remaining two, count the draws
+  on every path, including the ones that offer a locked option.
+- `nonupeipe`, `orobas` and `pael` are worked examples of the Ancient shape
+  (`events/ancient.py`'s inherited full heal and `_relic_option`); `tanx`,
+  `tezcatara` and `vakuu` are the same shape.
 - `punch_off` and `the_lantern_key` both declare `CanonicalEncounter` and attach
   `pending_reward_extras`; `battleworn_dummy` and `fake_merchant` are the worked
   examples for that shape.

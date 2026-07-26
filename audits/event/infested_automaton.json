@@ -1,0 +1,46 @@
+{
+  "unit": "event/infested_automaton",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\InfestedAutomaton.cs",
+    "sha256": "4ad1a8b6be3f4fd38bf39c03a53e03a6d102fa7ace82684eb751a3da7767a62f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\infested_automaton.py",
+    "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b"
+  },
+  "hooks": {},
+  "guards": [
+    {
+      "what": "both branches are single-card grants into the deck with the same shape: build CardCreationOptions over the CHARACTER pool with a predicate, CreateForReward(1), null-guard, then CardPileCmd.Add(card, PileType.Deck) (InfestedAutomaton.cs:28-52)",
+      "maps_to": "events/infested_automaton.py:27-39. The pool is right (the sim's default is IRONCLAD_POOL, cards/pool.py:141), the null guard is reproduced (`for card in ...` over a possibly-empty list, and `if candidates:`), and run.add_card runs the deck-entry hooks CardPileCmd.Add runs (run.py:341-354) -- so the egg relics upgrade the grant in both. CanonicalVars is Array.Empty, so there are no constants to check.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "STUDY's predicate `c.Type == CardType.Power` (InfestedAutomaton.cs:30)",
+      "maps_to": "events/infested_automaton.py:28 passes CardType.POWER to random_pool_cards, which filters through pool_card_ids(card_type) (cards/pool.py:152). Same predicate.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "TOUCH_CORE's predicate `EnergyCost != null && EnergyCost.Canonical == 0 && !EnergyCost.CostsX` (InfestedAutomaton.cs:41-45)",
+      "maps_to": "events/infested_automaton.py:33-36 `make_card(cid).energy_cost == 0 and not make_card(cid).energy_cost_x`. Reading `energy_cost` off a FRESHLY constructed card is the Canonical value -- no cost modifier has been applied to it -- so the two predicates select the same set. The C# null-check has no analogue because a sim Card always has an int cost.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "TOUCH_CORE's `CardCreationFlags.NoCardPoolModifications` (InfestedAutomaton.cs:45), which STUDY does NOT set",
+      "maps_to": "neither branch of the sim runs a pool-modification hook at all -- random_pool_cards takes the static pool (cards/pool.py:152). For TOUCH_CORE that matches the flag exactly. For STUDY the flag is absent in the source, so a pool-modifying hook WOULD apply there; no ported relic implements one (`grep -rn modify_card_pool sts2_rl` returns nothing), so the asymmetry is currently unobservable and is recorded here so a future pool-modifier port is caught.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-6: both InfestedAutomaton branches (InfestedAutomaton.cs:31, 46) calls `CardFactory.CreateForReward(owner, n, CardCreationOptions.ForNonCombatWithDefaultOdds(pool, filter))`; the sim uses `random_pool_cards` (cards/pool.py:136-161), which is the port of a DIFFERENT factory",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-6, one verdict at every site (rule 3). `random_pool_cards`' own docstring says what it is: \"Mirrors CardFactory.GetForCombat (uniform, with replacement)\" (cards/pool.py:146-147) -- the in-combat generator used by Infernal Blade and Stoke. `CreateForReward` is a different function and the sim HAS a faithful port of it: `rewards.create_reward_cards` (rewards.py:235-275), which does the rarity roll with escalation, the act-scaled upgrade draw, the distinct-card constraint, the `GetUnlockedCards` reward pool, and draws on `run.rewards_rng` -- the per-player Rewards stream (rewards.py:255-257). Three observables where GetForCombat is used instead: (1) NO RARITY ODDS -- every card in the pool is equally likely, so Rares appear at pool frequency instead of the non-combat default odds; (2) NO UPGRADE DRAW -- the act-scaled chance for the offered card to arrive upgraded is never rolled; (3) the wrong stream (compounds EV-3). The sibling site events/brain_leech.py:44-47, 60-64 already calls `create_reward_cards` for exactly this shape, so this is an inconsistency inside the sim, not a missing capability. LIVE at every site listed -- all are ordinary event branches."
+    },
+    {
+      "what": "EV-3: TOUCH_CORE's uniform pick (events/infested_automaton.py:38) and STUDY's (via random_pool_cards' rng argument); the source draws these on the per-player Rewards stream inside CreateForReward rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
