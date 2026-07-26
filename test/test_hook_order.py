@@ -453,3 +453,408 @@ class TestCreatureCardCmdsOrder:
                     if o.key == "REST")
         rest.on_chosen()
         assert run.max_hp == before_max + 5  # C#: Stone Humidifier fires
+
+
+class TestTurnStructureOrder:
+    """turn_structure audit (docs/audit/seams/turn_structure.md,
+    audits/seam/turn_structure.json): pins the whole end_turn hook pipeline
+    plus the seam's eight pinnable live gaps."""
+
+    # Every turn-lifecycle hook one CombatState.end_turn touches, in the
+    # order the sim fires them. Deliberately excludes the damage-pipeline
+    # hooks the enemy's attack runs through (damage_pipeline's seam) and
+    # on_shuffle (creature_card_cmds').
+    TURN_HOOKS = [
+        "should_take_extra_turn", "on_player_turn_end",
+        "should_ethereal_trigger", "on_card_exhausted", "should_flush_hand",
+        "on_card_discarded", "on_hand_emptied", "after_player_turn_end",
+        "should_clear_block", "on_block_cleared", "on_enemy_turn_start",
+        "on_enemy_turn_end", "on_enemy_side_end", "modify_max_energy",
+        "should_reset_energy", "on_energy_reset", "on_player_turn_start",
+        "modify_hand_draw", "should_draw", "on_card_drawn",
+        "on_player_turn_started",
+    ]
+
+    def test_end_turn_hook_sequence(self):
+        """The complete ordered turn pipeline, spec steps 42-74 then 5-29
+        (CombatManager.cs). Reading the assertion top to bottom:
+
+        - the extra-turn predicate is consulted FIRST (spec step 65 puts it
+          LAST, in SwitchFromPlayerToEnemySide -- gap G3);
+        - Hook.BeforeTurnEnd (step 48) -> DoTurnEnd's ethereal pass (step 53,
+          Dazed) -> the turn-end-in-hand effect and its discard (step 54,
+          Burn) -> ShouldFlush (step 61) -> the flush (step 62) -> the
+          player-side Hook.AfterTurnEnd (step 64, the Parrying Shield slot,
+          AFTER the flush);
+        - the enemy side (steps 30-39): block clear, per-enemy turn start,
+          per-enemy turn end, then ONE side-end (where Vulnerable/Weak/Frail
+          tick, step 39);
+        - the next player turn's setup (steps 12-23): block clear -> energy
+          (modify_max_energy, ShouldPlayerResetEnergy, AfterEnergyReset) ->
+          BeforeHandDraw -> ModifyHandDraw -> the 5-card draw ->
+          AfterPlayerTurnStart.
+
+        The hand is seeded so the ethereal pass and the turn-end-in-hand pass
+        are both exercised: Dazed is Ethereal with no turn-end effect, Burn
+        has a turn-end effect, Strike is an ordinary card that flushes."""
+        cs = fresh()
+        p = cs.player
+        p.hand.clear()
+        p.hand.extend([make_card("dazed"), make_card("burn"),
+                       make_card("strike")])
+        p.block = 7                      # absorbs Burn, so nobody dies
+        cs.enemies[0].block = 5          # so the enemy's clear is visible
+        p.draw_pile.clear()
+        p.discard_pile.clear()
+        p.draw_pile.extend([make_card("strike") for _ in range(8)])
+        calls = trace(cs.hooks, self.TURN_HOOKS)
+        cs.end_turn()
+        assert calls == [
+            # --- the player's end of turn -------------------------------
+            "should_take_extra_turn",     # step 65 (sim runs it first: G3)
+            "on_player_turn_end",         # step 48  Hook.BeforeTurnEnd
+            "should_ethereal_trigger",    # step 52  hand partition (Dazed)
+            "on_card_exhausted",          # step 53  ethereal pass
+            "on_card_discarded",          # step 54  Burn -> Discard
+            "should_flush_hand",          # step 61  Hook.ShouldFlush
+            "on_card_discarded",          # step 62  the flush (Strike)
+            "on_hand_emptied",            # (sim-only here -- gap G16)
+            "after_player_turn_end",      # step 64  Hook.AfterTurnEnd
+            # --- the enemy side -----------------------------------------
+            "should_clear_block",         # step 13  the enemy's clear
+            "on_block_cleared",           # step 14
+            "on_enemy_turn_start",        # (sim-only per-enemy -- gap G5)
+            "on_enemy_turn_end",          # (sim-only per-enemy -- gap G5)
+            "on_enemy_side_end",          # step 39  V/W/F tick down here
+            # --- the next player turn's setup ---------------------------
+            "should_clear_block",         # step 13  the player's clear
+            "on_block_cleared",           # step 14
+            "modify_max_energy",          # step 17  Hook.ModifyMaxEnergy
+            "should_reset_energy",        # step 17  ShouldPlayerResetEnergy
+            "on_energy_reset",            # step 18  Hook.AfterEnergyReset
+            "on_player_turn_start",       # step 19  Hook.BeforeHandDraw
+            "modify_hand_draw",           # step 20  Hook.ModifyHandDraw
+            "should_draw", "on_card_drawn",
+            "should_draw", "on_card_drawn",
+            "should_draw", "on_card_drawn",
+            "should_draw", "on_card_drawn",
+            "should_draw", "on_card_drawn",   # step 22  the 5-card draw
+            "on_player_turn_started",     # steps 22/23 AfterPlayerTurnStart
+        ]
+
+    def test_enemy_side_is_interleaved_per_enemy(self):
+        """Gap G5, pinned as a PASSING trace of the sim's current (divergent)
+        order so that fixing it has to come here and change this deliberately.
+        C# runs three complete passes over every participant before any enemy
+        acts (BeforeTurnStart 449-455, AfterTurnStart/ClearBlock 492-499,
+        AfterBlockCleared 500-507), then ONE Hook.AfterSideTurnStart (522),
+        then the moves (1072-1090), then ONE Hook.BeforeTurnEnd (1251) and ONE
+        Hook.AfterTurnEnd (1256) -- i.e. [clear1, clear2, cleared1, cleared2,
+        SideTurnStart, move1, move2, BeforeTurnEnd, AfterTurnEnd]. The sim
+        brackets each enemy individually and has no side-start slot at all."""
+        from sts2_rl.monsters import Encounter, FuzzyWurmCrawler
+
+        cs = CombatState(
+            rng=random.Random(0),
+            encounter=Encounter(id="two_crawlers",
+                                monster_classes=[FuzzyWurmCrawler,
+                                                 FuzzyWurmCrawler]),
+        )
+        for e in cs.enemies:
+            e.block = 5
+        calls = trace(cs.hooks, ["should_clear_block", "on_block_cleared",
+                                 "on_enemy_turn_start", "on_enemy_turn_end",
+                                 "on_enemy_side_end"])
+        cs._run_enemy_turns()
+        assert calls == [
+            "should_clear_block", "on_block_cleared",
+            "on_enemy_turn_start", "on_enemy_turn_end",
+            "should_clear_block", "on_block_cleared",
+            "on_enemy_turn_start", "on_enemy_turn_end",
+            "on_enemy_side_end",
+        ]
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G1 (audits/seam/turn_structure.json, "
+               "spec step 14): C# runs the block clear and its event in TWO "
+               "separate loops -- `foreach (item3 in creaturesStartingTurn) "
+               "await item3.AfterTurnStart(side)` (CombatManager.cs:492-499) "
+               "then `foreach (item4 in creaturesStartingTurn) await "
+               "Hook.AfterBlockCleared(_state, item4)` (500-507) -- so "
+               "AfterBlockCleared fires for EVERY participant, including one "
+               "whose clear a ShouldClearBlock listener prevented. The sim "
+               "fuses them: player.py:157-159 fires on_block_cleared only "
+               "inside the `if should_clear_block(...)` arm (and "
+               "combat.py:296-298 additionally gates the enemy arm on "
+               "`enemy.block > 0`). LIVE: BarricadePower is a ported Ironclad "
+               "Rare Power card (cards/barricade_card.py:33-34, powers.py:140) "
+               "returning false from ShouldClearBlock "
+               "(BarricadePower.cs), and Horn Cleat is a ported Uncommon relic "
+               "listening on AfterBlockCleared (HornCleat.cs:20-27, "
+               "relics/horn_cleat.py:19-22) -- so the real game still grants "
+               "the turn-2 block behind Barricade and the sim grants nothing. "
+               "Sturdy Clamp and Captain's Wheel are the same shape, and "
+               "Anchor/Fake Anchor are caught by it because gap G6 forced them "
+               "onto this hook.",
+        strict=True,
+    )
+    def test_block_clear_event_fires_even_when_prevented(self):
+        from sts2_rl.powers import BarricadePower
+
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("horn_cleat")])
+        PowerCmd.apply(cs.hooks, cs.player, BarricadePower, 1,
+                       applier=cs.player)
+        cs.end_turn()
+        assert cs.turn == 2
+        assert cs.player.block == 14  # C#: Horn Cleat fires anyway
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G2 (audits/seam/turn_structure.json, "
+               "spec step 13): Creature.ClearBlock passes the vetoing listener "
+               "out of Hook.ShouldClearBlock and fires "
+               "Hook.AfterPreventingBlockClear(preventer, creature) on the "
+               "else-arm (Creature.cs:718-728); SturdyClamp.cs:31-46 caps the "
+               "retained block at 10 there and early-returns unless `this == "
+               "preventer`. sts2_rl/hooks.py has no such hook and no preventer "
+               "concept, so relics/sturdy_clamp.py:27-30 caps from "
+               "on_player_turn_start UNCONDITIONALLY. LIVE and proven: "
+               "Hook.ShouldClearBlock returns the FIRST vetoing listener "
+               "(Hook.cs:2193-2204) and CombatState.IterateHookListeners walks "
+               "each creature's POWERS before that player's RELICS "
+               "(CombatState.cs:412-435), so with Barricade (a ported Ironclad "
+               "card) and Sturdy Clamp (a ported Rare relic) both held the "
+               "preventer is BarricadePower and Sturdy Clamp's cap never runs "
+               "-- the real game keeps the whole retained block where the sim "
+               "trims it to 10.",
+        strict=True,
+    )
+    def test_sturdy_clamp_does_not_cap_when_it_is_not_the_preventer(self):
+        from sts2_rl.powers import BarricadePower
+
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("sturdy_clamp")])
+        PowerCmd.apply(cs.hooks, cs.player, BarricadePower, 1,
+                       applier=cs.player)
+        cs.player.block = 30
+        cs.player.start_turn()
+        assert cs.player.block == 30  # C#: Barricade is the preventer
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G3 (audits/seam/turn_structure.json, "
+               "spec step 65): combat.py:648-652 tests should_take_extra_turn "
+               "at the TOP of end_turn and, on success, runs only "
+               "on_extra_turn, `turn += 1` and start_turn(). C# evaluates "
+               "Hook.ShouldTakeExtraTurn in SwitchFromPlayerToEnemySide "
+               "(CombatManager.cs:1360-1373), i.e. AFTER "
+               "EndPlayerTurnPhaseOneInternal (auto-post-play, BeforeTurnEnd, "
+               "DoTurnEnd, BeforeFlush) and AFTER EndPlayerTurnPhaseTwoInternal "
+               "(FlushPlayerHand, AfterFlush, EndOfTurnCleanup, AfterTurnEnd); "
+               "only the ENEMY SIDE is skipped. LIVE: Pael's Eye is a ported "
+               "Ancient relic granted by the Pael shrine (events/pael.py:53, "
+               "PaelsEye.cs:108-137, relics/paels_eye.py:36-47), and the sim "
+               "has dozens of on_player_turn_end listeners plus Parrying "
+               "Shield on after_player_turn_end -- every one of which the "
+               "real game still runs on an extra-turn round.",
+        strict=True,
+    )
+    def test_extra_turn_still_runs_the_turn_end_pipeline(self):
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("paels_eye")])
+        calls = trace(cs.hooks, ["should_take_extra_turn", "on_extra_turn",
+                                 "on_player_turn_end", "should_flush_hand",
+                                 "after_player_turn_end"])
+        cs.end_turn()
+        assert calls == [
+            "should_take_extra_turn",
+            "on_player_turn_end",     # C#: Hook.BeforeTurnEnd still runs
+            "should_flush_hand",      # C#: FlushPlayerHand still runs
+            "after_player_turn_end",  # C#: Hook.AfterTurnEnd still runs
+            "on_extra_turn",          # C#: AfterTakingExtraTurn, last
+        ]
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G4 (audits/seam/turn_structure.json, "
+               "spec steps 61-63): C#'s FlushPlayerHand treats ShouldFlush == "
+               "false as 'every card is retained' and STILL runs "
+               "Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup "
+               "unconditionally (CombatManager.cs:1327-1346). The sim gates "
+               "the whole thing -- `if self.hooks.should_flush_hand(): "
+               "self.player.discard_hand()` (combat.py:661-662) -- so a false "
+               "result also skips on_hand_emptied, which player.py:197 fires "
+               "from inside discard_hand. LIVE through Joss Paper: its port "
+               "defers Ethereal-caused exhausts and credits them from "
+               "on_hand_emptied (relics/joss_paper.py:41-45), where the real "
+               "Joss Paper credits them from AfterSideTurnEnd "
+               "(JossPaper.cs:116), which fires whatever ShouldFlush returned. "
+               "With Runic Pyramid (ported Ancient relic from the Darv shrine, "
+               "events/darv.py:33, relics/runic_pyramid.py:16-17) the sim "
+               "strands the credit forever and the Joss Paper draw never "
+               "happens. See also gap G16 for the on_hand_emptied site itself.",
+        strict=True,
+    )
+    def test_no_flush_still_credits_the_end_of_turn_hand_events(self):
+        cs = CombatState(rng=random.Random(1),
+                         relics=[make_relic("joss_paper"),
+                                 make_relic("runic_pyramid")])
+        p = cs.player
+        p.hand.clear()
+        p.hand.extend([make_card("dazed") for _ in range(5)])  # 5 Ethereal
+        p.draw_pile.clear()
+        p.discard_pile.clear()
+        p.draw_pile.extend([make_card("strike") for _ in range(20)])
+        cs.end_turn()
+        # C#: the 5 ethereal exhausts are credited at the player's turn end,
+        # Joss Paper draws its 1 card, and the next hand is 5 + 1.
+        assert len(p.hand) == 6
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G6 (audits/seam/turn_structure.json, "
+               "spec step 12): Creature.AfterTurnStart returns BEFORE "
+               "ClearBlock for a player whose PlayerCombatState.TurnNumber == "
+               "1 (Creature.cs:681-692) -- which is what lets "
+               "Hook.BeforeCombatStart grant block that survives into the "
+               "first enemy turn. player.py:157-159 has no turn-1 arm. LIVE "
+               "and already load-bearing: Anchor's real hook is "
+               "BeforeCombatStart (Anchor.cs:19-23) and the sim had to re-wire "
+               "it onto on_block_cleared to compensate "
+               "(relics/anchor.py:21-24, whose docstring says so outright), as "
+               "did Fake Anchor (relics/fake_anchor.py:24-29) -- and that "
+               "workaround is what makes gap G1 bite both of them.",
+        strict=True,
+    )
+    def test_player_block_is_not_cleared_on_turn_one(self):
+        cs = fresh()
+        cs.player.block = 10
+        # PlayerCombatState._first_turn is the sim's TurnNumber == 1 marker;
+        # CombatState.__init__ already consumed it at combat.py:209.
+        cs.player._first_turn = True
+        cs.player.start_turn()
+        assert cs.player.block == 10  # C#: turn 1 never clears
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G8 (audits/seam/turn_structure.json, "
+               "spec step 47): C# gives end-of-turn auto-plays their own "
+               "phase -- Phase = AutoPostPlay, "
+               "Hook.AfterAutoPostPlayPhaseEntered, Phase = End -- entered "
+               "strictly BEFORE Hook.BeforeTurnEnd "
+               "(CombatManager.cs:1160-1180). The sim has neither the phase "
+               "nor the hook, so StampedePower's port fires from "
+               "on_player_turn_end (powers.py:1025), the sim's BeforeTurnEnd "
+               "slot, and lands in listener-registration order. LIVE: "
+               "StampedePower and Cloak Clasp (a ported Rare relic gaining 1 "
+               "Block per card in hand from plain BeforeSideTurnEnd, "
+               "CloakClasp.cs:24, relics/cloak_clasp.py:19-24) contend "
+               "directly -- the real game ALWAYS auto-plays first and lets "
+               "Cloak Clasp count the reduced hand, while the sim registers "
+               "relics before powers and counts the full one. The ported Howl "
+               "From Beyond card (cards/howl_from_beyond.py:45) is the same "
+               "shape.",
+        strict=True,
+    )
+    def test_end_of_turn_auto_plays_run_before_turn_end_hooks(self):
+        from sts2_rl.powers import StampedePower
+
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("cloak_clasp")])
+        PowerCmd.apply(cs.hooks, cs.player, StampedePower, 2,
+                       applier=cs.player)
+        assert len(cs.player.hand) == 5
+        # combat.py:654 -- the sim's Hook.BeforeTurnEnd slot.
+        cs.hooks.on_player_turn_end(cs.player)
+        # C#: Stampede's 2 auto-plays land in AutoPostPlay first, so Cloak
+        # Clasp counts the 3 cards left.
+        assert cs.player.block == 3
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G12 (audits/seam/turn_structure.json, "
+               "spec step 48): Hook.BeforeTurnEnd runs THREE complete listener "
+               "passes in order -- BeforeSideTurnEndVeryEarly, then "
+               "BeforeSideTurnEndEarly, then BeforeSideTurnEnd "
+               "(Hook.cs:1238-1261) -- and Orichalcum depends on it: "
+               "BeforeSideTurnEndVeryEarly snapshots `Block > 0` into "
+               "ShouldTrigger (Orichalcum.cs:44-56) and BeforeSideTurnEnd then "
+               "grants the 6 Block. The sim's hooks.on_player_turn_end "
+               "(hooks.py:297-301) is a single listener walk, so "
+               "relics/orichalcum.py:22-26 reads `player.block == 0` at "
+               "whatever point registration order puts it. LIVE: Cloak Clasp "
+               "is a ported Rare relic granting 1 Block per card in hand from "
+               "plain BeforeSideTurnEnd (CloakClasp.cs:24, "
+               "relics/cloak_clasp.py:19-24), so acquiring it before "
+               "Orichalcum silently switches Orichalcum off; the real game "
+               "always grants both. Fake Orichalcum and Ripple Basin are the "
+               "same shape, as are the ported SandpitPower "
+               "(AfterSideTurnStartLate) and DisintegrationPower "
+               "(AfterSideTurnEndLate).",
+        strict=True,
+    )
+    def test_orichalcum_snapshots_block_before_other_turn_end_listeners(self):
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("cloak_clasp"),
+                                 make_relic("orichalcum")])
+        hand = len(cs.player.hand)
+        assert cs.player.block == 0
+        cs.hooks.on_player_turn_end(cs.player)
+        # C#: Orichalcum latched "no block" before Cloak Clasp ran.
+        assert cs.player.block == hand + 6
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G13 (audits/seam/turn_structure.json, "
+               "spec step 27): CombatManager.cs:573 runs `await "
+               "CheckWinCondition()` immediately after SetupPlayerTurn (which "
+               "ends with Hook.AfterPlayerTurnStart at 675) and after the "
+               "auto-pre-play phase. The sim's turn-1 setup -- "
+               "`self.hooks.on_combat_start(); self.player.start_turn()` at "
+               "combat.py:208-209 -- is followed by NOTHING; the only "
+               "post-setup check is combat.py:681-685, on the end_turn path. "
+               "LIVE: Royal Poison is a ported Event relic from the Round Tea "
+               "Party event (events/round_tea_party.py:40) that deals 4 "
+               "unblockable HP loss on turn 1 (RoyalPoison.cs:18-25 -> "
+               "relics/royal_poison.py:25-31), so entering a combat at 4 HP or "
+               "less leaves the sim in Phase.PLAYER_TURN with a dead player "
+               "and a full hand of legal actions, where the real game "
+               "processes the pending loss on the spot. Festive Popper and "
+               "Mercury Hourglass already hand-roll a `_check_win()` call for "
+               "the all-enemies-dead half of the same missing check; neither "
+               "covers player death.",
+        strict=True,
+    )
+    def test_turn_one_setup_death_ends_the_combat(self):
+        cs = CombatState(rng=random.Random(0),
+                         relics=[make_relic("royal_poison")],
+                         current_hp=4, max_hp=80)
+        assert cs.player.is_dead      # the 4 HP loss landed
+        assert cs.is_over             # C#: CheckWinCondition ends it here
+
+    @pytest.mark.xfail(
+        reason="turn_structure audit gap G14 (audits/seam/turn_structure.json, "
+               "spec step 21): on turn 1 CombatManager.cs:657-672 runs TWO "
+               "pile moves before the draw -- every card whose enchantment "
+               "sets ShouldStartAtBottomOfDrawPile goes to the BOTTOM, then "
+               "every Innate card not already moved goes to the TOP. "
+               "player.py:172-182 ports only the Innate half. LIVE: "
+               "ShouldStartAtBottomOfDrawPile has exactly one implementer in "
+               "the whole decompiled game, Imbued.cs:11, and Imbued is ported "
+               "(enchantments.py:243-267) and obtainable -- Electric Shrymp is "
+               "a ported relic that enchants a deck Skill with it "
+               "(relics/electric_shrymp.py:17-21). The bottom-move exists so "
+               "the self-auto-playing Imbued card does not occupy an "
+               "opening-hand slot; without it the sim draws it like any other "
+               "card and the opening hand is one card short (observed on 17 of "
+               "30 seeds with a 9-Strike + 1-Imbued-Defend deck). Knock-on: "
+               "the sim's Imbued only fires `if self.card in player.hand` "
+               "(enchantments.py:261-266), so on the seeds where it is NOT "
+               "drawn the sim never auto-plays it at all.",
+        strict=True,
+    )
+    def test_imbued_card_starts_at_the_bottom_of_the_draw_pile(self):
+        from sts2_rl.enchantments import make_enchantment
+
+        deck = [make_card("strike") for _ in range(9)]
+        imbued = make_card("defend")
+        make_enchantment("imbued").attach(imbued)
+        deck.append(imbued)
+        cs = CombatState(starting_deck=deck, rng=random.Random(0))
+        # C#: Imbued sat at the bottom, so all 5 drawn cards are Strikes and
+        # the auto-play comes out of the draw pile.
+        assert len(cs.player.hand) == 5

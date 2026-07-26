@@ -232,8 +232,70 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "sts2_rl/combat.py", "sts2_rl/hooks.py"],
     ),
     "turn_structure": (
-        ["src/Core/Combat/CombatManager.cs", "src/Core/Combat/PlayerTurnPhase.cs"],
-        ["sts2_rl/combat.py", "sts2_rl/player.py"],
+        # CombatManager.cs is the turn driver, but PlayerTurnPhase.cs is a bare
+        # enum and every other file the ordering spec rests on was missing.
+        # Added on the game side (Task 8 Step A):
+        #  - CombatState.cs: CurrentSide / RoundNumber / CreaturesOnCurrentSide /
+        #    Enemies / IsLiveCombat, the side accessors every StartTurn branch
+        #    reads.
+        #  - Creature.cs: the per-creature turn verbs CombatManager calls —
+        #    BeforeTurnStart (673-679), AfterTurnStart (681-692, the turn-1
+        #    block-clear skip), ClearBlock (718-728), OnSideSwitch (694-704),
+        #    TakeTurn (706-716), PrepareForNextTurn (546-554), IsPrimaryEnemy
+        #    (252-263). Split by method against creature_card_cmds — see the
+        #    scope-boundary section of docs/audit/seams/turn_structure.md.
+        #  - PlayerCombatState.cs: TurnNumber/IncrementTurnNumber, ResetEnergy /
+        #    AddMaxEnergyToCurrent, EndOfTurnCleanup, Phase.
+        #  - CardModel.cs: OnTurnEndInHandWrapper (1682-1698) and the per-turn
+        #    card reset EndOfTurnCleanup (1610-1623).
+        #  - MonsterModel.cs: PerformMove / SpawnedThisTurn / OnSideSwitch /
+        #    RollMove — the enemy half of the turn loop (move SELECTION is
+        #    Task 10's).
+        #  - Hook.cs: the turn dispatchers (BeforeTurnEnd 1238-1261, AfterTurnEnd
+        #    1265-1291, BeforeSideTurnStart 1144-1159, AfterSideTurnStart
+        #    1163-1175, AfterBlockCleared 119-125, ShouldClearBlock 2193-...).
+        #    Claimed by method against damage_pipeline / power_cmd /
+        #    creature_card_cmds / hook_dispatch — see the doc's boundary section.
+        #  - PowerCmd.cs: TickDownDuration (190-200), the duration-tick verb the
+        #    seed fact's V/W/F tick runs through. power_cmd owns the SET site of
+        #    SkipNextDurationTick (PowerCmd.cs:146); this record owns the
+        #    consume site only.
+        #  - WeakPower.cs / VulnerablePower.cs / FrailPower.cs: the three
+        #    AfterSideTurnEnd(side == Enemy) callers that make the tick an
+        #    enemy-side-end event, which is what the sim's on_enemy_side_end
+        #    maps to.
+        #  - SturdyClamp.cs / HornCleat.cs / CaptainsWheel.cs / Anchor.cs:
+        #    load-bearing witnesses for gap G1 (the unconditional
+        #    AfterBlockCleared loop) — a preventer and three listeners.
+        #  - PaelsEye.cs / RunicPyramid.cs: the ported ShouldTakeExtraTurn and
+        #    ShouldFlush implementations that make gaps G3 and G4 live.
+        # Sim side: combat.py + player.py cover under half the seam — hooks.py
+        # holds the turn dispatchers (and the missing ones), creatures.py the
+        # is_gone/retained_after_death win-condition inputs, monsters/base.py
+        # take_turn/telegraph_next_move, powers.py the _tick_duration sites,
+        # cards/base.py reset_turn_cost_modifiers, and the six relic modules the
+        # live gaps' sim halves.
+        ["src/Core/Combat/CombatManager.cs", "src/Core/Combat/PlayerTurnPhase.cs",
+         "src/Core/Combat/CombatState.cs",
+         "src/Core/Entities/Creatures/Creature.cs",
+         "src/Core/Entities/Players/PlayerCombatState.cs",
+         "src/Core/Models/CardModel.cs", "src/Core/Models/MonsterModel.cs",
+         "src/Core/Hooks/Hook.cs", "src/Core/Commands/PowerCmd.cs",
+         "src/Core/Models/Powers/WeakPower.cs",
+         "src/Core/Models/Powers/VulnerablePower.cs",
+         "src/Core/Models/Powers/FrailPower.cs",
+         "src/Core/Models/Relics/SturdyClamp.cs",
+         "src/Core/Models/Relics/HornCleat.cs",
+         "src/Core/Models/Relics/CaptainsWheel.cs",
+         "src/Core/Models/Relics/Anchor.cs",
+         "src/Core/Models/Relics/PaelsEye.cs",
+         "src/Core/Models/Relics/RunicPyramid.cs"],
+        ["sts2_rl/combat.py", "sts2_rl/player.py", "sts2_rl/hooks.py",
+         "sts2_rl/creatures.py", "sts2_rl/monsters/base.py",
+         "sts2_rl/powers.py", "sts2_rl/cards/base.py",
+         "sts2_rl/relics/sturdy_clamp.py", "sts2_rl/relics/horn_cleat.py",
+         "sts2_rl/relics/captains_wheel.py", "sts2_rl/relics/anchor.py",
+         "sts2_rl/relics/paels_eye.py", "sts2_rl/relics/runic_pyramid.py"],
     ),
     "hook_dispatch": (
         ["src/Core/Hooks/Hook.cs", "src/Core/Models/AbstractModel.cs"],
