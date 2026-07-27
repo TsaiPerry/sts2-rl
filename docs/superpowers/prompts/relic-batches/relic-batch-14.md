@@ -26,8 +26,8 @@ GAME SOURCE (**READ-ONLY**): `c:\Users\Perry\Desktop\Slay the Spire 2`
 1. `docs/superpowers/prompts/_shared-audit-contract.md` — your binding
    contract: operational rules, the EIGHT BINDING VERDICT RULES, file
    ownership, the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` (**v5**) — the versioned instruction sheet and the
-   23-item bug-class checklist. Check EVERY class against EVERY unit.
+2. `tools/audit/PROMPT.md` (**v6**) — the versioned instruction sheet and the
+   29-item bug-class checklist. Check EVERY class against EVERY unit.
 3. `.superpowers/sdd/content-relic-sweeps.md` — five pool-wide sweeps already
    ran across all 258 relics. **Units in your batch that they diagnosed are
    listed below; read their sweep section before auditing them so you confirm

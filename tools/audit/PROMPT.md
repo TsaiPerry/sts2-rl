@@ -1,4 +1,39 @@
-# Audit prompt — source-to-sim unit audits (v5)
+# Audit prompt — source-to-sim unit audits (v6)
+
+> **v6 (2026-07-26, after relic batches 9–13):** bug classes 24–29 added, each
+> from a defect a batch actually exhibited. Three binding items:
+>
+> **1. A POOL-WIDE SWEEP MAY ESCALATE A CANDIDATE. IT MAY NEVER CLEAR ONE.**
+> Ten batches used the relic sweeps and **eight distinct defects** came back —
+> six in sweep A, one in B, one in C. Every one was found by a batch auditing a
+> unit on its merits; none by reviewing the tooling. **Three produced false
+> clears**, the direction nothing downstream re-checks: an unstimulated execution
+> driver cleared `red_skull`, whose un-reset flag makes combat 2 open with
+> **Strength −3**; an incomplete C# hook census cleared `permafrost` (0 block vs
+> 7); a construction-time-only snapshot cleared `paels_legion`. Two more were
+> **under-reports** where a mechanical check silently did nothing at all: sweep B
+> read only the first *line* of a C# method body, and sweep C compared PascalCase
+> C# hook names against snake_case `vars(HookSystem)` keys, so its "is this a
+> real hook?" branch was dead code. When you write a sweep: never give a bucket a
+> label that makes a safety claim ("safe only if…") without executing the claim,
+> and prefer reporting `INCONCLUSIVE` over reporting agreement.
+>
+> **2. `RelicModel.IsAllowedAtNeow` DEFAULTS to `IsAllowed(player.RunState)`**
+> (`RelicModel.cs:443-446`). The sim models the two as independent members, so
+> whoever fixes the 17-relic `is_allowed` pool gate must make
+> `is_allowed_at_neow` delegate, or Neow will silently keep using a stale flag.
+>
+> **3. Rule-3 resolution — `undo_after_obtained`.** Its **absence** is
+> `faithful` at every site: the helper has no C# counterpart (nothing in the game
+> un-picks a relic), so a sim lacking it is not diverging from the source, which
+> is the only question this audit asks. It is not a waiver either — a waiver is
+> in-scope-adjacent and declined, and here there is no source behaviour to be
+> faithful to. Keep flagging the operational consequence in the entry text (a
+> missing undo breaks the conformance runner's relic swap and its DETECTOR 3 HP
+> assertion) — that is a tooling defect, not a fidelity gap. **Distinct
+> mechanism, still a gap:** an `undo_after_obtained` that EXISTS and *clamps*
+> instead of subtracting violates its own stated contract (`mango` G1,
+> `lees_waffle` N4, `looming_fruit` N3 — and all five implementers do it).
 
 > **v5 (2026-07-26, after relic batches 4–8 ran as five concurrent subagents):**
 > bug classes 19–23 added, each from a defect a batch actually found. Two
@@ -196,6 +231,52 @@ checks completeness. Read BOTH files fully before writing any verdict.
     helper paid the cost, dropped the relic's own −9 Max HP, and is right only
     by accident because Vakuu's option pays it instead. `DrowningBeacon` and
     `UnrestSite` are the other callers.
+24. **A docstring that misdescribes the PORT — pointing at a *false* gap.**
+    Classes 12 and 19 cover claims that talk you *out of* a real gap; this is
+    the opposite direction and it wastes a whole audit. `nunchaku.py:14-15`
+    calls its counter per-combat when the port really keeps it per-run — which
+    is *correct*, because C#'s is a `[SavedProperty]`. `pendulum.py:13-14` and
+    `happy_flower.py` claim a per-combat reset they do not perform, and the
+    behaviour is right. Verdict the CODE, never the comment; a batch that
+    trusted these would have filed three false gaps and "fixed" working relics.
+25. **A C# dispatcher with TWO passes is an ordering guarantee.** The sim's
+    single duck-typed listener loop destroys it, and the two passes are often
+    two *different hook names* rather than an `X`/`X`Late pair — so grepping for
+    "Late" misses them. Three instances found: `AfterCombatVictoryEarly` is a
+    separate earlier full pass and `meat_on_the_bone` is its only implementer
+    (LIVE — at 38/80 the sim heals 44 where the game heals 56, because index-0
+    Burning Blood gets to heal first); turn start runs steps 22 and 23 as two
+    passes over 9 and 14 relics (LIVE on `gambling_chip × bone_tea`); card
+    rewards are the same shape but dormant. Read the C# `Hook.X` body and count
+    the `foreach`es before verdicting any ordering question.
+26. **A control-flow predicate moved earlier drops every hook between the two
+    positions.** Distinct from class 11 (wrong slot) and class 20 (wrong site):
+    here the hook order is right, but a `return` happens too early. C# asks
+    `ShouldTakeExtraTurn` **last** (`CombatManager.cs:1366`, after
+    `BeforeTurnEnd`/`DoTurnEnd`/the hand flush/`AfterTurnEnd`); the sim asks it
+    first and returns (`combat.py:648-652`), so Pael's Eye skips the **entire**
+    turn-end pass. A sentinel listener recording which hooks fire is the cheapest
+    way to see this: `[on_player_turn_end, on_hand_emptied,
+    after_player_turn_end]` without the relic, `[NONE]` with it.
+27. **A filter hoisted from the listener to the dispatcher changes WHICH
+    listeners run.** `Hook.ModifyBlock` has no `props` gate and `PaelsLegion`
+    filters on the looser `IsCardOrMonsterMove`; the sim put the props check in
+    the dispatcher, so an unpowered card silently skips the listener entirely —
+    Entrench on 10 block gives 20 with *and* without the relic where C# gives 30.
+    The fix must add the field, not flip a flag, because `brilliant_scarf` G1
+    needs the same distinction pointing the other way.
+28. **A one-implementer hook is still a hook.** `Hook.BeforeCardRemoved` has a
+    single C# implementer (`SpoilsMap`), and the port re-implemented that
+    implementer's intent as a local flag — which only the map-generation readers
+    consult, not the payout reader. A removed Spoils Map still pays 600 gold
+    (`precise_scissors` / `precarious_shears` / `preserved_fog`, all LIVE).
+    "Only one thing uses it" is never a reason to skip the dispatch.
+29. **Sibling relics may differ ON PURPOSE — never copy a sibling's verdict.**
+    Rule 3 says one verdict per *mechanism*, not per family. `brilliant_scarf`
+    deliberately excludes `IsAutoPlay` (its LIVE G1); `RainbowRing` and
+    `RazorTooth` deliberately do not, so the sim counting auto-plays is correct
+    at those two sites. Copying across would have filed two false gaps. Same
+    trap in reverse for the `undo_after_obtained` family below.
 
 ## Sweep the shape before you audit the units
 
