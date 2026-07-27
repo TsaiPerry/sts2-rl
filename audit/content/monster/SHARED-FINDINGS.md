@@ -175,10 +175,24 @@ batch. Enumerate with `py audit/tools/dormancy_probes.py cs-monster-hooks`.
 For each of the other 11: read the override **to the end** first (N6's lesson),
 then find the open-coded sim counterpart — the sim has no `MonsterModel`
 listener category (`hook_dispatch` **G5**, dormant, `monsters/base.py:78-81`),
-so a ported equivalent lives somewhere else, e.g.
-`LagavulinMatriarch.AfterDamageReceived` → `AsleepPower` → `wake_up(stunned=True)`
-(`underdocks/lagavulin_matriarch.py:75-87`). Verdict the **mechanical**
-behaviour only; do not re-verdict `hook_dispatch`'s G5.
+so a ported equivalent lives somewhere else.
+
+> **CORRECTION (batch 3, after reading the override to the end).** This section
+> originally repeated `monster_state_machine.md:296-298`'s claim that
+> "`LagavulinMatriarch.AfterDamageReceived` is the wake-from-damage path whose
+> sim counterpart is `AsleepPower` → `wake_up(stunned=True)`". **The first half
+> is false.** `LagavulinMatriarch.cs:130-146` is entirely presentation — a
+> `target != Creature` early return, `SleepingVfx?.Stop()`, and two
+> `eyes_open` Spine calls plus `IsShellAwake = true`, a flag whose only three
+> references in the whole game tree are its own declaration, read and write
+> (`grep -rn IsShellAwake --include=*.cs src/`). The mechanical wake really
+> lives in `AsleepPower.cs:21-36`, ported at `powers.py:1840-1851`. The seam
+> record does not *verdict* the sentence — it is a boundary-hole hand-off — so
+> there is no rule-3 verdict conflict, but do not inherit the framing. It is
+> the N6 lesson firing a second time: an override that looks mechanical can be
+> entirely presentation, and only reading it to the end tells you.
+
+Verdict the **mechanical** behaviour only; do not re-verdict `hook_dispatch`'s G5.
 
 ## 7. Findings you must NOT re-verdict (rule 3)
 
