@@ -1,0 +1,42 @@
+{
+  "unit": "relic/small_capsule",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SmallCapsule.cs",
+    "sha256": "ae052e2dbcfc30eed878ec64a6132f7d130273603379c818b547605f0ef6634c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\small_capsule.py",
+    "sha256": "92c185028bcd1bf834ea328157c982941f82f445119c696753823c787cad8bd8"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (small_capsule.py:13)",
+      "verdict": "faithful",
+      "rationale": "SmallCapsule.cs:11 is RelicRarity.Ancient. Ancient means it is never grab-bag or shop stock: executed (py tools/audit/relic_probes_b15.py b15-pool) the relic is absent from the 126-relic transcribed grab bag and its only ported grant path is events/neow.py -- which is also the C# situation (SmallCapsule is a Neow option). Ancient also makes Relic.is_tradable False (relics/base.py:132-136), matching RelicModel.IsTradable's Ancient exclusion."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (small_capsule.py:15-16) -> run.obtain_relic_from_grab_bag (run.py:631-636) -> run.pull_relic_from_front (run.py:559-595) + run.add_relic (run.py:546-553)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Rollup of guards G1 and N1 per binding rule 4. The RELIC the sim pulls and the stream draw it burns are both correct; the only divergence is that RewardsCmd.OfferCustom is a take-or-skip screen and the port auto-keeps."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: `RewardsCmd.OfferCustom(Owner, [new RelicReward(Owner)])` (SmallCapsule.cs:15-18) is a reward SCREEN the player may decline; after_obtained grants the pulled relic unconditionally",
+      "verdict": "deliberate-divergence",
+      "rationale": "RewardsCmd.OfferCustom (RewardsCmd.cs:47-50) builds a RewardsSet and Offers it, and RelicReward.OnSkipped (RelicReward.cs:117-123) records a wasPicked:false choice -- i.e. the relic is lost either way, because RelicReward.Populate has already burned the pull (RelicReward.cs:75-96). The sim's obtain_relic_from_grab_bag pulls and adds in one step. Verdicted deliberate-divergence and not a gap for exactly the reason relic/calling_bell guard G3 gives at the same mechanism (binding rule 3, one verdict per mechanism): the divergent thing is the sim's player-choice model for non-choice relic offers, applied consistently (rewards.py grants an elite relic immediately too), and the observable relic list is the same in the common case. EXECUTED (py tools/audit/relic_probes_b15.py b15-misc): `run.add_relic('small_capsule')` on a started run yields relics ['burning_blood', 'small_capsule', 'blood_vial'] and moves the grab bag 96 -> 95, which is the C# take-branch outcome exactly. Flagged so whoever adds a declining policy revisits it -- at that point a skipped Small Capsule relic must still leave the bag."
+    },
+    {
+      "what": "N1: `new RelicReward(base.Owner)` -- the no-rarity constructor -- and which RNG stream its rarity roll comes off",
+      "verdict": "faithful",
+      "rationale": "RelicReward(Player) (RelicReward.cs:56-59) leaves _rarity at RelicRarity.None, so Populate takes the `_rarity == RelicRarity.None` arm and calls `RelicFactory.PullNextRelicFromFront(base.Player)` with no rarity and no rng override (RelicReward.cs:81-91). The sim's obtain_relic_from_grab_bag(rarity_rng=None) reaches pull_relic_from_front with rarity=None, which rolls the rarity on run.rewards_rng (run.py:587-589) -- and run.rewards_rng is the per-player Rewards stream (run.py:271-274), which is precisely what the default PullNextRelicFromFront(player) overload uses (pull_relic_from_front's own docstring cites RelicFactory.cs:28/82). So this is NOT an instance of PROMPT.md bug class 16's silent-stream fallback: the stream is named on both sides and it is the same one. Checked deliberately because relic/calling_bell G2 is the failure mode here -- a relic-granting relic that never burns the pull -- and this port does burn it (executed: grab bag 96 -> 95). Rule 7: RelicReward.cs, RewardsCmd.cs and run.py are not hashed by this record."
+    },
+    {
+      "what": "N2: no `undo_after_obtained`, although the pickup mutates run state outside the relic itself (it adds a second relic)",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. OPERATIONAL CONSEQUENCE worth flagging (a tooling defect, not a fidelity gap): the conformance runner grants a node's relic and then swaps it for the one the save says was really picked (sts2_rl/conformance/runner.py:461, 694 -- verified by grep per binding rule 8), and a discarded Small Capsule leaves BOTH the free relic in run.relics AND the burned grab-bag pull behind, which shifts every later relic pull in the run. Distinct from the mango/strawberry family (PROMPT.md v6 item 3's second half), whose undo EXISTS and clamps; here there is none at all. Rule 7: leans on relics/base.py:143-150 and conformance/runner.py, neither hashed here."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

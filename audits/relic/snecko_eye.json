@@ -1,0 +1,57 @@
+{
+  "unit": "relic/snecko_eye",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SneckoEye.cs",
+    "sha256": "7b27d2c6246f9c377d403c052c882cdb146a46e8251197608707b8c9b78d135d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\snecko_eye.py",
+    "sha256": "0e086508c8286fbe0843a1abb5bd12d970c50413aa7b394de08b75019049d884"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (snecko_eye.py:19)",
+      "verdict": "faithful",
+      "rationale": "SneckoEye.cs:19 is RelicRarity.Ancient. Executed (b15-pool): absent from the grab bag, granted by the ported Darv shrine (events/darv.py) -- both sides Ancient/event-only, and is_tradable False on both."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "SneckoEye.cs:25-31 applies the Confused power immediately when the relic is picked up DURING a combat (`if (CombatManager.Instance.IsInProgress) await ApplyPower()`). snecko_eye.py defines only on_combat_start and modify_hand_draw, so a Snecko Eye obtained mid-fight leaves the player un-Confused for the rest of that fight while still drawing +2. DORMANT: the sim grants relics through RunState.add_relic between rooms and has no path that grants a relic inside a fight -- the concrete unported thing is any content that calls add_relic while a CombatState is live (the same shape relic/belt_buckle's AfterObtained records, and it carries the same verdict per binding rule 3: recorded as a gap rather than a waiver because 'the sim has no path here' is today's content, not the divergence's shape -- binding rule 1)."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_combat_start (snecko_eye.py:23-30)",
+      "verdict": "faithful",
+      "rationale": "SneckoEye.cs:33-36 calls ApplyPower(), i.e. PowerCmd.Apply<ConfusedPower>(ctx, target=Owner.Creature, 1m, applier=Owner.Creature, cardSource=null) (SneckoEye.cs:47-51). snecko_eye.py:27-30 is PowerCmd.apply(hooks, combat.player, ConfusedPower, 1, applier=combat.player) -- same power, same amount 1, same target and the same applier identity. The slot is right too: the sim's on_combat_start IS Hook.BeforeCombatStart (combat.py:208-209 fires it and only then player.start_turn()), which is the same relative position as CombatManager.cs:403 firing BeforeCombatStart before StartTurn() at :417 -- so the opening hand is drawn with Confused already attached. EXECUTED (b15-misc): with the relic the sim's turn-1 hand is 7 cards and confused=True. ConfusedPower is ported (powers.py:3851) with PowerStackType.Single mirrored as a no-op on_stack."
+    },
+    "ModifyHandDraw": {
+      "maps_to": "modify_hand_draw (snecko_eye.py:32-33), dispatched by HookSystem.modify_hand_draw (hooks.py:217-222) from PlayerCombatState.start_turn (player.py:171)",
+      "verdict": "faithful",
+      "rationale": "SneckoEye.cs:38-45 returns `count + DynamicVars.Cards.BaseValue`; CanonicalVars is CardsVar(2) (SneckoEye.cs:21) and the file contains no AscensionHelper.GetValueIfAscension call at all, so 2 is the pinned non-ascension value and snecko_eye.py:21's CARDS = 2 is correct. EXECUTED (b15-misc): hand 5 -> 7. The dropped `if (player != base.Owner) return count;` guard is verdicted at guard N1."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: ConfusedPower's randomised cost is drawn from the sim's LEGACY shared rng, where C# names Rng.CombatEnergyCosts",
+      "verdict": "gap",
+      "issue": "MECHANISM: ConfusedPower.NextEnergyCost (ConfusedPower.cs:47-54) ends in `base.Owner.Player.RunState.Rng.CombatEnergyCosts.NextInt(4)`. The sim's ConfusedPower.on_card_drawn (powers.py:3867-3873) calls `combat._rng.randrange(4)` -- the shared legacy random.Random -- even in parity mode, although the sim HAS the matching stream: CombatRng exposes `energy` mapped to combat_energy_costs (combat_rng.py:17-25, 53) and potions.py:1049 already uses it. This is PROMPT.md bug class 16's second half (a caller that names an RNG stream in C# reaching a sim path that silently falls back to the legacy shared rng), and the stream IS consumed on both sides -- once per non-X card drawn -- so it is not the claws-style false alarm class 16 warns about. LIVE for RNG parity: Snecko Eye is granted by the ported Darv shrine (events/darv.py, executed b15-pool), it applies Confused for the whole combat, and every drawn card then diverges in cost AND desynchronises the CombatEnergyCosts stream for the rest of the run, which the conformance runner compares. DORMANT for RL play (the sim's own seeds stay reproducible). OWNERSHIP: the defective line is powers.py:3873, not snecko_eye.py, so the POWER stream owns the fix and this record does not hash powers.py (binding rule 7); it is recorded here because Snecko Eye and Fake Snecko Eye (relics/fake_snecko_eye.py:19-22) are the only two ported appliers of the power, so nothing else would surface it."
+    },
+    {
+      "what": "N1: `if (player != base.Owner) return count;` on ModifyHandDraw (SneckoEye.cs:40-43), absent from the sim",
+      "verdict": "waiver",
+      "rationale": "A multiplayer owner filter: Hook.ModifyHandDraw is dispatched over every combat listener including the other players' relics, so C# must check whose draw it is. The sim models one player, and HookSystem.modify_hand_draw is only ever called with that player (player.py:171). Waived as multiplayer-only under the shared contract's global scope, not under an unreachability claim about ported content."
+    },
+    {
+      "what": "N2: `_testEnergyCostOverride` / SetTestEnergyCostOverride / ApplyTestEnergyCostOverrideToPower (SneckoEye.cs:17, 53-71), entirely absent from the port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 18 in the direction that goes RIGHT: this is test scaffolding, not a shipping branch, and the port correctly declines it. SetTestEnergyCostOverride opens with `TestMode.AssertOn()` (SneckoEye.cs:55) and EXECUTED grep over the whole decompiled source finds its only occurrences are the two declarations themselves (SneckoEye.cs:53 and FakeSneckoEye.cs:42) -- zero production callers -- so `_testEnergyCostOverride` is frozen at its -1 initialiser and ApplyTestEnergyCostOverrideToPower's `>= 0` body is unreachable in the shipping game. ConfusedPower's mirror field (ConfusedPower.cs:17-29, also TestMode.AssertOn-guarded) is likewise absent from powers.py:3851. Contrast relic/calling_bell G1, which ported the TestMode arm and grants the wrong relics."
+    },
+    {
+      "what": "N3: ApplyPower passes cardSource = null and CanonicalVars/ExtraHoverTips (SneckoEye.cs:21, 23, 49)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The cardSource = null half is faithful rather than waived: the sim's PowerCmd.apply call omits the card argument entirely (snecko_eye.py:27-30), which matters because relic/unsettling_lamp's doubling needs a card source in flight -- with none, Snecko Eye's Confused can never be doubled on either side."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

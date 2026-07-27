@@ -1,0 +1,52 @@
+{
+  "unit": "relic/tanxs_whistle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TanxsWhistle.cs",
+    "sha256": "894920638a95080ea7e13f3b8417cf3d02e7cc4fef49bba559bfd7e7c80965d7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\tanxs_whistle.py",
+    "sha256": "08073e1c4fa0ed3e40e53becd0ac67e362467cce65cd3f76462bcee36498b9bf"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (tanxs_whistle.py:12)",
+      "verdict": "faithful",
+      "rationale": "TanxsWhistle.cs:13 is RelicRarity.Ancient. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Tanx shrine (events/tanx.py) -- the same event that grants relic/spiked_gauntlets in this batch."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (tanxs_whistle.py:14-17) -> run.add_card(make_card('whistle')) (run.py:341-354)",
+      "verdict": "faithful",
+      "rationale": "Rollup of guards N1-N4 per binding rule 4. TanxsWhistle.cs:17-21 is byte-for-byte Storybook.cs:17-21 with a different card, and the port matches it the same way."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `CardPileCmd.Add(card, PileType.Deck)` (TanxsWhistle.cs:20) vs run.add_card -- insertion position and the two deck hooks",
+      "verdict": "faithful",
+      "rationale": "Same mechanism and same verdict as relic/storybook N1 in this batch (binding rule 3): CardPile.AddInternal's default index = -1 appends (CardPile.cs:83-97), run.add_card appends (run.py:349) and dispatches ModifyCardBeingAddedToDeck before and the deck AfterCardChangedPiles analogue after (run.py:345-353). EXECUTED (b15-misc): the deck tail after add_relic('tanxs_whistle') is ['whistle']. Rule 7: run.py, CardPileCmd.cs and CardPile.cs are not hashed here."
+    },
+    {
+      "what": "N2: Hook.ShouldAddToDeck (CardPileCmd.cs:384) has no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Cited and matched from relic/calling_bell guard G4 and relic/storybook N2 (binding rule 3): the hook has ZERO overrides anywhere in the decompiled game, so it is dead code in C# too rather than unported content, and the sim's `grep should_add_to_deck` returns nothing. Rule 7: CardPileCmd.cs and Hook.cs are not hashed here."
+    },
+    {
+      "what": "N3: `CreateCard<Whistle>` (TanxsWhistle.cs:19) vs make_card('whistle') -- is the ported card the right one?",
+      "verdict": "faithful",
+      "rationale": "Whistle.cs:22-24 is `base(3, CardType.Attack, CardRarity.Ancient, TargetType.AnyEnemy)` with DamageVar(33, ValueProp.Move), CanonicalKeywords Exhaust and one upgrade level (+11 damage). EXECUTED: make_card('whistle') is CardType.ATTACK, energy_cost 3, max_upgrade_level 1, eternal False -- cost, type and upgrade ceiling match, and it joins the deck un-upgraded. The card's OnPlay (33 damage + Stun) belongs to the CARD stream; cards/*.py is not hashed here (rule 7)."
+    },
+    {
+      "what": "N4: no undo_after_obtained, no HasUponPickupEffect",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. Same operational caveat as relic/storybook N4: a conformance relic swap leaves the Whistle in the deck, which conformance/runner.py:618's (id, upgrade_level) deck comparison would report. TanxsWhistle.cs declares no HasUponPickupEffect, so the port's default False is correct, and Ancient rarity already makes it untradable."
+    },
+    {
+      "what": "N5: CardCmd.PreviewCardPileAdd and ExtraHoverTips (TanxsWhistle.cs:15, 20)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}
