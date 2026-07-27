@@ -21,14 +21,16 @@ they are what the tools in `tools/` do. They never judge faithfulness.
 
 ## Status
 
-**What is established: the engine-seam tier is complete — 6 of 6 seams
-audited, 0 invalid.** That is the claim this folder supports with evidence.
+**Audited and merged here: all 6 engine seams, plus the power, card, event and
+enchantment content tiers — 428 records, 0 invalid, 0 stale.** Every one has
+been through an independent review pass and a fix pass.
 
-**The content tier is in progress, and none of it is on this branch.** The
-relic, power, card and event+enchantment streams are running in sibling
-worktrees and have written several hundred records between them. So the
-content rows below read 0 because nothing has been *merged here* — not
-because the work has not started.
+**Not audited at all: `relic` (258 units) and `monster` (109).** The relic
+stream is still running in a sibling worktree; the monster stream is gated on
+the `monster_state_machine` seam, which is now done, so it can start. Anything
+here that reads as a whole-project claim covers **4 of the 6 content kinds** —
+367 units are simply not looked at yet, and `GAP-QUEUE.md` says so in its
+header too.
 
 Do not trust a status number written in prose, including in this file. Run it:
 
@@ -37,23 +39,23 @@ py audit/tools/audit_status.py      # coverage, staleness, gaps, per kind
 py audit/tools/gap_queue.py counts  # gap entries, mechanisms, pins
 ```
 
-Two things to expect from that output rather than be surprised by:
+Three things to expect from that output rather than be surprised by:
 
 - **`stale` is nonzero whenever `sts2_rl/` has uncommitted edits.** Records
-  hash the sim files they audited, so any working-tree change to an audited
-  file marks its records stale on sight. That is the detector working. See
-  [Staleness](#staleness).
-- **Every seam rolls up to `gap`**, because one gap anywhere in a record makes
+  hash every file their verdicts cite, so a working-tree change to an audited
+  file marks its records stale on sight — editing `cmds.py` alone stales 146.
+  That is the detector working. See [Staleness](#staleness).
+- **Most records roll up to `gap`**, because one gap anywhere in a record makes
   the record a gap. Gaps are **queued, not fixed** — a standing decision, not
   an oversight.
+- **The `live` column reads 0** even though 251 gap entries are labelled live
+  in prose. The `live` boolean is a new field and no record populates it yet;
+  until they do, liveness lives in `GAP-QUEUE.md`, not in the status table.
 
-> **Merging a content stream needs one extra step.** Those streams were cut
-> before this folder existed and write to the **pre-restructure** path
-> `audits/<kind>/*.json`. Merging one drops its records there, beside the empty
-> `audit/records/<kind>/` here, and the status table will keep reading 0 until
-> they are moved. See *Merge order* in
-> [`prompts/README-parallel-streams.md`](prompts/README-parallel-streams.md)
-> for the one-line repath.
+> **Content gaps have no acceptance tests.** All 31 pins are seam-tier; not one
+> of the 372 content mechanisms has a `strict=True` xfail. A seam fix proves
+> itself by flipping a pin red-to-green — a content fix currently cannot. Adding
+> pins as gaps are worked is the cheapest way to keep that from rotting.
 
 ---
 
