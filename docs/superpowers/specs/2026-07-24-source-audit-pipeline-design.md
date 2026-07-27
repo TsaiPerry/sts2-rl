@@ -53,7 +53,7 @@ That per-guard comparison, recorded durably, is the unit of work.
 
 ### The completeness harness (mechanical, deliberately dumb)
 
-`tools/audit/harness.py` — grep/glob-level enumeration only, no parsing:
+`audit/tools/harness.py` — grep/glob-level enumeration only, no parsing:
 
 - **Unit roster:** enumerate ported units by joining the sim registries
   (`ALL_RELICS`, `ALL_POWERS`, card registry, `ENCOUNTERS`, event registry)
@@ -87,7 +87,7 @@ An audit batch = one pool slice (e.g. 15 relics). For each unit, an agent:
 3. Files every **gap** with a queued fix; a gap fix follows the normal
    workflow (failing test first, then the engine change).
 
-The audit prompt is a versioned artifact (`tools/audit/PROMPT.md`) listing
+The audit prompt is a versioned artifact (`audit/tools/PROMPT.md`) listing
 the known bug classes to check for — killing-blow guards, Artifact
 interception order, sign-aware power typing, visibility guards, pile-limbo
 membership — so lessons from past divergences compound instead of living in
@@ -113,7 +113,7 @@ For each seam, an agent:
    cap → `on_attacked` → block absorption → `modify_hp_lost` → apply → death
    check → post-damage events; the killing-blow guard at `CreatureCmd.cs:392`
    `!WasTargetKilled || !IsDead`). Specs live as markdown in
-   `docs/audit/seams/<seam>.md` — human-reviewable, and the durable statement
+   `audit/seams/<seam>.md` — human-reviewable, and the durable statement
    of what the sim claims to implement.
 2. **Compares the sim step-by-step** against the spec; every step gets a
    verdict in the seam's ledger record.
@@ -133,7 +133,7 @@ after the hand flush.
 
 ### Tier 3 — audit ledger with staleness tracking
 
-One JSON record per audited unit under `audits/<kind>/<id>.json` (JSON, not
+One JSON record per audited unit under `audit/records/<kind>/<id>.json` (JSON, not
 YAML — no new dependency), written by the auditing agent and accepted only
 if it passes harness validation:
 
@@ -169,7 +169,7 @@ Verdict vocabulary (per hook/guard and rolled up per unit): **faithful**,
 **gap** (divergence found → fix queued; the record is updated when the fix
 lands and a re-audit of the changed unit confirms).
 
-**`tools/audit_status.py`** aggregates the ledger against the harness roster
+**`audit/tools/audit_status.py`** aggregates the ledger against the harness roster
 and the source trees:
 
 - coverage: audited / unaudited units per pool;

@@ -1,0 +1,690 @@
+{
+  "unit": "seam/turn_structure",
+  "game_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840"
+    },
+    {
+      "path": "src/Core/Combat/PlayerTurnPhase.cs",
+      "sha256": "33cda99dd8304176d76e668ebbab28741030c00dcfa5c1f34e177b39a75b8009"
+    },
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1"
+    },
+    {
+      "path": "src/Core/Entities/Players/PlayerCombatState.cs",
+      "sha256": "c908ea3144a466dc0d979ec44ade207dd692d6b23b9512afbcccae3468fea123"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21"
+    },
+    {
+      "path": "src/Core/Models/MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993"
+    },
+    {
+      "path": "src/Core/Models/Powers/WeakPower.cs",
+      "sha256": "631e963cbc39801fd98236e18e2fc645a12b3c118e82b4133cdb93afc9bfaaca"
+    },
+    {
+      "path": "src/Core/Models/Powers/VulnerablePower.cs",
+      "sha256": "d4cc015ea3ab96f8245de67d7a5a64799d5ba09f8d77ccaf7a9708065be9d204"
+    },
+    {
+      "path": "src/Core/Models/Powers/FrailPower.cs",
+      "sha256": "0c1090da7732348da9a8c5ab595b0ed11e30079298c94c51983f5660c65cc4dd"
+    },
+    {
+      "path": "src/Core/Models/Relics/SturdyClamp.cs",
+      "sha256": "5b9ad3cff05c51540b6559891a2e1cb87022834d9fc68f9f6be336f6f52834df"
+    },
+    {
+      "path": "src/Core/Models/Relics/HornCleat.cs",
+      "sha256": "c410e13417a8b4ccb1acde332b8c4197901c746a76ba49aee8f387dff21eeb2f"
+    },
+    {
+      "path": "src/Core/Models/Relics/CaptainsWheel.cs",
+      "sha256": "1ed14a0fedcf0e97e38765d61c6a5d16bfb829609ad6ff8612aff9f9b73e603d"
+    },
+    {
+      "path": "src/Core/Models/Relics/Anchor.cs",
+      "sha256": "8ec8f84f20049c2b3613be8e6705a5a669ec6b2338984091d2774b4b39f5b647"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsEye.cs",
+      "sha256": "0ff4149872257b8969c808d66f1e293c0aa33980f41be77618f2802d59b02d3e"
+    },
+    {
+      "path": "src/Core/Models/Relics/RunicPyramid.cs",
+      "sha256": "872632e4196b24167fe7a681827829d05486b29b4483467aa0c33f383ef5a3e3"
+    },
+    {
+      "path": "src/Core/Models/Powers/BarricadePower.cs",
+      "sha256": "a5ecba6bc6007bbe200879d545ec975002bd6230145248e3cf9732b73cd5eb04"
+    },
+    {
+      "path": "src/Core/Models/Relics/CloakClasp.cs",
+      "sha256": "1b8e9638fab92d0ea0322f48e9c4e48fe10ae7f2fb6696b21932dc1d73995f0d"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orichalcum.cs",
+      "sha256": "26ea7db10392ce478bef226d3b112f7b17575177d3d839ce176c135f031c06f8"
+    },
+    {
+      "path": "src/Core/Models/Relics/RoyalPoison.cs",
+      "sha256": "ddbb27b4723f3646672d78d24807eab8da79bfa7b3ce9210bcb3a282f3ca2161"
+    },
+    {
+      "path": "src/Core/Models/Relics/JossPaper.cs",
+      "sha256": "97237a51eda6199f48455edf7e83c061a73b97980279ee4a6cfdd149561b6bf2"
+    },
+    {
+      "path": "src/Core/Models/Relics/UnceasingTop.cs",
+      "sha256": "a00ca92b089176e93f9377585333323848fc7f7b50781397621a55ec54e3d323"
+    },
+    {
+      "path": "src/Core/Models/Enchantments/Imbued.cs",
+      "sha256": "46444d4f929ca036a9aec3ce332e04cf53c04671be3362de4939043669d7cb71"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883"
+    },
+    {
+      "path": "sts2_rl/relics/sturdy_clamp.py",
+      "sha256": "604f42a4a0f9d3cb998c3c146c822d6b560004429d53c6c61824d5a36f056eb4"
+    },
+    {
+      "path": "sts2_rl/relics/horn_cleat.py",
+      "sha256": "5142219d3758ef8eee61f9c513a5211915edb09122190d174e3e5f77bb68e5cb"
+    },
+    {
+      "path": "sts2_rl/relics/captains_wheel.py",
+      "sha256": "68b0cc3f2130b718c54c557bb202b81767500a9d5b20ffa0d09131bb032ca85e"
+    },
+    {
+      "path": "sts2_rl/relics/anchor.py",
+      "sha256": "e77e6679508b418d9702662595518c274bd3b40f18a2f5094e33c20a907c312c"
+    },
+    {
+      "path": "sts2_rl/relics/paels_eye.py",
+      "sha256": "f56a124736de6ad63266a47e71ab2e16b27e40b3eb513aa3eea51dade6eb73fc"
+    },
+    {
+      "path": "sts2_rl/relics/runic_pyramid.py",
+      "sha256": "313c805b499bd5a3c6340b8d34b9d9b01052908585d1392e060ac75b04424399"
+    },
+    {
+      "path": "sts2_rl/cards/barricade_card.py",
+      "sha256": "8957c6e32b0a2e03774b66619b13e1c031febbb579fedb446145dda4510e1bf9"
+    },
+    {
+      "path": "sts2_rl/relics/cloak_clasp.py",
+      "sha256": "0be75771fbd507ec9984fabce3b9d1f0041a8a768bee9f09a9779a30c33aae67"
+    },
+    {
+      "path": "sts2_rl/relics/orichalcum.py",
+      "sha256": "5797b6afca188cd66619524d8ea170a678e96a2dfd831ce913462ff6dfce7a8c"
+    },
+    {
+      "path": "sts2_rl/relics/royal_poison.py",
+      "sha256": "8a9397eef70c2263a3edc53db632154737df2ef517c8118118b5420af27b7860"
+    },
+    {
+      "path": "sts2_rl/relics/joss_paper.py",
+      "sha256": "0422ba5e6305aad13158e75b13c970b306b389340fdc7a49e0815158b956dfb2"
+    },
+    {
+      "path": "sts2_rl/relics/electric_shrymp.py",
+      "sha256": "418018af76beb2284a8e2aa300d263a5878caea3eb43f19d2ed032c982f2f23b"
+    },
+    {
+      "path": "sts2_rl/relics/unceasing_top.py",
+      "sha256": "fc9e1f4b5772a120a7d84674b3975f750ecd25e8a05ff1c6d0be956b69df50c3"
+    },
+    {
+      "path": "sts2_rl/relics/whispering_earring.py",
+      "sha256": "c5da5382027d294d41d34e8ce137f99417a349dc7d9ae29ef8bd66682a3b715e"
+    },
+    {
+      "path": "sts2_rl/cards/apparition.py",
+      "sha256": "2e3f76a090559cfc244803561d216616a6128a29cd3b3d91ef54a6fea223fcee"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. SetUpCombat: throw if already set up; IsStarting=true; MultiplayerScalingModel.OnCombatEntered; clear _playersTakingExtraTurn; per player ResetCombatState() then PopulateCombatState(RunState.Rng.Shuffle, state); NetCombatCardDb.StartCombat; per creature AddCreature; CombatSetUp event (CombatManager.cs:350-378)",
+      "verdict": "faithful",
+      "rationale": "CombatState.__init__ (combat.py:72-209) builds the five piles from the run deck and shuffles the draw pile on the run's own stream, then adds the encounter's creatures. The multiplayer-scaling, NetCombatCardDb and CombatSetUp-event legs are N2 (single-player/presentation). The already-set-up throw is structurally impossible: the sim constructs a fresh CombatState per combat (see step 74)."
+    },
+    {
+      "what": "2. StartCombatInternal: per creature AfterCreatureAdded -> AfterAddedToRoom(), and `if (IsEnemy && CurrentSide == Player) Monster.RollMove(players)` -- every enemy's FIRST intent is rolled here, while IsInProgress is still false (CombatManager.cs:394-398, 860-867)",
+      "verdict": "gap",
+      "issue": "The sim's AfterAddedToRoom half is ported (combat.py:255-257 calls adjust_hp_after_added per enemy after the Niche HP roll), but the first-intent roll is not a separate combat-setup step: each Monster telegraphs its opening move in its own constructor/state-machine setup. Same mechanism as step 11 -- see guard G9."
+    },
+    {
+      "what": "3. IsInProgress = true; IsStarting = false; then Hook.BeforeCombatStart(runState, state) -- combat is already in progress when it fires, and it fires BEFORE StartTurn (CombatManager.cs:399-403; Hook.cs:311-324)",
+      "verdict": "faithful",
+      "rationale": "combat.py:208-209 is exactly this pair: `self.hooks.on_combat_start()` then `self.player.start_turn()`. Verified by execution: a listener that sets block from on_combat_start runs before any turn-start hook (that the block is then wrongly cleared is step 12's finding, guard G6, not this step's ordering)."
+    },
+    {
+      "what": "4. Banner / FTUE / scaled wait, then `await StartTurn()` (CombatManager.cs:406-419)",
+      "verdict": "waiver",
+      "rationale": "Banner, FTUE gating and CustomScaledWait are presentation (guard N2). The `await StartTurn()` this wraps is step 5's and is mirrored at combat.py:209."
+    },
+    {
+      "what": "5. StartTurn guard `!IsInProgress` -> return (CombatManager.cs:424-427)",
+      "verdict": "faithful",
+      "rationale": "PlayerCombatState.start_turn (player.py:151) has no guard of its own, but every sim call site is guarded: combat.py:641-642 returns from end_turn unless phase == PLAYER_TURN, combat.py:673 gates the post-enemy-side start_turn on `phase != COMBAT_OVER`, and combat.py:209 runs it during construction when the combat is by definition in progress. The extra-turn call at 651 sits behind the same 641 guard."
+    },
+    {
+      "what": "6. SetPhaseForAllPlayers(PlayerTurnPhase.None) -- every player's phase is None for the whole enemy turn and the first part of their own (CombatManager.cs:429; PlayerTurnPhase.cs:11)",
+      "verdict": "gap",
+      "issue": "The sim has two phases (Phase.PLAYER_TURN / Phase.COMBAT_OVER, combat.py:35-37) against the game's six, and never leaves PLAYER_TURN while the combat is live -- `_execute_enemy_turn` (combat.py:279-284) tracks the side in a separate `current_side` string and leaves `phase` alone. There is no window in which the sim's phase says 'None'. See guard G8."
+    },
+    {
+      "what": "7. Participants: isExtraPlayerTurn = _playersTakingExtraTurn.Count > 0; on a player-side extra turn only those players participate, otherwise CreaturesOnCurrentSide (playersStartingTurn empty on the enemy side) (CombatManager.cs:430-448; CombatState.cs:133)",
+      "verdict": "faithful",
+      "rationale": "Single-player: the player-side participant set is always [the player] and the enemy-side set is always self.enemies, which _run_enemy_turns (combat.py:287) iterates. The extra-turn subsetting is multiplayer bookkeeping (guard N2) and collapses to the same one-element list."
+    },
+    {
+      "what": "8. Per participant creature.BeforeTurnStart(side) -> for every power, AmountOnTurnStart = Amount -- a snapshot taken before anything else in the turn (CombatManager.cs:449-455; Creature.cs:673-679)",
+      "verdict": "gap",
+      "issue": "The sim has no per-power turn-start amount snapshot at all: `grep -rn amount_on_turn_start sts2_rl/` returns 0 hits. C# has three readers, two of which are ported -- DrawCardsNextTurnPower (`AmountOnTurnStart == 0` suppresses both the extra draw and the removal, DrawCardsNextTurnPower.cs:28,37) and HelloWorldPower; SummonNextTurnPower is unported. The sim's DrawCardsNextTurnPower (powers.py:2737-2754) adds `self.amount` from modify_hand_draw and expires from on_player_turn_started with no such guard, so a stack applied DURING the turn-start window would draw and expire in the same turn where C# defers both to the next one. DORMANT: the sim's only auto-play slot inside turn start is on_player_turn_started (player.py:186), which runs AFTER _draw, so no ported path applies either power inside the window today. Goes live with any turn-start effect that applies a next-turn power."
+    },
+    {
+      "what": "9. Hook.BeforeSideTurnStart(state, side, participants) -- fires for BOTH sides, before any block is cleared (CombatManager.cs:456-460; Hook.cs:1144-1159)",
+      "verdict": "gap",
+      "issue": "The sim has no pre-block-clear turn-start hook and no enemy-side turn-start hook: player.py:151-159 goes straight from reset_turn_cost_modifiers to should_clear_block, and the enemy side has only the per-enemy on_enemy_turn_start (combat.py:301). 26 C# classes override BeforeSideTurnStart, many ported (Pocketwatch, Orichalcum, Kunai, Shuriken, Red Mask, Velvet Choker, Bag of Marbles, Music Box, Ornamental Fan, Ripple Basin, Plating/HardenedShell/Aggression/Sloth powers). DORMANT for the player side: every ported one is a per-turn counter reset or latch that does not read block or energy, so moving it to on_player_turn_start (player.py:169, after the clear and the energy reset) is unobservable -- Pocketwatch's `_cardsPlayedLastTurn` snapshot (Pocketwatch.cs:73-81 vs relics/pocketwatch.py:31-34) still lands before modify_hand_draw. The enemy-side half is guard G5's."
+    },
+    {
+      "what": "10. Player side only: SetPhaseForAllPlayers(Start); PlayerActionsDisabled = false; clear _playersReadyToEndTurn and _playersReadyToBeginEnemyTurn; _inPlayerTurnSetup = true; _deferredEndTurnTransition = null; turn banner (CombatManager.cs:461-477)",
+      "verdict": "gap",
+      "issue": "No phase model (guard G8) and no setup-window flag (guard N1) in the sim. The ready-flag and banner legs are N2."
+    },
+    {
+      "what": "11. Player side and !isExtraPlayerTurn only: `foreach (enemy in _state.Enemies) enemy.PrepareForNextTurn(_state.PlayerCreatures)` -> Monster.RollMove(targets). EVERY enemy's next move is rolled at the start of the PLAYER's turn, unconditionally -- including one that was stunned and skipped its move, and one that has just spawned. An extra player turn skips the roll entirely (CombatManager.cs:478-484; Creature.cs:546-554; MonsterModel.cs:415-418)",
+      "verdict": "gap",
+      "issue": "The sim advances each monster's own machine as part of performing its move; monsters/base.py:96-105 (`telegraph_next_move`) is the explicit stand-in and its docstring names this divergence. combat.py:314-329 documents the consequence in the engine itself: a monster stunned this round keeps its move (correct) but misses one MonsterAi draw where the game takes one. See guard G9."
+    },
+    {
+      "what": "12. Per participant `await creature.AfterTurnStart(side)` -> ClearBlock(), EXCEPT a player whose PlayerCombatState.TurnNumber == 1, which returns before clearing anything (CombatManager.cs:492-499; Creature.cs:681-692)",
+      "verdict": "gap",
+      "issue": "player.py:157-159 clears unconditionally -- there is no turn-1 arm. Verified by execution: a player holding 10 block at a first start_turn ends it with 0. See guard G6."
+    },
+    {
+      "what": "13. ClearBlock: `if (Hook.ShouldClearBlock(CombatState, this, out preventer)) Block = 0; else await Hook.AfterPreventingBlockClear(CombatState, preventer, this)` (Creature.cs:718-728; Hook.cs:2193-2204, 1032-1038)",
+      "verdict": "gap",
+      "issue": "The sim has the predicate (hooks.py:613-619) but no after_preventing_block_clear hook and no `preventer` identity at all. See guard G2."
+    },
+    {
+      "what": "14. A SECOND, SEPARATE loop over the same participants: `await Hook.AfterBlockCleared(state, creature)` -- UNCONDITIONAL. It fires for a creature that had no block, for a creature whose clear was PREVENTED, and for a player on turn 1 whose AfterTurnStart returned early (CombatManager.cs:500-507; Hook.cs:119-125)",
+      "verdict": "gap",
+      "issue": "The sim fuses the clear and the event: player.py:157-159 fires on_block_cleared only inside the `if should_clear_block(...)` arm, and combat.py:296-298 additionally gates the enemy arm on `enemy.block > 0`. See guard G1 -- LIVE."
+    },
+    {
+      "what": "15. Per player participant: SetupPlayerTurn(player, choiceContext) (steps 16-22), each awaited to its pause-or-completion point (CombatManager.cs:508-519)",
+      "verdict": "faithful",
+      "rationale": "Single-player: one call, and the sim inlines its body into player.py:161-186. The HookPlayerChoiceContext pause plumbing is N2."
+    },
+    {
+      "what": "16. SetupPlayerTurn guards: player.Creature.IsDead -> return; null combat state -> warn and return (CombatManager.cs:629-639)",
+      "verdict": "gap",
+      "issue": "player.py:151 has no is_dead guard. DORMANT for the ordinary turn-boundary path -- combat.py:673 will not call start_turn once _end_combat has flipped the phase -- but it is exactly the guard that would have contained guard G13's live case (Royal Poison killing the player during turn-1 setup leaves the sim in Phase.PLAYER_TURN with a dead player). Same family, recorded here as the missing guard and in G13 as the missing win check."
+    },
+    {
+      "what": "17. `if (Hook.ShouldPlayerResetEnergy(state, player)) ResetEnergy()` (Energy = MaxEnergy) `else AddMaxEnergyToCurrent()` (Energy += MaxEnergy). MaxEnergy is itself Hook.ModifyMaxEnergy(state, player, player.MaxEnergy) (CombatManager.cs:641-649; PlayerCombatState.cs:101, 162-170; Hook.cs:2378-2388, 1770-1782)",
+      "verdict": "gap",
+      "issue": "The arithmetic matches exactly (player.py:163-167), but the two hooks fire in the OPPOSITE order: the sim calls modify_max_energy first (163) and should_reset_energy second (164), where C# evaluates ShouldPlayerResetEnergy first and only then reads MaxEnergy inside the chosen branch. DORMANT: both sim dispatchers are pure aggregations over listeners and no ported should_reset_energy or modify_max_energy implementation mutates state, so the swap is unobservable today; it goes live with the first side-effecting implementation of either, or with any modify_max_energy listener that reads a value the reset branch changes."
+    },
+    {
+      "what": "18. `await Hook.AfterEnergyReset(state, player)` (CombatManager.cs:650; Hook.cs:503-509)",
+      "verdict": "faithful",
+      "rationale": "player.py:168 `self._hooks.on_energy_reset(self)`, immediately after the energy assignment and before the next hook. Verified by execution in the end_turn sequence pin."
+    },
+    {
+      "what": "19. `await Hook.BeforeHandDraw(state, player, choiceContext)` (CombatManager.cs:652; Hook.cs:588-601)",
+      "verdict": "faithful",
+      "rationale": "Maps to on_player_turn_start (player.py:169 / hooks.py:279-283) -- the sim's pre-draw turn-start slot, fired after on_energy_reset and before modify_hand_draw. Verified by execution: the sequence pin records on_energy_reset -> on_player_turn_start -> modify_hand_draw."
+    },
+    {
+      "what": "20. `handDraw = Hook.ModifyHandDraw(state, player, 5m, out modifiers)` then `await Hook.AfterModifyingHandDraw(state, modifiers)`; base is the const baseHandDrawCount = 5 (CombatManager.cs:40, 654-655; Hook.cs:1684-1700, 739-745)",
+      "verdict": "gap",
+      "issue": "modify_hand_draw is ported with the same base of 5 (player.py:171, PlayerCombatState.DRAW_PER_TURN), but there is no after_modifying_hand_draw hook in sts2_rl/hooks.py. DORMANT: C# has four implementers and the two ported ones are cosmetic -- Pocketwatch.cs:67-71 is a bare `Flash()` and PollinousCore's is the same shape; MindRotPower is ported but its override is also presentation-only, and PaleBlueDotPower is unported. Goes live with the first implementation that has a gameplay effect."
+    },
+    {
+      "what": "21. Turn 1 only: first move every card whose enchantment sets ShouldStartAtBottomOfDrawPile to the BOTTOM (MoveToBottomInternal), then move every Innate card NOT already moved to the TOP (MoveToTopInternal); handDraw = min(max(handDraw, innateCount), CardPile.MaxCardsInHand) (CombatManager.cs:657-672)",
+      "verdict": "gap",
+      "issue": "player.py:172-182 ports the Innate half (move innates to the top, raise draw_count to their count) and the MaxCardsInHand clamp is redundantly enforced inside _draw (player.py:278). The bottom-of-draw-pile pass is MISSING entirely, and its `.Except(list)` interaction with the innate pass with it. LIVE -- see guard G14."
+    },
+    {
+      "what": "22. `await CardPileCmd.Draw(choiceContext, handDraw, player, fromHandDraw: true)` then `await Hook.AfterPlayerTurnStart(state, choiceContext, player)` (CombatManager.cs:673-675; Hook.cs:882-895)",
+      "verdict": "faithful",
+      "rationale": "player.py:183-186: `self._draw(draw_count, from_hand_draw=True)` then `on_player_turn_started`. The fromHandDraw flag is ported through to should_draw/on_card_drawn. Verified by execution in the sequence pin (modify_hand_draw -> 5x [should_draw, on_card_drawn] -> on_player_turn_started)."
+    },
+    {
+      "what": "23. `await Hook.AfterSideTurnStart(state, side, participants)` -- every listener's AfterSideTurnStart, then a SECOND full pass of every listener's AfterSideTurnStartLate. Fires for BOTH sides, and on the player side only after every player's SetupPlayerTurn has finished (CombatManager.cs:520-524; Hook.cs:1163-1175)",
+      "verdict": "gap",
+      "issue": "The player side maps to on_player_turn_started (hooks.py:285-295), which the sim fires in a single pass -- SandpitPower is a ported AfterSideTurnStartLate implementation with no separate slot (guard G12). The ENEMY side has no counterpart at all: the sim never fires a side-scoped enemy turn-start event (guard G5), which is why the ported PoisonPower (powers.py:484-490), whose C# home is exactly this hook (PoisonPower.cs:55-73), sits on the per-enemy on_enemy_turn_start instead."
+    },
+    {
+      "what": "24. Player side: per player, PlayerCombatState.OrbQueue.AfterTurnStart(ctx) (CombatManager.cs:526-537)",
+      "verdict": "waiver",
+      "rationale": "Orbs are the Defect's; the sim is Ironclad-only (guard N3, and the shared scope rule for non-Ironclad characters)."
+    },
+    {
+      "what": "25. Player side: every dead player and every player NOT in playersStartingTurn is auto-SetReadyToEndTurn(canBackOut: false); if that makes everyone ready, release the deferred transition and return (CombatManager.cs:543-555)",
+      "verdict": "waiver",
+      "rationale": "Pure multiplayer readiness bookkeeping: with one player the set is either empty or the whole game, and the deferred-transition release is guard N1's. Multiplayer-only plumbing is out of scope by the shared rules."
+    },
+    {
+      "what": "26. Player side: per player, RunAutoPrePlayPhase(ctx, setupTask, player) -- await the setup task, Phase = AutoPrePlay, Hook.AfterAutoPrePlayPhaseEntered, Phase = Play. Strictly AFTER steps 23 and 24, so start-of-turn auto-plays run after every turn-start relic and power (CombatManager.cs:556-572, 613-619; Hook.cs:928-938)",
+      "verdict": "gap",
+      "issue": "Neither the phase nor the hook exists in the sim; the two ported AutoPrePlay users -- Whispering Earring (relics/whispering_earring.py:27-43) and the Imbued enchantment (enchantments.py:261-267) -- fire from on_player_turn_started, i.e. the sim's AfterSideTurnStart slot, so their auto-plays interleave with the turn-start relics in registration order instead of running strictly after all of them. See guard G8."
+    },
+    {
+      "what": "27. `await CheckWinCondition()` -- AFTER the player's turn setup and the auto-pre-play phase, before the play phase opens (CombatManager.cs:573)",
+      "verdict": "gap",
+      "issue": "The sim's turn-1 setup (combat.py:208-209) is followed by NOTHING; the only post-setup check is combat.py:681-685 on the end_turn path. LIVE -- see guard G13 (Royal Poison, verified by execution)."
+    },
+    {
+      "what": "28. If still IsInProgress: unpause the action executor, set the queue to PlayPhase, IsEnemyTurnStarted = false, _inPlayerTurnSetup = false, fire TurnStarted; then ReleaseDeferredEndTurnTransitionIfNeeded() (CombatManager.cs:575-586)",
+      "verdict": "gap",
+      "issue": "The action-executor/queue/event legs are N2, but the _inPlayerTurnSetup teardown and the deferred-transition release have no sim analogue -- see guard N1."
+    },
+    {
+      "what": "29. Enemy-side branch: IsEnemyTurnStarted = true, TurnStarted, checksum, WaitForUnpause, CheckWinCondition, then `if (IsInProgress) await ExecuteEnemyTurn(actionDuringEnemyTurn)` (CombatManager.cs:588-604)",
+      "verdict": "gap",
+      "issue": "combat.py:666-671 does check `phase == COMBAT_OVER` and `_all_enemies_dead()` before entering the enemy side, but neither is a recomputation of the loss condition: a player killed by an after_player_turn_end listener (combat.py:665) is not detected and the enemy side runs anyway. Same mechanism as steps 27/41/49/56 -- guard G13."
+    },
+    {
+      "what": "30. ExecuteEnemyTurn guard `!IsInProgress` -> return; optional test hook actionDuringEnemyTurn() (CombatManager.cs:1063-1071)",
+      "verdict": "faithful",
+      "rationale": "_execute_enemy_turn (combat.py:279-284) is reached only from end_turn's guarded tail (combat.py:666-671). The actionDuringEnemyTurn parameter is a C# test seam with no gameplay meaning."
+    },
+    {
+      "what": "31. Iterate a SNAPSHOT of _state.Enemies.ToList(), skipping any creature the state no longer contains -- a monster spawned or removed during the enemy side does not change this turn's participant list (CombatManager.cs:1072-1074)",
+      "verdict": "faithful",
+      "rationale": "combat.py:287 iterates `list(self.enemies)` -- the same snapshot -- and the only mid-combat mutation of that list is the append at cmds.py:263, so a monster spawned during the enemy side is correctly excluded. Removal is modelled by is_gone rather than by deleting the entry (verified: no `enemies.remove` anywhere in sts2_rl/), and combat.py:292 skips gone creatures unless retained_after_death, which is the ContainsCreature test."
+    },
+    {
+      "what": "32. Per enemy: intent animation, then `await enemy.TakeTurn()` -- throws unless the creature is a monster on the enemy side, and runs Monster.PerformMove() ONLY if !Monster.SpawnedThisTurn. There is NO IsDead guard: a corpse the combat retained still takes its turn (CombatManager.cs:1076-1081; Creature.cs:706-716)",
+      "verdict": "gap",
+      "issue": "The no-IsDead-guard half is faithfully ported (combat.py:288-292 keeps a retained_after_death corpse in the loop -- that is how a withered Decimillipede segment reaches REATTACH). The SpawnedThisTurn half has no sim counterpart: `grep -rn spawned_this_turn sts2_rl/` returns 0 hits, and there is no OnSideSwitch to clear it either (step 67). DORMANT: I could not construct a reachable C# path where the flag survives to TakeTurn -- SetUpForCombat sets it for every monster (MonsterModel.cs:409-413), SwitchSides clears it for every creature at every side switch including extra turns (CombatManager.cs:1420-1423; MonsterModel.cs:479-483), and a monster spawned during the enemy side is already outside step 31's snapshot. Recorded as a gap rather than faithful because the sim reproduces the observable by accident (the snapshot) rather than by modelling the flag."
+    },
+    {
+      "what": "33. PerformMove: scaled wait -> IsPerformingMove = true -> move = NextMove -> move.PerformMove(combatState.PlayerCreatures) -> MoveStateMachine.OnMovePerformed(move) (Task 10) -> history -> IsPerformingMove = false -> if the monster is now dead and Hook.ShouldCreatureBeRemovedFromCombatAfterDeath -> combatState.RemoveCreature (MonsterModel.cs:434-453)",
+      "verdict": "gap",
+      "issue": "The sim's take_turn (monsters/base.py:93-94, per-monster overrides) performs the move and records history, and should_remove_from_combat_after_death is ported (hooks.py:603-611, consumed in cmds.py:102/200 via retained_after_death). The divergence is that the sim ALSO advances the state machine here (telegraph_next_move) instead of at step 11 -- guard G9. IsPerformingMove has no counterpart; no ported content reads it."
+    },
+    {
+      "what": "34. Per enemy, after its move: WaitForUnpause, `await CheckWinCondition()`, `if (!IsInProgress) return` (CombatManager.cs:1082-1088)",
+      "verdict": "gap",
+      "issue": "combat.py:332-338 does check both conditions after each move, but the player-death branch (332-335) sets phase/result BY HAND and returns WITHOUT firing on_combat_end, where the sibling branch at 308-310 calls _end_combat. Verified by execution: a listener killing the player from on_enemy_turn_start records [('on_combat_end', False)] while the ordinary death-to-an-attack case records []. See guard G10."
+    },
+    {
+      "what": "35. After the loop: checksum, then `await EndEnemyTurn()` (CombatManager.cs:1091-1092)",
+      "verdict": "faithful",
+      "rationale": "combat.py:344-345 falls through from the per-enemy loop into the side-end handling under a `phase != COMBAT_OVER` guard. The checksum is N2."
+    },
+    {
+      "what": "36. EndEnemyTurn guards: IsInProgress; THROW if CurrentSide != Enemy; WaitForUnpause (CombatManager.cs:819-827)",
+      "verdict": "faithful",
+      "rationale": "combat.py:344 gates the side-end on `phase != Phase.COMBAT_OVER`. The side assertion is an invariant check; _execute_enemy_turn sets and restores current_side in a try/finally (combat.py:280-284) so it cannot be violated."
+    },
+    {
+      "what": "37. EndEnemyTurnInternal: `await Hook.BeforeTurnEnd(state, Enemy, CreaturesOnCurrentSide)` -- three complete listener passes in order: BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then BeforeSideTurnEnd (CombatManager.cs:1250-1251; Hook.cs:1238-1261)",
+      "verdict": "gap",
+      "issue": "There is no enemy-side BeforeTurnEnd slot in the sim at all -- _run_enemy_turns goes straight from the last per-enemy on_enemy_turn_end (combat.py:341) to on_enemy_side_end (345), which maps to AfterTurnEnd. See guards G11 (the missing slot) and G12 (the flattened sub-phases)."
+    },
+    {
+      "what": "38. `foreach (player in _state.Players) PlayerCombatState.EndOfTurnCleanup()` -- per card in EVERY pile: ExhaustOnNextPlay = false, HasSingleTurnRetain = false, HasSingleTurnSly = false, drop every local energy-cost modifier flagged EndOfTurn and every temporary star cost flagged ClearsWhenTurnEnds (CombatManager.cs:1252-1255; PlayerCombatState.cs:268-274; CardModel.cs:1610-1623)",
+      "verdict": "gap",
+      "issue": "First of the two per-round C# sites; the sim has no counterpart at either. See guard G7."
+    },
+    {
+      "what": "39. `await Hook.AfterTurnEnd(state, Enemy, enemies)` -- every listener's AfterSideTurnEnd (awaited as a group), THEN every listener's AfterSideTurnEndLate. This is where Vulnerable, Weak and Frail tick down, each overriding AfterSideTurnEnd with a `side == CombatSide.Enemy` guard (CombatManager.cs:1256; Hook.cs:1265-1291; WeakPower.cs:48-53, VulnerablePower.cs:59-64, FrailPower.cs:35-40)",
+      "verdict": "gap",
+      "issue": "The tick PLACEMENT is faithful: hooks.on_enemy_side_end (combat.py:345, hooks.py:338-342) fires once after every enemy has acted, and the three debuffs tick there (powers.py:419-420, 441-442, 462-463). The step still carries a gap because the AfterSideTurnEndLate second pass is flattened into the same single listener walk and DisintegrationPower is a ported implementation of it -- guard G12."
+    },
+    {
+      "what": "40. PowerCmd.TickDownDuration(power): `if (power.SkipNextDurationTick) { SkipNextDurationTick = false; }` else `await Decrement(power)` = ModifyAmount(..., -1m, ...) (PowerCmd.cs:190-200)",
+      "verdict": "faithful",
+      "rationale": "Power._tick_duration (powers.py:77-84) is a line-for-line port of the consume half: it clears skip_next_tick and returns, otherwise decrements by one through the power-amount pipeline. The SET site (PowerCmd.cs:146) is Task 6's and is already a pinned gap there (the sim re-arms on re-stacking); this record owns the consume site only, and it is faithful."
+    },
+    {
+      "what": "41. Back in EndEnemyTurn: `await CheckWinCondition()`; then `if (!IsEnding) { SwitchSides(); WaitForUnpause(); await StartTurn(); }` (CombatManager.cs:830-837)",
+      "verdict": "gap",
+      "issue": "combat.py:673-675 tests only `phase != Phase.COMBAT_OVER`, which is a cached flag set by a previous _end_combat, not a recomputation. A death caused by an on_enemy_side_end listener (19 ported implementations) leaves phase untouched and the sim starts a fresh player turn. Same mechanism as steps 27/29/49/56 -- guard G13."
+    },
+    {
+      "what": "42. SetReadyToEndTurn(player, canBackOut, actionDuringEnemyTurn): idempotent per player; fires PlayerEndedTurn; returns immediately unless AllPlayersReadyToEndTurn() (CombatManager.cs:684-698)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer readiness handshake; with one player 'all players ready' is true on the first call, which is exactly `CombatState.end_turn` being invoked. The PlayerEndedTurn event is presentation (N2)."
+    },
+    {
+      "what": "43. Choose the transition: if a player-driven action is currently running, wait for it first (WaitForActionThenEndTurn), else run AfterAllPlayersReadyToEndTurn directly. If _inPlayerTurnSetup is true the whole transition is DEFERRED into _deferredEndTurnTransition and released at every exit of StartTurn (CombatManager.cs:699-714, 722-735, 1095-1099)",
+      "verdict": "gap",
+      "issue": "No deferral machinery in the sim. The ported Whispering Earring auto-plays real cards during what C# calls the setup window and hand-rolls a recursion guard instead (`if combat.is_over or self.turn != start_turn: break`, relics/whispering_earring.py:27-43). See guard N1."
+    },
+    {
+      "what": "44. AfterAllPlayersReadyToEndTurn: guard IsInProgress; EndingPlayerTurnPhaseOne = true; drain the queue (WaitUntilQueueIsEmptyOrWaitingOnNonPlayerDrivenAction); run EndPlayerTurnPhaseOneInternal(); enqueue ReadyToBeginEnemyTurnAction; EndingPlayerTurnPhaseOne = false (CombatManager.cs:1101-1116)",
+      "verdict": "waiver",
+      "rationale": "The ActionExecutor / ActionQueueSynchronizer layer and its two EndingPlayerTurnPhase flags are the async-scheduling machinery the sim replaces with a straight-line synchronous end_turn (guard N2). The substantive body is step 45 onward."
+    },
+    {
+      "what": "45. EndPlayerTurnPhaseOneInternal guards: null state -> return; THROW if CurrentSide != Player; WaitForUnpause (CombatManager.cs:1145-1154)",
+      "verdict": "faithful",
+      "rationale": "combat.py:641-642 returns from end_turn unless phase == PLAYER_TURN, which is the same precondition; the side assertion cannot be violated (see step 36)."
+    },
+    {
+      "what": "46. Participants: the extra-turn players if any, else every player (CombatManager.cs:1155-1159)",
+      "verdict": "faithful",
+      "rationale": "CORRECTED IN THE FIX PASS (was 'waiver', which violated the one-mechanism-one-verdict rule -- steps 7, 15, 50, 58 and 59 are the SAME participant-set collapse and were already 'faithful', and step 58 literally reads 'participants as in step 46'). Read on the merits, 'faithful' is right and the waiver was wrong: this is not multiplayer-only machinery with no single-player counterpart (that would be step 25's readiness handshake, or step 42's) -- it is a participant selection that HAS a single-player counterpart and produces the identical observable. Verified against the source: playersEndingTurn is `_playersTakingExtraTurn.Count > 0 ? _playersTakingExtraTurn.ToList() : _state.Players.ToList()` (CombatManager.cs:1155-1159); the sim has exactly one player, so on a normal round the list is [the player] and on an extra-turn round _playersTakingExtraTurn is also [the player]. Both arms are the same one-element list, and the sim's end_turn (combat.py:639-685) runs the whole phase-one pipeline for that one player unconditionally. Same observable outcome, so 'faithful', with the multiplayer subsetting itself cited to N2."
+    },
+    {
+      "what": "47. Per player: Phase = AutoPostPlay, then Hook.AfterAutoPostPlayPhaseEntered(ctx, state, player); in a SECOND pass, await each context and set Phase = End (CombatManager.cs:1160-1176; Hook.cs:910-920)",
+      "verdict": "gap",
+      "issue": "Neither the phase nor the hook exists in the sim, and the two ported implementers were re-wired onto on_player_turn_end -- StampedePower (powers.py:1025) and the Howl From Beyond card (cards/howl_from_beyond.py:45). C# runs this phase to completion strictly BEFORE Hook.BeforeTurnEnd (step 48). LIVE -- see guard G8."
+    },
+    {
+      "what": "48. `await Hook.BeforeTurnEnd(state, Player, participants)` -- the same three-pass dispatcher as step 37 (CombatManager.cs:1177-1180)",
+      "verdict": "gap",
+      "issue": "hooks.on_player_turn_end (combat.py:654, hooks.py:297-301) is a single listener walk. Ported content exists in two of the three C# sub-phases on the player side -- Orichalcum/Fake Orichalcum in BeforeSideTurnEndVeryEarly and Pael's Eye in BeforeSideTurnEndEarly, against Cloak Clasp and Ripple Basin in plain BeforeSideTurnEnd. LIVE -- see guard G12."
+    },
+    {
+      "what": "49. `if (await CheckWinCondition()) return` -- a turn-end effect that ends the fight aborts the rest of the pipeline (CombatManager.cs:1181-1184)",
+      "verdict": "gap",
+      "issue": "combat.py:655-657 tests `phase == Phase.COMBAT_OVER`, a cached flag, rather than recomputing the condition; an on_player_turn_end listener that kills the last enemy without routing through a path that calls _end_combat leaves the pipeline running. Guard G13."
+    },
+    {
+      "what": "50. Per player: DoTurnEnd(player, ctx) (steps 51-54), each on its own choice context; then await all of them (CombatManager.cs:1185-1199)",
+      "verdict": "faithful",
+      "rationale": "Single-player: one call, inlined as combat.py:658 `self._process_turn_end_cards()`. Per-player choice contexts are N2."
+    },
+    {
+      "what": "51. DoTurnEnd: `await OrbQueue.BeforeTurnEnd(ctx)`; `if (IsOverOrEnding) return` (CombatManager.cs:1216-1222)",
+      "verdict": "gap",
+      "issue": "RE-VERDICTED IN THE FIX PASS (was 'waiver'). The orb leg alone justified the waiver, but the step has a second, substantive leg and the record's own convention (see N2's rationale) is that the substantive leg carries the step. That leg is the `if (IsOverOrEnding) return` guard, and it maps to the SAME sim lines -- combat.py:655-657, re-tested at 659-660 -- that steps 49 and 56 are verdicted 'gap' at. IsOverOrEnding is `IsEnding || !IsInProgress` and IsEnding RECOMPUTES the condition (CombatManager.cs:180-220); combat.py:655-657 reads the cached `phase == Phase.COMBAT_OVER` flag, which only a previous _end_combat sets. That is guard G13's mechanism exactly, so by the one-mechanism-one-verdict rule this step carries G13's verdict alongside steps 27/29/41/49/56. The PLACEMENT of the sim's check is faithful (it sits between on_player_turn_end and _process_turn_end_cards, where C# puts it); only the cached-vs-recomputed content diverges. The orb leg stays with guard N3, which still cites steps 24 and 51."
+    },
+    {
+      "what": "52. Partition the hand IN PILE ORDER into two lists: a card with HasTurnEndInHandEffect -> turnEndCards; ELSE IF Keywords.Contains(Ethereal) && Hook.ShouldEtherealTrigger(state, card) -> the ethereal list. A card with BOTH goes into turnEndCards only (CombatManager.cs:1223-1237; CardModel.cs:1043; Hook.cs:2286-2296)",
+      "verdict": "faithful",
+      "rationale": "combat.py:357 builds the ethereal list as `c.is_ethereal and not c.has_turn_end_in_hand_effect` gated on should_ethereal_trigger, and combat.py:364 takes every has_turn_end_in_hand_effect card -- the same else-if partition in the same hand order."
+    },
+    {
+      "what": "53. Exhaust EVERY ethereal card first, in order, via CardCmd.Exhaust(ctx, card, causedByEthereal: true) -- the whole ethereal pass completes before any turn-end effect runs (CombatManager.cs:1238-1241)",
+      "verdict": "faithful",
+      "rationale": "combat.py:357-361 is a complete loop over the ethereal list before the turn-end-effect loop at 364. Verified by execution: with a hand of [Dazed, Burn, Strike] the sequence pin records should_ethereal_trigger -> on_card_exhausted -> (Burn's) on_card_discarded -> should_flush_hand."
+    },
+    {
+      "what": "54. Then, per turn-end card, OnTurnEndInHandWrapper(ctx): CardPileCmd.Add(this, PileType.Play) (the card sits in the Play pile for the whole effect) -> wait -> OnTurnEndInHand(ctx) -> if Ethereal CardCmd.Exhaust(ctx, this, causedByEthereal: true) ELSE CardPileCmd.Add(this, Discard). The wrapper does NOT re-consult ShouldEtherealTrigger (CombatManager.cs:1242-1245; CardModel.cs:1682-1698)",
+      "verdict": "gap",
+      "issue": "combat.py:370 DOES re-consult it: `if card.is_ethereal and self.hooks.should_ethereal_trigger(card)`. DORMANT on both sides -- `grep -rl 'override.*ShouldEtherealTrigger'` over the whole decompiled game returns ZERO files and `grep -rn 'def should_ethereal_trigger' sts2_rl/` returns only the hooks.py dispatcher, so the predicate is always true and the two branches coincide. Goes live with the first implementation on either side. The Play-pile limbo half is faithful in effect: combat.py:365 removes the card from the hand before running the effect and only files it afterwards, so a reshuffle the effect triggers cannot pick it up."
+    },
+    {
+      "what": "55. Per player: `await Hook.BeforeFlush(state, player)` (CombatManager.cs:1200-1206; Hook.cs:532-538)",
+      "verdict": "gap",
+      "issue": "No before_flush hook in sts2_rl/hooks.py; there is no slot between _process_turn_end_cards (combat.py:658) and the flush (661-662). DORMANT: C#'s three implementers are SlumberingEssence.cs, WellLaidPlansPower.cs and a mock, and none is ported (verified: no sts2_rl file for either). Goes live with the first port."
+    },
+    {
+      "what": "56. Checksum, then `await CheckWinCondition()` (CombatManager.cs:1207-1208)",
+      "verdict": "gap",
+      "issue": "combat.py:659-660 tests the cached phase again rather than recomputing. Guard G13; the checksum is N2."
+    },
+    {
+      "what": "57. AfterAllPlayersReadyToBeginEnemyTurn: guard IsInProgress; EndingPlayerTurnPhaseTwo = true; queue -> NotPlayPhase; AboutToSwitchToEnemyTurn event; `await Task.Yield()`; EndPlayerTurnPhaseTwoInternal(); SwitchFromPlayerToEnemySide() (CombatManager.cs:1259-1272)",
+      "verdict": "waiver",
+      "rationale": "Action-queue mode switching, a C# event and a scheduler yield -- guard N2. The two substantive calls are steps 58-64 and step 65."
+    },
+    {
+      "what": "58. EndPlayerTurnPhaseTwoInternal: THROW if CurrentSide != Player; participants as in step 46 (CombatManager.cs:1279-1289)",
+      "verdict": "faithful",
+      "rationale": "Single-player participant list; the side assertion cannot be violated (step 36)."
+    },
+    {
+      "what": "59. Per player: FlushPlayerHand(player, ctx) (steps 60-63); then await all (CombatManager.cs:1290-1304)",
+      "verdict": "faithful",
+      "rationale": "Single-player: one call, combat.py:661-662."
+    },
+    {
+      "what": "60. FlushPlayerHand guards: player.Creature.IsDead -> return; null state -> warn and return (CombatManager.cs:1313-1323)",
+      "verdict": "gap",
+      "issue": "player.discard_hand (player.py:188-197) has no is_dead guard. Same mechanism and same verdict as step 16: dormant on the ordinary path (combat.py:655-660 returns first if a turn-end effect killed the player) but part of the same family as guard G13's live case."
+    },
+    {
+      "what": "61. `flag = Hook.ShouldFlush(state, player)`; per card IN HAND ORDER: `!flag || card.ShouldRetainThisTurn` -> cardsToRetain, else cardsToFlush. A false ShouldFlush retains the WHOLE hand (CombatManager.cs:1327-1338; Hook.cs:2301-2311)",
+      "verdict": "gap",
+      "issue": "The sim hoists the predicate out of the loop and gates the whole flush call on it: `if self.hooks.should_flush_hand(): self.player.discard_hand()` (combat.py:661-662), so a false result skips not just the card moves but the flush tail as well. Same card partition otherwise (player.py:192 splits on card.retain). See guard G4 -- LIVE."
+    },
+    {
+      "what": "62. `if (cardsToFlush.Count > 0) await CardPileCmd.Add(cardsToFlush, PileType.Discard)` -- one batched Add for the whole flush (CombatManager.cs:1339-1343)",
+      "verdict": "faithful",
+      "rationale": "player.py:193-196 moves all flushed cards in one operation. The per-card hook order inside the move (on_card_discarded firing before the cards actually change piles) is creature_card_cmds' G11 and is not re-verdicted here."
+    },
+    {
+      "what": "63. `await Hook.AfterFlush(state, player, ctx, cardsToFlush, cardsToRetain)` -- UNCONDITIONAL, fired even when nothing was flushed -- then PlayerCombatState.EndOfTurnCleanup(), also unconditional and the SECOND of its two per-round sites (CombatManager.cs:1344-1346; Hook.cs:560-570)",
+      "verdict": "gap",
+      "issue": "Neither exists in the sim, and both sit inside the arm a false should_flush_hand skips. The nearest sim event is on_hand_emptied (player.py:197), which is NOT AfterFlush's counterpart -- see step 73 and guard G16. Guards G4 and G7."
+    },
+    {
+      "what": "64. `await Hook.AfterTurnEnd(state, Player, participants)` -- the player-side AfterSideTurnEnd/AfterSideTurnEndLate pair, AFTER the hand flush (the Parrying Shield slot) (CombatManager.cs:1305-1310)",
+      "verdict": "gap",
+      "issue": "The PLACEMENT is faithful and load-bearing: combat.py:665 fires after_player_turn_end after discard_hand, and relics/parrying_shield.py:24 is the ported listener that depends on it (verified by execution -- the sequence pin records on_hand_emptied then after_player_turn_end). The step carries a gap for the flattened AfterSideTurnEndLate pass (guard G12) and because the C# hook fires unconditionally where combat.py:661-662 can skip the flush that precedes it (guard G4)."
+    },
+    {
+      "what": "65. SwitchFromPlayerToEnemySide: null state -> return; clear _playersTakingExtraTurn, then per player Hook.ShouldTakeExtraTurn(state, player) -> repopulate it. Evaluated at the very END of the turn-end pipeline, after steps 42-64 have all run (CombatManager.cs:1356-1373; Hook.cs:2457-2467)",
+      "verdict": "gap",
+      "issue": "combat.py:648-652 tests should_take_extra_turn at the TOP of end_turn and, on success, runs only on_extra_turn, turn += 1 and start_turn(). See guard G3 -- LIVE."
+    },
+    {
+      "what": "66. SwitchSides(): on the player side with no extra turn -> CurrentSide = Enemy. Otherwise -> CurrentSide = Player, and IncrementTurnNumber() for the extra-turn players; on a NORMAL round it is every player AND RoundNumber++. An extra turn therefore advances TurnNumber but NOT RoundNumber (CombatManager.cs:1387-1419; PlayerCombatState.cs:157-160)",
+      "verdict": "gap",
+      "issue": "CombatState.turn (combat.py:108) is one counter incremented on every player turn including extra turns (combat.py:650, 674). See guard N4."
+    },
+    {
+      "what": "67. `foreach (creature in _state.Creatures) creature.OnSideSwitch()` -- a monster clears SpawnedThisTurn, a player does nothing; then the TurnEnded event (CombatManager.cs:1420-1424; Creature.cs:694-704; MonsterModel.cs:479-483)",
+      "verdict": "gap",
+      "issue": "No side-switch verb and no spawned_this_turn field in the sim (0 grep hits). Same mechanism and same verdict as step 32, which is where the flag is read."
+    },
+    {
+      "what": "68. Per extra-turn player: `await Hook.AfterTakingExtraTurn(state, player)`; then WaitForUnpause() and `await StartTurn(actionDuringEnemyTurn)` (CombatManager.cs:1375-1384; Hook.cs:1220-1226)",
+      "verdict": "gap",
+      "issue": "The sim folds AfterTakingExtraTurn AND Pael's Eye's BeforeSideTurnEndEarly hand exhaust into one on_extra_turn notification fired BEFORE the fresh turn (combat.py:649-651; hooks.py:673-680; relics/paels_eye.py:42-47). C# runs the hand exhaust in phase one (step 48's Early pass) and the bookkeeping here, after the whole turn-end pipeline. Guard G3."
+    },
+    {
+      "what": "69. IsEnding: !IsInProgress -> false; _pendingLoss != null -> true; any (e.IsAlive && e.IsPrimaryEnemy) -> false; Hook.ShouldStopCombatFromEnding(state) -> false; else true. IsOverOrEnding is IsEnding || !IsInProgress (CombatManager.cs:180-220; Creature.cs:252-277; Hook.cs:2442-2452)",
+      "verdict": "gap",
+      "issue": "The primary-enemy predicate itself is faithful (guard N5): _all_enemies_dead (combat.py:272-277) tests `'minion' not in e.powers`, and MinionPower is the only power in the whole decompiled source that sets OwnerIsSecondaryEnemy. What is missing is the pending-loss two-step and Hook.ShouldStopCombatFromEnding, which has no sim hook at all. Guard G10."
+    },
+    {
+      "what": "70. CheckWinCondition: a pending loss -> ProcessPendingLoss() (null the pending loss, IsInProgress = false, fire the CombatEnded C# EVENT only -- no hook whatsoever) and return true; else IsEnding -> EndCombatInternal() and return true; else false (CombatManager.cs:1046-1059, 945-965)",
+      "verdict": "gap",
+      "issue": "The sim's _end_combat (combat.py:347-350) fires on_combat_end(player_won) for BOTH outcomes, where C# fires no hook at all on a loss. Guard G10."
+    },
+    {
+      "what": "71. EndCombatInternal (the VICTORY path): record TurnNumber; IsInProgress = false; phase None; PlayerActionsDisabled = false; clear extra turns; per player `await ReviveBeforeCombatEnd()`; Hook.AfterCombatEnd(runState, state, room); History.Clear(); room.OnCombatEnded(); write the replay; per player AfterCombatEnd(); Hook.AfterCombatVictory(runState, state, room); hover-tips, turn accounting, saves, achievements, CombatWon and CombatEnded events (CombatManager.cs:970-1033; Hook.cs:328-336, 340-348)",
+      "verdict": "gap",
+      "issue": "_end_combat collapses AfterCombatEnd and AfterCombatVictory into one on_combat_end(player_won) and has no ReviveBeforeCombatEnd step. Six C# relics implement AfterCombatVictory and four are ported (Black Blood, Burning Blood, Meat on the Bone, plus Belt Buckle / Sword of Stone / War Hammer). Guard G10."
+    },
+    {
+      "what": "72. LoseCombat() only RECORDS _pendingLoss = new PendingLossState(state, room) (idempotent); the loss is processed at the next CheckWinCondition. HandlePlayerDeath(player) separately removes every card in all five piles from combat and zeroes energy and stars (CombatManager.cs:923-951)",
+      "verdict": "gap",
+      "issue": "The sim has neither the deferral nor HandlePlayerDeath's card/energy/star teardown; a lost combat just flips phase and result. Guard G10; the teardown half is unobservable because the sim discards the whole CombatState afterwards (step 74)."
+    },
+    {
+      "what": "73. CheckForEmptyHand(ctx, player): `IsInProgress && !IsExecutingCardOrPotionEffect(player) && hand is empty` -> Hook.AfterHandEmptied. Called ONLY after a card play and after a potion use -- explicitly NOT from ending the turn (CombatManager.cs:887-893; Hook.cs:611-621)",
+      "verdict": "gap",
+      "issue": "The sim's on_hand_emptied has exactly ONE call site and it is the wrong one: player.py:197, at the bottom of discard_hand -- i.e. the end-of-turn flush, the one place C# deliberately excludes (UnceasingTop.cs:25-35 spells out why in a comment). It is never fired after a card play or a potion use. See guard G16."
+    },
+    {
+      "what": "74. Reset(graceful): cancel the CT; per creature Reset() + RemoveCreature + state.RemoveCreature; _state = null; _pendingLoss = null; DebugForcedTopCardOnNextShuffle = null; IsInProgress/IsStarting/IsEnemyTurnStarted = false; History.Clear(); clear _cardOrPotionEffectDepth (CombatManager.cs:899-921)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# reuses one CombatManager singleton across a run and must tear its state back down; the sim constructs a fresh CombatState per combat (RunState.create_combat) and lets the old one be collected, so every field this method clears is already gone. Same observable outcome by construction, deliberately different architecture."
+    }
+  ],
+  "guards": [
+    {
+      "what": "G1: Hook.AfterBlockCleared is a separate UNCONDITIONAL loop; the sim fires on_block_cleared only when the block was actually cleared",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# runs the block clear and the event in TWO loops -- `foreach (item3 in creaturesStartingTurn) await item3.AfterTurnStart(side)` (CombatManager.cs:492-499) and then `foreach (item4 in creaturesStartingTurn) await Hook.AfterBlockCleared(_state, item4)` (500-507) -- so the event fires for EVERY participant: one with no block, one whose clear a ShouldClearBlock listener prevented, and a player on turn 1 whose AfterTurnStart returned early. The sim fuses them: player.py:157-159 fires on_block_cleared only inside the `if should_clear_block(...)` arm, and combat.py:296-298 additionally gates the enemy arm on `enemy.block > 0`. LIVE, both sides ported and both verified by execution. Preventers: BarricadePower is a ported Ironclad Rare Power card (cards/barricade_card.py:33-34, powers.py:140) and Sturdy Clamp is a ported Rare relic in ALL_RELICS (relics/sturdy_clamp.py:23-25; SturdyClamp.cs:22-29); BurrowedPower is ported for the enemy side. Listeners: Horn Cleat (HornCleat.cs:20-27 / relics/horn_cleat.py:19-22, Uncommon), Captain's Wheel (CaptainsWheel.cs:20-27 / relics/captains_wheel.py:19-22, Rare), Anchor and Fake Anchor (re-wired onto this hook, see G6). OBSERVED: a fresh combat with [horn_cleat] reaches turn 2 with 14 block; the same combat with a Barricade stack on the player reaches turn 2 with 0, and with [sturdy_clamp, horn_cleat] also 0. [captains_wheel] reaches turn 3 with 18 block, [sturdy_clamp, captains_wheel] with 0. Enemy half also observed: an enemy with 0 block records NO should_clear_block and NO on_block_cleared, where C# calls both. Pinned: test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented."
+    },
+    {
+      "what": "G2: there is no after_preventing_block_clear hook and no `preventer` identity; Sturdy Clamp hand-rolls its cap onto on_player_turn_start and applies it unconditionally",
+      "verdict": "gap",
+      "issue": "MECHANISM: Creature.ClearBlock (Creature.cs:718-728) passes the vetoing listener out of Hook.ShouldClearBlock and fires Hook.AfterPreventingBlockClear(preventer, creature) on the else-arm; SturdyClamp.cs:31-46 caps the retained block at 10 there and guards `if (this != preventer || creature != Owner.Creature) return`. sts2_rl/hooks.py defines no such hook and hooks.should_clear_block (613-619) returns a bare bool, so relics/sturdy_clamp.py:27-30 caps from on_player_turn_start instead -- with no preventer test and at a different point in the turn (player.py:169, AFTER the energy reset at 163-168, where C# caps inside AfterTurnStart, before the AfterBlockCleared loop and before SetupPlayerTurn). LIVE, proven: Hook.ShouldClearBlock returns the FIRST listener that vetoes (Hook.cs:2193-2204) and CombatState.IterateHookListeners walks each creature's POWERS before that player's RELICS (CombatState.cs:412-435), so with Barricade and Sturdy Clamp both held the preventer is BarricadePower and Sturdy Clamp's cap never runs -- C# keeps the full block. OBSERVED in the sim: a player holding 30 block with Barricade + Sturdy Clamp finishes start_turn with 10. Both are ported and obtainable (Barricade is an Ironclad Rare Power card; Sturdy Clamp is a Rare relic in the reward pool). Pinned: test_sturdy_clamp_does_not_cap_when_it_is_not_the_preventer."
+    },
+    {
+      "what": "G3: the extra-turn check short-circuits the ENTIRE turn-end pipeline",
+      "verdict": "gap",
+      "issue": "MECHANISM: combat.py:648-652 tests should_take_extra_turn at the TOP of end_turn and, on success, runs only on_extra_turn, `turn += 1` and start_turn(). C# evaluates Hook.ShouldTakeExtraTurn in SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373) -- AFTER EndPlayerTurnPhaseOneInternal (auto-post-play, BeforeTurnEnd, DoTurnEnd, BeforeFlush) and AFTER EndPlayerTurnPhaseTwoInternal (FlushPlayerHand, AfterFlush, EndOfTurnCleanup, AfterTurnEnd); only the ENEMY SIDE is skipped. LIVE, both sides ported: Pael's Eye is a ported Ancient relic granted by the Pael shrine (events/pael.py:53; PaelsEye.cs:108-137, relics/paels_eye.py:36-47) and the sim has dozens of on_player_turn_end listeners plus after_player_turn_end (Parrying Shield). OBSERVED: with Pael's Eye held and no card played, a full hook trace of end_turn records should_take_extra_turn -> on_extra_turn -> (5x on_card_exhausted, Pael's Eye's own hand exhaust) -> the whole of start_turn -- and NO on_player_turn_end, NO should_flush_hand, NO after_player_turn_end, no ethereal exhaust pass and no turn-end-in-hand effects. CORRECTION to the inherited doc, which claimed the trace was exactly ['should_take_extra_turn', 'on_extra_turn', 'on_player_turn_started']: that is a narrow-trace artefact, the real trace is 24 calls long. Pinned: test_extra_turn_still_runs_the_turn_end_pipeline."
+    },
+    {
+      "what": "G4: a false ShouldFlush skips the whole flush tail (AfterFlush, EndOfTurnCleanup and the sim's on_hand_emptied), where C# runs it unconditionally",
+      "verdict": "gap",
+      "issue": "MECHANISM: C#'s FlushPlayerHand treats ShouldFlush == false as 'every card is retained' -- cardsToFlush is empty and the batched Add is skipped -- but it still runs Hook.AfterFlush(..., cardsToFlush, cardsToRetain) AND PlayerCombatState.EndOfTurnCleanup() (CombatManager.cs:1327-1346). The sim guards the whole thing: `if self.hooks.should_flush_hand(): self.player.discard_hand()` (combat.py:661-662). LIVE, and NOT for the reason the inherited doc gave -- after_flush has no ported listener at all (C#'s only implementer is Bookmark.cs, unported) and EndOfTurnCleanup is dormant (G7). The live path is through the sim's on_hand_emptied, which player.py:197 fires from inside discard_hand: Joss Paper is a ported Uncommon relic whose port defers Ethereal-caused exhausts and credits them from on_hand_emptied (relics/joss_paper.py:41-45), where C#'s Joss Paper credits them from AfterSideTurnEnd (JossPaper.cs:116), which fires unconditionally. Runic Pyramid (RunicPyramid.cs:10-17, relics/runic_pyramid.py:16-17) is a ported Ancient relic from the Darv shrine (events/darv.py:33) and Ringing Triangle is a ported shop relic; both return false from should_flush_hand. OBSERVED: a turn that exhausts 5 Ethereal cards leaves the next hand at 6 cards with [joss_paper] and at 5 with [joss_paper, runic_pyramid] -- the deferred credit is stranded (_ethereal_pending stays at 5) and the Joss Paper draw never happens, where the real game draws it either way. THE OBSERVABLE IS COMPOUND, and the fix queue needs to see that: Joss Paper is the ONLY sim listener on on_hand_emptied (verified in the fix pass -- `grep -rn on_hand_emptied sts2_rl/` returns hooks.py:427/430/431 the dispatcher, player.py:197 the single call site, and relics/joss_paper.py:42 the single listener), so the flush-gate defect has no other observable today. Fixing EITHER leg clears the pin: (a) make the flush tail unconditional (run the AfterFlush/EndOfTurnCleanup/on_hand_emptied arm even when should_flush_hand is false), or (b) re-hook Joss Paper's deferred credit onto after_player_turn_end, which is the sim's AfterSideTurnEnd slot and is where JossPaper.cs:116 actually lives. (b) is the smaller change and is the faithful one; (a) is still required for G4 itself, but the pin will already be green. Pinned: test_no_flush_still_credits_the_end_of_turn_hand_events."
+    },
+    {
+      "what": "G5: the enemy side is per-enemy in the sim and per-side in the game",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# has no per-creature turn-start or turn-end hook at all -- BeforeTurnStart (449-455), AfterTurnStart/ClearBlock (492-499) and AfterBlockCleared (500-507) each run as a complete pass over every participant, then Hook.AfterSideTurnStart fires ONCE (522), then the moves (1072-1090), then one Hook.BeforeTurnEnd (1251) and one Hook.AfterTurnEnd (1256). The sim's _run_enemy_turns (combat.py:286-345) does [clear block -> on_enemy_turn_start -> move -> on_enemy_turn_end] per enemy and only on_enemy_side_end once. DORMANT, reachability checked rather than assumed: every ported listener on these hooks self-filters to its own owner -- all 7 on_enemy_turn_start and all 8 on_enemy_turn_end implementations in sts2_rl/powers.py open with `if self.owner is enemy` / `if enemy is self.owner`, and ZERO relic, card, enchantment or potion implements any of the three (verified by grep: the only non-hooks.py definitions are in powers.py). So the N-fold dispatch is neutralised. It goes live the moment (a) any cross-enemy effect touches a LATER-indexed enemy's block or turn-start power, or (b) PoisonPower becomes reachable -- it is ported (powers.py:484-490) and C# fires it from AfterSideTurnStart (PoisonPower.cs:55-73), i.e. for ALL enemies before ANY move, but a grep of sts2_rl for PoisonPower outside powers.py finds only the __init__.py re-export, so nothing applies it today. CORRECTION to the inherited doc, which said 'nine on_enemy_turn_end implementations': there are eight. Pinned as a PASSING order trace so that a future fix has to change it deliberately: test_enemy_side_is_interleaved_per_enemy."
+    },
+    {
+      "what": "G6: the sim clears the player's block on turn 1; the game does not",
+      "verdict": "gap",
+      "issue": "MECHANISM: Creature.AfterTurnStart returns BEFORE ClearBlock for a player whose PlayerCombatState.TurnNumber == 1 (Creature.cs:681-692), which is what lets Hook.BeforeCombatStart grant block that survives into the first enemy turn. player.py:157-159 has no turn-1 arm. LIVE and already load-bearing: Anchor's real hook is BeforeCombatStart (Anchor.cs:19-23) and the sim had to re-wire it onto on_block_cleared to compensate (relics/anchor.py:21-24, whose docstring says so outright), as did Fake Anchor (relics/fake_anchor.py:24-29); that workaround is itself what makes G1 bite those two relics. OBSERVED: a player holding 10 block at a first start_turn (_first_turn = True) ends it with 0. Anchor is a ported Common relic in ALL_RELICS. Pinned: test_player_block_is_not_cleared_on_turn_one."
+    },
+    {
+      "what": "G7: PlayerCombatState.EndOfTurnCleanup has no sim counterpart at either of its two sites",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# runs it twice per round -- at the end of the enemy turn for every player (CombatManager.cs:1252-1255) and inside each player's FlushPlayerHand (1346). Per card in EVERY pile it clears ExhaustOnNextPlay, HasSingleTurnRetain, HasSingleTurnSly and the turn-scoped cost modifiers (PlayerCombatState.cs:268-274; CardModel.cs:1610-1623). The sim's only per-turn card reset is Card.reset_turn_cost_modifiers (cards/base.py:265-269), which clears _cost_delta_this_turn / _free_this_turn / _cost_this_turn and nothing else, and it runs at the START of the next player turn (player.py:153-155) rather than at either end-of-turn site. Two consequences: the reset window is a full enemy turn wider than the game's, and there is no single-turn Retain / single-turn Sly / ExhaustOnNextPlay state at all. DORMANT, and the dormancy evidence was RE-EXECUTED in the fix pass rather than inherited: `grep -rn --include=*.py <field> sts2_rl/` gives `has_single_turn_retain 0 hits`, `single_turn_sly 0 hits`, `exhaust_on_next_play 0 hits` -- so no ported effect can grant any of the three states EndOfTurnCleanup exists to clear. The counterpart grep for the one reset the sim does have, `grep -rn --include=*.py reset_turn_cost_modifiers sts2_rl/`, returns exactly four lines: cards/base.py:118 (a comment), cards/base.py:245 (the constructor), cards/base.py:265 (the definition) and player.py:155 (its ONE call site, inside start_turn) -- confirming there is no end-of-turn site on either of C#'s two. ExhaustOnNextPlay's only C# setter is CardPileCmd.AutoPlayFromDrawPile(forceExhaust), unported. Goes live with the first single-turn Retain/Sly grant, or with any effect that reads a cost modifier during the enemy turn."
+    },
+    {
+      "what": "G8: the AutoPrePlay and AutoPostPlay phases do not exist; their two hooks are hand-rolled onto neighbouring slots",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# gives start-of-turn auto-plays their own phase, entered strictly AFTER Hook.AfterSideTurnStart and the orb queue (CombatManager.cs:556-572), and end-of-turn auto-plays a phase entered strictly BEFORE Hook.BeforeTurnEnd (CombatManager.cs:1160-1176). The sim has neither hook. LIVE on the AutoPostPlay side, verified by execution: StampedePower is ported and fires from on_player_turn_end (powers.py:1025), i.e. the sim's BeforeTurnEnd slot, where C#'s StampedePower.cs implements AfterAutoPostPlayPhaseEntered; Cloak Clasp is a ported Rare relic that gains 1 block per card in hand from BeforeSideTurnEnd (CloakClasp.cs:24, relics/cloak_clasp.py:19-24). C# therefore ALWAYS runs Stampede's auto-plays before Cloak Clasp counts the hand; the sim's answer depends on listener-registration order. OBSERVED with a 5-card hand and Stampede 2: forcing Stampede first gives 3 block (the C# answer), the natural relics-before-powers order gives 5. The ported Howl From Beyond card (cards/howl_from_beyond.py:45, HowlFromBeyond.cs) is the same shape. The AutoPrePlay side is dormant: Whispering Earring (relics/whispering_earring.py:27-43) and Imbued (enchantments.py:261-267) both fire from on_player_turn_started and neither reads another turn-start listener's output. Pinned: test_end_of_turn_auto_plays_run_before_turn_end_hooks."
+    },
+    {
+      "what": "G9: enemy intents are rolled at the end of each monster's own move, not in one pass at the start of the player's turn",
+      "verdict": "gap",
+      "issue": "MECHANISM: CombatManager.cs:478-484 rolls EVERY enemy's next move in one pass at the start of the player's turn, unconditionally and in enemy-list order, and skips the pass entirely on an extra player turn; the very first roll happens even earlier, in AfterCreatureAdded (CombatManager.cs:860-867). The sim instead advances each monster's own machine as part of performing its move, with telegraph_next_move (monsters/base.py:96-105) as the explicit stand-in, and combat.py:314-329 documents the consequence in the engine itself: a monster stunned this round keeps its move (correct) but MISSES ONE MonsterAi draw where the game takes one. LIVE under seed parity, and the differing draw count is now DEMONSTRATED BY EXECUTION rather than argued (the fix pass's requirement): with a one-LeafSlimeS encounter (monsters/overgrowth/slimes.py:17-56, whose telegraph_next_move draws exactly one weighted_branch_pick on combat_rng.monster_ai on every transition) and a counting proxy installed over the monster_ai accessor, one _run_enemy_turns records `normal enemy turn: MonsterAi draws = 1` and `STUNNED enemy turn: MonsterAi draws = 0`. C# takes 1 in BOTH cases, because PrepareForNextTurn -> RollMove runs for every enemy at player-turn-start regardless of whether it acted (CombatManager.cs:478-484; MonsterModel.cs:415-418). So one stunned enemy round desyncs the MonsterAi stream by exactly one draw, and every later draw in the combat shifts. The stun is player-reachable, not monster-only: Whistle is a ported Ancient Attack card from Tanx's Whistle (cards/whistle.py:30-38) that calls CreatureCmd.stun with no next_move_key, i.e. with no compensating pre-roll (cmds.py:208-218). Dormant under legacy RNG (one shared stream, nothing compares counts). Cross-referenced to Task 10 (monster_state_machine), which owns WHAT the roll returns; if Task 10 finds the sim's roll produces the wrong move, that is Task 10's finding and should cross-reference G9 rather than re-verdict it. Not pinned here: the observable is an RNG-stream draw count, not a hook order, and the conformance suite is its natural home."
+    },
+    {
+      "what": "G10: the combat-end path collapses five C# distinctions into one hook, and the sim's two player-death exits disagree with each other",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# distinguishes (a) a LOSS -- LoseCombat() -> _pendingLoss -> ProcessPendingLoss(), which fires the CombatEnded C# event and NO HOOK AT ALL (CombatManager.cs:945-965) -- from (b) a VICTORY, which runs EndCombatInternal with ReviveBeforeCombatEnd() -> Hook.AfterCombatEnd -> Hook.AfterCombatVictory (970-1033); and it consults Hook.ShouldStopCombatFromEnding inside IsEnding (196-199). The sim has one _end_combat(player_won) firing one on_combat_end(player_won) (combat.py:347-350), no revive step, and no should_stop_combat_from_ending hook. On top of that, _run_enemy_turns has TWO player-death exits that behave differently: combat.py:308-310 calls _end_combat(player_won=False) (hook fires) while combat.py:332-335 sets phase/result by hand and returns (hook does not). OBSERVED (re-executed in the fix pass, not inherited): `killed from on_enemy_turn_start: hooks=[('on_combat_end', False)]  phase=Phase.COMBAT_OVER  player_dead=True` versus `killed by the attack: hooks=[]  phase=Phase.COMBAT_OVER  player_dead=True` -- same end state, different hook record. DORMANT, and the dormancy evidence was re-executed too: `grep -rn --include=*.py 'def on_combat_end' sts2_rl/` returns the hooks.py:271 dispatcher plus exactly four listeners, and reading all four confirms each gates on victory or on the player being alive -- black_blood.py:18 `if player_won and not self.player.is_dead`, burning_blood.py:16 the same, meat_on_the_bone.py:18 `if not player_won or self.player.is_dead: return`, chosen_cheese.py:20 `if self.player.is_dead: return`. So neither the extra loss-side call nor the missing one changes anything today; and the two ported effects that need ShouldStopCombatFromEnding hand-roll around it (SteamEruptionPower prevents the death instead, powers.py:2004-2010; StockPower spawns the replacement Axebot from on_death, powers.py:2962-2984, which runs before the _all_enemies_dead() check). It goes live for any AfterCombatVictory-only listener with an unconditional effect, and the two-exit inconsistency is live the moment any on_combat_end listener has an effect that outlives the combat."
+    },
+    {
+      "what": "G11: Hook.BeforeTurnEnd(Enemy) has no sim counterpart",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# fires the same three-pass BeforeTurnEnd dispatcher for the ENEMY side at CombatManager.cs:1251, immediately before EndOfTurnCleanup and AfterTurnEnd. The sim's _run_enemy_turns has only the per-enemy on_enemy_turn_end (combat.py:341) and the side-scoped on_enemy_side_end (345), which maps to AfterTurnEnd; there is no slot between them. DORMANT, and the inherited content list was WRONG -- re-enumerated by execution in the fix pass. `grep -rln 'BeforeSideTurnEndVeryEarly|BeforeSideTurnEndEarly|override.*Task BeforeSideTurnEnd' src/Core/Models/Powers/` over the decompiled game returns eight files: AsleepPower (VeryEarly, 38), PlatingPower (Early, 61), ChainsOfBindingPower (80), DoomPower (68), HailstormPower (30), SandpitPower (139), TheBombPower (38) and a mock. Of those, DoomPower and HailstormPower -- both named in the inherited rationale as ported -- are NOT ported (`grep -n '^class DoomPower|^class HailstormPower' sts2_rl/powers.py` returns nothing); ChainsOfBindingPower (powers.py:3292) and TheBombPower (powers.py:3748) ARE ported but their BeforeSideTurnEnd is the PLAYER side, and both sit on on_player_turn_end (powers.py:3331, 3779), so neither touches this enemy-side slot. The genuinely ported ENEMY-side content is two powers, each owner-filtered: PlatingPower's BeforeSideTurnEndEarly block grant went onto on_enemy_turn_end (powers.py:1076-1078, `if enemy is self.owner`), and AsleepPower's BeforeSideTurnEndVeryEarly Plating-drop went onto on_enemy_turn_START (powers.py:1853-1857, `if enemy is self.owner and self.amount <= 1`, comment 'Mirrors BeforeSideTurnEndVeryEarly') -- one slot further from the C# position than the inherited text said. With one enemy the per-enemy slot and the side slot coincide, so nothing is observable today. It goes live in any multi-enemy fight where one of those powers must act after the LAST enemy's move rather than after its own."
+    },
+    {
+      "what": "G12: the sub-phase ordering inside BeforeTurnEnd / AfterTurnEnd / AfterSideTurnStart is flattened into single listener walks",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# guarantees ordering by running separate complete passes -- BeforeSideTurnEndVeryEarly -> BeforeSideTurnEndEarly -> BeforeSideTurnEnd (Hook.cs:1238-1261), AfterSideTurnEnd -> (awaited) -> AfterSideTurnEndLate (Hook.cs:1265-1291), AfterSideTurnStart -> AfterSideTurnStartLate (Hook.cs:1163-1175). The sim's dispatchers are a single `for l in list(self._listeners)` pass each (hooks.py:285-295, 297-301, 338-342), so a 'Late'/'VeryEarly' listener's guaranteed position becomes registration-order luck. LIVE, verified by execution, and the inherited doc's 'no ported pair contends for the same event today' is WRONG: Orichalcum is a ported Uncommon relic whose C# implementation is deliberately two-phase -- BeforeSideTurnEndVeryEarly snapshots `Block > 0` into ShouldTrigger (Orichalcum.cs:44-56) and BeforeSideTurnEnd then grants the 6 block -- while Cloak Clasp (ported Rare) grants 1 block per card in hand from plain BeforeSideTurnEnd (CloakClasp.cs:24). The sim folds both into on_player_turn_end (relics/orichalcum.py:22-26, relics/cloak_clasp.py:19-24). OBSERVED with a 5-card hand: [cloak_clasp, orichalcum] gives 5 block and [orichalcum, cloak_clasp] gives 11; C# always gives 11 because the VeryEarly snapshot runs before ANY plain listener. Fake Orichalcum and Ripple Basin are the same shape, as are SandpitPower (AfterSideTurnStartLate) and DisintegrationPower (AfterSideTurnEndLate), both ported. Same shape as creature_card_cmds' G10 (ModifyShuffleOrder vs AfterShuffle). Pinned: test_orichalcum_snapshots_block_before_other_turn_end_listeners."
+    },
+    {
+      "what": "G13: CheckWinCondition runs at three of the game's six sites, and none of the three recomputes the condition",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# calls it after the player-turn setup (CombatManager.cs:573), after the enemy turn starts (598), after EACH enemy's move (1084), after Hook.BeforeTurnEnd(Player) (1181), at the end of phase one (1208) and after EndEnemyTurnInternal (830). The sim checks after each enemy's move (combat.py:336-338), after the enemy side (via the same return), and after the NEXT player turn's setup (combat.py:681-685); its other 'checks' (655-660, 666, 673) test the cached `phase == COMBAT_OVER` flag, which only a previous _end_combat sets. Critically there is NO check after the TURN-1 setup: combat.py:208-209 fires on_combat_start and start_turn and is followed by nothing. LIVE -- the inherited doc claimed this was dormant because 'none of the sim's on_combat_start / on_player_turn_start(ed) listeners deals damage'. That is FALSE: a scripted scan finds SEVEN damage-dealing turn-start listeners, four of them relics (relics/festive_popper.py:21, mercury_hourglass.py:22, mr_struggles.py:22, royal_poison.py:25) plus three powers. Two of them -- Festive Popper and Mercury Hourglass -- hand-roll a `self._check_win()` call (relics/base.py) precisely because this check is missing, which is itself evidence of the gap; and NEITHER covers player death. Royal Poison is a ported Event relic granted by the Round Tea Party event (events/round_tea_party.py:40; RoyalPoison.cs:18-25 fires AfterPlayerTurnStart on turn 1, which C# follows immediately with CheckWinCondition at CombatManager.cs:573). OBSERVED: a combat constructed with relics=[royal_poison], current_hp=4 comes back with player.hp == 0, player.is_dead == True, phase == Phase.PLAYER_TURN, is_over == False and six valid actions -- the sim hands the player a full turn (which they can win the fight in) after a death the real game processes on the spot. Pinned: test_turn_one_setup_death_ends_the_combat."
+    },
+    {
+      "what": "G14: the turn-1 ShouldStartAtBottomOfDrawPile pass is missing, so an Imbued card can be drawn into the opening hand",
+      "verdict": "gap",
+      "issue": "MECHANISM: CombatManager.cs:657-672 runs TWO moves before the turn-1 draw -- first every card whose enchantment sets ShouldStartAtBottomOfDrawPile goes to the BOTTOM (MoveToBottomInternal), then every Innate card NOT already moved goes to the TOP (`.Except(list)`). player.py:172-182 ports only the Innate half. LIVE: ShouldStartAtBottomOfDrawPile has exactly one implementer in the whole decompiled game, Imbued.cs:11, and Imbued IS ported (enchantments.py:243-267) and IS obtainable -- Electric Shrymp is a ported relic in ALL_RELICS that enchants a deck Skill with it (relics/electric_shrymp.py:17-21). The bottom-move exists so the auto-playing Imbued card does not occupy an opening-hand slot; without it the sim draws it like any other card. OBSERVED over 30 seeds with a 9-Strike + 1-Imbued-Defend deck: the sim's turn-1 hand is 4 cards in 17 of 30 runs and 5 in the other 13, where C# is always 5. THE 17/30 FIGURE WAS RE-RUN IN THE FIX PASS AND IS CONFIRMED, with the exact seed partition recorded so it is reproducible: `CombatState(starting_deck=[9x strike, defend+imbued], rng=random.Random(seed))` for seed in range(30) gives hand==4 on seeds [0, 4, 5, 6, 7, 10, 11, 13, 17, 18, 20, 21, 23, 24, 25, 26, 28] (17 seeds) and hand==5 on [1, 2, 3, 8, 9, 12, 14, 15, 16, 19, 22, 27, 29] (13 seeds), with no other hand size (the Imbued card sits at the bottom and is auto-played from the draw pile by AfterAutoPrePlayPhaseEntered, Imbued.cs:20-26). Knock-on: the sim's Imbued only fires `if self.card in player.hand` (enchantments.py:261-266), so on the 13 runs where it is not drawn the sim never auto-plays it at all, where C# always does. Pinned: test_imbued_card_starts_at_the_bottom_of_the_draw_pile."
+    },
+    {
+      "what": "G15: the turn-end-in-hand wrapper re-consults should_ethereal_trigger in the sim; C# does not",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.OnTurnEndInHandWrapper (CardModel.cs:1682-1698) decides the card's destination on the raw keyword -- `if (Keywords.Contains(Ethereal)) Exhaust else Add(Discard)` -- and never re-consults Hook.ShouldEtherealTrigger, which was already consulted in step 52's partition (and only for the cards that had NO turn-end effect). combat.py:370 re-consults it: `if card.is_ethereal and self.hooks.should_ethereal_trigger(card)`. So a false predicate sends an Ethereal turn-end card to the discard pile in the sim and to the exhaust pile in the game. DORMANT on both sides, verified: `grep -rl 'override.*ShouldEtherealTrigger'` over the whole decompiled game returns ZERO files and `grep -rn 'def should_ethereal_trigger' sts2_rl/` returns only the hooks.py dispatcher, so the predicate is constant-true and the branches coincide. Goes live with the first implementation on either side."
+    },
+    {
+      "what": "G16: on_hand_emptied is fired from the end-of-turn flush -- the one site C# deliberately excludes -- and from nowhere else",
+      "verdict": "gap",
+      "issue": "MECHANISM: C#'s CheckForEmptyHand (CombatManager.cs:887-893) is called ONLY after a card play and after a potion use, and UnceasingTop.cs:25-35 has an explicit remark explaining why the hand draw and the hand flush must not trigger it ('if a card is autoplayed during this time, the player's hand will always be empty, so Unceasing Top will always draw'); it additionally gates on IsExecutingCardOrPotionEffect and on the player's Phase being AutoPrePlay/Play/AutoPostPlay. The sim's on_hand_emptied has exactly one call site, player.py:197 at the bottom of discard_hand -- i.e. the flush -- and none after a card play or a potion. DORMANT, and the dormancy evidence was RE-EXECUTED in the fix pass: `grep -rn --include=*.py on_hand_emptied sts2_rl/` returns exactly five lines -- hooks.py:427 (the dispatcher def), hooks.py:430-431 (its listener walk), player.py:197 (the one call site) and relics/joss_paper.py:42 (the one listener). The one C# AfterHandEmptied implementer was re-wired away from it: relics/unceasing_top.py:21-28 uses on_card_played with `not self.combat.is_over and self.combat.current_side == 'player' and not self.player.hand`, which reproduces C#'s CheckForEmptyHand gating (play-time only, in-progress only). The only listener left, Joss Paper (relics/joss_paper.py:42-45), was deliberately written against the sim's flush-time semantics -- its C# counterpart uses AfterSideTurnEnd (JossPaper.cs:116). Not independently observable today, but it is the mechanism through which G4 becomes live (Runic Pyramid skips the flush, so Joss Paper's deferred credit is stranded), and see G17 for the second defect in the same port."
+    },
+    {
+      "what": "G17: Joss Paper's port uses `card.is_ethereal` as its causedByEthereal proxy, so ANY mid-turn exhaust of an Ethereal card is deferred to the flush; C# defers only the turn-end ethereal path",
+      "verdict": "gap",
+      "issue": "MECHANISM: C#'s AfterCardExhausted takes the CAUSE as a parameter -- `AfterCardExhausted(ctx, card, bool causedByEthereal)` (JossPaper.cs:102-114, dispatched from CardCmd.cs:237-244 / Hook.cs:237-242) -- and `causedByEthereal: true` is passed from exactly TWO sites in the whole decompiled game, both at turn end: CombatManager.cs:1240 (step 53's ethereal exhaust pass) and CardModel.cs:1692 (step 54's OnTurnEndInHandWrapper). Every other Exhaust passes false, including the play-time exhaust of an Exhaust-keyword card at CardModel.cs:1985 (`causedByEthereal: false`). The sim has no cause parameter: relics/joss_paper.py:36 branches on `card.is_ethereal`, a property of the CARD, so an Ethereal card exhausted in the middle of the play phase is booked to _ethereal_pending and its credit is withheld until on_hand_emptied fires from the flush. LIVE, both sides ported and obtainable, and verified by execution. Trigger: Apparition (cards/apparition.py:12-38) is a ported 1-cost Ancient Skill with `exhausts = True` AND `is_ethereal = True`, granted by the ported relic Distinguished Cape (relics/distinguished_cape.py); Joss Paper is a ported Uncommon relic. OBSERVED: with [joss_paper], four plain Strikes exhausted first (cards_exhausted = 4, ethereal_pending = 0) and then Apparition played, the sim records cards_exhausted = 4, ethereal_pending = 1 and hand 1 -> 0 -- NO draw. C# treats that exhaust as the fifth non-ethereal one (causedByEthereal false), fires DrawIfThresholdMet immediately and hands the player a card they can still play this turn (hand 1 -> 1). Knock-on at turn end: the sim credits the deferred exhaust inside discard_hand, AFTER the flush, so its drawn card survives into the next turn -- next hand 6 -- where C#'s mid-turn draw was flushed with the rest and the next hand is 5. Distinct from G4 (there the credit is stranded because the flush is skipped; here it is merely late) but the same port, and the same one-line fix does not cover both. Pinned: test_hook_order.py::TestTurnStructureOrder::test_joss_paper_credits_a_mid_turn_ethereal_exhaust_at_once."
+    },
+    {
+      "what": "G18: Pael's Eye's AnyCardsPlayedThisTurn predicate is missing BOTH of its C# clauses -- the turn-1 Whispering Earring short-circuit and the auto-play exclusion",
+      "verdict": "gap",
+      "issue": "MECHANISM: PaelsEye.AnyCardsPlayedThisTurn (PaelsEye.cs:149-156) has two clauses the sim's relics/paels_eye.py:27-34 has neither of. (1) PaelsEye.cs:152 -- `if (playerCombatState.TurnNumber == 1 && Owner.Relics.Any(r => r is WhisperingEarring)) return true;` -- on turn 1, merely HOLDING Whispering Earring counts as having played, which switches Pael's Eye off for that turn. (2) PaelsEye.cs:155 -- the history scan filters `&& !e.CardPlay.IsAutoPlay`, so auto-plays never count. The sim's predicate is a bare `any(history.of_type(CardPlayedEntry, this_turn=True))`: history.py:80-81 records a CardPlayedEntry from on_card_played for EVERY play including auto-plays (combat.auto_play at combat.py:424-439 goes through _resolve_card_play, and relics/whispering_earring.py:36 says the missing auto flag is a known divergence). The two omissions CANCEL in the common case -- Whispering Earring's turn-1 auto-plays are counted by the sim and so reproduce clause (1)'s effect -- and diverge otherwise. LIVE, verified by execution on both legs. Leg (2), reachability proven with two ported relics and no exotic deck: with relics=[paels_eye] and a 9-Strike + 1-Imbued-Defend deck (Imbued is granted by the ported relic Electric Shrymp, relics/electric_shrymp.py:17-21), on seeds 0, 4 and 5 the Imbued card lands in the opening hand and auto-plays, and the sim reports _any_cards_played_this_turn = True and should_take_extra_turn = FALSE where C# reports False and TRUE. Isolated from G14's draw ordering, the same thing shows with a direct `cs.auto_play(card)` on turn 1: sim _any_cards_played_this_turn = True, should_take_extra_turn = False; C# would grant the extra turn. Leg (1), the clause named in the review: with relics=[whispering_earring, paels_eye] and an opening hand in which nothing is playable (a 10-Dazed deck; valid card actions = []), the Earring's loop plays nothing, and the sim reports _any_cards_played_this_turn = False and should_take_extra_turn = TRUE where C#'s clause makes it False -- i.e. the sim hands out a Pael's Eye extra turn (plus its hand exhaust) that the real game withholds. Leg (1) needs a turn-1 hand with no playable card, which is constructible but I could not name a realistic Ironclad deck for it, so the LIVE label rests on leg (2). Pinned on leg (2), which is the reachability-proven one: test_hook_order.py::TestTurnStructureOrder::test_paels_eye_ignores_auto_plays. Adjacent to G3 (which owns WHEN the extra-turn predicate is evaluated); this guard owns WHAT it reads."
+    },
+    {
+      "what": "N1: the _inPlayerTurnSetup / _deferredEndTurnTransition race guard has no sim analogue",
+      "verdict": "gap",
+      "issue": "CombatManager.cs:56-65, 700-714, 722-735 exists exactly so that a card auto-played during the AutoPrePlay phase can end the turn without the transition racing the tail of StartTurn. The sim's start_turn is synchronous and an end_turn re-entered from inside it would recurse. Recorded as a gap and NOT a waiver: the ported Whispering Earring auto-plays real cards during what C# calls the setup window (relics/whispering_earring.py:27-43) and guards against the recursion by hand (`if combat.is_over or self.turn != start_turn: break`), which is a workaround for exactly this missing machinery. Dormant only because no ported turn-1 auto-playable card ends the turn. Carries G8's precedence (same missing phase model)."
+    },
+    {
+      "what": "N2: presentation, animation, SFX, banners, checksums, replay writing, saves, achievements, the ActionExecutor / ActionQueueSynchronizer layer, and every HookPlayerChoiceContext pause/resume path",
+      "verdict": "waiver",
+      "rationale": "Out of scope by the shared audit rules (presentation and multiplayer plumbing), and the sim is single-player and synchronous. Steps 4, 10, 25, 28, 35, 42, 44, 56, 57 and 71 each cite it for their non-substantive legs; in every one of those steps the substantive leg is verdicted separately."
+    },
+    {
+      "what": "N3: orbs (OrbQueue.AfterTurnStart at CombatManager.cs:533, OrbQueue.BeforeTurnEnd at 1218)",
+      "verdict": "waiver",
+      "rationale": "Orbs are the Defect's and the sim is Ironclad-only; non-Ironclad character content is an explicit waiver under the shared scope rules. Steps 24 and 51."
+    },
+    {
+      "what": "N4: RoundNumber and TurnNumber are one counter in the sim",
+      "verdict": "gap",
+      "issue": "CombatState.turn (combat.py:108) is incremented once per player turn INCLUDING extra turns (combat.py:650, 674), whereas SwitchSides increments PlayerCombatState.TurnNumber for extra-turn players but CombatState.RoundNumber ONLY on a normal round (CombatManager.cs:1405-1418). AbstractModel.cs:1125 explicitly directs content to use AfterSideTurnStart 'with a RoundNumber check', so the two are meant to be distinguishable. Recorded as a gap carrying G3's precedence (it is only reachable on the extra-turn path, which G3 already makes divergent); dormant on its own because no ported content reads a round counter that an extra turn would skew -- the ported turn-number readers (Horn Cleat turn 2, Captain's Wheel turn 3, Sparkling Rouge turn 3, Royal Poison turn 1, Anchor turn 1) all read TurnNumber, which is what self.turn models."
+    },
+    {
+      "what": "N5: the win-condition PREDICATE itself is faithful",
+      "verdict": "gap",
+      "issue": "_all_enemies_dead (combat.py:272-277) reproduces IsPrimaryEnemy exactly -- a full-source grep confirms MinionPower is the only power that sets OwnerIsSecondaryEnemy, so `'minion' not in e.powers` is the right test and IllusionPower is NOT a secondary-enemy marker despite reviving its owner -- and its `primaries or self.enemies` fallback matches C#'s behaviour when every enemy is a minion. The two things missing from the SURROUNDING machinery, Hook.ShouldStopCombatFromEnding and the pending-loss two-step, are G10's; this guard carries G10's verdict so the rollup stays actionable rather than recording a faithful predicate in isolation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-25"
+}
