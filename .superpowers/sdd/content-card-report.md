@@ -1,7 +1,7 @@
 # Stream 3 — card content audits
 
 Branch `audit-card`, worktree `c:\Users\Perry\Desktop\sts2-rl-card`.
-Records under `audits/card/**`; probes under `tools/audit/card_probes.py`.
+Records under `audit/records/card/**`; probes under `audit/tools/card_probes.py`.
 
 **Status: COMPLETE.** All 202 auditable units of the 203-unit roster are
 audited; the 203rd (`card/sweep`) has no C# counterpart and is resolved in §7.
@@ -11,27 +11,30 @@ audited; the 203rd (`card/sweep`) has no C# counterpart and is resolved in §7.
 ## 1. Result
 
 ```
-py tools/audit_status.py --kind card
+py audit/tools/audit_status.py --kind card
 kind    total  audited  invalid  stale  gaps  unaudited
-card      203      202        0      0   107          1
+card      203      202        0      0   109          1
 ```
 
 | | count |
 |---|---|
 | Records | 202 |
-| Unit rollups | **107 gap**, 91 faithful, 3 deliberate-divergence, 1 waiver |
-| Verdict entries (hooks + guards) | 1074: 924 faithful, **143 gap**, 5 dd, 2 waiver |
+| Unit rollups | **109 gap**, 89 faithful, 3 deliberate-divergence, 1 waiver |
+| Verdict entries (hooks + guards) | 1074: 918 faithful, **149 gap**, 5 dd, 2 waiver |
+
+Counts as of the review fix pass (§10), which raised six `faithful` guards to
+`gap`. Before it: 107 gap rollups / 143 gap entries.
 
 `py -m pytest test/ -q` was run after every batch and never moved: **2476
 passed, 31 xfailed**, the same as before the stream started. Audits add no
-executable code; the only non-record file added is `tools/audit/card_probes.py`.
+executable code; the only non-record file added is `audit/tools/card_probes.py`.
 
 Fourteen batches, one commit each: `10946560`, `716f023e`, `2c8b3c35`,
 `935bc8da`, `6cd22260`, `f5e3e3e8`, `437c0134`, `708a6a37`, `7f45ec85`,
 `218d7458`, `50eb0d52`, `d700872d`, `b5b6e211`, `2e1a5a97`.
 
 **Reading the 53% gap rate.** It is a rollup number: one `gap` entry anywhere in
-a unit makes the unit a gap. 143 of 1074 entries (13%) are gaps, and a large
+a unit makes the unit a gap. 149 of 1074 entries (14%) are gaps, and a large
 share of those are three pool-wide DORMANT families — the `-1` canonical cost on
 unplayable cards, a printed DynamicVar with no stored counterpart, and the
 `is_gone` liveness guards. The genuinely card-specific live defects are the ~25
@@ -89,7 +92,7 @@ also what fills the context window.
 
 ## 3. Pool-wide findings (executed)
 
-Every number below is reproducible with `py tools/audit/card_probes.py`, which
+Every number below is reproducible with `py audit/tools/card_probes.py`, which
 is committed.
 
 ### 3.1 `downgrade()` does not restore upgrade-toggled keywords — 5 cards, LIVE
@@ -203,7 +206,7 @@ rider (card_selection / card_gen), `infernal_blade`, `stoke` (card_gen) and
 
 ### 3.5 Liveness guards C# does not have — 41 classes
 
-`py tools/audit/card_probes.py dead-target-guards` lists 41 sim card classes
+`py audit/tools/card_probes.py dead-target-guards` lists 41 sim card classes
 testing `is_gone` / `is_dead`. They fall into four kinds and only two diverge:
 
 1. **`if ctx.player.is_dead: return` mid-card** — the sim bails between two
@@ -318,8 +321,8 @@ Each is recorded per unit with the trigger that would make it live.
 
 | Family | Count | Trigger that makes it live |
 |---|---|---|
-| **`-1` canonical cost mapped to 0.** `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full chain. `GetAmountToSpend()` clamps to 0 on both sides, so only READS diverge. | 27 unplayable curses/statuses/quests | Any effect reading an unplayable card's cost without a `> 0` filter. The three ported readers all filter (`mummified_hand.py:25`, `potions.py:168`, `event_cards.py:328`) and `infested_automaton.py:35` filters `pool_card_ids()`, which holds no curses/statuses/quests. |
-| **A printed DynamicVar with no stored counterpart**, so `base_damage` / `base_block` / `base_hp_loss` / `magic_number` report the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. | 22 | Nothing for game fidelity — the dealt number is always right. Already LIVE for the RL observation encoder. |
+| **`-1` canonical cost mapped to 0.** `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full chain. `GetAmountToSpend()` clamps to 0 on both sides, so only READS diverge. | **29** unplayable curses/statuses/quests | Any effect reading an unplayable card's cost without a `> 0` filter. The three ported readers all filter (`mummified_hand.py:25`, `potions.py:168`, `event_cards.py:328`) and `infested_automaton.py:35` filters `pool_card_ids()`, which holds no curses/statuses/quests. |
+| **A printed DynamicVar with no stored counterpart**, so `base_damage` / `base_block` / `base_hp_loss` / `magic_number` report the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. | **23** — 22 with the number MISSING, plus `feel_no_pain`, which stores a wrong one (§4.3) | Nothing for game fidelity — the dealt number is always right. Already LIVE for the RL observation encoder. |
 | **`is_gone` liveness guards** (§3.5 families 2–3). | 10 | Already LIVE via `card/vicious`. |
 | **Per-enemy AoE fan-out.** C# passes the whole valid-target list to ONE `CreatureCmd.Damage` call per hit (AttackCommand.cs:650), computing every DamageResult before any `Kill`; the sim issues one call per enemy, so deaths interleave. | 8: conflagration, dramatic_entrance, exterminate, howl_from_beyond, pacts_end, stomp, thunderclap, whirlwind | A ported monster whose on-death effect changes a sibling's incoming damage or block, or whose death spawns an enemy mid-attack. |
 | **`CanBeGeneratedInCombat` mapped to the wrong flag** — the sim's `_ChoosableCurse` base sets `can_be_generated_by_modifiers = False`, which C# leaves true, and leaves the flag C# does override at its default. | 4: disintegration, mind_rot, sloth, waste_away (+ frantic_escape independently) | One base-class fix corrects all four. Live if an in-combat generator is pointed at a pool including statuses. Contrast `feed`, `hand_of_greed`, `hidden_gem`, `not_yet`, `soot`, which map it correctly, and `neows_fury`, which relies on rarity instead. |
@@ -333,10 +336,19 @@ Each is recorded per unit with the trigger that would make it live.
 The one **waiver** in 202 records is `card/alchemize`, whose entire OnPlay is
 potion procurement — explicitly out of scope per the shared contract. Its record
 still states that the sim uses the correct `combat_potion_generation` stream and
-reproduces the create-then-maybe-drop ordering, so nothing hides behind it. The
-three **deliberate-divergences** are `cascade` (pull-phase pile bookkeeping),
-`inflame` / `prowess` (`StrengthCmd` vs `PowerCmd.Apply`) and `stomp`
-(clone-seeding), each with the same-observable argument spelled out.
+reproduces the create-then-maybe-drop ordering, so nothing hides behind it.
+
+There are **5 deliberate-divergence ENTRIES across 5 units**, of which only 3
+roll a unit up to `deliberate-divergence`; each spells out the same-observable
+argument.
+
+| Unit | dd entry | Unit rollup |
+|---|---|---|
+| `cascade` | guard: pull-phase pile bookkeeping | deliberate-divergence |
+| `inflame` | OnPlay: `StrengthCmd` vs `PowerCmd.Apply` | deliberate-divergence |
+| `prowess` | OnPlay: same `StrengthCmd` verb, first half | deliberate-divergence |
+| `fight_me` | guard: both Strength applications routed through `StrengthCmd`, so the player's strength-given modifiers also run over the ENEMY's buff — which C# reaches via `ModifyPowerAmountGiven` anyway | **gap** (a gap elsewhere in the unit dominates) |
+| `stomp` | AfterCardEnteredCombat: clone-seeding | **gap** (ditto) |
 
 ---
 
@@ -371,8 +383,8 @@ Repro: play Brightest Flame at full HP holding Rupture. `newMaxHp < CurrentHp`,
 so the game deals 1 damage and Rupture grants Strength; the sim grants none.
 Both halves are ported Ironclad content.
 
-Recorded as a guard entry on `audits/card/brightest_flame.json`.
-**`audits/seam/**` is not edited** — this is for the seam owner to fold in. Note
+Recorded as a guard entry on `audit/records/card/brightest_flame.json`.
+**`audit/records/seam/**` is not edited** — this is for the seam owner to fold in. Note
 that `card/breakthrough`'s independently-found gap has the same shape and the
 same witness, which is corroboration rather than coincidence: any code path that
 loses HP without going through `DamageCmd` is invisible to Rupture.
@@ -386,7 +398,7 @@ reaching its own (`armaments`, `headbutt`, `not_yet`, `purity`, `thinking_ahead`
 
 ## 7. Roster problem: `card/sweep`
 
-`py tools/audit/harness.py roster card` reports
+`py audit/tools/harness.py roster card` reports
 `UNMATCHED card/sweep -> expected src\Core\Models\Cards\Sweep.cs`. **This is not
 a name-resolution problem and `name_overrides.json` cannot fix it.**
 
@@ -399,7 +411,15 @@ a name-resolution problem and `name_overrides.json` cannot fix it.**
 - `SweepCard` (sts2_rl/cards/sweep.py) is a **sim-only test fixture**: it is
   absent from `cards/pool.py`, so it is in no generation or reward pool, and its
   only consumers are the four multi-enemy routing tests at
-  `test/test_multi_enemy.py:253-280`.
+  `test/test_multi_enemy.py:253-280` (imported at `test_multi_enemy.py:11`).
+  Two further grep hits are NOT consumers, checked rather than assumed:
+  `test/run.py:3` names "1 × Sweep (AoE)" in the demo's module docstring, but
+  the demo's actual `DECK` (run.py:41-46) builds strike / defend /
+  breakthrough / armaments / whirlwind / bash / anger / burning_pact and no
+  sweep — the docstring is stale; and `test/test_driver.py:54` is the English
+  verb ("Sweep seeds for a victorious run"), not the card. So removing the
+  fixture would touch exactly one test file plus the two export lists
+  (`cards/__init__.py:18,259`, `sts2_rl/__init__.py:76,266`).
 
 Because `harness.validate_record` requires an existing `game_source` path, no
 valid record can be written for it, so the pool is **202 auditable units plus
@@ -409,7 +429,7 @@ exclude sim-only fixtures, or the harness should let a unit be marked
 
 ---
 
-## 8. Lessons for `tools/audit/PROMPT.md`
+## 8. Lessons for `audit/tools/PROMPT.md`
 
 The card stream does not own `PROMPT.md`. These are offered for the relic stream
 to fold in and version-bump.
@@ -481,8 +501,8 @@ to fold in and version-bump.
 
 ## 9. Deliverables
 
-- `audits/card/*.json` — 202 records, 0 invalid, 0 stale.
-- `tools/audit/card_probes.py` — five reproducible pool-wide probes
+- `audit/records/card/*.json` — 202 records, 0 invalid, 0 stale.
+- `audit/tools/card_probes.py` — five reproducible pool-wide probes
   (`downgrade`, `dead-target-guards`, `unpowered-block`, `replay`,
   `shared-rng`), committed so every executed number here is re-derivable.
 - This report.
@@ -497,3 +517,142 @@ already written eight times over in `alchemize`, `cinder`, `infernal_blade`,
 and `omnislice`'s block quantity; `feed` and `hand_of_greed`'s Fatal veto;
 `clash`'s hook; `normality`'s counter; the five one-line downgrade re-seeds; and
 the three false-premise omissions in `debt`, `guilty` and `lantern_key`.
+
+---
+
+## 10. Review fix pass
+
+Applied after review of the completed tier. The review's own framing held up:
+upgrade-value coverage 100 %, 0 false LIVE in 20 sampled entries, keyword census
+202/202, all rollups correct, both waivers legitimate. These are five targeted
+corrections, not a re-audit. Every count below was recomputed from
+`audit/records/card/*.json`, not carried over.
+
+### Fix 1 — six `faithful` entries were dormant gaps or rule-3 breaks
+
+Found by a **census over all 924 `faithful` entries** for dormancy / unported
+language, so the list is complete for that marker rather than sampled.
+
+| Unit | Entry | Why it is a gap |
+|---|---|---|
+| `apotheosis` | guard, `AllCards` self-exclusion | The sim's `all_cards` has no Play pile, so the two sets differ when a POWER card is mid-play. Rule 1: "no ported card does this" is dormancy, not equivalence. Trigger: a ported Power card that auto-plays another card. **Rollup faithful → gap.** |
+| `pillage` | guard, `player.hand[-1]` | The sim infers the drawn card from list order where C# reads Draw's return value. Trigger: a ported draw-time listener that adds to the hand. **Rollup faithful → gap.** |
+| `omnislice` | guard, zero-damage early return | Wrote "Dormant:" verbatim while verdicting faithful. Trigger: a before/after-damage-received listener that fires on a 0 amount. |
+| `expect_a_fight` | guard, skipped zero-energy gain | "No ported `modify_energy_gain` listener … so the two agree today" is a dormancy argument. The energy-side twin of `creature_card_cmds/N5`. |
+| `neows_fury` | guard, `CardPileCmd.Add` | Rule 3: its own rationale said *"Same structural point as card/anointed's guard"*, and `card/anointed` carries `gap`. Also inside §5's "Direct pile mutation" family. |
+| `thunderclap` | guard, mid-card `player.is_dead` | Rule 3: all five siblings (`blood_wall`, `bloodletting`, `brand`, `hemokinesis`, `offering`) carry `gap`, and §3.5 family 1 already files thunderclap with them. |
+
+Each rewritten entry states the dormancy, names the concrete trigger and
+cross-references the sibling record. Both rule-3 cases had been contradicting
+this report as well as the sibling records.
+
+**Recomputed tier** (`py audit/tools/harness.py validate` → 0 invalid):
+
+| | before | after |
+|---|---|---|
+| gap entries | 143 | **149** |
+| faithful entries | 924 | **918** |
+| gap rollups | 107 | **109** |
+| faithful rollups | 91 | **89** |
+
+`deliberate-divergence` (5 entries / 3 rollups) and `waiver` (2 / 1) unchanged.
+
+### Fix 2 — every probe citation was an unrunnable path
+
+The `tools/audit/*` → `audit/tools/*` restructure left every card record naming
+the old location. Swept all 202: **27 occurrences across 26 records** —
+24 × `card_probes.py`, 2 × `name_overrides.json`, 1 × `PROMPT.md`. Text-only;
+no verdict or reasoning changed. The same stale prefix appeared 7 times in this
+report and is fixed here too, along with `audits/card/**` →
+`audit/records/card/**` and `audits/seam/**` → `audit/records/seam/**`.
+
+**Still broken, and not ours to fix:** the path is now right but the script is
+not runnable — `audit/tools/card_probes.py:41` does
+`from tools.audit.harness import DEFAULT_GAME_ROOT`, which raises
+`ModuleNotFoundError: No module named 'tools.audit'`. `audit/tools/` belongs to
+the tools stream.
+
+### Fix 3 — `card/beckon`'s faithful rationale was false
+
+It claimed `is_unpowered` "only steers `DamageCmd.deal`'s prop inference … so
+the flag is never read". The flag has **nine** readers: `cmds.py:46-50`,
+`powers.py:116, 1260, 1385, 1911, 3965`, `relics/the_boot.py:37`,
+`previews.py:157`, `cards/thrash.py:44`.
+
+The `faithful` verdict survives, and rule 5 wants the executed reason rather
+than a false claim of no readers. Each site is independently unreachable **for
+this card**:
+
+- the three modifier readers are dispatched only inside
+  `if is_powered_attack(props):` (cmds.py:56-58), and
+  `is_powered_attack(CARD_HP_LOSS)` is `False` — `CARD_HP_LOSS` carries
+  `UNPOWERED` (valueprops.py:38, 47-49);
+- the two `before_attack` readers fire only from combat.py:476-479, gated on
+  `card_type == ATTACK`; Beckon is a STATUS whose damage comes from
+  `on_turn_end_in_hand`, not a play;
+- `the_boot` returns at `dealer is not self.player or target is self.player`
+  (the_boot.py:34-35) — Beckon deals dealerless damage to the player, so both
+  disjuncts hold;
+- `preview_card_damage` returns at `base is None` (previews.py:154-156); Beckon
+  declares neither `_damage` nor `calc_damage`;
+- `thrash`'s victim is filtered to ATTACK cards (thrash.py:58);
+- the prop-inference branch needs `props is None`, and Beckon passes
+  `CARD_HP_LOSS` explicitly (beckon.py:39).
+
+### Fix 4 — report count drift (the ledger was right, the prose was stale)
+
+Each re-derived here rather than taken on trust:
+
+- **§5 `-1` cost family: 27 → 29.** 29 records cite `CardEnergyCost.cs:100-103`.
+  Cross-checked against the source: 31 C# card models call `base(-N, …)`; `Void`
+  is unported (there is no `card/void` record), leaving 30 ported negative-cost
+  cards, of which `cascade` is the legitimate X-cost exception —
+  `Canonical = ((!CostsX) ? canonicalCost : 0)` (CardEnergyCost.cs:86) makes the
+  sim's 0 correct there. 30 − 1 = 29.
+- **§5 inlined-DynamicVar family: 22 → 23.** 22 records carry the
+  missing-stored-var shape; `feel_no_pain` carries the same family's sharper
+  form (a WRONG number in the `_block` slot rather than a missing one) and is
+  the 23rd. It stays listed in §4.3 as well, now cross-referenced.
+- **§5's dd list omitted `card/fight_me`.** Corrected to a table: **5 dd entries
+  across 5 units** — `cascade`, `inflame`, `prowess`, `fight_me`, `stomp` — of
+  which only 3 roll up `deliberate-divergence`, because `fight_me` and `stomp`
+  each carry a `gap` elsewhere that dominates. (The review said 4 units; it is
+  5.)
+- **§7's `sweep` consumer list — the review's two additions are NOT consumers,**
+  which is why the list is now explicit about them rather than extended.
+  `test/run.py:3` names "1 × Sweep (AoE)" in the demo's module docstring, but
+  the demo's real `DECK` (run.py:41-46) contains no sweep — the docstring is
+  stale. `test/test_driver.py:54` is the English verb ("Sweep seeds for a
+  victorious run"), not the card. The four executable consumers at
+  `test/test_multi_enemy.py:253-280` stand, plus the import at
+  `test_multi_enemy.py:11` and the two export lists.
+
+§1's result block was also stale on all four numbers and is updated.
+
+### Fix 5 — rule 8 was vacuous: 0 test citations in 202 records
+
+**18 added**, every path grep-verified before it was written; no test file was
+touched and nothing was invented. Gaps with no obvious existing test were left
+uncited.
+
+| Count | Gap | Test |
+|---|---|---|
+| 13 | the wrong-stream RNG family (§3.4) | `test/test_rng_tripwire.py:33` — `test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs asserting ZERO in-combat draws on `RunState.rng`. `CombatState` receives that same object as `_rng` (run.py:1146-1148, combat.py:88). **Executed:** playing this family's shape under a `Tripwire` produces a hit at the `card.on_play` frame (combat.py:490), so the gate really does cover these sites; it is green today because its 20 seeds never reach them. |
+| 1 | `entrench` (seam G1's whole ported blast radius) | `test/test_hook_order.py:296-320` — a **strict** xfail that builds `make_card("entrench")` with a Vambrace. Flips to an unexpected pass the moment G1 is fixed. |
+| 1 | `apotheosis` (premise only) | `test/test_hook_order.py:259-279` pins the `_playing_card` limbo the NON-Power half rests on. Labelled premise-only: the Power half — the actual divergence — is unpinned, which is exactly why it is dormant rather than equivalent. |
+| 1 | `mad_science`'s unset `gains_block` | `test/test_shared_enchantments.py:52-61` — the existing Nimble / `gains_block` gate. No Mad Science case yet; the fix should add one there. |
+| 1 | `feel_no_pain`'s `_block` slot | the same gate (it already asserts `not make_card("feel_no_pain").gains_block`) plus `test/test_ironclad_cards.py:666-669`, which pins the applied amount at 3. They bracket the fix. |
+| 1 | `primal_force` (sibling half only) | `test/test_hook_order.py:345-365`, seam G3's DECK-case strict xfail. The in-combat case this record covers has no pin — which is why it is recorded at the card rather than deferred. |
+
+### Verification
+
+```
+py audit/tools/harness.py validate      428 record(s), 0 invalid
+py audit/tools/audit_status.py          card  203  202  0  0  109  1
+py -m pytest test/ -q                   2521 passed, 38 xfailed
+git diff --name-only main...audit-pipeline | grep "^sts2_rl/"   (nothing)
+```
+
+`sts2_rl/**` is untouched by this branch; the suite total moved from the
+review's expected 2478 only because concurrent streams added tests — zero
+failures, zero regressions.
