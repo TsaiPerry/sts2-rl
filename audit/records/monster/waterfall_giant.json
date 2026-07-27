@@ -1,0 +1,160 @@
+{
+  "unit": "monster/waterfall_giant",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\WaterfallGiant.cs",
+    "sha256": "526a68e24ae441923a3dbfa3175e95900d23e035630a220608ea6356a108afaa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\waterfall_giant.py",
+    "sha256": "7a56cdc2b7100662f13350de2c6f3738989bb9b2501903c2a72ebebaf81de08c"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# WaterfallGiant.cs:68,70 (MaxInitialHp => MinInitialHp) non-ascension branch = 240 (AscensionHelper.GetValueIfAscension puts the non-ascension value LAST); sim min_hp = 240. Confirmed by `monster_probes.py hp` (102/109 compared, 0 mismatches)."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# WaterfallGiant.cs:68,70 (MaxInitialHp => MinInitialHp) non-ascension branch = 240; sim max_hp = 240."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "HasDeathSfx": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "ShouldFadeAfterDeath": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "BeforeRemovedFromRoom": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "ShouldDisappearFromDoom": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "SHARED-FINDINGS section 4 says to think about this one rather than reflex-waive it, so it was traced: ShouldDisappearFromDoom has exactly ONE reader in the whole game, DoomPower.cs:90, and that read is inside `PlayVfx` -- it computes a bool that is passed to StartDoomAnim and to NDoomVfx.Create as the 'should the sprite vanish' flag (DoomPower.cs:80-144). The actual lethality is DoomKill, which does not consult it. So `!Creature.HasPower<SteamEruptionPower>()` (WaterfallGiant.cs:84) only decides whether the Doom animation makes the giant disappear. Presentation. (Doom is additionally Necrobinder content and the sim implements no Doom at all -- `grep -rin doom sts2_rl/` returns nothing -- but the waiver rests on the presentation finding, not on that dormancy.)"
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "WaterfallGiant.__init__ (waterfall_giant.py:36-40)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance: the sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect is applied from __init__ (waterfall_giant.py:36-40). The game runs it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:393-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); the concrete trigger that would make it a gap is a relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and sts2_rl/powers.py that section 2's clause (a)/(b) argument cites are NOT hashed by this record. Here the mechanical content is one field seed, `CurrentPressureGunDamage = BasePressureGunDamage` (WaterfallGiant.cs:159-164, non-ascension 20) -> `self._pressure_gun_dmg = 20` at construction; the rest of the override is SfxCmd.PlayLoop. No power is applied here, so section 2's listener-set clause is vacuous, and the field is a literal that reads no HP."
+    },
+    "AfterDeath": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "One of monster_state_machine boundary-hole 5's eleven unclaimed overrides. Read to the end (N6): WaterfallGiant.cs:166-179 is two early returns (not my creature / still holding SteamEruptionPower) and then exactly two statements -- `NRunMusicController...UpdateMusicParameter(\"waterfall_giant_progress\", 5f)` and `StopAmbientSfx()`, the latter being SfxCmd.StopLoop (:186-189). A music parameter and an SFX loop stop: entirely presentation, no mechanical behaviour for the sim to be missing. hook_dispatch G5 is not re-verdicted."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (waterfall_giant.py:42-90)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node identical to WaterfallGiant.cs:191-222: eight MoveStates, no branch state, initial PRESSURIZE, main ring PRESSURIZE -> STOMP -> RAM -> SIPHON -> PRESSURE_GUN -> PRESSURE_UP -> STOMP (note PRESSURE_UP returns to STOMP, not to PRESSURIZE, on both sides), plus the detached death branch ABOUT_TO_BLOW -> EXPLODE -> EXPLODE (self-loop). ABOUT_TO_BLOW_MOVE carries MustPerformOnceBeforeTransitioning = true on both sides (WaterfallGiant.cs:200-203 vs waterfall_giant.py:69-72). PRESSURE_GUN's and EXPLODE's intents are lambdas over the live damage fields on both sides (:198, :204 vs :61-62, :75-76). Executed (monster_probes_b04.py graphs)."
+    },
+    "TriggerAboutToBlowState": {
+      "maps_to": "trigger_about_to_blow (waterfall_giant.py:92-101) + SteamEruptionPower.on_damage_received (powers.py:2022-2033)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# (WaterfallGiant.cs:301-313): set IsAboutToBlow, play SFX, `CreatureCmd.SetMaxAndCurrentHp(Creature, 999999999m)`, set the infinite HP display, then `SetMoveImmediate(AboutToBlowState, forceTransition: true)`. The sim splits it: the monster sets the flag and does machine.force_current_state(ABOUT_TO_BLOW) + _current_move, and the 999999999 assignment happens one hook later in SteamEruptionPower.on_damage_received. Two sub-points, both checked. (a) forceTransition: true means C#'s SetMoveImmediate SKIPS its NextMove.CanTransitionAway guard (MonsterModel.cs:420-432), so the sim's unguarded force_current_state is the correct analogue here -- monster_state_machine G5's second clause (the missing CanTransitionAway guard) names WaterfallGiant as a trigger, but the trigger does not fire, because this is the forced overload. G5 is not re-verdicted. (b) executed end to end (monster_probes_b04.py giant-blow): a 9999 killing blow leaves hp = max_hp = 999999999, is_about_to_blow True and the move parked on ABOUT_TO_BLOW_MOVE; the next enemy side banks steam_dmg = 30 and removes the power; the one after deals 30 and kills the giant. The sim's extra `if self.is_about_to_blow: return` re-entry guard (waterfall_giant.py:96-97) has no C# counterpart but is unreachable a second time, because SteamEruptionPower is what calls it and the power is removed before EXPLODE."
+    },
+    "ShouldShowMoveInBestiary": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port. WaterfallGiant.cs:362-365 hides SIPHON_MOVE from the Bestiary listing."
+    }
+  },
+  "guards": [
+    {
+      "what": "killing the giant fires no on_death in the sim",
+      "verdict": "gap",
+      "live": true,
+      "issue": "In C# the Waterfall Giant REALLY DIES on the killing blow: SteamEruptionPower.ShouldCreatureBeRemovedFromCombatAfterDeath returns false for its owner (SteamEruptionPower.cs:28-35), so the death stands, Hook.AfterDeath dispatches to every listener, the corpse stays in Enemies, and SteamEruptionPower.AfterDeath (:15-21) then calls TriggerAboutToBlowState, which revives it at 999999999 HP. The sim instead ports the mechanic onto `should_die` (powers.py:2016-2020), which VETOES the death, so `hooks.on_death` never runs for that blow (cmds.py:96-110 only dispatches on_death inside the `should_die` true arm). Observable, executed (monster_probes_b04.py giant-blow) with a ported Gremlin Horn attached: on the killing blow the sim reports `on_death dispatches so far: []` and Gremlin Horn moves energy 3->3 and hand 5->5, where the game would fire AfterDeath and pay +1 energy and +1 card. The sim fires on_death exactly once for the whole fight (at EXPLODE's CreatureCmd.kill, once the power is gone -- verified in the same run: energy 3->4, hand 5->6); the game fires it TWICE. LIVE on both sides (governing rule 6): the Waterfall Giant is in the ported Underdocks boss pool (rooms.py, boss_keys; executed, probe `pools`) and Gremlin Horn is a ported, obtainable Uncommon relic with a real on_death listener (relics/gremlin_horn.py:18-22) -- sixteen other on_death listeners exist in powers.py. This entry records the MONSTER-LEVEL consequence only; the mechanism itself is PROMPT.md bug class 21 (death is not removal), which already names SteamEruptionPower and powers.py:2016 and belongs to the power tier. Not re-verdicted here, and no engine code was touched. Contrast decimillipede_segment, whose ReattachPower ports the same C# member onto `should_remove_from_combat_after_death` (powers.py:2338-2341, hooks.py:603-610) and is correct."
+    },
+    {
+      "what": "SIPHON heal, and its multiplayer factor",
+      "verdict": "faithful",
+      "rationale": "WaterfallGiant.cs:263-270 heals `SiphonHeal * CombatState.Players.Count`; SiphonHeal is the non-ascension 10 (:72). With the sim's single player the factor is 1, so `CreatureCmd.heal(hooks, self, 10)` (waterfall_giant.py:122-125) is the same number. Multiplayer plumbing is noted in the mapping, not treated as a divergence (PROMPT.md scope)."
+    },
+    {
+      "what": "move damage / Steam Eruption bookkeeping",
+      "verdict": "faithful",
+      "rationale": "Non-ascension, WaterfallGiant.cs:72-86: PressurizeAmount 15, StompDamage 15, RamDamage 10, PressureUpDamage 13, BasePressureGunDamage 20, PressureGunIncrease 5, SiphonHeal 10; every move except PRESSURIZE also applies SteamEruptionPower 3m (:238, :249, :259, :268, :279) while PRESSURIZE applies the flat 15 (:228). Sim waterfall_giant.py:13-21 = 15 / 3 / 15 / 1 / 10 / 10 / 20 / 5 / 13, and _pressurize (:108-109) grants only the 15. STOMP applies Weak 1 (:248) then Steam 3 -- same order in _stomp (:111-116). PRESSURE_GUN increments its own damage AFTER the attack on both sides (:274-278 vs :128-129), so the first shot is 20 and the second 25; executed in giant-blow, where six sides bank steam=30 (15 + 5x3)."
+    },
+    {
+      "what": "ABOUT_TO_BLOW banks the Steam amount then removes the power",
+      "verdict": "faithful",
+      "rationale": "WaterfallGiant.cs:283-289: SteamEruptionDamage = GetPowerAmount<SteamEruptionPower>(), then PowerCmd.Remove, then the presentation-only PressureBuildupIdx = 6 / IncrementBuildUpAnimationTrack. Sim _about_to_blow (waterfall_giant.py:136-140) reads the amount and removes the power in the same order; EXPLODE then attacks for the banked number and calls CreatureCmd.kill on itself (:142-145 vs :291-299). Executed: steam_dmg = 30, powers empty after the ABOUT_TO_BLOW turn, 30 damage on the next."
+    },
+    {
+      "what": "PressureBuildupIdx and the TestMode fork",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port. IncrementBuildUpAnimationTrack (WaterfallGiant.cs:315-329) is wholly inside `if (TestMode.IsOff)` and its whole body is a music parameter, an SFX parameter and a SpineAnimation track. PROMPT.md class 18 was applied: the shipping arm is the IsOff one (TestMode.TurnOnInternal has no caller), so the counter does advance in a real run -- but its only readers are ShouldFadeAfterDeath (:157) and the animation track, both presentation. Nothing mechanical depends on it, which is why the sim carries no counterpart."
+    },
+    {
+      "what": "no RandomBranchState -- AddBranch bug class not applicable",
+      "verdict": "faithful",
+      "rationale": "Executed (monster_probes_b04.py branches): waterfall_giant builds no RandomBranchState on either side. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Commands\\CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\SteamEruptionPower.cs",
+      "sha256": "84f1f3ed19556c3101079b793c7d7f6e0227a477c25103c686e0a3b6042ba7a0",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
+      "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\gremlin_horn.py",
+      "sha256": "d056b799eb6625767ab63dd52b23d6bd9984624bb3de91a87406c4fdbf1b74d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ]
+}

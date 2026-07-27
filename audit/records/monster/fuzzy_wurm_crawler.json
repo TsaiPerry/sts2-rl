@@ -1,0 +1,99 @@
+{
+  "unit": "monster/fuzzy_wurm_crawler",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\FuzzyWurmCrawler.cs",
+    "sha256": "e1441bb5e3c2210e64c29cd94fdf6501c4a5b04c7b200a21fb57bd950d0208f9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\fuzzy_wurm_crawler.py",
+    "sha256": "4808b860f919e0adf19c4c09be1b9848e14a79597dd08ccfaf30f02a278fe5e3"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "FuzzyWurmCrawler.min_hp = 55 (fuzzy_wurm_crawler.py:15)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). FuzzyWurmCrawler.cs:29 (ToughEnemies, 58, 55) -> 55."
+    },
+    "MaxInitialHp": {
+      "maps_to": "FuzzyWurmCrawler.max_hp = 57 (fuzzy_wurm_crawler.py:16)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). FuzzyWurmCrawler.cs:31 (ToughEnemies, 59, 57) -> 57."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "_TRANSITIONS + telegraph_next_move (fuzzy_wurm_crawler.py:25-29, 33, 53-57)",
+      "verdict": "faithful",
+      "rationale": "Hand-rolled port of FuzzyWurmCrawler.cs:48-60. The C# wiring is easy to misread because it is written as a nested assignment: `moveState3 = (MoveState)(moveState.FollowUpState = new MoveState(\"INHALE\", ...))` then `moveState3.FollowUpState = moveState2` and `moveState2.FollowUpState = moveState`, i.e. FIRST_ACID_GOOP -> INHALE -> ACID_GOOP -> FIRST_ACID_GOOP, initial FIRST_ACID_GOOP. The port's _TRANSITIONS is exactly those three edges. Executed, not asserted (verdict rule 5): `py audit/tools/monster_probes_b01.py chain` rebuilds the C# GenerateMoveStateMachine graph node for node on the sim's OWN MonsterMoveStateMachine primitives (so the walk, the repeat rules and the single-NextFloat(total) draw are the audited machinery) and diffs it against the shipped port over 20 turns from an identically seeded RunRngSet. Result: 20/20 turns identical, 0 MonsterAi draws on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "FIRST_ACID_GOOP and ACID_GOOP are distinct ids sharing the SAME delegate and the same damage (FuzzyWurmCrawler.cs:51-52)",
+      "verdict": "faithful",
+      "rationale": "The port keeps both keys with identical tuples (fuzzy_wurm_crawler.py:20, 22), which is what makes the three-cycle work: the two goops sit on opposite sides of INHALE. Their only real difference in C# is that ShouldShowMoveInBestiary hides the first (:115-118), i.e. presentation."
+    },
+    {
+      "what": "Move numerics: AcidGoopDamage 4, Inhale StrengthPower 7",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). FuzzyWurmCrawler.cs:33 (DeadlyEnemies, 6, 4) -> 4, matching both goop entries (fuzzy_wurm_crawler.py:20, 22) -- note the ascension value here is 6 and reading the call left-to-right would have filed the correct 4 as a gap (PROMPT.md v5's named trap). Inhale applies StrengthPower 7m (:88) = the 7 in the INHALE tuple. Single hit on both sides (no WithHitCount)."
+    },
+    {
+      "what": "IsPuffed (FuzzyWurmCrawler.cs:27, 35-46, set in both moves) is dropped by the port",
+      "verdict": "waiver",
+      "rationale": "Executed: its only readers are GenerateAnimator's four AddAnyState conditions (:108-111), choosing the puffed hurt/die animations. Presentation."
+    },
+    {
+      "what": "AcidGoop's `TestMode.IsOff && targets.Any()` block (FuzzyWurmCrawler.cs:64-75)",
+      "verdict": "waiver",
+      "rationale": "PROMPT.md class 18 checked: IsOff is the shipping arm, and the block only moves Visuals/SpineBoneNode toward the target. No mechanics."
+    },
+    {
+      "what": "Ascension gating on the HP pair and AcidGoopDamage",
+      "verdict": "waiver",
+      "rationale": "Out of scope; non-ascension branch compared (N4)."
+    },
+    {
+      "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
+      "verdict": "faithful",
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 3-wide range, so a top-end off-by-one would be silently observable as HP 57 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [55,57], observed [55,57], and the observed set is exactly the full inclusive range, so the top endpoint 57 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Random\\Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    }
+  ]
+}

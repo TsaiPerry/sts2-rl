@@ -1,0 +1,104 @@
+{
+ "unit": "monster/mecha_knight",
+ "game_source": {
+  "path": "src\\Core\\Models\\Monsters\\MechaKnight.cs",
+  "sha256": "381ca2e9be0fb6ad9de0ef6192a1c368af949140366cd7ca5c940d3f100c810c"
+ },
+ "sim_source": {
+  "path": "sts2_rl\\monsters\\glory\\mecha_knight.py",
+  "sha256": "10deb29affc4d559aad86e7c80e514ce35edef83e2bbf01780501fdd3a5b75f5"
+ },
+ "hooks": {
+  "MinInitialHp": {
+   "maps_to": "min_hp = 300 (mecha_knight.py:29)",
+   "verdict": "faithful",
+   "rationale": "MechaKnight.cs:48 GetValueIfAscension(ToughEnemies, 320, 300) -> non-ascension 300."
+  },
+  "MaxInitialHp": {
+   "maps_to": "max_hp = 300 (mecha_knight.py:30)",
+   "verdict": "faithful",
+   "rationale": "MechaKnight.cs:50 `MaxInitialHp => MinInitialHp` = 300."
+  },
+  "DeathSfx": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+  },
+  "HurtSfx": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+  },
+  "AfterAddedToRoom": {
+   "maps_to": "MechaKnight.__init__ -> PowerCmd.apply(hooks, self, ArtifactPower, 3) (mecha_knight.py:32-36)",
+   "verdict": "deliberate-divergence",
+   "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (mecha_knight.py:32-36). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: MechaKnight.cs:73-77 applies ArtifactPower 3m to itself and nothing else; _ARTIFACT = 3 (mecha_knight.py:18). Artifact is the one starting power in this batch that INTERCEPTS later applications (cmds.py:299-306 decrements it and returns before the debuff lands), so the apply-order inversion deserves the check rather than a blind copy -- but the inversion is only relative to the Niche HP roll and the relic/potion attach, all of which happen before the first player action, and no debuff can reach the Mecha Knight before combat starts. Clause (c) holds: the initial state is the MoveState CHARGE_MOVE, so the constructor roll is a sticky no-op."
+  },
+  "GenerateAnimator": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. This is the animator that reads IsWoundUp -- 14 conditional AddBranch(\"Hit\", ...) edges picking hurt vs hurt_wound (MechaKnight.cs:162-175). Note these are CreatureAnimator.AddBranch(string, ...), a different overload family from RandomBranchState.AddBranch, and monster_state_machine's 61-site census explicitly subtracts them; no state-machine integer is involved."
+  },
+  "GenerateMoveStateMachine": {
+   "maps_to": "MechaKnight.build_machine (mecha_knight.py:38-59)",
+   "verdict": "faithful",
+   "rationale": "Node-by-node against MechaKnight.cs:79-95. Four MoveStates with matching ids (CHARGE_MOVE / FLAMETHROWER_MOVE / WINDUP_MOVE / HEAVY_CLEAVE_MOVE) and the same chain CHARGE -> FLAMETHROWER -> WINDUP -> HEAVY_CLEAVE -> FLAMETHROWER (MechaKnight.cs:86-89 vs mecha_knight.py:53-56), so CHARGE fires once and the tail is a three-cycle. INITIAL state CHARGE_MOVE on both (:94 vs :58). The C# `list` is built in a different ORDER from the sim's ([charge, cleave, windup, flamethrower] vs the sim's identical [charge, heavy_cleave, windup, flamethrower]) -- and in any case the list is only a registration bag: RegisterStates adds each state to a dict by id (monster_state_machine step 23), and no walk iterates it. No branch state, so no AddBranch integer and no MonsterAi draw."
+  }
+ },
+ "guards": [
+  {
+   "what": "Attack, block and buff numerics",
+   "verdict": "faithful",
+   "rationale": "ChargeDamage GetValueIfAscension(DeadlyEnemies, 30, 25) -> 25; HeavyCleaveDamage (..., 40, 35) -> 35; WindupMove gains 15m block with ValueProp.Move then applies StrengthPower 5m to itself (MechaKnight.cs:128-129). All match mecha_knight.py:13-18 and the handlers at :61-78, including the block-BEFORE-Strength order in _windup (:74-75), which matters because a later ModifyBlock listener keyed on Strength would see a different value if the two were swapped."
+  },
+  {
+   "what": "FlamethrowerMove adds 4 Burn to HAND (MechaKnight.cs:136 vs mecha_knight.py:64-68)",
+   "verdict": "faithful",
+   "rationale": "C# is `CardPileCmd.AddToCombatAndPreview<Burn>(targets, PileType.Hand, 4, null)` with the default CardPilePosition.Bottom; the sim loops add_to_hand four times. Card count and pile match. Two guards C# carries that the sim expresses differently, both checked: (1) `if (player.Creature.IsDead) return` (CardPileCmd.cs:1008-1011) -- the sim has no such check, but a dead player ends the combat before any later reader can see the hand, so nothing observable differs; (2) hand overflow -- the sim routes the 4th..Nth card to the discard when the hand is at MAX_HAND_SIZE (cmds.py:508-511), which is the ported convention that creature_card_cmds already owns. The `_flamethrowerCardCount = 4` const (MechaKnight.cs:28) agrees with both the call and the intent."
+  },
+  {
+   "what": "StatusIntent(4)'s CardCount is dropped by the sim's Intent (MechaKnight.cs:83 vs mecha_knight.py:42-44)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Same mechanism and same verdict as monster/noisebot's guard (governing rule 3): StatusIntent.CardCount is read only by GetIntentLabel and GetIntentDescription in StatusIntent.cs, both of which only fill a LocString for the intent tooltip, and `grep -rn CardCount src/` finds no other consumer. No sim consumer of Intent reads a status count either (env.py:167 and full_env.py:571 are booleans). The 4 cards actually added are correct."
+  },
+  {
+   "what": "IsWoundUp (MechaKnight.cs:38, 60-71, 109, 125) is dropped by the port",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Read to the END before deciding, per KinPriest N6: the property is set true in WindupMove and false in HeavyCleaveMove, and its ONLY readers are the 14 conditional animator edges at MechaKnight.cs:162-175 that choose the wound-up idle/hurt animations. No move, no branch and no damage number consults it, so a port that drops the flag loses nothing mechanical."
+  }
+ ],
+ "verdict": "deliberate-divergence",
+ "audited": "2026-07-27",
+ "extra_sources": [
+  {
+   "path": "src\\Core\\Commands\\CardPileCmd.cs",
+   "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+   "side": "game"
+  },
+  {
+   "path": "src\\Core\\MonsterMoves\\Intents\\StatusIntent.cs",
+   "sha256": "3b9bf8b0cade87ff11671285cc5e656cd353506ce8c5a69e0963e0e1a9944d77",
+   "side": "game"
+  },
+  {
+   "path": "sts2_rl\\cmds.py",
+   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\monsters\\base.py",
+   "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\powers.py",
+   "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\rooms.py",
+   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+   "side": "sim"
+  }
+ ]
+}

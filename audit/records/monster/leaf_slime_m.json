@@ -1,0 +1,108 @@
+{
+  "unit": "monster/leaf_slime_m",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\LeafSlimeM.cs",
+    "sha256": "84c09b943f4c61af13e631ab2da6a60e901c57a59788b9e31d905536603f5809"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\slimes.py",
+    "sha256": "0716501b51d2726000d5b74c974d1607e9581d645a83936fd11d370fe04d7d0f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Encounters/SlimesNormal.cs",
+      "sha256": "d2c6ccf1093ae2e1bcdc149f5b6ee3138441200a29ec1003d4e2bdbb8f49677f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Encounters/SlimesWeak.cs",
+      "sha256": "28dfe46549350f953e4174d2c5554c3c5c3b56b07901d9e0c27db8084c2e95a8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
+      "sha256": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "slimes.py:81-82 min_hp = 32",
+      "verdict": "faithful",
+      "note": "LeafSlimeM.cs:22 non-ascension = 32. The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). `py audit/tools/monster_probes.py hp` compares this pair pool-wide with 0 mismatches; re-read by hand here."
+    },
+    "MaxInitialHp": {
+      "maps_to": "slimes.py:81-82 max_hp = 35",
+      "verdict": "faithful",
+      "note": "LeafSlimeM.cs:24 non-ascension = 35. "
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: LeafSlimeM.cs:28."
+    },
+    "GenerateMoveStateMachine (protected; not in the skeleton)": {
+      "maps_to": "slimes.py:86 _move_key / :88-103",
+      "verdict": "faithful",
+      "note": "LeafSlimeM.cs:30-41 - CLUMP_SHOT <-> STICKY_SHOT, and the INITIAL STATE IS moveState2 = STICKY_SHOT (line 40), not the first-declared state. The port starts at _move_key = \"STICKY_SHOT\" (slimes.py:86) and alternates. No branch state and no MonsterAi draw. Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count. leaf_slime_m: MATCH, 0 draws."
+    }
+  },
+  "guards": [
+    {
+      "what": "ClumpDamage (LeafSlimeM.cs:26, GetValueIfAscension(DeadlyEnemies, 9, 8)) = 8 vs slimes.py:92,102; _stickyAmount = 2 (LeafSlimeM.cs:20) vs the two Slimed cards added at slimes.py:98-99",
+      "verdict": "faithful",
+      "note": "The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). StickyShotMove adds them to PileType.Discard (LeafSlimeM.cs:73) and the port uses CardPileCmd.add_to_discard."
+    },
+    {
+      "what": "TestMode.IsOff branch in StickyShotMove (LeafSlimeM.cs:53-69)",
+      "verdict": "waiver",
+      "rationale": "PROMPT.md class 18 - check which arm ships. This one is inverted from calling_bell's trap: the guarded arm is the SHIPPING arm (TestMode.IsOff) and it does nothing but position a Godot Node2D spit-target sprite. Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all."
+    },
+    {
+      "what": "Intent list: CLUMP_SHOT SingleAttackIntent(8), STICKY_SHOT StatusIntent(2) (LeafSlimeM.cs:33-34)",
+      "verdict": "faithful",
+      "note": "Executed: `monster_probes_b02.py intents` agrees (STATUS_CARD is the sim primary for StatusIntent). The sim's Intent carries no status COUNT, but StatusIntent(2)'s count is the number of cards, which the port does add (two)."
+    },
+    {
+      "what": "Hand-rolled port: identical move sequence?",
+      "verdict": "faithful",
+      "note": "Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count."
+    },
+    {
+      "what": "Bug class 6 / SHARED-FINDINGS section 1 (the AddBranch weight-vs-cooldown misread that made monster_state_machine G1 live): checked explicitly and NOT present here. LeafSlimeM.cs has no RandomBranchState.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Move-state ids are the C# ids verbatim",
+      "verdict": "faithful",
+      "note": "SHARED-FINDINGS section 3 (MoveState ids differ between the two sides). The one cross-file reader of a sim move id is CreatureCmd.stun's next_move_key (cmds.py:216-217), which assigns straight into `target._move_key`. Executed: the only ported caller that passes a next_move_key at all is sts2_rl/monsters/overgrowth/ceremonial_beast.py:45 (next_move_key=\"BEAST_CRY\", its own id), so no cross-file reference reaches this unit's ids and the rename is unobservable."
+    },
+    {
+      "what": "SlimesNormal / SlimesWeak composition (SlimesNormal.cs:33-45 one base.Rng.NextBool ordering the two smalls with the two mediums pinned at slots 0-1; SlimesWeak.cs:48-58 three base.Rng.NextItem draws returned as [smallA, medium, smallB]) vs slimes.py:164-183 / :191-205",
+      "verdict": "faithful",
+      "note": "Both sim builders consume the per-encounter selection Rng and reproduce the draw order and the output slot order, including SlimesWeak's NextItem on a one-element list (which still consumes a draw). Executed: `py audit/tools/monster_probes_b02.py enc-rng` - slimes_normal 1 draw, slimes_weak 3 draws, both matching the C#. EncounterModel / monster-slot generation is monster_state_machine boundary hole 4 and is owned by no seam; this entry covers only the encounter code that lives in the unit's own sim file."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned, skipping the clamp / MaxHp<=0 -> Kill / AfterCurrentHpChanged) - does THIS unit make it live?",
+      "verdict": "faithful",
+      "note": "No. Neither side writes max HP after construction."
+    },
+    {
+      "what": "Death != removal: does the port conflate the two?",
+      "verdict": "faithful",
+      "note": "No ShouldDie, no ShouldCreatureBeRemovedFromCombatAfterDeath and no revive on either side."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27"
+}

@@ -1,0 +1,129 @@
+{
+  "unit": "monster/vine_shambler",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\VineShambler.cs",
+    "sha256": "7e2fe165acbe1fc3adccb4a25cc6385a1c7451267d8a47bc95cc49aba368c0b4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\vine_shambler.py",
+    "sha256": "bacc1fe6cf182b5bd924cf06429fa25de71f20ba213ea9d29e14b4465c44fe36"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Encounters/VineShamblerNormal.cs",
+      "sha256": "c59219808b65dd730c9fa7757981b994f2dc193052b1eeb571ae240490adad47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/env.py",
+      "sha256": "feedc90f3e16b8eea315266f0d475bdbc0386aa3b6ffeec0c44373d35e938f83",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
+      "sha256": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "vine_shambler.py:21-22 min_hp = 61",
+      "verdict": "faithful",
+      "note": "VineShambler.cs:34 non-ascension = 61. The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). `py audit/tools/monster_probes.py hp` compares this pair pool-wide with 0 mismatches; re-read by hand here."
+    },
+    "MaxInitialHp": {
+      "maps_to": "vine_shambler.py:21-22 max_hp = 61",
+      "verdict": "faithful",
+      "note": "VineShambler.cs:36 (`MaxInitialHp => MinInitialHp`, a fixed-HP elite) non-ascension = 61. "
+    },
+    "GenerateAnimator": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: VineShambler.cs:88-110."
+    },
+    "GenerateMoveStateMachine (protected; not in the skeleton)": {
+      "maps_to": "vine_shambler.py:12 _TRANSITIONS / :26 _move_key / :28-46",
+      "verdict": "faithful",
+      "note": "VineShambler.cs:44-57 - SWIPE -> GRASPING_VINES -> CHOMP -> SWIPE, and the INITIAL STATE IS moveState2 = SWIPE_MOVE (:56), not the first-declared state; the follow-up assignments at :50-52 are also written out of declaration order, which is where a transliteration would slip. The port's _TRANSITIONS and its _move_key = \"SWIPE\" match. No branch, no MonsterAi draw. Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count. vine_shambler: MATCH, 0 draws."
+    }
+  },
+  "guards": [
+    {
+      "what": "GRASPING_VINES_MOVE is constructed with TWO intents - `new SingleAttackIntent(GraspingVinesDamage)` AND `new CardDebuffIntent()` (VineShambler.cs:47) - but the port telegraphs only `Intent(MoveType.ATTACK, damage=8)` (vine_shambler.py:32-33), with an empty `also`",
+      "verdict": "gap",
+      "live": true,
+      "issue": "The Grasping Vines turn is telegraphed as a plain attack where the game shows attack + card-debuff. The TangledPower IS applied (vine_shambler.py:43), so only the telegraph is wrong - but the telegraph is what the player and the policy act on. The dropped intent is observable, not cosmetic: the sim's own observation builders call Intent.has() for exactly this type (env.py:163-167, full_env.py:568-571), so the feature reads 0 where the game shows the second intent icon, and a human player sees one icon instead of two. Executed: `py audit/tools/monster_probes_b02.py intents` reports exactly two mismatches over the batch's 45 moves, this one and vantom/DISMEMBER. LIVE on ported content (rule 6): `vine_shambler` is in the act-1 normal encounter pool (rooms.py:104) and GRASPING_VINES is the second move of every fight (executed by the seq probe). Counter-evidence that this is a port slip: MoveType.CARD_DEBUFF exists in the sim's vocabulary (monsters/base.py:31) and is read by env.py:165 / full_env.py:569; nothing else in the sim ever sets it."
+    },
+    {
+      "what": "GraspingVinesDamage / SwipeDamage x _swipeRepeat / ChompDamage (VineShambler.cs:38,40,42 and :20 - GetValueIfAscension(DeadlyEnemies, 9, 8), (7, 6), (18, 16); repeat const 2) vs vine_shambler.py:13-16 (8 / 6 x 2 / 16)",
+      "verdict": "faithful",
+      "note": "The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). All three ascension values differ from their non-ascension partners, so a left-to-right read would have filed three false gaps."
+    },
+    {
+      "what": "GraspingVinesMove applies TangledPower 1m to `targets` AFTER the attack (VineShambler.cs:67)",
+      "verdict": "faithful",
+      "note": "The port attacks then applies TangledPower 1 to ctx.player (vine_shambler.py:41-43). 1m is a literal with no ascension branch."
+    },
+    {
+      "what": "VineShambler declares no TakeDamageSfxType, DeathSfx or HurtSfx override",
+      "verdict": "faithful",
+      "note": "Confirmed against the file rather than assumed from the skeleton; the inherited MonsterModel defaults are presentation either way."
+    },
+    {
+      "what": "Hand-rolled port: identical move sequence?",
+      "verdict": "faithful",
+      "note": "Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count."
+    },
+    {
+      "what": "Bug class 6 / SHARED-FINDINGS section 1 (the AddBranch weight-vs-cooldown misread that made monster_state_machine G1 live): checked explicitly and NOT present here. VineShambler.cs has no RandomBranchState.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Move-state id rename (C# *_MOVE suffixes vs sim SWIPE / GRASPING_VINES / CHOMP)",
+      "verdict": "faithful",
+      "note": "SHARED-FINDINGS section 3 (MoveState ids differ between the two sides). The one cross-file reader of a sim move id is CreatureCmd.stun's next_move_key (cmds.py:216-217), which assigns straight into `target._move_key`. Executed: the only ported caller that passes a next_move_key at all is sts2_rl/monsters/overgrowth/ceremonial_beast.py:45 (next_move_key=\"BEAST_CRY\", its own id), so no cross-file reference reaches this unit's ids and the rename is unobservable."
+    },
+    {
+      "what": "VineShamblerNormal composition: a single fixed VineShambler (VineShamblerNormal.cs:16-19, no base.Rng draw) vs VINE_SHAMBLER_NORMAL (vine_shambler.py:49-52)",
+      "verdict": "faithful",
+      "note": "Executed: `py audit/tools/monster_probes_b02.py enc-rng` - 0 selection-stream draws on both sides. EncounterModel / monster-slot generation is monster_state_machine boundary hole 4 and is owned by no seam; this entry covers only the encounter code that lives in the unit's own sim file."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned) - does THIS unit make it live?",
+      "verdict": "faithful",
+      "note": "No. Neither side writes max HP after construction."
+    },
+    {
+      "what": "Death != removal: does the port conflate the two?",
+      "verdict": "faithful",
+      "note": "No ShouldDie, no ShouldCreatureBeRemovedFromCombatAfterDeath and no revive on either side."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}

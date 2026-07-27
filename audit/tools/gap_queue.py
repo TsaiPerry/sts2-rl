@@ -5,10 +5,17 @@ writes engine code; it only parses ``audit/records/<kind>/*.json`` plus the xfai
 pins in ``test/test_hook_order.py`` so the queue's counts are reproducible
 instead of transcribed.
 
-Six kinds are read: the 6 engine-seam records and the five content tiers that
-have landed (``power``, ``card``, ``event``, ``enchantment``, ``relic``).
-``monster`` is **not audited** -- its record directory is empty and the queue
-says so in its header rather than implying coverage it does not have.
+Seven kinds are read: the 6 engine-seam records and the six content tiers that
+have landed (``power``, ``card``, ``event``, ``enchantment``, ``relic``, and
+``monster`` since 2026-07-27).  ``potion`` is **not audited** -- its record
+directory is empty and the queue says so in its header rather than implying
+coverage it does not have.
+
+A gap entry may carry an explicit ``"live": true|false`` field.  When it does,
+that field IS the liveness: ``_liveness``'s prose scan is a heuristic written
+for the 386 entries that state nothing, and it does not get to overrule an
+author who used the typed field.  The monster tier is the first to populate it
+on every gap.
 
 Commands
 --------
@@ -69,16 +76,17 @@ SEAMS = [
     "monster_state_machine",
 ]
 
-# Kinds with records on this branch, in queue order.  ``monster`` is
+# Kinds with records on this branch, in queue order.  ``relic`` joined
+# 2026-07-26; ``monster`` joined 2026-07-27 (109/109 units).  ``potion`` is
 # deliberately absent: that stream has not run, and listing it here with 0
-# records would read as "audited, no gaps".  ``relic`` joined 2026-07-26.
-CONTENT_KINDS = ["power", "card", "event", "enchantment", "relic"]
+# records would read as "audited, no gaps".
+CONTENT_KINDS = ["power", "card", "event", "enchantment", "relic", "monster"]
 KINDS = ["seam"] + CONTENT_KINDS
 # Kinds the pipeline defines but has NOT audited -- reported by ``counts`` so a
 # reader of the queue cannot mistake it for complete coverage.  The unit counts
 # are ``py audit/tools/harness.py roster <kind>``'s "N sim units" line.
-UNAUDITED_KINDS = ["monster", "potion"]
-_UNAUDITED_UNITS = {"monster": 109, "potion": 51}
+UNAUDITED_KINDS = ["potion"]
+_UNAUDITED_UNITS = {"potion": 51}
 
 # --- mechanism merges the records themselves declare -------------------------
 # key: mechanism key as auto-derived, value: canonical mechanism key.
@@ -173,6 +181,109 @@ _TAG_MECHANISM = {
 # quoted above it, and a family the records explicitly call a seam gap is keyed
 # on the seam mechanism so content and seam sites land in one group.
 _FAMILIES = [
+    # --- monster tier (joined 2026-07-27) ------------------------------------
+    # Every merge below is asserted by the monster record's OWN text, per this
+    # module's rule that only a records-declared merge may collapse two keys.
+    #
+    # "monster_state_machine G1 (LIVE) at this unit's site -- recorded here at
+    #  the unit level with the seam's verdict and NOT re-verdicted (governing
+    #  rule 3)" (scroll_of_biting, spectral_knight); flail_knight/hunter_killer
+    #  spell the overload out ("overload #9 (`int maxRepeats`, seam step-13
+    #  table row 9)"); mysterious_knight "INHERITS FlailKnight's - including the
+    #  misread branch arguments".  inklet is EXCLUDED by _FAMILY_OVERRIDE below
+    #  -- its GenerateMoveStateMachine gap names G1 too, but only to say it is a
+    #  different mechanism (branch ADD ORDER), so a text match would over-merge.
+    ("monster", r"^GenerateMoveStateMachine", None,
+     r"maxRepeats|monster_state_machine G1", "monster_state_machine/G1"),
+    # ORDER MATTERS BELOW: first match wins, and four of these mechanisms are
+    # discussed in each other's text (a corpse is only "still in Enemies"
+    # because its removal was vetoed).  The three NARROW mechanisms therefore
+    # come first and the broad death-prevention family last, or it swallows
+    # them -- which it did on the first run, mis-filing guardbot and the_obscura.
+    #
+    # "membership of Enemies is the only test, and a creature whose removal was
+    #  vetoed ... is still in it" -- guardbot and queen scan the enemy side and
+    #  the sim's filter hides a retained corpse.  A CONSEQUENCE of the death
+    #  mechanism, not the mechanism: fixing the death hooks does not fix these
+    #  scans, and fixing these scans does not restore AfterDeath.
+    ("monster", None, None,
+     r"membership of Enemies is the only test|"
+     r"membership of the enemy side is the only test",
+     "monster/_retained_corpse_in_scan"),
+    # "PowerCmd has no CanReceivePowers guard" -- the power tier's
+    #  _should_allow_hitting group (IllusionPower/ReattachPower/AdaptablePower).
+    #  the_obscura's entry also says "CARRIED FROM power/illusion PER RULE 3",
+    #  which is why it must be matched before the death family.
+    ("monster", None, None, r"CanReceivePowers", "power/_should_allow_hitting"),
+    # "SAME MECHANISM AS audit/records/seam/creature_card_cmds.json STEP 8b
+    #  (`gap`, LIVE), carried per rule 3 and NOT re-derived".  Matched on that
+    #  DECLARED sentence only.  A looser `RemoveAllPowersAfterDeath` alternative
+    #  was tried and pulled in test_subject's TriggerDeadState entry, which
+    #  merely mentions the strip while being the death-prevention gap itself --
+    #  the same over-merge the ordering comment above warns about.
+    ("monster", None, None, r"creature_card_cmds\.json STEP 8b",
+     "creature_card_cmds/step8b"),
+    # "CARRIED FROM power/illusion PER RULE 3 -- NOT a new finding and not
+    #  re-derived" (parafright); "the monster-side half of a mechanism already
+    #  verdicted at audit/records/power/adaptable.json" (test_subject);
+    #  eye_with_teeth and waterfall_giant state the same shape against
+    #  IllusionPower / SteamEruptionPower, the two other members of the power
+    #  tier's group.  PROMPT.md bug class 21.
+    ("monster", None, None,
+     r"power/illusion|power/adaptable\.json|bug class 21|"
+     r"ShouldCreatureBeRemovedFromCombatAfterDeath",
+     "power/_death_prevention_branch"),
+    # "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned)" -- the
+    #  seam handed the content tier the liveness question and both answers came
+    #  back dormant, executed.  Four Decimillipede segments plus tough_egg.
+    ("monster", None, None, r"creature_card_cmds step 26|step 26 hands the content tier",
+     "creature_card_cmds/step26"),
+    # The sim's Intent dataclass has no count field, so a C# StatusIntent(N)
+    #  telegraphs the wrong number.  Identical wording on aeonglass,
+    #  the_insatiable and test_subject; monster_state_machine boundary hole 2
+    #  ("AbstractIntent and the intent vocabulary") is the unaudited home of it.
+    ("monster", None, None, r"StatusIntent'?s? count|StatusIntent\(\w+\) lose|"
+     r"carries the NUMBER|no count field", "monster/_intent_count_lost"),
+    # A MoveState built with TWO AbstractIntents where the port keeps one.
+    #  Distinct from the count loss above: the sim CAN express both (via
+    #  Intent.also) and simply does not.  vantom + vine_shambler.  Matched on
+    #  the TITLE -- the phrase is in `what`, not in the body head, which is why
+    #  the first attempt (an ``hpat``) matched nothing at all.
+    ("monster", r"constructed with TWO intents", None, None,
+     "monster/_second_intent_dropped"),
+    # A C# MoveState with an EMPTY intents array, which the sim cannot express
+    #  at all (its Intent requires a MoveType).  The three BattleFriends and
+    #  their shared base, identical text.
+    ("monster", r"NOTHING_MOVE carries no intents", None, None,
+     "monster/_no_intent_unrepresentable"),
+    # "membership of Enemies is the only test, and a creature whose removal was
+    #  vetoed (Hook.ShouldCreatureBeRemovedFromCombatAfterDeath) is still in
+    #  it" -- guardbot and queen, the corpse-visible-to-a-teammate-scan shape.
+    ("monster", None, None,
+     r"membership of Enemies is the only test|"
+     r"membership of the enemy side is the only test",
+     "monster/_retained_corpse_in_scan"),
+    # An encounter builder that ignores its parity selection Rng.  C#'s
+    #  EncounterModel._rng (run seed + total floor + id hash) has NO sim
+    #  analogue at all, and 20 create_monsters overrides take the shared rng --
+    #  so this needs a missing CONCEPT, not a one-line stream swap.  Kept
+    #  separate from _off_stream_draw below for exactly that reason.
+    #  corpse_slug, slithering_strangler, scroll_of_biting.
+    ("monster", None, None,
+     r"EncounterModel\._rng|base\.Rng\.NextInt|CorpseSlug\.|"
+     r"create_monsters draws|per-encounter selection (?:stream|Rng)|"
+     r"PER-ENCOUNTER selection Rng",
+     "monster/_encounter_selection_rng"),
+    # A call site that NAMES a dedicated stream in C# where the sim uses the
+    #  shared legacy combat random.Random -- PROMPT.md bug class 16, and the
+    #  same shape as relic/_off_stream_draw.  Distinct from the encounter
+    #  family: here the sim ALREADY HAS the stream and simply does not use it
+    #  (combat_rng.card_gen exists unused for thieving_hopper; monster_ai for
+    #  fabricator), so each is a one-line fix.
+    ("monster", None, None,
+     r"SHARED legacy combat random\.Random|the SHARED combat rng|"
+     r"WRONG RNG stream",
+     "monster/_off_stream_draw"),
     # "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd
     #  (Hook.cs:1267-1292), called ONCE for the whole enemy side
     #  (CombatManager.cs:12..)" -- the ENEMY leg, which turn_structure G5 is the
@@ -361,6 +472,20 @@ _FAMILY_OVERRIDE = {
     # mechanism at every site): ... and power/illusion, which owns the
     # Hook.ShouldPowerBeRemovedOnDeath half of the predicate."
     "power/illusion/ShouldPowerBeRemovedOnDeath": "creature_card_cmds/step8b",
+    # inklet's GenerateMoveStateMachine gap NAMES monster_state_machine G1 --
+    # "cites G1's *class*, is not G1's mechanism (order, not integers)" -- so
+    # the monster G1 family's text match would swallow it.  It is the branch
+    # ADD ORDER mechanism, which no parameter check and no distribution check
+    # can catch (identical marginal; 0/20000 agreement on a shared stream), and
+    # it anchors its own.  Pinned here rather than fixed with a lookahead so
+    # the exclusion is legible.
+    "monster/inklet/GenerateMoveStateMachine": "monster/inklet/GenerateMoveStateMachine",
+    # "Carried from the same mechanism as the TriggerDeadState entry (rule 3),
+    # recorded separately because it is a distinct observable that survives any
+    # fix that only re-slots the AfterDeath body."  The record declares the
+    # merge; its body also mentions step 26 in passing, which the step-26
+    # family would otherwise claim.
+    "monster/test_subject/g1": "power/_death_prevention_branch",
 }
 
 # Entries whose FIRST guard reference is not the finding the entry is about.
@@ -536,8 +661,24 @@ def _family(kind: str, title: str, body: str):
     return None
 
 
-def _make_entry(key, kind, record, section, local_id, what, body, mech):
+def _make_entry(key, kind, record, section, local_id, what, body, mech,
+                live=None):
+    """``live`` is the record entry's explicit boolean field, when it has one.
+
+    Added 2026-07-27 with the monster tier, which is the first to populate it on
+    every gap.  The field is DATA and outranks ``_liveness``'s prose scan: the
+    scan is a heuristic over caps tokens that was written because 386 entries
+    state no liveness at all, and where an author has said so in a typed field
+    there is nothing to infer.  ``None`` means the entry omits the field, not
+    that it is dormant -- absence still falls through to the scan and then to
+    mechanism inheritance."""
     text = what + " " + body
+    if live is True:
+        liveness = "live"
+    elif live is False:
+        liveness = "dormant"
+    else:
+        liveness = _liveness(what + " || " + body)
     return {
         "id": key,
         "kind": kind,
@@ -547,7 +688,7 @@ def _make_entry(key, kind, record, section, local_id, what, body, mech):
         "seam": record,
         "section": section,
         "local_id": local_id,
-        "liveness": _liveness(what + " || " + body),
+        "liveness": liveness,
         "mechanism": _resolve(mech),
         "what": what,
         "issue": body,
@@ -603,7 +744,8 @@ def extract():
                     _FAMILY_OVERRIDE.get(key) or _family(kind, hname, body) or key
                 )
                 entries.append(
-                    _make_entry(key, kind, unit, "hooks", local, hname, body, mech)
+                    _make_entry(key, kind, unit, "hooks", local, hname, body,
+                                mech, e.get("live"))
                 )
             # guards: a list; a content guard may carry a tier tag as its id
             for i, e in enumerate(rec.get("guards") or []):
@@ -625,7 +767,8 @@ def extract():
                 else:
                     mech = _family(kind, what, body) or key
                 entries.append(
-                    _make_entry(key, kind, unit, "guards", local, what, body, mech)
+                    _make_entry(key, kind, unit, "guards", local, what, body,
+                                mech, e.get("live"))
                 )
 
     # apply the cross-record merge to mechanism keys that are themselves gaps

@@ -1,0 +1,183 @@
+{
+  "unit": "monster/corpse_slug",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\CorpseSlug.cs",
+    "sha256": "a37ff6a434242dd59ddee338cb0fead116b59efa989113011cbc164bdc8306c5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\corpse_slug.py",
+    "sha256": "467c141df0df171f99cfc105a47db4f44eb683626fb359e0c5df1101be70c7f5"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Encounters/CorpseSlugsNormal.cs",
+      "sha256": "9e7f91463951eeabe9ac29856adeb997618a8b2840079cddd51dcffe3742075f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Encounters/CorpseSlugsWeak.cs",
+      "sha256": "c4eb2f309e39d1d41141c5f504bc341037bc65f0f0a6b0bd357cee21b1d182b7",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
+      "sha256": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_legion.py",
+      "sha256": "20f9950262269d972fff7aff6d200544ce02c445f956217cf9568890938e5f21",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/ruined_helmet.py",
+      "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/unsettling_lamp.py",
+      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/vambrace.py",
+      "sha256": "95c98caeae4206f9737a2f3de4c8275edfd4be384397baf07d0e66f81cf6bcb5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "corpse_slug.py:29-30 min_hp = 25",
+      "verdict": "faithful",
+      "note": "CorpseSlug.cs:39 non-ascension = 25. The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). `py audit/tools/monster_probes.py hp` compares this pair pool-wide with 0 mismatches; re-read by hand here."
+    },
+    "MaxInitialHp": {
+      "maps_to": "corpse_slug.py:29-30 max_hp = 27",
+      "verdict": "faithful",
+      "note": "CorpseSlug.cs:41 non-ascension = 27. "
+    },
+    "DeathSfx": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: CorpseSlug.cs:55."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: CorpseSlug.cs:70."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "corpse_slug.py:40-42 (PowerCmd.apply(hooks, self, RavenousPower, 4) inside __init__)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied not re-derived. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (corpse_slug.py:40-42). Same observable today on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none can fire, and sts2_rl/potions.py implements none of the four hooks; (b) HP-roll inversion - the sim applies the power before the parity Niche roll (combat.py:152-153) and the game after it, but of the constructor-applied power classes only IllusionPower reads max_hp and only inside revive() (powers.py:1581), never at apply time, and RavenousPower 4 (CorpseSlug.cs:51,88 - GetValueIfAscension(DeadlyEnemies, 5, 4), non-ascension value LAST) is a flat constant; (c) roll ordering - CorpseSlug is the batch's one MachineMonster, so MachineMonster.__init__ DOES roll (state_machine.py:301) before the subclass applies the power - but every one of its three possible initial states is a MoveState, so monster_state_machine step 30's sticky early return fires and the roll evaluates no branch and reads no power. Executed rather than assumed: `py audit/tools/monster_probes_b02.py seq` drives all three starter indices for 40 turns and reports 0 MonsterAi draws on both the reference machine and the port. All cited files are carried in this record's extra_sources. NOTE (tooling defect this batch found): `py audit/tools/monster_probes.py ctor-order` does NOT list this unit. Its `_CTOR` regex (the `_CTOR` regex in audit/tools/monster_probes.py, which this pipeline deliberately never hashes) is `def __init__\\(self`, which cannot match a port whose signature wraps as `def __init__(<newline> self,`. Reproduce with `py audit/tools/monster_probes_b02.py ctor-regex`: the real population is 46, not the 35 SHARED-FINDINGS section 2 reports, and 11 units are missing from that list."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: CorpseSlug.cs:146-177."
+    },
+    "AttackSfx (protected; not in the skeleton)": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: CorpseSlug.cs:53."
+    },
+    "GenerateMoveStateMachine (protected; not in the skeleton)": {
+      "maps_to": "corpse_slug.py:44-57 build_machine (a real MonsterMoveStateMachine - the batch's only MachineMonster port)",
+      "verdict": "faithful",
+      "note": "CorpseSlug.cs:91-109 - WHIP_SLAP -> GLOMP -> GOOP -> WHIP_SLAP, with the initial state selected by `(StarterMoveIdx % 3) switch { 0 => whip, 1 => glomp, _ => goop }` (:103-108). The port's build_machine mirrors the graph, the state ids VERBATIM, and the same modulo selection (corpse_slug.py:56). Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count. corpse_slug start=0/1/2: MATCH, 0 draws each. (The VALUE of StarterMoveIdx is a separate gap - see the guard.)"
+    }
+  },
+  "guards": [
+    {
+      "what": "Where StarterMoveIdx comes from. The game calls `CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves(models, base.Rng)` (CorpseSlugsNormal.cs:32, CorpseSlugsWeak.cs:32), and the helper draws `rng.NextInt(3)` off the PER-ENCOUNTER selection Rng (CorpseSlug.cs:135-144; EncounterModel.cs:49,268 is the stream, reproduced by rng.py:52-67's make_encounter_rng). The sim's CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-84) ignores its `selection_rng` parameter entirely and draws `rng.randrange(3)` off the combat rng.",
+      "verdict": "gap",
+      "live": true,
+      "issue": "Every Corpse Slug in the encounter starts on the WRONG move of the three-move loop, so all three slugs telegraph and perform a different opening move from the game's, for the whole fight. Two separate defects in one line: (1) wrong value - executed, `py audit/tools/monster_probes_b02.py slug-start` compares the game's NextInt(3) against the sim's starters over 10 seed/floor configurations and 6 DISAGREE; (2) the per-encounter selection stream is drawn 0 times where the game draws exactly once, desynchronising every later draw on it. Worse, the sim's draw is not even seed-stable: `CombatState(rng_set=RunRngSet('FIXEDSEED'), encounter=CORPSE_SLUGS_NORMAL)` returns starter indices [2,0,1], [0,1,2], [1,2,0], [1,2,0] on four consecutive runs of the same process, because the combat rng it draws from is the unseeded shared random.Random - so a conformance replay of a Corpse Slug fight is non-deterministic. LIVE on ported content (rule 6): corpse_slugs_weak and corpse_slugs_normal are both in the act-2 encounter pools (rooms.py:130,134,141-142), CorpseSlug itself is fully ported, and the observable is the enemy intent shown on turn 1. The four correctly-ported batch-2 encounters (ruby_raiders_normal, slimes_normal, slimes_weak, the fixed bosses) consume the selection stream exactly as their C# does - executed, `monster_probes_b02.py enc-rng` - so this is a port slip, not a missing capability. Same root cause as the gap recorded on monster/slithering_strangler. EncounterModel / monster-slot generation is monster_state_machine boundary hole 4 and is owned by no seam; this entry covers only the encounter code that lives in the unit's own sim file."
+    },
+    {
+      "what": "EnsureCorpseSlugsStartWithDifferentMoves' stagger itself: `num = rng.NextInt(3); foreach slug { StarterMoveIdx = num % 3; num++; }` (CorpseSlug.cs:138-143) vs the sim's `(start + i) % 3` (corpse_slug.py:82)",
+      "verdict": "faithful",
+      "note": "The stagger arithmetic and the assignment order are equivalent; only the source of `start` diverges (previous guard). Recorded separately so the fix does not accidentally change the stagger too."
+    },
+    {
+      "what": "WhipSlapDamage x WhipSlapRepeat / GlompDamage / GoopFrailAmt / RavenousStr (CorpseSlug.cs:43,45,47,49,51 - plain 3 and 2, GetValueIfAscension(DeadlyEnemies, 9, 8), plain 2, GetValueIfAscension(DeadlyEnemies, 5, 4)) vs corpse_slug.py:14-18 (3 x 2 / 8 / 2 / 4)",
+      "verdict": "faithful",
+      "note": "The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). Note WhipSlapDamage and GoopFrailAmt are NOT ascension-branched at all - reading them as if they were would have invented a second value."
+    },
+    {
+      "what": "GoopMove applies FrailPower to `targets` (the player side, CorpseSlug.cs:132) vs PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, 2) (corpse_slug.py:68)",
+      "verdict": "faithful"
+    },
+    {
+      "what": "_isRavenous / IsRavenous (CorpseSlug.cs:35,57-68) - the port keeps no such flag",
+      "verdict": "waiver",
+      "rationale": "Read to the end before deciding (the KinPriest N6 lesson): the field's only readers are the five GenerateAnimator predicates at CorpseSlug.cs:169-175 (devour / hurt_devouring / die_devouring). It gates nothing mechanical in this model - the devour mechanic itself lives in RavenousPower, which is the power tier's unit and is where the sim implements it. Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all."
+    },
+    {
+      "what": "Intent list: WHIP_SLAP MultiAttackIntent(3,2), GLOMP SingleAttackIntent(8), GOOP DebuffIntent (CorpseSlug.cs:94-96)",
+      "verdict": "faithful",
+      "note": "Executed: `monster_probes_b02.py intents` agrees on all three; the port builds the same Intents inside build_machine (corpse_slug.py:45-52)."
+    },
+    {
+      "what": "Bug class 6 / SHARED-FINDINGS section 1 (the AddBranch weight-vs-cooldown misread that made monster_state_machine G1 live): checked explicitly and NOT present here. CorpseSlug.cs builds no RandomBranchState and the port's build_machine makes no add_branch call, so the state_machine_probes `mismatch` sweep resolves no pair for it - verified by reading both graphs rather than by the sweep's silence.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Move-state ids: the port uses the C# ids VERBATIM (WHIP_SLAP_MOVE / GLOMP_MOVE / GOOP_MOVE)",
+      "verdict": "faithful",
+      "note": "SHARED-FINDINGS section 3 (MoveState ids differ between the two sides). The one cross-file reader of a sim move id is CreatureCmd.stun's next_move_key (cmds.py:216-217), which assigns straight into `target._move_key`. Executed: the only ported caller that passes a next_move_key at all is sts2_rl/monsters/overgrowth/ceremonial_beast.py:45 (next_move_key=\"BEAST_CRY\", its own id), so no cross-file reference reaches this unit's ids and the rename is unobservable. This unit is the batch's only one with no rename at all, so even a future cross-file id reference would resolve."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned) - does THIS unit make it live?",
+      "verdict": "faithful",
+      "note": "No. Neither side writes max HP after construction."
+    },
+    {
+      "what": "Death != removal: a slug's death is what triggers its teammates' Ravenous devour",
+      "verdict": "faithful",
+      "note": "Neither CorpseSlug.cs nor corpse_slug.py implements ShouldDie, ShouldCreatureBeRemovedFromCombatAfterDeath or a revive; the dying slug really dies and really leaves Enemies on both sides. The devour response is RavenousPower's (monster_state_machine cites underdocks/corpse_slug.py as one of the two INERT power-side stun sites), i.e. the power tier's unit, not this one."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}

@@ -1,0 +1,119 @@
+{
+  "unit": "monster/snapping_jaxfruit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\SnappingJaxfruit.cs",
+    "sha256": "8c6f621bc495af4e61ee670374431ad513cd3936d29ec42dc9537704d92c27ef"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\snapping_jaxfruit.py",
+    "sha256": "484416c4c857d3d8746e481aba663adb4f89ba76fce2b2cc59e34ad1159be594"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "SnappingJaxfruit.min_hp = 31 (snapping_jaxfruit.py:18)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). SnappingJaxfruit.cs:25 (ToughEnemies, 34, 31) -> 31."
+    },
+    "MaxInitialHp": {
+      "maps_to": "SnappingJaxfruit.max_hp = 33 (snapping_jaxfruit.py:19)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). SnappingJaxfruit.cs:27 (ToughEnemies, 36, 33) -> 33."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "no sim counterpart; the port's __init__ (snapping_jaxfruit.py:21-22) applies nothing",
+      "verdict": "waiver",
+      "rationale": "NOT the SHARED-FINDINGS section 2 case -- read to the end first. The whole override is `await base.AfterAddedToRoom()` (a no-op, MonsterModel.cs:313-316) plus `SfxCmd.PlayLoop(Creature, \"...orb_plant_idle_loop\")` (SnappingJaxfruit.cs:33-37). No power, no block, no state. Presentation, so there is nothing for the constructor to carry and the port applying nothing is correct rather than a dropped effect."
+    },
+    "BeforeRemovedFromRoom": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "current_intent / take_turn (snapping_jaxfruit.py:24-32); no _move_key exists",
+      "verdict": "faithful",
+      "rationale": "SnappingJaxfruit.cs:44-51 is a one-node machine: ENERGY_ORB_MOVE with FollowUpState = itself. The port has no move key and no telegraph override, so the base class's no-op telegraph_next_move (monsters/base.py:96-105) is correct here -- the case that hook's docstring calls 'fixed single-move loops'. Executed (`py audit/tools/monster_probes_b01.py chain`): 20 turns, single-move-loop = True, intent ATTACK, 0 MonsterAi draws on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "Move numerics: EnergyDamage 3 and StrengthPower 2, applied damage-then-buff",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). SnappingJaxfruit.cs:29 (DeadlyEnemies, 4, 3) -> 3 = _DMG; EnergyOrb attacks then applies StrengthPower 2m to itself (:64-66) = _STR_GAIN in that order (snapping_jaxfruit.py:12-13, 31-32). Single hit on both sides."
+    },
+    {
+      "what": "The C# move telegraphs SingleAttackIntent + BuffIntent (SnappingJaxfruit.cs:47); the port telegraphs Intent(MoveType.ATTACK, damage=3) with NO `also=(BUFF,)`",
+      "verdict": "faithful",
+      "rationale": "Telegraph presentation only, and the sim's own convention elsewhere in this batch is to carry it -- cubex_construct.py:42 and fogmog.py:71-73 both spell `also=(MoveType.BUFF,)` for the identical attack-plus-Strength shape. Behaviourally the Strength IS applied (snapping_jaxfruit.py:32), so nothing is lost mechanically; what is lost is one bit of the intent shown to the player and to an observation builder. Recorded as an inconsistency inside the batch rather than a divergence, because the intent vocabulary mapping is unaudited by design (monster_state_machine boundary hole 2) and MoveType.ATTACK already dominates the display."
+    },
+    {
+      "what": "EnergyOrb's `TestMode.IsOff` block (SnappingJaxfruit.cs:55-63)",
+      "verdict": "waiver",
+      "rationale": "PROMPT.md class 18 checked: IsOff is the shipping arm and the block only points an NSnappingJaxfruitVfx at the local player. `LocalContext.GetMe` is multiplayer/local-player plumbing, waived by the same reasoning as hook_dispatch N1."
+    },
+    {
+      "what": "SNAPPING_JAXFRUIT_NORMAL pairs the Jaxfruit with a Flyconid via a module-level factory (snapping_jaxfruit.py:35-42)",
+      "verdict": "faithful",
+      "rationale": "Boundary hole 4, recorded here. The lazy `_flyconid` function exists to break an import cycle and makes the pairing invisible to a monster_classes scan -- noted because `py audit/tools/monster_probes_b01.py reach` reports flyconid as 'NOT DIRECTLY IN A POOL' for exactly this reason and a future sweep must not read that as unreachable."
+    },
+    {
+      "what": "Ascension gating on the HP pair and EnergyDamage",
+      "verdict": "waiver",
+      "rationale": "Out of scope; non-ascension branch compared (N4)."
+    },
+    {
+      "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
+      "verdict": "faithful",
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 3-wide range, so a top-end off-by-one would be silently observable as HP 33 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [31,33], observed [31,33], and the observed set is exactly the full inclusive range, so the top endpoint 33 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Random\\Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\overgrowth\\flyconid.py",
+      "sha256": "f3eb737052a284fa03d9cff4edf7c5cb7de9736076c2b579a27f8eee4fab1c30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "unit": "monster/bowlbug_nectar",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\BowlbugNectar.cs",
+    "sha256": "20fe7813633482f3a07034e9170bcf8b9e0410e31aac1c0be0ef79dc09a38738"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\bowlbugs.py",
+    "sha256": "f4776ff765a05a9c96c27b1e7ec2614f59709dac7ccefa42109dc089f357c0ba"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# BowlbugNectar.cs:25,27 non-ascension branch = 35 (AscensionHelper.GetValueIfAscension puts the non-ascension value LAST); sim min_hp = 35. Confirmed by `monster_probes.py hp` (102/109 compared, 0 mismatches)."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# BowlbugNectar.cs:25,27 non-ascension branch = 38; sim max_hp = 38."
+    },
+    "DeathSfx": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "SetupSkins": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (bowlbugs.py:123-136)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node identical to BowlbugNectar.cs:43-56, including the detail that makes this monster odd: there are TWO distinct MoveStates sharing the ThrashMove delegate, THRASH_MOVE and THRASH2_MOVE, and the chain is THRASH -> BUFF -> THRASH2 -> THRASH2 (a self-loop), initial THRASH. So the +15 Strength lands exactly once and the bug thrashes forever afterwards. The sim reproduces both states and the self-loop, and even the registration order ([BUFF, THRASH2, THRASH]) matches. Executed (monster_probes_b04.py graphs)."
+    }
+  },
+  "guards": [
+    {
+      "what": "THRASH damage and BUFF strength",
+      "verdict": "faithful",
+      "rationale": "BowlbugNectar.cs:29 ThrashDamage is a flat 3 with no ascension gate at all; BuffStrengthGain (:31) non-ascension is 15. Sim bowlbugs.py:30-31 = 3 / 15. BuffMove applies the Strength to itself (:69) -- sim _buff (bowlbugs.py:141-144) does the same, so THRASH2 hits for 3 + 15."
+    },
+    {
+      "what": "no AfterAddedToRoom override",
+      "verdict": "faithful",
+      "rationale": "BowlbugNectar declares none (unlike its Egg and Rock siblings), so the base no-op runs and the sim's inherited MachineMonster.__init__ matches. SHARED-FINDINGS section 2 does not apply."
+    },
+    {
+      "what": "no RandomBranchState -- AddBranch bug class not applicable",
+      "verdict": "faithful",
+      "rationale": "Executed (monster_probes_b04.py branches): bowlbug_nectar builds no branch node on either side. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27"
+}

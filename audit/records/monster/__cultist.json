@@ -1,0 +1,35 @@
+{
+  "unit": "monster/__cultist",
+  "sim_only": true,
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\cultists.py",
+    "sha256": "27087bdb5d122fbfb3650d828d0c33c8a5d8bc0811bbcada9a04aacddd904816"
+  },
+  "rationale": "`_Cultist` (cultists.py:14-42) is a SIM-ONLY intermediate base with no C# counterpart. The roster resolves monster/__cultist to src/Core/Models/Monsters/Cultist.cs, which does not exist: the game ships TWO unrelated `public sealed class ... : MonsterModel` files, CalcifiedCultist.cs and DampCultist.cs, each carrying its OWN full copy of GenerateMoveStateMachine, IncantationMove, DarkStrikeMove and the SFX accumulator. There is no shared cultist base type anywhere in src/Core/Models/Monsters/ - the duplication is the source's own. The sim factors the identical half out; the factoring is not observable, because the two concrete subclasses build byte-identical graphs to their own C# models (audited in monster/calcified_cultist and monster/damp_cultist, both faithful on GenerateMoveStateMachine). Executed with `py audit/tools/monster_probes_b03.py cultist-base`: `_Cultist(hooks, rng)` raises AttributeError: '_Cultist' object has no attribute 'dark_strike_dmg' (the class declares dark_strike_dmg/incantation_amt as bare annotations, cultists.py:18-19, and defines no values - `_Cultist class attrs with values: {}`), so the base is abstract in practice and can never enter a combat on its own. Recorded as sim_only rather than pointed at one of the two C# files because pointing it at either would make the record claim a 1:1 mapping that does not exist and would double-count that file's overrides. REPORTED, NOT APPLIED (the relic stream owns name_overrides.json): the entry that would silence the roster's UNMATCHED line is {\"monster\": {\"__cultist\": null}} if the file supports an explicit sim-only marker, otherwise the roster should keep reporting it and this record is the answer.",
+  "hooks": {
+    "GenerateMoveStateMachine": {
+      "maps_to": "_Cultist.build_machine (cultists.py:24-34)",
+      "verdict": "faithful",
+      "rationale": "The one behaviour the base owns. It builds INCANTATION_MOVE (BUFF) -> DARK_STRIKE_MOVE (ATTACK, self.dark_strike_dmg) -> itself, initial state INCANTATION_MOVE, states [INCANTATION, DARK_STRIKE] - which is exactly CalcifiedCultist.cs:66-75 and DampCultist.cs:66-75, both of which spell the same graph out separately. Executed (monster_probes_b03.py cultist-base): both subclasses report states ['DARK_STRIKE_MOVE','INCANTATION_MOVE'], kinds ['MoveState'], RandomBranchState count=0, initial=INCANTATION_MOVE, state_log=['INCANTATION_MOVE']."
+    },
+    "__init__": {
+      "maps_to": "_Cultist.__init__ (cultists.py:21-22)",
+      "verdict": "faithful",
+      "rationale": "Only supplies the rng default and calls super(). It applies no power, reads no combat state and touches no list that does not exist yet, so SHARED-FINDINGS section 2's escalation clause does not apply."
+    }
+  },
+  "guards": [
+    {
+      "what": "monster_state_machine G7's zero-weight fuzz could not build this machine",
+      "verdict": "faithful",
+      "rationale": "monster_state_machine's G7 records `_Cultist` as the ONE machine its zero-weight probe could not build (it needs a constructor argument), so the seam's dormancy claim is unproven FOR THIS UNIT. Not re-verdicted here (rule 3) - but the content-tier fact that closes the hole is recorded: `_Cultist`'s graph contains no RandomBranchState at all (executed: monster_probes_b03.py cultist-base prints 'RandomBranchState count=0' for both concrete subclasses), so there is no degenerate-weight arm for the fuzz to reach and nothing G7 describes can fire through it. The build failure is also explained: the constructor argument is not the blocker - `_Cultist(hooks, rng)` still raises AttributeError on the unset dark_strike_dmg class annotation, because the intent is built from it inside build_machine."
+    },
+    {
+      "what": "Two C# files, one sim base - rule 3 across records",
+      "verdict": "faithful",
+      "rationale": "The same mechanism (the cultist move graph) is verdicted once here and once in each concrete record, and all three say faithful, so there is no rule-3 disagreement. The concrete records own the per-unit numbers (9/2 vs 1/5) which the base only reads through class attributes."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-27"
+}

@@ -1,0 +1,70 @@
+{
+  "unit": "monster/mysterious_knight",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\MysteriousKnight.cs",
+    "sha256": "12b1c152a9a7ebf62f730bcdd1b7900eafaea2f30337b3486b4e80921153ad24"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
+    "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01"
+  },
+  "hooks": {
+    "AfterAddedToRoom": {
+      "maps_to": "MysteriousKnight.__init__ -> PowerCmd.apply(StrengthPower, 6) then PowerCmd.apply(PlatingPower, 6) (flail_knight.py:82-87)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (flail_knight.py:84-87). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amounts and ORDER match: MysteriousKnight.cs:13-14 applies StrengthPower 6m then PlatingPower 6m, both self-applied; the sim applies them in the same order. The base call at :12 reaches MonsterModel.AfterAddedToRoom, which FlailKnight does not override, so there is no inherited effect to lose."
+    },
+    "MinInitialHp": {
+      "maps_to": "inherited FlailKnight.min_hp = 101 (flail_knight.py:34)",
+      "verdict": "faithful",
+      "rationale": "RESOLVES the HP sweep's INCONCLUSIVE for this unit (SHARED-FINDINGS section 0). MysteriousKnight.cs declares no HP; the value is read from its base class FlailKnight.cs:32, GetValueIfAscension(ToughEnemies, 108, 101) -> non-ascension 101. The sim's MysteriousKnight subclasses FlailKnight (flail_knight.py:75) and inherits min_hp = 101 the same way. FlailKnight.cs is listed in extra_sources."
+    },
+    "MaxInitialHp": {
+      "maps_to": "inherited FlailKnight.max_hp = 101 (flail_knight.py:35)",
+      "verdict": "faithful",
+      "rationale": "FlailKnight.cs:34 MaxInitialHp => MinInitialHp -> 101; inherited on both sides, so the knight has a fixed 101 HP with no roll."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. Inherited from FlailKnight.cs:36."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. Inherited from FlailKnight.cs:84-103."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "inherited FlailKnight.build_machine (flail_knight.py:40-56)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "MysteriousKnight overrides no move machine, so it INHERITS FlailKnight's - including the misread branch arguments. FlailKnight.cs:50-51's AddBranch(FLAIL, 2) / AddBranch(RAM, 2) are maxRepeats 2 with weight 1f (overload #9); the inherited flail_knight.py:51-52 read them as weight 2.0 with CAN_REPEAT_FOREVER. Same bug class as monster_state_machine G1 (the seam owns G1 itself; this entry is the unit-level consequence and does not re-verdict it). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and NEVER a weight (seam seed fact 1 / step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts weight there. Observable: the same distribution shift the seam measured for FlailKnight, on a monster with 6 Strength and 6 Plating. LIVE and on a SECOND reachable path from the seam's: MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER is the fight in The Lantern Key (events/the_lantern_key.py:41), a ported Hive event - so fixing G1 must fix this unit too. Rule 3: same mechanism, same verdict as monster/flail_knight."
+    }
+  },
+  "guards": [
+    {
+      "what": "StrengthPower 6 changes the damage of every inherited move",
+      "verdict": "faithful",
+      "rationale": "Neither side re-specifies FLAIL/RAM damage for the Mysterious Knight; the +6 Strength rides through the ordinary damage pipeline on both sides."
+    },
+    {
+      "what": "MysteriousKnight is `public class`, not sealed, and adds no state",
+      "verdict": "faithful",
+      "rationale": "MysteriousKnight.cs is 16 lines: one AfterAddedToRoom override and nothing else. `harness.py validate --strict-inherited` enumerates the four inherited public overrides (MinInitialHp, MaxInitialHp, TakeDamageSfxType, GenerateAnimator); all four carry verdicts above, plus the protected GenerateMoveStateMachine added by hand."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Monsters\\FlailKnight.cs",
+      "sha256": "7e5158dd5559c57156fee1ff9be34600d656ddb42a1bc0de61ef1207fe9b089b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\events\\the_lantern_key.py",
+      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "side": "sim"
+    }
+  ]
+}

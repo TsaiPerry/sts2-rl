@@ -1,0 +1,68 @@
+{
+  "unit": "monster/sewer_clam",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\SewerClam.cs",
+    "sha256": "cf6a5cae946be06f049684e8625ae551a0daf0ed1dcb7a936cd7ec55fba152f2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\sewer_clam.py",
+    "sha256": "27f5f7ea740f0d937117ea30e3c62794c8166ea9f3f1a2f14615836a3538f236"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (sewer_clam.py:23)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (sewer_clam.py:24)",
+      "verdict": "faithful",
+      "rationale": "SewerClam.cs:23 MaxInitialHp => MinInitialHp => 56."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Stone is a hit sound."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "SewerClam.__init__ (sewer_clam.py:26-30)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim as that section binds every batch. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (sewer_clam.py:26-30). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on target is self.player / applier is self.player / card is not None, and a monster's starting power is self-applied with no card, so none of them can fire; sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion - the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering - MachineMonster.__init__ rolls the first move (state_machine.py:301) before the subclass applies its powers, but `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: every initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7 NOTE: that rationale cites four relic files and powers.py which this record does NOT hash, exactly as the seam records disclose. Payload matches: SewerClam.cs:29-34 computes GetValueIfAscension(ToughEnemies, 9, 8) = 8 non-ascension and applies PlatingPower at that amount to itself; sewer_clam.py:30 applies PlatingPower 8. Clause (c) holds - the initial state is the MoveState JET_MOVE (executed: monster_probes_b03.py graphs, initial=JET_MOVE, log=['JET_MOVE']) - and no amount reads max_hp. WORTH SAYING for this unit because the power is Plating and Plating grants BLOCK: the block is not gained in __init__ but from PlatingPower.on_combat_start (powers.py:1054-1056), which runs at hooks.on_combat_start (combat.py:208), i.e. AFTER relics attach (combat.py:157-159) - so the block-modifier listeners section 2's clause (a) enumerates get their normal turn at their normal time and the inversion does not reach them."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (sewer_clam.py:32-41)",
+      "verdict": "faithful",
+      "rationale": "SewerClam.cs:36-45: PRESSURIZE_MOVE (BuffIntent) <-> JET_MOVE (SingleAttackIntent(10)), with the machine's INITIAL state being JET_MOVE (:44 passes moveState2), i.e. the clam attacks first. Sim sewer_clam.py:39-41 matches, executed (monster_probes_b03.py graphs: initial=JET_MOVE, JET_MOVE -> PRESSURIZE_MOVE -> JET_MOVE). This is the easiest place in the batch to invert an initial state, because the C# builds PRESSURIZE first and adds it to the list first; the port gets it right. No branch state, so PROMPT.md class 6 cannot apply."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "SewerClam.cs:21-32, LAST argument: MinInitialHp 56 (MaxInitialHp = MinInitialHp), JetDamage 10, Plating 8 (:32, the inline GetValueIfAscension(ToughEnemies, 9, 8)); plus the Strength 4 literal at :51. Sim sewer_clam.py:13-15, 23-24."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10 (reset timing): SewerClam.cs holds no field at all, and PlatingPower's own per-turn decay lives in the power tier. Class 19 (a docstring that misquotes the SOURCE): sewer_clam.py:19-20 says 'Starts with Plating 8 (and its block); ... starting with JET' - both re-derived against the C# rather than trusted, and both correct. Class 21: neither kills nor is retained."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ]
+}

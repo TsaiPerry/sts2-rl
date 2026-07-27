@@ -1,0 +1,113 @@
+{
+  "unit": "monster/gas_bomb",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\GasBomb.cs",
+    "sha256": "00513f0c88b5bbc866fd68fdc481aa49bbd018be2e8e9edc638f891d9041be0d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\living_fog.py",
+    "sha256": "330d0b8087d6cd0ada73d33d30c5c2a83ad9c80eee6a84c7a44ac5a3c9c28217"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (living_fog.py:26)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (living_fog.py:27)",
+      "verdict": "faithful",
+      "rationale": "GasBomb.cs:30 MaxInitialHp => MinInitialHp => 7."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Magic is a hit sound."
+    },
+    "ShouldFadeAfterDeath": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: false keeps the corpse sprite from fading. Not reflex-waived (SHARED-FINDINGS section 4 says think about this one): grepped for a mechanical reader and found none - it is consumed by the death animation only, and it is NOT the removal veto. The removal veto is Hook.ShouldCreatureBeRemovedFromCombatAfterDeath, which GasBomb does not implement, so an exploded bomb really does leave CombatState.Enemies."
+    },
+    "DeathSfx": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: an FMOD path."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "GasBomb.__init__ (living_fog.py:29-33)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim as that section binds every batch. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (living_fog.py:29-33). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on target is self.player / applier is self.player / card is not None, and a monster's starting power is self-applied with no card, so none of them can fire; sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion - the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering - MachineMonster.__init__ rolls the first move (state_machine.py:301) before the subclass applies its powers, but `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: every initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7 NOTE: that rationale cites four relic files and powers.py which this record does NOT hash, exactly as the seam records disclose. Payload matches: PowerCmd.Apply<MinionPower>(..., Creature, 1m, Creature, null) (GasBomb.cs:56) vs PowerCmd.apply(hooks, self, MinionPower, 1) (living_fog.py:33). EXTRA NOTE for this unit, because it is a mid-combat spawn and not a start-of-combat creature: the game runs AfterAddedToRoom from CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside CreatureCmd.Add (CreatureCmd.cs:69), i.e. AFTER the creature is in CombatState.Enemies; the sim applies MinionPower inside the constructor, which runs BEFORE CreatureCmd.add appends it (living_fog.py:94 constructs then adds, cmds.py:237-266). MinionPower is read by the win condition (combat.py:273-277 excludes 'minion' holders from the primary-enemy set), and the ordering inversion is unobservable because the sim's spawn is not visible to any listener until cmds.py:266 fires on_creature_added, by which point the power is already on."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine graph; HasExploded (GasBomb.cs:24,36-47,69) is read only by the 'Dead' AddAnyState predicate at :91, so read to the end it picks a death animation and nothing else."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (living_fog.py:35-41)",
+      "verdict": "deliberate-divergence",
+      "rationale": "GasBomb.cs:59-65 builds ONE MoveState, EXPLODE_MOVE (DeathBlowIntent(() => ExplodeDamage)), and leaves its FollowUpState UNSET; the sim self-loops it (living_fog.py:40 `explode.follow_up = explode`). Executed (`py audit/tools/monster_probes_b03.py bomb-followup`): sim EXPLODE_MOVE.follow_up = EXPLODE_MOVE, C# <none set>. In C# that difference would matter only if the bomb ever rolled again, because MoveState.GetNextState is `(FollowUpState?.Id ?? FollowUpStateId) ?? throw` (MoveState.cs:67-70). It never does: ExplodeMove ends with CreatureCmd.Kill(Creature) (GasBomb.cs:74), the bomb is removed from CombatState.Enemies, and the game's only roll sites iterate Enemies. The sim instead rolls once more, immediately, because MachineMonster.take_turn calls telegraph_next_move unconditionally after the perform (state_machine.py:320-330) - so the self-loop is what stops that roll raising 'MoveState EXPLODE_MOVE has no follow-up state'. SAME OBSERVABLE (rule 2): the extra roll consumes NO rng (MoveState.get_next_state is deterministic, state_machine.py:136-139), appends EXPLODE_MOVE to a state_log this machine never reads (it has no branch state), and the bomb is is_gone so combat.py:292 skips it forever after. Reachability of the alternative was EXECUTED rather than asserted: the probe enumerates every should_die implementer in the sim - potions.FairyInABottle ('return creature.side != \"player\"', i.e. it lets a monster die), relics.LizardTail (player only), powers.AdaptablePower / IllusionPower / SteamEruptionPower (each saves only `self.owner`, and a GasBomb carries only MinionPower) - so no ported content can leave a bomb alive after its own Kill and the C# throw is unreachable too."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "GasBomb.cs:28-32, LAST argument: MinInitialHp 7 (MaxInitialHp = MinInitialHp), ExplodeDamage 8; plus MinionPower 1 (:56). Sim living_fog.py:17, 26-27, 33."
+    },
+    {
+      "what": "EXPLODE: damage first, then self-kill",
+      "verdict": "faithful",
+      "rationale": "GasBomb.cs:70-74 awaits the Attack and THEN CreatureCmd.Kill; living_fog.py:43-46 does the same. Order is observable (PROMPT.md class 2, the killing-blow family): killing first would make the bomb dead when the damage lands and would suppress its own attack under the sim's monsters/base.py:116-117 early-out. Both sides attack first."
+    },
+    {
+      "what": "Death is not removal - which side of the line this unit is on",
+      "verdict": "faithful",
+      "rationale": "SHARED-FINDINGS section 7 names living_fog/gas_bomb as exactly the shape where conflating the two bites, so it was checked directly. GasBomb implements neither ShouldDie nor ShouldCreatureBeRemovedFromCombatAfterDeath, so in the game it really dies AND is really removed. The sim's CreatureCmd.kill (cmds.py:192-206) sets hp = 0, runs the should_die pipeline, sets retained_after_death from should_remove_from_combat_after_death and fires on_death; with no listener vetoing, retained_after_death stays False and combat.py:292 skips the corpse from then on. The sim never physically removes it from `enemies` - that is the engine-wide modelling choice, and it is behaviourally equivalent HERE because every reader that matters filters on is_gone, including LivingFog's own free-slot count (living_fog.py:90-91). See monster/living_fog for the one place where the list-position difference IS observable."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp) does not apply",
+      "verdict": "faithful",
+      "rationale": "SHARED-FINDINGS section 7 asks each unit whether it makes that dormant seam finding live. GasBomb's HP is a fixed 7 with no SetMaxAndCurrentHp / SetCurrentHpInternal call anywhere in GasBomb.cs, and the sim's port assigns no hp fields, so it does not."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 2 (killing-blow guards) and class 21 (death is not removal) are the live ones and are answered above. Class 6: no branch state. Class 10: the only per-combat field is HasExploded, presentation."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Commands\\CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    }
+  ]
+}

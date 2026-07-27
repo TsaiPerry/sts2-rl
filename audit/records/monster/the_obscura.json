@@ -1,0 +1,115 @@
+{
+  "unit": "monster/the_obscura",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\TheObscura.cs",
+    "sha256": "9d61d4c8e78300b2d26fd3d29640af02aba7394a84ff6c0563db483b576fe26c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\the_obscura.py",
+    "sha256": "8ffc0b4fdb22396d575ec4c72534b1c7812a85f2e220e75661b888346d578029"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/IllusionPower.cs",
+      "sha256": "7461c923281077a0f9acf3647dc08ec0ff75ed04e1098406f6dc8b6fbb6fb31d",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "the_obscura.py:68 `min_hp = 123`",
+      "verdict": "faithful",
+      "rationale": "TheObscura.cs:36 GetValueIfAscension(ToughEnemies, 129, 123) -> 123."
+    },
+    "MaxInitialHp": {
+      "maps_to": "the_obscura.py:69 `max_hp = 123`",
+      "verdict": "faithful",
+      "rationale": "TheObscura.cs:38 `MaxInitialHp => MinInitialHp` -> 123."
+    },
+    "DeathSfx": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4)."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4)."
+    },
+    "ShouldShowMoveInBestiary (protected; not in the skeleton)": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "TheObscura.cs:140-143 hides PIERCING_GAZE_MOVE from the Bestiary. Presentation; the sim has no Bestiary (monster_state_machine N5)."
+    },
+    "GenerateMoveStateMachine (protected; added by hand -- the skeleton only enumerates `public override` members)": {
+      "maps_to": "the_obscura.py:71-92 build_machine",
+      "verdict": "faithful",
+      "rationale": "THE ONE BRANCH STATE IN THIS BATCH, and its integer arguments are read correctly. TheObscura.cs:66-69 wires ILLUSION/GAZE/WAIL/HARDENING all to one `RandomBranchState(\"RAND\")` and adds three branches with `AddBranch(state, MoveRepeatType.CannotRepeat)` -- seam step 13's OVERLOAD #10 (`R repeatType`), which takes NO integer at all and defaults the weight to 1f. the_obscura.py:82-85 is `add_branch(state, 1.0, MoveRepeatType.CANNOT_REPEAT)`: weight 1.0 in the sim's positional slot 2 (state_machine.py:160-167), repeat type CANNOT_REPEAT, no max_times, no cooldown. No integer is misread because C# passes none -- there is nothing here for monster_state_machine G1's bug class to corrupt. EXECUTED (`py audit/tools/monster_probes_b06.py branch-args`), which prints the three C# calls and the three sim calls side by side. Branch ADD ORDER is observable (seam step 14, ties resolve toward the earlier branch) and matches: gaze, wail, hardening on both sides. Node-by-node the rest matches too: ids ILLUSION_MOVE / PIERCING_GAZE_MOVE / SAIL_MOVE (the game's own typo for Wail, preserved) / HARDENING_STRIKE_MOVE, initial state ILLUSION, registration list [illusion, gaze, wail, hardening, rand] in C# order."
+    }
+  },
+  "guards": [
+    {
+      "what": "WAIL into a reviving Parafright: PowerCmd has no CanReceivePowers guard",
+      "verdict": "gap",
+      "issue": "CARRIED FROM power/illusion PER RULE 3, and this unit is a concrete SITE of it. TheObscura.cs:101 applies StrengthPower 3m to `GetTeammatesOf(base.Creature)`, which is `GetCreaturesOnSide(creature.Side)` (CombatState.cs:397-400) and therefore includes the summoned Parafright. C#'s PowerCmd.Apply refuses any target whose `CanReceivePowers` is false (PowerCmd.cs:73-76, and again at :133), and CanReceivePowers reuses Hook.ShouldAllowHitting, which IllusionPower.cs:95-106 returns FALSE for while the illusion is reviving -- the override's own doc comment (IllusionPower.cs:92-94) says it exists precisely 'so the owner doesn't receive powers while it is reviving'. The sim's PowerCmd.apply (cmds.py:271-331) has no CanReceivePowers/should_allow_hitting guard at all, so a Wail cast on the turn a Parafright is reviving lands +3 Strength that the game refuses. LIVE: `the_obscura` is a ported Hive normal encounter (rooms.py:163), the Parafright is summoned by the machine's guaranteed opening move, WAIL is one of the three branches it then rolls, and killing the Parafright to open the revive window is ordinary play. The verdict and its executed evidence belong to audit/records/power/illusion.json's ShouldAllowHitting entry (and power_cmd G6, which that entry upgrades); recorded here so the monster tier does not disagree.",
+      "live": true
+    },
+    {
+      "what": "WAIL's target set: GetTeammatesOf includes the caster",
+      "verdict": "faithful",
+      "rationale": "CombatState.cs:397-400 `GetTeammatesOf(c) => GetCreaturesOnSide(c.Side)` -- the caster is on its own side, so The Obscura buffs itself too. the_obscura.py:104-107 loops `ctx.enemies` (which contains the Obscura) with the source comment stating exactly this. The sim's extra `if not enemy.is_gone` filter has no counterpart in C#, but it cannot change the outcome today: the only removable teammate is the Parafright, whose sim IllusionPower never lets it die (`is_gone` stays False), so both sides buff the same set. The power-application half of the same call is the gap entry above."
+    },
+    {
+      "what": "ILLUSION_MOVE's `if (base.CombatState.IsLiveCombat())` guard",
+      "verdict": "faithful",
+      "rationale": "EXECUTED rather than assumed (rule 5): `CombatState.IsLiveCombat()` (CombatState.cs:608-611) is `return true;` -- an unconditional literal. The only other implementation is NullCombatState's, a null-object used when there is no combat. So in any real fight the guard is always taken and the sim's unguarded `CreatureCmd.add(ctx.hooks, Parafright(...))` (the_obscura.py:94-96) is equivalent."
+    },
+    {
+      "what": "Damage / block / Strength constants",
+      "verdict": "faithful",
+      "rationale": "PiercingGazeDamage (DeadlyEnemies, 11, 10) -> 10 = _GAZE_DMG (the_obscura.py:21); HardeningStrikeDamage (..., 7, 6) -> 6 = _HARDENING_DMG (:22); HardeningStrikeBlock (..., 7, 6) -> 6 = _HARDENING_BLOCK (:23); WailMove's StrengthPower 3m (TheObscura.cs:101) = _WAIL_STR 3 (:24). HARDENING order (attack then GainBlock, TheObscura.cs:106-110) matches the_obscura.py:109-112."
+    },
+    {
+      "what": "`HasSummoned` (TheObscura.cs:46-57, set at :86)",
+      "verdict": "waiver",
+      "rationale": "Read only by the animator's Hit/Dead AddAnyState conditions (TheObscura.cs:131-134). Presentation."
+    },
+    {
+      "what": "PowerCmd.Apply's `applier` argument",
+      "verdict": "deliberate-divergence",
+      "rationale": "ONE MECHANISM ACROSS THIS BATCH (rule 3), recorded at every site: the sim's monster ports drop PowerCmd.Apply's `applier` argument. C# is `Apply<T>(choiceContext, target, amount, applier, cardSource)` (PowerCmd.cs:67) and passes `base.Creature` at TheObscura.cs:101 (StrengthPower, applier=base.Creature); the sim's `PowerCmd.apply(hooks, target, power_cls, amount, applier=None)` (cmds.py:271-277) is called without it at the_obscura.py:107. In C# a null applier additionally SKIPS the whole Hook.ModifyPowerAmountGiven pass (PowerCmd.cs:123-126) and changes the key FindExistingInstanceForStacking uses (PowerCmd.cs:78, :112). Same observable today, EXECUTED (`py audit/tools/monster_probes_b06.py applier`): the sim has exactly six listener definitions that can see the argument -- powers.py:1172/1181 (ViciousPower, gated `name != \"vulnerable\" or applier is not self.owner`, powers.py:1167), powers.py:3101/3106 (_PossessPower, gated `applier is self.owner and name == self._stat_id and target.side == \"player\" and delta < 0`, powers.py:3092-3099), relics/ruined_helmet.py:23-38 (gated on `target is self.player`, never on applier) and relics/unsettling_lamp.py:44-53 (gated `applier is not self.player`, unsettling_lamp.py:47). None can distinguish `None` from the applying monster for a power this unit applies. Named trigger: porting any listener that reads `applier` positively (a monster-applier-sensitive relic), or porting PowerInstanceType so stacking is keyed by applier. Third-file citations (relics/*.py) not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}

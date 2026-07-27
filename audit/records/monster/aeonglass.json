@@ -1,0 +1,136 @@
+{
+  "unit": "monster/aeonglass",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Aeonglass.cs",
+    "sha256": "4a1e8159da55c48e2f7870832f199f6c8a62c29b7d98ae6183c431505f2b68d5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\aeonglass.py",
+    "sha256": "122f47b88b1d87fd6dec7dbe7f575fa92aa176adb2b1e3d1d03f70f04a4c4dd8"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Powers/WitheringPresencePower.cs",
+      "sha256": "aa46615f0397905cd8f4becbed94af6ca1fdbf66010be9cc7f3c22392171be24",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/PlayerCombatState.cs",
+      "sha256": "c908ea3144a466dc0d979ec44ade207dd692d6b23b9512afbcccae3468fea123",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "aeonglass.py:31 `min_hp = 512`",
+      "verdict": "faithful",
+      "rationale": "Aeonglass.cs:28 GetValueIfAscension(ToughEnemies, 535, 512) -> 512."
+    },
+    "MaxInitialHp": {
+      "maps_to": "aeonglass.py:32 `max_hp = 512`",
+      "verdict": "faithful",
+      "rationale": "Aeonglass.cs:30 `MaxInitialHp => MinInitialHp` -> 512."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4)."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "aeonglass.py:34-41 __init__",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2's shared verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (aeonglass.py:34-41, WitheringPresencePower 6 then ArtifactPower 3). Same observable today on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40 and relics/paels_legion.py:36-43, and all four gate on `target is self.player` / `applier is self.player` / `card is not None`, which a self-applied cardless starting power cannot satisfy; (b) HP-roll inversion -- only IllusionPower mentions max_hp and only inside revive() (powers.py:1581); (c) roll ordering -- `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op. Rule 7: that rationale cites four relic files and powers.py which this record does NOT hash. Concrete trigger that would make it a gap: any relic/potion/power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Escalation check per SHARED-FINDINGS section 2: this unit's C# body loops `base.Creature.CombatState.GetOpponentsOf(base.Creature)` (Aeonglass.cs:78-83), i.e. it DOES read the combat's creature lists at add-to-room time -- but it reads the OPPONENT side (the player), which exists before create_monsters runs, not `hooks.combat.enemies`, which does not (combat.py:134). In Ironclad scope that loop has exactly one iteration, so the sim's single unconditional application is equivalent; the per-opponent instancing half is audit/records/power/withering_presence.json's InstanceType gap. Application ORDER (WitheringPresence then Artifact) matches Aeonglass.cs:78-84. The `NRunMusicController.UpdateMusicParameter(\"queen_progress\", 1f)` at :77 is presentation."
+    },
+    "AfterDeath": {
+      "maps_to": "no sim counterpart, and none is needed",
+      "verdict": "waiver",
+      "rationale": "ONE OF THE ELEVEN UNCLAIMED C# HOOK OVERRIDES handed to the content tier by monster_state_machine boundary hole 5. Read to the end (the KinPriest N6 lesson): the ENTIRE body of Aeonglass.cs:87-95 is a `creature != base.Creature` self-filter and `NRunMusicController.Instance?.UpdateMusicParameter(\"queen_progress\", 5f)` -- one music parameter and nothing else. No command, no power, no card, no state change; the two private counters (`_additionalStrength`, `_witherUpgradeCount`) are not touched. Same shape as KinPriest.AfterDeath (monster_state_machine N6, `waiver`) and as TheInsatiable.AfterDeath in this same batch, and the same shape as this class's own AfterAddedToRoom music line. Presentation. Does NOT re-verdict hook_dispatch's G5."
+    },
+    "AfterCardGeneratedForCombat": {
+      "maps_to": "no sim counterpart; the effect is open-coded at aeonglass.py:78-82 and powers.py:3284-3289",
+      "verdict": "gap",
+      "issue": "THE SECOND OF THIS UNIT'S TWO UNCLAIMED C# HOOK OVERRIDES, and unlike AfterDeath it is genuinely mechanical -- read to the end and it is still mechanical. Aeonglass.cs:150-166: for EVERY card generated for combat, if it is a Wither, call `MatchWitherToUpgradeCount(wither)`, which applies `wither.FakeUpgrade()` WitherUpgradeCount times. The hook is dispatched by Hook.AfterCardGeneratedForCombat from CardPileCmd.cs:246 (inside AddGeneratedCardsToCombat, per generated card) and CardCmd.cs:504, i.e. it is a GENERAL interception point that catches Withers from any source. The sim has no such dispatch and no MonsterModel listener category (hook_dispatch G5, not re-verdicted), so the effect is open-coded at each of the sim's two Wither-creating sites instead: aeonglass.py:78-82 fake-upgrades the boss's own new Wither, and powers.py:3284-3289 (WitheringPresencePower) fake-upgrades the punish Wither by reading `getattr(self.owner, \"wither_upgrade_count\", 0)`. Note that the C# line the power record cites for the same behaviour, WitheringPresencePower.cs:37, is inside `ExtraHoverTips` -- a HOVER-TIP preview property -- not inside AfterCardPlayed; the real Wither the power adds at :55 is matched only via this Aeonglass hook, so the sim's open-coding is standing in for THIS override at both sites, not for that line. **NOT LIVE, executed** (`py audit/tools/monster_probes_b06.py wither`): the sim constructs a WitherCard at exactly two sites, aeonglass.py:79 and powers.py:3286, and both already apply the upgrade count, so no ported path can produce an unmatched Wither today. Named triggers that would make it live: (a) porting anything that draws Wither from the status pool -- StatusCardPool.cs:28 lists Wither among its 12 entries, so any 'add a random status' card/relic/potion reaches it; (b) a second monster or power adding Wither during an Aeonglass fight; (c) porting Regalite, RocketPunch, ArsenalPower, PillarOfCreationPower, SmokestackPower or TrashToTreasurePower, the other six AfterCardGeneratedForCombat implementers, which would need the dispatch to exist at all.",
+      "live": false
+    },
+    "GenerateMoveStateMachine (protected; added by hand -- the skeleton only enumerates `public override` members)": {
+      "maps_to": "aeonglass.py:43-59 build_machine",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against Aeonglass.cs:97-109. Three MoveStates with identical ids (EBB_MOVE, EYE_LASERS_MOVE, INCREASING_INTENSITY_MOVE), a pure deterministic 3-cycle ebb->lasers->intensity->ebb on both sides, same registration list order, same initial state (ebb). No branch state on either side (EXECUTED, `monster_probes_b06.py branch-args`)."
+    }
+  },
+  "guards": [
+    {
+      "what": "Damage / block / power constants",
+      "verdict": "faithful",
+      "rationale": "EbbDamage (DeadlyEnemies, 32, 26) -> 26 = _EBB_DMG (aeonglass.py:13); EbbBlock is a bare 33 with no ascension branch (Aeonglass.cs:36) = _EBB_BLOCK (:14); EyeLasersDamage (..., 12, 11) -> 11 with EyeLasersRepeat 2 = _EYE_LASERS_DMG/_EYE_LASERS_HITS (:15-16); IncreasingIntensityBaseStrength (..., 4, 3) -> 3 = _INTENSITY_BASE_STR (:17); WitherAmount (..., 2, 1) -> 1 = _WITHER_AMOUNT (:18); WitheringPresence 6m (Aeonglass.cs:82) and Artifact 3m (:84) = :19-20. The escalating Strength `IncreasingIntensityTotalStrength = base + AdditionalStrength` with `AdditionalStrength++` AFTER the apply (Aeonglass.cs:72, :146-147) matches aeonglass.py:83-87 exactly, including the post-increment -- so the first Increasing Intensity grants 3, the second 4, and so on on both sides."
+    },
+    {
+      "what": "Wither pile position is BOTTOM, not Random",
+      "verdict": "faithful",
+      "rationale": "Checked because the sibling finding on the_insatiable is a live gap. Aeonglass.cs:145 is `AddToCombatAndPreview<Wither>(targets, PileType.Discard, WitherAmount, null)` and omits the `position` argument, so it takes the default `CardPilePosition.Bottom` (CardPileCmd.cs:997, :1005) -- which resolves to index -1 (CardPileCmd.cs:512) and draws no RNG. aeonglass.py:82 uses `CardPileCmd.add_to_discard`, an append (cmds.py:464-472). Same position, same zero draws. This is exactly the helper the_insatiable should NOT have used, and here it is the right one."
+    },
+    {
+      "what": "Increasing Intensity: existing Withers upgraded, then the counter, then the new card",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# order (Aeonglass.cs:130-147): FakeUpgrade every existing Wither in `target.Player.PlayerCombatState.AllCards`; `WitherUpgradeCount++`; add the new Wither, which the AfterCardGeneratedForCombat hook then upgrades to the NEW count; apply Strength; `AdditionalStrength++`. Sim order (aeonglass.py:74-87): upgrade existing; increment the counter; build the WitherCard and fake-upgrade it to the new count; add it; Strength; increment. The one difference is that the sim upgrades the new card BEFORE it enters the pile and the game upgrades it AFTER, i.e. C# fires the pile-entry path on an un-upgraded card. Same observable: the sim's only pile-entry work is `CardPileCmd._enter_combat` (cmds.py:472), and no ported listener reads a card's upgrade level at that moment. Named trigger: any listener on card-entering-combat that branches on upgrade level."
+    },
+    {
+      "what": "`ctx.player.all_cards` omits the play pile",
+      "verdict": "faithful",
+      "rationale": "C# `PlayerCombatState.AllCards` is `AllPiles.SelectMany(...)` over FIVE piles -- Hand, DrawPile, DiscardPile, ExhaustPile and **PlayPile** (PlayerCombatState.cs:70-82). The sim's `all_cards` is hand + draw + discard + exhaust (player.py:100-103) and its docstring claims it mirrors AllCards, which is inaccurate. Not a divergence at this site, argued rather than assumed: Increasing Intensity is a MONSTER move and runs during the enemy side, when no player card is mid-play, so the play pile is empty and the two sets coincide. Flagged so a later reader does not inherit the docstring (PROMPT.md class 24 shape, in player.py rather than in this unit)."
+    },
+    {
+      "what": "INCREASING_INTENSITY's intent drops StatusIntent's count",
+      "verdict": "gap",
+      "issue": "Aeonglass.cs:102 telegraphs `new StatusIntent(WitherAmount), new BuffIntent()`; the sim records `Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,))` (aeonglass.py:54) with no count field. Same mechanism as the_insatiable's StatusIntent(6) -- one verdict at both sites per rule 3. monster_state_machine's scope boundary item 2 records the whole AbstractIntent -> Intent mapping as audited by no seam. NOT LIVE: the sim's Intent (monsters/base.py:36-59) has no status-count field, so no ported consumer can observe the loss. Named trigger: adding one, or an observation/replay consumer that reads it.",
+      "live": false
+    },
+    {
+      "what": "PowerCmd.Apply's `applier` argument",
+      "verdict": "deliberate-divergence",
+      "rationale": "ONE MECHANISM ACROSS THIS BATCH (rule 3), recorded at every site: the sim's monster ports drop PowerCmd.Apply's `applier` argument. C# is `Apply<T>(choiceContext, target, amount, applier, cardSource)` (PowerCmd.cs:67) and passes `base.Creature` at Aeonglass.cs:82 (WitheringPresence), :84 (Artifact) and :146 (StrengthPower), all applier=base.Creature; the sim's `PowerCmd.apply(hooks, target, power_cls, amount, applier=None)` (cmds.py:271-277) is called without it at aeonglass.py:40, :41 and :83-86. In C# a null applier additionally SKIPS the whole Hook.ModifyPowerAmountGiven pass (PowerCmd.cs:123-126) and changes the key FindExistingInstanceForStacking uses (PowerCmd.cs:78, :112). Same observable today, EXECUTED (`py audit/tools/monster_probes_b06.py applier`): the sim has exactly six listener definitions that can see the argument -- powers.py:1172/1181 (ViciousPower, gated `name != \"vulnerable\" or applier is not self.owner`, powers.py:1167), powers.py:3101/3106 (_PossessPower, gated `applier is self.owner and name == self._stat_id and target.side == \"player\" and delta < 0`, powers.py:3092-3099), relics/ruined_helmet.py:23-38 (gated on `target is self.player`, never on applier) and relics/unsettling_lamp.py:44-53 (gated `applier is not self.player`, unsettling_lamp.py:47). None can distinguish `None` from the applying monster for a power this unit applies. Named trigger: porting any listener that reads `applier` positively (a monster-applier-sensitive relic), or porting PowerInstanceType so stacking is keyed by applier. Third-file citations (relics/*.py) not hashed here."
+    },
+    {
+      "what": "Reachability",
+      "verdict": "faithful",
+      "rationale": "rooms.py:196 puts `aeonglass` in Glory's boss_keys and aeonglass.py:90-93 exports AEONGLASS_BOSS. Both sides reachable with ported content."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}
