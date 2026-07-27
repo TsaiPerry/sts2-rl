@@ -1,0 +1,46 @@
+{
+  "unit": "power/improvement",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ImprovementPower.cs",
+    "sha256": "2af9811d1c6336a1692d81d7f9644fbc85b2f27a68b98169d720d0fb9be01de5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2902 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "NO SIM COUNTERPART -- powers.py:2890-2902 is a data-only stub with no methods at all",
+      "verdict": "gap",
+      "issue": "THE EFFECT IS ENTIRELY UNIMPLEMENTED. ImprovementPower.cs:17-31 upgrades base.Amount random upgradable DECK cards after the combat ends: it takes PileType.Deck's cards filtered on IsUpgradable, then loops Amount times picking with Rng.CombatCardSelection.NextItem, removing the pick from the candidate list (so the picks are DISTINCT) and calling CardCmd.Upgrade. The sim's ImprovementPower declares only id, name and power_type. Its docstring (powers.py:2895-2898) states the reason -- 'the sim fights over a deep-copied deck and does not sync card upgrades back to the run, so the after-combat upgrade is a documented no-op here' -- and per binding rule 1 that is a DORMANT GAP, not a waiver: the divergence's shape is 'an effect the sim does not implement', and the dormancy rests on an engine property, not on scope. It is REACHABLE content: the applier is the ported Mad Science card's Improvement rider from the ported Act-3 Glory event Tinker Time, the same card that supplies power/curious. So a run can hold it, play it, and get nothing where the game permanently upgrades cards -- which is a run-level, conformance-visible difference (deck contents at the next floor). Two named triggers, and either is enough: wiring combat card upgrades back to the run deck, or a conformance replay that plays Mad Science with the Improvement rider. NOTE the sim also has no on_combat_end-time deck access to hang it on: hooks.py:271-277's on_combat_end is combat-scoped, so this is a genuine engine-shaped gap rather than a one-line omission -- which is why it is recorded here rather than fixed."
+    }
+  },
+  "guards": [
+    {
+      "what": "ImprovementPower.cs:26 Rng.CombatCardSelection",
+      "verdict": "gap",
+      "issue": "Recorded so it is not lost when the effect is implemented: the picks must come off combat.combat_rng.card_selection (combat_rng.py:21,51), not combat._rng. WRONG RNG STREAM. combat._rng is the SHARED unseeded random.Random (combat.py:88), NOT the per-purpose accessor object -- that is combat.combat_rng, built one line later at combat.py:94, whose seven named accessors (combat_rng.py:17-25: shuffle, monster_ai, card_gen, card_selection, targets, energy, potion_gen) are GameRandomAdapters over the matching RunRngSet streams in a parity run. This is the sixth and seventh power unit in this stream with the same defect -- power/aggression (main report section 4 item 8), then power/hello_world, power/entropy, power/stampede and power/confused in half A -- so it is systematic, not incidental, and it is proposed as its own PROMPT.md bug class in .superpowers/sdd/content-power-report-a.md section 7 item 11. LIVE under seed parity by construction: the draw comes off a different stream in a different order AND every later consumer of the shared rng is perturbed. Third-file citations, not hashed here. Currently vacuous because the effect does not exist, but it is the seventh instance of the same trap and the one most likely to be reintroduced, since whoever implements the upgrade will not be reading this power's C# for the stream name."
+    },
+    {
+      "what": "ImprovementPower.cs:19 PileType.Deck filtered on IsUpgradable, and :27's list.Remove making the picks DISTINCT",
+      "verdict": "gap",
+      "issue": "Also recorded for the implementation: the candidates are the RUN deck (not the combat piles), the filter is IsUpgradable (so already-upgraded and non-upgradable cards are excluded), the picks are without replacement, and the loop breaks early when the candidate list empties (ImprovementPower.cs:22-25). Vacuous today for the same reason as the previous guard."
+    },
+    {
+      "what": "The power's in-combat presence IS faithful",
+      "verdict": "faithful",
+      "rationale": "The sim registers a real Power object with the right id, name and type (powers.py:2900-2902), so it appears in target.powers, in the observation vector via full_env.POWER_IDS, and in any conformance power-list comparison, exactly as the game's does. C# gives it no in-combat behaviour either -- AfterCombatEnd is its only override. So the divergence is confined to the post-combat effect, which is what the hook entry records."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

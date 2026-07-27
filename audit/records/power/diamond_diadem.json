@@ -1,0 +1,46 @@
+{
+  "unit": "power/diamond_diadem",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DiamondDiademPower.cs",
+    "sha256": "6a4dd464474dbd0518ef639a0e655140b30f97ff65dcf7190fea548adb06a75b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2718 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single, and the sim leaves Power.on_stack alone, so both sides add on re-application -- PowerCmd.ModifyAmount:236 has no StackType branch and Single only means 'Amount is hidden' (PowerStackType.cs:10-13). Correct, unlike the 15 units that override on_stack to a no-op citing the same StackType (py tools/audit/power_census.py stack). Inert either way: nothing reads Diamond Diadem's Amount on either side -- it is a flat halving that lasts one enemy turn -- and the sole ported applier (relics/diamond_diadem.py:37) applies 1 once per qualifying turn end, removing it before the next application."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:2720-2731 DiamondDiademPower.modify_damage_multiplicative (hooks.py:66-78, cmds.py:58)",
+      "verdict": "faithful",
+      "rationale": "0.5 for powered attacks against the owner, 1 otherwise. Both C# guards are present, one structurally: target != base.Owner (DiamondDiademPower.cs:23-26 vs powers.py:2729-2730) and !props.IsPoweredAttack() (:27-30), which the sim gets from DamageCmd.deal gating the multiplier families on is_powered_attack (cmds.py:56-58) -- the sim's own comment at powers.py:2727-2728 says so. 0.5 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py tools/audit/power_census.py multipliers, which lists it among the safe factors)."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2733-2734 on_enemy_side_end -> Power._expire (combat.py:345)",
+      "verdict": "faithful",
+      "rationale": "CORRECT SLOT. Like NoBlockPower, DiamondDiademPower.cs:34-40 has no participants filter -- it Removes whenever side == CombatSide.Enemy -- so the sim's side-scoped on_enemy_side_end (combat.py:345, the Hook.AfterTurnEnd(Enemy) slot at CombatManager.cs:1256) is exactly right and there is no per-creature question to lose. Remove, not Decrement, on both sides. The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audits/power/duplication.json and audits/power/flame_barrier.json per binding rule 3."
+    }
+  },
+  "guards": [
+    {
+      "what": "The applier's own condition",
+      "verdict": "waiver",
+      "rationale": "DiamondDiadem.cs grants the power at turn end only when the player played few enough cards; the ported relic reproduces that (relics/diamond_diadem.py:33-37, applier=player). That condition belongs to audits/relic/diamond_diadem and is not re-judged here. The POWER's own behaviour is audited in full above."
+    },
+    {
+      "what": "Halving on a MULTI-HIT attack",
+      "verdict": "faithful",
+      "rationale": "Neither side latches a command the way power/gigantification does, so the 0.5 applies to every hit of a multi-hit attack independently, and integer truncation happens per hit on both sides (C# rounds the decimal at the damage site, the sim at cmds.py:58's int()). Same observable for the ported content."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

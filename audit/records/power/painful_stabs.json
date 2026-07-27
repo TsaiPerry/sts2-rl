@@ -1,0 +1,56 @@
+{
+  "unit": "power/painful_stabs",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PainfulStabsPower.cs",
+    "sha256": "831faebcd0e3abddd1d9970cef5ccb5968e8c6f82c5c8531ab4f37ab7d2d71a9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3389 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ShouldPowerBeRemovedAfterOwnerDeath": {
+      "maps_to": "no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> false`. C# strips a dead creature's powers at CreatureCmd.cs:533; the sim never removes powers on death, so `false` is its universal behaviour and this override is satisfied for free. The inverse -- the C# default is `true` and the sim strips nothing -- is the engine-wide absence reported in content-power-report-b.md section 3c."
+    },
+    "ShouldCreatureBeRemovedFromCombatAfterDeath": {
+      "maps_to": "hooks.py:603 -- NOT implemented by this power",
+      "verdict": "gap",
+      "issue": "`=> creature != base.Owner`, i.e. the Test Subject's corpse stays in combat. The sim has the hook (hooks.py:603, consumed at cmds.py:102-104) and this power does not use it -- AdaptablePower on the same creature prevents the death instead (audits/power/adaptable.json), so the phase transition works by a different route. Same unused-hook finding as adaptable's and illusion's; folded into that mechanism."
+    },
+    "AfterAttack": {
+      "maps_to": "powers.py:3391-3409 on_damage_received",
+      "verdict": "gap",
+      "issue": "WRONG HOOK, and the sim HAS the right one and does not use it. C#'s `AfterAttack(choiceContext, AttackCommand command)` fires ONCE per attack command, after every hit of every target, and is handed the whole `command.Results` (a List<List<DamageResult>>) so it can count hits and act once. The sim ports it onto `on_damage_received` (cmds.py:122), which fires PER HIT and inside the damage pipeline. `hooks.py:344` (before_attack) and `hooks.py:361` (after_attack) both exist -- the main report records them as used by Vigor and Gigantification -- so this is an unused-slot omission, not an absence. Same defect as curl_up's and skittish's (main report section 4 items 5 and 14). Two standing consequences: the KILLING-BLOW guard (cmds.py:121 skips the victim's on_damage_received on a kill, where C#'s AfterAttack is not guarded at all), and effects granted inline being visible to LATER HITS OF THE SAME attack. Third-file citations, not hashed here. Here the Wound COUNT works out the same -- C# adds `base.Amount * num` Wounds once where num is the number of connecting hits (PainfulStabsPower.cs:60-62) and the sim adds `self.amount` per connecting hit (powers.py:3408-3409) -- so the arithmetic is equivalent and the divergences are the two standing ones. (a) KILLING BLOW: this power's target is the PLAYER, so on a lethal hit cmds.py:121 suppresses the sim's on_damage_received and the game's AfterAttack still adds the Wounds. That is not purely academic -- with the ported Lizard Tail preventing the death, cmds.py:112 floors the player at 1 HP and `target.is_dead` is then False, so the sim DOES fire; the two models therefore agree on the prevented-death path and disagree on the real-death path, which is the inverse of damage_pipeline gap G4's shape. (b) TIMING: Wounds arriving in the discard mid-attack rather than after it, which nothing currently reads. Also faithful for the record: C# adds to `PileType.Discard` and the sim uses `CardPileCmd.add_to_discard` -- the pile is right, which matters because Wounds in the DRAW pile would be a different card. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "PainfulStabsPower.cs:36 the three AfterAttack guards",
+      "verdict": "faithful",
+      "rationale": "`command.Attacker != base.Owner`, `command.TargetSide == base.Owner.Side`, `!command.DamageProps.IsPoweredAttack()` map to powers.py:3400-3405's `dealer is self.owner and target.side == \"player\" and amount > 0 and is_powered_attack(props)`. The props test reads `props` directly, which is the correct form (contrast SlowPower's card-based test)."
+    },
+    {
+      "what": "PainfulStabsPower.cs:41 `!list.Any(r => r.UnblockedDamage > 0)` -> return",
+      "verdict": "faithful",
+      "rationale": "The sim's per-hit `amount > 0` is the same predicate evaluated per hit; with the count equivalence above the totals agree."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

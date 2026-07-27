@@ -1,0 +1,56 @@
+{
+  "unit": "power/corruption",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CorruptionPower.cs",
+    "sha256": "c86856472c573de5ffe91cb011527db21dea29f9fb70259297b1ae836ebd7414"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:592 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:594-595 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "Same PowerStackType.Single misreading as power/hellraiser's StackType entry -- C# adds at PowerCmd.cs:236 regardless. Dormant: Corruption reads Amount nowhere. One of the 15 units in `py tools/audit/power_census.py stack`."
+    },
+    "TryModifyEnergyCostInCombatLate": {
+      "maps_to": "powers.py:597-601 CorruptionPower.modify_card_energy_cost (hooks.py:196-201)",
+      "verdict": "gap",
+      "issue": "PHASE LOSS. This is a phase-suffixed C# hook and the sim has a single unphased dispatch, which is hook_dispatch gap G3 (24 dispatchers lose their phase structure; 27 phase-suffixed hooks declared on AbstractModel). Per binding rule 3 the mechanism keeps G3's `gap` verdict and is cross-referenced rather than re-argued. Third-file citations, not hashed here. Corruption is a LATE-phase cost modifier: C# runs it in Hook.ModifyEnergyCostInCombat's second pass (TryModifyEnergyCostInCombatLate, CorruptionPower.cs:16-25), strictly after every early-phase modifier. The sim's single modify_card_energy_cost pass orders it by registration instead, so Corruption contends with the ported early-phase modifiers -- Curious (powers.py:2883) and Spiked Gauntlets -- by accident of application order. Corruption returning a hard 0 makes it order-sensitive in the worst way: it must WIN over Spiked Gauntlets' +1, and it does so only if it happens to be registered later. Same shape as hook_dispatch G3's own executed Tangled/Free-Attack witness."
+    },
+    "ModifyCardPlayResultPileTypeAndPosition": {
+      "maps_to": "powers.py:603-613 CorruptionPower.on_card_played",
+      "verdict": "gap",
+      "issue": "The destination-pile DECISION is replaced by an after-the-fact move, and the sim has the right hook available and does not use it. C# (CorruptionPower.cs:27-38) returns (PileType.Exhaust, position) from the pile-resolution chain, so a played Skill never enters the discard pile at all. The sim lets combat._resolve_card_play put the card in the discard pile (combat.py:453), runs the exhaust-keyword check and then the modify_card_play_result_pile chain (combat.py:500-511), and only afterwards -- inside on_card_played (combat.py:514) -- does Corruption pull the card out of the discard pile and append it to the exhaust pile, firing on_card_exhausted itself (powers.py:610-613). Two consequences. (i) CONTENTION ORDER: the sim's modify_card_play_result_pile hook exists (hooks.py:236-246) but accepts only 'discard'/'draw_top', so Nostalgia (powers.py:3595-3612) runs FIRST and can move the Skill to the top of the draw pile, after which Corruption's `card in player.discard_pile` test fails (powers.py:610) and the Skill is never exhausted. In C# both are listeners on ONE chain and the last writer wins, so Corruption exhausts it. Both Nostalgia and Corruption are ported Ironclad-pool powers, so the contention is reachable; which one wins in C# is hook_dispatch G2's listener-order question and is not re-verdicted here. (ii) EVENT TIMING: Feel No Pain and Dark Embrace see on_card_exhausted fired from the middle of Corruption's on_card_played rather than at pile assignment, so their effects land after any on_card_played listener registered before Corruption. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "CorruptionPower.cs:18 / :29 `card.Owner.Creature != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "`card.Owner.Creature != base.Owner` reduces to a tautology in the sim: there is one player, every Card belongs to it, and this power is only ever applied to the player. Same reading power_cmd's sim-entry note and SurroundedPower's own comment (powers.py:2574-2576) already record."
+    },
+    {
+      "what": "CorruptionPower.cs:18 / :33 `card.Type != CardType.Skill`",
+      "verdict": "faithful",
+      "rationale": "powers.py:599 and :607 both test CardType.SKILL. Identical, and applied in both places C# applies it."
+    },
+    {
+      "what": "The cost override is a hard 0, not a reduction",
+      "verdict": "faithful",
+      "rationale": "CorruptionPower.cs:23 sets `modifiedCost = default(decimal)` and returns true; powers.py:600 returns 0. Exact -- note this is a try-chain hook whose bool return says 'I changed it', and the sim's chain-shaped modify_card_energy_cost has no such signal. That missing signal is hook_dispatch's try-chain family (its step 34) and its notification lists (step 38), not this unit's."
+    },
+    {
+      "what": "`position` is passed through unchanged",
+      "verdict": "faithful",
+      "rationale": "C# returns the incoming CardPilePosition (CorruptionPower.cs:37) rather than forcing one; the sim appends to the exhaust pile end (powers.py:612), which is where a normal exhaust lands (combat.py:503). No divergence demonstrated."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

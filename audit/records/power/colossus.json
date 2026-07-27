@@ -1,0 +1,64 @@
+{
+  "unit": "power/colossus",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ColossusPower.cs",
+    "sha256": "9430dede8bf297d2b2f1f905b74823394b879d3168e43656323b3563382667c2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:570 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:572-581 ColossusPower.modify_damage_multiplicative",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:583-584 on_enemy_side_end -> Power._tick",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "ColossusPower.cs:28-31 `target != base.Owner` -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:579 `target is self.owner`. Identical."
+    },
+    {
+      "what": "ColossusPower.cs:32-35 `!props.IsPoweredAttack()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "Enforced by DamageCmd.deal's is_powered_attack gate (cmds.py:56-58)."
+    },
+    {
+      "what": "ColossusPower.cs:36-39 `dealer == null` -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:579 `dealer is not None`. Identical."
+    },
+    {
+      "what": "ColossusPower.cs:40-43 `!dealer.HasPower<VulnerablePower>()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:579 `'vulnerable' in dealer.powers`. Identical -- note it is the DEALER's Vulnerable that matters, not the target's, and the sim gets that right."
+    },
+    {
+      "what": "ColossusPower.cs:44 the DamageDecrease DynamicVar",
+      "verdict": "faithful",
+      "rationale": "The sim hard-codes 0.5 (powers.py:580) where C# reads a DynamicVar. Its canonical value is the 0.5m the ported card sets, and 1/2 is dyadic, so the float and decimal agree bit-for-bit and Colossus does not widen hook_dispatch G9. Executed: `py tools/audit/power_census.py multipliers`."
+    },
+    {
+      "what": "ColossusPower.cs:49 `side == CombatSide.Enemy`, plain Decrement",
+      "verdict": "faithful",
+      "rationale": "powers.py:583-584 on_enemy_side_end (combat.py:345, the Hook.AfterTurnEnd(Enemy) slot) calling _tick (powers.py:70-75), NOT _tick_duration -- matching C#'s use of PowerCmd.Decrement rather than TickDownDuration, so Colossus does not honour SkipNextDurationTick. Correct on both counts, and unlike most AfterSideTurnEnd overrides this one has no participants filter to lose."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

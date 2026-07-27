@@ -1,0 +1,61 @@
+{
+  "unit": "power/vulnerable",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\VulnerablePower.cs",
+    "sha256": "d4cc015ea3ab96f8245de67d7a5a64799d5ba09f8d77ccaf7a9708065be9d204"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:401 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:403-417 VulnerablePower.modify_damage_multiplicative",
+      "verdict": "gap",
+      "issue": "The base multiplier and both ported modifiers are right, but the value is computed in FLOAT where C# uses DECIMAL, which puts this hook inside hook_dispatch gap G9's blast radius. C# reads DamageIncrease = 1.5m from the DynamicVar (VulnerablePower.cs:12,27) and threads it through PaperPhrog, then CrueltyPower, then DebilitatePower (:30-45). The sim starts from 1.5, adds `cruelty.amount / 100.0` inline (powers.py:414-416) and then calls hooks.modify_vulnerable_multiplier (powers.py:417), whose only listener is the ported Paper Phrog (relics/paper_phrog.py:21-24, +0.25). The ORDER is therefore swapped relative to C#, which is harmless because both contributions are additive on the running value and addition commutes -- but `1.5 + n/100.0` is non-dyadic for most Cruelty amounts (n=10 -> 1.6, n=30 -> 1.8, both inexact in binary), so this is a THIRD non-dyadic damage multiplier in the sim beyond the two literals the census reports, and it widens G9. DebilitatePower is unported, which is a further dormant leg of the same chain. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:419-420 on_enemy_side_end -> Power._tick_duration (powers.py:77-84)",
+      "verdict": "faithful",
+      "rationale": "VulnerablePower.cs:49-55 fires on `side == CombatSide.Enemy` with no participants filter and calls PowerCmd.TickDownDuration; the sim's on_enemy_side_end (combat.py:345) is the Hook.AfterTurnEnd(Enemy) slot (CombatManager.cs:1256) and _tick_duration is the SkipNextDurationTick-honouring tick. This is one of the three tick sites turn_structure step 39 already pins. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "VulnerablePower.cs:19-22 `target != base.Owner` -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:410-411 `target is not self.owner -> 1.0`. Identical."
+    },
+    {
+      "what": "VulnerablePower.cs:23-26 `!props.IsPoweredAttack()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "Enforced by DamageCmd.deal's is_powered_attack gate (cmds.py:56-58). Unlike Strength/Shrink the sim's Vulnerable does not even restate it."
+    },
+    {
+      "what": "CrueltyPower.cs:19-22 `target == base.Owner` -> unmodified",
+      "verdict": "gap",
+      "issue": "Cruelty's own self-exclusion is dropped. C# skips the Cruelty bonus when the Vulnerable target IS the Cruelty holder; powers.py:414-416 reads `dealer.powers.get('cruelty')` with no such test, so a Cruelty holder attacking its own Vulnerable self would get the bonus in the sim and not in the game. DORMANT: no ported effect deals powered attack damage from a creature to itself -- the self-damage sites (CrimsonMantlePower powers.py:644-647, InfernoPower powers.py:742-745) all pass DamageProps.NON_CARD_HP_LOSS, which is UNPOWERED and so never reaches the multiplicative family at all (cmds.py:56). Named trigger: a powered self-targeting attack. Third-file citations, not hashed here."
+    },
+    {
+      "what": "VulnerablePower.cs:41-45 DebilitatePower leg",
+      "verdict": "gap",
+      "issue": "DebilitatePower is not ported (`grep -c DebilitatePower sts2_rl/powers.py` returns 0), so the third link of C#'s modifier chain has no sim counterpart. Per binding rule 1 an unported C# side is a DORMANT gap, not a waiver. Named trigger: porting DebilitatePower."
+    },
+    {
+      "what": "PaperPhrog's own gate is spelled differently but is equivalent in single-player",
+      "verdict": "faithful",
+      "rationale": "PaperPhrog.cs:18-21 skips when `target == Owner.Creature`; relics/paper_phrog.py:22 instead requires `dealer is self.player`. With one player both reduce to 'apply only when the player is attacking somebody else'. The relic itself is the relic stream's unit; recorded here only because Vulnerable is the consumer. Third-file citations, not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

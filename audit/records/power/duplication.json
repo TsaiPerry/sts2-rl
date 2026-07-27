@@ -1,0 +1,60 @@
+{
+  "unit": "power/duplication",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DuplicationPower.cs",
+    "sha256": "7b601e4615be02e223e5e6a3dbeac7835cc31b4a43043379937bb14a12f3cef1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3917 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "ModifyCardPlayCount": {
+      "maps_to": "powers.py:3919-3928 DuplicationPower.modify_card_play_count",
+      "verdict": "faithful"
+    },
+    "AfterModifyingCardPlayCount": {
+      "maps_to": "powers.py:3927 the inline `self._tick()` inside modify_card_play_count",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# consumes the stack from a separate after-hook (DuplicationPower.cs:27-30 -> PowerCmd.Decrement) that Hook.ModifyCardPlayCount fires immediately after the modifier chain and before the plays resolve (Hook.cs:1372-1384, one of the ten modifier-notification lists hook_dispatch step 38 enumerates). The sim folds the decrement into the modifier itself. Equivalent today, for the reason the sim's own docstring gives, and Duplication always changes the count so it is always in C#'s notification list. Kept as a divergence rather than faithful because the sim has no notification machinery at all -- the same absence as audits/seam/power_cmd.json's gap G4 one family over -- so a second play-count listener that only sometimes changes the count could not be expressed. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:3930-3932 on_player_turn_end -> Power._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. LIVE for this unit: Stampede's turn-end auto-plays are Attack card plays, and Duplication doubles ANY card the owner plays (DuplicationPower.cs:18-25 has no card-type test). In the game Duplication is still present for them; in the sim it is present only if it happens to be registered after Stampede in _listeners. Both are ported (Duplicator potion aside, Stampede is powers.py:1017-1041 and Duplication is reachable from the potion; a non-potion Duplication source would remove the scope caveat entirely)."
+    }
+  },
+  "guards": [
+    {
+      "what": "DuplicationPower.cs:20 `card.Owner.Creature != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "powers.py:3922-3926 reduces this to `self.owner is combat.player`, and the sim's own comment explains why: one player, every card belongs to it. Same reading as power_cmd's sim-entry note."
+    },
+    {
+      "what": "No card-type restriction",
+      "verdict": "faithful",
+      "rationale": "C# doubles any card type; powers.py:3919-3928 likewise applies no type test. Contrast power/one_two_punch, whose C# file DOES restrict to Attacks and whose sim port restricts too -- the pair is correct in both directions."
+    },
+    {
+      "what": "DuplicationPower.cs:36 PowerCmd.Remove vs the sim's _expire",
+      "verdict": "deliberate-divergence",
+      "rationale": "Duplication overrides no AfterRemoved, so the observable is identical; _expire (powers.py:86-92) bypasses RemoveInternal/AfterRemoved. Same note as power/no_draw's."
+    },
+    {
+      "what": "Duplication is one of hook_dispatch G4's replay sources",
+      "verdict": "gap",
+      "issue": "hook_dispatch G4 already names powers.py:3919 as a play-count source that widens the per-CardPlay bracket gap: C# builds a fresh CardPlay per iteration and fires Before/AfterCardPlayed inside the loop (CardModel.cs:1904-1965) where combat.py:466/514 fire once. Per binding rule 3 the same verdict, cross-referenced not re-argued. Recorded here so duplication.json names the gap it participates in."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

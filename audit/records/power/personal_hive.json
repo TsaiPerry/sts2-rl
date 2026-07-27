@@ -1,0 +1,41 @@
+{
+  "unit": "power/personal_hive",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PersonalHivePower.cs",
+    "sha256": "c92eb7f3b43b1554c3406a9b95c4d98b3581cec40a3b0bae1bfc953b0785b297"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2377 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:2379-2398 on_damage_received",
+      "verdict": "faithful",
+      "rationale": "Right hook in the right slot, and the guards match one for one: `target == base.Owner && dealer != null && props.IsPoweredAttack()` (PersonalHivePower.cs:25) vs powers.py:2388-2393's `target is not self.owner or dealer is None or dealer.side != \"player\" or not is_powered_attack(props) -> return` -- the sim adding the `dealer.side == \"player\"` test in place of C#'s implicit `dealer.Player` dereference at PersonalHivePower.cs:34. Note what is deliberately NOT there on either side: an UnblockedDamage check, so the Dazed land even on a fully blocked hit, which is what the sim's docstring says. The killing-blow behaviour is faithful and load-bearing: cmds.py:121 skips the sim's hook when the hit killed the owner and C#'s AfterDamageReceived is skipped by the same CreatureCmd.cs:392 guard -- this exact pair is the SP3 89U act-1 force-win fix (a killing Thrash must NOT fire PersonalHive), so it is pinned by conformance, not just by reading. `base.Amount` Dazed to PileType.Draw at CardPilePosition.Random maps to `CardPileCmd.add_to_draw` x amount. Osty redirection (PersonalHivePower.cs:27-30) is out of Ironclad scope. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "PersonalHivePower.cs:39-40 PreviewCardPileAdd / Cmd.Wait(0.5f)",
+      "verdict": "waiver",
+      "rationale": "Presentation and timing only."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

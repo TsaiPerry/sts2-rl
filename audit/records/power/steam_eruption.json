@@ -1,0 +1,61 @@
+{
+  "unit": "power/steam_eruption",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SteamEruptionPower.cs",
+    "sha256": "84f1f3ed19556c3101079b793c7d7f6e0227a477c25103c686e0a3b6042ba7a0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2014 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:2016-2020 should_die + powers.py:2022-2033 on_damage_received",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same wrong-hook SHAPE as adaptable/illusion (C# lets the death happen and retains the corpse; the sim prevents the death from should_die and floors the owner at 1 HP, cmds.py:112), but here the sim DOCUMENTS the substitution and then repairs the only observable it produces: powers.py:2005-2010's docstring says outright that \"the game lets the death happen but keeps the giant in combat at 999999999 HP; the sim prevents the death outright, which is observably the same\", and powers.py:2022-2033's on_damage_received restores `hp = max_hp = 999_999_999` after the prevented death, mirroring CreatureCmd.SetMaxAndCurrentHp(999999999). That closes the 1-vs-0 HP hole that makes the same substitution a `gap` on adaptable and illusion, and it is why this unit is a deliberate-divergence and those two are not. The mechanism is still should_die-for-AfterDeath and would break for any AfterDeath body that needs the creature to be dead. NOTE the residual: damage_pipeline gap G4 still applies -- a prevented death does not skip the sim's on_damage_received, which is precisely what this power RELIES on to run its HP restore, so the sim's repair is built on a divergence. Third-file citations, not hashed here."
+    },
+    "ShouldStopCombatFromEnding": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here."
+    },
+    "ShouldCreatureBeRemovedFromCombatAfterDeath": {
+      "maps_to": "hooks.py:603 -- NOT implemented by this power",
+      "verdict": "gap",
+      "issue": "The sim has the hook and this power does not use it, because it prevents the death instead. Same unused-hook finding as adaptable's and illusion's, and the same inconsistency with reattach, which does use it. Folded into the AfterDeath mechanism; carried separately because it is a concrete unused sim slot."
+    },
+    "ShouldPowerBeRemovedAfterOwnerDeath": {
+      "maps_to": "no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> false`. C# strips a dead creature's powers at CreatureCmd.cs:533; the sim never removes powers on death at all, so `false` is its universal behaviour and this override is satisfied for free. The inverse -- that the C# DEFAULT is `true` and the sim strips nothing -- is an engine-wide absence reported in content-power-report-b.md rather than verdicted here."
+    }
+  },
+  "guards": [
+    {
+      "what": "SteamEruptionPower.cs:19 `((WaterfallGiant)creature.Monster).TriggerAboutToBlowState()`",
+      "verdict": "faithful",
+      "rationale": "powers.py:2018 `self.owner.trigger_about_to_blow()`, unguarded by a type test, relying on the Waterfall Giant being the only applier."
+    },
+    {
+      "what": "powers.py:2032 `getattr(self.owner, \"is_about_to_blow\", False)`",
+      "verdict": "faithful",
+      "rationale": "The sim needs this because its restore runs from a generic damage hook rather than from the death path; without it every later hit would re-inflate the HP. Correct and load-bearing."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,56 @@
+{
+  "unit": "power/clarity",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ClarityPower.cs",
+    "sha256": "5bdcc464468e318c2e4f196e093b44318a3a7b3a001a5febb4a0d9d336b34034"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3893 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyHandDraw": {
+      "maps_to": "powers.py:3895-3898 ClarityPower.modify_hand_draw",
+      "verdict": "faithful",
+      "rationale": "count + 1 FLAT, not count + Amount -- which is the whole reason ClarityPower and DrawCardsNextTurnPower are separate classes (ClarityPower.cs:12-15 says so). The sim gets it right at powers.py:3898 and its docstring (powers.py:3885-3886) records why. The owner guard (ClarityPower.cs:24-27 player != base.Owner.Player) is powers.py:3896-3897, identical."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "powers.py:3900-3902 on_player_turn_started -> Power._tick (hooks.py:285-295, player.py:186)",
+      "verdict": "gap",
+      "issue": "The SLOT is right and the group's usual slot gap does not apply here: Hook.AfterSideTurnStart (CombatManager.cs:522) is post-draw, and the sim's on_player_turn_started (player.py:186) is the post-draw slot -- confirmed by the ordering table in this record's source comments and by py tools/audit/power_census.py slots (which flags the unit only as NO-SIM-SIDE-START-SLOT, i.e. no side-scoped dispatch, not as a wrong slot). What IS a gap is the phase collapse: PHASE COLLAPSE. The sim's on_player_turn_started (player.py:186) is a single slot serving THREE distinct C# phases that the game runs in a fixed order: Hook.AfterPlayerTurnStart (CombatManager.cs:675, inside the SetupPlayerTurn task launched at :514), then Hook.AfterSideTurnStart (:522), then Hook.AfterAutoPrePlayPhaseEntered (:568 -> RunAutoPrePlayPhase, :613-619). Collapsing them makes the relative order of this power and every other turn-start power a function of hook-REGISTRATION order, i.e. of which card the player happened to play first. Same shape as hook_dispatch's G3 (the Early/Late phase passes do not exist) one level up, and the AutoPrePlay/AutoPostPlay half of it is turn_structure's G8; neither is re-verdicted here per binding rule 3, but see this record's Mayhem guard for the executed consequence."
+    }
+  },
+  "guards": [
+    {
+      "what": "ClarityPower.cs:33 participants.Contains(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "powers.py:3901 player is self.owner. The player side has exactly one creature, so the per-side/per-creature question turn_structure G5 raises for the enemy side does not arise."
+    },
+    {
+      "what": "PowerCmd.Decrement vs the sim's _tick",
+      "verdict": "faithful",
+      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field directly and _expires at <= 0, where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250). Observationally identical for a Buff: the only unconditional modifier leg ModifyAmount runs is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only, ArtifactPower.cs:24) and RuinedHelmet (StrengthPower-only), and neither GetTypeForAmount arm can turn a Counter/!AllowNegative/Buff power into a Debuff at a negative amount (PowerModel.cs:460-471; py tools/audit/power_census.py typing). Same mechanism and same faithful verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3. Third-file citations, not hashed here."
+    },
+    {
+      "what": "Registration-order contention with Mayhem in the collapsed slot",
+      "verdict": "faithful",
+      "rationale": "Examined and INERT for Clarity specifically, unlike its two slot-mates power/prep_time and power/rolling_boulder, whose Mayhem guards carry executed live witnesses. Clarity's only effect is on ModifyHandDraw, which the game and the sim have both already run by the time either reaches this slot (CombatManager.cs:654 / player.py:171), so whether the tick lands before or after a Mayhem auto-play changes nothing this turn, and the amount reaching next turn is the same either way (a stack applied by an auto-play is not in the dispatcher's listener snapshot -- hooks.py:61 -- so it is not ticked in the turn it lands, on either side). Named trigger: any future reader of Clarity's Amount from another turn-start listener."
+    },
+    {
+      "what": "The only applier is a potion",
+      "verdict": "waiver",
+      "rationale": "ClarityPotion.cs is the sole applier (ported at potions.py:763-777, applier = the player) and potions are out of scope by Perry's deferral. The POWER is audited in full above; only the reachability of its one applier is waived. Note the sim's own docstring at potions.py:763-765 records the ordering subtlety that the potion's Draw(1) resolves BEFORE the power lands, so the potion does not draw twice."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,56 @@
+{
+  "unit": "power/regen",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RegenPower.cs",
+    "sha256": "3d95e7b15142a38ac8c32500b7656dc123570cd6a573b4545bd07b7ada3c3d95"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:157 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audits/seam/power_cmd.json. The sim is single-player."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:160-171 RegenPower._apply_regen via on_enemy_turn_end / on_player_turn_end",
+      "verdict": "gap",
+      "issue": "Both legs are in the wrong slot and the IsDead guard is missing. RegenPower.cs:20-28 is `if (participants.Contains(Owner) && !Owner.IsDead) { Heal(Amount); Decrement; }` on AfterSideTurnEnd. (a) The ENEMY leg uses the per-creature on_enemy_turn_end (powers.py:165-167) instead of the side-scoped on_enemy_side_end -- see the dedicated guard entry. (b) The PLAYER leg uses on_player_turn_end (powers.py:169-171), which is Hook.BeforeTurnEnd (combat.py:654), one slot before the sim's real AfterTurnEnd equivalent after_player_turn_end (combat.py:665); the game heals AFTER the turn-end card effects and the hand flush, the sim before them. (c) `!Owner.IsDead` is absent from _apply_regen (powers.py:160-163): CreatureCmd.heal does return 0 for a dead target (cmds.py:160-161) so no HP moves, but `self._tick()` still runs and still fires on_power_amount_changed, so a dead-but-retained owner burns a Regen stack the game would keep. ALL DORMANT, for one shared reason: the only ported Regen source in the sim is a potion (potions.py:613), and potions are out of scope by the shared contract's global-scope rule, so no in-scope content puts Regen on anybody. Named trigger: any non-potion Regen source -- at which point (b) becomes live immediately (the heal races the flush) and (a) becomes live with two or more enemies. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "RegenPower.cs:22 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Same mechanism as turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game): the sim's on_enemy_turn_end (combat.py:341) runs immediately after THIS enemy's move, where Hook.AfterTurnEnd -- the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292) -- runs once at CombatManager.cs:1256 after EVERY enemy has moved. The sim does have the right slot available: on_enemy_side_end (combat.py:345). Per binding rule 3 the mechanism keeps G5's `gap` verdict and is cross-referenced rather than re-argued. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here."
+    },
+    {
+      "what": "RegenPower.cs:22 `!base.Owner.IsDead`",
+      "verdict": "gap",
+      "issue": "Absent from the sim -- see clause (c) of the AfterSideTurnEnd entry. Carried as its own guard because it is a distinct omission from the slot problem and would survive a slot fix."
+    },
+    {
+      "what": "RegenPower.cs:26 PowerCmd.Decrement after the heal",
+      "verdict": "faithful",
+      "rationale": "powers.py:163 `self._tick()` decrements by 1 and expires at <= 0 (powers.py:70-75), which is Decrement plus ShouldRemoveDueToAmount for a non-AllowNegative power. Note the ORDER matches too: C# heals first and decrements second, so the heal uses the pre-decrement Amount, and powers.py:162-163 does the same."
+    },
+    {
+      "what": "RegenPower.cs:24 Flash()",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

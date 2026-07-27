@@ -1,0 +1,66 @@
+{
+  "unit": "power/infested",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\InfestedPower.cs",
+    "sha256": "226e053d2c81f6012a22b8743aae2224502956d5829da8a58aa9ae5df08c48d6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1407 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py tools/audit/power_census.py stack`). Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:1409-1422 InfestedPower.on_death (cmds.py:105)",
+      "verdict": "faithful",
+      "rationale": "Right hook, right slot: the Phrog Parasite really dies and its four stunned Wrigglers are added from the after-death hook. InfestedPower.cs:19-35's `!wasRemovalPrevented && base.Owner == target` maps to powers.py:1410's `creature is not self.owner -> return` (see the wasRemovalPrevented guard). Count 4 matches (InfestedPower.cs:28 `i < 4`, powers.py:1417 `range(4)`), `wriggler.StartStunned = true` maps to `start_stunned=True`, and the slot name `PhrogParasiteElite.GetWrigglerSlotName(i)` maps to `slot=i + 1`. The sim adds a `self._expire()` C# does not have, which is harmless and in fact closer to C#'s net behaviour -- C# strips the dead owner's powers at CreatureCmd.cs:533 anyway. Third-file citations, not hashed here."
+    },
+    "ShouldStopCombatFromEnding": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "powers.py:1420 passes `combat._rng` for the spawn's HP roll",
+      "verdict": "faithful",
+      "rationale": "The sim passes `combat._rng` -- the shared LEGACY random.Random -- to the spawned monster's constructor (powers.py:1420), and Monster.__init__ rolls the spawn's HP from it (monsters/base.py:78-79 `hp = rng.randint(self.min_hp, self.max_hp)`), where the game rolls a mid-combat spawn's HP on a NAMED stream. Half A found seven power units reaching for `combat._rng` where C# names a stream, so this was checked as a systematic class rather than trusted: the sim REPAIRS it one level up. `CreatureCmd.add` calls `combat.assign_parity_hp(creature)` (cmds.py:254 -> combat.py:259-267), which re-rolls a mid-combat spawn's HP on the **Niche** stream against the current siblings, mirroring CombatState.CreateCreature's SetUniqueMonsterHpValue -- and it is a no-op in legacy mode, where the shared rng IS the model. The Wriggler really does have HP variance (min_hp 17, max_hp 21), so the repair is load-bearing rather than vacuous. Faithful, with the caveat that the constructor's `randint` still consumes a draw from the unseeded shared rng in parity mode -- harmless, because no parity content reads that stream. Third-file citations, not hashed here."
+    },
+    {
+      "what": "InfestedPower.cs:21 `!wasRemovalPrevented`",
+      "verdict": "faithful",
+      "rationale": "`wasRemovalPrevented: true` is passed when Hook.ShouldDie returned FALSE, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the real-death path (CreatureCmd.cs:519) -- the parameter is misnamed in the decompiled source and is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath (computed separately at CreatureCmd.cs:508). So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing on the prevented branch, so the guard is satisfied structurally. Third-file citations, not hashed here."
+    },
+    {
+      "what": "InfestedPower.cs:23 Cmd.CustomScaledWait(deathAnimLength) before spawning",
+      "verdict": "waiver",
+      "rationale": "Animation timing only. Recorded because it means the Wrigglers appear a beat after the death in the game and immediately in the sim -- no state depends on the gap."
+    },
+    {
+      "what": "InfestedPower.cs:26 NRunMusicController.TriggerEliteSecondPhase()",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    {
+      "what": "The Wrigglers are spawned on `base.Owner.Side`",
+      "verdict": "faithful",
+      "rationale": "CreatureCmd.add (cmds.py) appends to the enemy list; the sim has no cross-side add. Equivalent in single-player."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

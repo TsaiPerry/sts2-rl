@@ -1,0 +1,81 @@
+{
+  "unit": "power/plating",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PlatingPower.cs",
+    "sha256": "d3cd1402c704dcc379caf0981595356d449ccd81da10ff043836e0c1644cc2f1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1052 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "PlatingPower.cs:23 returns true, feeding PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audits/seam/power_cmd.json. The sim is single-player."
+    },
+    "GetScaledAmountForMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "PlatingPower.cs:85-88 is ((Players.Count - 1) * 2 + 1) * amount, which is exactly `amount` at one player. Multiplayer-only; same waiver as above."
+    },
+    "AfterApplied": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "PlatingPower.cs:29-36 sets the Decrement DynamicVar to RunState.Players.Count when the owner is an enemy -- i.e. an enemy's Plating decays once per player per round. At one player that is 1, which is what the sim's _tick (powers.py:1066) does. Multiplayer-only; the CanonicalVars default is 1m (PlatingPower.cs:27) and the sim matches it."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "powers.py:1054-1056 PlatingPower.on_combat_start (hooks.py:265-269, combat.py:208)",
+      "verdict": "gap",
+      "issue": "SLOT. C# uses the ROUND-1 arm of a turn-start hook as a stand-in for combat start -- PlatingPower.cs:41-56 fires only when side == Player, the owner is NOT a player, and combatState.RoundNumber <= 1, and its own comment says 'We want enemies that start with Plating to also start combat with block'. Dispatched at CombatManager.cs:458, i.e. AFTER Creature.BeforeTurnStart (:453) and BEFORE the block clear at :496. The sim instead uses the real combat-start hook, on_combat_start (combat.py:208, immediately before start_turn at :209). DORMANT: the two points are adjacent, the enemy's block is not cleared at the player's turn start on either side, and the round-1-only condition is enforced on both (C# by RoundNumber, the sim by on_combat_start firing once). What differs is the sim grants the block one dispatch EARLIER, so any on_combat_start listener registered after this power sees the enemy already blocked where the game shows it unblocked. Named trigger: a combat-start relic or power that reads an enemy's block -- none is ported. Reachable owners are plentiful (monsters/underdocks/sewer_clam.py:30, monsters/underdocks/lagavulin_matriarch.py:43, monsters/hive/slumbering_beetle.py:41, monsters/hive/flail_knight.py:87, monsters/glory/frog_knight.py:42)."
+    },
+    "BeforeSideTurnEndEarly": {
+      "maps_to": "powers.py:1068-1070 on_player_turn_end / :1076-1078 on_enemy_turn_end -> _gain_block (combat.py:654 / combat.py:~330)",
+      "verdict": "gap",
+      "issue": "PHASE, and LIVE with an executed witness. C# is BeforeSideTurnEndEarly -- the EARLY pass of Hook.BeforeTurnEnd (CombatManager.cs:1179) -- and PlatingPower.cs:58-60 says why in as many words: 'We do this in early so that it triggers before end-of-turn damage effects.' The sim has no phase passes at all (hook_dispatch's G3) and fires this from the plain on_player_turn_end dispatch, so the block's position relative to end-of-turn damage is registration order. EXECUTED: Plating 4 on the player plus Constrict 6 (ported -- monsters/overgrowth/slithering_strangler.py:43 applies it to the player, and Constrict's player-owner leg is also on_player_turn_end). Applying Constrict FIRST costs the player 6 HP and leaves 4 unused block; applying Plating first costs 2 HP. The game always costs 2, because Plating's Early pass strictly precedes both the plain BeforeTurnEnd pass and Constrict's own AfterSideTurnEnd at :1307. So the sim can lose up to a full Plating stack of HP every turn on a coin flip. Player-side Plating is reachable four ways: the ported Ironclad card Stone Armor (cards/stone_armor.py:38), the ported relic Gorget (relics/gorget.py:17), a ported Colorless power card (cards/colorless_powers.py:121) and a ported potion (potions.py:592); the Slithering Strangler is a ported Act-1 monster. Binding rule 6 satisfied on both halves. Also note the ENEMY leg uses the per-creature on_enemy_turn_end rather than a side-scoped slot, which is turn_structure's G5 and is not re-verdicted here."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "powers.py:1072-1074 on_player_turn_start / :1080-1082 on_enemy_turn_start -> _decay (player.py:169 / combat.py:~300)",
+      "verdict": "gap",
+      "issue": "WRONG SLOT on the player leg. C#'s AfterSideTurnStart is CombatManager.cs:522, POST-draw; the sim's on_player_turn_start is player.py:169, PRE-draw (before modify_hand_draw at :171 and _draw at :183). The sim's post-draw slot, on_player_turn_started (player.py:186), is available and unused -- the same one-line fix as the other misplaced-slot units, and the population is reproducible with `py tools/audit/power_census.py slots`. DORMANT on its own: the decay is pure bookkeeping and nothing between the two points reads Plating's Amount (the block was already gained last turn end). Named trigger: any draw-time or BeforeHandDraw effect that reads the stack count -- power/hello_world shares this pre-draw slot. The ENEMY leg is turn_structure's G5 again."
+    }
+  },
+  "guards": [
+    {
+      "what": "PlatingPower.cs:55 / :66 CreatureCmd.GainBlock(..., ValueProp.Unpowered, null)",
+      "verdict": "faithful",
+      "rationale": "powers.py:1058-1061 passes props=ValueProp.UNPOWERED explicitly. Correct, and worth recording: this is the exact call shape whose OMITTED props made power/feel_no_pain and power/curl_up live gaps (the main report's section 4 item 4 names Plating as one of the eight siblings that get it right), and BlockCmd.apply's gate (cmds.py:145) then skips both the additive and the multiplicative block families -- so Plating's block ignores Dexterity/Frail AND ignores power/no_block and power/unmovable, matching C#, whose NoBlockPower.cs:36-39 and UnmovablePower.cs:27-30 both bail on Unpowered / non-card-or-move props."
+    },
+    {
+      "what": "PlatingPower.cs:63 participants.Contains(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "powers.py:1069 / :1077 self-filter on the owner instead. Equivalent for the player side; for the enemy side it is the same per-creature-vs-per-side question turn_structure G5 owns."
+    },
+    {
+      "what": "PlatingPower.cs:72 the turn-1 / round-1 decay exclusion",
+      "verdict": "faithful",
+      "rationale": "C# skips the decay when the owner is a player on PlayerCombatState.TurnNumber == 1 or an enemy on combatState.RoundNumber == 1 -- so the stack the player just applied is not immediately eaten. powers.py:1063-1066 uses one test, combat.turn > 1, for both legs. Equivalent for the ported content: the sim's combat.turn is the round counter and starts at 1, and the player and the enemies share it."
+    },
+    {
+      "what": "PlatingPower.cs:76 vs :80 -- ModifyAmount(-Decrement) for enemies, plain Decrement for players",
+      "verdict": "faithful",
+      "rationale": "Two code paths that differ only by the multiplayer Decrement var, which is 1 at one player (PlatingPower.cs:27's CanonicalVars default, and :33 only raises it for enemies by Players.Count == 1). The sim's single _tick (powers.py:1066) is both. See also The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    {
+      "what": "The sim ADDS `not self.owner.is_dead` to the enemy block gain",
+      "verdict": "faithful",
+      "rationale": "powers.py:1077. C# has no such test, but a dead creature has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), so the hook is unreachable on a dead owner in the game too. Defensive, not divergent. Note the PLAYER leg (:1069) does NOT carry the same guard, which is an internal inconsistency rather than a divergence."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

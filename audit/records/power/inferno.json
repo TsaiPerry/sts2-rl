@@ -1,0 +1,65 @@
+{
+  "unit": "power/inferno",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\InfernoPower.cs",
+    "sha256": "53c9107dd488ef1a6eb29cae65890af033ae4df32d58488f47c469064b189221"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:723 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "powers.py:738-745 InfernoPower.on_player_turn_start",
+      "verdict": "gap",
+      "issue": "SLOT, identical to power/crimson_mantle's: AfterPlayerTurnStart is post-draw and the sim uses the pre-draw on_player_turn_start. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. Inferno's self-damage can be lethal, so in the sim it can cancel a hand draw the game already made. The sim additionally guards on `self.self_damage > 0` (powers.py:739) where C# fires the 0-damage call unconditionally -- same dormant sub-finding as power/crimson_mantle's, with the same named trigger."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:747-767 InfernoPower.on_damage_received",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "InfernoPower.cs:28 / :39 `player == base.Owner.Player` / `target != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "powers.py:739 and :755 respectively. Identical."
+    },
+    {
+      "what": "InfernoPower.cs:39 `result.UnblockedDamage <= 0` -> return",
+      "verdict": "faithful",
+      "rationale": "powers.py:755 `amount <= 0 -> return`, and the sim's amount is the post-block unblocked loss (cmds.py:122). Exact."
+    },
+    {
+      "what": "InfernoPower.cs:39 `CombatState.CurrentSide != base.Owner.Side`",
+      "verdict": "faithful",
+      "rationale": "powers.py:757-759 tests `combat.current_side != self.owner.side`. Present and correct -- and worth recording because power/rupture's C# file has the SAME guard on the same hook and the sim drops it there. The concept and the accessor both exist; Rupture's omission is an omission."
+    },
+    {
+      "what": "InfernoPower.cs:48 CombatState.HittableEnemies",
+      "verdict": "gap",
+      "issue": "The sim iterates `combat.enemies` filtered on `not enemy.is_gone` (powers.py:762-763) where C# uses HittableEnemies, which additionally consults Hook.ShouldAllowHitting (Creature.cs:308-322). So the sim burns creatures the game considers unhittable -- a mid-revival Illusion or a withered Decimillipede segment (powers.py:1572-1575, :2354-2357 both implement should_allow_hitting). Partly mitigated because DamageCmd.deal re-checks should_allow_hitting at entry (cmds.py:51-52) and returns 0, so no damage lands; what still differs is that the sim fires DamageCmd.deal at all, which is observable through hook side effects and through hitting an unhittable creature's count. DORMANT on that mitigation. Named trigger: an unhittable-creature effect whose behaviour depends on being targeted rather than damaged. Third-file citations, not hashed here."
+    },
+    {
+      "what": "InfernoPower.cs:48 ValueProp.Unpowered, dealer = base.Owner",
+      "verdict": "faithful",
+      "rationale": "powers.py:764-767 passes DamageProps.NON_CARD_UNPOWERED and dealer=self.owner. Matches."
+    },
+    {
+      "what": "InfernoPower.cs:30,45-47 the fire VFX",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

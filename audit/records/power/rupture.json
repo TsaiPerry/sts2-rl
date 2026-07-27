@@ -1,0 +1,66 @@
+{
+  "unit": "power/rupture",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RupturePower.cs",
+    "sha256": "df96d99885ac965299a007c14234f028f4e4ba53d08be499b26fcd600ac7bc9a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:277 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "Half of a deferral mechanism the sim does not implement at all. RupturePower.cs:31-43 registers every card the owner starts playing during its own side turn in an internal playedCards dictionary; AfterDamageReceived then ACCUMULATES into that entry instead of applying Strength, and AfterCardPlayed applies the accumulated total once the card has fully resolved. The point is that a card which damages its own player several times must not have its later hits boosted by the Strength its earlier hits earned. The sim has no BeforeCardPlayed on Rupture and applies Strength per hit, inline (powers.py:279-289). LIVE: Rupture is a ported Ironclad card (cards/rupture_card.py:35) and the sim's self-damage cards deal multi-instance HP loss, so mid-card Strength changes the same card's remaining damage. Third-file citations, not hashed here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:279-289 RupturePower.on_damage_received",
+      "verdict": "gap",
+      "issue": "LIVE, and the bigger half. C# requires `base.CombatState.CurrentSide == base.Owner.Side` (RupturePower.cs:47): Rupture only pays out for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. powers.py:287 tests only `target is self.owner and amount > 0`, so the sim's Rupture also pays out for every enemy attack that gets through on the ENEMY's turn -- turning a self-harm payoff card into a free Strength engine that grows whenever the player is hit. The guard is not even hard to reach: the sim already exposes `combat.current_side` and InfernoPower uses it for exactly this purpose two hundred lines away (powers.py:757-759). Additionally the accumulate-then-apply-once deferral is absent (see the BeforeCardPlayed entry), so even the in-scope self-damage case grants Strength mid-card. Third-file citations, not hashed here."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "The payout half of the deferral described on the BeforeCardPlayed entry: RupturePower.cs:60-66 removes the card's accumulator and applies the summed Strength once. Absent from the sim. Carried separately because the harness requires a verdict per override and because a fix needs all three hooks together."
+    }
+  },
+  "guards": [
+    {
+      "what": "RupturePower.cs:33 / :62 `cardPlay.Card.Owner.Creature != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "`card.Owner.Creature != base.Owner` reduces to a tautology in the sim: there is one player, every Card belongs to it, and this power is only ever applied to the player. Same reading power_cmd's sim-entry note and SurroundedPower's own comment (powers.py:2574-2576) already record."
+    },
+    {
+      "what": "RupturePower.cs:47 `result.UnblockedDamage > 0`",
+      "verdict": "faithful",
+      "rationale": "powers.py:287 `amount > 0`, and the sim's on_damage_received amount IS the post-block unblocked loss (cmds.py:122 passes hp_lost). Exact."
+    },
+    {
+      "what": "RupturePower.cs:47 `CurrentSide == Owner.Side`",
+      "verdict": "gap",
+      "issue": "Absent -- the core of the AfterDamageReceived gap. Carried as its own guard because it is a one-line omission that survives any fix to the deferral, and because it is the single divergence in this unit with the largest effect on play."
+    },
+    {
+      "what": "RupturePower.cs:49 `cardSource == null || !playedCards.ContainsKey(cardSource)` -> immediate apply",
+      "verdict": "faithful",
+      "rationale": "This is C#'s own fallback for damage that did NOT come from a card the owner is mid-play on, and it applies Strength immediately -- which is what the sim always does. So the sim is C#'s fallback branch taken unconditionally: correct for the cases that reach the fallback, wrong for the ones that should have been deferred. Recorded so the gap entries are not read as 'the sim does something unrelated'."
+    },
+    {
+      "what": "Killing-blow guard (PROMPT.md bug class 2)",
+      "verdict": "faithful",
+      "rationale": "Both sides hang this on AfterDamageReceived, which C# skips for a victim the hit killed (CreatureCmd.cs:392) and the sim gates on `not target.is_dead` (cmds.py:121). So a lethal self-damage grants Rupture Strength on neither side."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

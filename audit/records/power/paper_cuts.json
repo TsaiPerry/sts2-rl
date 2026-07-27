@@ -1,0 +1,36 @@
+{
+  "unit": "power/paper_cuts",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PaperCutsPower.cs",
+    "sha256": "451342ada2c96adbf7c1aabf5e8a508ea4d1da32eb302d44cb8280e178aa7623"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2941 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDamageGiven": {
+      "maps_to": "powers.py:2943-2959 on_damage_received",
+      "verdict": "gap",
+      "issue": "WRONG HOOK. C#'s `AfterDamageGiven(choiceContext, dealer, result, props, target, cardSource)` is the DEALER-side after-damage event; the sim's counterpart is `on_damage_dealt` (hooks.py:469, fired at cmds.py:123-124), and this power uses `on_damage_received` instead, filtering on `dealer is self.owner`. The reason the port had to do that is itself the finding: cmds.py:123 fires on_damage_dealt only `if dealer is not None and hp_lost > 0`, so the sim's dealer-side event **cannot see a fully-blocked or zero-damage hit at all**, where C#'s AfterDamageGiven sees every one (`result.WasFullyBlocked` is a field it is expected to read). Consequence of the substitution: cmds.py:121's killing-blow guard suppresses the sim's on_damage_received when the hit killed the VICTIM, and cmds.py:119-120's own comment says \"AfterDamageGiven (on_damage_dealt) is not guarded and still fires on the kill\" -- so this power silently stops working on a lethal hit in the sim and keeps working in the game. Third-file citations, not hashed here. The guards are otherwise exact: `dealer == base.Owner && target.IsPlayer && props.IsPoweredAttack() && result.UnblockedDamage > 0` (PaperCutsPower.cs:18) maps to powers.py:2952-2957, props read directly. `CreatureCmd.LoseMaxHp(choiceContext, target, base.Amount, isFromCard: false)` maps to `CreatureCmd.lose_max_hp(self.hooks, target, self.amount)`; `isFromCard` has no sim analogue and gates only run-history bookkeeping. The live-shaped residue is the killing-blow asymmetry: a lethal hit from the Scroll of Biting costs the player max HP in the game and none in the sim. DORMANT as a practical matter -- max HP on the turn the player dies is only observable through a death PREVENTION, and on that path cmds.py:112 sets hp = 1 so `target.is_dead` is False and the sim fires after all. So the two models agree when Lizard Tail saves you and disagree when nothing does, at which point the run is over. Trigger: any ported effect that reads max HP after a lethal blow. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

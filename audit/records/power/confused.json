@@ -1,0 +1,46 @@
+{
+  "unit": "power/confused",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ConfusedPower.cs",
+    "sha256": "d38af5402c260325c9371b0ab688f66242b97ece96e6d6c32dfb8413638fc603"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3862 power_type = PowerType.DEBUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:3864-3865 ConfusedPower.on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single, and the sim overrides Power.on_stack to `pass` citing it -- which is WRONG about C# and inert about this power. Single means only 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13); PowerCmd.ModifyAmount:236 adds the offset with no StackType branch at all, so in the game a second application really does raise Amount to 2. This unit is one of the 15 the stack census flags (py tools/audit/power_census.py stack) and the main report's section 7 item 5 covers the class. DORMANT here for the per-unit reason the census leaves open: nothing reads this power's Amount -- not the power itself, not any sim listener, and not the C# model (whose only Amount reader is the hidden DisplayAmount). Named trigger: any future effect that scales with the stack count, or a UI that shows it. For this unit the dormancy is airtight in a second way: C#'s only Amount reader would be DisplayAmount, which ConfusedPower does not override, and the sim's on_card_drawn never consults self.amount. Both ported appliers apply exactly 1 (relics/snecko_eye.py:28, relics/fake_snecko_eye.py:22) from on_combat_start, so a second application inside one combat is not even reachable today -- but Snecko Eye and Fake Snecko Eye are both obtainable in one run, which is precisely the case that would reach it."
+    },
+    "AfterCardDrawn": {
+      "maps_to": "powers.py:3867-3873 ConfusedPower.on_card_drawn (hooks.py:391-400)",
+      "verdict": "faithful",
+      "rationale": "Fires on every draw for the owner, sets the drawn card's cost for the rest of the combat, and skips X-cost cards. ConfusedPower.cs:31-45 vs powers.py:3867-3873 line for line: the owner filter (:33-36, a single-player tautology the sim omits), the X-cost bail (:37-40 EnergyCost.Canonical < 0 vs :3868 card.energy_cost_x), and EnergyCost.SetThisCombat(cost) (:42 vs :3873 card.set_cost_this_combat). The `fromHandDraw` argument is read by neither side, so turn-start and mid-turn draws are both randomised. NCard.PlayRandomizeCostAnim (:43) is presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "ConfusedPower.cs:53 Rng.CombatEnergyCosts.NextInt(4)",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM. C# draws the cost from base.Owner.Player.RunState.Rng.CombatEnergyCosts; powers.py:3873 uses combat._rng.randrange(4), the SHARED unseeded random.Random (combat.py:88). combat.combat_rng.energy (combat_rng.py:23,53 -- the combat_energy_costs stream) is the matching accessor and exists. The range is right on both sides (NextInt(4) is 0..3 and randrange(4) is 0..3, so costs 0-3 inclusive, which the sim's docstring states). Same defect as power/aggression's (main report section 4 item 8) and as power/hello_world, power/entropy and power/stampede in half A, and LIVE for the same reason with an unusually wide blast radius: Confused re-costs EVERY card the player draws for the whole combat, so under seed parity a Snecko Eye run diverges on the first draw and every shared-rng consumer after it is perturbed. Both appliers are ported relics (relics/snecko_eye.py:25-28, relics/fake_snecko_eye.py:19-22), so binding rule 6 is satisfied. Third-file citations, not hashed here."
+    },
+    {
+      "what": "ConfusedPower.cs:11,17-29 TestEnergyCostOverride",
+      "verdict": "waiver",
+      "rationale": "A TestMode.AssertOn()-gated hook for the game's own tests (ConfusedPower.cs:25). Not gameplay; the sim has no analogue and needs none."
+    },
+    {
+      "what": "Confused is never removed",
+      "verdict": "faithful",
+      "rationale": "Neither side ticks or removes it; the re-costing lasts the combat, and SetThisCombat means already-drawn cards keep their rolled cost. Both agree."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

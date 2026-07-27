@@ -1,0 +1,56 @@
+{
+  "unit": "power/battleworn_dummy_time_limit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\BattlewornDummyTimeLimitPower.cs",
+    "sha256": "db7ef51bc50c7eeea99c83fc8777037f2ff0d2c0bf6f272561178c80bce939c6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2915 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2917-2928 on_enemy_turn_end (hooks.py:332-336, combat.py:~330)",
+      "verdict": "gap",
+      "issue": "SLOT: a side-scoped C# hook implemented with the sim's PER-CREATURE enemy slot. Hook.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), which for the enemy side is one call after ALL enemies have moved (CombatManager.cs:1256 per turn_structure's G5); the sim's on_enemy_turn_end fires inside _run_enemy_turns once per enemy, immediately after that enemy's own move (combat.py:286-345). The sim's side-scoped slot, on_enemy_side_end (combat.py:345), is available and unused. This is turn_structure's G5 and is not re-verdicted here per binding rule 3. SETTLING THE MAIN REPORT'S SECTION 6 ITEM 1, WHICH NAMED THIS UNIT: the report argued G5's dormancy rests on 'every ported listener self-filters to its own owner', which does not reach a listener that ESCAPES its owner mid-dispatch, and speculated that 'the Battle Friend encounters field more than one dummy, so the sim can remove dummy #1 before dummy #2 acts'. That speculation is FALSE and the correction is a narrowing, not a widening: C#'s BattlewornDummyEventEncounter.GenerateMonsters (BattlewornDummyEventEncounter.cs:62-72) returns a _ReadOnlySingleElementList -- exactly ONE dummy, chosen by Setting -- and the sim's three encounters each list a single monster class (monsters/glory/battle_friend.py:67-78). There is never a second dummy, and the dummy's only move is NOTHING_MOVE (battle_friend.py:31-36), so no other creature's turn can be affected by the escape either. This unit therefore does NOT make G5 live; the remaining two candidates (asleep, slumber) are half B's. Recorded as a gap on the slot itself, which is G5's shape regardless."
+    }
+  },
+  "guards": [
+    {
+      "what": "BattlewornDummyTimeLimitPower.cs:21-24 participants.Contains(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "powers.py:2918-2919 self-filters on the owner. Same equivalence as the other enemy-side units; see the slot entry."
+    },
+    {
+      "what": "BattlewornDummyTimeLimitPower.cs:25-29 Amount > 1 -> Decrement and return",
+      "verdict": "faithful",
+      "rationale": "powers.py:2920-2923 decrements the field and fires hooks.on_power_amount_changed itself rather than calling PowerCmd.Decrement (and rather than Power._tick, which would _expire at 0 -- correctly avoided, because the Amount == 1 case must escape, not vanish). The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    {
+      "what": "BattlewornDummyTimeLimitPower.cs:30-33 the RanOutOfTime encounter flag",
+      "verdict": "faithful",
+      "rationale": "powers.py:2924-2926 sets encounter.ran_out_of_time through a duck-typed getattr/hasattr pair rather than C#'s `is BattlewornDummyEventEncounter` type test. Same observable: the sim's Encounter carries the attribute only for this event, and the flag's one consumer is the event's post-combat resume (BattlewornDummy.cs Resume vs events/battleworn_dummy.py), which withholds the reward. Third-file citations, not hashed here."
+    },
+    {
+      "what": "BattlewornDummyTimeLimitPower.cs:34 CreatureCmd.Escape(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "powers.py:2927-2928 CreatureCmd.escape. Note the power does NOT remove itself on either side -- the escape takes the creature (and its powers) out of the combat, so the leftover Amount 1 is unobservable. Both agree."
+    },
+    {
+      "what": "The amount is 3",
+      "verdict": "faithful",
+      "rationale": "BattleFriendV1/2/3.cs apply the power in AfterAddedToRoom; the sim's _BattleFriend.__init__ applies 3 (monsters/glory/battle_friend.py:13,29). No AscensionHelper call anywhere in the power or the dummies, so there is no non-ascension branch to pick."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

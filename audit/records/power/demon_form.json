@@ -1,0 +1,46 @@
+{
+  "unit": "power/demon_form",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DemonFormPower.cs",
+    "sha256": "0d13c5598b23a293d6d3e0c44a403ab596357b2a534ddc2c2d954e1af37a907e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:218 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "powers.py:221-229 on_enemy_turn_start / on_player_turn_start",
+      "verdict": "gap",
+      "issue": "LIVE. The player leg is one slot too early. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED co-occurrence witness with two ported Ironclad cards: Hellraiser (cards/hellraiser.py:36) auto-plays every Strike as it is DRAWN, and Demon Form (cards/demon_form_card.py:35) grants Strength at turn start. On the turn after Demon Form 2 is played, the sim grants the Strength first and the auto-played Strikes take it with them -- enemy HP 41 -> 17 -- where the game draws (and auto-plays) first and only then grants Strength, leaving those Strikes un-Strengthened at 41 -> 23. Six damage the game never deals. The enemy leg (powers.py:221-224) has the separate per-creature problem recorded in its own guard entry."
+    }
+  },
+  "guards": [
+    {
+      "what": "DemonFormPower.cs:23 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Enemy leg: the sim uses the per-creature on_enemy_turn_start (combat.py:301), which runs immediately before THIS enemy's move, where Hook.AfterSideTurnStart runs once at CombatManager.cs:522 before ANY enemy moves. Worse than the AfterSideTurnEnd family, because the sim has no enemy-side-START slot at all to move it to -- that absence is turn_structure gap G5's other half. Per rule 3 the same verdict, cross-referenced. Observable with two or more enemies: an enemy holding Demon Form gains its Strength after earlier enemies have already acted in the sim, and before all of them in the game. Reproduce the population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here."
+    },
+    {
+      "what": "DemonFormPower.cs:26 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",
+      "verdict": "deliberate-divergence",
+      "rationale": "powers.py:223-224 and :228-229 route through StrengthCmd.apply, which adds a modify_strength_given chain C# does not have here and drops `applier = Owner`. Same shape, same reasoning and same non-observability as the matching guard on power/ritual."
+    },
+    {
+      "what": "DemonFormPower.cs:25 Flash()",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

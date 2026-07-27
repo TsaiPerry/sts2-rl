@@ -1,0 +1,60 @@
+{
+  "unit": "power/one_two_punch",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\OneTwoPunchPower.cs",
+    "sha256": "293fe6f5f10155b7fac864388563f11b833e75f52548ef0ceed9d5befd4eeff3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:964 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "ModifyCardPlayCount": {
+      "maps_to": "powers.py:966-977 OneTwoPunchPower.modify_card_play_count",
+      "verdict": "faithful"
+    },
+    "AfterModifyingCardPlayCount": {
+      "maps_to": "powers.py:976 the inline `self._tick()`",
+      "verdict": "deliberate-divergence",
+      "rationale": "Identical shape and identical reasoning to power/duplication's entry for the same hook -- the decrement is folded into the modifier rather than fired from Hook.ModifyCardPlayCount's notification list (Hook.cs:1376-1384). Equivalent today; kept as a divergence because the machinery is absent rather than unused."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:979-981 on_player_turn_end -> Power._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. LIVE for this unit for the same reason as power/duplication's, and more sharply: One-Two Punch doubles ATTACKS specifically and Stampede's turn-end auto-plays are exactly Attack plays, so the two powers are made for each other. In the game the stack is still there for them; in the sim it is a registration-order coin flip. Both are ported Ironclad-pool card powers."
+    }
+  },
+  "guards": [
+    {
+      "what": "OneTwoPunchPower.cs:21 `card.Owner.Creature != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "Reduces to a tautology in single-player; powers.py:966-977 omits it."
+    },
+    {
+      "what": "OneTwoPunchPower.cs:25-28 `card.Type != CardType.Attack`",
+      "verdict": "faithful",
+      "rationale": "powers.py:972-974 tests CardType.ATTACK and returns the unmodified count otherwise -- and, importantly, returns BEFORE the _tick, so a non-Attack play does not burn a stack. Matches C#, whose AfterModifyingCardPlayCount fires only for listeners that changed the value."
+    },
+    {
+      "what": "OneTwoPunchPower.cs:41 PowerCmd.Remove vs _expire",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same note as power/duplication's."
+    },
+    {
+      "what": "One-Two Punch is one of hook_dispatch G4's replay sources",
+      "verdict": "gap",
+      "issue": "hook_dispatch G4 names powers.py:966 explicitly. Per binding rule 3 the same verdict, cross-referenced not re-argued."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

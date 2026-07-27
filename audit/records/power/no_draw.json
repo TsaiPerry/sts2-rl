@@ -1,0 +1,55 @@
+{
+  "unit": "power/no_draw",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\NoDrawPower.cs",
+    "sha256": "21aedfb76a47719d32f82129b65116ea9526b49d5b4a8b6a0cd08330ed30d6ef"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:528 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:530-531 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "The sim overrides on_stack to a no-op citing PowerStackType.Single, but Single only means 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds the offset with no StackType branch. One of the 15 units making this misreading (`py tools/audit/power_census.py stack`). DORMANT for this unit: Amount is read nowhere in it, so the value is inert. Named trigger: any behaviour on this power that reads Amount. Third-file citations, not hashed here."
+    },
+    "ShouldDraw": {
+      "maps_to": "powers.py:533-536 NoDrawPower.should_draw",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:538-540 on_player_turn_end -> Power._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), which CombatManager calls at :1307 for the player side -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654, before both); the sim's real AfterTurnEnd slot is after_player_turn_end (combat.py:665). Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. Live consequence for THIS power specifically: the sim removes No Draw before the turn-end card effects and the hand flush, so a turn-end effect that draws (Dark Embrace off an ethereal exhaust, powers.py:251-255) succeeds in the sim and is blocked in the game. Both halves are ported Ironclad-pool content. The sim's correct slot, after_player_turn_end (combat.py:665), is available and unused."
+    }
+  },
+  "guards": [
+    {
+      "what": "NoDrawPower.cs:21-24 `fromHandDraw` -> true",
+      "verdict": "faithful",
+      "rationale": "powers.py:534 `if from_hand_draw or player is not self.owner: return True`. Identical, including the polarity of this AND predicate: the start-of-turn hand draw is exempt and only mid-turn draws are blocked."
+    },
+    {
+      "what": "NoDrawPower.cs:25-28 `player != base.Owner.Player` -> true",
+      "verdict": "faithful",
+      "rationale": "Same line, powers.py:534."
+    },
+    {
+      "what": "NoDrawPower.cs:37 PowerCmd.Remove vs the sim's _expire",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same mechanism note as power/shriek's -- No Draw overrides no AfterRemoved, so the observable is identical, but _expire (powers.py:86-92) bypasses RemoveInternal/AfterRemoved."
+    },
+    {
+      "what": "No preventer out-param on the sim's should_draw",
+      "verdict": "faithful",
+      "rationale": "C#'s ShouldDraw is an AND predicate with first-False short-circuit (hook_dispatch step 35) and the sim's hooks.py:631-641 has no preventer out-param, so which listener vetoed is unobservable. That absence is hook_dispatch's, not this unit's, and No Draw is currently the only ported should_draw listener, so no contention exists to observe."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

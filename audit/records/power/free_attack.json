@@ -1,0 +1,61 @@
+{
+  "unit": "power/free_attack",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\FreeAttackPower.cs",
+    "sha256": "3b5e91b54cfa618c14e9567d99c0fab1292e057db822817207c4e4ddda4a00d2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1145 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "TryModifyEnergyCostInCombatLate": {
+      "maps_to": "powers.py:1147-1151 FreeAttackPower.modify_card_energy_cost (hooks.py:196-201)",
+      "verdict": "gap",
+      "issue": "This power is hook_dispatch G3's LIVE WITNESS from the Late side, and the witness is recorded there with an execution: Tangled (TryModifyEnergyCostInCombat, the EARLY pass, ported at powers.py:1486-1502 and applied by the ported Act-1 Vine Shambler) adds 1 to an Entangled Attack's cost and Free Attack (TryModifyEnergyCostInCombatLate, ported here) sets it to 0. The game always runs Tangled first and Free Attack last, so the Attack is free; in the sim applying Free Attack BEFORE Tangled leaves the Strike at cost 1 and applying Tangled first leaves it at 0. Same gap from this end, same verdict per binding rule 3; power/curious is the other content half of the same phase question. SEPARATELY, this record's own finding: the PILE GUARD is missing. FreeAttackPower.cs:26-39 only zeroes the cost when card.Pile?.Type is Hand or Play; powers.py:1147-1151 zeroes every Attack of the owner's regardless of where it sits, and has no owner test either (a single-player tautology). DORMANT for the cost itself -- energy is only spent for a card played from hand -- but the sim's modify_card_energy_cost is also what previews.py and the RL observation read, so an Attack sitting in the draw or discard pile displays as free where the game shows its real cost. Named trigger: any effect that reads a non-hand card's cost, of which the observation vector is one."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "powers.py:1153-1156 FreeAttackPower.on_energy_spent (hooks.py:318-324, combat.py:552 for auto-plays)",
+      "verdict": "gap",
+      "issue": "DELIBERATE SLOT CHOICE plus an inherited bracket gap. The sim consumes the stack from on_energy_spent rather than before_card_played, and its docstring (powers.py:1137-1141) gives the reason: on_energy_spent fires before the card resolves, so the stack Unrelenting applies during its own resolution is not immediately eaten by Unrelenting itself, and auto-plays fire it with 0 energy so they consume a stack just as C#'s BeforeCardPlayed does. That reasoning holds and the choice is sound. What is a gap is the COUNT: hook_dispatch's G4 (the per-CardPlay bracket): CardModel.cs:1904-1965 constructs a fresh CardPlay per replay iteration and fires Hook.BeforeCardPlayed (:1929) and Hook.AfterCardPlayed (:1959) INSIDE the loop, where combat.py:466 fires before_card_played once before the `for _ in range(play_count)` loop (:477-494) and combat.py:514 fires on_card_played once after it. Already LIVE with a Throwing Axe / Pen Nib witness and not re-verdicted here per binding rule 3; what is recorded is this unit's share of it. Throwing Axe is a ported relic from the ported Tanx shrine (relics/throwing_axe.py:30-36, events/tanx.py:13) and power/duplication and power/one_two_punch are ported replay sources. C#'s BeforeCardPlayed fires once per replay iteration, so a Throwing-Axe-doubled or Duplication-doubled Attack consumes TWO Free Attack stacks in the game; the sim's on_energy_spent fires once per play (combat.py:552 / the energy-spend site), so it consumes ONE -- and the second, free iteration of that Attack is free in both, so the player keeps a stack the game spends. Also the pile guard C#'s BeforeCardPlayed repeats (FreeAttackPower.cs:48-59) is absent for the same reason as above; that half is dormant because a card being played is in Hand or Play by definition."
+    }
+  },
+  "guards": [
+    {
+      "what": "FreeAttackPower.cs:17-20 / :46 card.Owner.Creature != base.Owner",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; the sim omits it on both hooks."
+    },
+    {
+      "what": "FreeAttackPower.cs:21-24 / :46 card.Type != CardType.Attack",
+      "verdict": "faithful",
+      "rationale": "powers.py:1149 and :1155 both test CardType.ATTACK. Identical, and note BOTH sides gate the CONSUMPTION on the card being an Attack, so playing a Skill does not waste a stack."
+    },
+    {
+      "what": "FreeAttackPower.cs:40 modifiedCost = default(decimal), i.e. 0 not a reduction",
+      "verdict": "faithful",
+      "rationale": "powers.py:1150 returns 0. So Free Attack composes with power/curious and Spiked Gauntlets by overwriting rather than subtracting, which is exactly why C# put it in the Late pass and why the collapse is observable."
+    },
+    {
+      "what": "The TryModify predicate protocol",
+      "verdict": "gap",
+      "issue": "C#'s Try* hooks return bool and write to an out-param, which Hook.ModifyEnergyCostInCombat (Hook.cs:1574-1590) uses to build its notification list; the sim's modify_card_energy_cost (hooks.py:196-201) is a plain fold with neither. Identical entry to power/curious's, same verdict per binding rule 3, dormant with the same named trigger (any AfterModifyingEnergyCostInCombat implementer)."
+    },
+    {
+      "what": "The applier",
+      "verdict": "faithful",
+      "rationale": "The ported Ironclad card Unrelenting (cards/unrelenting.py:40). No AscensionHelper call in FreeAttackPower.cs."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

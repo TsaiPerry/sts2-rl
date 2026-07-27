@@ -1,0 +1,50 @@
+{
+  "unit": "power/enrage",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\EnragePower.cs",
+    "sha256": "ff5fc31f32e76264ac9548c102f9d7923f4fc15e53af249e99308cdd76b2b4ce"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:263 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:265-269 EnragePower.on_card_played",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "EnragePower.cs:17 `cardPlay.Card.Type == CardType.Skill` -- and NO ownership test",
+      "verdict": "faithful",
+      "rationale": "powers.py:267 tests CardType.SKILL and likewise does not test ownership. The absent owner check is C#'s, not an omission: EnragePower.cs:15-22 reacts to ANY Skill played by anyone, unlike Corruption and Feel No Pain, which both gate on card.Owner.Creature. The sim matches, and in single-player the distinction is unobservable anyway."
+    },
+    {
+      "what": "EnragePower.cs:20 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",
+      "verdict": "deliberate-divergence",
+      "rationale": "powers.py:268-269 routes through StrengthCmd.apply (cmds.py:349-361), which runs a modify_strength_given chain C# does not have at this site and drops `applier = Owner`. Same shape, same reasoning and same non-observability as the matching guards on power/ritual and power/demon_form; kept as a divergence because PossessStrengthPower (powers.py:3092-3099) is the ported effect that reads a Strength application's applier."
+    },
+    {
+      "what": "Enrage fires once per CardPlay, not once per Replay iteration",
+      "verdict": "gap",
+      "issue": "hook_dispatch gap G4: CardModel.cs:1904-1965 builds a fresh CardPlay per replay iteration and fires Hook.AfterCardPlayed inside the loop, while combat.py:514 fires on_card_played once after the whole `for _ in range(play_count)` loop. A doubled Skill therefore gives C# two Enrage triggers and the sim one. Per binding rule 3 the mechanism keeps G4's `gap` verdict and is cross-referenced rather than re-argued; recorded here because Enrage is a concrete Ironclad-pool listener that widens G4's blast radius beyond the Throwing Axe / Pen Nib witness G4 already carries -- One-Two Punch and Duplication are both ported play-count sources (powers.py:966, :3919). Third-file citations, not hashed here."
+    },
+    {
+      "what": "EnragePower.cs:19 Cmd.Wait(0.5f)",
+      "verdict": "waiver",
+      "rationale": "Presentation pacing."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

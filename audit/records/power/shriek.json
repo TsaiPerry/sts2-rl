@@ -1,0 +1,69 @@
+{
+  "unit": "power/shriek",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ShriekPower.cs",
+    "sha256": "4695f16955ff21fd5b84bb8403067ab0b55e982c8153b1eca3ea05bbeda233df"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1934 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
+    },
+    "AllowNegative": {
+      "maps_to": "powers.py:1935 `allow_negative = True`",
+      "verdict": "faithful"
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audits/seam/power_cmd.json. The sim is single-player."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:1937-1952 ShriekPower.on_damage_received -> TerrorEel.trigger_terror (monsters/underdocks/terror_eel.py:58-65)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "ShriekPower.cs:18 `result.UnblockedDamage > 0`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1946 `amount > 0`. The sim's on_damage_received `amount` argument IS the post-block unblocked HP loss -- cmds.py:122 passes hp_lost. Exact."
+    },
+    {
+      "what": "ShriekPower.cs:18 `target.CurrentHp <= base.Amount`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1949 `self.owner.hp <= self.amount`, evaluated after the HP loss lands on both sides (C# AfterDamageReceived; sim cmds.py:122, after the write at cmds.py:92)."
+    },
+    {
+      "what": "Killing-blow guard (PROMPT.md bug class 2)",
+      "verdict": "faithful",
+      "rationale": "C# skips a victim's AfterDamageReceived when the hit killed it (CreatureCmd.cs:392) and the sim gates on_damage_received on `not target.is_dead` (cmds.py:121), so the sim's extra `not self.owner.is_gone` (powers.py:1948) is redundant rather than divergent. Third-file citations, not hashed here."
+    },
+    {
+      "what": "ShriekPower.cs:21 CreatureCmd.Stun(Owner, TerrorState.StateId)",
+      "verdict": "faithful",
+      "rationale": "The call direction is inverted -- C#'s power reaches into ((TerrorEel)Owner.Monster).TerrorState and stuns; the sim's power calls self.owner.trigger_terror(), and TerrorEel.trigger_terror (monsters/underdocks/terror_eel.py:58-65, a third file not hashed here) does force_current_state(TERROR_MOVE) plus CreatureCmd.stun. Both the stun and the follow-up state are therefore present; verified by reading the method rather than assumed."
+    },
+    {
+      "what": "Sign-aware typing is INERT for this power",
+      "verdict": "faithful",
+      "rationale": "Shriek is Counter + AllowNegative, so GetTypeForAmount's first arm (PowerModel.cs:462-465) fires at a negative amount -- but that arm returns Debuff, which is what Type already returns, so the sim's static attribute gives the same answer for every sign. Executed: `py tools/audit/power_census.py typing` lists shriek under arm 1 with cs Type=Debuff == sim DEBUFF. Only strength and dexterity flip."
+    },
+    {
+      "what": "ShriekPower.cs:22 PowerCmd.Remove vs the sim's _expire",
+      "verdict": "deliberate-divergence",
+      "rationale": "PowerCmd.Remove runs RemoveInternal + AfterRemoved (power_cmd steps 39-41); powers.py:1952 `_expire()` pops the power and unregisters the listener. Shriek overrides no AfterRemoved, so the observable is identical -- kept as a divergence because the mechanisms differ and a future AfterRemoved on this power would not fire."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

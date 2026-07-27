@@ -1,0 +1,65 @@
+{
+  "unit": "power/juggling",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\JugglingPower.cs",
+    "sha256": "ceb563698f5ba534edee10f779f2713d4d772dbe791fc9590ad3fe1f7d38fc44"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:804 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterApplied": {
+      "maps_to": "powers.py:806-817 JugglingPower.__init__ seeds _attacks_this_turn from combat.history.attack_plays_this_turn()",
+      "verdict": "faithful"
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:819-830 JugglingPower.on_card_played",
+      "verdict": "gap",
+      "issue": "The copy is rebuilt from the class rather than cloned. JugglingPower.cs:48 is `cardPlay.Card.CreateClone()`, which reproduces the card's full live state; powers.py:827-829 constructs `type(card)()` and replays `card.upgrade_level` upgrades onto it. Upgrade level is therefore carried and everything else is not -- a this-combat cost override (ConfusedPower/Snecko Eye, powers.py:3867-3873), an affliction (Entangled, Ringing, Smog, Bound, Galvanized, Tainted -- all ported), or a this-turn free flag would all be dropped. DORMANT only in the narrow sense that no test exercises it; the route is a Snecko-Eye or Tangled combat plus a Juggling trigger, both ported. Named trigger: any Juggling copy of a card carrying per-combat state. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:832-834 on_player_turn_end resets _attacks_this_turn",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. For Juggling the consequence is concrete: the sim zeroes the attack counter BEFORE Stampede's turn-end Attack auto-plays, so those attacks count towards NEXT turn's total of three and can trigger Juggling a play early. The game resets after them."
+    }
+  },
+  "guards": [
+    {
+      "what": "JugglingPower.cs:38 `cardPlay.Card.Owner != base.Owner.Player`",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; omitted."
+    },
+    {
+      "what": "JugglingPower.cs:38 `cardPlay.Card.Type != CardType.Attack`",
+      "verdict": "faithful",
+      "rationale": "powers.py:821-822 tests CardType.ATTACK before incrementing. Identical."
+    },
+    {
+      "what": "JugglingPower.cs:43 `attacksPlayedThisTurn == 3` (exact equality)",
+      "verdict": "faithful",
+      "rationale": "powers.py:824 uses `== 3` too, not `>= 3`, so Juggling fires on the third Attack only and not on the fourth and fifth. Matching an exact-equality test rather than 'improving' it is the right call and the sim made it."
+    },
+    {
+      "what": "JugglingPower.cs:32 the AfterApplied history seed",
+      "verdict": "faithful",
+      "rationale": "C# counts Attack CardPlaysStarted this turn belonging to the owner; powers.py:815-817 calls combat.history.attack_plays_this_turn(). The owner filter is a single-player tautology. This is the mechanism that makes a mid-turn Juggling application count the turn's earlier Attacks, and the sim has it."
+    },
+    {
+      "what": "JugglingPower.cs:49 CardPileCmd.AddGeneratedCardToCombat(PileType.Hand)",
+      "verdict": "faithful",
+      "rationale": "powers.py:830 CardPileCmd.add_to_hand, which is the sim's generated-card path and fires on_card_entered_combat. Pile-verb semantics (MaxCardsInHand, index) belong to creature_card_cmds, not to this unit."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

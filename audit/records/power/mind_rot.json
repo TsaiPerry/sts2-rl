@@ -1,0 +1,41 @@
+{
+  "unit": "power/mind_rot",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\MindRotPower.cs",
+    "sha256": "3676390da138fd28e1f6289419ffd57b0fa4e0e96f7509f0354f11dc855849a1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2646 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyHandDraw": {
+      "maps_to": "powers.py:2648-2651 modify_hand_draw (hooks.py:217, called at player.py:171)",
+      "verdict": "faithful",
+      "rationale": "`player != base.Owner.Player -> count` else `Math.Max(0m, count - base.Amount)` maps exactly to powers.py:2649-2651, floor included. Slot checked too: C# calls Hook.ModifyHandDraw when computing the turn's draw and the sim calls it at player.py:171, before `_draw(draw_count, from_hand_draw=True)` at :183 -- the same point. Owner is the player, via the Knowledge Demon's Curse of Knowledge. Third-file citations, not hashed here."
+    },
+    "AfterModifyingHandDraw": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "The whole body is `Flash();` -- presentation only. Recorded rather than skipped because it is the companion notification for a modifier chain, i.e. power_cmd gap G4's shape one family over, and here it costs nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

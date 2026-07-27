@@ -1,0 +1,46 @@
+{
+  "unit": "power/demise",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DemisePower.cs",
+    "sha256": "be71652f4440d981f36b1bb0509cea5693ce8810cbe3e972293e42e9f1289348"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:4050 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:4052-4065 DemisePower._fire via on_player_turn_end / on_enemy_side_end",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. Same damage-in-the-wrong-slot consequence as power/constrict's. The enemy leg (powers.py:4063-4065) is correct. DORMANT for reachability: the only ported Demise source is the Powdered Demise potion, and potions are out of scope by the shared contract's global-scope rule, so no in-scope content applies it. Named trigger: any non-potion Demise source."
+    }
+  },
+  "guards": [
+    {
+      "what": "DemisePower.cs:21 `participants.Contains(base.Owner)`",
+      "verdict": "faithful",
+      "rationale": "Self-filtered on both legs (powers.py:4060, :4064)."
+    },
+    {
+      "what": "DemisePower.cs:24 ValueProp.Unblockable | ValueProp.Unpowered, dealer null",
+      "verdict": "faithful",
+      "rationale": "powers.py:4055-4057 passes DamageProps.NON_CARD_HP_LOSS, which is exactly UNBLOCKABLE | UNPOWERED (valueprops.py:45), and omits the dealer, matching C#'s explicit null. Exact on both."
+    },
+    {
+      "what": "The stack never decrements, so the damage repeats every turn",
+      "verdict": "faithful",
+      "rationale": "C# neither decrements nor removes; powers.py:4052-4057 likewise only damages. The sim's docstring states it and the code matches."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

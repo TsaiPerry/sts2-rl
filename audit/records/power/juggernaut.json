@@ -1,0 +1,51 @@
+{
+  "unit": "power/juggernaut",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\JuggernautPower.cs",
+    "sha256": "109d8bfef00f263a9f00ffd80fefd81a0649beea57f5fcd35fb9c86c0f954942"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:776 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterBlockGained": {
+      "maps_to": "powers.py:778-794 JuggernautPower.on_block_gained (hooks.py:481-488, cmds.py:150)",
+      "verdict": "gap",
+      "issue": "The hook, the guards, the props and the dealer are all right -- amount <= 0 and creature == base.Owner (JuggernautPower.cs:19 vs powers.py:781), and CreatureCmd.Damage(target, base.Amount, ValueProp.Unpowered, base.Owner) (:26) vs DamageCmd.deal(..., self.amount, dealer=self.owner, props=DamageProps.NON_CARD_UNPOWERED) (:791-794), where NON_CARD_UNPOWERED is UNPOWERED alone (valueprops.py:42) and so is BLOCKABLE, matching C# omitting Unblockable. cmds.py:150 fires the hook after the block is actually added, matching AfterBlockGained. THE GAP is the TARGET PICK -- see the RNG guard. Recorded here too because the observable is which enemy takes the damage, which is player-visible and conformance-visible, not just a stream position."
+    }
+  },
+  "guards": [
+    {
+      "what": "JuggernautPower.cs:24 Rng.CombatTargets.NextItem(hittableEnemies)",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM. combat._rng is the SHARED unseeded random.Random (combat.py:88), NOT the per-purpose accessor object -- that is combat.combat_rng, built one line later at combat.py:94, whose seven named accessors (combat_rng.py:17-25: shuffle, monster_ai, card_gen, card_selection, targets, energy, potion_gen) are GameRandomAdapters over the matching RunRngSet streams in a parity run. This is the sixth and seventh power unit in this stream with the same defect -- power/aggression (main report section 4 item 8), then power/hello_world, power/entropy, power/stampede and power/confused in half A -- so it is systematic, not incidental, and it is proposed as its own PROMPT.md bug class in .superpowers/sdd/content-power-report-a.md section 7 item 11. LIVE under seed parity by construction: the draw comes off a different stream in a different order AND every later consumer of the shared rng is perturbed. Third-file citations, not hashed here. Juggernaut is the sharpest of the seven because the RIGHT accessor is used three lines away in the same engine for the same purpose: combat.py:546 picks an auto-play's target with combat_rng.targets.choice(living), citing CardCmd.cs:77's Rng.CombatTargets.NextItem(HittableEnemies) -- and powers.py:792 picks Juggernaut's target with combat._rng.choice(living). Same C# stream, two different sim objects. Reachable: Juggernaut is a ported Ironclad card power and every block gain triggers it, so a Juggernaut run diverges on its first block in a multi-enemy fight."
+    },
+    {
+      "what": "JuggernautPower.cs:21-22 CombatState.HittableEnemies and the empty check",
+      "verdict": "gap",
+      "issue": "The sim iterates combat.enemies filtered on not enemy.is_gone where C# uses CombatState.HittableEnemies, which additionally consults Hook.ShouldAllowHitting (Creature.cs:308-322), so the sim aims at creatures the game considers unhittable -- a mid-revival Illusion (powers.py:1572-1575) or a withered Decimillipede segment (powers.py:2354-2357). DORMANT: DamageCmd.deal re-checks should_allow_hitting at entry (cmds.py:51-52) and returns 0. Same finding and verdict as power/inferno's, power/constrict's, power/rolling_boulder's and power/the_bomb's HittableEnemies guards, per binding rule 3. The Count != 0 / `if not living: return` pair is present on both sides (JuggernautPower.cs:22 vs powers.py:787-788)."
+    },
+    {
+      "what": "Re-entrancy: Juggernaut's damage cannot itself grant block",
+      "verdict": "faithful",
+      "rationale": "Neither side guards against on_block_gained re-entering, and neither needs to: the damage is dealt to an enemy and DamageCmd.deal grants no block. Note the sim also does NOT add the end-of-combat check that power/rolling_boulder and power/the_bomb add for their own sweeps -- so a Juggernaut hit that kills the last enemy leaves the combat un-ended until the surrounding code checks, which is hook_dispatch's G8 rather than this power's divergence."
+    },
+    {
+      "what": "power/thorns cites this power as its reachability route",
+      "verdict": "faithful",
+      "rationale": "audits/power/thorns.json's props guard names cards/juggernaut.py:38 -> powers.py:791-794 as the ported route to unpowered non-card damage with dealer = the player, which is what makes Thorns's missing IsPoweredAttack gate live. Confirmed from this end: the props really are NON_CARD_UNPOWERED and the dealer really is the player. Rule 3 agreement, recorded so the cross-reference is verifiable from both ends."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

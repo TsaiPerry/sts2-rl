@@ -1,0 +1,61 @@
+{
+  "unit": "power/hellraiser",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HellraiserPower.cs",
+    "sha256": "3f357af4bf761b6f7cbaa9023a2b62c233b24069e751b3e04b1e23453a26c53a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:702 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:704-705 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "The sim drops a re-application's offset on the strength of a misreading of PowerStackType.Single. Single means only 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13); PowerCmd.ModifyAmount:236 adds the offset with no StackType branch, so playing Hellraiser twice gives C# Amount 2 and the sim Amount 1. DORMANT for this unit -- Hellraiser reads Amount nowhere, so the value is inert. Recorded because this is one of 15 ported powers that make the same misreading (reproduce with `py tools/audit/power_census.py stack`), and for the others Amount is load-bearing. Named trigger: any Hellraiser behaviour that reads Amount. Third-file citations, not hashed here."
+    },
+    "AfterCardDrawnEarly": {
+      "maps_to": "powers.py:707-713 HellraiserPower.on_card_drawn (hooks.py:391-400)",
+      "verdict": "gap",
+      "issue": "Two divergences. (a) PHASE LOSS. This is a phase-suffixed C# hook and the sim has a single unphased dispatch, which is hook_dispatch gap G3 (24 dispatchers lose their phase structure; 27 phase-suffixed hooks declared on AbstractModel). Per binding rule 3 the mechanism keeps G3's `gap` verdict and is cross-referenced rather than re-argued. Third-file citations, not hashed here. AfterCardDrawnEarly is one of the nine phase-suffixed hooks hook_dispatch step 28 enumerates; the sim's on_card_drawn is the only pass there is, so Hellraiser's auto-play races every other on_card_drawn listener by registration order instead of running strictly first. That matters here more than usual, because auto-playing the drawn card CHANGES what later listeners see. (b) The 9-auto-play safety cap (HellraiserPower.cs:26,45-57,91-96) is absent, and the sim's own docstring justifies the omission with a claim that is FALSE: it says the cap applies 'only against infinite-HP enemies, which the sim does not have' (powers.py:696-698), but C#'s HpDisplay.IsInfinite (HpDisplayExtensions.cs:8-15) is set at exactly two sites and the sim ports BOTH -- WaterfallGiant.cs:306 (SteamEruptionPower drives the sim to hp = max_hp = 999_999_999, powers.py:2033) and HardenedShellPower.cs:66 (ported at powers.py:1955-2001). Per binding rule 5 an unreachability claim has to be executed, and this one does not survive being checked. DORMANT anyway, for a reason the docstring does not give: the cap is a runaway guard, and an auto-played Strike goes to the discard pile rather than back to the draw pile, so nothing ported can draw 10 Strikes in one turn. Named trigger: any effect that returns Strikes to the draw pile mid-turn while the only hittable enemy shows infinite HP. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "HellraiserPower.cs:70-78 resets the per-turn infinite-auto-play counter. The sim tracks no counter (see the AfterCardDrawnEarly entry), so there is nothing to reset. Dormant for the same reason and with the same trigger; carried separately because a fix for the cap must add this reset too, and because the harness requires a verdict per override."
+    },
+    "BeforeAttack": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "HellraiserPower.cs:80-89 only decorates the AttackCommand with hit VFX, a cast animation and hit-VFX placement. Presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "HellraiserPower.cs:39 `card.Owner.Creature != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "`card.Owner.Creature != base.Owner` reduces to a tautology in the sim: there is one player, every Card belongs to it, and this power is only ever applied to the player. Same reading power_cmd's sim-entry note and SurroundedPower's own comment (powers.py:2574-2576) already record."
+    },
+    {
+      "what": "HellraiserPower.cs:39 `!card.Tags.Contains(CardTag.Strike)`",
+      "verdict": "faithful",
+      "rationale": "powers.py:708 `'strike' not in card.tags`. Identical -- keyed on the Strike TAG, not on the card id or type, so Perfected Strike-style tagged cards behave the same on both sides."
+    },
+    {
+      "what": "The sim's extra `combat.is_over` guard",
+      "verdict": "faithful",
+      "rationale": "powers.py:711-712 refuses to auto-play once the combat is over. C# needs no such test because Hook.IterateCombatHookListeners yields nothing to a dispatch begun after combat starts ending (Hook.cs:53-63) -- the sim's missing gate is hook_dispatch gap G8, and this power hand-rolls the specific case. Not a divergence: it makes the sim MORE like the game here. Third-file citations, not hashed here."
+    },
+    {
+      "what": "CardCmd.AutoPlay with a null target",
+      "verdict": "faithful",
+      "rationale": "HellraiserPower.cs:65 passes target null; combat.auto_play_card (combat.py:517-...) picks a random living enemy off Rng.CombatTargets for an ANY_ENEMY card, which is CardCmd.cs:77's behaviour. The autoPlayingCards set (:19,64,66) exists only to drive the BeforeAttack VFX, so its absence is part of that waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

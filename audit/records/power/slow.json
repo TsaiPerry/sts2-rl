@@ -1,0 +1,71 @@
+{
+  "unit": "power/slow",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SlowPower.cs",
+    "sha256": "825ed779d3a42bd83ef6799d8ceee47299e75342b298b4858c44bc6e49d050b3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1234 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "DisplayAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "SlowPower.cs:22 is `DynamicVars[\"SlowAmount\"].IntValue * 10` -- the number shown on the power's badge. Presentation only; the sim has no DisplayAmount concept."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:1246-1247 on_card_played",
+      "verdict": "faithful",
+      "rationale": "SlowPower.cs:26-31 increments SlowAmount on EVERY AfterCardPlayed with no owner or side filter; powers.py:1246-1247 does the same on the sim's on_card_played (combat.py:514). Note that the sim fires on_card_played ONCE per play where C# fires AfterCardPlayed once per CardPlay iteration -- hook_dispatch gap G4, carried as its own guard below."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:1253-1262 modify_damage_multiplicative",
+      "verdict": "gap",
+      "issue": "The factor matches (`1m + 0.1m * SlowAmount` at SlowPower.cs:43 vs `1.0 + 0.1 * self._cards_this_turn` at powers.py:1261) and `target != base.Owner -> 1m` matches, but the POWERED test does not: C# is `props.IsPoweredAttack()` (SlowPower.cs:39) and the sim is `card is not None and not card.is_unpowered` (powers.py:1260). Those are different predicates -- the sim's additionally requires a card, so powered NON-card damage (props Move && !Unpowered with cardSource null, the shape an AttackIntent and Thrash-style hook re-entry produce) gets the multiplier in the game and not in the sim. DORMANT: this power's owner is the Bygone Effigy (monsters/overgrowth/bygone_effigy.py:25-26; BygoneEffigy.cs:37 applies Slow 1, and BYGONE_EFFIGY_ELITE is a solo encounter), so every hit that can reach the owner either comes from a player card (card is not None -- agrees) or is unpowered power/relic damage (excluded on both sides). Trigger: any powered card-less damage aimed at an enemy, e.g. porting a monster that attacks another monster. Separately, this is the sim's second non-dyadic damage factor (0.1, `power_census.py multipliers`) and so sits inside hook_dispatch gap G9; the power report's section 3 already raised that G9's factor population omitted it. Third-file citations, not hashed here."
+    },
+    "AfterModifyingDamageAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "SlowPower.cs:46-50 is `Flash();` and nothing else -- presentation only. Recorded rather than skipped: the sim DOES have the companion-notification machinery for the hp-loss family (hooks.py:149-154 after_modify_hp_lost) but none for the damage family, which is power_cmd gap G4's shape one family over; here it costs nothing because the only body is a Flash."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "powers.py:1249-1251 on_enemy_turn_start",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnStart is dispatched at CombatManager.cs:522, once per side after that side's turn setup; the sim has NO side-scoped enemy turn-start slot at all (`py tools/audit/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start NO-SIM-SIDE-START-SLOT) and this power uses the per-enemy on_enemy_turn_start (combat.py:301). turn_structure gap G5 owns the mechanism and carries the identical `gap` verdict (rule 3). DORMANT, executed: BYGONE_EFFIGY_ELITE is a solo encounter, so the per-creature slot and the side slot coincide; and because the counter is reset at the owner's OWN side start, the reset point relative to the player's card plays -- which is what the counter measures -- is identical. Trigger: any encounter fielding the Bygone Effigy with a second enemy, at which point cards played during the enemy side would be counted against a stale or fresh baseline depending on the owner's index."
+    }
+  },
+  "guards": [
+    {
+      "what": "SlowPower.cs:54 `!participants.Contains(base.Owner)` -> no reset",
+      "verdict": "gap",
+      "issue": "The sim expresses it as `enemy is self.owner` (powers.py:1250) on the per-creature dispatch. Same intent, wrong dispatcher; folded into the AfterSideTurnStart entry."
+    },
+    {
+      "what": "Once-per-play vs once-per-CardPlay counting",
+      "verdict": "gap",
+      "issue": "hook_dispatch gap G4 (LIVE and already pinned with an executed witness) applies directly: CardModel.cs:1904-1965 constructs a fresh CardPlay per Replay iteration and fires AfterCardPlayed INSIDE the loop, so a Throwing-Axe- or One-Two-Punch-doubled card raises SlowAmount by 2 in the game and by 1 in the sim (combat.py:514 fires on_card_played once after the `for _ in range(play_count)` loop). Not re-verdicted; the per-unit consequence is that the owner takes 10% less bonus damage per doubled card in the sim."
+    },
+    {
+      "what": "Counter storage: DynamicVars vs an instance field",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# keeps the count in `DynamicVars[\"SlowAmount\"].BaseValue` (so it can drive DisplayAmount and the localization var); the sim keeps `self._cards_this_turn` (powers.py:1244). Observably identical -- both are per-power-instance and both reset at the owner's side start."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

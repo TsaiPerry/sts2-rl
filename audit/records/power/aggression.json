@@ -1,0 +1,56 @@
+{
+  "unit": "power/aggression",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\AggressionPower.cs",
+    "sha256": "97fc50abc153d4e57d43a5ad70217405287f88c844d56c2e8d7ddb74644d7c94"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:502 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "powers.py:504-519 AggressionPower.on_player_turn_start",
+      "verdict": "gap",
+      "issue": "The card selection uses the wrong RNG and the wrong shuffle. AggressionPower.cs:28 is `source.ToList().UnstableShuffle(Rng.CombatCardSelection).Take(Amount)` -- an UnstableShuffle drawn from the dedicated CombatCardSelection stream. powers.py:514 is `combat._rng.sample(candidates, min(self.amount, len(candidates)))`, i.e. Python's reservoir sampling on the shared unseeded combat rng. Two consequences: the stream is wrong, so an Aggression turn perturbs every later draw on the shared rng and consumes nothing from CombatCardSelection; and `random.sample` is a different algorithm from UnstableShuffle+Take, so even given the same stream position it selects different cards. Conformance-visible on any replay that plays Aggression -- this is the class of defect docs/superpowers/prompts/_shared-audit-contract.md's sibling seeds are graded on. The SLOT half is correct for once: C# uses BeforeSideTurnStart (pre-draw, CombatManager.cs:458) and the sim uses on_player_turn_start (pre-draw, player.py:169), which is exactly right and is what makes the moved Attacks part of the same turn's hand. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "AggressionPower.cs:22 `participants.Contains(base.Owner)`",
+      "verdict": "faithful",
+      "rationale": "powers.py:505-506 `player is not self.owner -> return`. The enemy side cannot hold Aggression (its body reaches Owner.Player), so the per-creature-vs-per-side problem does not arise for this unit."
+    },
+    {
+      "what": "AggressionPower.cs:27 `c.Type == CardType.Attack` over the DISCARD pile",
+      "verdict": "faithful",
+      "rationale": "powers.py:511 filters player.discard_pile on CardType.ATTACK. Identical pile and identical predicate."
+    },
+    {
+      "what": "AggressionPower.cs:28 `.Take(base.Amount)` with fewer candidates than Amount",
+      "verdict": "faithful",
+      "rationale": "LINQ Take silently yields what exists; powers.py:514's `min(self.amount, len(candidates))` does the same, and powers.py:512-513 returns early on an empty pile. No off-by-one."
+    },
+    {
+      "what": "AggressionPower.cs:32 `card.IsUpgradable`",
+      "verdict": "faithful",
+      "rationale": "powers.py:518-519 tests `card.upgrade_level == 0`. Equivalent for the ported pool -- every sim card is single-upgrade -- and the comment says so. A multi-level upgradable card would expose the difference; none exists."
+    },
+    {
+      "what": "AggressionPower.cs:31 CardPileCmd.Add(card, PileType.Hand) before the upgrade",
+      "verdict": "faithful",
+      "rationale": "powers.py:516-519 moves the card then upgrades, in the same order. The sim mutates the piles directly rather than through CardPileCmd, so no on_card_drawn / MaxCardsInHand handling fires -- the pile-verb question belongs to creature_card_cmds, not to this unit."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

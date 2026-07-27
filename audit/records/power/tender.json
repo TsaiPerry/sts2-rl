@@ -1,0 +1,66 @@
+{
+  "unit": "power/tender",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\TenderPower.cs",
+    "sha256": "7701c261dac64d191e48d43e4b9dc305203b9652456ad72892b91c1e46bdd72e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2100 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "DisplayAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "TenderPower.cs:22 shows CardsPlayedThisTurn instead of Amount. The sim keeps the counter separately (`_cards_played_this_turn`, powers.py:2110) but has no display concept. Presentation."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:2112-2116 TenderPower.on_card_played",
+      "verdict": "gap",
+      "issue": "The applier is dropped. TenderPower.cs:50-51 applies Strength and Dexterity -1 with `applier: base.Applier` -- the creature that applied Tender -- and `silent: true`; powers.py:2115-2116 calls PowerCmd.apply with no applier at all. DORMANT but with a real route: PossessStrengthPower and PossessSpeedPower (powers.py:3075-3147) track stat losses BY APPLIER (`applier is self.owner`, powers.py:3094) so they can hand the stats back on death. A monster holding Possess Strength that also applied Tender would, in the game, be credited with the Tender drain and return it; in the sim the drain is applier-less and is lost. Both powers are ported (Hunter Killer applies Tender, The Lost/The Forgotten hold the Possess powers). Named trigger: one monster applying Tender while another holds a Possess power, or any single monster with both. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2118-2124 on_player_turn_end restores the drained stats",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. LIVE for this unit: Tender restores Strength and Dexterity at turn end, and Stampede's turn-end auto-plays are Attack plays whose damage scales off Strength. In the game the restore happens AFTER them, so those attacks are still Tenderised; in the sim it happens in the same dispatch, so whether they are depends on registration order between Tender and Stampede. The restore also uses the same applier-less PowerCmd.apply as the drain, so it cannot be credited either."
+    }
+  },
+  "guards": [
+    {
+      "what": "TenderPower.cs:46 `cardPlay.Card.Owner == base.Owner.Player`",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; omitted."
+    },
+    {
+      "what": "TenderPower.cs:50-51 the literal -1 per card, regardless of Amount",
+      "verdict": "faithful",
+      "rationale": "powers.py:2115-2116 applies -1 for each of Strength and Dexterity, not -Amount. Matches C#, whose Amount is only the display anchor -- the kind of constant that is easy to 'fix' wrongly and the sim did not."
+    },
+    {
+      "what": "TenderPower.cs:59-60 restores CardsPlayedThisTurn, then zeroes it",
+      "verdict": "faithful",
+      "rationale": "powers.py:2122-2124 applies +_cards_played_this_turn to both stats and then resets. Exact, including restoring the COUNT rather than Amount, so the net effect over a turn is zero on both sides."
+    },
+    {
+      "what": "TenderPower.cs:55-62 fires even when no card was played",
+      "verdict": "faithful",
+      "rationale": "C# calls PowerCmd.Apply with CardsPlayedThisTurn == 0; the sim guards `self._cards_played_this_turn == 0 -> return` (powers.py:2119-2120). Equivalent, and this time the equivalence is exact rather than lucky: C# PowerCmd.Apply returns immediately on `amount == 0m` (PowerCmd.cs:103), so a 0-amount application is a documented no-op -- step 6 of audits/seam/power_cmd.json. Third-file citations, not hashed here."
+    },
+    {
+      "what": "`silent: true` on all four applications",
+      "verdict": "waiver",
+      "rationale": "Suppresses the power VFX/flash. Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

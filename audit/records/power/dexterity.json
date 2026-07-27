@@ -1,0 +1,50 @@
+{
+  "unit": "power/dexterity",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DexterityPower.cs",
+    "sha256": "40117b7d813af37ed580a278f516ce276d15cc89dd1ccaaa8876a0681f754096"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:126 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
+    },
+    "AllowNegative": {
+      "maps_to": "powers.py:127 `allow_negative = True`",
+      "verdict": "faithful"
+    },
+    "ModifyBlockAdditive": {
+      "maps_to": "powers.py:129-137 DexterityPower.modify_block_additive",
+      "verdict": "gap",
+      "issue": "The sim keys the ownership test on the BLOCK TARGET where C# keys it on the CARD's owner. DexterityPower.cs:16-26: when cardSource != null the test is `cardSource.Owner.Creature != base.Owner -> 0m` and the target is not consulted at all; only for cardSource == null (a monster move) does it fall back to `base.Owner != target`. powers.py:135 tests `target is self.owner` in both cases. Divergent whenever a card played by the Dexterity holder grants block to somebody else: C# adds the holder's Dexterity, the sim adds nothing. DORMANT -- an executed grep for cross-creature block grants in the sim finds only RampartPower (powers.py:2994-3002), which is a power and so passes card=None, taking C#'s identical fallback branch. Named trigger: porting any card that grants block to an ally or an enemy."
+    }
+  },
+  "guards": [
+    {
+      "what": "DexterityPower.cs:27-30 `!props.IsPoweredCardOrMonsterMoveBlock()`",
+      "verdict": "faithful",
+      "rationale": "Enforced by the caller: BlockCmd.apply gates both block-modifier families on is_powered_attack(props) (cmds.py:145-147), and C#'s IsPoweredAttack and IsPoweredCardOrMonsterMoveBlock have identical bodies (ValuePropExtensions.cs:5-21, `Move && !Unpowered` both), so the sim's single helper is exact. Third-file citations, not hashed here."
+    },
+    {
+      "what": "Sign-aware power typing on a negative Dexterity application",
+      "verdict": "gap",
+      "issue": "SIGN-AWARE TYPING (PROMPT.md bug class 3). GetTypeForAmount (PowerModel.cs:460-471, a third file not hashed by this record) returns PowerType.Debuff for this power at any NEGATIVE amount, because StackType == Counter && AllowNegative. The sim has no get_type_for_amount at all and tests the static class attribute, so a negative-amount application is a Buff to the sim and a Debuff to the game. Same mechanism as audits/seam/power_cmd.json gaps G1 (Artifact interception) and G2 (Unsettling Lamp's doubling gate); per binding rule 3 it carries the identical verdict and the identical named trigger -- DORMANT until Malaise.cs:39 or Resonance.cs:33 is ported, the only two C# sites where a PLAYER applies a negative-amount stat power to an enemy. Re-checked for a new route and found none: the sim's negative applications of this power are all monsters targeting the player (the_lost_and_forgotten.py:54,99, lagavulin_matriarch.py:106-107), TenderPower self-applying (powers.py:2115-2116), or the TemporaryStrength/Dexterity revert (powers.py:863,937) -- Artifact needs a player-side source that exists nowhere in the game and Lamp needs `applier is player`, which none of those is. Reproduce the census with `py tools/audit/power_census.py typing`: of 134 ported powers only strength and dexterity actually flip."
+    },
+    {
+      "what": "ExtraHoverTips (Block static tip)",
+      "verdict": "waiver",
+      "rationale": "Presentation only -- a hover tip list."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

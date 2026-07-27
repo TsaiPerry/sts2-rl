@@ -1,0 +1,69 @@
+{
+  "unit": "power/tangled",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\TangledPower.cs",
+    "sha256": "f52ae733202234b2cf4dfe54c05d3657e24a996e867d6142048b2d106650d022"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1462 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterApplied": {
+      "maps_to": "powers.py:1464-1477 TangledPower.__init__",
+      "verdict": "gap",
+      "issue": "The sim adds a guard C# does not have, and it changes the outcome. TangledPower.cs:23-30 afflicts EVERY Attack card with Entangled unconditionally -- there is no `Affliction == null` test, unlike its own AfterCardEnteredCombat at :34 and unlike Ringing's and Smoggy's AfterApplied -- so in the game Tangled OVERWRITES an existing affliction on Attack cards. powers.py:1476 adds `card.affliction is None`, so the sim skips already-afflicted Attacks and they cost nothing extra. Reachable with two ported enemy powers in one combat: Ringing (powers.py:1319-1332) afflicts every unafflicted card, after which the game's Tangled re-afflicts the Attacks as Entangled and the sim leaves them Ringing. Also note the sim's __init__ walk misses the Play pile for the same reason recorded on power/ringing and power/smoggy (player.py:100-103 vs PlayerCombatState.cs:70-80). Third-file citations, not hashed here."
+    },
+    "AfterCardEnteredCombat": {
+      "maps_to": "powers.py:1479-1484 TangledPower.on_card_entered_combat",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1492-1494 on_player_turn_end -> TangledPower._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. Tangled's removal clears every Entangled affliction (powers.py:1496-1502), so the sim's turn-end card effects and flush run with Attack costs already back to normal; the game clears them after. Reachable through Stampede's turn-end auto-plays, which are Attack plays and are the exact cards Entangled taxes."
+    },
+    "AfterRemoved": {
+      "maps_to": "powers.py:1496-1502 TangledPower._expire clears every Entangled affliction",
+      "verdict": "faithful"
+    },
+    "TryModifyEnergyCostInCombat": {
+      "maps_to": "powers.py:1486-1490 TangledPower.modify_card_energy_cost",
+      "verdict": "gap",
+      "issue": "This is hook_dispatch gap G3's own primary witness: Tangled is the EARLY-phase cost modifier and FreeAttackPower is the Late one, and the sim has a single unphased pass, so the result depends on the order the two powers happened to land. G3 records the executed evidence (applying Free Attack before Tangled leaves a Strike at cost 1; applying Tangled first leaves it at 0, where the game always makes it free). Per binding rule 3 the mechanism keeps G3's verdict and is cross-referenced rather than re-argued; recorded here so tangled.json names the gap it is the witness for. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "TangledPower.cs:34 `card.Affliction == null && card.Type == Attack` on AfterCardEnteredCombat",
+      "verdict": "faithful",
+      "rationale": "powers.py:1480-1481 tests both. The asymmetry with C#'s own AfterApplied -- which omits the affliction test -- is C#'s, and the sim flattens it; that flattening is the gap recorded on the AfterApplied entry."
+    },
+    {
+      "what": "TangledPower.cs:61 `card.Owner != base.Owner.Player`",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; omitted."
+    },
+    {
+      "what": "TangledPower.cs:66 `originalCost + base.Amount`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1489 `cost + self.amount`. Exact, and additive rather than a floor or a set, so it composes with other modifiers -- which is what makes the missing phase (see the hook entry) observable rather than academic."
+    },
+    {
+      "what": "TangledPower.cs:45 PowerCmd.Remove -> AfterRemoved clears",
+      "verdict": "faithful",
+      "rationale": "Same correct shape as power/ringing's: the sim overrides _expire (powers.py:1496-1502) and calls super() last, so every removal path sweeps the afflictions."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

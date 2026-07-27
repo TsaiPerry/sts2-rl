@@ -1,0 +1,92 @@
+{
+ "unit": "power/speed_potion",
+ "game_source": {
+  "path": "src\\Core\\Models\\Powers\\SpeedPotionPower.cs",
+  "sha256": "82c63f0efdbdb78c73882634d2c7ce2ad5e4ba0e3f30768f61e5984d344a5e9c"
+ },
+ "sim_source": {
+  "path": "sts2_rl\\powers.py",
+  "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+ },
+ "hooks": {
+  "OriginModel": {
+   "maps_to": "no sim counterpart; powers.py:949-955 name literal",
+   "verdict": "waiver",
+   "rationale": "Pure identity/presentation: OriginModel is switched on only to pick Title (TemporaryDexterityPower.cs:69-88) and the Description loc key, and the sim hard-codes name instead. Nothing reads it behaviourally -- already established for this family on power/setup_strike, whose whole-source grep found the single non-Powers hit to be the ITemporaryPower.cs:9 declaration itself. Waiver: presentation."
+  },
+  "Type (inherited, TemporaryDexterityPower.cs:28-38)": {
+   "maps_to": "powers.py:949-955 power_type = PowerType.BUFF",
+   "verdict": "faithful",
+   "rationale": "IsPositive is the base default true, so C#'s Type is Buff (TemporaryDexterityPower.cs:28-38) and the sim's static attribute agrees. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  "StackType (inherited, TemporaryDexterityPower.cs:40)": {
+   "maps_to": "powers.py:64-66 Power.on_stack",
+   "verdict": "faithful",
+   "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  "BeforeApplied (inherited, TemporaryDexterityPower.cs:142-152)": {
+   "maps_to": "powers.py:918-927 TemporaryDexterityPower.__init__",
+   "verdict": "faithful",
+   "rationale": "The sim applies the inner DexterityPower from __init__, which PowerCmd.apply runs at cmds.py:324 -- before the wrapper is placed on the creature (cmds.py:325) and registered (cmds.py:326), which is C#'s ordering (BeforeApplied is step 15 of audits/seam/power_cmd.json, ApplyInternal step 17). Settled in full on power/setup_strike, including the Artifact-blocked leg that lands on power_cmd's step-6 zero-amount finding. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  "AfterPowerAmountChanged (inherited, TemporaryDexterityPower.cs:154-167)": {
+   "maps_to": "powers.py:929-932 TemporaryDexterityPower.on_stack",
+   "verdict": "faithful",
+   "rationale": "The re-stack leg. C# guards !(amount == base.Amount) && power == this to stop the first application double-applying; the sim needs no such guard because the two cases are separate methods (__init__ at cmds.py:324 vs on_stack at cmds.py:311), and it keeps C#'s internal order. Settled on power/setup_strike. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  "AfterSideTurnEnd (inherited, TemporaryDexterityPower.cs:169-177)": {
+   "maps_to": "powers.py:940-946 on_player_turn_end / on_enemy_side_end -> _revert",
+   "verdict": "gap",
+   "issue": "SLOT, and LIVE. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and the flush (combat.py:661-662); the correct slot, after_player_turn_end (combat.py:665), exists and is unused. The mechanism was EXECUTED on power/setup_strike (StampedePower 1 + a temp-strength power: ending the turn deals 6 or 8 depending on registration order where the game always deals 8), and this unit shares that code path verbatim. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  }
+ },
+ "guards": [
+  {
+   "what": "TemporaryDexterityPower.cs:174-175 Remove-then-Apply ordering",
+   "verdict": "deliberate-divergence",
+   "rationale": "C# removes the wrapper and THEN applies the restoring Dexterity; the sim's _revert applies first and _expires after, so the wrapper is still a listener in the sim and already gone in the game. No ported listener observes it -- settled on power/setup_strike. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  {
+   "what": "TemporaryDexterityPower.cs:150,:164,:175 explicit applier arguments",
+   "verdict": "deliberate-divergence",
+   "rationale": "MISSING applier= (the recurring shape). C# passes an explicit applier on every inner application; the sim passes none. Recorded at the seam as audits/seam/power_cmd.json note N2, which settled the BeforeApplied leg by execution as observationally equivalent. Same verdict here per rule 3. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  {
+   "what": "TemporaryDexterityPower.cs:175 the revert applies a NEGATIVE DexterityPower (sign-aware typing)",
+   "verdict": "faithful",
+   "rationale": "SIGN-AWARE TYPING on the revert, examined as another candidate route to audits/seam/power_cmd.json G1 and DORMANT. The revert is a negative DexterityPower with applier == target == the owner, which GetTypeForAmount classifies Debuff via arm 1 (PowerModel.cs:460-471) where the sim's static power_type says Buff. All three consumers were traced on power/setup_strike and none fires: no player-side Artifact source exists, Unsettling Lamp's latch needs cardSource != null and this call passes null, and PowerCmd.cs:144 reads the STATIC power.Type. Confirmation, not contradiction. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  {
+   "what": "TemporaryDexterityPower.cs:137-140 IgnoreNextInstance",
+   "verdict": "gap",
+   "issue": "ITemporaryPower.IgnoreNextInstance / _shouldIgnoreNextInstance has NO sim counterpart. Its one caller is Misery.cs:59-61, which copies an enemy's debuffs and must not re-apply the wrapper's internal stat power. DORMANT: Misery is unported (grep -rn misery sts2_rl/ --include=*.py is empty). Named trigger: porting Misery. Dormant gap, not a waiver, per binding rule 1. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  {
+   "what": "ITemporaryPower as a marker interface",
+   "verdict": "gap",
+   "issue": "The marker itself is absent from the sim -- no is_temporary attribute, no InternallyAppliedPower, no should_power_be_removed_on_death among hooks.py's dispatchers. C# has five readers; Rend, Sleight of Flesh and Misery are unported, but IllusionPower IS ported (powers.py:1560ff) and owns the ShouldPowerBeRemovedOnDeath port. DORMANT for this record and flagged rather than re-verdicted, exactly as on power/setup_strike. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  {
+   "what": "TemporaryDexterityPower.cs:171 participants.Contains(base.Owner), plus the is_dead test the sim adds",
+   "verdict": "faithful",
+   "rationale": "The sim ADDS if not self.owner.is_dead before restoring the Dexterity where C#'s only guard is participants.Contains(base.Owner). Harmless: a creature that died has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), and PowerCmd.Apply's CanReceivePowers guard (PowerCmd.cs:73-76) would refuse the application anyway. NOTE: half B's report-b section 3 names this substituted guard (is_dead standing in for participants.Contains) as a recurring shape; this is the benign instance of it. TemporaryDexterityPower.cs is a line-for-line clone of TemporaryStrengthPower.cs with DexterityPower substituted for StrengthPower (compare :142-152 with :146-156, :154-167 with :158-171, :169-177 with :173-181), so every verdict the TemporaryStrengthPower family already carries applies here under binding rule 3 -- see power/setup_strike and power/reptile_trinket. power/speed_potion is the ONLY ported TemporaryDexterityPower unit, so this record is where that base class is recorded. Third-file citations, not hashed by this record."
+  },
+  {
+   "what": "The only applier is a potion",
+   "verdict": "waiver",
+   "rationale": "The sole applier is the potion of the same name, and potions are out of scope by Perry's deferral (the shared audit contract's Global scope section). The POWER is audited in full above; what is waived is only the reachability of its one applier. The sim does port the potion, so if the deferral is lifted every finding above is live with no further work. Mirrors the guard recorded on power/shackling_potion."
+  },
+  {
+   "what": "HARNESS: base-class hooks not enumerated",
+   "verdict": "waiver",
+   "rationale": "harness.py's list_overrides enumerated ONE hook for this unit (OriginModel, the only member the .cs file declares) where the unit needs six, because it does not follow the C# base class TemporaryDexterityPower.cs. The five inherited hooks above were added by hand; validation accepts extra keys. This is defect 2b of the stream report's section 8, found by half A on six TemporaryStrengthPower subclasses and reproducing here on both previously-unauditable potion powers. Waiver: a tooling observation, not a sim/game divergence."
+  },
+  {
+   "what": "The Dexterity leg's own observable consequence, as distinct from the family's slot verdict",
+   "verdict": "gap",
+   "issue": "Stated separately so the AfterSideTurnEnd verdict above is not read as more proven than it is. The SLOT gap is the same code path power/setup_strike executed, so the verdict is inherited under rule 3. But setup_strike's witness is a damage witness (Stampede auto-plays an ATTACK from its own on_player_turn_end, so it sees the reverted Strength). Dexterity modifies BLOCK, so an equivalent witness needs a turn-end BLOCK gain landing between combat.py:654 and :665, and I did not find a ported source of one. So: mechanism LIVE and inherited, this unit's own numeric consequence UNPROVEN. Whoever fixes the family (one line: on_player_turn_end -> after_player_turn_end) fixes both legs regardless."
+  }
+ ],
+ "verdict": "gap",
+ "audited": "2026-07-26"
+}

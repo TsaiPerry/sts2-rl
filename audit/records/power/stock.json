@@ -1,0 +1,61 @@
+{
+  "unit": "power/stock",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\StockPower.cs",
+    "sha256": "5606ab5216234cf2c45b642b9cb2d289f2f78534b68e09ffd9b8190d78d06271"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
+  },
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2969 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:2971-2983 StockPower.on_death",
+      "verdict": "faithful",
+      "rationale": "Right hook. `!wasRemovalPrevented && target == base.Owner && base.Amount > 0` (StockPower.cs:18) maps to powers.py:2972's `creature is not self.owner or self.amount <= 0 -> return`; the replacement carries `StockAmount = base.Amount - 1` (StockPower.cs:23) vs `stock=self.amount - 1` (powers.py:2981) and `ShouldPlaySpawnAnimation = true` vs `respawn=True`; the spawn slot `base.Owner.SlotName` has no sim analogue (slot placement is the monster's record). Checked the 0-amount edge, because power_cmd's step-6 finding (the sim has no 0-amount PowerCmd no-op) would otherwise leave a `Stock(0)` badge the game never shows: monsters/glory/axebot.py:48-51 guards `if stock > 0` exactly as Axebot.cs:78 guards `if (StockAmount > 0)`, so Stock(0) is never applied on either side. The sim's added `self._expire()` matches C#'s CreatureCmd.cs:533 power strip in net effect. Third-file citations, not hashed here."
+    },
+    "ShouldStopCombatFromEnding": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "powers.py:2981 passes `combat._rng` for the spawn's HP roll",
+      "verdict": "faithful",
+      "rationale": "The sim passes `combat._rng` -- the shared LEGACY random.Random -- to the spawned monster's constructor (powers.py:2981), and Monster.__init__ rolls the spawn's HP from it (monsters/base.py:78-79 `hp = rng.randint(self.min_hp, self.max_hp)`), where the game rolls a mid-combat spawn's HP on a NAMED stream. Half A found seven power units reaching for `combat._rng` where C# names a stream, so this was checked as a systematic class rather than trusted: the sim REPAIRS it one level up. `CreatureCmd.add` calls `combat.assign_parity_hp(creature)` (cmds.py:254 -> combat.py:259-267), which re-rolls a mid-combat spawn's HP on the **Niche** stream against the current siblings, mirroring CombatState.CreateCreature's SetUniqueMonsterHpValue -- and it is a no-op in legacy mode, where the shared rng IS the model. The Axebot really does have HP variance (min_hp 70, max_hp 78), so the repair is load-bearing rather than vacuous. Faithful, with the caveat that the constructor's `randint` still consumes a draw from the unseeded shared rng in parity mode -- harmless, because no parity content reads that stream. Third-file citations, not hashed here."
+    },
+    {
+      "what": "StockPower.cs:18 `!wasRemovalPrevented`",
+      "verdict": "faithful",
+      "rationale": "`wasRemovalPrevented: true` is passed when Hook.ShouldDie returned FALSE, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the real-death path (CreatureCmd.cs:519) -- the parameter is misnamed in the decompiled source and is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath (computed separately at CreatureCmd.cs:508). So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing on the prevented branch, so the guard is satisfied structurally. Third-file citations, not hashed here."
+    },
+    {
+      "what": "StockPower.cs:20 Cmd.CustomScaledWait(deathAnimLength) / :24 TriggerAnim(\"respawn\")",
+      "verdict": "waiver",
+      "rationale": "Animation timing and presentation only."
+    },
+    {
+      "what": "StockPower.cs:24 `base.Owner.SlotName` for the replacement's position",
+      "verdict": "waiver",
+      "rationale": "Slot placement is presentation/layout in the sim's model; the Ovicopter egg-slot finding shows the sim DOES model list POSITION where it matters for targeting, and CreatureCmd.add appends here. Flagged as a waiver rather than a gap because a single-enemy replacement lands in the same list position either way."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
