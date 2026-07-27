@@ -5,10 +5,10 @@ writes engine code; it only parses ``audit/records/<kind>/*.json`` plus the xfai
 pins in ``test/test_hook_order.py`` so the queue's counts are reproducible
 instead of transcribed.
 
-Five kinds are read: the 6 engine-seam records and the four content tiers that
-have landed (``power``, ``card``, ``event``, ``enchantment``).  ``relic`` and
-``monster`` are **not audited** -- their record directories are empty and the
-queue says so in its header rather than implying coverage it does not have.
+Six kinds are read: the 6 engine-seam records and the five content tiers that
+have landed (``power``, ``card``, ``event``, ``enchantment``, ``relic``).
+``monster`` is **not audited** -- its record directory is empty and the queue
+says so in its header rather than implying coverage it does not have.
 
 Commands
 --------
@@ -69,16 +69,16 @@ SEAMS = [
     "monster_state_machine",
 ]
 
-# Kinds with records on this branch, in queue order.  ``relic`` and ``monster``
-# are deliberately absent: those streams have not run, and listing them here
-# with 0 records would read as "audited, no gaps".
-CONTENT_KINDS = ["power", "card", "event", "enchantment"]
+# Kinds with records on this branch, in queue order.  ``monster`` is
+# deliberately absent: that stream has not run, and listing it here with 0
+# records would read as "audited, no gaps".  ``relic`` joined 2026-07-26.
+CONTENT_KINDS = ["power", "card", "event", "enchantment", "relic"]
 KINDS = ["seam"] + CONTENT_KINDS
 # Kinds the pipeline defines but has NOT audited -- reported by ``counts`` so a
 # reader of the queue cannot mistake it for complete coverage.  The unit counts
 # are ``py audit/tools/harness.py roster <kind>``'s "N sim units" line.
-UNAUDITED_KINDS = ["relic", "monster"]
-_UNAUDITED_UNITS = {"relic": 258, "monster": 109}
+UNAUDITED_KINDS = ["monster"]
+_UNAUDITED_UNITS = {"monster": 109}
 
 # --- mechanism merges the records themselves declare -------------------------
 # key: mechanism key as auto-derived, value: canonical mechanism key.
@@ -251,6 +251,98 @@ _FAMILIES = [
     #  `_base < 0` (CardEnergyCost.cs:100-103) ... Same divergence as
     #  card/ascenders_bane's"
     ("card", r"^ctor$", None, r"energy cost is (?:\*\*)?-1|base\(-1", "card/_unplayable_cost"),
+
+    # --- relic tier (merged 2026-07-26) -------------------------------------
+    # The relic records tag nothing and number their guards PER RECORD (G1, G2,
+    # N1 ...), so unlike the event and enchantment tiers there is no tier-wide
+    # id to group on and every entry would otherwise anchor its own mechanism.
+    # These 16 families are ordered most-specific first; five of them resolve to
+    # a mechanism a SEAM record already owns, which is the cross-record merge
+    # binding rule 3 asks for.  Everything unmatched still anchors its own key --
+    # an over-split queue overstates the work, an over-merged one hides a job,
+    # and each pattern below was checked against its membership list before
+    # being added.
+
+    # "Hook.BeforeCardRemoved has NO sim dispatch at all -- grep before_card_removed
+    #  returns zero hits; run.remove_cards (run.py:356-358) is a bare list remove"
+    #  -- the missing hook surface creature_card_cmds step 68 owns.
+    ("relic", None, None, r"BeforeCardRemoved|before_card_removed",
+     "creature_card_cmds/step68"),
+    # "an undo_after_obtained that EXISTS and *clamps* instead of subtracting
+    #  violates its own stated contract" -- PROMPT.md v6 item 3; all five
+    #  implementers do it (mango, strawberry, lees_waffle, looming_fruit, pear).
+    ("relic", None, None, r"undo_after_obtained", "relic/_undo_clamp"),
+    # the shop-price hook surface: "hasattr(Relic,'modify_merchant_price') False"
+    #  -- Membership Card's halving and the Courier's 20% both land nowhere.
+    ("relic", None, None,
+     r"modify_merchant_price|MerchantEntry|originalPrice|merchant price",
+     "relic/_shop_price"),
+    # "there is no `is_allowed` member on Relic at all" -- the 17-relic pool
+    #  gate, plus PROMPT.md v6 item 2's IsAllowedAtNeow delegation trap.
+    ("relic", None, None, r"\bis_allowed\b|\bIsAllowed\b|IsBeforeAct3TreasureChest",
+     "relic/_is_allowed"),
+    # "the sim auto-keeps, which is the house rule for non-choice relic offers"
+    #  -- re-verdicted gap by the merge review: only NeowsBones.cs:43 uses
+    #  WithSkippingDisallowed, every other site is a skippable OfferCustom.
+    ("relic", None, None,
+     r"auto-keep|OfferCustom|WithSkippingDisallowed|SKIPPABLE_PURPOSES|"
+     r"force-grant|forced grant",
+     "relic/_auto_keep"),
+    # the StableShuffle contract: top-first orientation, UPPERCASE sort key, and
+    #  the dropped `.Take(N)` -- sand_castle, war_hammer, whetstone, war_paint,
+    #  royal_stamp, stone_cracker, fragrant_mushroom all depend on it.
+    ("relic", None, None, r"StableShuffle", "relic/_stable_shuffle"),
+    # the missing combat-boundary reset: a per-combat latch on a relic instance
+    #  that RunState carries between combats -- "combat 2 opens at Strength -3"
+    #  (red_skull), permafrost, vambrace, centennial_puzzle, ruined_helmet ...
+    ("relic", None, None,
+     r"combat 2|carried into combat|per-combat reset|carry(?:-| )over|stale latch|"
+     r"not reset (?:at|on|between)|no reset (?:at|on|between)|"
+     r"survives into the next combat",
+     "relic/_combat_reset"),
+    # "TryModifyCardRewardOptionsLate is C#'s SECOND dispatch pass and the sim
+    #  collapses the two into one" -- a distinct mechanism from the stub family
+    #  it used to be lumped with.
+    ("relic", None, None,
+     r"TryModifyCardRewardOptionsLate|TryModifyRewards\*\*Late\*\*|"
+     r"TryModifyRewardsLate|SECOND dispatch p|LATE pass of a two-pass",
+     "relic/_reward_late_pass"),
+    # "the port is a behaviourless stub whose premise -- 'no gold system' -- is
+    #  false" -- relics registered as documented no-ops (relics/base.py:20-24)
+    #  whose stated justification has since been overtaken by the sim growing
+    #  the system.  LIVE for most of them.
+    ("relic", None, None,
+     r"behaviourless stub|no-op stub|inert stub|the whole relic is (?:missing|a no-op)|"
+     r"the port is a .{0,20}stub|documented no-op|declares no `after_obtained`",
+     "relic/_stub"),
+    # PROMPT.md bug class 29: `if (cardPlay.IsAutoPlay) return;` present in the
+    #  C# and missing in the port (brilliant_scarf), or deliberately absent in
+    #  both (rainbow_ring, razor_tooth) -- the counter-example matters.
+    ("relic", None, None, r"IsAutoPlay|is_auto_play", "relic/_auto_play_counted"),
+    # "one hook bracket per logical play instead of per CardPlay" -- the seam
+    #  mechanism hook_dispatch G4, cited by name in most of these entries.
+    ("relic", None, None,
+     r"per-CardPlay|hook_dispatch(?:'s)? G4|once per Replay", "hook_dispatch/G4"),
+    # "PHASE LOSS. This is a phase-suffixed C# hook and the sim has a single
+    #  unphased dispatch, which is hook_dispatch gap G3"
+    ("relic", None, None, r"PHASE LOSS|VeryEarly|phase-suffixed", "hook_dispatch/G3"),
+    # the block-side props hoist -- creature_card_cmds G1.  The relic tier is
+    #  where this mechanism's census was found incomplete (UnmovablePower).
+    ("relic", None, None, r"is_powered_attack|IsCardOrMonsterMove",
+     "creature_card_cmds/G1"),
+    # "C# runs await CheckWinCondition() right after turn setup
+    #  (CombatManager.cs:573)" -- turn_structure G13, whose named witnesses are
+    #  mr_struggles and royal_poison.
+    ("relic", None, None, r"CheckWinCondition|_check_win", "turn_structure/G13"),
+    # the victory-sequence flattening: AfterCombatVictoryEarly and
+    #  AfterCombatVictory collapsed into one sim dispatch.
+    ("relic", None, None, r"AfterCombatVictoryEarly", "relic/_victory_flatten"),
+    # draws taken from the legacy shared run rng where C# names a specific
+    #  stream (Rng.Niche, PlayerRng.Rewards) -- the grade-A parity family.
+    ("relic", None, None,
+     r"Rng\.Niche|PlayerRng\.Rewards|legacy shared|shared run stream|off-stream|"
+     r"off the wrong stream",
+     "relic/_off_stream_draw"),
 ]
 
 # Individual content entries whose family the regex table gets wrong, or which
@@ -759,14 +851,19 @@ GAME_ROOT = Path(r"c:\Users\Perry\Desktop\Slay the Spire 2")
 QUEUE_DOC = ROOT / "audit" / "GAP-QUEUE.md"
 _CITE = re.compile(r"`?([\w][\w./-]*\.(?:py|cs)):(\d+)(?:-(\d+))?`?")
 
-# Citations the queue quotes BECAUSE they are broken -- the two stale record
-# citations reported in its "Record inconsistencies" section.  Quoting them is
-# the point; they must not be silently repaired, and cite-check must not fail on
-# them.  Remove an entry here only when the record itself is corrected.
-_KNOWN_BAD_CITATIONS = {
-    "relics/spiked_gauntlets.py:26-32",  # hook_dispatch G2 evidence; file ends at 31
-    "relics/fiddle.py:26-31",  # creature_card_cmds G9 / step 84; file ends at 29
-}
+# Citations the queue quotes BECAUSE they are broken -- entries here are stale
+# record citations the queue reports in its "Record inconsistencies" section.
+# Quoting them is the point; they must not be silently repaired, and cite-check
+# must not fail on them.  Remove an entry here only when the record itself is
+# corrected.
+#
+# EMPTY since 2026-07-26.  Both former entries -- relics/spiked_gauntlets.py:26-32
+# (file ends at 31) and relics/fiddle.py:26-31 (ends at 29) -- were corrected at
+# source by the relic stream, which read the real line ranges while auditing
+# those two relics, and the fixes arrived with the relic-tier merge.  Keep the
+# mechanism: the next mechanically-found stale citation goes here until its
+# record catches up.
+_KNOWN_BAD_CITATIONS: set[str] = set()
 
 
 def _candidates(name: str):

@@ -21,16 +21,24 @@ they are what the tools in `tools/` do. They never judge faithfulness.
 
 ## Status
 
-**Audited and merged here: all 6 engine seams, plus the power, card, event and
-enchantment content tiers — 428 records, 0 invalid, 0 stale.** Every one has
-been through an independent review pass and a fix pass.
+**Audited and merged here: all 6 engine seams, plus the power, card, event,
+enchantment and relic content tiers — 686 records, 0 invalid.** Every one has
+been through an independent review pass and a fix pass. The relic tier (258
+records) merged on 2026-07-26.
 
-**Not audited at all: `relic` (258 units) and `monster` (109).** The relic
-stream is still running in a sibling worktree; the monster stream is gated on
-the `monster_state_machine` seam, which is now done, so it can start. Anything
-here that reads as a whole-project claim covers **4 of the 6 content kinds** —
-367 units are simply not looked at yet, and `GAP-QUEUE.md` says so in its
-header too.
+**Not audited at all: `monster` (109 units).** That stream is gated on the
+`monster_state_machine` seam, which is done, so it can start. Anything here that
+reads as a whole-project claim covers **5 of the 6 content kinds** — 109 units
+are simply not looked at yet, and `GAP-QUEUE.md` says so in its header too.
+
+**What the relic merge did to the tiers that were already "done" is the reason
+to keep that caveat loud.** Merging one kind did not merely append its own
+gaps: it unblocked `power/diamond_diadem` (whose verdict had been waiting on a
+record that did not exist), corrected two stale seam citations, flipped a seam
+`waiver` to a `gap` by disproving its "no ported listener" claim, raised a seam
+guard from dormant to LIVE, and turned up **`UnmovablePower` × `Entrench`** — a
+live gap that the `power` and `seam` records had between them recorded as
+`faithful` and omitted from a census. Expect the same from `monster`.
 
 Do not trust a status number written in prose, including in this file. Run it:
 
@@ -48,14 +56,25 @@ Three things to expect from that output rather than be surprised by:
 - **Most records roll up to `gap`**, because one gap anywhere in a record makes
   the record a gap. Gaps are **queued, not fixed** — a standing decision, not
   an oversight.
-- **The `live` column reads 0** even though 251 gap entries are labelled live
-  in prose. The `live` boolean is a new field and no record populates it yet;
-  until they do, liveness lives in `GAP-QUEUE.md`, not in the status table.
+- **The `live` column is nearly all zero** even though most gap entries are
+  labelled live in prose. The `live` boolean is a newer field; the relic tier's
+  fix pass is the first to populate it as data, so `relic` and one `power`
+  record report a real number and everything else reports 0 because nothing was
+  stated, not because nothing is live. Until the other tiers catch up, liveness
+  lives in `GAP-QUEUE.md` rather than in the status table.
 
-> **Content gaps have no acceptance tests.** All 31 pins are seam-tier; not one
-> of the 372 content mechanisms has a `strict=True` xfail. A seam fix proves
-> itself by flipping a pin red-to-green — a content fix currently cannot. Adding
-> pins as gaps are worked is the cheapest way to keep that from rotting.
+> **Content gaps still have no acceptance tests of their own.** All 31 pinned
+> mechanisms are seam-anchored; not one content-anchored mechanism has a
+> `strict=True` xfail. The relic merge softened this without fixing it — relic
+> entries now sit under four *already-pinned* seam mechanisms
+> (`damage_pipeline/G3`, `hook_dispatch/G3`, `hook_dispatch/G4`,
+> `turn_structure/G13`), so those particular relic gaps can prove themselves.
+> Every other content fix still cannot. Adding pins as gaps are worked is the
+> cheapest way to keep that from rotting, and `GAP-QUEUE.md` entry 51
+> (`relic/_combat_reset`, 16 sites, one parametrised test) is the highest-value
+> place to start. Note the ownership snag: `test/test_hook_order.py` is
+> seam-tier-owned, so content pins need either that ownership widened or a
+> sibling module the same `gap_queue.py pins` scanner reads.
 
 ---
 
@@ -65,11 +84,11 @@ Three things to expect from that output rather than be surprised by:
 audit/
   README.md          you are here
   GAP-QUEUE.md       every gap in every audited kind, de-duplicated by
-                     mechanism, ordered for work (relic + monster are unaudited)
+                     mechanism, ordered for work (monster is unaudited)
   records/
     seam/*.json      the 6 engine-seam audit records — the evidence
-    power/ card/ event/ enchantment/                    422 content records
-    relic/ monster/                                     empty; stream never run
+    power/ card/ event/ enchantment/ relic/             680 content records
+    monster/                                            empty; stream never run
   seams/*.md         the 6 seam narration docs — the ordering specs
   tools/             the harness, the status tool, the queue generator, probes
   prompts/           the shared contract + the 8 stream prompts
@@ -94,28 +113,33 @@ dormant.
 | **B** | state divergence — changes a damage/block/HP number, a hand, a pile, a deck entry; the next conformance assert fires |
 | **C** | bookkeeping only — hook order or event identity, no numeric effect on ported content |
 
-**The queue covers 4 of the 6 content kinds.** `seam`, `power`, `card`, `event`
-and `enchantment` are in it; **`relic` (258 units) and `monster` (109) are not
-audited at all**, so a mechanism that lives only there is missing from the queue
-because nobody looked, not because it was cleared. The queue's header says so
-first, before any number.
+**The queue covers 5 of the 6 content kinds.** `seam`, `power`, `card`, `event`,
+`enchantment` and `relic` are in it; **`monster` (109 units) is not audited at
+all**, so a mechanism that lives only there is missing from the queue because
+nobody looked, not because it was cleared. The queue's header says so first,
+before any number.
 
-**Entries are not jobs.** 788 gap entries across the 428 records de-duplicate to
-403 mechanisms, and 78 of those mechanisms carry 463 of the entries between
-them. The largest — the `AfterSideTurnEnd` slot wiring and the unplayable-card
-cost model — are recorded at 29 sites each; the enchantment-clone gap is
-recorded on **all 17** enchantment records. Fixing one site of a mechanism
-generally clears all of them, so treating the entries as independent overstates
-the work badly, and the overstatement is worse in the content tiers than it was
-at the seam tier. Do not reuse the figures in this paragraph — re-run
+**Entries are not jobs, and the relic tier is the sharpest illustration yet.**
+1410 gap entries across the 686 records de-duplicate to 809 mechanisms; the
+relic tier alone contributes 620 entries that collapse to 404, with 16 recurring
+families carrying 227 of them. The extreme case is `relic/_is_allowed` — **34
+recorded sites and one missing base-class member.** The largest cross-kind
+mechanism is now `hook_dispatch/G4` at 36 sites across four kinds.
+
+Fixing one site of a mechanism generally clears all of them, so treating the
+entries as independent overstates the work badly, and the overstatement is worse
+in the content tiers than it was at the seam tier. Do not reuse the figures in
+this paragraph — re-run
 `py audit/tools/gap_queue.py counts`. The queue is organised by mechanism, and
 each one carries a **fix recipe**: sites, impact grade, divergence
 (sim `file:line` vs C# `file:line`), observable, dormancy trigger, pin, which
 sim file changes and roughly how, and the blast radius.
 
-**The pins are the acceptance test.** 31 mechanisms — all of them seam-tier — are
-pinned by a `strict=True` xfail in `test/test_hook_order.py`; **no content-tier
-mechanism has a pin yet.** Strict means the
+**The pins are the acceptance test.** 31 mechanisms — all of them
+seam-*anchored* — are pinned by a `strict=True` xfail in
+`test/test_hook_order.py`; **no content-anchored mechanism has a pin of its
+own**, though since the relic merge some content entries do fall under four
+already-pinned seam mechanisms. Strict means the
 test *fails* if it unexpectedly passes — so when you fix the gap the pin flips
 from xfail to a failure, and you delete the marker in the same commit. That is
 the fix's proof. `py audit/tools/gap_queue.py pins` lists what is pinned and
@@ -196,7 +220,7 @@ The enumeration follows the unit's **immediate base class**, which normally
 lives in another file: `FlexPotionPower.cs` declares one member and inherits
 seven from `TemporaryStrengthPower`, so the record owes eight verdicts, not one.
 Following stops at the framework roots (`PowerModel`, `CardModel`, …) — that
-layer is audited once by the seam tier, not 422 times.
+layer is audited once by the seam tier, not 680 times.
 
 A hook key is matched on the identifier it starts with, so a record may annotate
 one with provenance: `"Type (inherited, TemporaryStrengthPower.cs:32-42)"`.
