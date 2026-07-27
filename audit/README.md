@@ -21,49 +21,37 @@ they are what the tools in `tools/` do. They never judge faithfulness.
 
 ## Status
 
-**The engine-seam tier is complete: 6 of 6 seams audited, 0 stale, 0 invalid.
-The content tier has not started: 0 of 786 units.**
+**What is established: the engine-seam tier is complete — 6 of 6 seams
+audited, 0 invalid.** That is the claim this folder supports with evidence.
 
-`py audit/tools/audit_status.py` (2026-07-26):
+**The content tier is in progress, and none of it is on this branch.** The
+relic, power, card and event+enchantment streams are running in sibling
+worktrees and have written several hundred records between them. So the
+content rows below read 0 because nothing has been *merged here* — not
+because the work has not started.
 
-```
-kind         total  audited  invalid  stale  gaps  unaudited
-card           203        0        0      0     0        203
-enchantment     17        0        0      0     0         17
-event           65        0        0      0     0         65
-monster        109        0        0      0     0        109
-power          134        0        0      0     0        134
-relic          258        0        0      0     0        258
-seam             6        6        0      0     6          0
-```
-
-`py audit/tools/gap_queue.py counts`:
+Do not trust a status number written in prose, including in this file. Run it:
 
 ```
-gap entries        : 224
-  labelled live    : 46
-  labelled dormant : 75
-  unlabelled       : 103 (inherit their mechanism's liveness)
-  in a LIVE mech   : 81
-  in a dormant mech: 143
-distinct mechanisms: 90
-  with a live entry: 23
-  pinned           : 31
-  unpinned         : 59
-strict xfail pins  : 32 (of 32 xfail decorators in test/test_hook_order.py)
+py audit/tools/audit_status.py      # coverage, staleness, gaps, per kind
+py audit/tools/gap_queue.py counts  # gap entries, mechanisms, pins
 ```
 
-Every seam rolls up to `gap`, which is the rollup rule working, not a failure:
-one gap anywhere in a record makes the record a gap. Gaps are **queued, not
-fixed** — that is a standing decision, not an oversight.
+Two things to expect from that output rather than be surprised by:
 
-> **Content records exist, but not on this branch yet.** The relic, power, card
-> and event+enchantment streams are running in sibling worktrees off older
-> `audit-pipeline` commits, and between them have already written several
-> hundred records — at the **pre-restructure** path `audits/<kind>/*.json`.
-> Merging one of those branches drops its records at that old path, beside the
-> empty `audit/records/<kind>/` here, and the status table will keep reading 0
-> until they are moved. See *Merge order* in
+- **`stale` is nonzero whenever `sts2_rl/` has uncommitted edits.** Records
+  hash the sim files they audited, so any working-tree change to an audited
+  file marks its records stale on sight. That is the detector working. See
+  [Staleness](#staleness).
+- **Every seam rolls up to `gap`**, because one gap anywhere in a record makes
+  the record a gap. Gaps are **queued, not fixed** — a standing decision, not
+  an oversight.
+
+> **Merging a content stream needs one extra step.** Those streams were cut
+> before this folder existed and write to the **pre-restructure** path
+> `audits/<kind>/*.json`. Merging one drops its records there, beside the empty
+> `audit/records/<kind>/` here, and the status table will keep reading 0 until
+> they are moved. See *Merge order* in
 > [`prompts/README-parallel-streams.md`](prompts/README-parallel-streams.md)
 > for the one-line repath.
 
@@ -102,22 +90,24 @@ dormant.
 | **B** | state divergence — changes a damage/block/HP number, a hand, a pile, a deck entry; the next conformance assert fires |
 | **C** | bookkeeping only — hook order or event identity, no numeric effect on ported content |
 
-**224 entries are not 224 jobs.** They de-duplicate to **90 mechanisms**. The
-largest one — the missing `IsEnding`/`IsOverOrEnding` dispatch gate — is
-recorded at 22 sites across three records; the missing
+**Entries are not jobs.** At the seam tier, 224 entries de-duplicate to 90
+mechanisms. The largest one — the missing `IsEnding`/`IsOverOrEnding` dispatch
+gate — is recorded at 22 sites across three records; the missing
 `AfterModifyingXxx(modifiers)` companion events at 12. Fixing one site of a
 mechanism generally clears all of them, so treating the entries as independent
-overstates the work by roughly 2.5x. The queue is organised by mechanism, and
+overstates the work by roughly 2.5x. Expect the same ratio to hold as content
+records land and the queue grows — re-run `py audit/tools/gap_queue.py counts`
+rather than reusing the figures above. The queue is organised by mechanism, and
 each one carries a **fix recipe**: sites, impact grade, divergence
 (sim `file:line` vs C# `file:line`), observable, dormancy trigger, pin, which
 sim file changes and roughly how, and the blast radius.
 
-**The pins are the acceptance test.** 31 of the 90 mechanisms are pinned by a
-`strict=True` xfail in `test/test_hook_order.py`. Strict means the test *fails*
-if it unexpectedly passes — so when you fix the gap the pin flips from xfail to
-a failure, and you delete the marker in the same commit. That is the fix's
-proof. `py audit/tools/gap_queue.py unpinned` lists the 59 mechanisms with no
-pin yet.
+**The pins are the acceptance test.** A third of the seam-tier mechanisms are
+pinned by a `strict=True` xfail in `test/test_hook_order.py`. Strict means the
+test *fails* if it unexpectedly passes — so when you fix the gap the pin flips
+from xfail to a failure, and you delete the marker in the same commit. That is
+the fix's proof. `py audit/tools/gap_queue.py pins` lists what is pinned and
+`unpinned` lists the mechanisms with no pin yet.
 
 Fixing anything in `sts2_rl/` marks the records that hashed those files stale
 — see [Staleness](#staleness). That is why fixes run as their own stream
