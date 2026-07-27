@@ -711,14 +711,27 @@ def _hash_sources(paths: list[str], base: Path) -> list[dict]:
 
 
 def skeleton(unit: str, game_root: Path | None = None,
-             audits_dir: Path | None = None) -> Path:
+             audits_dir: Path | None = None, sim_only: bool = False) -> Path:
     """Write audit/records/<kind>/<id>.json with hooks/steps enumerated and
     verdicts empty, ready for an agent to fill in. Refuses to overwrite."""
     root = game_root or DEFAULT_GAME_ROOT
     adir = audits_dir or DEFAULT_AUDITS_DIR
     kind, _, unit_id = unit.partition("/")
 
-    if kind == "seam":
+    if sim_only:
+        row = next(r for r in roster(kind, root) if r["unit"] == unit)
+        record = {
+            "unit": unit,
+            "sim_only": True,
+            "rationale": "",
+            "sim_source": {"path": row["sim_path"],
+                           "sha256": file_sha256(_REPO / row["sim_path"])},
+            "hooks": {},
+            "guards": [],
+            "verdict": "",
+            "audited": "",
+        }
+    elif kind == "seam":
         game_paths, sim_paths = SEAM_SOURCES[unit_id]
         record: dict = {
             "unit": unit,
@@ -864,6 +877,29 @@ def validate_record(record: dict, game_root: Path | None = None,
                 errs.append(f"steps[{i}]: 'what' required")
             _check_entry(f"steps[{i}]", s, errs)
         entries += steps
+    elif record.get("sim_only") is not None and record.get("sim_only") is not False:
+        # A unit the sim has and the game does not (a test fixture, a
+        # scaffold). It cannot carry a game_source, so the ordinary shape
+        # rejects it and audit_status shows it unaudited forever. Recording it
+        # as sim-only-by-design is a CLAIM, so it costs a rationale.
+        if record.get("sim_only") is not True:
+            errs.append(f"sim_only must be true, got {record['sim_only']!r}")
+        if record.get("game_source"):
+            errs.append("sim_only record must not carry a game_source")
+        src = record.get("sim_source") or {}
+        if not src.get("path") or not src.get("sha256"):
+            errs.append("sim_source: path and sha256 required")
+        elif not (_REPO / src["path"]).is_file():
+            errs.append(f"sim source not found: {_REPO / src['path']}")
+        if not record.get("rationale"):
+            errs.append("sim_only requires a rationale naming why the unit has "
+                        "no C# counterpart")
+        if record.get("verdict") not in VERDICTS:
+            errs.append(f"verdict {record.get('verdict')!r} not one of {VERDICTS}")
+        hooks = record.get("hooks") or {}
+        for name, entry in hooks.items():
+            _check_entry(f"hooks[{name}]", entry, errs)
+        entries += list(hooks.values())
     else:
         for side in ("game_source", "sim_source"):
             src = record.get(side) or {}
@@ -994,6 +1030,9 @@ def main(argv: list[str] | None = None) -> int:
     ap_roster.add_argument("kind", nargs="?", choices=sorted(GAME_MODEL_DIRS))
     ap_skel = sub.add_parser("skeleton", help="write a record skeleton")
     ap_skel.add_argument("unit", help="e.g. relic/unsettling_lamp or seam/power_cmd")
+    ap_skel.add_argument(
+        "--sim-only", action="store_true",
+        help="unit exists in the sim with no C# counterpart (needs a rationale)")
     ap_val = sub.add_parser("validate", help="validate audit records")
     ap_val.add_argument("paths", nargs="*", help="record files (default: all)")
     ap_val.add_argument(
@@ -1022,7 +1061,7 @@ def main(argv: list[str] | None = None) -> int:
             for x in unmatched:
                 print(f"  UNMATCHED {x['unit']} -> expected {x['game_path']}")
     if args.cmd == "skeleton":
-        out = skeleton(args.unit)
+        out = skeleton(args.unit, sim_only=args.sim_only)
         print(f"wrote {out}")
     if args.cmd == "validate":
         paths = ([Path(p) for p in args.paths]

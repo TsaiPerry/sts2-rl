@@ -148,6 +148,24 @@ carrying at least one `live: true` entry. Absence means *not stated* — 64 of
 the 258 power gap entries carried neither a `LIVE` nor a `dormant` token
 anywhere, and nothing could tell them apart from the dormant ones.
 
+### Sim-only units
+
+A handful of sim units have no C# counterpart at all — `card/sweep` is
+`sts2_rl/cards/sweep.py` with no `Sweep.cs`. The ordinary record shape requires
+a `game_source`, so those units could not be recorded and read as permanently
+unaudited. Generate them with `harness.py skeleton <unit> --sim-only`:
+
+```json
+{"unit": "card/sweep", "sim_only": true,
+ "rationale": "why the unit has no C# counterpart",
+ "sim_source": {"path": "…", "sha256": "…"}, "hooks": {}, "guards": [],
+ "verdict": "waiver", "audited": "YYYY-MM-DD"}
+```
+
+"There is no C# side" is a **claim**, so the shape costs a `rationale`, a
+verdict and a date like any other, and its `sim_source` is hashed and goes
+stale normally. It counts as audited.
+
 ### Rollup rule
 
 Precedence low→high is exactly the order above. A record's `verdict` must equal
@@ -187,7 +205,7 @@ All run from the repo root. None of them judges faithfulness.
 |---|---|
 | `py audit/tools/audit_status.py` | the coverage / staleness / gap table above. `--strict` exits 1 on stale, gaps or unaudited; exit 2 means an invalid record |
 | `py audit/tools/harness.py roster <kind>` | the work queue for one kind: every sim unit joined to its C# model file, plus unmatched units and unported C# files |
-| `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite |
+| `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite. `--sim-only` for a unit with no C# counterpart |
 | `py audit/tools/harness.py validate` | completeness + vocabulary check over every record. **Staleness is not validation's job** |
 | `py audit/tools/harness.py rehash <unit>` | re-pins a record's source hashes after a re-audit. **Not a re-audit** — see [Staleness](#staleness) |
 | `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from the records — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json` |

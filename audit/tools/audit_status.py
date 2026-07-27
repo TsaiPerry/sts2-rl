@@ -43,6 +43,8 @@ def _is_stale(record: dict, unit: str, game_root: Path) -> bool:
     if unit.startswith("seam/"):
         return (any(drifted(s, game_root) for s in record.get("game_sources", []))
                 or any(drifted(s, _REPO) for s in record.get("sim_sources", [])))
+    if record.get("sim_only"):
+        return drifted(record.get("sim_source", {}), _REPO)
     return (drifted(record.get("game_source", {}), game_root)
             or drifted(record.get("sim_source", {}), _REPO))
 

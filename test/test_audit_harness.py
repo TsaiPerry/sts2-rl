@@ -369,6 +369,87 @@ class TestValidateRecord:
         assert any("steps" in e for e in errs)
 
 
+class TestSimOnlyRecord:
+    """`card/sweep` has sts2_rl/cards/sweep.py and no Sweep.cs, so the
+    ordinary shape could not express it and it read as permanently
+    unaudited."""
+
+    def _rec(self, **over):
+        rec = {
+            "unit": "card/sweep",
+            "sim_only": True,
+            "rationale": "sim-only test fixture; no Sweep.cs in the game source",
+            "sim_source": {"path": "sts2_rl/cards/sweep.py",
+                           "sha256": harness.file_sha256(
+                               harness._REPO / "sts2_rl/cards/sweep.py")},
+            "hooks": {},
+            "guards": [],
+            "verdict": "waiver",
+            "audited": "2026-07-26",
+        }
+        rec.update(over)
+        return rec
+
+    def test_validates_without_a_game_source(self, tmp_path):
+        assert harness.validate_record(self._rec(), game_root=tmp_path) == []
+
+    def test_rationale_required(self, tmp_path):
+        errs = harness.validate_record(self._rec(rationale=""),
+                                       game_root=tmp_path)
+        assert any("rationale" in e for e in errs)
+
+    def test_game_source_rejected(self, tmp_path):
+        errs = harness.validate_record(
+            self._rec(game_source={"path": "X.cs", "sha256": "0" * 64}),
+            game_root=tmp_path)
+        assert any("must not carry a game_source" in e for e in errs)
+
+    def test_sim_source_must_exist(self, tmp_path):
+        errs = harness.validate_record(
+            self._rec(sim_source={"path": "sts2_rl/nope.py",
+                                  "sha256": "0" * 64}),
+            game_root=tmp_path)
+        assert any("sim source not found" in e for e in errs)
+
+    def test_verdict_still_required(self, tmp_path):
+        errs = harness.validate_record(self._rec(verdict=""),
+                                       game_root=tmp_path)
+        assert any("verdict" in e for e in errs)
+
+    def test_entries_still_roll_up(self, tmp_path):
+        rec = self._rec(
+            hooks={"play": {"maps_to": "on_play", "verdict": "faithful"}},
+            guards=[{"what": "x", "verdict": "gap", "issue": "y"}],
+            verdict="faithful")
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("rollup" in e for e in errs)
+
+    def test_sim_only_false_takes_the_ordinary_path(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["sim_only"] = False
+        assert harness.validate_record(rec, game_root=tmp_path) == []
+
+    def test_sim_only_must_be_a_bool(self, tmp_path):
+        errs = harness.validate_record(self._rec(sim_only="yes"),
+                                       game_root=tmp_path)
+        assert any("sim_only must be true" in e for e in errs)
+
+    def test_skeleton_writes_the_sim_only_shape(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: [{
+            "unit": "card/sweep",
+            "sim_path": "sts2_rl/cards/sweep.py",
+            "game_path": "src/Core/Models/Cards/Sweep.cs",
+            "game_exists": False,
+        }])
+        out = harness.skeleton("card/sweep", game_root=tmp_path,
+                               audits_dir=tmp_path / "records", sim_only=True)
+        rec = json.loads(out.read_text(encoding="utf-8"))
+        assert rec["sim_only"] is True
+        assert "game_source" not in rec
+        assert rec["rationale"] == ""      # the agent must supply it
+        assert rec["sim_source"]["sha256"]
+
+
 class TestGapLiveness:
     """`live` turns a LIVE/dormant prose token into data. Optional: gap
     entries written before it existed stay valid."""
