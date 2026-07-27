@@ -26,7 +26,7 @@
     "ShouldStopCombatFromEnding": {
       "maps_to": "no sim counterpart",
       "verdict": "gap",
-      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here."
+      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here. ENGINE-LEVEL HOME (added 2026-07-26): this mechanism now also carries `gap` at audits/seam/creature_card_cmds.json step 8c, which owns the missing hook surface itself; same verdict at every site per rule 3."
     }
   },
   "guards": [
