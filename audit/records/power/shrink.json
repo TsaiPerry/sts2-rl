@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:64-66 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "ShrinkPower.cs:26-36 is the only DYNAMIC StackType among the 134 ported powers: Counter while finite, Single once IsInfinite (Amount < 0). The sim models no StackType. Inert here: the only non-presentation reader is GetTypeForAmount, and at a negative amount StackType is Single so the Counter&&AllowNegative arm cannot fire while the !AllowNegative&&Debuff arm is excluded by AllowNegative, leaving Type == Debuff -- the same answer the sim's static attribute gives. Executed: `py tools/audit/power_census.py typing` shows shrink with neither arm set."
+      "rationale": "ShrinkPower.cs:26-36 is the only DYNAMIC StackType among the 134 ported powers: Counter while finite, Single once IsInfinite (Amount < 0). The sim models no StackType. Inert here: the only non-presentation reader is GetTypeForAmount, and at a negative amount StackType is Single so the Counter&&AllowNegative arm cannot fire while the !AllowNegative&&Debuff arm is excluded by AllowNegative, leaving Type == Debuff -- the same answer the sim's static attribute gives. Executed: `py audit/tools/power_census.py typing` shows shrink with neither arm set."
     },
     "AllowNegative": {
       "maps_to": "powers.py:1366-1400 ShrinkPower (no allow_negative)",
@@ -46,7 +46,7 @@
     "ModifyDamageMultiplicative": {
       "maps_to": "powers.py:1378-1387 ShrinkPower.modify_damage_multiplicative",
       "verdict": "gap",
-      "issue": "NON-DYADIC FACTOR. C# computes `(100m - DamageDecrease) / 100m` in DECIMAL from the DynamicVar (ShrinkPower.cs:105, DamageDecrease = 30m at :18/:44) = exactly 0.7m; the sim returns the float literal 0.7 (powers.py:1386), which is not a binary fraction. This is the executed witness for hook_dispatch gap G9 (the sim multiplies the factors together in float and applies the product once, where C# folds each into a running decimal): Shrink x0.7 with Vulnerable x1.5 on a 20-damage attack gives the sim 20 and the game 21. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded here because the FACTOR is this unit's, and because a census of every literal operand in the sim's multiplicative power hooks (`py tools/audit/power_census.py multipliers`) finds exactly two non-dyadic values, both on damage: this 0.7 and SlowPower's 0.1. Every ported BLOCK multiplier stays dyadic, so hook_dispatch's block-site dormancy argument is unaffected. Third-file citations, not hashed here."
+      "issue": "NON-DYADIC FACTOR. C# computes `(100m - DamageDecrease) / 100m` in DECIMAL from the DynamicVar (ShrinkPower.cs:105, DamageDecrease = 30m at :18/:44) = exactly 0.7m; the sim returns the float literal 0.7 (powers.py:1386), which is not a binary fraction. This is the executed witness for hook_dispatch gap G9 (the sim multiplies the factors together in float and applies the product once, where C# folds each into a running decimal): Shrink x0.7 with Vulnerable x1.5 on a 20-damage attack gives the sim 20 and the game 21. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded here because the FACTOR is this unit's, and because a census of every literal operand in the sim's multiplicative power hooks (`py audit/tools/power_census.py multipliers`) finds exactly two non-dyadic values, both on damage: this 0.7 and SlowPower's 0.1. Every ported BLOCK multiplier stays dyadic, so hook_dispatch's block-site dormancy argument is unaffected. Third-file citations, not hashed here."
     }
   },
   "guards": [

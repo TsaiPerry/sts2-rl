@@ -41,7 +41,7 @@
     {
       "what": "FrailPower.cs:22 the 0.75m literal",
       "verdict": "faithful",
-      "rationale": "powers.py:459 returns 0.75. Unlike Weak's and Shrink's, this factor is hard-coded in C# too (no DynamicVar) and 3/4 is dyadic, so the sim's float product equals C#'s decimal fold -- this is one of the five binary-exact block factors hook_dispatch's block-site dormancy argument rests on. Executed: `py tools/audit/power_census.py multipliers`."
+      "rationale": "powers.py:459 returns 0.75. Unlike Weak's and Shrink's, this factor is hard-coded in C# too (no DynamicVar) and 3/4 is dyadic, so the sim's float product equals C#'s decimal fold -- this is one of the five binary-exact block factors hook_dispatch's block-site dormancy argument rests on. Executed: `py audit/tools/power_census.py multipliers`."
     },
     {
       "what": "AfterSideTurnEnd slot and tick verb",

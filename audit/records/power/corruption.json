@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:594-595 on_stack -> pass",
       "verdict": "gap",
-      "issue": "Same PowerStackType.Single misreading as power/hellraiser's StackType entry -- C# adds at PowerCmd.cs:236 regardless. Dormant: Corruption reads Amount nowhere. One of the 15 units in `py tools/audit/power_census.py stack`."
+      "issue": "Same PowerStackType.Single misreading as power/hellraiser's StackType entry -- C# adds at PowerCmd.cs:236 regardless. Dormant: Corruption reads Amount nowhere. One of the 15 units in `py audit/tools/power_census.py stack`."
     },
     "TryModifyEnergyCostInCombatLate": {
       "maps_to": "powers.py:597-601 CorruptionPower.modify_card_energy_cost (hooks.py:196-201)",

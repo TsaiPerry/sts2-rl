@@ -43,7 +43,7 @@
     {
       "what": "0.75 is exactly representable in binary",
       "verdict": "faithful",
-      "rationale": "3/4 is dyadic, so the sim's float and C#'s decimal agree bit-for-bit here and Weak does not widen hook_dispatch G9. Executed: `py tools/audit/power_census.py multipliers`."
+      "rationale": "3/4 is dyadic, so the sim's float and C#'s decimal agree bit-for-bit here and Weak does not widen hook_dispatch G9. Executed: `py audit/tools/power_census.py multipliers`."
     }
   ],
   "verdict": "gap",

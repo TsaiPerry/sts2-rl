@@ -16,12 +16,12 @@
     "StackType": {
       "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Single, and the sim leaves Power.on_stack alone, so both sides add on re-application -- PowerCmd.ModifyAmount:236 has no StackType branch and Single only means 'Amount is hidden' (PowerStackType.cs:10-13). Correct, unlike the 15 units that override on_stack to a no-op citing the same StackType (py tools/audit/power_census.py stack). Inert either way: nothing reads Diamond Diadem's Amount on either side -- it is a flat halving that lasts one enemy turn -- and the sole ported applier (relics/diamond_diadem.py:37) applies 1 once per qualifying turn end, removing it before the next application."
+      "rationale": "PowerStackType.Single, and the sim leaves Power.on_stack alone, so both sides add on re-application -- PowerCmd.ModifyAmount:236 has no StackType branch and Single only means 'Amount is hidden' (PowerStackType.cs:10-13). Correct, unlike the 15 units that override on_stack to a no-op citing the same StackType (py audit/tools/power_census.py stack). Inert either way: nothing reads Diamond Diadem's Amount on either side -- it is a flat halving that lasts one enemy turn -- and the sole ported applier (relics/diamond_diadem.py:37) applies 1 once per qualifying turn end, removing it before the next application."
     },
     "ModifyDamageMultiplicative": {
       "maps_to": "powers.py:2720-2731 DiamondDiademPower.modify_damage_multiplicative (hooks.py:66-78, cmds.py:58)",
       "verdict": "faithful",
-      "rationale": "0.5 for powered attacks against the owner, 1 otherwise. Both C# guards are present, one structurally: target != base.Owner (DiamondDiademPower.cs:23-26 vs powers.py:2729-2730) and !props.IsPoweredAttack() (:27-30), which the sim gets from DamageCmd.deal gating the multiplier families on is_powered_attack (cmds.py:56-58) -- the sim's own comment at powers.py:2727-2728 says so. 0.5 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py tools/audit/power_census.py multipliers, which lists it among the safe factors)."
+      "rationale": "0.5 for powered attacks against the owner, 1 otherwise. Both C# guards are present, one structurally: target != base.Owner (DiamondDiademPower.cs:23-26 vs powers.py:2729-2730) and !props.IsPoweredAttack() (:27-30), which the sim gets from DamageCmd.deal gating the multiplier families on is_powered_attack (cmds.py:56-58) -- the sim's own comment at powers.py:2727-2728 says so. 0.5 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py audit/tools/power_census.py multipliers, which lists it among the safe factors)."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2733-2734 on_enemy_side_end -> Power._expire (combat.py:345)",
@@ -31,9 +31,9 @@
   },
   "guards": [
     {
-      "what": "The applier's own condition",
-      "verdict": "waiver",
-      "rationale": "DiamondDiadem.cs grants the power at turn end only when the player played few enough cards; the ported relic reproduces that (relics/diamond_diadem.py:33-37, applier=player). That condition belongs to audits/relic/diamond_diadem and is not re-judged here. The POWER's own behaviour is audited in full above."
+      "what": "The applier's own condition (DiamondDiadem.cs) -- BLOCKED ON THE RELIC TIER",
+      "verdict": "gap",
+      "issue": "RE-VERDICTED 2026-07-26 (review fix pass): `waiver` -> `gap`. The old rationale delegated the applier's condition to `audits/relic/diamond_diadem`, WHICH DOES NOT EXIST -- the relic tier is 0 of 258 audited -- so under binding rule 4 (a guard carries max(verdict) of what it aggregates) it was waiving an unaudited verdict, and `waiver` is reserved for genuinely out-of-scope material in any case. Re-verdicted on this record's own evidence, because whether the applier fires when the game's does IS this power's reachability. C# (DiamondDiadem.cs) does three things: counts plays in AfterCardPlayed behind `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (:43-56); grants the power from BeforeSideTurnEnd when `CardsPlayedThisTurn <= CardThreshold` (2) and then zeroes the counter (:58-70); and **zeroes the counter again in AfterCombatEnd (:78-84)**. The sim's relic (relics/diamond_diadem.py:28-39) reproduces the first two -- `on_player_turn_end` IS the Hook.BeforeSideTurnEnd slot (combat.py:654; same finding as this stream's power/the_bomb BeforeSideTurnEnd entry), the threshold is 2 and the turn-end reset is there -- but it has NO combat-end reset. **EXECUTED 2026-07-26:** play two harmless cards, then kill the last enemy with a third. The combat ends inside play_card (combat.py:417-418), so `on_player_turn_end` never runs and the relic instance keeps `cards_played_this_turn == 3`; carried into the next combat, turn 1 of that fight grants NO Diamond Diadem power (3 > 2) where the game grants it, because AfterCombatEnd had reset the counter. So the POWER silently fails to appear for a turn of a later fight -- reachability, which is exactly what this guard is for. OWNERSHIP: the FIX belongs to the relic tier (`audits/relic/diamond_diadem`, unwritten), so this entry is the explicit blocked-on-relic-tier marker and cannot be closed from here. Seen and NOT part of the gap: `cardPlay.Card.Owner != base.Owner` is the multiplayer card-owner test, and ShowCounter / DisplayAmount / RefreshCounter / Status are presentation. Third-file citations, not hashed here."
     },
     {
       "what": "Halving on a MULTI-HIT attack",
@@ -41,6 +41,6 @@
       "rationale": "Neither side latches a command the way power/gigantification does, so the 0.5 applies to every hit of a multi-hit attack independently, and integer truncation happens per hit on both sides (C# rounds the decimal at the damage site, the sim at cmds.py:58's int()). Same observable for the ported content."
     }
   ],
-  "verdict": "waiver",
+  "verdict": "gap",
   "audited": "2026-07-26"
 }

@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:704-705 on_stack -> pass",
       "verdict": "gap",
-      "issue": "The sim drops a re-application's offset on the strength of a misreading of PowerStackType.Single. Single means only 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13); PowerCmd.ModifyAmount:236 adds the offset with no StackType branch, so playing Hellraiser twice gives C# Amount 2 and the sim Amount 1. DORMANT for this unit -- Hellraiser reads Amount nowhere, so the value is inert. Recorded because this is one of 15 ported powers that make the same misreading (reproduce with `py tools/audit/power_census.py stack`), and for the others Amount is load-bearing. Named trigger: any Hellraiser behaviour that reads Amount. Third-file citations, not hashed here."
+      "issue": "The sim drops a re-application's offset on the strength of a misreading of PowerStackType.Single. Single means only 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13); PowerCmd.ModifyAmount:236 adds the offset with no StackType branch, so playing Hellraiser twice gives C# Amount 2 and the sim Amount 1. DORMANT for this unit -- Hellraiser reads Amount nowhere, so the value is inert. Recorded because this is one of 15 ported powers that make the same misreading (reproduce with `py audit/tools/power_census.py stack`), and for the others Amount is load-bearing. Named trigger: any Hellraiser behaviour that reads Amount. Third-file citations, not hashed here."
     },
     "AfterCardDrawnEarly": {
       "maps_to": "powers.py:707-713 HellraiserPower.on_card_drawn (hooks.py:391-400)",

@@ -43,7 +43,7 @@
     {
       "what": "Applying Thorns with a NEGATIVE amount",
       "verdict": "faithful",
-      "rationale": "Thorns is one of only five powers the whole C# source ever applies negatively -- SpinyToad.cs:-5 and Toadpole.cs:-SpikenAmount spend the Thorns they built up (executed: `py tools/audit/power_census.py neg-appliers`) -- and it is NOT AllowNegative, so ShouldRemoveDueToAmount (PowerModel.cs:478-489) removes it at <= 0. The sim agrees: ThornsPower leaves allow_negative False and cmds.py:317-319 expires the power at amount == 0 or below. Both ported spenders subtract exactly what they added (spiny_toad.py:45,51; toadpole.py:66,75), so the amount lands on 0 and both sides remove. Sign-aware typing is inert here for a third reason: with AllowNegative false and Type Buff, NEITHER GetTypeForAmount arm fires, so the type is Buff for every sign on both sides. Third-file citations, not hashed here."
+      "rationale": "Thorns is one of only five powers the whole C# source ever applies negatively -- SpinyToad.cs:-5 and Toadpole.cs:-SpikenAmount spend the Thorns they built up (executed: `py audit/tools/power_census.py neg-appliers`) -- and it is NOT AllowNegative, so ShouldRemoveDueToAmount (PowerModel.cs:478-489) removes it at <= 0. The sim agrees: ThornsPower leaves allow_negative False and cmds.py:317-319 expires the power at amount == 0 or below. Both ported spenders subtract exactly what they added (spiny_toad.py:45,51; toadpole.py:66,75), so the amount lands on 0 and both sides remove. Sign-aware typing is inert here for a third reason: with AllowNegative false and Type Buff, NEITHER GetTypeForAmount arm fires, so the type is Buff for every sign on both sides. Third-file citations, not hashed here."
     }
   ],
   "verdict": "gap",

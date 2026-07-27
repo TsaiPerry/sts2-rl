@@ -51,7 +51,7 @@
     {
       "what": "ColossusPower.cs:44 the DamageDecrease DynamicVar",
       "verdict": "faithful",
-      "rationale": "The sim hard-codes 0.5 (powers.py:580) where C# reads a DynamicVar. Its canonical value is the 0.5m the ported card sets, and 1/2 is dyadic, so the float and decimal agree bit-for-bit and Colossus does not widen hook_dispatch G9. Executed: `py tools/audit/power_census.py multipliers`."
+      "rationale": "The sim hard-codes 0.5 (powers.py:580) where C# reads a DynamicVar. Its canonical value is the 0.5m the ported card sets, and 1/2 is dyadic, so the float and decimal agree bit-for-bit and Colossus does not widen hook_dispatch G9. Executed: `py audit/tools/power_census.py multipliers`."
     },
     {
       "what": "ColossusPower.cs:49 `side == CombatSide.Enemy`, plain Decrement",

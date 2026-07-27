@@ -78,7 +78,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     },
     {
       "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",

@@ -46,7 +46,7 @@
     "AfterSideTurnStart": {
       "maps_to": "powers.py:1072-1074 on_player_turn_start / :1080-1082 on_enemy_turn_start -> _decay (player.py:169 / combat.py:~300)",
       "verdict": "gap",
-      "issue": "WRONG SLOT on the player leg. C#'s AfterSideTurnStart is CombatManager.cs:522, POST-draw; the sim's on_player_turn_start is player.py:169, PRE-draw (before modify_hand_draw at :171 and _draw at :183). The sim's post-draw slot, on_player_turn_started (player.py:186), is available and unused -- the same one-line fix as the other misplaced-slot units, and the population is reproducible with `py tools/audit/power_census.py slots`. DORMANT on its own: the decay is pure bookkeeping and nothing between the two points reads Plating's Amount (the block was already gained last turn end). Named trigger: any draw-time or BeforeHandDraw effect that reads the stack count -- power/hello_world shares this pre-draw slot. The ENEMY leg is turn_structure's G5 again."
+      "issue": "WRONG SLOT on the player leg. C#'s AfterSideTurnStart is CombatManager.cs:522, POST-draw; the sim's on_player_turn_start is player.py:169, PRE-draw (before modify_hand_draw at :171 and _draw at :183). The sim's post-draw slot, on_player_turn_started (player.py:186), is available and unused -- the same one-line fix as the other misplaced-slot units, and the population is reproducible with `py audit/tools/power_census.py slots`. DORMANT on its own: the decay is pure bookkeeping and nothing between the two points reads Plating's Amount (the block was already gained last turn end). Named trigger: any draw-time or BeforeHandDraw effect that reads the stack count -- power/hello_world shares this pre-draw slot. The ENEMY leg is turn_structure's G5 again."
     }
   },
   "guards": [

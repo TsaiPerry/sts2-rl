@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py tools/audit/power_census.py stack`). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py audit/tools/power_census.py stack`). Third-file citations, not hashed here."
     },
     "AfterDeath": {
       "maps_to": "powers.py:1409-1422 InfestedPower.on_death (cmds.py:105)",
@@ -58,7 +58,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

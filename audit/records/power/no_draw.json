@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:530-531 on_stack -> pass",
       "verdict": "gap",
-      "issue": "The sim overrides on_stack to a no-op citing PowerStackType.Single, but Single only means 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds the offset with no StackType branch. One of the 15 units making this misreading (`py tools/audit/power_census.py stack`). DORMANT for this unit: Amount is read nowhere in it, so the value is inert. Named trigger: any behaviour on this power that reads Amount. Third-file citations, not hashed here."
+      "issue": "The sim overrides on_stack to a no-op citing PowerStackType.Single, but Single only means 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds the offset with no StackType branch. One of the 15 units making this misreading (`py audit/tools/power_census.py stack`). DORMANT for this unit: Amount is read nowhere in it, so the value is inert. Named trigger: any behaviour on this power that reads Amount. Third-file citations, not hashed here."
     },
     "ShouldDraw": {
       "maps_to": "powers.py:533-536 NoDrawPower.should_draw",
@@ -25,7 +25,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:538-540 on_player_turn_end -> Power._expire",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), which CombatManager calls at :1307 for the player side -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654, before both); the sim's real AfterTurnEnd slot is after_player_turn_end (combat.py:665). Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. Live consequence for THIS power specifically: the sim removes No Draw before the turn-end card effects and the hand flush, so a turn-end effect that draws (Dark Embrace off an ethereal exhaust, powers.py:251-255) succeeds in the sim and is blocked in the game. Both halves are ported Ironclad-pool content. The sim's correct slot, after_player_turn_end (combat.py:665), is available and unused."
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), which CombatManager calls at :1307 for the player side -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654, before both); the sim's real AfterTurnEnd slot is after_player_turn_end (combat.py:665). Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. Live consequence for THIS power specifically: the sim removes No Draw before the turn-end card effects and the hand flush, so a turn-end effect that draws (Dark Embrace off an ethereal exhaust, powers.py:251-255) succeeds in the sim and is blocked in the game. Both halves are ported Ironclad-pool content. The sim's correct slot, after_player_turn_end (combat.py:665), is available and unused."
     }
   },
   "guards": [

@@ -31,7 +31,7 @@
     "AfterSideTurnStartLate": {
       "maps_to": "powers.py:2606-2608 on_enemy_turn_start -> Power._tick (powers.py:70-75)",
       "verdict": "gap",
-      "issue": "SLOT and PHASE. (a) SandpitPower.cs:70-76 is AfterSideTurnStartLate with `side == CombatSide.Enemy` and NO owner/participants filter, dispatched once per enemy side; the sim uses the per-enemy on_enemy_turn_start (combat.py:301) filtered to `enemy is self.owner`. turn_structure gap G5 owns that and carries the identical verdict (rule 3) -- `py tools/audit/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start. (b) the `Late` phase pass does not exist in the sim at all -- hook_dispatch gap G3 / turn_structure G12 -- so this power's decrement is not guaranteed to be last among the side-start listeners. DORMANT for both: executed, `py tools/audit/power_slot_probes.py rosters` shows THE_INSATIABLE_BOSS is a SOLO encounter (n=1, order=['TheInsatiable']), so the per-creature slot and the side slot coincide, and the only other ported enemy-side-start listeners are owner-filtered (PoisonPower, DemonFormPower, HardenedShellPower, SlowPower, AsleepPower). Trigger: an Insatiable encounter with adds. Third-file citations, not hashed here."
+      "issue": "SLOT and PHASE. (a) SandpitPower.cs:70-76 is AfterSideTurnStartLate with `side == CombatSide.Enemy` and NO owner/participants filter, dispatched once per enemy side; the sim uses the per-enemy on_enemy_turn_start (combat.py:301) filtered to `enemy is self.owner`. turn_structure gap G5 owns that and carries the identical verdict (rule 3) -- `py audit/tools/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start. (b) the `Late` phase pass does not exist in the sim at all -- hook_dispatch gap G3 / turn_structure G12 -- so this power's decrement is not guaranteed to be last among the side-start listeners. DORMANT for both: executed, `py audit/tools/power_slot_probes.py rosters` shows THE_INSATIABLE_BOSS is a SOLO encounter (n=1, order=['TheInsatiable']), so the per-creature slot and the side slot coincide, and the only other ported enemy-side-start listeners are owner-filtered (PoisonPower, DemonFormPower, HardenedShellPower, SlowPower, AsleepPower). Trigger: an Insatiable encounter with adds. Third-file citations, not hashed here."
     },
     "AfterPowerAmountChanged": {
       "maps_to": "no sim counterpart",
@@ -88,7 +88,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

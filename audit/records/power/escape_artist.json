@@ -21,7 +21,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2183-2186 on_enemy_turn_end",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py tools/audit/power_slot_probes.py rosters` and `enemy-hook-order`. Executed: THIEVING_HOPPER_WEAK is a solo encounter (n=1, order=['ThievingHopper'], `py tools/audit/power_slot_probes.py rosters`), so the per-creature slot and the side slot coincide. Trigger: any multi-hopper encounter."
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. Executed: THIEVING_HOPPER_WEAK is a solo encounter (n=1, order=['ThievingHopper'], `py audit/tools/power_slot_probes.py rosters`), so the per-creature slot and the side slot coincide. Trigger: any multi-hopper encounter."
     }
   },
   "guards": [
@@ -43,7 +43,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal, so IsVisible is provably always true for every power in the decompiled game."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

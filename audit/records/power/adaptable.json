@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:3362-3363 on_stack -> pass",
       "verdict": "gap",
-      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the settled census's 15-unit wrong-reasoning class (`py tools/audit/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing reads Adaptable's Amount on either side -- the revive machinery is driven by the private `isReviving` / `is_reviving` flag (AdaptablePower.cs:13, powers.py:3360) -- and monsters/glory/test_subject.py applies it once at combat start. Third-file citations, not hashed here."
+      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the settled census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing reads Adaptable's Amount on either side -- the revive machinery is driven by the private `isReviving` / `is_reviving` flag (AdaptablePower.cs:13, powers.py:3360) -- and monsters/glory/test_subject.py applies it once at combat start. Third-file citations, not hashed here."
     },
     "AfterDeath": {
       "maps_to": "powers.py:3365-3369 AdaptablePower.should_die (hooks.py:582, called at cmds.py:98)",
@@ -63,7 +63,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     },
     {
       "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",

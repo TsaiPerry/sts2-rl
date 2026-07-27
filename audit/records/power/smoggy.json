@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:1731-1732 on_stack -> pass",
       "verdict": "gap",
-      "issue": "The sim drops a re-application's offset citing PowerStackType.Single, which only means 'Amount is hidden' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds regardless. DORMANT: Smoggy reads Amount nowhere (it afflicts with the literal 1). One of the 15 units making this misreading (`py tools/audit/power_census.py stack`)."
+      "issue": "The sim drops a re-application's offset citing PowerStackType.Single, which only means 'Amount is hidden' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds regardless. DORMANT: Smoggy reads Amount nowhere (it afflicts with the literal 1). One of the 15 units making this misreading (`py audit/tools/power_census.py stack`)."
     },
     "AfterCardPlayed": {
       "maps_to": "powers.py:1744-1750 SmoggyPower.on_card_played",
@@ -30,7 +30,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:1768-1776 on_player_turn_end clears Smog and resets the flag",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here. Note C#'s AfterSideTurnEnd here only CLEARS the afflictions -- unlike Ringing's and Tangled's, it does NOT remove the power -- and the sim matches that, clearing without expiring."
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. Note C#'s AfterSideTurnEnd here only CLEARS the afflictions -- unlike Ringing's and Tangled's, it does NOT remove the power -- and the sim matches that, clearing without expiring."
     },
     "ShouldPlay": {
       "maps_to": "powers.py:1760-1762 SmoggyPower.should_play_card",

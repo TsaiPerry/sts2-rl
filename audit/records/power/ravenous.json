@@ -28,7 +28,7 @@
     {
       "what": "RavenousPower.cs:33 `applier: base.Owner`",
       "verdict": "gap",
-      "issue": "MISSING `applier=`. C# passes `base.Owner` (`PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, ..., base.Owner, null)`); the sim omits it, so `applier` is None through hooks.modify_power_amount (cmds.py:297), hooks.on_power_applied (cmds.py:327) and hooks.on_power_amount_changed (cmds.py:312), and the granted power's .applier is left None (powers.py:59). Recurring gap shape 5. DORMANT, executed: the sim's applier readers are RitualPower.__init__ (powers.py:195), _PossessPower._track (powers.py:3092-3099 -- needs `applier is self.owner` AND a player target AND a negative delta), UnsettlingLamp (relics/unsettling_lamp.py:47 -- needs `applier is self.player`) and the `creature is self.applier` on_death tests of shrink/constrict/dampen/hex; none matches an enemy self-buff with a positive delta. Reproduce with `py tools/audit/power_slot_probes.py applier-readers`. Same verdict as power/high_voltage's and power/territorial's (rule 3). Third-file citations, not hashed here."
+      "issue": "MISSING `applier=`. C# passes `base.Owner` (`PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, ..., base.Owner, null)`); the sim omits it, so `applier` is None through hooks.modify_power_amount (cmds.py:297), hooks.on_power_applied (cmds.py:327) and hooks.on_power_amount_changed (cmds.py:312), and the granted power's .applier is left None (powers.py:59). Recurring gap shape 5. DORMANT, executed: the sim's applier readers are RitualPower.__init__ (powers.py:195), _PossessPower._track (powers.py:3092-3099 -- needs `applier is self.owner` AND a player target AND a negative delta), UnsettlingLamp (relics/unsettling_lamp.py:47 -- needs `applier is self.player`) and the `creature is self.applier` on_death tests of shrink/constrict/dampen/hex; none matches an enemy self-buff with a positive delta. Reproduce with `py audit/tools/power_slot_probes.py applier-readers`. Same verdict as power/high_voltage's and power/territorial's (rule 3). Third-file citations, not hashed here."
     },
     {
       "what": "RavenousPower.cs:32 `CreatureCmd.Stun(base.Owner, StunnedMove)` with no follow-up state id",
@@ -48,7 +48,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

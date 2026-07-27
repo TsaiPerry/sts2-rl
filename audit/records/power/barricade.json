@@ -42,7 +42,7 @@
     {
       "what": "PowerStackType.Single with no on_stack override",
       "verdict": "faithful",
-      "rationale": "Playing Barricade twice raises Amount to 2 in both C# (PowerCmd.cs:236) and the sim (powers.py:64-66). Amount is unread by ShouldClearBlock on both sides, so the value is inert -- but the sim matching C# here is worth recording, because 15 other ported powers override on_stack to a no-op citing this same StackType and thereby diverge. Reproduce with `py tools/audit/power_census.py stack`."
+      "rationale": "Playing Barricade twice raises Amount to 2 in both C# (PowerCmd.cs:236) and the sim (powers.py:64-66). Amount is unread by ShouldClearBlock on both sides, so the value is inert -- but the sim matching C# here is worth recording, because 15 other ported powers override on_stack to a no-op citing this same StackType and thereby diverge. Reproduce with `py audit/tools/power_census.py stack`."
     }
   ],
   "verdict": "waiver",

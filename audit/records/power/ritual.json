@@ -33,7 +33,7 @@
     {
       "what": "RitualPower.cs:47 `participants.Contains(base.Owner)`",
       "verdict": "gap",
-      "issue": "Same mechanism as turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game): the sim's on_enemy_turn_end (combat.py:341) runs immediately after THIS enemy's move, where Hook.AfterTurnEnd -- the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292) -- runs once at CombatManager.cs:1256 after EVERY enemy has moved. The sim does have the right slot available: on_enemy_side_end (combat.py:345). Per binding rule 3 the mechanism keeps G5's `gap` verdict and is cross-referenced rather than re-argued. Reproduce the affected population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here."
+      "issue": "Same mechanism as turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game): the sim's on_enemy_turn_end (combat.py:341) runs immediately after THIS enemy's move, where Hook.AfterTurnEnd -- the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292) -- runs once at CombatManager.cs:1256 after EVERY enemy has moved. The sim does have the right slot available: on_enemy_side_end (combat.py:345). Per binding rule 3 the mechanism keeps G5's `gap` verdict and is cross-referenced rather than re-argued. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
     },
     {
       "what": "RitualPower.cs:49-53 the one-shot reset of WasJustAppliedByEnemy",

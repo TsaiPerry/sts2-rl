@@ -43,7 +43,7 @@
     {
       "what": "VigorPower.cs:13-18,24-27 the per-instance Data",
       "verdict": "faithful",
-      "rationale": "powers.py:1882-1890 initialises the latch in __init__, the sim's equivalent of InitInternalData. Vigor is NOT PowerInstanceType.Instanced (it is absent from `py tools/audit/power_census.py instance`), so one shared latch per owner is correct on both sides and power_cmd's G5 does not apply."
+      "rationale": "powers.py:1882-1890 initialises the latch in __init__, the sim's equivalent of InitInternalData. Vigor is NOT PowerInstanceType.Instanced (it is absent from `py audit/tools/power_census.py instance`), so one shared latch per owner is correct on both sides and power_cmd's G5 does not apply."
     },
     {
       "what": "Vigor's ported appliers all pass applier=",

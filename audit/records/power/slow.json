@@ -41,7 +41,7 @@
     "AfterSideTurnStart": {
       "maps_to": "powers.py:1249-1251 on_enemy_turn_start",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnStart is dispatched at CombatManager.cs:522, once per side after that side's turn setup; the sim has NO side-scoped enemy turn-start slot at all (`py tools/audit/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start NO-SIM-SIDE-START-SLOT) and this power uses the per-enemy on_enemy_turn_start (combat.py:301). turn_structure gap G5 owns the mechanism and carries the identical `gap` verdict (rule 3). DORMANT, executed: BYGONE_EFFIGY_ELITE is a solo encounter, so the per-creature slot and the side slot coincide; and because the counter is reset at the owner's OWN side start, the reset point relative to the player's card plays -- which is what the counter measures -- is identical. Trigger: any encounter fielding the Bygone Effigy with a second enemy, at which point cards played during the enemy side would be counted against a stale or fresh baseline depending on the owner's index."
+      "issue": "SLOT. AbstractModel.AfterSideTurnStart is dispatched at CombatManager.cs:522, once per side after that side's turn setup; the sim has NO side-scoped enemy turn-start slot at all (`py audit/tools/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start NO-SIM-SIDE-START-SLOT) and this power uses the per-enemy on_enemy_turn_start (combat.py:301). turn_structure gap G5 owns the mechanism and carries the identical `gap` verdict (rule 3). DORMANT, executed: BYGONE_EFFIGY_ELITE is a solo encounter, so the per-creature slot and the side slot coincide; and because the counter is reset at the owner's OWN side start, the reset point relative to the player's card plays -- which is what the counter measures -- is identical. Trigger: any encounter fielding the Bygone Effigy with a second enemy, at which point cards played during the enemy side would be counted against a stale or fresh baseline depending on the owner's index."
     }
   },
   "guards": [
@@ -63,7 +63,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

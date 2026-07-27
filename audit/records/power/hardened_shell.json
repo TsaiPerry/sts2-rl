@@ -46,7 +46,7 @@
     "BeforeSideTurnStart": {
       "maps_to": "powers.py:1996-2001 on_player_turn_start (player.py:169) + on_enemy_turn_start (combat.py:301)",
       "verdict": "gap",
-      "issue": "C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py tools/audit/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
+      "issue": "C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py audit/tools/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
     }
   },
   "guards": [
@@ -73,7 +73,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of the 260 files under src/Core/Models/Powers overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

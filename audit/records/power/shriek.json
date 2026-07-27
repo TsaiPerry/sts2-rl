@@ -56,7 +56,7 @@
     {
       "what": "Sign-aware typing is INERT for this power",
       "verdict": "faithful",
-      "rationale": "Shriek is Counter + AllowNegative, so GetTypeForAmount's first arm (PowerModel.cs:462-465) fires at a negative amount -- but that arm returns Debuff, which is what Type already returns, so the sim's static attribute gives the same answer for every sign. Executed: `py tools/audit/power_census.py typing` lists shriek under arm 1 with cs Type=Debuff == sim DEBUFF. Only strength and dexterity flip."
+      "rationale": "Shriek is Counter + AllowNegative, so GetTypeForAmount's first arm (PowerModel.cs:462-465) fires at a negative amount -- but that arm returns Debuff, which is what Type already returns, so the sim's static attribute gives the same answer for every sign. Executed: `py audit/tools/power_census.py typing` lists shriek under arm 1 with cs Type=Debuff == sim DEBUFF. Only strength and dexterity flip."
     },
     {
       "what": "ShriekPower.cs:22 PowerCmd.Remove vs the sim's _expire",

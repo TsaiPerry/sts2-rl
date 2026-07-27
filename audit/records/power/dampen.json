@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:3173-3174 on_stack -> pass",
       "verdict": "gap",
-      "issue": "PowerStackType.None (DampenPower.cs:22) with the sim's on_stack overridden to `pass` citing it -- the census's wrong-reasoning class (`py tools/audit/power_census.py stack`, which lists this unit as the single StackType=None member). PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally regardless of StackType, so a second application really does reach Amount 2 in C#. DORMANT: nothing on either side reads Dampen's Amount (the downgrade is one level per card and the restore is per-card bookkeeping), and monsters/glory/knights.py:71-72 applies it with amount 1. Third-file citations, not hashed here."
+      "issue": "PowerStackType.None (DampenPower.cs:22) with the sim's on_stack overridden to `pass` citing it -- the census's wrong-reasoning class (`py audit/tools/power_census.py stack`, which lists this unit as the single StackType=None member). PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally regardless of StackType, so a second application really does reach Amount 2 in C#. DORMANT: nothing on either side reads Dampen's Amount (the downgrade is one level per card and the restore is per-card bookkeeping), and monsters/glory/knights.py:71-72 applies it with amount 1. Third-file citations, not hashed here."
     },
     "AfterApplied": {
       "maps_to": "powers.py:3159-3171 DampenPower.__init__",
@@ -53,7 +53,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

@@ -48,7 +48,7 @@
     {
       "what": "ArtifactPower.cs:29-33 `!canonicalPower.IsVisible`",
       "verdict": "waiver",
-      "rationale": "The sim has no IsVisible concept. Genuinely inert rather than merely untriggered: PowerModel.IsVisible (PowerModel.cs:150-160) returns IsVisibleInternal for a self-or-enemy target, and EXECUTED -- `py tools/audit/power_census.py visible` -- **0 of the 260 files under src/Core/Models/Powers override IsVisibleInternal**, so it is provably always true for every power in the whole decompiled game, not just the ported ones. Same finding and same verdict as power_cmd note N1. PROMPT.md bug class 4 (visibility guards) is therefore CLEAR for this unit and for every other power unit. Third-file citations, not hashed here."
+      "rationale": "The sim has no IsVisible concept. Genuinely inert rather than merely untriggered: PowerModel.IsVisible (src/Core/Models/PowerModel.cs:150-160 -- the file sits directly under Models/, NOT under Models/Powers/) returns IsVisibleInternal, the overridable virtual at PowerModel.cs:167, for a self-or-enemy target, and EXECUTED -- `py audit/tools/power_census.py visible` -- **0 of the 260 .cs files directly under src/Core/Models/Powers override IsVisibleInternal** (260 EXCLUDES the 16 files in Powers/Mocks/; 276 including them, and a recursive grep that does cover Mocks/ also returns 0), so it is provably always true for every power in the whole decompiled game, not just the ported ones. Same finding and same verdict as power_cmd note N1. PROMPT.md bug class 4 (visibility guards) is therefore CLEAR for this unit and for every other power unit. Third-file citations, not hashed here."
     },
     {
       "what": "One Artifact instance carries N stacks, so one debuff costs one stack",

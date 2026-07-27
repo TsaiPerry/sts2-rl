@@ -28,7 +28,7 @@
     {
       "what": "DemonFormPower.cs:23 `participants.Contains(base.Owner)`",
       "verdict": "gap",
-      "issue": "Enemy leg: the sim uses the per-creature on_enemy_turn_start (combat.py:301), which runs immediately before THIS enemy's move, where Hook.AfterSideTurnStart runs once at CombatManager.cs:522 before ANY enemy moves. Worse than the AfterSideTurnEnd family, because the sim has no enemy-side-START slot at all to move it to -- that absence is turn_structure gap G5's other half. Per rule 3 the same verdict, cross-referenced. Observable with two or more enemies: an enemy holding Demon Form gains its Strength after earlier enemies have already acted in the sim, and before all of them in the game. Reproduce the population with `py tools/audit/power_census.py slots`. Third-file citations, not hashed here."
+      "issue": "Enemy leg: the sim uses the per-creature on_enemy_turn_start (combat.py:301), which runs immediately before THIS enemy's move, where Hook.AfterSideTurnStart runs once at CombatManager.cs:522 before ANY enemy moves. Worse than the AfterSideTurnEnd family, because the sim has no enemy-side-START slot at all to move it to -- that absence is turn_structure gap G5's other half. Per rule 3 the same verdict, cross-referenced. Observable with two or more enemies: an enemy holding Demon Form gains its Strength after earlier enemies have already acted in the sim, and before all of them in the game. Reproduce the population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
     },
     {
       "what": "DemonFormPower.cs:26 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",

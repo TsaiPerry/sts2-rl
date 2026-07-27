@@ -48,7 +48,7 @@
     {
       "what": "UnmovablePower.cs:36-40 num >= base.Amount -> 1m, else 2m",
       "verdict": "faithful",
-      "rationale": "powers.py:1117-1120. The factor 2.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py tools/audit/power_census.py multipliers), and it composes with power/no_block's absorbing 0.0 the same way under either aggregation shape."
+      "rationale": "powers.py:1117-1120. The factor 2.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py audit/tools/power_census.py multipliers), and it composes with power/no_block's absorbing 0.0 the same way under either aggregation shape."
     }
   ],
   "verdict": "gap",

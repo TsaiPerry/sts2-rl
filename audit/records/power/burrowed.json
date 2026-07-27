@@ -16,7 +16,7 @@
     "StackType": {
       "maps_to": "powers.py:2285-2286 on_stack -> pass",
       "verdict": "gap",
-      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the census's 15-unit wrong-reasoning class (`py tools/audit/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing on either side reads Burrowed's Amount (it is a pure block-persistence marker), and monsters/hive/tunneler.py applies it once."
+      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing on either side reads Burrowed's Amount (it is a pure block-persistence marker), and monsters/hive/tunneler.py applies it once."
     },
     "ShouldClearBlock": {
       "maps_to": "powers.py:2288-2291 should_clear_block (hooks.py:613, consulted at combat.py:296 for enemies and player.py:157 for the player)",
@@ -38,7 +38,7 @@
     {
       "what": "IsVisible",
       "verdict": "waiver",
-      "rationale": "Closed game-wide: `py tools/audit/power_census.py visible` finds 0 of 260 power files overriding IsVisibleInternal."
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
   "verdict": "gap",

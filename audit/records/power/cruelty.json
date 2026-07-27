@@ -38,7 +38,7 @@
     {
       "what": "CrueltyPower.cs:27 `amount + base.Amount / 100m`",
       "verdict": "gap",
-      "issue": "The arithmetic is right and the TYPE is not: powers.py:416 computes `mult += cruelty.amount / 100.0` in float where C# uses decimal. `1.5 + n/100` is non-dyadic for most n (10 -> 1.6, 30 -> 1.8), so a Cruelty-boosted Vulnerable is a third non-dyadic damage multiplier beyond the two literals `py tools/audit/power_census.py multipliers` reports, widening hook_dispatch gap G9. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded at both this record and power/vulnerable because the factor is jointly theirs."
+      "issue": "The arithmetic is right and the TYPE is not: powers.py:416 computes `mult += cruelty.amount / 100.0` in float where C# uses decimal. `1.5 + n/100` is non-dyadic for most n (10 -> 1.6, 30 -> 1.8), so a Cruelty-boosted Vulnerable is a third non-dyadic damage multiplier beyond the two literals `py audit/tools/power_census.py multipliers` reports, widening hook_dispatch gap G9. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded at both this record and power/vulnerable because the factor is jointly theirs."
     },
     {
       "what": "Cruelty has no turn hook and never decays",
