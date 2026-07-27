@@ -1,0 +1,95 @@
+{
+  "unit": "monster/punch_construct",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\PunchConstruct.cs",
+    "sha256": "f6551e08a1d0d00bc203d2d3c52369c3e1d9f1872e52e810aae1ebb12b48e39f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\punch_construct.py",
+    "sha256": "5322f0c737027825e883bb5852961eccb38cf7425a57414bcddf497ff045f64e"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (punch_construct.py:26)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (punch_construct.py:27)",
+      "verdict": "faithful",
+      "rationale": "PunchConstruct.cs:35 MaxInitialHp => MinInitialHp => 55."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Armor is a hit sound."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "PunchConstruct.__init__ (punch_construct.py:29-40) for the Artifact; _PunchOffEncounter.create_monsters (events/punch_off.py:22-30) for the HP reduction",
+      "verdict": "gap",
+      "live": true,
+      "issue": "PunchConstruct.StartingHpReduction is ported onto the wrong HP field: the game reduces CURRENT hp and leaves MAX hp at 55, the sim reduces MAX hp. PunchConstruct.cs:75-78 (inside AfterAddedToRoom) is `if (StartingHpReduction > 0) Creature.SetCurrentHpInternal(Math.Max(1, Creature.CurrentHp - StartingHpReduction))` - MaxInitialHp is a flat 55 (:33-35, non-ascension) and nothing touches MaxHp. The sim has no StartingHpReduction member at all; the Punch-Off encounter open-codes it as `m.max_hp = max(1, m.max_hp - reduction); m.hp = min(m.hp, m.max_hp)` (events/punch_off.py:27-28). So a Punch-Off construct that the game shows at '46/55' the sim shows at '46/46'. Observables: (a) the HP bar and the recorded EnemyState both carry max_hp, and the conformance replay compares the (name, hp, max_hp) triple positionally (combat_driver.py:184-191), so every Punch-Off fight reports an 'enemies' Divergence on max_hp; (b) any effect reading or restoring max HP - a heal, a percentage-of-max computation, the parity Niche uniqueness roll - sees 46 instead of 55; (c) the reduction is clamped against the wrong bound, so `max(1, ...)` protects max_hp where the game protects current hp.",
+      "rationale": "The hook has two clauses and they get different answers. CLAUSE 1, ArtifactPower 1 (PunchConstruct.cs:74 -> punch_construct.py:40): deliberate-divergence by SHARED-FINDINGS section 2, whose three clauses all hold - the amount is the literal 1, the power is self-applied with no card, and the initial state is a MoveState (READY_MOVE, or FAST_PUNCH_MOVE under StartsWithFastPunch), so monster_state_machine step 30's sticky no-op means the first roll reads nothing. RULE 7 NOTE: that shared rationale cites four relic files and powers.py which this record does not hash. CLAUSE 2, StartingHpReduction: the gap above. EXECUTED, `py audit/tools/monster_probes_b03.py punchoff-hp` on a real Punch-Off CombatState (seed 4): 'sim punch-off construct 0: hp=53 max_hp=53 initial_move=FAST_PUNCH_MOVE' and 'sim punch-off construct 1: hp=49 max_hp=49 initial_move=READY_MOVE', against a game MaxHp of 55 for both. LIVE under rule 6, both sides reachable on ported content: the same probe prints 'punch_off in the sim's Underdocks event pool: True | registered class: <class sts2_rl.events.punch_off.PunchOff>' (events/__init__.py:73-76 lists it in UNDERDOCKS_EVENTS), the encounter is PunchOffEventEncounter's port and the reduction fires unconditionally for BOTH constructs - PunchOffEventEncounter.cs:17,19 roll Rng.NextInt(2, 10), i.e. 2..9, never 0, and events/punch_off.py:26 rolls the matching randint(2, 9), so `StartingHpReduction > 0` is always true. The gap needs no relic, no potion and no player choice beyond taking the fight. Note the range and the first-construct StartsWithFastPunch flag are both ported CORRECTLY - only the field the reduction lands on is wrong."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (punch_construct.py:42-57)",
+      "verdict": "faithful",
+      "rationale": "PunchConstruct.cs:81-93: READY_MOVE (DefendIntent) -> FAST_PUNCH_MOVE (MultiAttackIntent(5,2)+DebuffIntent) -> STRONG_PUNCH_MOVE (SingleAttackIntent(14)) -> READY_MOVE, and the initial state is `StartsWithFastPunch ? FAST_PUNCH : READY` (:92). Sim punch_construct.py:53-57 reproduces the chain and the same conditional initial state, reading a flag set BEFORE super().__init__ (:36) so build_machine can see it. Executed (monster_probes_b03.py graphs, default construct: initial=READY_MOVE; punchoff-hp, the event's first construct: initial_move=FAST_PUNCH_MOVE). No branch state, so PROMPT.md class 6 cannot apply."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "PunchConstruct.cs:33-41, LAST argument: MinInitialHp 55 (MaxInitialHp = MinInitialHp), StrongPunchDamage 14, FastPunchDamage 5, FastPunchRepeat 2; plus the literals block 10 (:99), Artifact 1 (:74) and Frail 1 (:118). Sim punch_construct.py:13-17, 26-27. The Punch-Off reduction range NextInt(2, 10) -> 2..9 is matched by randint(2, 9) (events/punch_off.py:26)."
+    },
+    {
+      "what": "FAST_PUNCH applies Frail after the two hits",
+      "verdict": "faithful",
+      "rationale": "PunchConstruct.cs:112-118 attacks twice then applies Frail 1; punch_construct.py:67-70 does the same order."
+    },
+    {
+      "what": "The construct's own Artifact 1 and PROMPT.md class 1",
+      "verdict": "faithful",
+      "rationale": "PunchConstruct is the batch's only Artifact holder, so the Artifact-ordering family (PROMPT.md class 1, and the shipped Unsettling-Lamp-through-Artifact fix) was checked. The interception itself is PowerCmd's, not this model's: PunchConstruct.cs neither reads nor writes ArtifactPower after applying it, and punch_construct.py:38-40 does the same. No per-unit exposure."
+    },
+    {
+      "what": "creature_card_cmds step 26 - and why this is a DIFFERENT method",
+      "verdict": "faithful",
+      "rationale": "SHARED-FINDINGS section 7 asks whether this unit makes the dormant SetMaxAndCurrentHp finding live. It does not: PunchConstruct.cs:77 calls SetCurrentHpInternal, which is the game's own raw current-HP setter for exactly this purpose, so a sim assignment that skips the hooks is faithful to the source here. The divergence recorded on AfterAddedToRoom is about WHICH FIELD is written, not about the hooks the write skips."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10: StartsWithFastPunch and StartingHpReduction are both set at generation time and never reset, and the sim rebuilds the monster per combat, so nothing latches. Class 18 (TestMode.IsOn arms): no fork in this model. Class 24 (docstring misdescribes the port): punch_construct.py:21-23 describes the chain and the StartsWithFastPunch flag correctly - and says nothing about the HP reduction, which is how it stayed invisible."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Encounters\\PunchOffEventEncounter.cs",
+      "sha256": "89b7198f96c26ae07a220b300937637fa2f2cf0c99119825c6fbc26ae7de3e7d",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\events\\punch_off.py",
+      "sha256": "605dec483c61cc46bd6f9596bc6b7a9f3a79d6268445ea09b2b9e7cea6545d3e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\events\\__init__.py",
+      "sha256": "c170436e0540caaebac2e6703e83d385e003d7ea79a8dc6010b46e4d58908e87",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\conformance\\combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "unit": "monster/calcified_cultist",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\CalcifiedCultist.cs",
+    "sha256": "5ec912a15a06860f60ffc09663c85544923fbc1a6b04f9a42a5eccf4aa9f83a9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\cultists.py",
+    "sha256": "27087bdb5d122fbfb3650d828d0c33c8a5d8bc0811bbcada9a04aacddd904816"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp class attr (cultists.py:49 / :59)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (cultists.py:50/60)",
+      "verdict": "faithful"
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Fur selects a hit sound."
+    },
+    "ExtraDeathVfxPadding": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: a Vector2 of death-vfx padding."
+    },
+    "DeathSfx": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: a death sound event path."
+    },
+    "SetupSkins": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: picks a Spine skin (coral / slug); no mechanics."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: builds the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "_Cultist.build_machine (cultists.py:24-34), inherited",
+      "verdict": "faithful",
+      "rationale": "build_machine (cultists.py:24-34) vs GenerateMoveStateMachine (CalcifiedCultist.cs:66-75). Node-for-node identical, executed with `py audit/tools/monster_probes_b03.py graphs`: INCANTATION_MOVE (BuffIntent -> Intent(BUFF)) -> DARK_STRIKE_MOVE (SingleAttackIntent(9) -> Intent(ATTACK, damage=9)) -> itself; initial state INCANTATION_MOVE; states list [INCANTATION, DARK_STRIKE] in the same order. No RandomBranchState and no ConditionalBranchState on either side, so PROMPT.md bug class 6 (AddBranch integer arguments) cannot apply and no move roll ever draws. By monster_state_machine step 28 both machines start with a one-entry StateLog ([INCANTATION_MOVE], executed) because the initial state is a loggable MoveState, and by step 30 the first roll is the sticky no-op."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "AscensionHelper.GetValueIfAscension puts the non-ascension value LAST. CalcifiedCultist.cs: MinInitialHp -> 38, MaxInitialHp -> 41, DarkStrikeDamage (CalcifiedCultist.cs:32) -> 9, IncantationAmount (CalcifiedCultist.cs:34) -> 2 (a plain `=> 2`, no ascension fork). Sim: cultists.py:49-52 carries all four exactly. monster_probes.py hp compared Min/MaxInitialHp for this unit with 0 mismatches; damage and the Ritual amount are this record's own hand check."
+    },
+    {
+      "what": "IncantationMove applies RitualPower to itself, amount and applier",
+      "verdict": "faithful",
+      "rationale": "CalcifiedCultist.cs:83 PowerCmd.Apply<RitualPower>(ctx, Creature, IncantationAmount, Creature, null) - target=self, applier=self, no card source. Sim cultists.py:39 PowerCmd.apply(ctx.hooks, self, RitualPower, self.incantation_amt, applier=self). Same target, same applier, same amount, no card on either side. The PlayerChoiceContext argument is multiplayer-only (PROMPT.md scope) and is not a divergence."
+    },
+    {
+      "what": "DarkStrikeMove target and hit count",
+      "verdict": "faithful",
+      "rationale": "CalcifiedCultist.cs:88-91 DamageCmd.Attack(DarkStrikeDamage).FromMonster(this)...Execute(null) - one hit, no explicit target list, i.e. the default opposing side. Sim cultists.py:42 self._execute_attack(ctx, self.dark_strike_dmg, 1) hits ctx.player once (monsters/base.py:107-118). The Ironclad-only sim has exactly one player, so the target sets coincide."
+    },
+    {
+      "what": "AttackSfxStrength accumulator (+0.2f per attack)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: CalcifiedCultist.cs:112-117 PlayAttackSfx raises an FMOD 'enemy_strength' parameter by 0.2 per attack. Read to the end: the field is written nowhere else and read only by SfxCmd.Play, so it moves no game state. The sim has no analogue."
+    },
+    {
+      "what": "No AfterAddedToRoom / no starting power",
+      "verdict": "faithful",
+      "rationale": "CalcifiedCultist.cs overrides no AfterAddedToRoom, and the sim's _Cultist.__init__ (cultists.py:21-22) only calls super(). SHARED-FINDINGS section 2's constructor-applied-power divergence therefore does not arise for this unit."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 classes checked. Live ones for a monster: class 6 (AddBranch integer arguments) - N/A, no branch state (executed: monster_probes_b03.py graphs). Class 10 (reset timing) - the model holds no per-combat state but _attackSfxStrength, which is presentation. Class 21 (death is not removal) - the cultist neither kills nor is retained. Class 24 (docstring misdescribes the port) - cultists.py:15-16 and :46/:56 describe the graph and the numbers correctly; verified against the code, not the comment."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27"
+}

@@ -1,0 +1,107 @@
+{
+  "unit": "monster/gremlin_merc",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\GremlinMerc.cs",
+    "sha256": "5cf4349fc05cd9a502bf6cd5adb003e25fb4cac6bcbfbb2eb4865ef678785a9f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\gremlin_merc.py",
+    "sha256": "7f493af5ad113c5c6ab7bbb534dbf55e223a29adf297d2cd0ea3863bc6d5f30c"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (gremlin_merc.py:31)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (gremlin_merc.py:32)",
+      "verdict": "faithful"
+    },
+    "HasDeathSfx": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: suppresses the generic death sound."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Fur is a hit sound."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "GremlinMerc.__init__ (gremlin_merc.py:34-39)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim as that section binds every batch. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (gremlin_merc.py:34-39). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on target is self.player / applier is self.player / card is not None, and a monster's starting power is self-applied with no card, so none of them can fire; sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion - the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering - MachineMonster.__init__ rolls the first move (state_machine.py:301) before the subclass applies its powers, but `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: every initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7 NOTE: that rationale cites four relic files and powers.py which this record does NOT hash, exactly as the seam records disclose. Payload and ORDER match: SurprisePower 1 then ThieveryPower 20 (GremlinMerc.cs:49-55 vs gremlin_merc.py:38-39). ESCALATION CHECK, because section 2 requires one when the C# body reads combat state: GremlinMerc.cs:50 iterates `Creature.CombatState.Players` and gives each player its own ThieveryPower instance with `Target = player.Creature`. That is a read of the PLAYER list, not of `enemies`, and it is multiplayer-only shape: the Ironclad-only sim has exactly one player, so the loop yields exactly one instance and the sim's single untargeted ThieveryPower (gremlin_merc.py:39, stolen through self.powers['thievery'] at :42-44) is the same object count with the same amount. The sim's __init__ reads no hooks.combat list at all, so the not-yet-assigned-enemies hazard section 2 names does not arise."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (gremlin_merc.py:46-65)",
+      "verdict": "faithful",
+      "rationale": "GremlinMerc.cs:58-71 is a pure three-node chain GIMME -> DOUBLE_SMASH -> HEHE -> GIMME with initial state GIMME_MOVE and no branch state of either kind, so PROMPT.md class 6 cannot apply and no move roll draws. The port is node-for-node identical (executed, monster_probes_b03.py graphs: GIMME_MOVE -> DOUBLE_SMASH_MOVE -> HEHE_MOVE -> GIMME_MOVE, initial GIMME_MOVE, log ['GIMME_MOVE']). Intents map MultiAttackIntent(7,2) -> ATTACK 7x2, MultiAttackIntent(6,2)+DebuffIntent -> ATTACK 6x2 / DEBUFF, SingleAttackIntent(8)+BuffIntent -> ATTACK 8 / BUFF."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "GremlinMerc.cs:28-44, LAST argument of GetValueIfAscension: MinInitialHp 47, MaxInitialHp 49, GimmeDamage 7, GimmeRepeat 2, DoubleSmashDamage 6, DoubleSmashRepeat 2, HeheDamage 8; plus the literals Surprise 1 (:49), Thievery 20 (:54), Weak 2 (:109), Strength 2 (:122). Sim gremlin_merc.py:13-21, 31-32 carries all eleven."
+    },
+    {
+      "what": "Steal runs after the attack on all three moves",
+      "verdict": "faithful",
+      "rationale": "GremlinMerc.cs:83-92, :99-108, :114-121 all await the Attack, then loop GetPowerInstances<ThieveryPower>() calling Steal(), and only THEN apply the move's rider (Weak on DoubleSmash, Strength on Hehe). gremlin_merc.py:67-83 uses the same order on all three. This is a real ordering question (PROMPT.md class 1): stealing before the attack would change the gold a lethal hit leaves behind."
+    },
+    {
+      "what": "The multiplayer ThieveryPower loop",
+      "verdict": "faithful",
+      "rationale": "GremlinMerc.cs:89-92 / :105-108 / :118-121 iterate EVERY ThieveryPower instance on the merc, because :50-55 created one per player. The sim's _steal (gremlin_merc.py:41-44) reads the single self.powers['thievery']. Same set in single-player. Noted in the mapping per PROMPT.md scope (multiplayer-only params are not a divergence by themselves)."
+    },
+    {
+      "what": "_hasSpoken banter latch",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: GremlinMerc.cs:75-81 gates a TalkCmd line and a CustomScaledWait on a once-per-combat bool. Read to the end (the N6 lesson): the field is written and read nowhere else, so it is barks and timing only. The sim has no analogue."
+    },
+    {
+      "what": "Death spawns are SurprisePower's, and their order matches",
+      "verdict": "faithful",
+      "rationale": "The Sneaky/Fat spawn is not a GremlinMerc override - it is SurprisePower.AfterDeath (SurprisePower.cs:18-38), which adds SneakyGremlin into slot 'sneaky' then FatGremlin into slot 'fat'. Checked here because slot placement is the mechanism this batch found broken for LivingFog: GremlinMercNormal does NOT override EncounterModel.Slots (GremlinMercNormal.cs has only three unused const strings; the base default is Array.Empty<string>(), EncounterModel.cs:176), so CombatState.SortEnemiesBySlotName (CombatState.cs:495-501) compares Slots.IndexOf(...) = -1 against -1 for every pair and leaves the list in add order. The sim's SurprisePower appends in the same order (powers.py:1704-1706), so the enemy list agrees. NOT the same site as monster/living_fog's G1 - stated here so the two records' different verdicts on 'spawn ordering' are visibly about two different encounters (rule 3)."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10 (reset timing): the only per-combat field is _hasSpoken, presentation. Class 21 (death is not removal): the merc's death is a real death; SurprisePower.ShouldStopCombatFromEnding (SurprisePower.cs:40-43) keeps the combat alive but does not veto removal, and the sim's retained_after_death is not set for it. Class 25 (two-pass dispatchers): none of the merc's own moves dispatch a hook twice."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Encounters\\GremlinMercNormal.cs",
+      "sha256": "bac8975076826b8a4a690489ff1f4820e0e65432ad0434554be83ec0fc6a4322",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\SurprisePower.cs",
+      "sha256": "3f425e1c3ec41c3112d61eb1e9f57de93994215ae212b53616e8d5e7d42f1c0e",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ]
+}
