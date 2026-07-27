@@ -17,7 +17,7 @@
     "ctor": {
       "maps_to": "class attrs (defend.py:13-19) + _init_vars (21-23)",
       "verdict": "faithful",
-      "rationale": "`base(1, CardType.Skill, CardRarity.Basic, TargetType.Self)` (DefendIronclad.cs:19-22) == cost 1 / SKILL / BASIC / SELF. Note the C# class is DefendIronclad but the sim registers it as id `defend`; the roster resolves it through tools/audit/name_overrides.json, correctly."
+      "rationale": "`base(1, CardType.Skill, CardRarity.Basic, TargetType.Self)` (DefendIronclad.cs:19-22) == cost 1 / SKILL / BASIC / SELF. Note the C# class is DefendIronclad but the sim registers it as id `defend`; the roster resolves it through audit/tools/name_overrides.json, correctly."
     },
     "CanonicalTags": {
       "maps_to": "DefendCard.tags = frozenset({\"defend\"}) (defend.py:19)",
@@ -27,7 +27,7 @@
     "CanonicalVars": {
       "maps_to": "DefendCard._block = 5 (defend.py:23)",
       "verdict": "faithful",
-      "rationale": "`new BlockVar(5m, ValueProp.Move)` (DefendIronclad.cs:17) == `_block = 5`. Move WITHOUT Unpowered -> POWERED block on both sides, so Vambrace and Pael's Legion double it identically and this card is NOT in gap G1's blast radius (`py tools/audit/card_probes.py unpowered-block` lists only Entrench)."
+      "rationale": "`new BlockVar(5m, ValueProp.Move)` (DefendIronclad.cs:17) == `_block = 5`. Move WITHOUT Unpowered -> POWERED block on both sides, so Vambrace and Pael's Legion double it identically and this card is NOT in gap G1's blast radius (`py audit/tools/card_probes.py unpowered-block` lists only Entrench)."
     },
     "OnPlay": {
       "maps_to": "DefendCard.on_play (defend.py:28-30)",

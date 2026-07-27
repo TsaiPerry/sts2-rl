@@ -27,7 +27,7 @@
     "OnUpgrade": {
       "maps_to": "GoldAxeCard._on_upgrade (colorless_attacks.py:160-161)",
       "verdict": "faithful",
-      "rationale": "`AddKeyword(CardKeyword.Retain)` (GoldAxe.cs:39) == `self.retain = True`, and this card DOES re-seed the flag in `_init_vars` (`self.retain = False`, colorless_attacks.py:157), so `downgrade()` restores it -- `py tools/audit/card_probes.py downgrade` does not list gold_axe. The correct pattern; contrast card/hello_world in this same batch."
+      "rationale": "`AddKeyword(CardKeyword.Retain)` (GoldAxe.cs:39) == `self.retain = True`, and this card DOES re-seed the flag in `_init_vars` (`self.retain = False`, colorless_attacks.py:157), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list gold_axe. The correct pattern; contrast card/hello_world in this same batch."
     }
   },
   "guards": [],

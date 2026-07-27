@@ -27,7 +27,7 @@
     "OnUpgrade": {
       "maps_to": "ScrawlCard._on_upgrade (colorless_skills.py:585-586)",
       "verdict": "faithful",
-      "rationale": "`AddKeyword(CardKeyword.Retain)` (Scrawl.cs:26) == `self.retain = True`, and the flag IS re-seeded in `_init_vars` (`self.retain = False`, colorless_skills.py:583), so `downgrade()` restores it -- `py tools/audit/card_probes.py downgrade` does not list scrawl. The correct pattern, unlike card/wish, which gains the same keyword and does not re-seed."
+      "rationale": "`AddKeyword(CardKeyword.Retain)` (Scrawl.cs:26) == `self.retain = True`, and the flag IS re-seeded in `_init_vars` (`self.retain = False`, colorless_skills.py:583), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list scrawl. The correct pattern, unlike card/wish, which gains the same keyword and does not re-seed."
     }
   },
   "guards": [],

@@ -12,7 +12,7 @@
     "ctor": {
       "maps_to": "class attrs (strike.py:228-233) + _init_vars (235-237)",
       "verdict": "faithful",
-      "rationale": "`base(1, CardType.Attack, CardRarity.Basic, TargetType.AnyEnemy)` (StrikeIronclad.cs:24-27) == cost 1 / ATTACK / BASIC / ANY_ENEMY. The C# class is StrikeIronclad and the sim registers it as id `strike`; the roster resolves that through tools/audit/name_overrides.json, correctly, and the source's own comment confirms the five character Strikes differ only in \"portrait, attack vfx, and color\" -- so an Ironclad-only sim is right to port just this one."
+      "rationale": "`base(1, CardType.Attack, CardRarity.Basic, TargetType.AnyEnemy)` (StrikeIronclad.cs:24-27) == cost 1 / ATTACK / BASIC / ANY_ENEMY. The C# class is StrikeIronclad and the sim registers it as id `strike`; the roster resolves that through audit/tools/name_overrides.json, correctly, and the source's own comment confirms the five character Strikes differ only in \"portrait, attack vfx, and color\" -- so an Ironclad-only sim is right to port just this one."
     },
     "CanonicalTags": {
       "maps_to": "StrikeCard.tags = frozenset({\"strike\"}) (strike.py:233)",

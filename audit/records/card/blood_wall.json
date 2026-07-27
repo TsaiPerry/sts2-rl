@@ -22,7 +22,7 @@
     "CanonicalVars": {
       "maps_to": "_hp_loss = 2, _block = 16 (blood_wall.py:29-30)",
       "verdict": "faithful",
-      "rationale": "`new HpLossVar(2m)` + `new BlockVar(16m, ValueProp.Move)` (BloodWall.cs:22-26) == both numbers, and both ARE declared in `_init_vars`, so `base_hp_loss` and `base_block` report them correctly (contrast Beckon/Bad Luck). The BlockVar carries Move WITHOUT Unpowered -> POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and this card is NOT in gap G1's blast radius; confirmed pool-wide by `py tools/audit/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
+      "rationale": "`new HpLossVar(2m)` + `new BlockVar(16m, ValueProp.Move)` (BloodWall.cs:22-26) == both numbers, and both ARE declared in `_init_vars`, so `base_hp_loss` and `base_block` report them correctly (contrast Beckon/Bad Luck). The BlockVar carries Move WITHOUT Unpowered -> POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and this card is NOT in gap G1's blast radius; confirmed pool-wide by `py audit/tools/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
     },
     "OnPlay": {
       "maps_to": "BloodWallCard.on_play (blood_wall.py:35-41)",

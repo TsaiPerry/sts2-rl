@@ -22,7 +22,7 @@
     "CanonicalVars": {
       "maps_to": "ArmamentsCard._block = 5 (armaments.py:32)",
       "verdict": "faithful",
-      "rationale": "`new BlockVar(5m, ValueProp.Move)` (Armaments.cs:16) == `_block = 5` gained via `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`. The prop set is Move WITHOUT Unpowered, i.e. POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and Armaments is NOT in gap G1's blast radius -- Vambrace/Pael's Legion double it on both sides. Confirmed pool-wide by `py tools/audit/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
+      "rationale": "`new BlockVar(5m, ValueProp.Move)` (Armaments.cs:16) == `_block = 5` gained via `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`. The prop set is Move WITHOUT Unpowered, i.e. POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and Armaments is NOT in gap G1's blast radius -- Vambrace/Pael's Legion double it on both sides. Confirmed pool-wide by `py audit/tools/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
     },
     "OnPlay": {
       "maps_to": "ArmamentsCard.on_play (armaments.py:34-46)",

@@ -57,7 +57,7 @@
     "OnUpgrade": {
       "maps_to": "MadScienceCard._on_upgrade (mad_science.py:111-112)",
       "verdict": "faithful",
-      "rationale": "`AddKeyword(CardKeyword.Innate)` (MadScience.cs:252) == `self.innate = True`, and this card DOES re-seed the flag in `_init_vars` (`self.innate = False`, mad_science.py:109, with a comment saying why), so `downgrade()` restores it -- `py tools/audit/card_probes.py downgrade` does not list mad_science. The correct pattern, unlike card/aggression, card/hello_world and card/juggling."
+      "rationale": "`AddKeyword(CardKeyword.Innate)` (MadScience.cs:252) == `self.innate = True`, and this card DOES re-seed the flag in `_init_vars` (`self.innate = False`, mad_science.py:109, with a comment saying why), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list mad_science. The correct pattern, unlike card/aggression, card/hello_world and card/juggling."
     },
     "AddExtraArgsToDescription": {
       "maps_to": "no counterpart",

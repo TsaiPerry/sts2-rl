@@ -12,7 +12,7 @@
     "CanonicalKeywords": {
       "maps_to": "DiscoveryCard.exhausts, set in _init_vars (colorless_skills.py:212)",
       "verdict": "faithful",
-      "rationale": "`{ CardKeyword.Exhaust }` (Discovery.cs:15) == `self.exhausts = True`. Crucially this is set in `_init_vars`, NOT as a class attribute, precisely so the upgrade's `RemoveKeyword` can be undone by `downgrade()`'s rebuild -- and `py tools/audit/card_probes.py downgrade` confirms discovery is NOT among the five sticky cards. This is the pattern aggression/apparition/hello_world/juggling/wish are missing."
+      "rationale": "`{ CardKeyword.Exhaust }` (Discovery.cs:15) == `self.exhausts = True`. Crucially this is set in `_init_vars`, NOT as a class attribute, precisely so the upgrade's `RemoveKeyword` can be undone by `downgrade()`'s rebuild -- and `py audit/tools/card_probes.py downgrade` confirms discovery is NOT among the five sticky cards. This is the pattern aggression/apparition/hello_world/juggling/wish are missing."
     },
     "ctor": {
       "maps_to": "class attrs (colorless_skills.py:206-210) + _init_vars (211-212)",

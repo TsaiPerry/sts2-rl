@@ -34,7 +34,7 @@
     {
       "what": "the enemy loop skips on `enemy.is_dead`, not `enemy.is_gone` (breakthrough.py:54)",
       "verdict": "gap",
-      "issue": "Every other AoE card in the sim filters on `not e.is_gone` (conflagration, shockwave, omnislice, sword_boomerang, rip_and_tear -- see `py tools/audit/card_probes.py dead-target-guards`), and `is_gone` is `is_dead or escaped` (creatures.py:44-46). Breakthrough alone uses `is_dead`, so an ESCAPED-but-alive enemy is still struck. C#'s `TargetingAllOpponents(CombatState)` resolves against the combat's live opponent list, from which an escaped creature has been removed (`CreatureCmd.Escape`, CreatureCmd.cs:579-603). DORMANT: no ported Ironclad-reachable monster escapes while a second enemy is still alive to keep the combat running, so the extra target is never reached today; live with any ported escaping monster in a multi-enemy fight."
+      "issue": "Every other AoE card in the sim filters on `not e.is_gone` (conflagration, shockwave, omnislice, sword_boomerang, rip_and_tear -- see `py audit/tools/card_probes.py dead-target-guards`), and `is_gone` is `is_dead or escaped` (creatures.py:44-46). Breakthrough alone uses `is_dead`, so an ESCAPED-but-alive enemy is still struck. C#'s `TargetingAllOpponents(CombatState)` resolves against the combat's live opponent list, from which an escaped creature has been removed (`CreatureCmd.Escape`, CreatureCmd.cs:579-603). DORMANT: no ported Ironclad-reachable monster escapes while a second enemy is still alive to keep the combat running, so the extra target is never reached today; live with any ported escaping monster in a multi-enemy fight."
     },
     {
       "what": "the per-enemy `if ctx.player.is_dead: break` inside the AoE loop (breakthrough.py:55-56)",

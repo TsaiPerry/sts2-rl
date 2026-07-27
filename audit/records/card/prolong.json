@@ -12,7 +12,7 @@
     "CanonicalKeywords": {
       "maps_to": "ProlongCard.exhausts, set in _init_vars (colorless_skills.py:481)",
       "verdict": "faithful",
-      "rationale": "`{ CardKeyword.Exhaust }` (Prolong.cs:16) == `self.exhausts = True`, and crucially it is set in `_init_vars` rather than as a class attribute -- exactly so `downgrade()`'s rebuild can undo the upgrade's `RemoveKeyword`. `py tools/audit/card_probes.py downgrade` does not list prolong. The same correct pattern as card/discovery and card/gold_axe."
+      "rationale": "`{ CardKeyword.Exhaust }` (Prolong.cs:16) == `self.exhausts = True`, and crucially it is set in `_init_vars` rather than as a class attribute -- exactly so `downgrade()`'s rebuild can undo the upgrade's `RemoveKeyword`. `py audit/tools/card_probes.py downgrade` does not list prolong. The same correct pattern as card/discovery and card/gold_axe."
     },
     "ctor": {
       "maps_to": "class attrs (colorless_skills.py:474-478) + _init_vars (480-481)",
