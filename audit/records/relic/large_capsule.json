@@ -1,0 +1,83 @@
+{
+  "unit": "relic/large_capsule",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LargeCapsule.cs",
+    "sha256": "64b9a6ff561efb66fd9aff37c63f67ee3869aa6fbcb8ffe9cc7bf41a049e82f7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\large_capsule.py",
+    "sha256": "7eefbfc2a38d6f54ca8c742c7bdebf3d1d96b47d8ed6d581e85921169bb52d42"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/TestSupport/TestMode.cs",
+      "sha256": "609e8f466e2d5b0f9b4d4d94492c0ba0db60420f8ff06e339cf0d408651d12e9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (large_capsule.py:13)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (large_capsule.py:16-22), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "gap",
+      "issue": "Rollup of guards N1-N4 per binding rule 4 -- N4 is the gap. LargeCapsule.cs:23-36 does exactly three things in order: `IntVar(\"Relics\", 2)` iterations of `RelicFactory.PullNextRelicFromFront(Owner)` -> `RelicCmd.Obtain`, then `CardPileCmd.Add(Strike, Deck)`, then `CardPileCmd.Add(Defend, Deck)`. large_capsule.py:19-22 does the same three in the same order. EXECUTED (py audit/tools/relic_probes_b08.py b08-capsule): add_relic('large_capsule') grants ['toxic_egg', 'akabeko'], grows the deck 10 -> 12 with the tail ['strike', 'defend'], and shrinks the grab bag 96 -> 94. RelicCmd.Obtain is an unconditional grant in C# too, so unlike relic/lava_rock this relic is NOT a reward screen and there is no auto-keep divergence. The residual gap is N4: the pull cannot apply RelicModel.IsAllowed, because the sim has no such concept. Rule 7: run.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `GetStrikeForCharacter` / `GetDefendForCharacter` fork on `TestMode.IsOn` (LargeCapsule.cs:38-54) -- PROMPT.md bug class 18",
+      "verdict": "faithful",
+      "rationale": "The test arm returns ModelDb.Card<StrikeIronclad>/<DefendIronclad> for the Deprived test character; the SHIPPING arm is `character.CardPool.AllCards.First(c => c.Rarity == CardRarity.Basic && c.Tags.Contains(CardTag.Strike|Defend))`. TestMode.TurnOnInternal (TestMode.cs:38) is documented 'NEVER CALL THIS' and has no caller under src/, so shipping always takes the second arm -- checked BEFORE reading, per class 18, because relic/calling_bell shipped the test arm. For the Ironclad the two arms COINCIDE, and the sim's `make_card('strike')` / `make_card('defend')` is right either way: EXECUTED, the ported Basic-rarity cards are [('bash', []), ('defend', ['defend']), ('strike', ['strike']), ('sweep', [])], so the tag filter has exactly one match each. The character-pool half is Ironclad-only by construction and is a waiver for other characters under the shared contract's global scope."
+    },
+    {
+      "what": "N2: `RelicFactory.PullNextRelicFromFront(base.Owner)` (LargeCapsule.cs:27) vs `run.obtain_relic_from_grab_bag()` (large_capsule.py:20)",
+      "verdict": "faithful",
+      "rationale": "The no-rarity overload is `PullNextRelicFromFront(player, RollRarity(player), _ => true)` (RelicFactory.cs), and RollRarity(player) draws one NextFloat off `player.PlayerRng.Rewards`. run.obtain_relic_from_grab_bag (run.py:631-636) calls pull_relic_from_front with no rarity, which rolls on `self.rewards_rng` -- the same stream by that method's own documented default (run.py:576-584) -- and then adds the relic through add_relic, which is RelicCmd.Obtain's after_obtained dispatch. So both the draw count and the stream match, and the project's 'Relic rarity rolls on Rewards' note holds. EXECUTED: 2 pulls, bag 96 -> 94. Rule 7: run.py is not hashed by this record."
+    },
+    {
+      "what": "N3: `CardPileCmd.Add(card, PileType.Deck)` twice (LargeCapsule.cs:32-34) vs `run.add_card(make_card(...))` twice (large_capsule.py:21-22)",
+      "verdict": "faithful",
+      "rationale": "The no-index Add overload appends at the END of the deck (AddInternal with no index), which is the placement audit/records/seam/creature_card_cmds.json pins for out-of-combat pile adds and which run.transform_card's docstring (run.py:418-428) calls parity-critical because the combat-start UnstableShuffle is order-dependent. EXECUTED here rather than asserted, which is what audit/records/relic/arcane_scroll.json could not do from its own two files: the deck tail after the pickup is ['strike', 'defend'] in that order, i.e. appended, Strike first. add_card also runs modify_card_being_added_to_deck and after_card_added_to_deck (run.py:341-354), the two hooks CardPileCmd.Add runs (CardPileCmd.cs:501, 635) -- so unlike relic/leafy_poultice's transform path this relic does not drop them. Rule 7: run.py and cards/pool.py are not hashed here."
+    },
+    {
+      "what": "N4 (DORMANT): the pull cannot apply RelicModel.IsAllowed, so the two relics can be ones the game would have removed from the bag",
+      "verdict": "gap",
+      "issue": "PullNextRelicFromFront goes through `player.RelicGrabBag.PullFromFront(rarity, filter, runState)`, and RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-271) permanently drops every relic whose IsAllowed(runState) is false before the pull. `sts2_rl.relics.base.Relic` declares no is_allowed member at all and pull_relic_from_front applies no such filter, so Large Capsule can hand out a relic the game would not have offered -- and, because a wrong pull also shifts every later pull, the divergence is not one relic deep. This is the base-class omission audit/records/relic/amethyst_aubergine.json records and .superpowers/sdd/content-relic-sweeps.md sweep B bucket (a) sizes; one verdict per mechanism, binding rule 3, so this entry does not re-derive it. DORMANT AT THIS SITE specifically: Large Capsule is granted by the ported Neow event (events/neow.py), i.e. at total_floor 0, where IsBeforeAct3TreasureChest (TotalFloor < 41) is true for all 17 cluster members and the three remaining overrides are single-player-constant -- so at Large Capsule's own trigger point no ported relic is disallowed. It becomes live the moment any content grants Large Capsule after floor 41, or any non-floor IsAllowed predicate is ported. Rule 7: src/Core/Runs/RelicGrabBag.cs, relics/base.py, run.py and events/neow.py are not hashed by this record. NOTE (correcting the sweep): the cluster is SEVENTEEN, not sixteen -- see audit/records/relic/lasting_candy.json guard G2 and `py audit/tools/relic_probes_b08.py b08-isallowed`."
+    },
+    {
+      "what": "N5: `CardCmd.PreviewCardPileAdd(list, 2f)` and the CardPileAddResult list it is built for (LargeCapsule.cs:30-35), plus CanonicalVars(IntVar('Relics', 2))",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The two CardPileAddResults are collected only to feed the preview animation; nothing reads them."
+    },
+    {
+      "what": "N6: IntVar('Relics', 2m).IntValue (LargeCapsule.cs:21, 25) vs RELICS = 2 (large_capsule.py:14)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 2 is the pinned non-ascension value."
+    },
+    {
+      "what": "N7: recursion -- each granted relic's own AfterObtained runs inside Large Capsule's",
+      "verdict": "faithful",
+      "rationale": "C# `RelicCmd.Obtain(relic, Owner)` fires the granted relic's AfterObtained, and run.add_relic does the same (run.py:550-552), so a pulled Lee's Waffle or Looming Fruit applies its max HP here on both sides. Checked because the sim's add_relic is the recursion point and a pulled Large Capsule would recurse -- impossible in practice because the pull removes the relic from the bag before granting, and Large Capsule is Ancient rarity and not in the transcribed bag at all (EXECUTED, b08-pool: bag='-'). The executed grant ['toxic_egg', 'akabeko'] shows the nesting works. Rule 7: run.py are not hashed by this record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

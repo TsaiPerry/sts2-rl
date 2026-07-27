@@ -1,0 +1,63 @@
+{
+  "unit": "card/toxic",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Toxic.cs",
+    "sha256": "3886fc0631ae04c5170e0ed3599852ffe5a24313d76174946987b84c75f6ce0c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\toxic.py",
+    "sha256": "75212c36f990f4b80b315b604088e7678d3bb3a4a62a0b6e2196c006f266dde2"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "ToxicCard.max_upgrade_level = 0 (toxic.py:144)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Toxic.cs:13) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "ToxicCard.exhausts = True (toxic.py:146)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Toxic.cs:15) == `exhausts = True`, and NOT Unplayable -- Toxic is a PLAYABLE status whose play exists only to exhaust it before end of turn, and the sim correctly leaves `is_playable` True. The same shape as card/slimed and card/spore_mind."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "ToxicCard.has_turn_end_in_hand_effect = True (toxic.py:147)",
+      "verdict": "faithful",
+      "rationale": "`=> true` (Toxic.cs:19) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (toxic.py:139-147) + _init_vars (149-150)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Status, CardRarity.Status, TargetType.None)` (Toxic.cs:21-24) == cost 1 / STATUS / STATUS / NONE. A REAL cost of 1, not the -1 sentinel, so the ascenders_bane cost finding does not apply."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim inlines 5 at the damage site (toxic.py:157)",
+      "verdict": "gap",
+      "issue": "`new DamageVar(5m, ValueProp.Unpowered | ValueProp.Move)` (Toxic.cs:17) is a printed var with no `_damage` in `_init_vars`, so `Card.base_damage` returns None. The PROP SET is right: the sim passes no explicit props and `DamageCmd.deal` infers `DamageProps.CARD_UNPOWERED` (UNPOWERED | MOVE) from `is_unpowered = True` (cmds.py:44-50, toxic.py:145), so the 5 damage is not Strength-scaled and IS blockable on both sides -- identical to card/burn, card/decay and card/infection. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "ToxicCard.on_turn_end_in_hand (toxic.py:155-157)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.Damage, this)` (Toxic.cs:28) -- passing the VAR so the props ride along -- == `DamageCmd.deal(ctx.hooks, ctx.player, 5, dealer=None, card=self)` with the inferred props. Explicit null dealer on both sides. At 5 damage this is the hardest-hitting end-of-turn status in the pool."
+    },
+    "OnPlay": {
+      "maps_to": "ToxicCard.on_play -> pass (toxic.py:152-153)",
+      "verdict": "faithful",
+      "rationale": "Toxic.cs declares no OnPlay, so playing it costs 1 and only exhausts the card. A reachable no-op on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

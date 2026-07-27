@@ -32,9 +32,19 @@ def _is_stale(record: dict, unit: str, game_root: Path) -> bool:
         p = base / src.get("path", "")
         return (not p.is_file()) or harness.file_sha256(p) != src.get("sha256")
 
+    # Every record shape can carry `extra_sources`: the files a verdict cites
+    # beyond the unit's own two. Without this a content record's citations of
+    # PowerCmd.cs / cmds.py / combat.py go unpinned, and the record reports
+    # fresh while resting on line numbers nothing hashes.
+    if any(drifted(s, harness.source_base(s.get("side"), game_root))
+           for s in record.get("extra_sources") or []):
+        return True
+
     if unit.startswith("seam/"):
         return (any(drifted(s, game_root) for s in record.get("game_sources", []))
                 or any(drifted(s, _REPO) for s in record.get("sim_sources", [])))
+    if record.get("sim_only"):
+        return drifted(record.get("sim_source", {}), _REPO)
     return (drifted(record.get("game_source", {}), game_root)
             or drifted(record.get("sim_source", {}), _REPO))
 
@@ -52,7 +62,7 @@ def collect(kinds=None, game_root: Path | None = None,
         else:
             units = [r["unit"] for r in harness.roster(kind, root)]
         stats = {"total": len(units), "audited": 0, "invalid": 0,
-                 "stale": 0, "gaps": 0, "unaudited": []}
+                 "stale": 0, "gaps": 0, "live": 0, "unaudited": []}
         for unit in units:
             path = adir / kind / (unit.split("/", 1)[1] + ".json")
             if not path.is_file():
@@ -75,6 +85,11 @@ def collect(kinds=None, game_root: Path | None = None,
                 stats["stale"] += 1
             if record.get("verdict") == "gap":
                 stats["gaps"] += 1
+            # `live` counts records carrying at least one gap entry explicitly
+            # marked live: true. It reads low until records adopt the key —
+            # absence is "not stated", not "dormant".
+            if any(e.get("live") is True for e in harness.record_entries(record)):
+                stats["live"] += 1
         out[kind] = stats
     return out
 
@@ -91,10 +106,11 @@ def main(argv=None) -> int:
                      audits_dir=harness.DEFAULT_AUDITS_DIR)
     invalid = stale = gaps = unaudited = 0
     print(f"{'kind':<12}{'total':>6}{'audited':>9}{'invalid':>9}"
-          f"{'stale':>7}{'gaps':>6}{'unaudited':>11}")
+          f"{'stale':>7}{'gaps':>6}{'live':>6}{'unaudited':>11}")
     for kind, s in stats.items():
         print(f"{kind:<12}{s['total']:>6}{s['audited']:>9}{s['invalid']:>9}"
-              f"{s['stale']:>7}{s['gaps']:>6}{len(s['unaudited']):>11}")
+              f"{s['stale']:>7}{s['gaps']:>6}{s['live']:>6}"
+              f"{len(s['unaudited']):>11}")
         invalid += s["invalid"]
         stale += s["stale"]
         gaps += s["gaps"]

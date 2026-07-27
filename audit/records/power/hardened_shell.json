@@ -1,0 +1,133 @@
+{
+  "unit": "power/hardened_shell",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HardenedShellPower.cs",
+    "sha256": "81ebdd1312d4e08d1a901981776349c1c09456b7dd51c93de424b32b92fe42d8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/SkulkingColony.cs",
+      "sha256": "1021f5a5e37929420c41e1709dd86c6b479a000b40f88e76816c037e79da4ef1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/skulking_colony.py",
+      "sha256": "73b753f8bb0e0e4e9bf369efa7f3d283551fc7ca0a8a94a4f0b2c9f8d7e93c97",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1962 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only scaling (MultiplayerScalingModel). Out of scope everywhere; the sim is single-player."
+    },
+    "DisplayAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "HardenedShellPower.cs:25 is `max(0, Amount - damageReceivedThisTurn)` -- the remaining-cap number on the badge. Presentation only."
+    },
+    "ModifyHpLostBeforeOstyLate": {
+      "maps_to": "powers.py:1974-1983 modify_hp_lost (hooks.py:126-147, called at cmds.py:86)",
+      "verdict": "gap",
+      "issue": "The FORMULA is exact -- `target != Owner -> amount`, `amount == 0 -> amount`, else `Math.Min(amount, Amount - damageReceivedThisTurn)` (HardenedShellPower.cs:32-43) vs powers.py:1981-1983 -- and the BeforeOsty/AfterOsty phase collapse is already resolved as faithful by damage_pipeline (Osty redirection is waived, so its steps 8 and 11 fold into one `modify_hp_lost` call). What is left is the `Late` sub-phase: hook_dispatch gap G3 (the Early/VeryEarly/Late passes do not exist in the sim) applies, and it matters more here than usual because HardenedShell is the ONLY `ModifyHpLostBeforeOsty*` implementer in the whole decompiled source while all six others are AfterOsty or AfterOstyLate (BufferPower, IntangiblePower, SlipperyPower, BeatingRemnant, TheBoot, TungstenRod) -- so in C# this cap ALWAYS runs first and in the sim it runs wherever registration order puts it, and min-then-adjust is not adjust-then-min. Not re-verdicted (rule 3). DORMANT, and executed rather than asserted: on a SKULKING_COLONY_ELITE combat holding the ported relic The Boot, with 3 HP of cap left and a 2-damage powered card hit, the sim reports hp_lost 5 -- the same answer the game gives (BeforeOstyLate min(2,3)=2, then AfterOstyLate 2<5 -> 5) -- and 2 without the Boot (control), because the sim's registration order happens to be ['HardenedShellPower', 'TheBoot', 'TungstenRod'], reproducing C#'s pass order for the pair that can contend. TheBoot-vs-TungstenRod IS inverted relative to C# (AfterOsty before AfterOstyLate) but those two never share a target. Trigger: any change to registration order, or porting BufferPower (AfterOstyLate). Third-file citations, not hashed here."
+    },
+    "AfterModifyingHpLostBeforeOsty": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "HardenedShellPower.cs:45-49 is `Flash();` and nothing else -- presentation only. Recorded rather than skipped because the sim DOES have the companion notification for this family (hooks.py:149-154 after_modify_hp_lost, fired at cmds.py:87, which hooks.py:150-151 documents as mirroring AfterModifyingHpLostAfterOsty -- the *AfterOsty* event, not this one), so a behavioural BeforeOsty body would have had nowhere to go. It is power_cmd gap G4's shape one family over and costs nothing here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:1985-1993 on_damage_received",
+      "verdict": "gap",
+      "issue": "Two divergences, one of them the killing-blow class. (a) KILLING BLOW: the sim's on_damage_received is skipped when the hit killed the victim (cmds.py:121, the CreatureCmd.cs:392 guard) -- and C#'s AfterDamageReceived is subject to the same guard, so that half is faithful. (b) The GUARD DIFFERS: C# returns on `result.WasFullyBlocked` and then accumulates `result.UnblockedDamage` (HardenedShellPower.cs:57-62), where the sim accumulates its `amount` argument on `amount > 0` (powers.py:1993-1994). The sim's argument is hp_lost -- POST-block AND POST-modify_hp_lost (cmds.py:86, 122) -- so the cap counts the ALREADY-CAPPED figure, whereas C# counts UnblockedDamage, which is post-block but PRE-HP-loss-modifier. On any hit the cap actually truncates, the game charges the full unblocked amount against the shell and the sim charges only the truncated amount, so the sim's shell absorbs MORE total damage per turn than the game's. LIVE-shaped and reachable in principle the first time the player over-hits a Skulking Colony (a ported Underdocks elite, monsters/underdocks/skulking_colony.py:32-33, Hardened Shell 20 matching SkulkingColony.cs:56's 20m); marked a gap without an executed number because the arithmetic is decided by the same registration order the previous entry executed, and The Boot can re-raise the figure. NOTE the sim's `amount == 0` arm in modify_hp_lost returns `amount` unchanged and the C# one does too, so a fully-blocked hit charges nothing on either side -- WasFullyBlocked is redundant rather than dropped. Third-file citations, not hashed here."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "powers.py:1996-2001 on_player_turn_start (player.py:169) + on_enemy_turn_start (combat.py:301)",
+      "verdict": "gap",
+      "issue": "C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py audit/tools/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "HardenedShellPower.cs:27-30 InitInternalData / GetInternalData<Data>()",
+      "verdict": "faithful",
+      "rationale": "The sim uses a plain instance field `self._damage_received_this_turn` (powers.py:1972). Equivalent while InstanceType is None (this power does not override it), which is exactly the condition power_cmd G5 is about."
+    },
+    {
+      "what": "HardenedShellPower.cs:42 the cap can go NEGATIVE once the shell is spent",
+      "verdict": "faithful",
+      "rationale": "Both sides compute `min(amount, Amount - received)` with no floor, so once received > Amount the modifier returns a negative number -- which the sim then clamps with `max(0, amount)` at hooks.py:147, and which C# clamps downstream in CreatureCmd. Same observable (no HP loss, no healing). Checked because a negative return from an HP-loss modifier is the sort of thing an audit should not wave past."
+    },
+    {
+      "what": "HardenedShellPower.cs:64-67 `Owner.HpDisplay = HpDisplay.InfiniteWithNumbers`",
+      "verdict": "waiver",
+      "rationale": "Presentation only (the badge/HP readout)."
+    },
+    {
+      "what": "HardenedShellPower.cs:75 `Owner.HpDisplay = HpDisplay.Normal` on reset",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,58 @@
+{
+  "unit": "relic/dingy_rug",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DingyRug.cs",
+    "sha256": "82580893e449c598235fbbac664bf082782678f4f257506d94f95a4e9a20fb01"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\dingy_rug.py",
+    "sha256": "9ec81b771ed3d31bbdea777db5e1d6607ad17a57a40930c36c12a1e800ab40a4"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (dingy_rug.py:17)",
+      "verdict": "faithful"
+    },
+    "ModifyCardRewardCreationOptions": {
+      "maps_to": "no counterpart. dingy_rug.py is a behaviourless port -- the class body is an id, a name and a rarity (dingy_rug.py:10-17) -- justified by the docstring 'out-of-combat card reward modifier, stub'.",
+      "verdict": "gap",
+      "issue": "Carries guard G1's LIVE label. Card rewards never contain Colorless cards in the sim; they should, for the whole run once the relic is bought."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the relic's entire effect -- appending the Colorless card pool to every card-reward creation -- is absent, and the docstring's 'out-of-combat ... stub' premise does not survive checking (PROMPT.md bug class 12)",
+      "verdict": "gap",
+      "issue": "MECHANISM: DingyRug.cs:13-36 returns `options.WithCardPools(options.CardPools.Concat(ColorlessCardPool), options.CardPoolFilter)`, so every card REWARD (not shop stock, not combat generation) draws from the character pool PLUS the Colorless pool. The sim's card-reward path (rewards.create_reward_cards) takes its pool from `reward_pool_card_ids()` / `pool_card_ids()` over IRONCLAD_POOL and nothing widens it. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py stubs): a REGULAR-odds reward screen offers ['drum_of_battle', 'blood_wall', 'true_grit'] both with and without the relic, with zero Colorless options either way. Both sides are ported and no unported content is needed: Dingy Rug is Shop rarity in the transcribed grab bag (relic_pools.py:63 'RELIC.DINGY_RUG'), the Colorless pool is fully ported (executed: 53 cards in cards/pool.py's COLORLESS_POOL), and create_reward_cards already accepts a `pool` override -- its own docstring names 'Lead Paperweight passes the Colorless pool' as the precedent. So the capability the stub says is missing is present; only the widening is not. IMPLEMENTATION NOTE for whoever fixes it: this is NOT one of sweep C's 33 one-relic fixes. ModifyCardRewardCreationOptions has no method on the sim's Relic base at all (guard N1), and the sim's nearest hook, modify_card_reward_options (relics/base.py:172-176, dispatched at rewards.py:300-301), runs AFTER the options have been generated -- it can upgrade or enchant an option, not change the pool it was drawn from. A faithful fix needs a new pool-time hook, which is why .superpowers/sdd/content-relic-sweeps.md sweep C lists ModifyCardRewardCreationOptions among the hooks it EXCLUDED from that count. RULE 7: rewards.py, cards/pool.py, relic_pools.py and relics/base.py are not hashed here."
+    },
+    {
+      "what": "G2: all four of DingyRug.ModifyCardRewardCreationOptions' early returns -- `Owner != player` (DingyRug.cs:15-18), `Flags.HasFlag(NoCardPoolModifications)` (:19-22), `!Flags.HasFlag(IsCardReward)` (:23-26), `CardPools.Contains(ColorlessCardPool)` (:27-30) and `CustomCardPool != null` (:31-34)",
+      "verdict": "gap",
+      "issue": "Recorded as a group and carrying G1's verdict, because with no hook there is nothing for any of them to gate. They are listed rather than skipped because three of them are load-bearing for the FIX and easy to lose: IsCardReward is what confines the effect to reward screens (shop stock and in-combat generation must stay character-pool only, which is why the sim's existing shop and combat paths must not be changed); the already-contains-Colorless clause makes the append idempotent when two sources widen the same options; and CustomCardPool != null exempts callers that pinned their own pool (Lead Paperweight's Colorless-only reward, Kaleidoscope's cross-character pool). NoCardPoolModifications is the generic opt-out flag. The owner clause is multiplayer and out of scope."
+    },
+    {
+      "what": "N1: whether the sim has ANY pool-time card-reward hook the port could have used (the load-bearing question PROMPT.md class 12 says to check before accepting a stub)",
+      "verdict": "faithful",
+      "rationale": "Executed, and unlike the other two stubs in this batch the answer is NO: `hasattr(Relic, 'modify_card_reward_creation_options')` is false and there is no equivalent under any name -- relics/base.py's reward hooks are should_force_potion_reward, modify_combat_rewards, modify_card_reward_options, modify_merchant_card_results and modify_card_being_added_to_deck, and every one of them receives cards that already exist. This entry is faithful in the sense that the port's SHAPE (no method) is the only shape available today; the missing behaviour is still G1's gap, per binding rule 1 -- 'the sim has no such system' is a dormant-or-live gap, never a waiver. It is LIVE rather than dormant because the divergent observable (reward options) needs no unported content, only a base-class addition."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,63 @@
+{
+  "unit": "card/whirlwind",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Whirlwind.cs",
+    "sha256": "86336574fa46008aefdba6c4f36b039ef94d0b9236a1b5fe72a5f737a4e827c7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\whirlwind.py",
+    "sha256": "d35891525ea7ea6cfe9b84058be9b46e1c383b85884c05e173b6057bc638fe77"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (whirlwind.py:24-30) + _init_vars (32-34)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Uncommon, TargetType.AllEnemies)` with `protected override bool HasEnergyCostX => true` (Whirlwind.cs:22-29) == `energy_cost_x = True` (cards/base.py:84-87), `_energy_cost = 0`, ATTACK / UNCOMMON / ALL_ENEMIES. The base cost of 0 is exactly right for an X-cost card: `CardEnergyCost`'s constructor sets `Canonical = ((!CostsX) ? canonicalCost : 0)` (CardEnergyCost.cs:86). `handles_own_routing = True` is faithful for the same reason as card/conflagration's: C#'s OnPlay runs once and the multi-hit fan-out happens inside the attack command."
+    },
+    "CanonicalVars": {
+      "maps_to": "WhirlwindCard._damage = 5 (whirlwind.py:34)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(5m, ValueProp.Move)` (Whirlwind.cs:24) == `_damage = 5` per hit, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "WhirlwindCard.on_play (whirlwind.py:39-49)",
+      "verdict": "gap",
+      "issue": "The X-value plumbing, the hit count and the hits-outer/enemies-inner loop order are all faithful: `WithHitCount(ResolveEnergyXValue())` on `TargetingAllOpponents(CombatState)` (Whirlwind.cs:33, 42-45) == `for _ in range(self.captured_x)` with a per-hit living-enemy sweep, where `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), the sim's ResolveEnergyXValue. AttackCommand re-derives `validTargets` from `where c.IsAlive` at the top of each hit (AttackCommand.cs:544-546), which the sim's per-hit `[e for e in ctx.enemies if not e.is_gone]` matches, and both break when none remain. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call per hit (AttackCommand.cs:650), computing every DamageResult before any `Kill` (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy, so each death resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage. Presentation, folded in: the whole `if (num > 0)` VFX block (34-41), which draws horizontal lines and a vignette scaled by the FastMode player setting and plays a sound; it touches no state, and note that the sim needs no `num > 0` guard because a zero-iteration loop does nothing."
+    },
+    "OnUpgrade": {
+      "maps_to": "WhirlwindCard._on_upgrade (whirlwind.py:36-37)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Whirlwind.cs:50) == `self._damage += 3` (5 -> 8 per hit). The hit count stays X on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

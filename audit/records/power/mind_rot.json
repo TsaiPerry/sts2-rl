@@ -1,0 +1,63 @@
+{
+  "unit": "power/mind_rot",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\MindRotPower.cs",
+    "sha256": "3676390da138fd28e1f6289419ffd57b0fa4e0e96f7509f0354f11dc855849a1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2646 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyHandDraw": {
+      "maps_to": "powers.py:2648-2651 modify_hand_draw (hooks.py:217, called at player.py:171)",
+      "verdict": "faithful",
+      "rationale": "`player != base.Owner.Player -> count` else `Math.Max(0m, count - base.Amount)` maps exactly to powers.py:2649-2651, floor included. Slot checked too: C# calls Hook.ModifyHandDraw when computing the turn's draw and the sim calls it at player.py:171, before `_draw(draw_count, from_hand_draw=True)` at :183 -- the same point. Owner is the player, via the Knowledge Demon's Curse of Knowledge. Third-file citations, not hashed here."
+    },
+    "AfterModifyingHandDraw": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "The whole body is `Flash();` -- presentation only. Recorded rather than skipped because it is the companion notification for a modifier chain, i.e. power_cmd gap G4's shape one family over, and here it costs nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

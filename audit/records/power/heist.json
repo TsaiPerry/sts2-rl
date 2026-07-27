@@ -1,0 +1,89 @@
+{
+  "unit": "power/heist",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HeistPower.cs",
+    "sha256": "b7cecfad5fc4dd1cd77a7312ce5bbf97f0e788d11688b42848840c0368dcf1cf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/lizard_tail.py",
+      "sha256": "f8aaa651db2976dba3b1b3c3ce57cb5ecd79122742cf82ce10d98b0d30346ab6",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1676 power_type = PowerType.BUFF",
+      "verdict": "faithful",
+      "rationale": "HeistPower.cs:11 PowerType.Buff; the sim agrees. Constant, not GetTypeForAmount."
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "HeistPower.cs:13 PowerStackType.Counter; the sim's inherited on_stack adds unconditionally, matching PowerCmd.cs:236. Third-file citation, not hashed."
+    },
+    "InstanceType": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "HeistPower.cs:15 PowerInstanceType.Instanced -- the audit/records/seam/power_cmd.json G5 mechanism, cross-referenced under rule 3. DORMANT here: the only applier is SurprisePower applying one HeistPower to the one Fat Gremlin it spawns (powers.py:1698ff), so two simultaneous instances are unreachable. Eleventh PowerInstanceType unit -- see the note on power/thievery."
+    },
+    "BeforeDeath": {
+      "maps_to": "powers.py:1678-1685 HeistPower.on_death",
+      "verdict": "gap",
+      "issue": "HOOK-PHASE MISMATCH -- a BEFORE hook ported onto an AFTER hook, the recurring shape section 0 item 5 of the stream report names for thorns/curl_up/skittish/suck, now in a death-time form. C# calls Hook.BeforeDeath UNCONDITIONALLY at CreatureCmd.cs:503, two lines BEFORE Hook.ShouldDie at :505 decides whether the death stands. The sim's on_death fires only INSIDE the should_die-true branch (cmds.py:96-105), i.e. it is AfterDeath (CreatureCmd.cs:519), not BeforeDeath. Two divergences follow: (a) when a listener prevents the death, C# has already queued the GoldReward and the sim has not; and (b) if the creature is later killed for real, C# calls BeforeDeath a SECOND time and queues the reward TWICE. DORMANT, established by enumerating the ported should_die listeners rather than by assertion: they are IllusionPower (powers.py:1566), SteamEruptionPower (:2016), AdaptablePower (:3365), FairyInABottle (potions.py:1242, player-only) and Lizard Tail (relics/lizard_tail.py:35, player-only). The three enemy ones are self-buffs on Hive and Glory monsters; HeistPower's owner is the Underdocks Fat Gremlin that SurprisePower spawns, and nothing applies a death-preventer to it. Named trigger: any ported effect that prevents a Fat Gremlin's death, or applying Illusion/Adaptable cross-act."
+    }
+  },
+  "guards": [
+    {
+      "what": "HeistPower.cs:27 CurrentMapPointHistoryEntry.MarkLootReturned",
+      "verdict": "waiver",
+      "rationale": "Run-history bookkeeping for the end-of-run screen, with no gameplay reader; the sim has no history entry to mark. Waiver: presentation. Note it is OUTSIDE C#'s CombatRoom type test (:23-26) and so runs even when the reward is not queued -- which the sim cannot diverge on, having neither."
+    },
+    {
+      "what": "HeistPower.cs:25 AddExtraReward(base.Target.Player, GoldReward(..., wasGoldStolenBack: true))",
+      "verdict": "faithful",
+      "rationale": "The sim appends RewardExtra.of_gold(self.amount) to combat.pending_reward_extras (powers.py:1684-1685), documented at rewards.py:363 as the wasGoldStolenBack port. Same amount, same single-player recipient, same reward-screen destination."
+    },
+    {
+      "what": "powers.py:1679 the sim ADDS an amount <= 0 test",
+      "verdict": "faithful",
+      "rationale": "A GUARD THE SIM ADDS (bug class 8) that turns out to be LOAD-BEARING COMPENSATION, which is why it is faithful rather than a divergence. C# has no such test, so on its face a zero-amount HeistPower would queue a GoldReward(0) in the game and nothing in the sim -- and a zero amount is very reachable (kill the Merc before it ever attacks, so ThieveryPower's total is 0 and SurprisePower moves 0 across). But C#'s PowerCmd.Apply returns early on amount == 0m (PowerCmd.cs:104), so the game never creates the power at all and never reaches BeforeDeath. The sim has no zero-amount no-op -- that is power_cmd's step-6 finding, confirmed here by reading cmds.py:288-326 -- so it DOES create HeistPower(0), and this added guard is what makes the two sides agree. Recorded because the guard must not be removed independently of fixing power_cmd step 6: either alone is correct, neither-or-both is a divergence."
+    },
+    {
+      "what": "HeistPower.cs:23 the CombatRoom type test, and the escape path",
+      "verdict": "faithful",
+      "rationale": "C# queues the reward only if CurrentRoom is a CombatRoom; the sim's on_death reaches combat.pending_reward_extras only from inside a combat, so the test is structurally satisfied. The sim's docstring claim that escape never fires BeforeDeath is correct and matters: a Fat Gremlin that flees is removed without CreatureCmd.Kill, so neither side pays the gold back."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

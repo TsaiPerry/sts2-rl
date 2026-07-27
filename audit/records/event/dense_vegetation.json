@@ -1,0 +1,117 @@
+{
+  "unit": "event/dense_vegetation",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\DenseVegetation.cs",
+    "sha256": "07bfcb3131b1f4cf006fd8d6e1ba2d76aa4cd4385ff60d55015ca59a0764d9f0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\dense_vegetation.py",
+    "sha256": "7e27f63c6f33dce521f958257f0e09446b61e531316661b95aaa821896fffac4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/RestSite/HealRestSiteOption.cs",
+      "sha256": "167debfa61b18e90a2db5912eb07b04577610af95427c5800cc2ed7e3b8fcbef",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsShared": {
+      "maps_to": "DenseVegetation.cs:26 `IsShared => true`; the sim carries shared membership as registry position rather than a flag (events/__init__.py), and this unit is in the 18-id pool.",
+      "verdict": "faithful"
+    },
+    "CalculateVars": {
+      "maps_to": "DenseVegetation.calculate_vars (events/dense_vegetation.py:51-52) ports the Gold roll as `self.rng.randint(61, 99)`, matching `Rng.NextInt(61, 100)`'s exclusive upper bound",
+      "verdict": "gap",
+      "issue": "Two problems. (1) The roll is on the shared run RNG, not the per-event Rng -- see guard EV-3. (2) The second var is not ported at all: DenseVegetation.cs:38 sets `Heal.BaseValue = HealRestSiteOption.GetHealAmount(Owner)`, which CALLS Hook.ModifyRestSiteHealAmount (HealRestSiteOption.cs:60-63) at CalculateVars time. The sim computes the heal only later, inside _rest, and without the hook -- see guard BR-38a."
+    },
+    "IsAllowed": {
+      "maps_to": "DenseVegetation.cs:41-55 short-circuits to true for a one-player run (`if (runState.Players.Count == 1) return true;`) and only then checks each player's HP against HpLoss. The sim has no is_allowed override, inheriting the base `return True` (events/base.py:103-107) -- which is exactly the single-player branch. The multiplayer branch is waived below.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars HpLossVar(8) (DenseVegetation.cs:32)",
+      "maps_to": "events/dense_vegetation.py:13 _HP_LOSS = 8. Exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "TrudgeOn (DenseVegetation.cs:66-86): Damage(8, Unblockable|Unpowered) then PlayerCmd.GainGold(Gold) -- damage first",
+      "maps_to": "events/dense_vegetation.py:60-63: lose_hp(8) then gain_gold(self.gold). Order preserved.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Fight (DenseVegetation.cs:102-106): EnterCombatWithoutExitingEvent<DenseVegetationEventEncounter>(no extra rewards, shouldResumeAfterCombat: FALSE)",
+      "maps_to": "events/dense_vegetation.py:70-74 sets pending_encounter and finishes the event, so nothing resumes -- resume_after_combat is not overridden. The encounter matches DenseVegetationEventEncounter.cs: four Wrigglers, not start-stunned, in slots 1-4 (events/dense_vegetation.py:16-30).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BR-38a (blast radius): audit/records/seam/turn_structure.json step 38a -- a bare run.heal() skips the Hook.AfterRestSiteHeal + Hook.ModifyRestSiteHealRewards + RewardsCmd.OfferCustom tail that HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113) runs",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as turn_structure step 38a, which names events/dense_vegetation.py:67 explicitly (rule 3, not re-verdicted). Recorded here with the fact that BOUNDS it: EXECUTED (`py audit/tools/event_probes.py heal`), this is the ONLY event in the sim that heals through the rest-site verb -- the other 10 run.heal() call sites are plain CreatureCmd.Heal equivalents, and CreatureCmd.Heal (CreatureCmd.cs:691-703) dispatches no hooks in C# either, so they are faithful. Dense Vegetation is 100% of step 38a's event-side blast radius."
+    },
+    {
+      "what": "EV-3: CalculateVars' `Gold = base.Rng.NextInt(61, 100)` (DenseVegetation.cs:37) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "`foreach (Player player in runState.Players)` HP gate in IsAllowed (DenseVegetation.cs:47-53)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the three slash VFX with their Rng.Chaotic jitter, the sleep/hiss audio and the screen rumble (DenseVegetation.cs:68-82, 91-98)",
+      "verdict": "waiver",
+      "rationale": "presentation only -- and note Rng.Chaotic is the game's explicitly non-deterministic visual stream, not a run stream, so skipping it cannot shift parity."
+    },
+    {
+      "what": "EV-1: TRUDGE_ON's 8 HP loss (DenseVegetation.cs:83) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

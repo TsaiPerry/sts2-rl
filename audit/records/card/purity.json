@@ -1,0 +1,53 @@
+{
+  "unit": "card/purity",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Purity.cs",
+    "sha256": "7944b2f8b652fd687fc4a63f9adaaf1bdbc3fd43ba238fc8fd27d2556d69cfaf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "retain = True, exhausts = True (colorless_skills.py:516-517)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Retain, CardKeyword.Exhaust }` (Purity.cs:13-17) == both class attributes. CANONICAL keywords, so no downgrade-rebuild hazard."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:511-517) + _init_vars (519-521)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Purity.cs:21-24) == cost 0 / SKILL / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "PurityCard._cards = 3 (colorless_skills.py:521)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(3)` (Purity.cs:19) == `_cards = 3`, the MAXIMUM number of hand cards exhausted."
+    },
+    "OnPlay": {
+      "maps_to": "PurityCard.on_play (colorless_skills.py:526-532)",
+      "verdict": "gap",
+      "issue": "The candidate set and the effect are faithful: `CardSelectCmd.FromHand(..., filter: null, source: this)` over the whole hand then `CardCmd.Exhaust` on each (Purity.cs:28-31) == `CardSelectCmd.from_hand(ctx.hooks, ctx.player, 'exhaust', count=self._cards)` then `ExhaustCmd.exhaust` on each, and Purity cannot select itself on either side (Play pile in C#, discard-pile limbo in the sim, combat.py:452-454). Both exhaust the chosen cards ONE AT A TIME, which CardCmd.cs:221-223 warns is required so each card's hooks fully run before the next. THE SELECTION RANGE IS WRONG: C# passes MinSelect **0** with MaxSelect equal to the printed count, so the player may exhaust FEWER than the cap or none at all; the sim's `count=` argument resolves through `CombatState.select_cards`, which clamps `count = min(count, len(candidates))` and takes exactly that many (combat.py:575-581), with no way to express a range. Same mechanism and same verdict as card/neows_fury's OnPlay entry (rule 3), and it is the min/max half of creature_card_cmds guard N10. DORMANT: no replay command encodes a partial selection and taking fewer is a player choice the sim's policy never needs; live for any conformance replay of a run where the player declined part of the selection."
+    },
+    "OnUpgrade": {
+      "maps_to": "PurityCard._on_upgrade (colorless_skills.py:523-524)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(2m)` (Purity.cs:36) == `self._cards += 2` (3 -> 5). The upgrade adds TWO, one of only three +2 CardsVar upgrades in the pool (with card/metamorphosis and card/offering)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,159 @@
+{
+  "unit": "relic/tea_of_discourtesy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TeaOfDiscourtesy.cs",
+    "sha256": "92715bb91a8888fb73935de43ce91631dfb10dd9d7100a4d366f1a68e0414e8a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\tea_of_discourtesy.py",
+    "sha256": "36488c84b798b632e9d0a19646487f2c99920aadfd11fb254ab44c77388efd10"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/stomp.py",
+      "sha256": "62381062367f9d305c1e7f3b5150e051829e73d4771879ca9a2e75cecb4e1652",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tea_master.py",
+      "sha256": "583c57ecdbc13cf70a127f0312b5d4515962a95fa0a25a8a9fc3755d787ef3bb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/fabricator.py",
+      "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/the_insatiable.py",
+      "sha256": "e04f5abac0020de91548e97fbe7938891e18018bb3fa0fb8da3c19527ae65290",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/soul_fysh.py",
+      "sha256": "4c072f390bc091b4197a1699ce769ae2fa5f78d5b8fa00718d14226dcca6c87c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/biiig_hug.py",
+      "sha256": "66d3ae58953be95479e12d670714d4f9777ee41d6b67068359085e3f25701ece",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/blessed_antler.py",
+      "sha256": "f3db307888350c1d72c4886e37478a170b7fc2b761386b8521f7a383537e75ad",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/ghost_seed.py",
+      "sha256": "1e8315023ffbf3a3cfc01bfa71ba949863bb6c176a5ed7b683cf6ae365c883d4",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (tea_of_discourtesy.py:14)",
+      "verdict": "faithful",
+      "rationale": "TeaOfDiscourtesy.cs:21. Granted by the ported Tea Master event (events/tea_master.py:60), which is the only source -- Event rarity is not in the transcribed grab bag (executed: py audit/tools/relic_probes_b16.py pool)."
+    },
+    "IsUsedUp": {
+      "maps_to": "is_used_up property (tea_of_discourtesy.py:23-25)",
+      "verdict": "faithful",
+      "rationale": "TeaOfDiscourtesy.cs:23 `CombatsLeft <= 0`, mirrored exactly, and on_combat_start reads it where C# reads `if (CombatsLeft > 0)`. Its one sim consumer outside the relic is Relic.is_tradable (relics/base.py:132), which already excludes EVENT rarity, so the flag is inert there -- but it is correct. Rule 7: relics/base.py is not hashed by this record."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_combat_start (tea_of_discourtesy.py:27-40)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The SHAPE is right -- 2 Dazed into the draw pile at a random position, one charge, decrement after -- but the port hand-rolls CardPileCmd.AddToCombatAndPreview instead of calling the sim's own CardPileCmd.add_to_draw, and so loses that helper's pile-orientation bridge (G1, LIVE) and its _enter_combat step (G2, dormant)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the hand-rolled random draw-pile insert drops the game-index-to-sim-index bridge, so the two Dazed land at MIRRORED positions in the draw pile",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardPileCmd.cs:514 resolves CardPilePosition.Random as `card.Owner.RunState.Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)`, an index into a pile whose TOP is index 0. The sim stores the draw pile with its top at the END of the list, and it already has the correct port of exactly this call: CardPileCmd.add_to_draw (cmds.py:474-497) draws `p` off the shuffle stream and then inserts at `count - p`, with the reason spelled out in its own docstring (cmds.py:483-489). tea_of_discourtesy.py:35-39 instead uses the raw game index as a sim index. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b16.py tea-position): with a 5-card draw pile and the shuffle stream pinned to NextInt -> 1, the relic puts the two Dazed at sim indices [1, 2] where CardPileCmd.add_to_draw puts them at [4, 5]; 4-5 is the TOP of the sim pile (drawn first), 1-2 is near the bottom, so the player draws the Dazed at completely different times. Both sides ported: the relic is the free option at the ported Tea Master event (events/tea_master.py:59-60) and fires at the very next combat start. SEVEN other ported sites do call the helper -- cards/event_cards.py:304, monsters/glory/fabricator.py:67, monsters/hive/the_insatiable.py:66, monsters/underdocks/soul_fysh.py:64, powers.py:2398, relics/biiig_hug.py:32 and relics/blessed_antler.py:33 (which adds Dazed to the draw pile the correct way) -- so this is a one-site defect, not a house convention. The legacy leg is NOT affected: CombatRng.legacy maps every accessor onto the one shared Random (combat_rng.py:38-39), so `combat_rng.shuffle` in an RL run is the same object cmds.py's legacy branch uses; only the orientation is wrong. Rule 7: cmds.py, combat_rng.py and the seven cited call sites are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): the port skips CardPileCmd._enter_combat, so the two generated Dazed are never registered as combat hook listeners and AfterCardEnteredCombat never fires for them",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# creates the card with `combatState.CreateCard<T>(player)` (CardPileCmd.cs:1016) and adds it through AddGeneratedCardToCombat, which fires `Hook.AfterCardEnteredCombat` (CardPileCmd.cs:517-520) and puts the CardModel in the combat's listener list (CombatState.cs:449-461). The sim's equivalent is CardPileCmd._enter_combat (cmds.py:455-461): set card.combat, hooks.register(card), hooks.on_card_entered_combat(card). tea_of_discourtesy.py:35-39 does none of it. EXECUTED (same probe): the inserted Dazed reports card.combat=None and is absent from hooks._listeners. REACHABILITY (DORMANT): the sim has 8 on_card_entered_combat listeners (`grep -rn 'def on_card_entered_combat' sts2_rl/`: powers.py:1334, :1479, :1752, :2431, :3033, :3225 -- the card-afflicting powers -- plus cards/stomp.py:48 and relics/ghost_seed.py:32) and none can act on this card at this moment: the relic fires at BeforeCombatStart, before any enemy power exists; Stomp only reacts to itself; Ghost Seed only makes BASIC Strike/Defend Ethereal, which Dazed is not. Dazed itself declares no hook method (cards/dazed.py), so the missing registration is inert too. Porting any BeforeCombatStart-active card-afflicting effect, or any on_card_entered_combat listener that matches a Status card, makes it live. Rule 7: cmds.py, powers.py, cards/dazed.py and relics/ghost_seed.py are not hashed here."
+    },
+    {
+      "what": "N1: DAZED_COUNT = 2 and COMBATS = 1 against the C# DynamicVars",
+      "verdict": "faithful",
+      "rationale": "TeaOfDiscourtesy.cs:27-32 declares HealVar(1), DynamicVar('Combats', CombatsLeft) and DynamicVar('DazedCount', 2); line 60 reads DynamicVars['DazedCount'].IntValue for the count and `_combatsLeft = 1` (line 19) is the initial charge. No AscensionHelper.GetValueIfAscension anywhere in the file, so 2 and 1 are the pinned non-ascension values. The HealVar(1) is loc-string plumbing for the event's text, not an effect -- the relic heals nothing, and the port correctly implements nothing for it."
+    },
+    {
+      "what": "N2: `CombatsLeft` is a [SavedProperty] (TeaOfDiscourtesy.cs:36-54), i.e. run-scoped; the sim's combats_left is an instance field set once in __init__ and never re-initialised",
+      "verdict": "faithful",
+      "rationale": "Sim relic instances live on RunState.relics and are re-attached to every CombatState, so an instance field IS run-scoped -- which is exactly what a [SavedProperty] means. PROMPT.md bug class 13 asks for the reset trace and there is nothing to trace: neither side resets the charge, by design (the relic is a one-shot). `py audit/tools/relic_probes.py sweep-reset` does not list this relic, because the on_combat_start decrement is its only write and it is monotone."
+    },
+    {
+      "what": "N3: the hook slot -- C#'s BeforeCombatStart vs the sim's on_combat_start",
+      "verdict": "faithful",
+      "rationale": "CombatRoom.cs:225-231 runs SetUpCombat, then Hook.AfterRoomEntered, then AfterCombatRoomLoaded (which opens the first turn); Hook.BeforeCombatStart therefore sits between combat setup and turn 1. The sim dispatches hooks.on_combat_start() at combat.py:208, the last statement of CombatState.__init__. Executed reference: `py audit/tools/relic_probes.py turn-order` prints on_combat_start as the first line, ahead of on_block_cleared(turn=1). The draw pile is already shuffled at that point on both sides, which is what a random-position insert needs. Rule 7: combat.py and CombatRoom.cs are not hashed here."
+    },
+    {
+      "what": "N4: the C# guards the port does not restate -- `player.Creature.IsDead` (CardPileCmd.cs:1008) and `CombatManager.Instance.IsInProgress` (CardPileCmd.cs:223)",
+      "verdict": "faithful",
+      "rationale": "Both are structurally satisfied at BeforeCombatStart: the combat has just been set up and the player cannot be dead. Recorded deliberately because it is the reason this manual insert needs no is_over gate, where relic/the_abacus's on_shuffle does (see that record's N4) -- the same omission is safe here and not there."
+    },
+    {
+      "what": "N5: Flash(), InvokeDisplayAmountChanged(), `base.Status = RelicStatus.Disabled` when used up, ShowCounter => false, CanonicalVars and the Dazed ExtraHoverTips (TeaOfDiscourtesy.cs:25-34, 47-52, 62)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

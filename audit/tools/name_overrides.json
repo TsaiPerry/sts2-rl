@@ -1,5 +1,6 @@
 {
   "card/strike": "src/Core/Models/Cards/StrikeIronclad.cs",
   "card/defend": "src/Core/Models/Cards/DefendIronclad.cs",
-  "enchantment/souls": "src/Core/Models/Enchantments/SoulsPower.cs"
+  "enchantment/souls": "src/Core/Models/Enchantments/SoulsPower.cs",
+  "potion/glowwater": "src/Core/Models/Potions/GlowwaterPotion.cs"
 }

@@ -1,0 +1,63 @@
+{
+  "unit": "power/disintegration",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DisintegrationPower.cs",
+    "sha256": "fc43b89182ccbc12619dbd8e6828d21d1892991fa64176174af34bc8973329c2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2628 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEndLate": {
+      "maps_to": "powers.py:2630-2637 DisintegrationPower.on_player_turn_end",
+      "verdict": "gap",
+      "issue": "Wrong slot AND lost phase, and it is the only power in this group with both. (a) PHASE: this is `AfterSideTurnEndLate`, the second complete pass Hook.AfterTurnEnd runs (Hook.cs:1284-1291), so in the game Disintegration's damage lands after EVERY plain AfterSideTurnEnd listener has finished -- deliberately last. The sim has one unphased pass, which is hook_dispatch gap G3; per binding rule 3 the mechanism keeps G3's verdict and is cross-referenced rather than re-argued. (b) SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. So the sim fires this damage not merely one slot early but in the earliest of the three places it could go. The sim also omits `dealer = base.Owner` (DisintegrationPower.cs:23 vs powers.py:2635-2637) and has no enemy-side leg at all, though the C# Curse of Knowledge only ever targets the player. DORMANT for reachability: an executed grep finds no ported applier for DisintegrationPower -- the Knowledge Demon's Curse of Knowledge is not wired up. Named trigger: porting any Disintegration source."
+    }
+  },
+  "guards": [
+    {
+      "what": "DisintegrationPower.cs:21 `participants.Contains(base.Owner)`",
+      "verdict": "faithful",
+      "rationale": "powers.py:2631-2632 self-filters to the owner."
+    },
+    {
+      "what": "DisintegrationPower.cs:23 ValueProp.Unpowered (BLOCKABLE)",
+      "verdict": "faithful",
+      "rationale": "powers.py:2636 passes DamageProps.NON_CARD_UNPOWERED. Matches, including being blockable."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

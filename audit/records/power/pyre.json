@@ -1,0 +1,73 @@
+{
+  "unit": "power/pyre",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PyrePower.cs",
+    "sha256": "0b16372599254f8aa08bd1dd94d4c1d111fb2f66db6f02e21f26d156e5c8863e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/pyre.py",
+      "sha256": "18102aa037360eb10481fefb829c82ddb3d65768e637da241e2decb4e951ef61",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:989 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "powers.py:991-994 PyrePower.modify_max_energy (hooks.py:203-208, player.py:163)",
+      "verdict": "faithful",
+      "rationale": "amount + base.Amount with an owner guard on both sides (PyrePower.cs:16-23 vs powers.py:991-994), and the sim consumes it in the right place: player.py:163 runs modify_max_energy BEFORE should_reset_energy (:164) and uses the modified value on BOTH arms (:165 reset, :167 add-to-current), which is C#'s ResetEnergy/AddMaxEnergyToCurrent pair at CombatManager.cs:641-648. So Pyre works under a Barricade-style reset veto too. The power is never removed on either side, so it is a permanent +N max energy for the combat. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "PyrePower.cs:18-21 player != base.Owner.Player -> unchanged",
+      "verdict": "faithful",
+      "rationale": "powers.py:992-994. Identical."
+    },
+    {
+      "what": "Pyre has no CanonicalVars and no AscensionHelper call",
+      "verdict": "faithful",
+      "rationale": "The amount is entirely the stack count; the ported card supplies it (cards/pyre.py:35-37, PowerCmd.Apply<PyrePower>(1) with applier=ctx.player). Nothing to check against a non-ascension branch."
+    },
+    {
+      "what": "Additive-vs-running aggregation on ModifyMaxEnergy",
+      "verdict": "faithful",
+      "rationale": "hooks.py:203-208 sums every listener's delta and player.py:163 applies the sum once. hook_dispatch's G9 settled by execution that the additive family is EXACTLY equal to C#'s running fold over integers (0 mismatches in an exhaustive sweep) and that no C# or sim implementation reads the value it is handed. Not re-verdicted here per binding rule 3. Pyre is additive-only, so it does not widen G9's multiplicative half."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

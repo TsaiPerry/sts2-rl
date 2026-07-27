@@ -1,0 +1,63 @@
+{
+  "unit": "card/seeker_strike",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\SeekerStrike.cs",
+    "sha256": "ca98437ca26994dbf36fbe90dbc0cb3381cc6da30a95ca0957b8c36fd58cee8d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_rng_tripwire.py",
+      "sha256": "f6bed2b1db59d7bab3be63259896987637e4f92d665c830fd7ed6fac0a80eba7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:419-424) + _init_vars (426-429)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (SeekerStrike.cs:25-28) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalTags": {
+      "maps_to": "SeekerStrikeCard.tags = frozenset({\"strike\"}) (colorless_attacks.py:424)",
+      "verdict": "faithful",
+      "rationale": "`new HashSet<CardTag> { CardTag.Strike }` (SeekerStrike.cs:17) == the tag set that card/perfected_strike counts."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 9, _cards = 3 (colorless_attacks.py:428-429)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(9m, ValueProp.Move)` + `new CardsVar(3)` (SeekerStrike.cs:19-23) == both numbers, both declared. The CardsVar is the number of OPTIONS offered, not the number taken."
+    },
+    "OnPlay": {
+      "maps_to": "SeekerStrikeCard.on_play (colorless_attacks.py:434-447)",
+      "verdict": "gap",
+      "issue": "Attack first, then the offer-three-take-one selection -- and the SHAPE is right, including that only one card moves and the hand-size cap applies. WRONG RNG STREAM AND WRONG ALGORITHM for building the offer. C# does `PileType.Draw.GetPile(Owner).Cards.ToList().StableShuffle(Owner.RunState.Rng.CombatCardSelection).Take(Cards.IntValue)` (SeekerStrike.cs:36) -- the stabilising sort plus Fisher-Yates on the named CombatCardSelection stream, then take-first-3 -- and the sim does `ctx.combat._rng.sample(player.draw_pile, min(self._cards, len(player.draw_pile)))` (colorless_attacks.py:440-442): the unseeded shared `random.Random`, `random.sample` rather than shuffle-then-take, and no stabilising pre-sort, so identical draw-pile CONTENTS in a different ORDER offer different cards. Same three stacked divergences as card/beat_down's OnPlay entry and the same verdict (rule 3); LIVE, and this is the 11th of the 21 cards the `shared-rng` probe lists. card/catastrophe shows the correct shape -- `stable_shuffled_cards(options, ctx.combat.combat_rng)` with the pile reversed into the game's top-first orientation. BLAST RADIUS, not re-verdicted here per rule 3: `CardSelectCmd` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates to the installed selector and otherwise falls back to `self._rng.sample` (combat.py:575-581) -- creature_card_cmds steps 104/105 and guard N10. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+    },
+    "OnUpgrade": {
+      "maps_to": "SeekerStrikeCard._on_upgrade (colorless_attacks.py:431-432)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (SeekerStrike.cs:46) == `self._damage += 3` (9 -> 12). The number of options stays 3 when upgraded on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

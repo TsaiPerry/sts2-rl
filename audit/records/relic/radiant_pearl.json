@@ -1,0 +1,74 @@
+{
+  "unit": "relic/radiant_pearl",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RadiantPearl.cs",
+    "sha256": "8a1f60ae5158fd9536b135407743576b1ddf337d6e6ea05c260e153427d7e304"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\radiant_pearl.py",
+    "sha256": "d6b9506665213746abeea37dc321dffe71c2470090efa4c7954e28e36111dbad"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/orobas.py",
+      "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (radiant_pearl.py:18)",
+      "verdict": "faithful",
+      "rationale": "Matches RadiantPearl.cs:17. Obtainable via the ported Orobas shrine's second option pool (events/orobas.py:21), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "CanonicalVars": {
+      "maps_to": "CARDS = 1 (radiant_pearl.py:20)",
+      "verdict": "faithful",
+      "rationale": "RadiantPearl.cs:19 is `new CardsVar(1)` and BeforeHandDraw loops `DynamicVars.Cards.IntValue` times (RadiantPearl.cs:37). No AscensionHelper.GetValueIfAscension in the file, so 1 is the pinned non-ascension value."
+    },
+    "BeforeHandDraw": {
+      "maps_to": "on_player_turn_start (radiant_pearl.py:22-29) -- the sim's PRE-DRAW turn-start slot",
+      "verdict": "faithful",
+      "rationale": "audit/records/seam/turn_structure.json step 19 verdicts `Hook.BeforeHandDraw -> on_player_turn_start` FAITHFUL and says so from execution ('the sequence pin records on_energy_reset -> on_player_turn_start -> modify_hand_draw'). Re-executed here: `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so the Luminesce really is added BEFORE the draw, as C# requires. `py audit/tools/relic_probes_b13.py radiant-pearl` shows the turn-1 hand as ['luminesce','defend','defend','strike','strike','strike'] -- 6 cards, the added card plus a full 5-card draw, which is C#'s outcome too. This is the one relic in the batch whose hook slot is right; contrast relic/red_mask in the same batch, which sits two slots later. NOTE per binding rule 7: turn_structure.json and player.py are not hashed here."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `if self.turn != 1` (radiant_pearl.py:23) vs `Owner.PlayerCombatState.TurnNumber == 1` (RadiantPearl.cs:34)",
+      "verdict": "faithful",
+      "rationale": "Equal for every value the sim can hold: CombatState.turn starts at 1 and only increments (combat.py's turn counter), so `!= 1` and `== 1` partition identically. EXECUTED: the turn-2 hand still contains exactly one Luminesce (`luminesce count=1`), and it is there because cards/luminesce.py sets `retain = True`, not because the relic fired twice. Worth recording precisely because the retained card makes a second firing look plausible in the output."
+    },
+    {
+      "what": "N2: `CardPileCmd.AddGeneratedCardsToCombat(list, PileType.Hand, Owner)` -- one BATCHED add of the whole list (RadiantPearl.cs:41) -- vs the sim's per-card add_to_hand loop (radiant_pearl.py:28-29)",
+      "verdict": "faithful",
+      "rationale": "With CardsVar(1) the list has exactly one element, so batched and per-card are the same operation and no hook can observe an intermediate state. Recorded rather than skipped because the collapse WOULD matter at CardsVar(2)+ (a hand-size clamp or an on-add listener would see the cards one at a time), which is a constraint on any future ascension/upgrade of this relic. The overflow rule also matches: CardPileCmd.add_to_hand (cmds.py:500-512) sends the card to the discard pile once MAX_HAND_SIZE is reached."
+    },
+    {
+      "what": "N3: `combatState.CreateCard<Luminesce>(Owner)` (RadiantPearl.cs:39) vs `make_card('luminesce')` (radiant_pearl.py:29)",
+      "verdict": "faithful",
+      "rationale": "The card is ported and matches the source: cards/luminesce.py is a 0-cost TOKEN Skill with exhausts=True, retain=True and `gain 2 Energy` (3 upgraded). This is a fresh generated card, not a CardModel.CreateClone, so PROMPT.md bug class 17 (shallow clones dropping per-instance state) does not apply -- checked deliberately, since three relics in the pool do hit it. NOTE per binding rule 7: cards/luminesce.py and Luminesce.cs are not hashed by this record."
+    },
+    {
+      "what": "N4: `player == base.Owner` (RadiantPearl.cs:34) and the PlayerChoiceContext / ICombatState parameters",
+      "verdict": "faithful",
+      "rationale": "Structurally satisfied: the sim has one player and hooks.on_player_turn_start is dispatched only for it (player.py:169). PlayerChoiceContext is multiplayer plumbing and is noted in the mapping rather than verdicted as a divergence, per the shared contract's scope section."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

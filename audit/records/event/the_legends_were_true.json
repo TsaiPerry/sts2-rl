@@ -1,0 +1,148 @@
+{
+  "unit": "event/the_legends_were_true",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\TheLegendsWereTrue.cs",
+    "sha256": "7583ad0ce5091b2b0001dbe089ae5623bd97b530d0a46032b64e4e129c9f01b0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\the_legends_were_true.py",
+    "sha256": "f86d70924caa9fc588f54dcdbad9e363f9795a709a9c8f8e6debad92bce9ad5c"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Events/EventOption.cs",
+      "sha256": "02a8c24eb58efdb08f14b8801a598400c4bd590b675faf9b947413096562118c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/BattlewornDummy.cs",
+      "sha256": "51c34a3b9eb2e9412644c0eee3265aebf7c8879b8c5815d4d37281c0ff34e437",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/EndlessConveyor.cs",
+      "sha256": "7039ef349c6d7f57f66b3284117cf70a26d80a0052bd0f72ad6418d826ee027e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Wellspring.cs",
+      "sha256": "64627bd5c9bf2a842e21ba09f31fdd2d7f1e6fa38dbf6bebf5237e2b3ede8a18",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/WhisperingHollow.cs",
+      "sha256": "5bab48d3218d2f58b9fe90948391bdf944edc8c63aecee198cd3c8e159a249f5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/battleworn_dummy.py",
+      "sha256": "850d27050c4f39057ffb93a9124e5d0fd307db16f1a8320abc19c8a1109c2f42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/endless_conveyor.py",
+      "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/potion_courier.py",
+      "sha256": "8cd18b6a03397127ffffee5343b3c60f0896c7f641742e7580886ef4b5135276",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/wellspring.py",
+      "sha256": "ae14d334d1ee68f6dbf31763a80dc691926ea0e526f3edcfa8fe8cd138f3fc5b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/whispering_hollow.py",
+      "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "TheLegendsWereTrue.cs:23-30 gates on CurrentActIndex == 0 AND every player's deck being non-empty AND every player at CurrentHp >= 10. events/the_legends_were_true.py:31-32 `run.act_index == 0 and len(run.deck) > 0 and run.hp >= 10` -- the same three clauses, same constants, same integer comparisons (no decimal/float boundary here, unlike unrest_site's 0.70m).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars DamageVar(8m, Unblockable | Unpowered) (TheLegendsWereTrue.cs:21)",
+      "maps_to": "events/the_legends_were_true.py:12 `_HP_LOSS = 8`, and RunState.lose_hp (run.py:294-302) is documented as exactly the Unblockable | Unpowered event-damage verb.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "NabTheMap (TheLegendsWereTrue.cs:41-47): CreateCard<SpoilsMap> then CardPileCmd.Add(card, PileType.Deck)",
+      "maps_to": "events/the_legends_were_true.py:41 run.add_card(make_card('spoils_map')). run.add_card (run.py:341-354) runs the Hook.ModifyCardBeingAddedToDeck pass CardPileCmd.Add runs, so this is NOT in creature_card_cmds G3's radius. Spoils Map is a Quest card, so no egg relic matches it in either build. The PreviewCardPileAdd and the CustomScaledWait(0.5, 1.2) are animation.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-1: SlowlyFindAnExit (TheLegendsWereTrue.cs:51) deals DynamicVars.Damage = 8 through CreatureCmd.Damage, and the gate only guarantees 10 HP, so a 10-HP entrant lands on 2 -- but a Tungsten Rod-style modifier or a lower HP reached mid-event is not what makes this a site: every CreatureCmd.Damage call is one can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    },
+    {
+      "what": "EV-9: events/the_legends_were_true.py:47 `random_potion(self.rng)` (TheLegendsWereTrue.cs:53) draws on the sim's shared run RNG where the source draws on the PER-PLAYER REWARDS stream, `Owner.PlayerRng.Rewards.NextItem(items)`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-9, one verdict at every site (rule 3). Four events share one verbatim three-line idiom in the source -- `items = Owner.Character.PotionPool.GetUnlockedPotions(UnlockState).Concat(ModelDb.PotionPool<SharedPotionPool>().GetUnlockedPotions(UnlockState)); potion = Owner.PlayerRng.Rewards.NextItem(items); RewardsCmd.OfferCustom(PotionReward(potion))` -- at TheLegendsWereTrue.cs:52-59, BattlewornDummy.cs:84-90, EndlessConveyor.cs:152-158 and Wellspring.cs:32-38. The sim HAS the stream: `RunState.rewards_rng` is `player_rng.rewards` whenever a parity rng_set exists and the shared legacy rng otherwise (run.py:271-274), and events/potion_courier.py:55 already draws its potion pick off it with `run.rewards_rng.next_item(options)` -- so this is an inconsistency inside the sim, not a missing capability. EXECUTED (`py audit/tools/event_probes_b.py potionoffer`): all four sim sites route through `self.rng` / `run.rng` instead. DISTINCT FROM EV-3, which is 'shared rng instead of the per-event base.Rng' -- these sites never touch base.Rng at all, so EV-3 does not cover them, and the report's own self-correction #3 already separates reward-stream correctness from EV-3. LIVE for the parity path the conformance harness grades: a shared-rng draw both takes a number the game never takes off that stream and fails to advance the Rewards counter, desyncing every later reward roll in the run. Invisible in legacy (RL) mode, which is an exercised sim mode rather than an unreachable one. RADIUS BEYOND THIS RECORD (not re-verdicted, rule 3): events/battleworn_dummy.py:72, events/endless_conveyor.py:107 and events/wellspring.py:30 -- three already-committed records. events/whispering_hollow.py:58 uses the same sim helper but its source shape is `new PotionReward(base.Owner)` (WhisperingHollow.cs:55-56), a screen-time roll, so it is NOT confirmed to be in this radius."
+    },
+    {
+      "what": "UNIT GAP: the_legends_were_true draws its potion from the sim's IN-COMBAT potion generator. The source's pool is `Character.PotionPool.GetUnlockedPotions(UnlockState).Concat(SharedPotionPool.GetUnlockedPotions(UnlockState))` (TheLegendsWereTrue.cs:52); events/the_legends_were_true.py:47 calls `potions.random_potion` (potions.py:1262-1277), whose own docstring says it 'mirrors PotionFactory.CreateRandomPotionInCombat' and which therefore also filters PotionModel.CanBeGeneratedInCombat",
+      "verdict": "gap",
+      "issue": "This is a UNIT-level gap, not part of EV-9 (which is the stream) and not part of EV-4 (which is the forced grant): it is the wrong POOL, and it is unique to this event. The three sibling sites of the same C# idiom all call `run.random_potion()` (run.py:513-520), which is the right helper; this one module reaches past it to the combat generator. EXECUTED (`py audit/tools/event_probes_b.py potionoffer`): the C# pool (potion_pools.POTION_POOL, the sim's transcription of Character.PotionPool U SharedPotionPool) has 48 ids; run.random_potion()'s pool has 48; this event's pool has 45. The three it can never offer are exactly the CanBeGeneratedInCombat == false set (potion_pools.py:74-78): fruit_juice, regen_potion and -- pointedly -- fairy_in_a_bottle, the potion mechanism EV-1 turns on. LIVE: SLOWLY_FIND_AN_EXIT is one of two options on an act-1 event whose only gates are a non-empty deck and 10 HP, and the sim's version of the offer is strictly unable to produce 3 of the 48 potions the game can."
+    },
+    {
+      "what": "EV-4: the potion SlowlyFindAnExit picks (TheLegendsWereTrue.cs:56-59). events/the_legends_were_true.py:47 calls run.add_potion directly, with a comment ('Potion offers auto-keep when a slot is free (sim convention)') that names the divergence is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3), first recorded on brain_leech / drowning_beacon / endless_conveyor. The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), and this very Event instance carries `pending_reward_extras` for the same purpose (events/base.py:94-99) -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a potion offer can be declined to keep a belt slot for a later pick, and the sim's forced RunState.add_potion silently DROPS the potion when the belt is full (run.py:474-480 returns False) where the game's screen lets the player discard something first. LIVE -- an ordinary event branch with no exotic gate."
+    },
+    {
+      "what": "`runState.Players.All(p => p.Deck.Cards.Count > 0)` and `.All(p => p.Creature.CurrentHp >= 10)` (TheLegendsWereTrue.cs:25-27)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "`.ThatDoesDamage(base.DynamicVars.Damage.BaseValue)` on SLOWLY_FIND_AN_EXIT (TheLegendsWereTrue.cs:37) and HoverTipFactory.FromCardWithCardHoverTips<SpoilsMap> on NAB_THE_MAP (:36)",
+      "verdict": "waiver",
+      "rationale": "presentation only: EventOption.cs:186-189 shows ThatDoesDamage is nothing but `ThatWillKillPlayerIf(p => p.CurrentHp <= damage)`, i.e. the predicate that flashes the option red; the damage itself is dealt by the option body. HoverTips are card previews. presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

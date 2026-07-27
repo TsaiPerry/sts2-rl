@@ -1,0 +1,48 @@
+{
+  "unit": "card/one_two_punch",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\OneTwoPunch.cs",
+    "sha256": "68634744da6a56a6bc711c0b8b2e857a05307201be72fefa9dd248a436c0b5f1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\one_two_punch.py",
+    "sha256": "4b52bb7a8218b4bd44065e5b1fa5a6fa27863d9d19877b0c4ff0297216fb580b"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (one_two_punch.py:64-68) + _init_vars (70-72)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (OneTwoPunch.cs:17-20) == cost 1 / SKILL / RARE / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "OneTwoPunchCard._attacks = 1 (one_two_punch.py:72)",
+      "verdict": "faithful",
+      "rationale": "`new DynamicVar(\"Attacks\", 1m)` (OneTwoPunch.cs:15) == `_attacks = 1`. `_attacks` is in `Card._MAGIC_ATTRS` (cards/base.py:185-189) so `magic_number` surfaces it -- the correct storage for a named non-standard var, contrast card/normality's inlined threshold."
+    },
+    "OnPlay": {
+      "maps_to": "OneTwoPunchCard.on_play (one_two_punch.py:77-82)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<OneTwoPunchPower>(choiceContext, Owner.Creature, DynamicVars[\"Attacks\"].BaseValue, Owner.Creature, this)` (OneTwoPunch.cs:24) == `PowerCmd.apply(ctx.hooks, ctx.player, OneTwoPunchPower, self._attacks, applier=ctx.player)`. No animation on either side. OneTwoPunchPower is one of the two `modify_card_play_count` powers (powers.py:966 or 3919) the `replay` probe lists, so it is a SOURCE of gap G4's blast radius -- the power stream's to audit, but worth noting that card/drum_of_battle's bare `1` would also ignore a One-Two Punch stack, since Drum of Battle is a Skill and this power keys on Attacks."
+    },
+    "OnUpgrade": {
+      "maps_to": "OneTwoPunchCard._on_upgrade (one_two_punch.py:74-75)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"Attacks\"].UpgradeValueBy(1m)` (OneTwoPunch.cs:29) == `self._attacks += 1` (1 -> 2)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

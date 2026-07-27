@@ -1,0 +1,68 @@
+{
+  "unit": "relic/alchemical_coffer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\AlchemicalCoffer.cs",
+    "sha256": "8d456bbd094b5fee3b9211a371a288cc79b5545e738222124ecf3e94d6d01bbf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\alchemical_coffer.py",
+    "sha256": "e1d39c02a3ea0907e3b4a542f5b25a7a26491b79ddf2704c206d8a0bcb608e45"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/orobas.py",
+      "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (alchemical_coffer.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (alchemical_coffer.py:14), read by Relic.is_tradable (relics/base.py:132)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (alchemical_coffer.py:18-32)",
+      "verdict": "gap",
+      "issue": "SCOPE RULING (2026-07-26 relic fix pass, applied at every potion site in this tier). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' means POTION IS NOT AN AUDITED KIND -- there is no `potion` roster kind and no `audit/records/potion/`. It does NOT mean that potion-affecting behaviour of an AUDITED relic is invisible. The relic tier itself already reads it that way at the overwhelming majority of its sites: 45 relic gap entries across 25 records turn on potion mechanics, 27 of them tagged LIVE (relic/belt_buckle, relic/cauldron, relic/sozu, relic/delicate_frond, relic/petrified_toad, relic/tiny_mailbox, relic/white_beast_statue, relic/wongos_mystery_ticket, relic/phial_holster G1 ...), against only four records that waived on the exclusion. Binding rule 3 forces one answer and the majority is also the better-reasoned side: potions ARE ported (51 registered classes, 48 in the reward pool) and the belt is conformance-asserted -- sts2_rl/conformance/runner.py:623-631 diffs `floor_potions` slot by slot and sts2_rl/conformance/runner.py:715-717 reads `max_potions`. A divergence the conformance runner asserts on is by definition one a replay sees, which is the README's definition of a gap.\nAT THIS SITE (LIVE, grade B): the counts and the RNG stream are both right -- 4 slots, 4 potions, and sts2_rl/relics/alchemical_coffer.py:24-28 spends the same two CombatPotionGeneration draws per potion the source does (verified against `PotionFactory.CreateRandomPotion`, src/Core/Factories/PotionFactory.cs:67-81). The divergence is the SLOT INDEX. AlchemicalCoffer.cs:22 snapshots `originalSlotCount = Owner.MaxPotionCount`, line 23 grows the belt, and line 27 procures each potion into the EXPLICIT slot `originalSlotCount + i` -- on a fresh belt, slots 3, 4, 5, 6. sts2_rl/relics/alchemical_coffer.py:31-32 calls `run.add_potion(potion)` per potion, and `RunState.add_potion` fills the FIRST open slot (`self.potions[self.potions.index(None)] = potion`, sts2_rl/run.py:484). EXECUTED on a fresh run: belt before `max=3 [None, None, None]`; after `add_relic('alchemical_coffer')`, `max=7` with slots [0 fairy_in_a_bottle, 1 colorless_potion, 2 liquid_memories, 3 strength_potion, 4 None, 5 None, 6 None] -- the game would leave 0-2 empty and fill 3-6. Slot identity is NOT cosmetic here: `UsePotion` replay commands name a SLOT (see the project's 'Potion belt + profile names' note), and sts2_rl/conformance/runner.py:623-631 diffs `floor_potions` slot by slot. Reachable with ported content: Alchemical Coffer is one of the three OPTION_POOL_2 relics of the ported Orobas shrine (sts2_rl/events/orobas.py:21). Re-verdicted from waiver -- see the scope ruling above. Rule 7: src/Core/Factories/PotionFactory.cs, sts2_rl/run.py and sts2_rl/conformance/runner.py are cited and not hashed by this record.",
+      "live": true
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the relic has no combat hooks at all, so nothing about it is reachable from CombatState",
+      "verdict": "faithful",
+      "rationale": "AlchemicalCoffer.cs overrides exactly three members and only AfterObtained does anything; the sim's port likewise defines only after_obtained. There is no stubbed-out combat behaviour hiding here, which is what the relic-stream brief asks the auditor to check before accepting a thin port."
+    },
+    {
+      "what": "N2: DynamicVar('PotionSlots', 4m) (AlchemicalCoffer.cs:18) vs POTION_SLOTS = 4 (alchemical_coffer.py:16), used for BOTH the slot gain and the potion count in C#",
+      "verdict": "faithful",
+      "rationale": "One var feeds both call sites in C# (lines 23 and 24) and one constant feeds both in the sim (lines 19 and 28); no ascension branch is involved."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

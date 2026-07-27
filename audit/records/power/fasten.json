@@ -1,0 +1,63 @@
+{
+  "unit": "power/fasten",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\FastenPower.cs",
+    "sha256": "a7d67c5fa1269971bec979bd63e6c0100c1482f636c641741d512edcfa7cd6ac"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3553 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyBlockAdditive": {
+      "maps_to": "powers.py:3555-3560 FastenPower.modify_block_additive (hooks.py:98-109, cmds.py:146)",
+      "verdict": "faithful",
+      "rationale": "+Amount to the owner's block from a Defend-tagged card. All three C# guards are present, one structurally: base.Owner != target (FastenPower.cs:22-25 vs powers.py:3558), !props.IsPoweredCardOrMonsterMoveBlock() (:26-29), which cmds.py:145's is_powered_attack(props) gate supplies -- it is the same Move-and-not-Unpowered rule, which the sim's docstring at powers.py:3548-3549 names -- and `cardSource != null && !cardSource.Tags.Contains(CardTag.Defend)` (:30-33 vs :3558 `'defend' in card.tags`). Note C#'s third guard lets a NULL cardSource through (monster-move block) where the sim requires `card is not None`; that arm is unreachable for a player-owned Fasten, since no monster move grants the player block. Additive only, so no hook_dispatch G9 exposure -- G9 settled by execution that the additive family is exactly equal to C#'s running fold over integers."
+    },
+    "AfterModifyingBlockAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "FastenPower.cs:37-41's body is a single presentation statement (the one line the dump filter removes) followed by Task.CompletedTask -- no state change, no Decrement, unlike BufferPower's counterpart on the HP-loss family. Fasten is permanent: neither side ever ticks or removes it. So the sim's total absence of an after_modify_block_amount hook is the correct port here, and the missing MACHINERY (no out-param modifiers list on hooks.py:98-109's modify_block_additive, unlike modify_hp_lost at :126-147) is power_cmd G4's shape one family over and is recorded there rather than re-verdicted."
+    }
+  },
+  "guards": [
+    {
+      "what": "CardTag.Defend membership",
+      "verdict": "faithful",
+      "rationale": "The sim models card tags as a string set and tests 'defend' (powers.py:3558). Same predicate; the tag data is the cards' own and is audited by the card stream, not here."
+    },
+    {
+      "what": "The applier",
+      "verdict": "faithful",
+      "rationale": "FastenPower is applied by the Fasten card / rider; no AscensionHelper call in FastenPower.cs, so there is no non-ascension branch to pick."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

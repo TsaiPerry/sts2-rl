@@ -1,0 +1,108 @@
+{
+  "unit": "event/tablet_of_truth",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\TabletOfTruth.cs",
+    "sha256": "75b20df028a330c6e52116565777ea4107c182e8e6a6651fa8380e448224c67d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\tablet_of_truth.py",
+    "sha256": "f0b1a22f3b1424b8aacb53242c41cab526b9842c2bdac79f7485162f6b30218e"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/tungsten_rod.py",
+      "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "CanonicalVars SmashHPGain 20 and DecipherMaxHpLoss 3 (TabletOfTruth.cs:37-41), and GetDecipherCost's ladder 6 / 12 / 24 / MaxHp - 1 (TabletOfTruth.cs:76-93)",
+      "maps_to": "events/tablet_of_truth.py:5-6 _SMASH_HEAL = 20, _INITIAL_COST = 3, and events/tablet_of_truth.py:44-46 `{1: 6, 2: 12, 3: 24, 4: self.run.max_hp - 1}` keyed by deciphers ALREADY done -- the same key the source switches on (DecipherCount is incremented before GetDecipherCost is called, TabletOfTruth.cs:62-68). The case-4 value reads max HP AFTER the 4th decipher's loss in both, which is the whole point of the ladder's last rung.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Smash (TabletOfTruth.cs:52-57): Heal(20)",
+      "maps_to": "events/tablet_of_truth.py:37-39 run.heal(20). Plain CreatureCmd.Heal -- no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does NOT apply; `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Decipher's control flow (TabletOfTruth.cs:59-74): LoseMaxHpAndUpgrade(current cost), then DecipherCount++, then finish at 5, otherwise recompute the cost and present DECIPHER + GIVE_UP",
+      "maps_to": "events/tablet_of_truth.py:48-61 in that exact order, with _MAX_DECIPHERS = 5 and the DECIPHER_{n} page keys. GIVE_UP appears only from the second page on, in both (the INITIAL page offers DECIPHER + SMASH, TabletOfTruth.cs:43-50 / events/tablet_of_truth.py:31-35).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "LoseMaxHpAndUpgrade's upgrade leg (TabletOfTruth.cs:110-124): the 5th decipher (_decipherCount == 4) upgrades EVERY upgradable deck card and takes NO draw; every earlier one upgrades ONE via base.Rng.NextItem(list), guarded on the list being non-empty; the kill branch returns before either",
+      "maps_to": "events/tablet_of_truth.py:70-82 reproduces all three arms and, crucially, the DRAW COUNT on each: zero on the whole-deck arm, zero on the empty-list arm, exactly one otherwise, and zero on the early return. The candidate list is the deck's upgradable cards in DECK ORDER in both (run.upgradable_cards, run.py:368-369, vs `Deck.Cards.Where(IsUpgradable)`), which is what makes a NextItem index reproducible.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the one draw is on the CORRECT stream -- this is one of the six events with a parity Rng branch, so EV-3 does not apply",
+      "maps_to": "events/tablet_of_truth.py:79-82: `if self.event_rng is not None: self.event_rng.next_item(upgradables).upgrade()` else the legacy `self.rng.choice`. Event.event_rng is make_event_rng(seed, 'TABLET_OF_TRUTH') (events/base.py:84-88), the per-event Rng the source's `base.Rng` is, and next_item is NextItem's index form over the same list. Counted on every path per the orobas lesson (that event was correct-stream but took one FEWER draw than the game because C# ran NextItem over a list that still held a locked option): here the source has no such list, both engines guard the same `Count != 0`, and both skip the draw entirely on the whole-deck and kill arms. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists tablet_of_truth among the modules WITH a parity branch.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the kill branch's guard and its LoseMaxHp amount (TabletOfTruth.cs:103-107): `if (!(hp < MaxHp))` -- i.e. cost >= max HP -- LoseMaxHp(MaxHp - 1) and then Kill, NOT LoseMaxHp(cost)",
+      "maps_to": "events/tablet_of_truth.py:66-69 `if cost >= self.run.max_hp: run.lose_max_hp(run.max_hp - 1); run.kill(); return`. Same predicate, same substituted amount, same early return. This is also why EV-2's second leg stays dormant on this unit: the source deliberately never asks LoseMaxHp for more max HP than the player has.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the sim short-circuits the page flow once the player is dead",
+      "verdict": "deliberate-divergence",
+      "rationale": "events/tablet_of_truth.py:51 adds `self.run.is_dead or` to the finish test, which the source does not have -- C# runs DecipherCount++ and then presents the next DECIPHER page even after CreatureCmd.Kill (TabletOfTruth.cs:62-73). Same observable outcome: in both engines the player is dead and the run is over, and CreatureCmd.Kill's own tail already tears the run down when every player is dead (CreatureCmd.cs:450-464), so the page the source builds is never read. Recorded as a divergence rather than faithful because the event's page state genuinely differs; the reachable trigger is a low-max-HP run (e.g. 20/20: costs 3 then 6 leave max HP 11, and the third cost of 12 takes the kill branch), which `py audit/tools/event_probes.py kill` executes."
+    },
+    {
+      "what": "EV-1 (second verb): Decipher's kill branch (TabletOfTruth.cs:106) via events/tablet_of_truth.py:68 calls RunState.kill (run.py:304-305), which sets hp = 0. C#'s CreatureCmd.Kill(creature, force: false) runs Hook.BeforeDeath and then Hook.ShouldDie / Hook.AfterPreventingDeath before the creature actually dies (CreatureCmd.cs:439-448, 489-507), over RunState.IterateHookListeners, which yields the potion belt outside combat (RunState.cs:545-596)",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at every site (rule 3). Recorded at the damage verb as 'RunState.lose_hp'; this is the SAME missing run-level death-prevention pass reached through the second verb, so it takes EV-1's verdict rather than a new one, and EV-1's radius widens from 18 lose_hp sites to those plus run.kill. Note the `force` argument exists precisely to BYPASS the pass ('true in certain built-in cases like abandoning a run', CreatureCmd.cs:436) and the event passes force: false. EXECUTED (`py audit/tools/event_probes.py kill`): a 20/20 run holding a belt Fairy in a Bottle that deciphers three times (costs 3, 6, then 12 against a max of 11, taking the kill branch) ends at max_hp/hp = 1/0 and DEAD with the Fairy still in the belt; the game's ShouldDie pass has the Fairy answer and heal to max(MaxHp*0.3, 1) = 1, leaving the player alive at 1/1 with the Fairy consumed. LIVE -- Fairy in a Bottle is ported (potions.py:1222-1250) and in the reward pool (potion_pools.py:49), and the divergence ends the run."
+    },
+    {
+      "what": "EV-2: every Decipher's max-HP loss (TabletOfTruth.cs:105, 109) via events/tablet_of_truth.py:67, 70 calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+    },
+    {
+      "what": "`.ThatWillKillPlayerIf(p => p.Creature.MaxHp <= DecipherMaxHpLoss)` on both DECIPHER options (TabletOfTruth.cs:47, 71)",
+      "verdict": "waiver",
+      "rationale": "presentation only: the option's lethality warning badge. The predicate itself duplicates the kill branch's real guard, which IS modelled (see the kill-branch entry). Note the badge's predicate is `MaxHp <= cost` while the branch's is `cost >= MaxHp` -- the same test -- so the warning cannot disagree with the outcome in either engine."
+    },
+    {
+      "what": "the Log.Error default arm of GetDecipherCost returning 999999999 (TabletOfTruth.cs:89-92) and the CustomScaledWait pauses / CardPreviewStyle arguments on the upgrade loop (TabletOfTruth.cs:115-118, 123)",
+      "verdict": "waiver",
+      "rationale": "presentation and diagnostics only. The default arm is unreachable in both engines -- the source only calls GetDecipherCost when DecipherCount is 1-4 (it returns early at 5, TabletOfTruth.cs:63-67), and the sim's dict lookup covers exactly those four keys (events/tablet_of_truth.py:46), so a 5th lookup would raise rather than silently return a sentinel. The waits and preview styles are animation pacing."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

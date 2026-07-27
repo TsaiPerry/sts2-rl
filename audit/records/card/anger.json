@@ -1,0 +1,79 @@
+{
+  "unit": "card/anger",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Anger.cs",
+    "sha256": "a257b4fa27cf13a9a7b9b8d1b3ebb82cac1b6c1f6f6b21da1198f8edd8690aa4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\anger.py",
+    "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/grave_of_the_forgotten.py",
+      "sha256": "e57a52a9d23e4e9409d249128dfcc4d38b857771f117f70630f31ea07473e9d7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/self_help_book.py",
+      "sha256": "19718722e260e9a3e96f1aa74d6acf5ea4970ea20b9fdcd2795b6afcecb217fd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/spiraling_whirlpool.py",
+      "sha256": "41a9efc1e1580159647fbdf2e2bbf8057d0c9a4543eb4843d6a1d74419959ee7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs on AngerCard (anger.py:20-24) + _init_vars (26-28)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (Anger.cs:16-19) == cost 0 / ATTACK / COMMON / ANY_ENEMY. No keywords, no tags on either side."
+    },
+    "CanonicalVars": {
+      "maps_to": "AngerCard._damage = 6 (anger.py:28)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(6m, ValueProp.Move)` (Anger.cs:14) == `_damage = 6` dealt through `DamageCmd.deal(..., card=self)`, whose default props are `DamageProps.CARD == ValueProp.MOVE` (valueprops.py:34). Powered (no Unpowered), so this card is NOT in gap G1's blast radius and IS boosted by Strength/Vulnerable/Weak on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "AngerCard.on_play (anger.py:33-39)",
+      "verdict": "gap",
+      "issue": "The damage half is faithful (`DamageCmd.Attack(DynamicVars.Damage.BaseValue).FromCard(this).Targeting(cardPlay.Target)`, Anger.cs:24-26, == `DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)`), and the destination pile is faithful (`CardPileCmd.AddGeneratedCardToCombat(card, PileType.Discard, Owner)`, Anger.cs:28, == `CardPileCmd.add_to_discard`, cmds.py:464-472, which appends and runs `_enter_combat`). THE COPY IS NOT A CLONE. C# `CreateClone()` (Anger.cs:27 -> CardModel.cs:2168-2181 -> RunState.CloneCard:394-399 -> AbstractModel.MutableClone:162-169) is a MemberwiseClone plus `CardModel.DeepCloneFields` (CardModel.cs:1193-1216), which carries over the live keyword set, the cloned `_energyCost` object (so `SetThisCombat` / `AddThisTurn` / free-this-turn overrides survive), `base_replay_count`, AND deep-clones the card's Enchantment (1204-1209) and Affliction (1210-1214) onto the copy. The sim instead constructs a bare `AngerCard()` and replays `upgrade()` `upgrade_level` times (anger.py:36-38), so the copy loses the enchantment, the affliction, and every cost override. Observable: play a Spiral-enchanted Anger -- in the game the discarded copy is also Spiral-enchanted and replays when played; in the sim the copy is vanilla. LIVE: `enchantments.py:372-375` (Spiral) accepts any ATTACK card, and `events/spiraling_whirlpool.py:46` attaches it to a player-chosen deck card; `events/self_help_book.py:71` and `events/grave_of_the_forgotten.py:47` are two more ported attach sites. RATIONALE CITES THIRD FILES (rule 7): CardModel.cs, RunState.cs, AbstractModel.cs, cmds.py, enchantments.py and the three event modules are not hashed by this record. Presentation, folded in: the generated card is wrapped in CardCmd.PreviewCardPileAdd(..., 2.2f) (Anger.cs:28), a pile-add tween with no state effect."
+    },
+    "OnUpgrade": {
+      "maps_to": "AngerCard._on_upgrade (anger.py:30-31)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` (Anger.cs:33) == `self._damage += 2` (6 -> 8). Downgrade-safe: `_init_vars` re-seeds `_damage`, and `card_probes.py downgrade` does not list anger."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (Anger.cs:23)",
+      "verdict": "faithful",
+      "rationale": "An AnyEnemy card always has a resolved target; the sim's `ctx.resolve_target(target_idx)` is the same contract. No behavioural branch."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

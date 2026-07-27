@@ -1,0 +1,104 @@
+{
+  "unit": "relic/strike_dummy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\StrikeDummy.cs",
+    "sha256": "973198a95c6a9d30c0a97d75363e3d7cf0a91ef81fce13f5c2c95e4148d64342"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\strike_dummy.py",
+    "sha256": "47e5483cf8e97bfdef196227bc8c04e985c678bb7153172fb746a324d24cc113"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fake_strike_dummy.py",
+      "sha256": "4eeb32a93171856dd92e73d129e7aa0167dd926b2c47a177bdc4634c1d579ae9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/miniature_cannon.py",
+      "sha256": "feb3bdebc5fb0b00dc1cd4724cbf0b805f6e89f2551a1e23ef1cd204079508bb",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Powers/SurroundedPower.cs",
+      "sha256": "e45d9c106a130f991f1c56ca620de9cf97f57096e1b5c400fc7d86acf0227971",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/kaiser_crab.py",
+      "sha256": "450a8fdc792bfab4bbcdb7bf007f28ce3cadb00001d5b4889795d73e4f67eff3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (strike_dummy.py:19)",
+      "verdict": "faithful",
+      "rationale": "StrikeDummy.cs:15 is RelicRarity.Common. EXECUTED (b15-pool): Common in the transcribed grab bag."
+    },
+    "ModifyDamageAdditive": {
+      "maps_to": "modify_damage_additive (strike_dummy.py:23-32), dispatched by HookSystem.modify_damage_additive (hooks.py:52-64) from DamageCmd.deal (cmds.py:56-57)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and N1 per binding rule 4. The +3 on a Strike-tagged powered attack is right and executed; the props gate has been hoisted out of the listener into the call site (G1) and the dealer/owner clause has been narrowed (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): the `props.IsPoweredAttack()` test lives in the LISTENER in C# and in the DISPATCH SITE in the sim -- PROMPT.md bug class 27",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.ModifyDamageInternal walks EVERY listener with no props gate of its own (Hook.cs:2511-2526), and each implementer decides for itself -- StrikeDummy.cs:21-23 bails on `!props.IsPoweredAttack()` (ValuePropExtensions.cs:5-12: Move and not Unpowered). The sim's HookSystem.modify_damage_additive has NO props parameter at all (hooks.py:52-58), so the test was hoisted to the caller: cmds.py:56-57 runs the additive and multiplicative chains only `if is_powered_attack(props)`. This is exactly the shape PROMPT.md bug class 27 records at Hook.ModifyBlock (paels_legion), where the hoist silently skips a listener that wanted the looser predicate. WHY IT IS DORMANT HERE, and the census is EXECUTED rather than assumed (py audit/tools/relic_probes_b15.py b15-censuses): all ELEVEN C# ModifyDamageAdditive implementers gate on IsPoweredAttack -- AccuracyPower, CalcifyPower, LeadershipPower, PhantomBladesPower, StrengthPower, TaintedPower, VigorPower, FakeStrikeDummy, MiniatureCannon, MysticLighter and StrikeDummy -- and the sim's three relic-side listeners (sts2_rl/relics/strike_dummy.py:23, sts2_rl/relics/fake_strike_dummy.py:24, sts2_rl/relics/miniature_cannon.py:22) could not check props even if they wanted to. CENSUS WIDENED, and the old wording CORRECTED, by the 2026-07-26 relic fix pass: it is NOT true that 'the hoisted gate admits and excludes exactly the same set', because sts2_rl/cmds.py:55-58 puts the additive AND the MULTIPLICATIVE chains behind ONE `if is_powered_attack(props)`, and the multiplicative family has a ported implementer that does NOT self-gate: `SurroundedPower.ModifyDamageMultiplicative` (src/Core/Models/Powers/SurroundedPower.cs:46-72) tests only `dealer == null`, `target != base.Owner` and the player's Facing -- no IsPoweredAttack anywhere -- and the sim ports it at sts2_rl/powers.py:2523-2566. So the hoist ALREADY excludes a listener the game would run. DORMANCY STILL HOLDS, by a narrower argument than the old one: Surrounded's owner is the PLAYER (`target != base.Owner -> return 1m`), so the multiplier applies to damage the player RECEIVES from a dealer holding BackAttackLeft/RightPower -- i.e. the two Kaiser Crab arms -- and every ported Kaiser Crab move routes through `_execute_attack` (sts2_rl/monsters/hive/kaiser_crab.py:77, 80, 83, 95, 142, 145, 153) with default MONSTER_MOVE props, which are POWERED. No ported unpowered damage source has a Kaiser Crab arm as its dealer. The full mechanism, both families included, belongs to audit/records/seam/damage_pipeline.json gap G3 (binding rule 3); this entry records the relic's own dropped self-gate and the corrected census. What makes it live: the first ModifyDamageAdditive (or ModifyDamageMultiplicative/Cap) implementer that must run on UNPOWERED damage -- at which point the fix must add the props field to the hook signature, not flip the call-site gate, because relic/brilliant_scarf G1's sibling finding needs the distinction preserved. Recorded rather than waived because 'no ported content needs the looser predicate' is today's content, not the divergence's shape (binding rule 1)."
+    },
+    {
+      "what": "G2 (DORMANT): C# grants the +3 when EITHER the dealer is the owner's creature OR the Strike card BELONGS to the owner; the port requires the dealer",
+      "verdict": "gap",
+      "issue": "MECHANISM: StrikeDummy.cs:33-36 is `if (dealer != base.Owner.Creature && cardSource.Owner != base.Owner) return 0m;` -- a conjunction of negatives, so either clause alone suffices. strike_dummy.py:30 requires `dealer is self.player` and never consults the card's owner (the sim's Card has no owner concept in this hook's signature). Two sub-cases follow. (a) A player-owned Strike-tagged card whose damage is dealt with a dealer that is not the player -- C# pays, the sim does not. (b) In multiplayer, another player's Strike dealt BY this owner's creature -- waived under the shared contract's multiplayer exclusion. REACHABILITY of (a) (DORMANT, executed census -- b15-censuses): the ported Strike-tagged cards are exactly eight (ashen_strike, perfected_strike, pommel_strike, seeker_strike, setup_strike, strike, twin_strike, ultimate_strike) and ALL EIGHT pass `dealer=ctx.player` to DamageCmd.deal -- zero exceptions -- so no ported play can reach the branch. EXECUTED demonstration of the divergence with a synthetic call (b15-misc): `DamageCmd.deal(..., 6, dealer=None, card=make_card('strike'), props=DamageProps.CARD)` deals 6 in the sim where C# deals 9. What makes it live: porting any effect that re-deals a player's Strike-tagged card's damage from another creature (a player-side summon, a 'the enemy plays your card' effect) or that passes dealer=None on a card attack."
+    },
+    {
+      "what": "N1: `cardSource == null` and `!cardSource.Tags.Contains(CardTag.Strike)` (StrikeDummy.cs:25-32) vs `card is not None and 'strike' in card.tags` (strike_dummy.py:30) -- and the DOCSTRING, which describes a different rule",
+      "verdict": "faithful",
+      "rationale": "The predicate is right: the sim models CardTag.Strike as the literal string 'strike' in a frozenset on the card, and EXECUTED (b15-censuses) exactly eight ported cards carry it. The port's own docstring (strike_dummy.py:14-15) says 'cards with \"Strike\" in the name', which is NOT what either side does -- the tag is data, and a Strike-named card without the tag (or a tagged card without 'strike' in its name, e.g. `setup_strike`/`ashen_strike` are fine but a future `Cleave`-style tagged card would not be) would behave differently from the comment. This is PROMPT.md bug class 24 -- a docstring that misdescribes the PORT and would point a later reader at a false gap -- so the verdict is on the CODE, which is correct, and the comment is flagged rather than filed. EXECUTED (b15-misc): a Strike gets 6 -> 9, a Bash gets 6 -> 6, and an UNPOWERED Strike gets 6 -> 6."
+    },
+    {
+      "what": "N2: DynamicVar('ExtraDamage', 3m) read as BaseValue (StrikeDummy.cs:17, 37) vs EXTRA_DAMAGE = 3 (strike_dummy.py:21)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in StrikeDummy.cs, so 3 is the pinned non-ascension value. Re-read against the C# expression rather than against the port's own citation, per PROMPT.md bug class 19 (relics/iron_club.py pinned 6 while its docstring 'quoted' a CardsVar the source sets to 4). C# returns the raw BaseValue and the sim returns the raw int, with no per-hit scaling on either side, so a multi-hit Strike-tagged card (twin_strike) gets +3 PER HIT on both sides -- each hit is its own DamageCmd call."
+    },
+    {
+      "what": "N3: the RETURN CONVENTION -- C# returns 0m to decline, and the sim's dispatcher SUMS listener returns",
+      "verdict": "faithful",
+      "rationale": "Hook.ModifyDamageInternal accumulates `num += num2` over the listeners and records each non-zero contributor in its out-modifiers list (Hook.cs:2515-2524); hooks.py:60-64 sums the same way. strike_dummy.py:32 returns 0 on the decline path, matching StrikeDummy.cs's four `return 0m` bails, so declining adds nothing on either side. The one thing C#'s dispatcher carries that the sim's does not is membership of the modifiers list (which drives Hook.AfterModifyingDamageAmount); Strike Dummy implements no AfterModifyingDamageAmount, so it cannot observe that -- recorded because audit/records/seam/hook_dispatch.json step 38 owns the general case."
+    },
+    {
+      "what": "N4: no state, no reset hook, no IsAllowed override, no presentation members",
+      "verdict": "faithful",
+      "rationale": "StrikeDummy.cs is one override plus one DynamicVar and declares no field, no Flash and no IsAllowed. PROMPT.md bug classes 13 and 16 therefore cannot apply, and `py audit/tools/relic_probes.py sweep-reset` / `sweep-isallowed` list it in no bucket -- confirmed here by reading both files in full (PROMPT.md v6 item 1: a sweep may escalate, never clear)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

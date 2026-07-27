@@ -1,0 +1,63 @@
+{
+  "unit": "power/plow",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PlowPower.cs",
+    "sha256": "3c59d2c0e4bcae4dc599453d81188eeeef4aa6d9d4e5290181f3fa0279bf2f89"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1287 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only scaling (MultiplayerScalingModel). Out of scope; the sim is single-player."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:1289-1306 on_damage_received",
+      "verdict": "gap",
+      "issue": "Right hook and right slot; the threshold matches exactly (`target != base.Owner || result.UnblockedDamage <= 0 || target.CurrentHp > base.Amount -> return`, PlowPower.cs:30, vs powers.py:1297-1300). Three divergences. (1) The sim ADDS `self.owner.is_dead` to the early-out (powers.py:1297) where C# has no such guard -- recurring gap shape 8; dormant because the Ceremonial Beast is removed on death and a dead beast's stun is unobservable. (2) C# removes every `TemporaryStrengthPower` INSTANCE first and then `StrengthPower` (PlowPower.cs:35-40); the sim removes only `\"strength\"` (powers.py:1302). Dormant because TemporaryStrengthPower is unported (`grep -n '^class TemporaryStrengthPower' sts2_rl/powers.py` returns nothing) -- a named-unported-content dormancy, which per binding rule 1 is a dormant gap and not a waiver. (3) The STUN's follow-up state is delegated: C# calls `ceremonialBeast.SetStunned()` then `CreatureCmd.Stun(base.Owner, ceremonialBeast.StunnedMove, ceremonialBeast.BeastCryState.StateId)` and falls back to a bare `CreatureCmd.Stun(base.Owner)` for a non-Beast owner (PlowPower.cs:41-50); the sim calls a single `on_plow_broken()` on the monster if it exists and does NOT stun at all otherwise (powers.py:1303-1305). So a non-Ceremonial-Beast Plow holder is stunned in the game and not in the sim -- dormant, since monsters/glory/ceremonial_beast.py is the only applier -- and the named follow-up state is the same shape as FlutterPower's, which is LIVE (audit/records/power/flutter.json). Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "PlowPower.cs:51 PowerCmd.Remove(this) vs _expire()",
+      "verdict": "deliberate-divergence",
+      "rationale": "Plow overrides no AfterRemoved, so the observable is identical -- the same mechanism note as power/no_draw's and power/tainted's."
+    },
+    {
+      "what": "Order: strength removal BEFORE the stun on both sides",
+      "verdict": "faithful",
+      "rationale": "PlowPower.cs:35-45 vs powers.py:1302-1305. Load-bearing: the beast must lose its Strength before its telegraphed move is replaced, or the replaced move would be computed against the old Strength."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

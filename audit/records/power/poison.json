@@ -1,0 +1,88 @@
+{
+  "unit": "power/poison",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PoisonPower.cs",
+    "sha256": "9ba700615a5784fdb23647a4dabbe17e2e4b6c4a0ad90e0c8614fa557003989d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:471 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "AmountLabelColor": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "PoisonPower.cs:23 forces the normal (cream) label colour instead of the debuff red. Presentation."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "powers.py:473-490 PoisonPower._apply_poison via on_enemy_turn_start / on_player_turn_start",
+      "verdict": "gap",
+      "issue": "Three divergences, all DORMANT for one shared reason: **nothing in the sim applies Poison at all.** An executed grep for PoisonPower outside powers.py and the package re-exports returns no applier -- no card, relic, event, monster or potion. (a) SLOT: The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED -- with Poison 5 on the player a spy records ['hp-5', 'draw', 'draw', 'draw', 'draw'], i.e. the tick lands before the hand draw, where PoisonPower.cs:55 runs at CombatManager.cs:522 after it. That is conformance-visible even when nothing dies, because a lethal tick would cancel a draw the game already made. (b) TRIGGER COUNT: C# loops `TriggerCount` times (PoisonPower.cs:31-40,61-73), which is `min(Amount, 1 + the sum of AccelerantPower across living opponents)`; the sim always fires exactly once. AccelerantPower is unported, so per binding rule 1 this is a dormant gap rather than a waiver; named trigger = porting Accelerant. (c) DECREMENT GUARD: C# decrements only `if (Owner.IsAlive)` (PoisonPower.cs:65-68) whereas powers.py:482 always ticks; conversely the sim adds an entry guard C# does not have (`if self.owner.is_dead: return`, powers.py:474-475). Named trigger for the whole unit: porting any Poison source."
+    }
+  },
+  "guards": [
+    {
+      "what": "PoisonPower.cs:57-60 `!participants.Contains(base.Owner)` -> return",
+      "verdict": "faithful",
+      "rationale": "The sim's two legs self-filter to the owner instead (powers.py:485, :489). The per-creature-vs-per-side problem is recorded on the AfterSideTurnStart entry, not here."
+    },
+    {
+      "what": "PoisonPower.cs:64 ValueProp.Unblockable | ValueProp.Unpowered",
+      "verdict": "faithful",
+      "rationale": "powers.py:480 passes DamageProps.NON_CARD_HP_LOSS, which is exactly UNBLOCKABLE | UNPOWERED (valueprops.py:44-45). Also matches on dealer and cardSource: C# passes null for both, the sim omits both."
+    },
+    {
+      "what": "PoisonPower.cs:64 the damage amount is Amount, re-read each iteration",
+      "verdict": "faithful",
+      "rationale": "With one iteration the sim's single `self.amount` read (powers.py:479) is equivalent. Note C#'s CalculateTotalDamageNextTurn (:42-53) uses `Amount - i` for the PREVIEW while the loop itself uses the live post-Decrement Amount -- a preview-only asymmetry the sim has no counterpart for, and preview code is presentation."
+    },
+    {
+      "what": "CalculateTotalDamageNextTurn is not a hook",
+      "verdict": "faithful",
+      "rationale": "PoisonPower.cs:42 is `public int`, not `public override`, so the harness does not enumerate it and it has no dispatcher. Recorded so a reader does not think it was skipped."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

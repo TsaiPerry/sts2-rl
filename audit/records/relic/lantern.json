@@ -1,0 +1,63 @@
+{
+  "unit": "relic/lantern",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Lantern.cs",
+    "sha256": "e5fc452e0f38c418c0712ec30018085db24efd7912127ab6e6f6d62a8601fc04"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lantern.py",
+    "sha256": "04aaaee575ef196e82a1f59ebd2887547b28dc2075718dce9365bf23b94244e3"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (lantern.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (lantern.py:18-21)",
+      "verdict": "faithful",
+      "rationale": "Lantern.cs:21-28 gains `DynamicVars.Energy.BaseValue` == 1 energy on the player side while `PlayerCombatState.TurnNumber <= 1`. The mapping is the executed one, not the docstring's: `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, and audit/records/seam/turn_structure.json step 23 is where the player-side AfterSideTurnStart sits -- both AFTER the energy reset (steps 17-18), which is what makes the +1 survive rather than being overwritten. hooks.py:285-295 names Lantern in that slot's own docstring and the executed order agrees. EXECUTED (py audit/tools/relic_probes_b08.py b08-lantern): turn 1 energy 3 -> 4 with the relic, turn 2 back to 3, exactly C#'s numbers. `participants.Contains(base.Owner.Creature)` is structurally satisfied (player-side-only dispatch), and `self.turn <= 1` matches TurnNumber <= 1 given the executed numbering (the first on_player_turn_started fires at turn=1 and turn is a positive counter, so there is no turn-0 case where the spellings differ) -- the same argument audit/records/relic/bag_of_preparation.json makes for its ModifyHandDraw. Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `PlayerCmd.GainEnergy(amount, player)` (Lantern.cs:26) vs `EnergyCmd.gain(self.hooks, player, 1)` (lantern.py:20-21) -- the missing AfterModifyingEnergyGain companion and the `finalAmount > 0` / `IsEnding` guards",
+      "verdict": "gap",
+      "issue": "PlayerCmd.GainEnergy does five things: bail on `amount <= 0`, bail on `CombatManager.Instance.IsEnding`, `Hook.ModifyEnergyGain(... out modifiers)`, `await Hook.AfterModifyingEnergyGain(state, modifiers)`, then `GainEnergy(finalAmount)` only when finalAmount > 0. EnergyCmd.gain (cmds.py:545-554) does the modify chain and the add, and nothing else. Taken one at a time: the `amount <= 0` bail is unreachable (Lantern passes a pinned 1); the `finalAmount > 0` skip is equivalent because hooks.modify_energy_gain already clamps with `max(0, amount)` (hooks.py:215) and `+= 0` is a no-op -- EXECUTED, the only ported modify_energy_gain listener is powers.py:554 and the clamp is unconditional; the IsEnding guard is the combat-over guard family; and the missing AfterModifyingEnergyGain out-parameter/companion pair is the SAME family audit/records/relic/bag_of_preparation.json guard N1, audit/records/seam/turn_structure.json step 20 and audit/records/seam/power_cmd.json gap G4 all record for their own dispatchers -- one verdict per mechanism, binding rule 3. DORMANT at this site: Lantern itself implements no AfterModifyingEnergyGain (Lantern.cs declares only Rarity, CanonicalVars, ExtraHoverTips and AfterSideTurnStart), so none of ITS behaviour is lost; porting any model that implements the companion makes the energy hook's half live, exactly as bag_of_preparation records for the draw hook. Rule 7: cmds.py, hooks.py and powers.py are not hashed by this record."
+    },
+    {
+      "what": "N2: EnergyVar(1) read as BaseValue (Lantern.cs:17, 26) vs the literal 1 (lantern.py:21)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 1 is the pinned non-ascension value, and BaseValue is the read the shared contract pins."
+    },
+    {
+      "what": "N3: Flash() and ExtraHoverTips (HoverTipFactory.ForEnergy) (Lantern.cs:19, 25)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N4: no combat-boundary or turn-boundary reset in either version",
+      "verdict": "faithful",
+      "rationale": "Lantern holds no state at all -- it re-derives everything from PlayerCombatState.TurnNumber / self.turn, which the CombatState owns and rebuilds per combat. `py audit/tools/relic_probes.py sweep-reset` puts it in the 200-relic 'holds no state' bucket, so the belt_buckle shape (PROMPT.md bug class 13) cannot apply. Checked explicitly because two of this batch's siblings (kunai, letter_opener) do hold per-turn counters and this one deliberately does not."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

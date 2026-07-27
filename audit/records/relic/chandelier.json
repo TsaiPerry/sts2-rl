@@ -1,0 +1,58 @@
+{
+  "unit": "relic/chandelier",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Chandelier.cs",
+    "sha256": "ab78a72c9a34a56d87bbad834b42d75aacdeca60e3653fd16905b4fd119afa0e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\chandelier.py",
+    "sha256": "553fb3800f07f04b8a952a37ee95fa17b21d008d535dcb17a1a9851261645c8c"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (chandelier.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (chandelier.py:18-21)",
+      "verdict": "faithful",
+      "rationale": "Chandelier.cs:23-34 gains EnergyVar(3).BaseValue when the owner is among the participants and PlayerCombatState.TurnNumber == 3; chandelier.py:19-21 is the same branch with the same constant. Same slot argument as the sibling relic/candelabra, executed via `py audit/tools/relic_probes.py turn-order`: on_player_turn_started is the post-draw slot that audit/records/seam/turn_structure.json step 23 assigns to AfterSideTurnStart, i.e. after the energy reset at step 17, so the +3 survives."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `participants.Contains(base.Owner.Creature)` (Chandelier.cs:25)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `card.Owner != base.Owner` / `participants.Contains(base.Owner.Creature)` family is the multiplayer per-player filter on a hook the game dispatches for every player (and, for the participants form, also admits pets). The sim is single-player by construction (one RunState, one PlayerCombatState) and models no pet creature, so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: `TurnNumber == 3` vs `self.turn == 3` (chandelier.py:19)",
+      "verdict": "faithful",
+      "rationale": "Same mechanism and same verdict as relic/candelabra N2 and relic/captains_wheel N2 (binding rule 3): audit/records/seam/turn_structure.json's extra-turn step establishes that self.turn models PlayerCombatState.TurnNumber, and lists the ported turn-number readers it checked."
+    },
+    {
+      "what": "N3: `PlayerCmd.GainEnergy` vs `EnergyCmd.gain` (chandelier.py:21)",
+      "verdict": "faithful",
+      "rationale": "Identical to relic/candelabra N3 -- EnergyCmd.gain (cmds.py:547-553) runs modify_energy_gain like PlayerCmd.GainEnergy runs Hook.ModifyEnergyGain; the only dropped leg is the AfterModifyingEnergyGain companion event, which belongs to the hook layer. Contrast relic/booming_conch, whose direct assignment skips the chain entirely and is a recorded gap."
+    },
+    {
+      "what": "N4: `EnergyVar(3)` and the unused `private const int _energyTurn = 3` (Chandelier.cs:15, 19)",
+      "verdict": "faithful",
+      "rationale": "Turn index and energy amount are both 3 here, as they were both 2 in Candelabra -- the same coincidence, checked the same way. The const is dead in the decompiled source; line 27's literal 3 is the turn test and DynamicVars.Energy is the amount. The sim's single literal 3 serves the amount and its `self.turn == 3` the index. No AscensionHelper call in the file."
+    },
+    {
+      "what": "N5: `InvokeDisplayAmountChanged()` (Chandelier.cs:32), which fires on EVERY turn the owner participates in, not only turn 3, plus Flash() and ExtraHoverTips (lines 21, 29)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Worth naming explicitly because it is the one structural difference between Chandelier and Candelabra: Chandelier's hook body does something on every turn, and that something is a UI refresh notification with no model effect."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

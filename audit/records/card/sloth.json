@@ -1,0 +1,74 @@
+{
+  "unit": "card/sloth",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Sloth.cs",
+    "sha256": "96985eb2dfe22e21770a4732e4073f4d0ae4634b24743a741d43b5e3ccf57a54"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\knowledge_curses.py",
+    "sha256": "d29aca1c34977dec78a38306040848d832018f4f0144e0703b77eb663e8ae57a"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "_ChoosableCurse.max_upgrade_level = 0 (knowledge_curses.py:24)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Sloth.cs:14) == the shared base-class attribute."
+    },
+    "CanBeGeneratedInCombat": {
+      "maps_to": "NOT PORTED -- the sim sets `can_be_generated_by_modifiers = False` instead (knowledge_curses.py:26)",
+      "verdict": "gap",
+      "issue": "`public override bool CanBeGeneratedInCombat => false` has no counterpart: the sim's shared `_ChoosableCurse` base leaves `can_be_generated_in_combat` True and instead turns off `can_be_generated_by_modifiers` (knowledge_curses.py:26), which the C# card does not override (it stays `=> true`, CardModel.cs:648). Two mismatched flags in one card. Same mechanism and same verdict as card/disintegration's and card/mind_rot's entries (rule 3). DORMANT both ways: `pool_card_ids()` (IRONCLAD_POOL) holds no Status cards and the random-CURSE pool holds no Status-rarity cards."
+    },
+    "ctor": {
+      "maps_to": "class attrs on _ChoosableCurse (knowledge_curses.py:20-26) + _init_vars (32-35)",
+      "verdict": "gap",
+      "issue": "STATUS / STATUS / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
+    },
+    "CanonicalVars": {
+      "maps_to": "SlothCard.default_power_amount = 3 (knowledge_curses.py:73)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<SlothPower>(3m)` (Sloth.cs:18) == `default_power_amount = 3`, copied into `self.power_amount` by `_init_vars` so it is re-seeded on downgrade. Note the amount is a CARD-PLAY LIMIT (3 cards per turn), not a damage or stack count."
+    },
+    "OnChosen": {
+      "maps_to": "_ChoosableCurse's power application via CombatState.select_cards (knowledge_curses.py module docstring; the chooser is the Knowledge Demon)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<SlothPower>(new ThrowingPlayerChoiceContext(), Owner.Creature, DynamicVars[\"SlothPower\"].IntValue, Owner.Creature, this)` (Sloth.cs:25-28) == the sim's select-then-apply path reading `power_cls` and `power_amount` off the chosen card. Self-target, self-applier, amount 3. `KnowledgeDemon.IChoosable` is an interface rather than a CardModel override, so the harness's `public override` scan does not enumerate it -- added by hand. NOTE: SlothPower's 3-cards-per-turn limit is the same MECHANIC as card/normality's, and normality's port reads the wrong history (plays finished vs plays started); whether SlothPower repeats that mistake is the power stream's to check."
+    },
+    "OnPlay": {
+      "maps_to": "_ChoosableCurse.on_play -> pass (knowledge_curses.py:38-39)",
+      "verdict": "faithful",
+      "rationale": "Sloth.cs declares no OnPlay."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim marks the card `is_playable = False` (knowledge_curses.py:23); Sloth.cs declares NO Unplayable keyword",
+      "verdict": "gap",
+      "issue": "C# gives this Status no CanonicalKeywords at all, so in the game it is a PLAYABLE no-effect Status. Same mechanism and same verdict as card/disintegration's and card/mind_rot's guards (rule 3). DORMANT: the four Knowledge-Demon cards never reach a combat pile on either side."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

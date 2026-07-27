@@ -1,0 +1,63 @@
+{
+  "unit": "card/squash",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Squash.cs",
+    "sha256": "362bdec7d1e015ef79a394df6a69e4445f3e5a2b5177b0fb374a13edc1cb1104"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:248-252) + _init_vars (254-257)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.AnyEnemy)` (Squash.cs:24-27) == cost 1 / ATTACK / EVENT / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 10, _vulnerable = 2 (event_cards.py:256-257)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(10m, ValueProp.Move)` + `new PowerVar<VulnerablePower>(2m)` (Squash.cs:18-22) == both numbers, both declared. Powered damage on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "SquashCard.on_play (event_cards.py:263-271)",
+      "verdict": "gap",
+      "issue": "C# applies the debuff unconditionally and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose doc comment states that DEAD creatures can still receive powers -- it refuses only for a REMOVED corpse. The two agree for an ordinary kill (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, removal at 523-525) and diverge for a corpse whose removal was VETOED (`ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104), because `is_gone` is `is_dead or escaped` (creatures.py:44-46). Observable through ViciousPower, which draws on any Vulnerable its owner applies with no liveness test on the target (ViciousPower.cs:19-26). Same mechanism and same verdict as card/bash's OnPlay entry (rule 3); LIVE. EXECUTED: `py audit/tools/card_probes.py dead-target-guards` lists 41 sim card classes that test liveness. Damage 10 first, then Vulnerable 2 -- amounts and order faithful (Squash.cs:32-35). Presentation, folded in: WithHitFx and the Vulnerable hover tip."
+    },
+    "OnUpgrade": {
+      "maps_to": "SquashCard._on_upgrade (event_cards.py:259-261)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` + `DynamicVars.Vulnerable.UpgradeValueBy(1m)` (Squash.cs:40-41) == `_damage += 2` (10 -> 12) and `_vulnerable += 1` (2 -> 3). Both upgraded numbers checked."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

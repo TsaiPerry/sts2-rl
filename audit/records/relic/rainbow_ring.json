@@ -1,0 +1,84 @@
+{
+  "unit": "relic/rainbow_ring",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RainbowRing.cs",
+    "sha256": "2af36eb8b68494aabc34ac77cb75f7785850a5218631fe12c630cef96caab1a8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\rainbow_ring.py",
+    "sha256": "1ae7d861d2452ee7df794abbe7bd79bf3ba6edc0977af16973731b0f06a5e41b"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (rainbow_ring.py:20)",
+      "verdict": "faithful",
+      "rationale": "Matches RainbowRing.cs:27. In the transcribed shared grab bag as Rare (relic_pools.py:122), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "CanonicalVars": {
+      "maps_to": "the literals 1 and 1 (rainbow_ring.py:45-46)",
+      "verdict": "faithful",
+      "rationale": "RainbowRing.cs:35-39 pins `new PowerVar<StrengthPower>(1m)` and `new PowerVar<DexterityPower>(1m)`, and AfterCardPlayed passes `.BaseValue` for both (RainbowRing.cs:117-118). No AscensionHelper.GetValueIfAscension in the file, so 1/1 are the non-ascension values. Also checked: BaseValue not IntValue at both call sites, so there is no display/behaviour split of the kind batch 1 recorded for big_mushroom."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (rainbow_ring.py:29-30)",
+      "verdict": "deliberate-divergence",
+      "rationale": "RainbowRing.cs:94-105 zeroes all four counters at turn_structure step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed at step 19, after the block clear and the energy reset (`py audit/tools/relic_probes.py turn-order`). Only a counter RESET happens here and the first READER is on_card_played, which cannot run before the play phase opens at step 28, so the four values are 0 at every moment either codebase can observe them. Same reasoning and same verdict as relic/brilliant_scarf's BeforeSideTurnStart (batch 2) and relic/beating_remnant's (batch 1) -- one verdict per mechanism, binding rule 3. Recorded as a divergence rather than faithful because the slot genuinely differs and an effect placed in that window would expose it. The `participants.Contains(Owner.Creature)` guard (RainbowRing.cs:96-99) is structurally satisfied: on_player_turn_start fires for the player side only."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (rainbow_ring.py:32-46)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The trigger, the amounts, the applier and the order (Strength then Dexterity) all match; the difference is WHEN the once-per-turn latch is set relative to the two PowerCmd.apply calls."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (rainbow_ring.py:29-30) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "RainbowRing.cs:124-131 zeroes the same four counters at combat end as well as at turn start; the sim keeps only the turn-start half. TRACED TO THE FIRST READER as PROMPT.md bug class 13 requires, and EXECUTED (`py audit/tools/relic_probes_b13.py rainbow-ring`): the instance leaves combat 1 with _attack=_skill=_power=_activated=True, and combat 2's own construction runs player.start_turn() -> on_player_turn_start, which reports all four back to False before any card can be played. `py audit/tools/relic_probes.py sweep-reset` files this relic in the 'RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- genuinely safe)' bucket, and that classification is confirmed here rather than inherited. Contrast relic/red_skull and relic/ruined_helmet in this same batch, whose dropped AfterCombatEnd resets have NO turn-start clear to fall back on and are live gaps."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): C# increments ActivationCountThisTurn AFTER awaiting both PowerCmd.Apply calls (RainbowRing.cs:117-119); the sim sets `_activated = True` BEFORE them (rainbow_ring.py:42)",
+      "verdict": "gap",
+      "issue": "MECHANISM: C#'s guard is `ActivationCountThisTurn < 1` (RainbowRing.cs:109) and the counter is only bumped at line 119, after `await PowerCmd.Apply<StrengthPower>` and `await PowerCmd.Apply<DexterityPower>` have both resolved. Anything that re-enters Hook.AfterCardPlayed from inside those two awaits therefore sees the counter still at 0 AND the three type counts still > 0, and activates a SECOND time -- C# is re-entrant here, and the sim is not, because rainbow_ring.py:42 latches first and rainbow_ring.py:33-34 bails on the latch. The divergence is 1 extra Strength and 1 extra Dexterity, in the sim's favour of caution. REACHABILITY (DORMANT): re-entry needs a card played from inside a Strength or Dexterity APPLICATION. The sim routes auto-plays through CombatState.auto_play_card, which fires the full card-play bracket including on_card_played, and eight ported sites call it (cards/cascade.py, cards/colorless_skills.py x2, powers.py x3, potions.py -- the census batch 2 recorded for relic/brilliant_scarf G1), but every one of them is triggered by a card play or a turn boundary, not by a power application: `grep -n 'def on_power_applied' sts2_rl/powers.py` finds no listener that plays a card. Porting a power or relic that auto-plays a card in reaction to gaining Strength/Dexterity makes it live. Filed as a gap rather than waived because the shape of the divergence -- latch-before vs latch-after -- is a property of the port, not of today's content (binding rule 1)."
+    },
+    {
+      "what": "N1: C# has NO IsAutoPlay exclusion on AfterCardPlayed, so the sim counting auto-plays is correct here",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately, because the sibling relic relic/brilliant_scarf DOES carry `if (cardPlay.IsAutoPlay) return;` (BrilliantScarf.cs:84-87) and the sim's failure to honour it is that record's LIVE gap G1. RainbowRing.cs:107-121 has no such clause -- its only guards are the card-owner check, CombatManager.Instance.IsInProgress and the activation count -- so an auto-played Attack/Skill/Power legitimately counts towards the trio on both sides. This is the kind of near-miss PROMPT.md bug class 15 warns about: paired relics rarely carry the same guard set, and copying brilliant_scarf's verdict here would have invented a gap."
+    },
+    {
+      "what": "N2: C# counts INTS per card type; the sim uses three booleans",
+      "verdict": "faithful",
+      "rationale": "RainbowRing.cs:111-113 adds 1 or 0 per type and line 114 tests `> 0` on all three; the sim sets three booleans and tests their conjunction (rainbow_ring.py:35-41). Equivalent for every reachable state, and the counters are unreadable from outside (they are private with AssertMutable setters, RainbowRing.cs:41-78). One structural difference is worth naming: C# adds to all three counters on every play while the sim's if/elif assigns exactly one, but since only the >0 tests are ever read they agree. EXECUTED (`py audit/tools/relic_probes_b13.py rainbow-ring`): Attack+Skill+Power in one turn gives Strength 1 / Dexterity 1, and a second full set in the same turn changes nothing."
+    },
+    {
+      "what": "N3: `CombatManager.Instance.IsInProgress` and `cardPlay.Card.Owner == base.Owner` (RainbowRing.cs:109)",
+      "verdict": "faithful",
+      "rationale": "Both structurally satisfied: on_card_played is a combat hook dispatched only by a live CombatState, combat.py's play loop breaks once the fight is decided, and the sim has a single card owner. Same disposition as relic/brilliant_scarf's N1 in batch 2."
+    },
+    {
+      "what": "N4: applier is the player's own creature on both PowerCmd.Apply calls (RainbowRing.cs:117-118) and in the port (rainbow_ring.py:45-46)",
+      "verdict": "faithful",
+      "rationale": "Matters for two other relics in the pool and one in this batch. relic/unsettling_lamp's doubling requires `applier is self.player`, and relic/ruined_helmet doubles the first positive StrengthPower on the player regardless of applier -- so Rainbow Ring's +1 Strength is a legitimate Ruined Helmet trigger on both sides, and the sim agrees because it passes the same applier C# does (cardSource is null on both sides too). Checked deliberately: an applier MISMATCH here would have silently changed which relic gets to double what."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

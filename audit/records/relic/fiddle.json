@@ -1,0 +1,163 @@
+{
+  "unit": "relic/fiddle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Fiddle.cs",
+    "sha256": "2326900ac466ae4a1847b3ceb1a37d635cdc9c93730fc387109cd83342acd037"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fiddle.py",
+    "sha256": "860b198228cbf072ca3d1c7eb46094e9eee8de35e0fd74f98b25600493fbca63"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/MindRotPower.cs",
+      "sha256": "3676390da138fd28e1f6289419ffd57b0fa4e0e96f7509f0354f11dc855849a1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/knowledge_curses.py",
+      "sha256": "d29aca1c34977dec78a38306040848d832018f4f0144e0703b77eb663e8ae57a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/bag_of_preparation.py",
+      "sha256": "7a4e14905fb9d88586ed4d4adb78ad771d5b89561480975b26ae7b73ed60a211",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/big_mushroom.py",
+      "sha256": "d2cc32319de1f178d350da05fb8d26bd6a693b5ae3ff17955780103936e78d6e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/booming_conch.py",
+      "sha256": "bfca57a42cfaf1a3dc5e70049be99405a561fbf5d8eaa069746080a31bc961b7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/centennial_puzzle.py",
+      "sha256": "fa3de18b57282f95eb03dadd6d706ebffa9e7371f06e502acdbd5dbd8dbe3a10",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/demon_tongue.py",
+      "sha256": "1940c74aeadbe2fffc8c3b510bb1f3e6a5c26b0d44ce9a85575deff5ac45cb11",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/gremlin_horn.py",
+      "sha256": "d056b799eb6625767ab63dd52b23d6bd9984624bb3de91a87406c4fdbf1b74d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_blood.py",
+      "sha256": "7c7b8066d0a06f90a2b3c566041923216f76c5cfd74a024d706ca8412df5f3e3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pendulum.py",
+      "sha256": "5a670586fcbb78defc9f2a4a6182bc08458a325abdba78756ca7caa6eceba141",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pocketwatch.py",
+      "sha256": "18d433f6e5305405c30200dcad9b38fc469a09614fb45324e9825b2762aa6c55",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pollinous_core.py",
+      "sha256": "e122b2f7a15f2b8dda7c91ecd7ab54ea1d7e5dfccfeaae832ba74c8459570b17",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/snecko_eye.py",
+      "sha256": "0e086508c8286fbe0843a1abb5bd12d970c50413aa7b394de08b75019049d884",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/unceasing_top.py",
+      "sha256": "fc9e1f4b5772a120a7d84674b3975f750ecd25e8a05ff1c6d0be956b69df50c3",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (fiddle.py:19)",
+      "verdict": "faithful"
+    },
+    "ModifyHandDrawLate": {
+      "maps_to": "modify_hand_draw (fiddle.py:23-24), dispatched by HookSystem.modify_hand_draw (hooks.py:217-222) from PlayerCombatState.start_turn (player.py:171)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G2 and N1 per binding rule 4. The arithmetic matches -- Fiddle.cs:21 returns `count + Cards.IntValue` and CanonicalVars pins CardsVar(2) (Fiddle.cs:13), the sim's CARDS = 2 (fiddle.py:21) -- but the hook is ModifyHandDraw**Late**, i.e. the SECOND of Hook.ModifyHandDraw's two complete listener passes (Hook.cs:1683-1708: every ModifyHandDraw first, then every ModifyHandDrawLate), and the sim has one flat pass (G2). The owner guard is dropped (N1, waived)."
+    },
+    "ShouldDraw": {
+      "maps_to": "should_draw (fiddle.py:26-29), dispatched by HookSystem.should_draw (hooks.py:631-642) from PlayerCombatState._draw (player.py:276-282)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. C# has THREE bails and the sim reproduces one: `fromHandDraw -> return true` is `return from_hand_draw`, but `player != base.Owner` (N1, waived) and -- the substantive one -- `player.Creature.Side != player.Creature.CombatState.CurrentSide -> return true` (Fiddle.cs:34-37) are both missing. Fiddle only forbids draws during its owner's OWN turn; the sim forbids every non-hand-draw draw for the whole combat. LIVE, executed: `py audit/tools/relic_probes_b06.py fiddle-draw`."
+    },
+    "AfterPreventingDraw": {
+      "maps_to": "no counterpart; the sim's should_draw has no preventer out-param and no notification hook",
+      "verdict": "waiver",
+      "rationale": "Fiddle.cs:41-45 is `Flash(); return Task.CompletedTask;` -- presentation only. audit/records/seam/hook_dispatch.json step 35 already establishes the same thing by census and verdicts it faithful there: Hook.AfterPreventingDraw (Hook.cs:1056-1067) has exactly ONE implementer in the whole game, this one, and its body is a Flash, 'so nothing observable is dropped'. Cited and matched rather than re-derived (binding rule 3); the seam owns the missing out-param, this record owns Fiddle's body. NOTE per binding rule 7: audit/records/seam/hook_dispatch.json and Hook.cs are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C#'s ShouldDraw allows the draw whenever the current side is NOT the owner's (Fiddle.cs:34-37); the sim's should_draw ignores the side entirely, so draws taken during the ENEMY's turn are vetoed too",
+      "verdict": "gap",
+      "issue": "MECHANISM: Fiddle.cs:24-39 returns true (allow) on `fromHandDraw`, on a foreign player, and on `player.Creature.Side != player.Creature.CombatState.CurrentSide`. Only the fall-through returns false. So the relic's downside is scoped to the player's own turn -- an off-turn draw is untouched. fiddle.py:26-29 is `return from_hand_draw` and consults no side, even though the sim HAS the concept: CombatState.current_side (combat.py:170 initial, :280 set to 'enemy', :284 restored) and two other relics already read it (relics/unceasing_top.py:24, relics/demon_tongue.py:38). REACHABILITY (LIVE, both sides proved by execution -- `py audit/tools/relic_probes_b06.py fiddle-draw`): Fiddle is granted by the ported Vakuu shrine (events/vakuu.py) and Centennial Puzzle draws 3 cards on the first HP loss of the combat (relics/centennial_puzzle.py:32-35, Common in the transcribed grab bag), and the player loses HP on the ENEMY's turn, inside CombatState._execute_enemy_turn's `current_side = 'enemy'` window (combat.py:279-284). Probe output: with Centennial Puzzle alone the three enemy-turn should_draw calls all return True and the player enters turn 2 with 8 cards; add Fiddle and the FIRST enemy-turn call returns False, the other two never happen, and the player enters turn 2 with 7 -- where C# gives 3 + (5 + 2) = 10. The lost cards are silent: nothing reports a vetoed draw (that is exactly what AfterPreventingDraw would have flashed). Other ported off-turn draw sources reach the same veto: relics/gremlin_horn.py:22 (an enemy dying on its own turn), relics/pendulum.py:30 and powers.py:1170 (ViciousPower, on the owner applying Vulnerable)."
+    },
+    {
+      "what": "G2 (DORMANT): the hook is ModifyHandDraw**Late** -- Hook.ModifyHandDraw's second complete listener pass (Hook.cs:1683-1708) -- and hooks.py:217-222 is a single flat fold",
+      "verdict": "gap",
+      "issue": "This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes) at a site that record does not name; one verdict per mechanism, binding rule 3, so this entry does not re-derive it -- the seam owns the machinery, this record owns Fiddle's observable. Fiddle running LAST is load-bearing only against a listener that CLAMPS: the two-pass order guarantees that MindRotPower's `Math.Max(0m, count - Amount)` (MindRotPower.cs:14-21) sees the total WITHOUT Fiddle's +2, while the sim's order is listener-registration order (relics registered at CombatState construction, powers when applied), which puts Fiddle first. DORMANT: an executed census of the sim's nine other modify_hand_draw implementers (grep `def modify_hand_draw` over sts2_rl/ -> powers.py:2648 MindRot, :2746 DrawCardsNextTurn, :3895 Clarity, relics/bag_of_preparation.py:18, big_mushroom.py:29, booming_conch.py:26, paels_blood.py:22, pocketwatch.py:37, pollinous_core.py:31, snecko_eye.py:32) finds exactly ONE clamping listener, MindRot, and addition is commutative everywhere else, so the two orders agree unless the running total reaches 0 at MindRot -- which needs MindRot amount >= 6 against a base of 5 (`cards/knowledge_curses.py:53-63` gives the curse default_power_amount 1, so it takes six stacked Mind Rot curses). Porting any further clamping or multiplicative hand-draw modifier makes it live at any amount."
+    },
+    {
+      "what": "N1: `player != base.Owner` on BOTH ModifyHandDrawLate (Fiddle.cs:17-20) and ShouldDraw (Fiddle.cs:30-33); the sim checks neither",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only: the guard exists to stop one player's relic modifying another player's draw. The sim's CombatState holds exactly one PlayerCombatState (combat.py:112-116) and every dispatch passes it, so the guard can never be false. Waived under the shared contract's multiplayer exclusion. Recorded because the two C# hooks carry the SAME guard here, which is the case PROMPT.md bug class 15 warns is usually not true -- checked deliberately, and they do match."
+    },
+    {
+      "what": "N2: CardsVar(2) read as IntValue (Fiddle.cs:21) vs the sim's literal CARDS = 2 (fiddle.py:21)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in Fiddle.cs, so 2 is the pinned non-ascension value."
+    },
+    {
+      "what": "N3: the turn-start hand draw itself must still be allowed, i.e. the relic must not deadlock its own +2",
+      "verdict": "faithful",
+      "rationale": "player.py:183-186 draws with from_hand_draw=True and hooks.py:638-642 threads the flag to every listener, so fiddle.py:29's `return from_hand_draw` lets the 7-card opening hand through. Executed: `py audit/tools/relic_probes_b06.py fiddle-draw` reports turn-1 hand = 7 with Fiddle and 5 without."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/fiddle's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Hooks/Hook.cs, src/Core/Models/Powers/MindRotPower.cs, sts2_rl/cards/knowledge_curses.py, sts2_rl/combat.py, sts2_rl/events/vakuu.py, sts2_rl/hooks.py, sts2_rl/player.py, sts2_rl/powers.py, sts2_rl/relics/bag_of_preparation.py, sts2_rl/relics/big_mushroom.py, sts2_rl/relics/booming_conch.py, sts2_rl/relics/centennial_puzzle.py, sts2_rl/relics/demon_tongue.py, sts2_rl/relics/gremlin_horn.py, sts2_rl/relics/paels_blood.py, sts2_rl/relics/pendulum.py, sts2_rl/relics/pocketwatch.py, sts2_rl/relics/pollinous_core.py, sts2_rl/relics/snecko_eye.py, sts2_rl/relics/unceasing_top.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

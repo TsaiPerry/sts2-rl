@@ -1,0 +1,103 @@
+{
+  "unit": "event/doll_room",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\DollRoom.cs",
+    "sha256": "a58e5ffacb30272fbf9c24e1896992f3521de150826141c759adbb44ca0d8982"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\doll_room.py",
+    "sha256": "e39f43c0a512e4b6443e5591c60117e9093425c7d96c70a7e65ed0b8223916c9"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/actmap.py",
+      "sha256": "1d4cb7a59c716b79d7b13d8478d0d705b7ea092cb41380fcb241860bd722206a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "DollRoom.is_allowed (events/doll_room.py:37-39) `run.act_index == 1`, matching DollRoom.cs:79-82 `runState.CurrentActIndex == 1`. No quantifier on this one.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars TakeTimeHpLoss 5 and ExamineHpLoss 15, both Unblockable|Unpowered (DollRoom.cs:73-77)",
+      "maps_to": "events/doll_room.py:11-12 _TAKE_TIME_HP_LOSS = 5, _EXAMINE_HP_LOSS = 15. Exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "_dolls (DollRoom.cs:41-58) in source order: Daughter of the Wind, Mr. Struggles, Bing Bong",
+      "maps_to": "events/doll_room.py:15 _DOLLS = ('daughter_of_the_wind', 'mr_struggles', 'bing_bong'), same order.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three branch shapes: RANDOM is free and takes NextItem(_dolls); TAKE_SOME_TIME takes 5 damage then offers a StableShuffle'd 2; EXAMINE takes 15 damage then offers all 3 StableShuffle'd (DollRoom.cs:106-139)",
+      "maps_to": "events/doll_room.py:52-67 reproduces all three, damage before offer in both paid branches. The stable shuffle is the right SHAPE: DollChoice.CompareTo delegates to RelicModel.CompareTo (DollRoom.cs:29-32) and actmap.stable_shuffle sorts then Fisher-Yates (actmap.py:193-201); with key=None the sim sorts the id slugs, whose order (bing_bong, daughter_of_the_wind, mr_struggles) matches the game's Entry ordinal order (BingBong, DaughterOfTheWind, MrStruggles) -- the same slug-tracks-Entry assumption player.py:252-263 documents for the draw pile.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ChooseDollAndShowDescription (DollRoom.cs:153-158): RelicCmd.Obtain(relic)",
+      "maps_to": "events/doll_room.py:48-50 run.add_relic(relic_id), which runs the relic's AfterObtained (run.py:546-553).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: all three doll picks -- `base.Rng.NextItem(_dolls)` (DollRoom.cs:108) and the two `StableShuffle(base.Rng)` calls (DollRoom.cs:117, 132) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "BeforeEventStarted / OnEventFinished / StopAudio -- the doll-room ambience handle (DollRoom.cs:94-101, 160-172)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "EV-1: TAKE_SOME_TIME's 5 and EXAMINE's 15 HP loss (DollRoom.cs:116, 131) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

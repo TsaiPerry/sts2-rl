@@ -1,0 +1,118 @@
+{
+  "unit": "power/the_bomb",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\TheBombPower.cs",
+    "sha256": "134cacd31438d5972a1979b438f973258b8d7259dfc0cea49b1b298f247319f3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/TheBomb.cs",
+      "sha256": "743b83f2841f11c84a7feb19e0180e62ff932761060f3f4056ddfa69846b26c0",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3757 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack, OVERRIDDEN at powers.py:3770-3772",
+      "verdict": "deliberate-divergence",
+      "rationale": "PowerStackType.Counter, but the sim deliberately does NOT add: on_stack appends a new (turns_left, damage) fuse to self.bombs and sets self.amount to the shortest fuse. That is the sim's hand-rolled workaround for the missing PowerInstanceType (see the InstanceType entry), and it is the RIGHT approximation -- C#'s Amount is a per-instance turn counter, so summing two instances' counters (what plain Power.on_stack would do) would be meaningless. Recorded as a deliberate divergence rather than faithful because the mechanism genuinely differs and the sim's own docstring (powers.py:3750-3753) says so."
+    },
+    "InstanceType": {
+      "maps_to": "powers.py:3768-3772 the self.bombs fuse list",
+      "verdict": "gap",
+      "issue": "RE-VERDICTED 2026-07-26 (review fix pass): `deliberate-divergence` -> `gap`. PowerInstanceType.Instanced (TheBombPower.cs:23) means every application is an independently tracked instance with its own Amount and its own DynamicVars.Damage, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). That MECHANISM is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units, and it is not re-argued here (binding rule 3); what is per-unit is REACHABILITY of two simultaneous instances and what diverges once they exist. **REACHABILITY: two live fuses are plainly reachable.** The Bomb is a ported Uncommon Colorless Skill with NO Exhaust keyword (cards/colorless_skills.py:715-743, mirroring TheBomb.cs:23-26 whose CanonicalKeywords is empty), so it can simply be played on two consecutive turns. EXECUTED 2026-07-26: play it, end the turn, play it again -- the sim holds ONE `the_bomb` power whose fuse list is [[2, 40], [3, 40]] and whose `amount` is `min(turns for turns, _ in self.bombs)` == 2 (powers.py:3770-3772), where C# holds TWO TheBombPower instances with Amount 2 and Amount 3. **WHAT IS AND IS NOT REPRODUCED.** The DAMAGE is exact, and this unit is one of only two of G5's eleven ported units that acknowledges the distinction at all: each fuse carries its own turns_left and its own damage (powers.py:3768, :3771, set_damage at :3774-3777), the turn-end pass explodes every fuse at <= 1 independently and decrements the rest (:3785-3788), and the power only expires when the list empties (:3799-3800). The STATE is not reproduced, and that is why this is a gap rather than a divergence with the same observable outcome (binding rule 2). A different power list (one entry where the game has two) and a different amount (2 where the game shows 2 and 3) is not an internal detail: full_env.py:412 encodes EVERY ALL_POWERS id as a presence bit plus a signed amount at two scales, so the game's two-instance state cannot even be represented in the sim's observation, and any power-list comparison sees one entry for two. The second residue was already named on this entry before it was graded dd, and stands: an effect that removed 'a' Bomb would remove all of them in the sim, and set_damage always writes the NEWEST fuse (:3777), which is correct only because TheBomb.cs:30 calls SetDamage immediately after applying. **RULE 3:** the identical G5 mechanism is `gap` on power/rolling_boulder, whose two-instance case is reachable exactly the same way (a non-exhausting ported Colorless card played twice). Grading it `deliberate-divergence` here and `gap` there was a rule-3 break, and this is the site that moves: a good workaround makes the gap SMALLER -- the damage is right where rolling_boulder's is arithmetically 5 short on two consecutive turns -- not absent."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "powers.py:3779-3802 TheBombPower.on_player_turn_end (combat.py:654)",
+      "verdict": "faithful",
+      "rationale": "CORRECT SLOT, and it is worth recording as such because most of this stream's turn-end units are not. Hook.BeforeSideTurnEnd is dispatched by Hook.BeforeTurnEnd, called for the player side at CombatManager.cs:1179 -- BEFORE DoTurnEnd (:1191) and FlushPlayerHand (:1296) -- and the sim's on_player_turn_end is exactly that point (combat.py:654, before _process_turn_end_cards at :658 and the flush at :661-662). The Amount > 1 -> Decrement / else explode-then-Remove structure matches (TheBombPower.cs:44-57 vs powers.py:3785-3800). NOTE this is the plain pass, not an Early one, so power/plating's BeforeSideTurnEndEarly block correctly precedes it in the game -- the phase gap recorded on that unit is the sim's failure to guarantee it, and The Bomb damages ENEMIES, so the two do not actually contend."
+    }
+  },
+  "guards": [
+    {
+      "what": "TheBombPower.cs:40-43 participants.Contains(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "powers.py:3782-3783 self-filters on the owner. The Bomb is player-only in ported content (cards/colorless_skills.py:737-739), so the side question does not arise."
+    },
+    {
+      "what": "TheBombPower.cs:51 / :56 CombatState.HittableEnemies",
+      "verdict": "gap",
+      "issue": "The sim iterates combat.enemies filtered on not enemy.is_gone where C# uses CombatState.HittableEnemies, which additionally consults Hook.ShouldAllowHitting (Creature.cs:308-322), so the sim aims at creatures the game considers unhittable -- a mid-revival Illusion (powers.py:1572-1575) or a withered Decimillipede segment (powers.py:2354-2357). DORMANT: DamageCmd.deal re-checks should_allow_hitting at entry (cmds.py:51-52) and returns 0, so no damage lands; what differs is that the command runs at all. Same finding and verdict as power/inferno's, power/constrict's and power/rolling_boulder's HittableEnemies guards, per binding rule 3."
+    },
+    {
+      "what": "TheBombPower.cs:25 the damage is a DamageVar(40m, ValueProp.Unpowered)",
+      "verdict": "faithful",
+      "rationale": "powers.py:3758's DEFAULT_DAMAGE = 40 and the props at :3795 is DamageProps.NON_CARD_UNPOWERED (valueprops.py:42 -- UNPOWERED alone, so BLOCKABLE, matching C# omitting Unblockable). dealer=self.owner is passed (:3794) where C# passes base.Owner (TheBombPower.cs:56). Props, amount and dealer all correct -- the same three the main report's proposed bug class 1 is about. Non-ascension by construction (no AscensionHelper call in the file); the ported card overrides the 40 via set_damage."
+    },
+    {
+      "what": "TheBombPower.cs:57 PowerCmd.Remove(this)",
+      "verdict": "faithful",
+      "rationale": "The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json per binding rule 3."
+    },
+    {
+      "what": "The sim ADDS an end-of-combat check the C# power does not have",
+      "verdict": "deliberate-divergence",
+      "rationale": "powers.py:3790-3791 breaks out when combat.is_over and :3797-3798 calls combat._end_combat(player_won=True) when the explosion killed the last enemy. C# leaves both to CombatManager (CheckWinCondition at CombatManager.cs:1181, immediately after BeforeTurnEnd) and to Hook.IterateCombatHookListeners' IsOverOrEnding gate (Hook.cs:53-63), which the sim lacks -- hook_dispatch's G8. Same observable, and it is the sim compensating for a recorded engine gap. Identical entry to power/rolling_boulder's, per binding rule 3."
+    },
+    {
+      "what": "The two Cmd.CustomScaledWait calls and the pre-damage per-enemy loop",
+      "verdict": "waiver",
+      "rationale": "TheBombPower.cs:50, :51-54 and :55 are timing and VFX (the retained line :51-54 loops HittableEnemies with only filtered presentation statements inside). Presentation, out of scope."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

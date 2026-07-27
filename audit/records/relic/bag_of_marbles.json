@@ -1,0 +1,78 @@
+{
+  "unit": "relic/bag_of_marbles",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BagOfMarbles.cs",
+    "sha256": "74dc0706aded95fe9d8639e42101d57dc9c8a4737f6a03a7e576381488ded908"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\bag_of_marbles.py",
+    "sha256": "ce6e84ee53972a4df5dba44198342a8a2dc07e5b06a574c86fd4fa24a8e0e778"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (bag_of_marbles.py:16)",
+      "verdict": "faithful"
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_started (bag_of_marbles.py:18-23) -- the POST-draw slot, not the pre-block-clear one the C# hook names",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 1 Vulnerable (PowerVar<VulnerablePower>(1m), BagOfMarbles.cs:19) to every enemy on turn 1, applier = the player -- but the hook slot and the enemy set are both off."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): the sim binds C#'s BeforeSideTurnStart to on_player_turn_started, which is FIVE ordering steps later",
+      "verdict": "gap",
+      "issue": "MECHANISM: audit/records/seam/turn_structure.json puts Hook.BeforeSideTurnStart at step 9 -- before any block is cleared and before the enemies re-roll their moves -- and Hook.AfterSideTurnStart at step 23, after the hand draw. The sim's on_player_turn_started is the step-23 slot (player.py:186; executed order, py audit/tools/relic_probes.py turn-order: on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started). Note the sim's on_player_turn_start (no trailing 'ed') is NOT the step-9 slot either: it fires after the block clear and after the energy reset, so relics/base.py:11's mapping table -- which labels it 'BeforeSideTurnStart (player)' -- is wrong, and this relic inherits the confusion. Everything that happens between the two slots sees the enemies un-Vulnerable in the sim and Vulnerable in C#: the turn-1 block clear, the energy reset, and -- the one that matters -- turn_structure step 11's `enemy.PrepareForNextTurn -> Monster.RollMove` for EVERY enemy. REACHABILITY (DORMANT): a live case needs a ported monster whose move selection reads its own Vulnerable, or a ported turn-1 draw-time effect that reads enemy powers; the ported monsters branch on HP thresholds, turn counters and their own non-Vulnerable powers. Porting an intent that keys off Vulnerable makes it live. The player-visible turn-1 intent would then differ, which a replay records."
+    },
+    {
+      "what": "G2 (DORMANT): `combatState.HittableEnemies` (BagOfMarbles.cs:28) vs the sim's living_enemies() (bag_of_marbles.py:22)",
+      "verdict": "gap",
+      "issue": "C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim's Relic.living_enemies() (relics/base.py:294-297) filters on `not e.is_gone` ONLY -- its own docstring concedes the should_allow_hitting predicate is applied by DamageCmd rather than here, and PowerCmd.apply does not apply it either (that absence is audit/records/seam/power_cmd.json gap G6, the missing CanReceivePowers backstop). So an alive-but-unhittable enemy receives Vulnerable in the sim and is skipped by C#. REACHABILITY (DORMANT): the ported should_allow_hitting implementers gate on a mid-revival state -- IllusionPower.should_allow_hitting returns False while is_reviving (powers.py:1572-1575) -- which cannot be true during turn 1's setup, the only turn Bag of Marbles fires. Porting a turn-1 untargetable enemy, or any effect that makes a creature unhittable before the first player turn, makes it live. Distinct from power_cmd G6: that gap is the missing backstop INSIDE PowerCmd.apply, this one is the wrong enemy set at the CALL site, and fixing either alone would leave the other."
+    },
+    {
+      "what": "N1: `participants.Contains(Owner.Creature)` and `TurnNumber <= 1` (BagOfMarbles.cs:25)",
+      "verdict": "faithful",
+      "rationale": "The participants check restricts a both-sides hook to the owner's own side turn; the sim's on_player_turn_started only fires for the player, so it is structurally satisfied. `self.turn <= 1` matches `TurnNumber <= 1` with the executed turn numbering above."
+    },
+    {
+      "what": "N2: the multi-target PowerCmd.Apply overload (BagOfMarbles.cs:28) vs the sim's per-enemy loop",
+      "verdict": "faithful",
+      "rationale": "Both iterate the enemy list in index order and apply the same amount with the same applier; the sim's loop makes the order explicit. The enemy SET is G2's subject, not this entry's."
+    },
+    {
+      "what": "N3: Flash() (BagOfMarbles.cs:27) and the Vulnerable hover tip",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

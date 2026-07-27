@@ -1,0 +1,83 @@
+{
+  "unit": "power/automation",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\AutomationPower.cs",
+    "sha256": "568fac0e930bd76b3887f9a6a82f81421a8daba902ea988d396d21ecbd931505"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_powers.py",
+      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3454 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "DisplayAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "AutomationPower.cs:25 overrides DisplayAmount to show cardsLeft rather than Amount, and :42/:48 call InvokeDisplayAmountChanged. Presentation only: PowerModel.cs:219's DisplayAmount default is Amount and its documented consumers are the Amount label and its colour. The sim keeps the same two numbers apart correctly (self.amount = energy per trigger, self.cards_left = the counter) and simply does not render either."
+    },
+    "InstanceType": {
+      "maps_to": "no sim counterpart; cmds.py:308 keys stacking on power id alone",
+      "verdict": "gap",
+      "issue": "PowerInstanceType.Instanced: in C# every application is an independently tracked instance with its own Amount and its own internal state, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units; the mechanism is not re-verdicted here per binding rule 3. What is per-unit is REACHABILITY of two simultaneous instances and what diverges when they exist. REACHABLE AND DIVERGENT for this power, because the per-instance state is a COUNTER, not just an Amount. Automation is a ported Colorless power card (cards/colorless_powers.py:37-39) that can be drawn and played twice in one combat. In C# each play gets its own Data.cardsLeft = 10 (AutomationPower.cs:12-15, :31-34), so two Automations each fire once per 10 cards drawn -- two separate energy grants of Amount each, on the same draw. In the sim the second play calls Power.on_stack, which adds the amounts into ONE power with ONE cards_left counter (powers.py:3465 is only run from __init__), so the player gets a single grant of the summed amount every 10 cards -- the same total energy but at half the frequency, and delivered on different draws. Worse, the merged counter is not reset by the second application, so the second Automation's first trigger arrives up to 9 draws early. Together with power/rolling_boulder this is the second reachable, arithmetically divergent witness half A has found for G5, whose text still says 'no currently-demonstrated collision'."
+    },
+    "AfterCardDrawn": {
+      "maps_to": "powers.py:3467-3472 AutomationPower.on_card_drawn (hooks.py:391-400)",
+      "verdict": "faithful",
+      "rationale": "Decrement, then fire at <= 0 and reset to 10, in that order on both sides (AutomationPower.cs:41-49 vs powers.py:3469-3472). The threshold is 10 on both: AutomationPower.cs:14/:17/:29 (the Data initialiser, the _baseCardsLeft const and the BaseCards CanonicalVar all agree at 10) vs powers.py:3455's CARDS_PER_TRIGGER = 10. The energy granted is base.Amount (AutomationPower.cs:46) vs self.amount (powers.py:3471). The reset assigns 10 rather than adding 10, so a draw burst cannot bank progress -- both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "AutomationPower.cs:38 card.Owner == base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "The sim's on_card_drawn has no owner parameter at all (hooks.py:391, powers.py:3467) -- a tautology in single-player, since the only draw pile is the player's. Note the `fromHandDraw` argument is carried by both signatures and read by neither, so Automation counts turn-start draws and mid-turn draws alike on both sides."
+    },
+    {
+      "what": "PlayerCmd.GainEnergy vs the sim's EnergyCmd.gain",
+      "verdict": "faithful",
+      "rationale": "cmds.py:545-554 runs hooks.modify_energy_gain then adds to player.energy, which is C#'s Hook.ModifyEnergyGain + AddEnergy shape. Same as the power/energy_next_turn and power/radiance entries, per binding rule 3."
+    },
+    {
+      "what": "Automation is never removed",
+      "verdict": "faithful",
+      "rationale": "Neither side ticks or removes it; it runs for the rest of the combat. Both agree."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

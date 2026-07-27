@@ -1,0 +1,74 @@
+{
+  "unit": "card/rampage",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Rampage.cs",
+    "sha256": "b32c4ff315501083fd8d782b54e91314f34d3826cdb39ea91c9500633c87a7fb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\rampage.py",
+    "sha256": "b92ad17a7dfb01eb3816719d41a0b88c0fa4bf67f3bacb46710ede0fc690e40d"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/reflections.py",
+      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/welcome_to_wongos.py",
+      "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (rampage.py:100-104) + _init_vars (106-109)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (Rampage.cs:40-43) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 9, _increase = 5 (rampage.py:108-109)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(9m, ValueProp.Move)` + `new DynamicVar(\"Increase\", 5m)` (Rampage.cs:18-22) == both numbers, both declared, and `_increase` is in `Card._MAGIC_ATTRS` so `magic_number` surfaces it."
+    },
+    "OnPlay": {
+      "maps_to": "RampageCard.on_play (rampage.py:114-117)",
+      "verdict": "faithful",
+      "rationale": "`await DamageCmd.Attack(DynamicVars.Damage.BaseValue)...Execute()` then `DynamicVars.Damage.BaseValue += DynamicVars[\"Increase\"].BaseValue` (Rampage.cs:48-52) == `DamageCmd.deal(...)` then `self._damage += self._increase`. The order is load-bearing on both sides -- THIS play uses the pre-increment damage -- and the growth persists on the card instance for the rest of the combat, which the sim's docstring states explicitly."
+    },
+    "OnUpgrade": {
+      "maps_to": "RampageCard._on_upgrade (rampage.py:111-112)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"Increase\"].UpgradeValueBy(4m)` (Rampage.cs:63) == `self._increase += 4` (5 -> 9). The BASE damage stays 9 when upgraded on both sides -- only the growth rate changes, which is the easy one to get backwards."
+    },
+    "AfterDowngraded": {
+      "maps_to": "NOT PORTED -- RampageCard has no downgrade hook, so `downgrade()` DESTROYS the accumulated damage (rampage.py)",
+      "verdict": "gap",
+      "issue": "`AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamageFromPlays` (Rampage.cs:55-59), re-adding everything this Rampage has accumulated from its own plays after `DowngradeInternal` rebuilt the damage var from canonical (CardModel.cs:2140). C# tracks the total in a private field for exactly this reason, and says so: \"Required so we can restore the extra damage amount after a downgrade (ie Magiknight)\" (Rampage.cs:24-26). The sim accumulates into `_damage` directly (rampage.py:117) and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) resets `_damage` to 9 and the accumulation is lost. Observable: play an upgraded Rampage three times (9 -> 18 -> 27 -> 36), then have it downgraded -- the game keeps 9 + 27 accumulated = 36, the sim drops to 9. LIVE via `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards IN COMBAT, which is exactly when the accumulation exists) and also `events/reflections.py:40` / `events/welcome_to_wongos.py:90`. Same mechanism and same verdict as card/maul's AfterDowngraded entry (rule 3) -- these two cards are the pool's only `AfterDowngraded` overrides, and both are unported. Not caught by `card_probes.py downgrade`, which compares a FRESH card against upgrade+downgrade and so never sees the accumulation."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (Rampage.cs:47)",
+      "verdict": "faithful",
+      "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the equivalent contract."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

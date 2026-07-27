@@ -1,0 +1,84 @@
+{
+  "unit": "card/wish",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Wish.cs",
+    "sha256": "2c0a731ca7bb415506ae7ba8ba74a32270b0eef8e6732e9459938b898d2d6af3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\wish.py",
+    "sha256": "0b2a79957474f0ba63c6f55bf4356a20e8d2c4f993fd33a91d0f12cc5f7de0dc"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/reflections.py",
+      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/welcome_to_wongos.py",
+      "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "WishCard.exhausts = True (wish.py:109)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Wish.cs:13) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (wish.py:104-109) + _init_vars (111-112)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Ancient, TargetType.Self)` (Wish.cs:15-18) == cost 0 / SKILL / ANCIENT / SELF. No CanonicalVars -- exactly one card is taken."
+    },
+    "OnPlay": {
+      "maps_to": "WishCard.on_play (wish.py:117-126)",
+      "verdict": "faithful",
+      "rationale": "`CardSelectCmd.FromCombatPile(prefs: (prompt, 1), pile: PileType.Draw.GetPile(Owner))` with NO filter, then `CardPileCmd.Add(cardModel, PileType.Hand)` if non-null (Wish.cs:22-26) == `ctx.combat.select_cards('wish', list(player.draw_pile), 1)` then the manual draw-pile-to-hand move. The absence of a filter is right -- Wish takes ANY card from the draw pile, unlike card/secret_technique (Skills) and card/secret_weapon (Attacks) -- and Wish cannot pick itself on either side, since it is not in the draw pile. The sim calls `select_cards` directly rather than through `CardSelectCmd.from_pile`, which is the same call one layer down (cmds.py:532-542). BLAST RADIUS, not re-verdicted per rule 3: `CardSelectCmd` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates and otherwise falls back to `self._rng.sample` (combat.py:575-581) -- creature_card_cmds steps 104/105."
+    },
+    "OnUpgrade": {
+      "maps_to": "WishCard._on_upgrade (wish.py:114-115)",
+      "verdict": "gap",
+      "issue": "`AddKeyword(CardKeyword.Retain)` (Wish.cs:31) maps to `self.retain = True`, correct at upgrade level 1. DOWNGRADE IS STICKY: `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars` and re-applying upgrades, and `WishCard._init_vars` (wish.py:111-112) sets only `_energy_cost` -- it never re-seeds `retain` -- so the instance attribute written by `_on_upgrade` survives and a downgraded Wish is still Retained. C# `DowngradeInternal` rebuilds the whole keyword set from canonical (CardModel.cs:2143). EXECUTED: `py audit/tools/card_probes.py downgrade` prints `wish: retain: False -> True` -- this is the FIFTH and LAST of the five sticky cards the probe found, completing the set with card/aggression, card/apparition, card/hello_world and card/juggling. LIVE: `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` (both registered in `events/__init__.py`) and `powers.py:3171` (DampenPower). Observable: a downgraded Wish is never discarded by the end-of-turn hand flush in the sim; in the game it is. The one-line fix is `self.retain = False` in `_init_vars`, exactly as card/scrawl and card/gold_axe -- which gain the same keyword on upgrade -- already do. Same mechanism and same verdict as card/aggression's OnUpgrade entry (rule 3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early on an empty draw pile (wish.py:119-120) and does not check MAX_HAND_SIZE where card/secret_technique does",
+      "verdict": "faithful",
+      "rationale": "The early return matches C#'s `FirstOrDefault()`-is-null skip. The missing hand-size check is harmless: C#'s `CardPileCmd.Add` enforces `CardPile.MaxCardsInHand` inside AddInternal, but Wish moves exactly one card and is itself leaving the hand as it resolves, so the hand can never be at 10 when the moved card arrives. Recorded because the sibling card DOES check, so the asymmetry is a checked fact rather than an oversight."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

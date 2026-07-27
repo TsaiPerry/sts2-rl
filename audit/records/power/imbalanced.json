@@ -1,0 +1,78 @@
+{
+  "unit": "power/imbalanced",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ImbalancedPower.cs",
+    "sha256": "7620e27c03d07e67845d2bad487c2ca1d5338ae3c861239287ca17d4eb0b1043"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Powers/PowerStackType.cs",
+      "sha256": "7251eb51775362338fe6fc5412a6e8304c23c5bad9b44a2b4a2c3bf9a3758407",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/bowlbugs.py",
+      "sha256": "f4776ff765a05a9c96c27b1e7ec2614f59709dac7ccefa42109dc089f357c0ba",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2048 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:2050-2051 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing reads Imbalanced's Amount on either side (the effect is a boolean off-balance flag), and monsters/hive/bowlbugs.py:47 applies it once at construction."
+    },
+    "AfterDamageGiven": {
+      "maps_to": "powers.py:2053-2071 on_damage_received",
+      "verdict": "gap",
+      "issue": "WRONG HOOK. C#'s `AfterDamageGiven(choiceContext, dealer, result, props, target, cardSource)` is the DEALER-side after-damage event; the sim's counterpart is `on_damage_dealt` (hooks.py:469, fired at cmds.py:123-124), and this power uses `on_damage_received` instead, filtering on `dealer is self.owner`. The reason the port had to do that is itself the finding: cmds.py:123 fires on_damage_dealt only `if dealer is not None and hp_lost > 0`, so the sim's dealer-side event **cannot see a fully-blocked or zero-damage hit at all**, where C#'s AfterDamageGiven sees every one (`result.WasFullyBlocked` is a field it is expected to read). Consequence of the substitution: cmds.py:121's killing-blow guard suppresses the sim's on_damage_received when the hit killed the VICTIM, and cmds.py:119-120's own comment says \"AfterDamageGiven (on_damage_dealt) is not guarded and still fires on the kill\" -- so this power silently stops working on a lethal hit in the sim and keeps working in the game. Third-file citations, not hashed here. This unit is the sharpest instance of that shape, because the whole power keys on `result.WasFullyBlocked` (ImbalancedPower.cs:19) -- exactly the case cmds.py:123's `hp_lost > 0` makes invisible to the sim's dealer-side event. The port therefore reads `amount == 0` on the victim's hook (powers.py:2064), which is a BROADER predicate than WasFullyBlocked: hp_lost is 0 for a fully blocked hit, but also for a hit that was 0 to begin with and for one an HP-loss modifier zeroed, neither of which C# calls fully blocked. The sim then narrows it back with an added `ValueProp.MOVE in props` test (powers.py:2065) that C# does NOT have -- recurring gap shape 8 -- so the two predicates differ in both directions. DORMANT: the owner is the Bowlbug Rock (monsters/hive/bowlbugs.py:42-47), whose only damage source is its own HEADBUTT AttackIntent (props MOVE, non-zero), and the player has no ported HP-loss modifier that could zero an enemy's hit -- so the only reachable trigger is a genuine full block, where both predicates agree. Trigger: a 0-damage MOVE from the owner, or any unpowered damage the owner deals. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "ImbalancedPower.cs:22-29 `IsOffBalance` flag vs CreatureCmd.Stun fallback",
+      "verdict": "faithful",
+      "rationale": "powers.py:2067-2071 reproduces both arms with `hasattr(self.owner, \"is_off_balance\")`, and the sim's docstring says why (\"BowlbugRock's move machine reads it\"). Faithful, and a good example of a hasattr probe standing in for a C# type test without changing the outcome."
+    },
+    {
+      "what": "ImbalancedPower.cs:19 `dealer == base.Owner`",
+      "verdict": "faithful",
+      "rationale": "powers.py:2062-2063 tests `dealer is self.owner and target is not self.owner`. The extra `target is not self.owner` clause is the sim's way of not firing on the owner hitting itself, which C# gets for free from being on the dealer-side hook."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,123 @@
+{
+  "unit": "relic/glass_eye",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\GlassEye.cs",
+    "sha256": "1cf2c74cfc8852970e07f40e2815f605806ba8f5a0d999cbaf4f49d99fe1f011"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\glass_eye.py",
+    "sha256": "7ef04680abff681c776a22e61914c9d794218d206102020c2d398b0d10defb32"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Helpers/AscensionHelper.cs",
+      "sha256": "81c7397c24d03c613d7f4d8d887b63ec7fc0accbdd97e1773ea0aacd2e9c2663",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (glass_eye.py:15)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (glass_eye.py:19-50), dispatched by RunState.add_relic (run.py:551-552)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1-G5 per binding rule 4. The SHAPE matches GlassEye.cs:15-33 -- five 3-card screens at Common, Common, Uncommon, Uncommon, Rare, each a uniform in-rarity pick from the character pool -- but four separate divergences are live: the per-card upgrade roll is missing entirely, which costs 15 PlayerRng.Rewards draws AND the upgrades those rolls can produce (G1, G2); the reward-option hooks CardFactory fires inside CreateForReward are never dispatched, so egg/enchant relics do not touch Glass Eye's options (G3); and the candidate pool is FilterForCombat rather than the reward pool, so Feed and Not Yet can never be offered (G4)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): each of the 15 created cards burns an unconditional `rng.NextFloat()` upgrade roll in C# that the sim never draws -- a 15-draw deficit on PlayerRng.Rewards",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardFactory.CreateForReward(player, cardCount, options) loops cardCount times and, unless the options carry CardCreationFlags.NoUpgradeRoll, calls RollForUpgrade(player, cardModel, 0m, rng) per card (CardFactory.cs:93-103). RollForUpgrade's FIRST statement is `decimal num = (decimal)rng.NextFloat();` -- before the IsUpgradable test -- so the draw happens for every card no matter what (CardFactory.cs:288-304). GlassEye.cs:29 sets only `.WithFlags(CardCreationFlags.NoRarityModification)`, so NoUpgradeRoll is NOT set. The per-card pick itself is one `rng.NextItem(items)` (CardFactory.cs:235-236) with no rarity roll, because RarityOdds is Uniform (CardFactory.cs:221-224). Total: 15 NextItem + 15 NextFloat = 30 Rewards draws. glass_eye.py:41-45 draws only the 15 NextItem equivalents. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b06.py glass-eye`): on string seed 89U21BV1TZ, `run.add_relic('glass_eye')` moves PlayerRng.Rewards' counter 0 -> 15 where the game reaches 30. Glass Eye is granted by the ported Orobas shrine (events/orobas.py). Because Rewards is a single per-player stream shared with every card and relic reward for the rest of the run, a 15-draw deficit shifts EVERY later reward roll -- so this is a whole-run conformance divergence, not a local one, in the same family as the three unconsumed PullNextRelicFromFront draws recorded at audit/records/relic/calling_bell.json G2."
+    },
+    {
+      "what": "G2 (LIVE): the port's docstring claims the options are 'never upgraded'; the game's upgrade odds are `act_index * UpgradedCardOddScaling` for every non-Rare, i.e. non-zero from act 1 on",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 12: check the claim. MECHANISM: RollForUpgrade computes `originalOdds = baseChance + CurrentActIndex * UpgradedCardOddScaling` for any card whose Rarity != Rare, then lets Hook.ModifyCardRewardUpgradeOdds adjust it, and upgrades when the roll is <= the odds (CardFactory.cs:288-304). `UpgradedCardOddScaling => AscensionHelper.GetValueIfAscension(AscensionLevel.Scarcity, 0.125m, 0.25m)` and the signature is `GetValueIfAscension(level, ascensionValue, fallbackValue)` (AscensionHelper.cs:40-47), so the NON-ascension value is 0.25 -- the same constant rewards.py:112 already pins as UPGRADED_CARD_ODD_SCALING. baseChance is the 0m GlassEye passes. So Glass Eye's four non-Rare options carry a 25% upgrade chance per act index: 0% in act 0, 25% in act 1, 50% in act 2. What NoRarityModification suppresses is the RARITY bump (Hook.ModifyCardRewardRarity-style relics), not the upgrade roll -- that would be NoUpgradeRoll. REACHABILITY (LIVE): the sibling reward generator in the same codebase already implements the roll correctly (rewards.py:288-295 draws `_uniform(rng)` unconditionally and applies `run.act_index * UPGRADED_CARD_ODD_SCALING` to non-Rares), which is what makes this a defect rather than a house style. Executed (`py audit/tools/relic_probes_b06.py glass-eye`): on the act-0 run the probe drives, no card is upgraded on either side -- act 0 odds are 0 -- and the divergence begins the moment the relic is taken in act 1 or later, which is the normal case for an Ancient relic (every act has an Ancient node). Recorded as LIVE rather than dormant because both sides are reachable with ported content and the only thing act 0 proves is that the probe picked the one act where the numbers agree."
+    },
+    {
+      "what": "G3 (LIVE): CardFactory fires `Hook.TryModifyCardRewardOptions` (BOTH phases) at the end of every CreateForReward; the sim's glass_eye never dispatches modify_card_reward_options",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardFactory.cs:104 runs `if (!options.Flags.HasFlag(CardCreationFlags.NoModifyHooks) && Hook.TryModifyCardRewardOptions(...))`, and Hook.TryModifyCardRewardOptions (Hook.cs:1445-1468) walks every listener's TryModifyCardRewardOptions and then every listener's TryModifyCardRewardOptionsLate. GlassEye sets only NoRarityModification, so the hooks DO run on its five screens. glass_eye.py:30-48 builds the options with make_card and hands them straight to run.select_cards -- the sim's own dispatch site for this hook (rewards.py:298-301) is bypassed. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b06.py glass-eye`): with relic/glitter in the run (Ancient, granted by the ported Nonupeipe shrine, and its port DOES implement modify_card_reward_options), Glass Eye's five granted cards come out as [breakthrough None, breakthrough None, pillage None, evil_eye None, barricade None) -- not one Glam, where the game Glams every eligible option. The same silence applies to the three egg relics (an offered Power would arrive un-upgraded with Frozen Egg in the run), to Silver Crucible, Silken Tress and Fresnel Lens. Note the fix is one call, but it must run BEFORE the options are shown, not after the pick."
+    },
+    {
+      "what": "G4 (LIVE): the candidate pool is `pool_card_ids()` (FilterForCombat) where a reward draws from `GetUnlockedCards`, so Feed and Not Yet can never be offered",
+      "verdict": "gap",
+      "issue": "MECHANISM: GlassEye.cs:29 builds `CardCreationOptions.ForNonCombatWithUniformOdds(new [Owner.Character.CardPool], c => c.Rarity == rarity)`, and CreateForReward resolves the candidates through `options.GetPossibleCards(player)` minus the blacklist, then (Uniform branch) excludes only Basic and Ancient rarity (CardFactory.cs:216-225) -- the combat-only filter never applies to rewards. glass_eye.py:22, 24 imports and calls `pool_card_ids()`, whose docstring says it mirrors FilterForCombat and drops `can_be_generated_in_combat=False` cards (cards/pool.py:100-117). The sim HAS the right helper: `reward_pool_card_ids()` (cards/pool.py:120-133) exists for exactly this and its docstring names Feed and NotYet as the affected cards. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b06.py glass-eye`): the reward-eligible ids pool_card_ids() drops are exactly [feed RARE, not_yet RARE], and Glass Eye's fifth screen is the Rare screen, so two Rare cards are permanently absent from it. This is the same mistake the project already fixed once elsewhere -- the batch-16 conformance finding 'reward pool = full GetUnlockedCards, not FilterForCombat (Feed/NotYet offerable)' -- and it changes both which cards appear and, because the candidate list is shorter, which index each NextItem draw lands on."
+    },
+    {
+      "what": "G5 (DORMANT): C# populates ALL FIVE rewards before offering any of them; the sim populates, resolves and ADDS one screen at a time",
+      "verdict": "gap",
+      "issue": "MECHANISM: RewardsCmd.OfferCustom -> RewardsSet.Offer -> GenerateWithoutOffering loops `foreach (Reward reward in Rewards) reward.Populate()` and only then offers (RewardsSet.cs:125-147, 153-159). So all 15 cards exist before the player picks anything. glass_eye.py:29-50 loops the five rarities and calls `run.add_card` inside the loop, so screen N+1's options are created after screen N's pick has already joined the deck. DORMANT: the observable requires a listener whose card creation depends on deck contents, and the sim's card-creation path consults the pool and the rarity only -- the deck-reading hooks (after_card_added_to_deck, used by relics/book_of_five_rings.py and lucky_fysh.py) change max HP and gold rather than the pool. Porting a relic or effect whose card-reward options depend on the deck (a 'no duplicates of cards you own' filter is the obvious shape) makes it live, as does implementing G3 with a relic whose reward hook counts deck cards. Also note the interleave costs nothing in draw ORDER today, because each screen's draws are contiguous on the same stream in both orders."
+    },
+    {
+      "what": "N1 (SETTLED BY EXECUTION): the reward blacklist resets per SCREEN, so the same card can be offered on two screens of the same rarity",
+      "verdict": "faithful",
+      "rationale": "Binding rule 5: the port's comment asserts 'the reward blacklist accumulates within each rarity's screen' and that had to be checked. CardFactory.CreateForReward declares `List<CardModel> list = new List<CardModel>()` LOCALLY per call (CardFactory.cs:91) and passes it as the blacklist for each of that call's cardCount picks, so it is per-CardReward and not per-RewardsSet. glass_eye.py:40-45 rebuilds `bl = list(matching)` per rarity and removes each pick from it, which is the same scope. Executed (`py audit/tools/relic_probes_b06.py glass-eye`): the five cards granted include `breakthrough` TWICE -- once from each Common screen -- which is exactly what a per-screen blacklist permits and a per-set blacklist would forbid."
+    },
+    {
+      "what": "N2: `RewardsCmd.OfferCustom` is a take-or-skip screen set; the port takes `run.select_cards('card_reward', options, 1)` and adds whatever comes back",
+      "verdict": "deliberate-divergence",
+      "rationale": "Each of the five CardRewards is individually skippable in the game. glass_eye.py:49-50 iterates whatever select_cards returns and adds it, so a policy that returns [] declines that screen -- the sim's choice seam is present and honoured. Same verdict and same reasoning as audit/records/relic/calling_bell.json G3 (the divergent thing is the sim's player-choice model, applied consistently across reward offers), binding rule 3. Recorded so a fixer does not turn the loop into an unconditional grant."
+    },
+    {
+      "what": "N3: GlassEye declares NO HasUponPickupEffect, despite having a real AfterObtained",
+      "verdict": "faithful",
+      "rationale": "GlassEye.cs has no `HasUponPickupEffect => true` override and glass_eye.py sets no has_upon_pickup_effect, so the two agree -- checked because the sibling upon-pickup relics in this batch (fragrant_mushroom, gnarled_hammer, golden_compass) all DO declare it and a missing declaration is exactly the defect batch 3 recorded for relic/byrdpip. Shadowed anyway: Relic.is_tradable (relics/base.py:132-136) already excludes ANCIENT rarity, so the flag could not change any outcome for this relic even if the source had set it."
+    },
+    {
+      "what": "N4: the five rarities and their ORDER -- Common, Common, Uncommon, Uncommon, Rare -- and 3 options per screen",
+      "verdict": "faithful",
+      "rationale": "GlassEye.cs:18-31 builds the array in that order and passes `new CardReward(options, 3, Owner)`; glass_eye.py:25-29 iterates the same five values in the same order with CHOICES = 3 (glass_eye.py:17). Order is load-bearing because all five screens draw from one Rewards stream. No AscensionHelper branch in GlassEye.cs, so 3 and the rarity list are the non-ascension values."
+    },
+    {
+      "what": "N5: `count = min(self.CHOICES, len(matching))` and `if count == 0: continue` (glass_eye.py:33-35) vs C#, which throws when a rarity has no candidates",
+      "verdict": "faithful",
+      "rationale": "CardFactory.CreateForReward raises InvalidOperationException when NextItem returns null (CardFactory.cs:237-240); the sim skips the screen instead. Same reachable behaviour: the Ironclad pool has at least 3 cards at every one of the three rarities, so neither branch is taken. Recorded because the sim's tolerance would hide a pool-shrinking bug that C# would crash on."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/glass_eye's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Factories/CardFactory.cs, src/Core/Helpers/AscensionHelper.cs, src/Core/Hooks/Hook.cs, src/Core/Rewards/RewardsSet.cs, sts2_rl/cards/base.py, sts2_rl/cards/pool.py, sts2_rl/events/orobas.py, sts2_rl/relics/book_of_five_rings.py, sts2_rl/relics/lucky_fysh.py, sts2_rl/rewards.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

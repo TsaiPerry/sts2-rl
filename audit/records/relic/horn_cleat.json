@@ -1,0 +1,73 @@
+{
+  "unit": "relic/horn_cleat",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\HornCleat.cs",
+    "sha256": "c410e13417a8b4ccb1acde332b8c4197901c746a76ba49aee8f387dff21eeb2f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\horn_cleat.py",
+    "sha256": "5142219d3758ef8eee61f9c513a5211915edb09122190d174e3e5f77bb68e5cb"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_hook_order.py",
+      "sha256": "c1deb8102e1a92975c9090d88ec4d15a463992010d2e8c906eb93b2076b62c49",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (horn_cleat.py:17)",
+      "verdict": "faithful"
+    },
+    "AfterBlockCleared": {
+      "maps_to": "on_block_cleared (horn_cleat.py:19-22), dispatched by PlayerCombatState.start_turn (player.py:157-159)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The relic's own arithmetic and guards are exact -- `creature == Owner.Creature && TurnNumber == 2` -> BlockVar(14, Unpowered) (HornCleat.cs:20-27) vs `target is self.player and self.turn == 2` -> BlockCmd.apply(..., 14, props=ValueProp.UNPOWERED) (horn_cleat.py:20-22), and EXECUTED (py audit/tools/relic_probes_b07.py cleat-turn2) the player's block after the clear on turns 1-4 is 0, 14, 0, 0, matching the game. What diverges is the DISPATCH: C#'s AfterBlockCleared is an unconditional second loop and the sim fires on_block_cleared only when a clear actually happened, so any prevented clear silently disables this relic."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C#'s Hook.AfterBlockCleared is a SEPARATE, UNCONDITIONAL loop over the turn's participants; the sim fires on_block_cleared only inside the `if should_clear_block(...)` arm, so a prevented block clear also cancels Horn Cleat's 14 block",
+      "verdict": "gap",
+      "issue": "This is audit/records/seam/turn_structure.json gap G1 (spec step 14) at the site that record already names -- its issue text cites HornCleat.cs:20-27 and relics/horn_cleat.py:19-22 as a NAMED PORTED LISTENER and labels the mechanism LIVE. One verdict per mechanism, binding rule 3: matched, not re-derived, and the seam owns the machinery while this record owns the relic's observable. THE OBSERVABLE HERE: with a Barricade stack or Sturdy Clamp on the player, the real game still grants Horn Cleat's 14 block on turn 2 (C# runs the event loop at CombatManager.cs:500-507 regardless of whether ClearBlock did anything) and the sim grants nothing -- so the relic is dead in exactly the deck that wants block to persist. REACHABILITY (LIVE, both sides ported, and the seam's own executed evidence names this relic's numbers): the seam record OBSERVED '[horn_cleat] reaches turn 2 with 14 block; the same combat with a Barricade stack on the player reaches turn 2 with 0, and with [sturdy_clamp, horn_cleat] also 0'. Barricade is a ported Ironclad Rare Power card and Sturdy Clamp a ported Rare relic; Horn Cleat is Uncommon in the transcribed grab bag (executed by py audit/tools/relic_probes_b07.py pool: bag=Uncommon). Pinned by a strict xfail that names Horn Cleat in its own reason string: test/test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented (verified present at test/test_hook_order.py:601, and it asserts cs.player.block == 14 behind a Barricade). Rule 7: audit/records/seam/turn_structure.json, test/test_hook_order.py, sts2_rl/player.py, relics/sturdy_clamp.py and cards/barricade_card.py are not hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): the sim clears the player's block on turn 1 where the game does not, which changes what 'the turn-2 clear' even means for this relic",
+      "verdict": "gap",
+      "issue": "MECHANISM: Creature.AfterTurnStart returns BEFORE ClearBlock for a player whose TurnNumber == 1, but the AfterBlockCleared loop still runs for that player; the sim's player.py:157-159 has no turn-1 arm, so it both clears and fires. That is audit/records/seam/turn_structure.json gap G6, verdicted LIVE there, and matched here per binding rule 3. DORMANT AT THIS SITE specifically: Horn Cleat's own guard is `turn == 2`, so the turn-1 behaviour cannot change its grant -- the relic sees the turn-1 event fire in both codebases and ignores it in both. It is recorded because G6 and G1 interact at this exact hook (G6 is why Anchor was re-wired onto it, which is why G1 bites Anchor too) and a fix to either must not be assumed safe for the other. Goes live for Horn Cleat only if its turn guard is ever mis-read as 'the second clear' rather than 'TurnNumber == 2'. Rule 7: the turn_structure record and sts2_rl/player.py are not hashed by this record."
+    },
+    {
+      "what": "N1: BlockVar(14m, ValueProp.Unpowered) (HornCleat.cs:16) read as the whole DynamicVar (not .BaseValue) at the call site (line 25), so the ValueProp travels with it",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.GainBlock(creature, base.DynamicVars.Block, null)` passes the VAR, which carries ValueProp.Unpowered -- that is what makes the 14 immune to Dexterity and Frail. horn_cleat.py:22 passes `props=ValueProp.UNPOWERED` explicitly and cmds.py's BlockCmd.apply gates the additive/multiplicative fold on is_powered_attack(props), so both sides skip the modifiers. Checked deliberately: passing the plain integer would have made the block Dexterity-scaled, and the relic's whole point is a fixed 14. No AscensionHelper branch in the file, so 14 is the pinned non-ascension value. Rule 7: sts2_rl/cmds.py and sts2_rl/valueprops.py are not hashed by this record."
+    },
+    {
+      "what": "N2: `creature == base.Owner.Creature` (HornCleat.cs:22) vs `target is self.player` (horn_cleat.py:20) -- identity, not side",
+      "verdict": "faithful",
+      "rationale": "Both compare identity against the owner, so an enemy's block clear cannot trigger the relic on either side. Worth recording because the sim's enemy arm of the same hook lives at combat.py:296-298 and DOES call on_block_cleared for enemies, so the identity check is load-bearing rather than decorative. Rule 7: sts2_rl/combat.py is not hashed by this record."
+    },
+    {
+      "what": "N3: Flash() and the Block hover tip (HornCleat.cs:18, 24)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

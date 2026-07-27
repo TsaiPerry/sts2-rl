@@ -1,0 +1,64 @@
+{
+  "unit": "card/brand",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Brand.cs",
+    "sha256": "6448b643d00c387ec26a9ab0af89b804904c974b26b777708083035559398155"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\brand.py",
+    "sha256": "961213836047f408c905c811d7a23de67a16bc1d572605bec6828dce80007d1c"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (brand.py:23-27) + _init_vars (29-32)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Brand.cs:32-35) == cost 0 / SKILL / RARE / SELF. Brand has NO Exhaust keyword of its own -- the Exhaust hover tip (Brand.cs:22) refers to the card it exhausts from your hand -- and the sim correctly leaves `exhausts` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "_hp_loss = 1, _strength = 1 (brand.py:31-32)",
+      "verdict": "faithful",
+      "rationale": "`new HpLossVar(1m)` + `new PowerVar<StrengthPower>(1m)` (Brand.cs:26-30) == both numbers, both declared. `_strength` is in `Card._MAGIC_ATTRS` so `magic_number` reports 1."
+    },
+    "OnPlay": {
+      "maps_to": "BrandCard.on_play (brand.py:37-49)",
+      "verdict": "faithful",
+      "rationale": "All three steps and their order match: self-damage 1 (Unblockable | Unpowered | Move, Brand.cs:41) -> select ONE hand card with a NULL filter and exhaust it if non-null (42-46) -> `PowerCmd.Apply<StrengthPower>(..., DynamicVars.Strength.BaseValue, ...)` (49). The sim's `StrengthCmd.apply` (cmds.py:349-361) is `hooks.modify_strength_given` + `PowerCmd.apply(StrengthPower)`; that extra sim-side modifier hook is power_cmd seam territory, not a card-level divergence. Brand cannot select itself on either side: C# holds it in the Play pile, the sim in the discard-pile limbo (combat.py:452-454). BLAST RADIUS, not re-verdicted here per rule 3: `CardSelectCmd.FromHand` auto-selects with no player choice and no RNG when the candidate count is at or below MinSelect (CardSelectCmd.cs:287-290), while the sim's `CombatState.select_cards` always delegates to the installed selector and otherwise falls back to `self._rng.sample` on the shared legacy rng (combat.py:575-581). Already recorded as creature_card_cmds steps 104/105 and guard N10; this card is one of its call sites. Presentation, folded in: TriggerAnim (39), the bloody-impact and ground-fire VFX (40, 47) and the SFX (48)."
+    },
+    "OnUpgrade": {
+      "maps_to": "BrandCard._on_upgrade (brand.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Strength.UpgradeValueBy(1m)` (Brand.cs:54) == `self._strength += 1` (1 -> 2). The HP loss stays 1 when upgraded on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early on `if ctx.player.is_dead` after the 1 HP loss, skipping BOTH the exhaust and the Strength (brand.py:44-45)",
+      "verdict": "gap",
+      "issue": "Brand.cs has no such early return. C# has no such early return: if the HP loss is lethal it still awaits the next command on the dying player. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand."
+    },
+    {
+      "what": "CardSelectCmd.FromHand is called with `filter: null`, i.e. ANY hand card is exhaustable (Brand.cs:42)",
+      "verdict": "faithful",
+      "rationale": "The sim passes no `predicate` to `CardSelectCmd.from_hand` (brand.py:46), so the candidate set is the whole hand on both sides."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,54 @@
+{
+  "unit": "card/inferno",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Inferno.cs",
+    "sha256": "396844f805b48e339031aa757219b5599bf1efe265a00adef07cc93756dcec01"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\inferno.py",
+    "sha256": "1eed39c02aa4c92584432ddb80aba1ceb9371ef4d12fc190e5a9c033ddf64bf7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (inferno.py:234-238) + _init_vars (240-242)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Inferno.cs:15-18) == cost 1 / POWER / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "InfernoCard._power_amount = 6 (inferno.py:242)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<InfernoPower>(6m)` (Inferno.cs:13) == `_power_amount = 6`, which `magic_number` surfaces."
+    },
+    "OnPlay": {
+      "maps_to": "InfernoCard.on_play (inferno.py:247-255)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<InfernoPower>(..., DynamicVars[\"InfernoPower\"].BaseValue, ...)` followed by `?.IncrementSelfDamage()` on the returned power (Inferno.cs:23) == `PowerCmd.apply(...)` then re-fetch by id and `power.increment_self_damage()` (inferno.py:253-255). On the normal path both reach the same instance and increment it exactly once per play. Presentation, folded in: TriggerAnim (22)."
+    },
+    "OnUpgrade": {
+      "maps_to": "InfernoCard._on_upgrade (inferno.py:244-245)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"InfernoPower\"].UpgradeValueBy(3m)` (Inferno.cs:28) == `self._power_amount += 3` (6 -> 9)."
+    }
+  },
+  "guards": [
+    {
+      "what": "C# skips IncrementSelfDamage when Apply returns NULL; the sim increments whenever the power is present (Inferno.cs:23 vs inferno.py:253-255)",
+      "verdict": "gap",
+      "issue": "Identical to card/crimson_mantle's guard and carrying the same verdict (rule 3): `PowerCmd.Apply<T>` returns null when combat is ending, when `!target.CanReceivePowers`, or when the stacking `ModifyAmount` resolves to 0 (PowerCmd.cs:29-34, 68-87), and the null-conditional `?.` then skips the increment. The sim's re-fetch by id cannot distinguish those cases, so a second Inferno whose amount was zeroed would still bump the self-damage counter and cost the player an extra HP per turn for the rest of the combat. DORMANT: no ported effect modifies a positive self-applied BUFF down to exactly 0 (Artifact intercepts only debuffs, cmds.py:299-306), and the other two null cases imply the combat is over. These two cards are the only `?.Increment...` sites in the pool."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

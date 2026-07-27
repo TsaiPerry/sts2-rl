@@ -1,0 +1,63 @@
+{
+  "unit": "card/uppercut",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Uppercut.cs",
+    "sha256": "3e79e551881accfe2b91a508b532a826d06e0d9eca7a54f710ba9f2d5dbff94b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\uppercut.py",
+    "sha256": "6b1d2d32799cdeaee31d4b932f9f611f2c86ecd76ee5b0836ee17129a367a448"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (uppercut.py:60-64) + _init_vars (66-69)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (Uppercut.cs:31-34) == cost 2 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 13, _power = 1 (uppercut.py:68-69)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(13m, ValueProp.Move)` + `new DynamicVar(\"Power\", 1m)` (Uppercut.cs:19-23) == both numbers, both declared, and the single `Power` var feeds BOTH debuffs on both sides (C# reads it once into a local, Uppercut.cs:44) -- a safe collapse for the same reason as card/shockwave's. `_power` is in `Card._MAGIC_ATTRS` so `magic_number` surfaces it."
+    },
+    "OnPlay": {
+      "maps_to": "UppercutCard.on_play (uppercut.py:74-81)",
+      "verdict": "gap",
+      "issue": "C# applies the debuff unconditionally and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose doc comment states that DEAD creatures can still receive powers -- it refuses only for a REMOVED corpse. The two agree for an ordinary kill (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, removal at 523-525) and diverge for a corpse whose removal was VETOED (`ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104), because `is_gone` is `is_dead or escaped` (creatures.py:44-46). Observable through ViciousPower, which draws on any Vulnerable its owner applies with no liveness test on the target (ViciousPower.cs:19-26) -- and card/vicious, audited in this same batch, is its ported source. Same mechanism and same verdict as card/bash's OnPlay entry (rule 3); LIVE. Damage 13, then Weak BEFORE Vulnerable, both at the shared amount -- order and amounts faithful (Uppercut.cs:39-46). Presentation, folded in: the Ironclad heavy-anim helpers, WithHitFx, WithHitVfxSpawnedAtBase and two hover tips."
+    },
+    "OnUpgrade": {
+      "maps_to": "UppercutCard._on_upgrade (uppercut.py:71-72)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"Power\"].UpgradeValueBy(1m)` (Uppercut.cs:51) == `self._power += 1` (1 -> 2 for BOTH debuffs). The DAMAGE is untouched by the upgrade on both sides -- unusual for an Attack, and the sim's docstring says so explicitly."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

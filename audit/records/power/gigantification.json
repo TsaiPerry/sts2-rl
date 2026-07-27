@@ -1,0 +1,103 @@
+{
+  "unit": "power/gigantification",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\GigantificationPower.cs",
+    "sha256": "644db8e55cc75924a5a703539cb88cccc82a0a5d6a5b94d8c34410f23de0a0a9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Potions/GigantificationPotion.cs",
+      "sha256": "8bdc58a35c79edf462f4723a953a7c31a7d57c2d250c3a899255ffba038ebf00",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3948 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeAttack": {
+      "maps_to": "powers.py:3961-3967 GigantificationPower.before_attack (hooks.py:344-359, combat.py:479)",
+      "verdict": "faithful",
+      "rationale": "USES THE RIGHT SLOT, which is worth recording loudly: hooks.py has before_attack/after_attack slots that power/thorns, power/curl_up and power/skittish all fail to use (the main report's section 4 items 2, 5 and 14), and this power and power/vigor are the two that do. C#'s BeforeAttack takes an AttackCommand and latches the first one that qualifies; combat.py:479 fires before_attack once per play-count iteration around the card's on_play, which is the sim's attack-command boundary (stated at combat.py:472-475). All four C# guards are present: ModelSource is a CardModel (GigantificationPower.cs:30-33 vs powers.py:3965 `card is None`), the owner (:34-37 vs :3963), Type == Attack (:38-41 vs :3965), IsPoweredAttack (:42-45 vs :3965 card.is_unpowered), and the already-latched early return (:47-50 vs :3963)."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:3969-3983 GigantificationPower.modify_damage_multiplicative (cmds.py:58)",
+      "verdict": "faithful",
+      "rationale": "3 for the latched card, 3 for any powered card attack of the owner while nothing is latched (which is what makes the card's damage PREVIEW read triple, and the sim's docstring at powers.py:3940-3942 says so), 1 otherwise. GigantificationPower.cs:57-74 vs powers.py:3979-3983: cardSource == null, the owner, IsPoweredAttack (structural via cmds.py:56-58) and the commandToModify-vs-cardSource comparison all line up, with the sim comparing CARD identity where C# compares command.ModelSource -- the same object for a card attack. The literal 3 at GigantificationPower.cs:72 matches powers.py:3949's MULTIPLIER = 3, and 3 is dyadic-safe as an integer factor (executed: py audit/tools/power_census.py multipliers lists it among the safe ones), so this power does not widen hook_dispatch's G9."
+    },
+    "AfterAttack": {
+      "maps_to": "powers.py:3985-3988 GigantificationPower.after_attack (hooks.py:361-370, combat.py:492)",
+      "verdict": "gap",
+      "issue": "The slot is right (combat.py:492, immediately after the card's on_play inside the play-count loop). The GAP is the IDENTITY the latch is cleared against: C# compares ATTACK-COMMAND identity (`command == internalData.commandToModify`, GigantificationPower.cs:80), the sim compares CARD identity (`card is self._card_to_modify`, powers.py:3986). They agree for one card producing one attack command, which is the normal case. They diverge when ONE card produces SEVERAL attack commands -- C# clears and Decrements once per matching command, i.e. once, while the sim clears and _ticks on the first after_attack for that card and then, because the latch is now None, the NEXT hit of the same card re-enters modify_damage_multiplicative on the `_card_to_modify is None` arm (powers.py:3981) and gets tripled AGAIN for free. DORMANT: combat.py:477-494 fires exactly one before_attack/after_attack pair per play-count iteration and a multi-hit card resolves inside one iteration, so no ported card reaches the second command. Named trigger: any card or effect that issues two attack commands within one play, or a port that moves before_attack/after_attack inside a card's own hit loop."
+    }
+  },
+  "guards": [
+    {
+      "what": "GigantificationPower.cs:14-17,23-26,46 the per-instance Data latch",
+      "verdict": "faithful",
+      "rationale": "powers.py:3951-3959 initialises self._card_to_modify in __init__, which is the sim's equivalent of InitInternalData. Note this power is NOT PowerInstanceType.Instanced (unlike power/automation, power/the_bomb, power/rolling_boulder and power/toric_toughness), so one shared latch per owner is correct on both sides and power_cmd's G5 does not apply here."
+    },
+    {
+      "what": "GigantificationPower.cs:83 PowerCmd.Decrement, once per triggered attack",
+      "verdict": "faithful",
+      "rationale": "powers.py:3988 self._tick(). So Gigantification 2 triples two separate Attack cards, not one card twice. The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    {
+      "what": "GigantificationPower.cs:77-85 AfterAttack has NO owner guard",
+      "verdict": "faithful",
+      "rationale": "C# relies on the command comparison alone; powers.py:3986 relies on the card comparison alone. Equivalent -- neither can match another creature's attack, because the latch was only ever set for the owner's own card."
+    },
+    {
+      "what": "N: the power's sole applier is Gigantification Potion -- a PORTED potion, not a scope boundary (GigantificationPotion.cs:25-30 vs sts2_rl/potions.py:801-822)",
+      "verdict": "faithful",
+      "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL. src/Core/Models/Potions/GigantificationPotion.cs:23 declares CanonicalVars = new PowerVar<GigantificationPower>(1m) with no AscensionHelper.GetValueIfAscension in the file, so 1 is the pinned non-ascension amount, and GigantificationPotion.cs:29 is `PowerCmd.Apply<GigantificationPower>(choiceContext, target, DynamicVars[\"GigantificationPower\"].BaseValue, base.Owner.Creature, null)`. sts2_rl/potions.py:811 pins STACKS = 1 and sts2_rl/potions.py:816-822 applies GigantificationPower with that amount and `applier=ctx.player`, which is C#'s `base.Owner.Creature` (parameter `Creature? applier`, src/Core/Commands/PowerCmd.cs:101); cardSource is null on both sides. The stack count matters here because the power is a next-attack-triples counter, so a 2 would triple two attacks. TargetType.AnyPlayer (GigantificationPotion.cs:21) and AssertValidForTargetedPotion (GigantificationPotion.cs:27) are the multiplayer target-validity path, waived as multiplayer; NCombatRoom.PlaySplashVfx (GigantificationPotion.cs:28) is presentation. REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): @register_potion puts it in ALL_POTIONS and it is in the generation pool at sts2_rl/potion_pools.py:53 (rare); the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:625-631). WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/gigantification_potion` has no record yet because the whole potion kind is unaudited. Nothing in this record depends on it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,73 @@
+{
+  "unit": "relic/massive_scroll",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\MassiveScroll.cs",
+    "sha256": "64e229d8a505fe13a546df808e8b4a7a82a9e80e10093e8717b9792776e6ecfd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\massive_scroll.py",
+    "sha256": "0b9674556fd19e267be0e954230cea795152a383c97e9063c58d38d7cbdd92df"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (massive_scroll.py:13)",
+      "verdict": "faithful"
+    },
+    "IsAllowed": {
+      "maps_to": "is_allowed_at_neow = False (massive_scroll.py:14) -- a DIFFERENT C# member (RelicModel.IsAllowedAtNeow), which happens to reach the same answer here; see guard N2",
+      "verdict": "waiver",
+      "rationale": "MassiveScroll.cs:19-22 is `runState.Players.Count > 1` -- the relic is MULTIPLAYER-ONLY and is never allowed in a single-player run at all. Multiplayer is out of scope by name under the shared contract's rule 1, so this is a genuine waiver and not a dormant gap: the divergence's SHAPE, not merely today's content, is multiplayer. The sim reaching the same exclusion through a different member is guard N2's subject, and the executed unreachability proof is guard N1's."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart (documented stub, massive_scroll.py:8-9)",
+      "verdict": "waiver",
+      "rationale": "MassiveScroll.cs:24-44 offers a 3-card choice drawn from the Colorless pool plus the character pool, FILTERED to `c.MultiplayerConstraint == CardMultiplayerConstraint.MultiplayerOnly` (line 27). Every card it can offer is multiplayer-only, so the effect is out of scope twice over -- the relic cannot be obtained (guard N1) and its payload does not exist in Ironclad single-player scope. Waived under the contract's multiplayer exclusion. The CardChoiceHistoryEntry bookkeeping (line 41) is replay history."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (EXECUTED, binding rule 5): the relic is unreachable in the sim -- the waivers above rest on this and nothing else",
+      "verdict": "faithful",
+      "rationale": "py audit/tools/relic_probes_b09.py b09-pool: (a) it is NOT in either transcribed grab bag, structurally -- its rarity is Ancient and RelicGrabBag takes only Common/Uncommon/Rare/Shop (relic_pools.py:38); (b) it IS listed in Neow.PositiveOptions and the sim's neow_relic_pool filter removes it, so it survives 0 of 400 seeds' initial Neow options; (c) its merchant_cost is the Ancient sentinel 999999999 and the sim's shop relic stock is pulled from the grab bag, which excludes it; (d) the only literal occurrence of the id anywhere under sts2_rl/ outside its own file is events/neow.py:39 (the pool it is filtered out of) and vocab.json. No ported event, shrine or reward path grants it. Rule 7: leans on relic_pools.py, events/neow.py and run.py, none hashed here."
+    },
+    {
+      "what": "N2: the sim models `IsAllowed` and `IsAllowedAtNeow` as INDEPENDENT members, where C# makes the second DELEGATE to the first",
+      "verdict": "deliberate-divergence",
+      "rationale": "RelicModel.IsAllowedAtNeow(player) is `=> IsAllowed(player.RunState)` (RelicModel.cs:443-446) -- one member with an override point, not two independent gates. The sim has `Relic.is_allowed_at_neow` (relics/base.py:159) and NO is_allowed at all, so this relic's port hard-codes the Neow flag to False to express a gate that C# expresses on IsAllowed. Same observable HERE, which is why this is a divergence and not a gap: both codebases refuse the relic at Neow and everywhere else. But the divergence is a FIX-ORDERING CONSTRAINT worth recording, because it is not obviously safe pool-wide: when the 17-relic `Relic.is_allowed(run)` fix lands (sweep B / relic/lucky_fysh G2 / relic/meal_ticket G2 / relic/molten_egg G1), is_allowed_at_neow must be made to DELEGATE to it, or Neow's filter silently keeps using a stale independent flag. Checked and no relic bites today: the 17 floor-gated relics are all allowed at Neow anyway (TotalFloor is 1 there), silver_crucible and winged_boots gate on `Players.Count == 1` which is true in single-player, and kaleidoscope and scroll_boxes override IsAllowedAtNeow itself. Rule 7: leans on relics/base.py and RelicModel.cs, neither hashed here."
+    },
+    {
+      "what": "N3: `is_allowed_at_neow = False` is a CLASS attribute in the port, so it also survives make_relic's no-argument construction",
+      "verdict": "faithful",
+      "rationale": "Checked against sweep A's FROZEN CONSTRUCTOR STATE bucket -- `make_relic` (relics/base.py:73-74) passes no arguments, so a field that only an unused constructor parameter could set is frozen for the whole run (the defect batch 5 found). This flag is a class attribute, not a constructor field, so it is correct on every instance. massive_scroll holds no mutable state at all and is absent from every sweep-A bucket."
+    },
+    {
+      "what": "N4: the port declares no `after_obtained`, so the run grants it silently if it is ever reachable",
+      "verdict": "gap",
+      "issue": "Recorded, DORMANT, as the one thing a reader should not conclude from the waivers above: the port is a stub, not a guarded no-op. If any future content ever puts Massive Scroll in a single-player run -- a hand-written test fixture, a conformance resync granting it by id, or the roster's own pool changing -- the relic does nothing at all instead of failing loudly, and the 3-card choice C# would offer is simply lost. The concrete unported thing that makes it live is multiplayer itself, which is permanently out of scope; filed as a dormant gap rather than folded into the AfterObtained waiver so the stub-ness stays visible to sweep C's stub census, which lists this relic under the \"out-of-combat pickup effect, stub\" family."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

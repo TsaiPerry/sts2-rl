@@ -1,0 +1,113 @@
+{
+  "unit": "power/asleep",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\AsleepPower.cs",
+    "sha256": "8a48187e4c0369d92adc6a2c72dd1f4972ab41645a386e69717cb438502c05da"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1834 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:1840-1851 AsleepPower.on_damage_received (fired at cmds.py:122)",
+      "verdict": "faithful",
+      "rationale": "AsleepPower.cs:21-36 is AfterDamageReceived, and cmds.py:121-122 is the sim's AFTER-damage slot carrying the same CreatureCmd.cs:392 killing-blow guard -- so this is the one damage hook in this batch whose slot matches, and PROMPT.md bug class 2 is satisfied in both directions. Order matches too: C# removes the owner's Plating, sets IsAwake, Stuns with WakeUpMove, then removes itself; powers.py:1849-1851 does _remove_plating() -> _expire() -> wake_up(stunned=True), and monsters/underdocks/lagavulin_matriarch.py's wake_up sets is_awake and stuns. `result.UnblockedDamage != 0` maps to `amount > 0` (powers.py:1848): the sim's on_damage_received argument is hp_lost, i.e. post-block AND post-modify_hp_lost, where C#'s UnblockedDamage is post-block only; the Matriarch has no ported HP-loss modifier so the two coincide here. Third-file citations, not hashed here."
+    },
+    "BeforeSideTurnEndVeryEarly": {
+      "maps_to": "powers.py:1853-1857 on_enemy_turn_start",
+      "verdict": "gap",
+      "issue": "SLOT, two ways. (a) turn_structure gap G11 owns this exact case and names it: Hook.BeforeTurnEnd(Enemy) (CombatManager.cs:1251) has no sim counterpart, and AsleepPower's BeforeSideTurnEndVeryEarly Plating-drop went onto on_enemy_turn_START (powers.py:1853, whose own comment says \"Mirrors BeforeSideTurnEndVeryEarly\") -- one slot FURTHER from the C# position than G11's first draft said. Identical `gap` verdict, not re-verdicted (rule 3). (b) the VeryEarly phase pass itself does not exist in the sim -- hook_dispatch gap G3 / turn_structure G12. DORMANT, executed: `py audit/tools/power_slot_probes.py rosters` shows LAGAVULIN_MATRIARCH_BOSS is a SOLO encounter (n=1, order=['LagavulinMatriarch']), so the per-creature slot and the side slot coincide, and the only other listener that reads the dropped Plating is PlatingPower's own on_enemy_turn_end (powers.py:1076-1078), owner-filtered and in a later slot in both models. Trigger: an encounter putting a Plating+Asleep creature alongside another enemy, or porting a second enemy-side BeforeSideTurnEnd* listener. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1859-1866 on_enemy_turn_end",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. LAGAVULIN_MATRIARCH_BOSS is a solo encounter (n=1), so nothing acts between the owner's turn end and the side end. This is the FIRST of the three units the power report's section 6 said would settle G5, and it settles DORMANT. Trigger: any encounter fielding the Matriarch with a second enemy -- wake_up() re-telegraphs the owner's move, so a later enemy would face a different board, and the CreatureCmd.stun / force_current_state would land at a different point in the MonsterAi draw sequence, which is conformance-visible."
+    }
+  },
+  "guards": [
+    {
+      "what": "AsleepPower.cs:23 `target == base.Owner`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1848 `target is self.owner`. Identical."
+    },
+    {
+      "what": "AsleepPower.cs:25 `Owner.HasPower<PlatingPower>()` before removing it",
+      "verdict": "faithful",
+      "rationale": "powers.py:1836-1838 `_remove_plating` calls PowerCmd.remove unconditionally; cmds.py's PowerCmd.remove is a no-op when the id is absent, so the HasPower test is redundant rather than dropped. Same for the BeforeSideTurnEndVeryEarly arm."
+    },
+    {
+      "what": "AsleepPower.cs:40 `base.Amount <= 1`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1856 `self.amount <= 1`. Identical, and load-bearing: it is what makes a natural wake come up without block."
+    },
+    {
+      "what": "AsleepPower.cs:48 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Folded into the AfterSideTurnEnd slot entry: the sim expresses the same intent with `enemy is not self.owner -> return` (powers.py:1860) on a per-creature dispatch. Equivalent for a solo owner, divergent for a multi-enemy one; carried here so a reader sees the guard was checked rather than skipped."
+    },
+    {
+      "what": "AsleepPower.cs:34 PowerCmd.Remove(this) vs _expire()",
+      "verdict": "deliberate-divergence",
+      "rationale": "Asleep overrides no AfterRemoved, so the observable is identical -- the same mechanism note as power/no_draw's and power/tainted's. It would stop being safe the moment an AfterRemoved is added, as SlumberPower one section over actually has."
+    },
+    {
+      "what": "AsleepPower.cs:29,31 SfxCmd.Play / CreatureCmd.TriggerAnim(\"Wake\")",
+      "verdict": "waiver",
+      "rationale": "Presentation only; out of scope everywhere."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

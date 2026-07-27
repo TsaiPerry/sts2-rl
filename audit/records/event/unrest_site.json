@@ -1,0 +1,103 @@
+{
+  "unit": "event/unrest_site",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\UnrestSite.cs",
+    "sha256": "0caacca3924788462f3c4406a05fa3dedde94638531027df72126815efb3a672"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\unrest_site.py",
+    "sha256": "e70c4bbb254a09ae0930b1954a5f7365e5242f5f2a932459525990e7206d887f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Events/EventOption.cs",
+      "sha256": "02a8c24eb58efdb08f14b8801a598400c4bd590b675faf9b947413096562118c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/tungsten_rod.py",
+      "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "events/unrest_site.py:30 `run.hp <= run.max_hp * 0.70` -- binary float, where UnrestSite.cs:26-29 is `(decimal)p.Creature.CurrentHp <= (decimal)p.Creature.MaxHp * 0.70m`, exact base-10 decimal",
+      "verdict": "gap",
+      "issue": "UNIT GAP: the representation moves the gate. Binary float cannot represent 0.70, so `max_hp * 0.70` lands just BELOW the true 70% for some max HP values and the sim refuses an event the game allows. EXECUTED (`py audit/tools/event_probes_b.py gate`), sweeping every (max_hp, hp) pair with max_hp <= 400: 7 disagreements, all in the same direction (sim False / game True) and all at hp exactly 70% of max -- max_hp/hp = 90/63, 170/119, 180/126, 330/231, 340/238, 350/245, 360/252. LIVE and easily reached: an Ironclad starts at 80 max HP and 90 is one Max-HP relic away, so a 90/63 run is ordinary state, and the consequence is that the node the game would serve as an Unrest Site is filtered out of the sim's event pool -- which then shifts every later event pick, not just this one -- a consequence that is now EXECUTED rather than asserted, see the eventsVisited guard below. The shared contract's 'numeric constants are checked against the non-ascension branch' rule makes 0.70m the canonical value; the defect is the arithmetic, not the constant. Note this is the SAME bug class the damage_pipeline N3 record calls out for Shrink x Vulnerable -- decimal-vs-float -- but at an event GATE rather than in the damage pipeline, so it is a separate site and not that record's blast radius."
+    },
+    "CalculateVars": {
+      "maps_to": "UnrestSite.cs:40-43 sets Heal.BaseValue = MaxHp - CurrentHp at BeginEvent time, and Rest() (:47) heals that stored amount. events/unrest_site.py:39 computes `run.max_hp - run.hp` at choose time instead. Same value: an event page offers no action that can change HP or Max HP between BeginEvent and the first choice, and REST is a first-page option, so the two evaluation points cannot disagree. HealVar(0m) is the placeholder CalculateVars overwrites.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars DynamicVar(\"MaxHpLoss\", 8m) (UnrestSite.cs:20-24)",
+      "maps_to": "events/unrest_site.py:11 `_MAX_HP_LOSS = 8`.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Rest (UnrestSite.cs:45-50): CreatureCmd.Heal(Heal.BaseValue) then CardPileCmd.AddCursesToDeck([PoorSleep])",
+      "maps_to": "events/unrest_site.py:38-41 run.heal(missing) then run.add_card(make_card('poor_sleep')), same order. The heal is the PLAIN verb, not HealRestSiteOption.ExecuteRestSiteHeal -- despite the event's name and its full-heal shape -- and CreatureCmd.Heal (CreatureCmd.cs:691-703) dispatches no hooks in C# either, so unrest_site is NOT in turn_structure step 38a's blast radius, matching the stream report's plain-heal list. AddCursesToDeck type-asserts Curse and then calls the ordinary Add(card, PileType.Deck) (CardPileCmd.cs:1042-1056), so run.add_card is the right port and runs the same deck-entry hook -- Darkstone Periapt's Max-HP-on-Curse fires in both, AFTER the heal in both.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-2: Kill (UnrestSite.cs:52-54) via `CreatureCmd.LoseMaxHp(new ThrowingPlayerChoiceContext(), Owner.Creature, MaxHpLoss = 8, isFromCard: false)`; events/unrest_site.py:44 run.lose_max_hp(8) calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+    },
+    {
+      "what": "Kill's ordering (UnrestSite.cs:54-56): LoseMaxHp FIRST, then RelicFactory.PullNextRelicFromFront(base.Owner) -> RelicCmd.Obtain",
+      "maps_to": "events/unrest_site.py:44-45 lose_max_hp then obtain_relic_from_grab_bag, same order -- which matters, because a pulled relic that modifies HP loss (Tungsten Rod) must NOT apply to this event's own max-HP chip in either build. The pull's rarity roll is on the correct per-player Rewards stream (RelicFactory.cs:28, :82; run.py:588-589), so it is not an EV-3 site.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`runState.Players.All(p => ...)` (UnrestSite.cs:28)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "`.ThatDecreasesMaxHp(base.DynamicVars[\"MaxHpLoss\"].BaseValue)` on KILL (UnrestSite.cs:36) and HoverTipFactory.FromCardWithCardHoverTips<PoorSleep> on REST (:35)",
+      "verdict": "waiver",
+      "rationale": "presentation only: EventOption.cs:194-197 shows ThatDecreasesMaxHp is nothing but `ThatWillKillPlayerIf(p => p.MaxHp <= value)`, the predicate that flashes the option red -- the max-HP loss itself is dealt by the option body. presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "this unit rolls NOTHING, so EV-3 does not apply",
+      "maps_to": "EXECUTED (`py audit/tools/event_probes_b.py rng5b`): unrest_site is one of the two slice-B modules with no RNG draw of any kind.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EVENT ORDERING (consequence proof, not a new mechanism): the IsAllowed gap's claim that refusing this event \"shifts every later event pick\" rests on eventsVisited, which no record in this tier had named. RoomSet.EnsureNextEventIsValid (rooms.py:441-457, RoomSet.cs) walks the shuffled queue and INCREMENTS events_visited past every event whose IsAllowed fails, and mark_visited (rooms.py:431-439) increments it again when the room is served -- so a wrongly-refused event does not merely go missing, it advances the cursor and re-indexes the whole tail. (Each act's Neow/Orobas/Tanx node bumps the same counter, which is why the first '?' node already serves events[1].)",
+      "maps_to": "EXECUTED (ad-hoc, repo root): drive RoomSet's event cursor over the queue ['unrest_site','doll_room','tea_master','this_or_that'] with a 90/63 run, serving three event rooms, once with unrest_site allowed (the game's decimal gate) and once refused (the sim's float gate). Game serves ['unrest_site','doll_room','tea_master']; sim serves ['doll_room','tea_master','this_or_that']. Every later pick is shifted by one, and the sim reaches an event in three rooms that the game would not have reached until the fourth. The gate half of the witness reproduces off the record's own probe: `py audit/tools/event_probes_b.py gate` (sim `63 <= 90*0.70` is False because 90*0.70 == 62.99999999999999; the game's 90m*0.70m is exactly 63.00m, so 63 <= 63 is True). This guard proves the CONSEQUENCE only -- the divergence itself is the IsAllowed gap above and is not re-verdicted here (rule 3), and the ordering machinery itself matches the source, so this entry is faithful.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,74 @@
+{
+  "unit": "card/thrash",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Thrash.cs",
+    "sha256": "87ecdaf33740eb5791b9e7401ac19b0f6daf2ceeb6a6f8dd009f6da376f244cc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\thrash.py",
+    "sha256": "6ffb7671ded4a4f5e00a8786ac110c677e02eef9139983e4effafceec8e3bdb5"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/reflections.py",
+      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/welcome_to_wongos.py",
+      "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (thrash.py:22-26) + _init_vars (28-31)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Rare, TargetType.AnyEnemy)` (Thrash.cs:37-40) == cost 1 / ATTACK / RARE / ANY_ENEMY. Thrash has no Exhaust keyword of its own -- the Exhaust hover tip (Thrash.cs:20) refers to the card it exhausts -- and the sim leaves `exhausts` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 4, _hits = 2 (thrash.py:30-31)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(4m, ValueProp.Move)` (Thrash.cs:22) == `_damage = 4`; the hit count of 2 is a literal `WithHitCount(2)` in C# (45) rather than a RepeatVar, and the sim stores it as `_hits = 2` so `base_hits` reports it -- the same small improvement card/maul and card/rip_and_tear make."
+    },
+    "OnPlay": {
+      "maps_to": "ThrashCard.on_play (thrash.py:50-69)",
+      "verdict": "faithful",
+      "rationale": "The two hits, the victim selection and the absorb-then-exhaust order are all faithful, and the RNG is handled CORRECTLY: `Owner.RunState.Rng.CombatCardSelection.NextItem(pile.Cards.Where(c => c.Type == CardType.Attack))` (Thrash.cs:50) == the sim's parity branch `crng.card_selection.choice(attacks)` with the shared legacy rng kept only for non-parity runs (thrash.py:63-67). The absorbed amount is a careful approximation of C#'s damage-var cascade: C# reads `CalculatedDamage` if present, else `Damage`, else `OstyDamage`, else logs a warning (Thrash.cs:54-69), and the sim reads `calc_damage(ctx, None)` if the victim defines it else `_damage` (thrash.py:40-43) -- the same two tiers that matter for Ironclad content, since no ported card has an OstyDamage var. C#'s `Hook.ModifyDamage(..., target: null, ..., ValueProp.Move, cardModel, ...)` (70) is reproduced by running the sim's additive-then-multiplicative modifier hooks with a null target (thrash.py:45-47), which is the right shape: outgoing modifiers such as Strength apply, target-side ones such as Vulnerable cannot. The absorb happens BEFORE the exhaust on both sides, so an on-exhaust effect cannot change what was absorbed. Presentation, folded in: WithHitFx."
+    },
+    "OnUpgrade": {
+      "maps_to": "ThrashCard._on_upgrade (thrash.py:33-34)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` (Thrash.cs:85) == `self._damage += 2` (4 -> 6 per hit)."
+    },
+    "AfterDowngraded": {
+      "maps_to": "NOT PORTED -- ThrashCard has no downgrade hook (thrash.py)",
+      "verdict": "gap",
+      "issue": "`AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamage` (Thrash.cs:77-81), where `ExtraDamage` is the running total of every absorbed Attack's damage (72). C# tracks the accumulation in a private field precisely so `AfterDowngraded()` can re-add it after `DowngradeInternal` rebuilds the damage var from canonical (CardModel.cs:2140); the sim mutates `_damage` directly and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) destroys it. LIVE via `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards IN COMBAT, which is exactly when the accumulation exists) and also `events/reflections.py:40` / `events/welcome_to_wongos.py:90`. Same mechanism and same verdict as card/maul's and card/rampage's AfterDowngraded entries (rule 3) -- these THREE cards are the pool's only `AfterDowngraded` overrides and all three are unported. Not caught by `card_probes.py downgrade`, which compares a FRESH card against upgrade+downgrade and so never sees the accumulation. Observable: absorb a 20-damage Bludgeon into an upgraded Thrash (6 -> 26 per hit), then have it downgraded -- the game keeps 4 + 20 = 24, the sim drops to 4."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim's `_absorbed_damage` clamps at 0 (`max(0, amount)`, thrash.py:48)",
+      "verdict": "faithful",
+      "rationale": "C#'s `Hook.ModifyDamage` already clamps its result at 0 inside the damage pipeline, so the two agree; recorded because the clamp is explicit in the sim and implicit in the source."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

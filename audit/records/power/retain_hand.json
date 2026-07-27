@@ -1,0 +1,83 @@
+{
+  "unit": "power/retain_hand",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RetainHandPower.cs",
+    "sha256": "1ff9604e0cbc7bb8f13fa843f3b1e716cb43f954aab7eb87b41108ae983b2ba4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_eye.py",
+      "sha256": "f56a124736de6ad63266a47e71ab2e16b27e40b3eb513aa3eea51dade6eb73fc",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3537 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ShouldFlush": {
+      "maps_to": "powers.py:3539-3540 RetainHandPower.should_flush_hand (hooks.py:644-652, combat.py:661)",
+      "verdict": "gap",
+      "issue": "The predicate itself is faithful -- false for the owner, true otherwise (RetainHandPower.cs:19-26), and the sim's should_flush_hand has no player parameter at all, which is a single-player tautology. What differs is what a FALSE result means, and that is turn_structure's G4, which is already LIVE and is not re-verdicted here per binding rule 3: C#'s FlushPlayerHand treats false as 'every card is retained' and then still runs Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup unconditionally (CombatManager.cs:1327-1346), where combat.py:661-662 guards the whole thing (`if should_flush_hand(): discard_hand()`) so a false result skips on_hand_emptied as well -- and there is no after_flush hook in hooks.py to fire in the first place. Recorded from this end because this power is the sim's ONLY should_flush_hand implementer, i.e. G4's entire trigger surface in the power tier."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:3542-3543 on_enemy_side_end -> Power._tick (combat.py:345)",
+      "verdict": "gap",
+      "issue": "A DELIBERATE SLOT SHIFT that is observationally correct in the normal case and LIVE through turn_structure's G3 in the extra-turn case. C# decrements at the PLAYER side's Hook.AfterTurnEnd (CombatManager.cs:1307), i.e. after FlushPlayerHand (:1296); the sim ticks at on_enemy_side_end (combat.py:345) instead, and its docstring (powers.py:3531-3533) explains the choice as 'the sim's equivalent post-flush slot'. That reasoning is unnecessary -- after_player_turn_end (combat.py:665) IS the sim's post-flush player-side slot and is unused -- but harmless in the normal case, because on_enemy_side_end still falls between the player's turn N end and turn N+1 start, so Retain Hand 1 retains exactly one hand on both sides. EXECUTED, and it does NOT survive an extra turn: with a should_take_extra_turn listener registered (the shape of the ported Ancient relic Pael's Eye, relics/paels_eye.py:36-46), one end_turn leaves `Retain Hand(1)` still on the player, where the same end_turn without it leaves None. combat.py:648-652 short-circuits at the TOP of end_turn and never reaches on_player_turn_end, the flush, after_player_turn_end OR the enemy turn, so the tick never happens; C# evaluates ShouldTakeExtraTurn in SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373) AFTER both EndPlayerTurnPhase methods, so Hook.AfterTurnEnd at :1307 has already decremented. The root cause is turn_structure's G3, already LIVE and not re-verdicted; this is a concrete content instance of it, and note that moving the tick to after_player_turn_end would NOT fix it, because combat.py:648-652 skips that too."
+    }
+  },
+  "guards": [
+    {
+      "what": "RetainHandPower.cs:30 participants.Contains(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "The sim's on_enemy_side_end takes no argument and the power does not filter (powers.py:3542-3543) -- it does not need to, since the slot is reached once per round and this power is player-only in ported content (Equilibrium / Salvo). Note that the shifted slot means the filter C# needs is exactly the filter the sim cannot express there."
+    },
+    {
+      "what": "RetainHandPower.cs:32 PowerCmd.Decrement",
+      "verdict": "faithful",
+      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250) -- Decrement, not TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical for a Buff: ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    {
+      "what": "Interaction with the per-card Retain keyword",
+      "verdict": "faithful",
+      "rationale": "The sim's discard_hand keeps cards with card.retain (player.py:192-196) independently of this power, which is C#'s per-card ShouldRetainThisTurn path. Two independent mechanisms on both sides; this power's false ShouldFlush short-circuits the whole flush, so the per-card path is moot when it is active."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

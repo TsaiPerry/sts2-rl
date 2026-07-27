@@ -1,0 +1,157 @@
+{
+  "unit": "enchantment/souls",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\SoulsPower.cs",
+    "sha256": "b14a2c28cbbff4411d4a9199965f10ed7ec5e1792c6368bfc72ceef1ff50614b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Anger.cs",
+      "sha256": "a257b4fa27cf13a9a7b9b8d1b3ebb82cac1b6c1f6f6b21da1198f8edd8690aa4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/DualWield.cs",
+      "sha256": "9477b1abf5642c96590d44e9f791e391dcfb8a4465ac40cb22510507f465ca6f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/JugglingPower.cs",
+      "sha256": "ceb563698f5ba534edee10f779f2713d4d772dbe791fc9590ad3fe1f7d38fc44",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BurningSticks.cs",
+      "sha256": "7c01f7308ea8d12a84161c069c669dbdadc18fb48ef5f551a5d9adcfbe3e8cf9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MusicBox.cs",
+      "sha256": "0dbade89edc069b750d2c1c41ad9597f036d1897cd9cfb9b0dbb22988da4550b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/anger.py",
+      "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/grave_of_the_forgotten.py",
+      "sha256": "e57a52a9d23e4e9409d249128dfcc4d38b857771f117f70630f31ea07473e9d7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/reflections.py",
+      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/bing_bong.py",
+      "sha256": "16432616467aff2cbd30eb4ca54ab0dfdd663256bcf3e3c63b714d6e423695c8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/burning_sticks.py",
+      "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/music_box.py",
+      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_growth.py",
+      "sha256": "1e9597d2278c55d09e942119f2df1df00f57c56d5cab173f2f52bc232d6d2871",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanEnchant": {
+      "maps_to": "SoulsEnchantment.can_enchant (enchantments.py:205-207) -- base plus `card.exhausts`, matching SoulsPower.cs:12-23's `card.GetKeywordsWithSources(KeywordSources.Local).Contains(Exhaust)`. The sim has no keyword-source split; Card.exhausts is the card's own flag, which is the Local source. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "OnEnchant (SoulsPower.cs:25-28, CardCmd.RemoveKeyword(Card, Exhaust)) -- a `protected override`, so harness.list_overrides does not enumerate it; audited here",
+      "verdict": "faithful",
+      "maps_to": "SoulsEnchantment.attach (enchantments.py:209-211) clears card.exhausts, and reset() (214-216) re-asserts the clear at every combat setup (combat.py:131). C# applies it once and permanently through CardCmd.Enchant -> ModifyCard (CardCmd.cs:539-543)."
+    },
+    {
+      "what": "BR-3 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145); Card.downgrade (cards/base.py:150-165) does not",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted); Souls IS that record's named witness. CROSS-RECORD NOTE for its owner, executed here (`py audit/tools/enchantment_probes.py souls-reset`): on a Discovery with Souls attached, exhausts is False after attach, True after upgrade()+downgrade() -- as step 52 states -- and False AGAIN after the next combat's Enchantment.reset() (enchantments.py:214-216, called from combat.py:131). The sim's divergence window is therefore bounded by the next combat setup. That keeps step 52 LIVE on its in-combat leg (Dampen, powers.py:3149-3183) but not on the out-of-combat leg its rationale also cites (events/reflections.py:36-41), which self-heals before the card is next played. Recommend step 52's owner narrow the liveness argument to the in-combat downgrade."
+    },
+    {
+      "what": "reachability: granted by the ported Grave of the Forgotten event (events/grave_of_the_forgotten.py:45-47, Confront). Executed: `py audit/tools/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "FOUR-VERB COVERAGE (enchant / upgrade+downgrade / transform / copy) -- stated explicitly so the hole cannot reopen silently. Verb 3, TRANSFORM: CardCmd.Transform (CardCmd.cs:369-451) removes the original from its pile and adds a freshly-built replacement; it never touches Enchantment, and the destroyed original takes its enchantment with it",
+      "maps_to": "TRANSFORM verdict: FAITHFUL, both engines drop the enchantment. C#: CardCmd.Transform's loop takes `item.GetReplacement(rng)`, calls `item.Original.RemoveFromCurrentPile()` (CardCmd.cs:400) and adds the replacement (CardCmd.cs:437/440); the word Enchantment does not appear anywhere in the method, and neither AfterTransformedFrom nor AfterTransformedTo (CardModel.cs:1625-1631, both empty virtuals -- SovereignBlade is the only override in the source) moves it. So the enchantment dies with the original. SIM: run.transform_card (run.py:406-470) and CardCmd.transform_to_random (cmds.py:415-449) both build the replacement with `make_card(...)`, which carries no enchantment. EXECUTED, this unit: `py -c \"import sys,random;sys.path.insert(0,'.');from sts2_rl.run import RunState;from sts2_rl.cards import make_card;from sts2_rl.enchantments import make_enchantment;r=RunState(rng=random.Random(0));c=make_card('fiend_fire');r.deck=[c];e=make_enchantment('souls');e.amount=2;e.attach(c);n=r.transform_card(c,into=make_card('bash'));print(n.id, n.enchantment)\"` -> `bash None`, matching C#. The in-combat twin (CardCmd.transform_to_random on a Sharp'd Strike) also prints a replacement with `enchantment=None`. Same result for all 17 ids. COVERAGE TABLE for this unit -- (1) ENCHANT: the CanEnchantCardType hook entry plus the reachability guard above. (2) UPGRADE / DOWNGRADE: settled in this record's own creature_card_cmds step-52 entry (this enchantment's attach() mutates a STATIC card property, so a card rebuild can drop it). (3) TRANSFORM: this entry, faithful. (4) COPY: guard EG2, gap. All four verbs are now on the record; before this pass transform and copy were 0/17.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
+      "verdict": "gap",
+      "issue": "MECHANISM EG2, one verdict at every site (rule 3). FIVE ported sim copy sites drop the enchantment, each a `type(card)()` / `make_card(card.id)` rebuild plus a re-upgrade loop with no `card.enchantment` carry: cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, DualWield.cs:35), powers.py:827-830 (JugglingPower.cs:48), relics/music_box.py:46-48 (MusicBox.cs:78), cards/anger.py:36-38 (Anger.cs:27) and relics/burning_sticks.py:30-32 (BurningSticks.cs:49). All five map to a C# `CreateClone()` call, so all five are the same defect. The sim's OTHER copy paths are correct and are what makes this a bug rather than a design choice: relics/bing_bong.py:37 and events/reflections.py:52 use `copy.deepcopy` (the enchantment rides along), relics/paels_growth.py:39-46 re-attaches Clone by hand, and the per-combat deck copy (run.py:1136 `copy.deepcopy`) carries it too. EXECUTED, this unit: `py -c \"import sys;sys.path.insert(0,'.');from sts2_rl.cards import make_card;from sts2_rl.cards.trash_heap_cards import _clone;from sts2_rl.enchantments import make_enchantment;c=make_card('fiend_fire');e=make_enchantment('souls');e.amount=2;e.attach(c);print(type(c.enchantment).__name__, _clone(c).enchantment)\"` -> `SoulsEnchantment None`. The same one-liner run over all 17 ids prints `None` for every one of the 16 that any probe card accepts (souls needs an Exhaust card, so it was run against fiend_fire). RULE 6, both legs -- reachability of the copy site for THIS unit: cards carrying Exhaust (Souls.cs's CanEnchant adds `card has Exhaust`). EXECUTED: 36 ported cards qualify, 6 of them ATTACKS (dramatic_entrance, feed, fiend_fire, molten_fist, neows_fury, whistle) -- so cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, hand ATTACK|POWER -- trash_heap_cards.py:143-149), powers.py:827-830 (Juggling, every 3rd ATTACK played), relics/music_box.py:46-48 (first ATTACK played each turn) and cards/anger.py:36-38 (Anger copies itself) for those six, and relics/burning_sticks.py:30-32 (the first SKILL exhausted each combat) for the 30 Skills. Every one of the five sites is ported and reachable (Dual Wield from the ported Trash Heap event pool, events/trash_heap.py:17; Anger from the Ironclad common pool; Juggling from cards/juggling.py; Music Box and Burning Sticks are ported relics). LIVENESS: LIVE. Souls' whole effect is REMOVING Exhaust, so the sim's copy exhausts where the game's copy does not -- the copy is spent after one play instead of returning to the discard pile. SECONDARY (false docstring): `_clone`'s docstring claims it \"mirrors CreateClone for the sim's needs\". It does not -- CreateClone carries the enchantment AND the affliction; `_clone` carries neither. Fifth entry in this stream's false-docstring list."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

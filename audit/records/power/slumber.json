@@ -1,0 +1,103 @@
+{
+  "unit": "power/slumber",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SlumberPower.cs",
+    "sha256": "0fbebdf8142f3ce901298e7c60721c863d04b1a163e576947b679b1c1969252c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/bowlbugs.py",
+      "sha256": "f4776ff765a05a9c96c27b1e7ec2614f59709dac7ccefa42109dc089f357c0ba",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2149 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:2158-2167 on_damage_received -> _count_down(woke_from_damage=True) (powers.py:2151-2156)",
+      "verdict": "faithful",
+      "rationale": "SlumberPower.cs:21-32 is AfterDamageReceived and cmds.py:121-122 is the matching sim slot, killing-blow guard included (CreatureCmd.cs:392). C# Decrements and, at Amount <= 0, Stuns with WakeUpMove; the sim decrements, _expire()s and calls owner.wake_up(stunned=True), and monsters/hive/slumbering_beetle.py's wake_up removes the Plating, forces ROLL_OUT_MOVE and stuns. C# relies on PowerCmd.Decrement -> ShouldRemoveDueToAmount (PowerModel.cs:478-489) to drop the power at 0 where the sim calls _expire() explicitly -- same observable. Third-file citations, not hashed here."
+    },
+    "AfterRemoved": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "SlumberPower.cs:34-38 is `SfxCmd.StopLoop(\".../slumbering_beetle_sleep_loop\")` and nothing else -- presentation only. Recorded rather than skipped because it is the one behavioural-looking AfterRemoved override in this batch, and it is what makes the `_expire()`-for-PowerCmd.Remove substitution used on sibling units a real (if currently unobservable) risk."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2169-2171 on_enemy_turn_end -> _count_down(woke_from_damage=False)",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. This is the SECOND of the three units the power report's section 6 said would settle turn_structure G5, and the interesting one, because SLUMBERING_BEETLE_NORMAL is a THREE-enemy encounter -- executed: `rosters` gives order=['BowlbugRock', 'BowlbugSilk', 'SlumberingBeetle']. It still settles DORMANT, for a reason G5 does not give: the Slumber owner is the LAST creature in the enemy list, so its per-creature turn-end slot is immediately adjacent to the side-end slot and no other enemy acts in between. `enemy-hook-order` records the sim's actual dispatch as ['clear:BowlbugRock', 'start:BowlbugRock', 'end:BowlbugRock', 'clear:BowlbugSilk', ..., 'end:SlumberingBeetle', 'side_end']. The BLOCK-clear half of G5 is separately dormant here: neither Bowlbug move grants block to an ally (monsters/hive/bowlbugs.py:87 gains block on `self`), so the sim clearing the beetle's block only after the Bowlbugs have moved cannot lose block the game kept. Trigger: reordering the encounter so the beetle is not last, or a Bowlbug-style ally-block move."
+    }
+  },
+  "guards": [
+    {
+      "what": "SlumberPower.cs:23 `target == base.Owner && result.UnblockedDamage != 0`",
+      "verdict": "faithful",
+      "rationale": "powers.py:2166 `target is self.owner and amount > 0`. See the AfterDamageReceived entry on UnblockedDamage vs the sim's post-modify_hp_lost hp_lost -- equal for this owner, whose only HP-shaped power is Plating (block, not an HP-loss modifier)."
+    },
+    {
+      "what": "Decrementing TWICE in one round (damage tick + side-end tick)",
+      "verdict": "faithful",
+      "rationale": "Both sources decrement once per damaging hit AND once at the owner's side end, so a beetle hit twice on the player's turn burns all 3 Slumber and wakes in the same round. Recorded because the sim's docstring (powers.py:2142-2143) phrases it as \"each point of unblocked damage\", where it is really each damage INSTANCE -- which matches C# but reads as if it did not."
+    },
+    {
+      "what": "stunned=True vs stunned=False as the only difference between the two paths",
+      "verdict": "faithful",
+      "rationale": "C#'s damage wake calls CreatureCmd.Stun(owner, WakeUpMove, \"ROLL_OUT_MOVE\") (SlumberPower.cs:29) and the natural wake calls WakeUpMove directly with no stun (SlumberPower.cs:48); powers.py:2156 threads exactly that distinction through wake_up(stunned=...). Faithful and non-obvious."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

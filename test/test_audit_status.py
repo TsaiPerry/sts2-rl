@@ -97,6 +97,58 @@ def test_hash_drift_is_stale(tmp_path, monkeypatch):
     assert out["relic"]["stale"] == 1
 
 
+def test_extra_sources_drift_is_stale(tmp_path, monkeypatch):
+    """A content record's citations beyond its own two files are pinned by
+    `extra_sources`; drift in one of them must mark the record stale."""
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    extra_cs = tmp_path / "src/Core/Commands/PowerCmd.cs"
+    extra_cs.parent.mkdir(parents=True, exist_ok=True)
+    extra_cs.write_text("public static class PowerCmd {}\n", encoding="utf-8")
+
+    rec = _make_record(tmp_path)
+    rec["extra_sources"] = [
+        {"path": "src/Core/Commands/PowerCmd.cs",
+         "sha256": harness.file_sha256(extra_cs), "side": "game"},
+        {"path": "sts2_rl/cmds.py",
+         "sha256": harness.file_sha256(Path("sts2_rl/cmds.py")), "side": "sim"},
+    ]
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["audited"] == 1
+    assert out["relic"]["stale"] == 0
+
+    # Drift the game-side extra source only: the singular pair is untouched,
+    # so the pre-fix _is_stale reported 0 here.
+    rec["extra_sources"][0]["sha256"] = "0" * 64
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+    # And the sim-side one, resolved against the repo root rather than the
+    # game root.
+    rec["extra_sources"][0]["sha256"] = harness.file_sha256(extra_cs)
+    rec["extra_sources"][1]["sha256"] = "0" * 64
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+
+def test_extra_sources_missing_file_is_stale(tmp_path, monkeypatch):
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    rec = _make_record(tmp_path)
+    rec["extra_sources"] = [
+        {"path": "src/Core/Gone.cs", "sha256": "0" * 64, "side": "game"}]
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+
 def test_gap_counted(tmp_path, monkeypatch):
     audits = _setup(tmp_path)
     monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
@@ -108,6 +160,69 @@ def test_gap_counted(tmp_path, monkeypatch):
     out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
                                audits_dir=audits)
     assert out["relic"]["gaps"] == 1
+
+
+def test_sim_only_record_counts_as_audited(tmp_path, monkeypatch):
+    """A sim-only unit has no C# file, so the ordinary shape left it in
+    `unaudited` forever and staleness had nothing to check."""
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: [{
+        "unit": "relic/fixture_relic",
+        "sim_path": "sts2_rl/relics/unsettling_lamp.py",
+        "game_path": "src/Core/Models/Relics/Nope.cs",
+        "game_exists": False,
+    }])
+    sim_path = "sts2_rl/relics/unsettling_lamp.py"
+    rec = {
+        "unit": "relic/fixture_relic",
+        "sim_only": True,
+        "rationale": "sim-only fixture, no C# counterpart",
+        "sim_source": {"path": sim_path,
+                       "sha256": harness.file_sha256(Path(sim_path))},
+        "hooks": {},
+        "guards": [],
+        "verdict": "waiver",
+        "audited": "2026-07-26",
+    }
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["audited"] == 1
+    assert out["relic"]["unaudited"] == []
+    assert out["relic"]["invalid"] == 0
+    assert out["relic"]["stale"] == 0
+
+    rec["sim_source"]["sha256"] = "0" * 64
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+
+def test_live_column_counts_records_with_a_live_gap(tmp_path, monkeypatch):
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    rec = _make_record(tmp_path)
+    rec["guards"] = [{"what": "g", "verdict": "gap", "issue": "x"}]
+    rec["verdict"] = "gap"
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["gaps"] == 1
+    assert out["relic"]["live"] == 0     # liveness not stated
+
+    rec["guards"][0]["live"] = False
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["live"] == 0     # stated dormant
+
+    rec["guards"][0]["live"] = True
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["gaps"] == 1
+    assert out["relic"]["live"] == 1
 
 
 def test_malformed_json_is_invalid(tmp_path, monkeypatch):

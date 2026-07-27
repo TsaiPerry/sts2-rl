@@ -1,0 +1,48 @@
+{
+  "unit": "card/thrumming_hatchet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\ThrummingHatchet.cs",
+    "sha256": "1a7098dc2654d6dfa090d41517d701374b48a4bca323ce52f36c116848ffe5fc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Cards/Bolas.cs",
+      "sha256": "e3b324c5d32d6f69356e70d28a8c4a5525338c7b8efa3c48dcd90a9950a84789",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "BeforeHandDraw": {
+      "maps_to": "ThrummingHatchetCard.on_player_turn_start -> _return_to_hand_if_played_last_turn (colorless_attacks.py:479-480, 514-536)",
+      "verdict": "gap",
+      "issue": "This card SHARES card/bolas's return-to-hand helper, and the two C# implementations are byte-identical (ThrummingHatchet.cs:33-43 vs Bolas.cs:39-49), so the finding transfers verbatim and carries the same verdict (rule 3). The trigger condition and the pre-draw slot are faithful: `History.CardPlaysFinished.Any(e => e.HappenedLastPlayerTurn(Owner) && e.CardPlay.Card == this)` == the sim's `e.card is card and e.turn == combat.turn - 1` over `CardPlayedEntry`. THE PILE SEARCH IS NOT: C# tests only `pile == null || pile.Type != PileType.Hand` and then calls `CardPileCmd.Add(this, PileType.Hand)`, which moves the card to hand from WHEREVER it is -- including the EXHAUST pile -- while the sim's helper searches only `(player.draw_pile, player.discard_pile)` (colorless_attacks.py:532-535) and silently gives up otherwise. Observable: play Thrumming Hatchet, then exhaust it -- next turn the game returns it to hand and the sim does not. LIVE: card/brand and card/burning_pact are ported hand-exhausters that pass a NULL filter, and card/second_wind and card/fiend_fire exhaust the hand wholesale."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:461-465) + _init_vars (467-469)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (ThrummingHatchet.cs:20-23) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "ThrummingHatchetCard._damage = 11 (colorless_attacks.py:469)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(11m, ValueProp.Move)` (ThrummingHatchet.cs:18) == `_damage = 11`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "ThrummingHatchetCard.on_play (colorless_attacks.py:471-477)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(11).FromCard(this).Targeting(cardPlay.Target)` (ThrummingHatchet.cs:28-30) == the sim's single `DamageCmd.deal(..., dealer=ctx.player, card=self)`. Presentation, folded in: WithHitFx."
+    },
+    "OnUpgrade": {
+      "maps_to": "ThrummingHatchetCard._on_upgrade (colorless_attacks.py:470 region)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (ThrummingHatchet.cs:47) == `self._damage += 3` (11 -> 14)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

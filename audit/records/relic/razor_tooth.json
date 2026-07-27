@@ -1,0 +1,74 @@
+{
+  "unit": "relic/razor_tooth",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RazorTooth.cs",
+    "sha256": "ef30fdb40103dedfb43dc384c0e85933ceb18177a702b83d091cf593f49a9723"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\razor_tooth.py",
+    "sha256": "64c8c65e0ed8080e8e63dcf1356c4e0b8a86eb9b2f1fd369dd0b347ca5e1fb79"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardType.cs",
+      "sha256": "5302169fcd5de05086c6d9cb15581af2b5280fd162513f9119880325b881bb5f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (razor_tooth.py:19)",
+      "verdict": "faithful",
+      "rationale": "Matches RazorTooth.cs:11. In the transcribed shared grab bag as Rare (relic_pools.py:123), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (razor_tooth.py:21-23)",
+      "verdict": "faithful",
+      "rationale": "RazorTooth.cs:13-30 runs four checks in order -- card owner, card type, IsUpgradable, then CardCmd.Upgrade -- and razor_tooth.py:22 runs the same three conditions before card.upgrade(). Each is verdicted at its own guard (N1-N4); no divergence was found at any of them, so this hook rolls up faithful per binding rule 4. EXECUTED (`py audit/tools/relic_probes_b13.py razor-tooth`): a Strike played once comes out at upgrade_level 1 and a second play leaves it at 1 (max_upgrade_level 1), a Dazed and a Burn stay at 0, and the run deck after finish_combat is still [('bash',0),('defend',0),('strike',0)]."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `(uint)(type - 1) > 1u` (RazorTooth.cs:20) is the decompiler's rendering of 'Attack or Skill'",
+      "verdict": "faithful",
+      "rationale": "CardType is None=0, Attack=1, Skill=2, Power=3, Status=4, Curse=5, Quest=6 (src/Core/Entities/Cards/CardType.cs:3-12), so `(uint)(type - 1) > 1` early-returns for everything except type 1 and 2. razor_tooth.py:22's `card.card_type in (CardType.ATTACK, CardType.SKILL)` is exactly that set. Recorded because the unsigned-underflow idiom is easy to read as the wrong comparison -- for type == None (0) the subtraction wraps to uint.MaxValue and correctly returns. NOTE per binding rule 7: CardType.cs is not hashed by this record."
+    },
+    {
+      "what": "N2 (PROMPT.md bug class 14): `if (!cardPlay.Card.IsUpgradable) return;` (RazorTooth.cs:24-27) IS mirrored -- razor_tooth.py:22 checks card.is_upgradable",
+      "verdict": "faithful",
+      "rationale": "The sim's Card.upgrade() (cards/base.py) is a bare `upgrade_level += 1` with no guard of its own, so every caller must supply one; sweep D found 7 of 23 relic call sites that do not, and two of those (astrolabe, bone_tea) are recorded live gaps. This relic is NOT one of them -- `py audit/tools/relic_probes.py sweep-upgrade` does not list razor_tooth.py, and the guard is executed above: Dazed and Burn (max_upgrade_level 0, the Curse/Status population) come out of on_card_played at upgrade_level 0. Checked rather than assumed, because the relic upgrades a card the player just played and Status cards ARE playable (Burn is not, but Dazed reaches the hand and Slimed is playable)."
+    },
+    {
+      "what": "N3: 'for the rest of the combat' -- the upgrade must not reach the run deck",
+      "verdict": "faithful",
+      "rationale": "C# upgrades the combat CardModel instance (CardCmd.Upgrade(cardPlay.Card)); the sim upgrades the combat Card instance. The sim's combat piles are a deepcopy of the run deck (RunState.create_combat, run.py:1136, whose docstring says 'the game clones canonical cards into each combat the same way'), so the upgrade cannot leak. EXECUTED end to end above: after finish_combat the run deck's upgrade levels are all 0 even though the played Strike reached level 1 in combat. NOTE per binding rule 7: run.py is not hashed by this record."
+    },
+    {
+      "what": "N4: C# has NO IsAutoPlay exclusion and no IsInProgress guard here",
+      "verdict": "faithful",
+      "rationale": "RazorTooth.cs:13-30's only guards are the three in N1-N2 plus the owner check, so an auto-played Attack is upgraded on both sides -- unlike relic/brilliant_scarf (BrilliantScarf.cs:84-87), whose auto-play exclusion the sim drops as a live gap. Same near-miss as relic/rainbow_ring N1 in this batch. The missing IsInProgress guard is structurally satisfied in the sim: on_card_played is a combat hook and combat.py's play loop breaks once the fight is decided."
+    },
+    {
+      "what": "N5: the relic has no state and no reset hooks at all",
+      "verdict": "faithful",
+      "rationale": "RazorTooth.cs overrides exactly Rarity and AfterCardPlayed -- no BeforeCombatStart, no AfterCombatEnd, no counter -- so PROMPT.md bug class 13 (a dropped per-combat reset) has nothing to bite here, and `py audit/tools/relic_probes.py sweep-reset` puts razor_tooth in the 'relics holding no state at all' bucket. Recorded so the absence is visibly a source property rather than an omission in the port."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

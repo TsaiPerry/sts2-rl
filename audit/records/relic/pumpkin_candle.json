@@ -1,0 +1,89 @@
+{
+  "unit": "relic/pumpkin_candle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PumpkinCandle.cs",
+    "sha256": "807de4c900f8d2dc20c55e7eba2bfa554a64f9a667d25bf2425e91da4dc8033a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\pumpkin_candle.py",
+    "sha256": "826df49b20600867ad8074b68409676d3a71a415dd4fbc6ff14181033da27607"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/RestSite/KindleRestSiteOption.cs",
+      "sha256": "8619c9b1e4be155e4a50c8972f694e12783c8f881d28948abc27a2eb3f12017a",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/tezcatara.py",
+      "sha256": "fe83c36275e02c36d3807758f33658fab29bc39bf010c1e2941fe947f458d6f4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (pumpkin_candle.py:19)",
+      "verdict": "faithful",
+      "rationale": "Matches PumpkinCandle.cs:22. Obtainable via the ported Tezcatara shrine (events/tezcatara.py:19), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "KindleCount (SavedProperty)": {
+      "maps_to": "self.kindle_count (pumpkin_candle.py:25, written at :31 and :39)",
+      "verdict": "faithful",
+      "rationale": "PumpkinCandle.cs:34-48 is a plain int with a setter whose only extra work is `base.Status = (KindleCount <= 0 ? Disabled : Normal)` and InvokeDisplayAmountChanged -- both presentation. [SavedProperty] means the counter persists across saves, i.e. it is deliberately PER-RUN state on both sides, which is what clears the sweep-A hit (see guard N1)."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (pumpkin_candle.py:27-28) -> rekindle(), dispatched by RunState.add_relic",
+      "verdict": "faithful",
+      "rationale": "PumpkinCandle.cs:52-56 calls Rekindle(); the port does the same. EXECUTED (`py audit/tools/relic_probes_b13.py pumpkin-candle`): `run.add_relic('pumpkin_candle')` leaves kindle_count == 5, matching `KindleCount += 5` (PumpkinCandle.cs:89). Contrast batch 1's relic/big_mushroom, whose after_obtained is missing entirely -- the dispatch site exists and this relic uses it."
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (pumpkin_candle.py:33-36)",
+      "verdict": "faithful",
+      "rationale": "PumpkinCandle.cs:58-69: owner check (structural in the sim), then `KindleCount <= 0 -> amount`, else `amount + DynamicVars.Energy.IntValue`. CanonicalVars pins EnergyVar(1) (PumpkinCandle.cs:31) and there is no AscensionHelper branch in the file, so the sim's literal +1 is the non-ascension value. EXECUTED: turn-1 energy is 4 for combats 1-5 and 3 from combat 6, exactly tracking kindle_count 4,3,2,1,0,0."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "after_combat_end (pumpkin_candle.py:38-39), dispatched by RunState.finish_combat (run.py:1206-1208)",
+      "verdict": "faithful",
+      "rationale": "PumpkinCandle.cs:71-75 is `KindleCount = Math.Max(KindleCount - 1, 0)`; pumpkin_candle.py:39 is `max(0, self.kindle_count - 1)`. EXECUTED end to end: 5 -> 4 -> 3 -> 2 -> 1 -> 0 -> 0 over seven combats, with the energy bonus dropping on combat 6. The sim dispatches this from finish_combat AFTER the HP/potion sync rather than inside the combat-end path, and gates it on `room_type is not None and not self.is_dead` (run.py:1206); C# fires Hook.AfterCombatEnd on victory only (audit/records/seam/turn_structure.json guard G10 -- a LOSS fires no hook at all), so the gate agrees. The ordering against the HP sync is unobservable for a counter nothing else reads. NOTE per binding rule 7: run.py and turn_structure.json are not hashed here."
+    },
+    "TryModifyRestSiteOptions": {
+      "maps_to": "modify_rest_site_options (pumpkin_candle.py:41-42), dispatched by RunState.rest_site_options (run.py:1062-1073)",
+      "verdict": "faithful",
+      "rationale": "PumpkinCandle.cs:77-85 adds `new KindleRestSiteOption(player)` and returns true; the owner check is structural. KindleRestSiteOption's whole behaviour is `Owner.GetRelic<PumpkinCandle>()?.Rekindle()` (KindleRestSiteOption.cs:37-41) -- no cost, no gate -- which the sim's `RestSiteOption('KINDLE', lambda run: self.rekindle())` reproduces exactly, including the OptionId string (KindleRestSiteOption.cs:19). EXECUTED: rest_site_options() -> ['KINDLE'] and selecting it takes kindle_count 0 -> 5. NOTE per binding rule 7: KindleRestSiteOption.cs and run.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `kindle_count` is a sweep-A candidate -- it is written during the run and no combat-boundary hook re-assigns it -- but it is per-run state on BOTH sides",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 13 requires tracing to the first READER of the field, which is modify_max_energy at the next combat's turn-1 energy step. The stale value is exactly the value the game keeps: [SavedProperty] KindleCount (PumpkinCandle.cs:34-35) survives saves, and C#'s only AfterCombatEnd assignment is a DECREMENT, not a reset (`py audit/tools/relic_probes.py sweep-reset` prints `C# resets: {'AfterCombatEnd': ['KindleCount = Math.Max(KindleCount - 1, 0)']}` for this relic -- the corrected column, which prints real assignments rather than an override census). So the sweep's static hit is a candidate that resolves to faithful, the same way batch 5's fake_happy_flower N1 did. WHAT THE EXECUTED ARM MISSED, reported in .superpowers/sdd/relic-batch-13-lessons.md: `sweep-reset-exec` files this relic under 'agree with a fresh instance', which is a FALSE CLEAR rather than agreement -- its driver builds a bare CombatState, so after_obtained and after_combat_end (both RUN hooks) never fire and kindle_count is 0 on both instances. Shown by `py audit/tools/relic_probes_b13.py sweep-exec-blind`."
+    },
+    {
+      "what": "N2: Rekindle() uses the literal 5 (PumpkinCandle.cs:89) while `const int kindleAmount = 5` (:18) and `new DynamicVar('CombatCount', 5m)` (:30) also exist",
+      "verdict": "faithful",
+      "rationale": "All three are 5 and there is no AscensionHelper.GetValueIfAscension in the file, so the sim's single KINDLE_AMOUNT = 5 (pumpkin_candle.py:21) is correct for the one clause that matters. Checked deliberately after PROMPT.md bug class 19 (iron_club's docstring pinned a constant the C# does not have): the source's duplicated constant is a display/behaviour split, not a value disagreement."
+    },
+    {
+      "what": "N3: nothing removes the +1 Energy mid-combat when kindle would run out, because the burn happens at combat end on both sides",
+      "verdict": "faithful",
+      "rationale": "Recorded because the relic reads like a per-combat charge and a reader may expect a mid-combat expiry. C# decrements only in AfterCombatEnd (PumpkinCandle.cs:71-75) and ModifyMaxEnergy is consulted once per turn at the energy reset, so a combat entered with KindleCount == 1 keeps the bonus for every turn of that combat and loses it afterwards. The sim's structure is identical, and the executed table above shows combat 5 (entered at kindle_count 1) still at energy 4."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

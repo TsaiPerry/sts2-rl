@@ -1,0 +1,59 @@
+{
+  "unit": "card/injury",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Injury.cs",
+    "sha256": "f13b6f81c77a635cb18494c48135854245a539bf67b49b2082bdb8c3bd20ddbe"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\injury.py",
+    "sha256": "6424cd518bee537b1d54e52fff0a37fe58b21eb1abec63775a29786e5584ea3c"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "InjuryCard.max_upgrade_level = 0 (injury.py:314)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Injury.cs:8) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "InjuryCard.is_playable = False (injury.py:313)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Injury.cs:10) == `is_playable = False`. NOT Eternal and NOT Ethereal -- Injury is the plainest curse in the pool, removable and permanent in hand -- and the sim leaves both False. It also does NOT override CanBeGeneratedByModifiers, so Injury IS in the random-curse pool on both sides (the sim leaves the True default)."
+    },
+    "ctor": {
+      "maps_to": "class attrs (injury.py:308-315) + _init_vars (317-318)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
+    },
+    "OnPlay": {
+      "maps_to": "InjuryCard.on_play -> pass (injury.py:320-321)",
+      "verdict": "faithful",
+      "rationale": "Injury.cs has no members beyond the two overrides -- no OnPlay, no OnTurnEndInHand, no vars. A pure dead draw on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (injury.py:315), which has no counterpart in Injury.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the flag only steers `DamageCmd.deal`'s prop inference and Injury deals no damage."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

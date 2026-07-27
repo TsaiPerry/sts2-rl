@@ -1,0 +1,48 @@
+{
+  "unit": "card/restlessness",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Restlessness.cs",
+    "sha256": "e672b3e47fd8d9f47c2cbd4b958d0b0754348c2cffc641065b0ec92ee6a7a46b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "RestlessnessCard.retain = True (colorless_skills.py:548)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Retain }` (Restlessness.cs:22) == `retain = True`. A CANONICAL Retain, so no downgrade-rebuild hazard, and load-bearing: the card only works as the last card in hand, so it has to survive the end-of-turn flush to get there."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:543-548) + _init_vars (550-553)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Restlessness.cs:28-31) == cost 0 / SKILL / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_cards = 2, _energy_gain = 2 (colorless_skills.py:552-553)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(2)` + `new EnergyVar(2)` (Restlessness.cs:14-18) == both numbers, both declared."
+    },
+    "OnPlay": {
+      "maps_to": "RestlessnessCard.on_play (colorless_skills.py:559-565)",
+      "verdict": "faithful",
+      "rationale": "The condition, the one-at-a-time draws and the order all match. C#'s `IsOnlyCardInHand` is `!Hand.Cards.Except(this).Any()` (Restlessness.cs:26) -- the hand with THIS card removed is empty -- and the sim's `if ctx.player.hand: return` (561-562) is the same test expressed differently, because the sim has already moved the played card out of the hand into the discard-pile limbo (combat.py:452-454), so an empty `hand` means Restlessness was the only card. The draws are issued individually (`for _ in range(self._cards): DrawCmd.draw(ctx.player, 1)`, 563-564) matching C#'s per-card `CardPileCmd.Draw(choiceContext, Owner)` loop (37-40) rather than one bulk draw -- which matters for per-draw listeners such as AutomationPower's counter -- and the energy is gained AFTER the draws on both sides. Presentation, folded in: the energy hover tip (20) and ShouldGlowGoldInternal (24), which reuses the same predicate."
+    },
+    "OnUpgrade": {
+      "maps_to": "RestlessnessCard._on_upgrade (colorless_skills.py:555-557)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` + `DynamicVars.Energy.UpgradeValueBy(1m)` (Restlessness.cs:47-48) == `_cards += 1` (2 -> 3) and `_energy_gain += 1` (2 -> 3). Both upgraded numbers checked."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

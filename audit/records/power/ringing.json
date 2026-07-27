@@ -1,0 +1,111 @@
+{
+  "unit": "power/ringing",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RingingPower.cs",
+    "sha256": "7f07b0aa6988e5a3b0ef12dc7412c5c2fb41399b3a2ad4492baf3cac4c7e299f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/PlayerCombatState.cs",
+      "sha256": "c908ea3144a466dc0d979ec44ade207dd692d6b23b9512afbcccae3468fea123",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Powers/PowerStackType.cs",
+      "sha256": "7251eb51775362338fe6fc5412a6e8304c23c5bad9b44a2b4a2c3bf9a3758407",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1317 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single, and this power leaves Power.on_stack alone, so both sides add on re-application -- PowerCmd.ModifyAmount:236 has no StackType branch and Single means only 'Amount is hidden' (PowerStackType.cs:10-13). Correct, unlike the 15 units that override on_stack to a no-op citing the same StackType (`py audit/tools/power_census.py stack`)."
+    },
+    "AfterApplied": {
+      "maps_to": "powers.py:1319-1332 RingingPower.__init__",
+      "verdict": "faithful"
+    },
+    "AfterCardEnteredCombat": {
+      "maps_to": "powers.py:1334-1338 RingingPower.on_card_entered_combat",
+      "verdict": "gap",
+      "issue": "The owner filter is dropped, which is harmless in single-player, but the SITE is not: C# afflicts from AfterCardEnteredCombat (RingingPower.cs:34-40) and the sim's on_card_entered_combat (hooks.py:402-407) is fired only where the sim happens to call it. Recorded as a gap because the sim's __init__ walks `getattr(owner, 'all_cards', ())` (powers.py:1330) and PlayerCombatState.all_cards is `hand + draw + discard + exhaust` evaluated live (player.py:100-103) -- it does NOT include cards currently in the Play pile, i.e. a card mid-resolution. C# reads PlayerCombatState.AllCards, which is Hand, Draw, Discard, Exhaust AND Play (PlayerCombatState.cs:70-80). So a Ringing applied while a card is mid-play leaves that card unafflicted in the sim and afflicts it in the game. This is PROMPT.md bug class 7 (pile limbo) in its power form. DORMANT: Ringing is applied by an enemy on the enemy's turn, when no player card is mid-play. Named trigger: any player-side or mid-resolution Ringing application. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1353-1355 on_player_turn_end -> RingingPower._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. Ringing's removal clears every Ringing affliction (powers.py:1357-1363), so in the sim the turn-end card effects and the flush run with the afflictions already gone, where the game clears them after. Reachable through should_play_card: a turn-end auto-play (Stampede) is legal in the sim because Ringing is gone and illegal in the game because it is not."
+    },
+    "AfterRemoved": {
+      "maps_to": "powers.py:1357-1363 RingingPower._expire clears every Ringing affliction",
+      "verdict": "faithful"
+    },
+    "ShouldPlay": {
+      "maps_to": "powers.py:1340-1344 RingingPower.should_play_card",
+      "verdict": "gap",
+      "issue": "HISTORY vs FLAG. C# answers 'has the owner played a card this turn' by querying CombatManager.History.CardPlaysStarted for entries that HappenedThisTurn; the sim keeps a boolean set from on_card_played. The two differ during a card's own resolution: C#'s history entry is written when the play STARTS (CardModel.cs:1930), so a card auto-played from inside the first card's resolution is already 'after a card this turn' and is blocked, while the sim's flag is set only in on_card_played, AFTER resolution (combat.py:514), so the nested auto-play slips through. Reachable: the sim auto-plays from inside a resolution in several ported places (HellraiserPower powers.py:707-713 on draw, MayhemPower :3572-3583, StampedePower :1025-1041). Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "RingingPower.cs:27 / :36 `item.Affliction == null`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1331 and :1336 both test `card.affliction is None`, so Ringing never overwrites another affliction. Contrast power/tangled, whose C# AfterApplied omits the test and whose sim port adds it."
+    },
+    {
+      "what": "RingingPower.cs:66 `card.Owner.Creature != base.Owner` -> true",
+      "verdict": "faithful",
+      "rationale": "Omitted; tautology in single-player. The polarity is right: this is an AND predicate and a non-owner must vote true."
+    },
+    {
+      "what": "RingingPower.cs:74 the history query is per-OWNER",
+      "verdict": "faithful",
+      "rationale": "`e.CardPlay.Card.Owner.Creature == base.Owner`; the sim's flag is per-power and there is one player. Equivalent -- the divergence is WHEN the flag is set, recorded on the ShouldPlay entry."
+    },
+    {
+      "what": "RingingPower.cs:47 PowerCmd.Remove -> AfterRemoved does the clearing",
+      "verdict": "faithful",
+      "rationale": "The sim routes the clearing through an overridden _expire (powers.py:1357-1363) that calls super()._expire() last, so the affliction sweep happens on every removal path exactly as C#'s AfterRemoved does. This is the right shape: contrast the units where _expire replaces PowerCmd.Remove and an AfterRemoved would be missed."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,88 @@
+{
+  "unit": "power/toric_toughness",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ToricToughnessPower.cs",
+    "sha256": "456720b22457cdbce2d3badc5229e365718425b814c06aaf13d9da7b9b6bc639"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1204 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "InstanceType": {
+      "maps_to": "no sim counterpart; cmds.py:308 keys stacking on power id alone",
+      "verdict": "gap",
+      "issue": "PowerInstanceType.Instanced: in C# every application is an independently tracked instance with its own Amount and its own internal state, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units; the mechanism is not re-verdicted here per binding rule 3. What is per-unit is REACHABILITY of two simultaneous instances and what diverges when they exist. This is the OTHER unit power_cmd G5 credits with documenting the approximation (powers.py:1194-1199) -- but unlike power/the_bomb it does NOT work around it, and the docstring admits as much: 're-applying stacks the turn counter and overwrites the block value'. So two C# instances of Toric Toughness 2 with block 5 and block 9 gain 5 + 9 = 14 block for two turns; the sim holds one instance at Amount 4 with block 9 and gains 9 block for FOUR turns. Both the per-turn amount and the duration are wrong, in opposite directions. REACHABLE: the applier is the ported Trash Heap event card (cards/event_cards.py:120, :142-145), a normal deck card that can be drawn and played twice in one combat. Third reachable G5 witness in half A, after power/rolling_boulder and power/automation."
+    },
+    "AfterBlockCleared": {
+      "maps_to": "powers.py:1214-1219 ToricToughnessPower.on_block_cleared (hooks.py:500-504, player.py:157-159)",
+      "verdict": "faithful",
+      "rationale": "Correct slot and correct order. C# fires Hook.AfterBlockCleared at CombatManager.cs:500-507, per creature, immediately after Creature.AfterTurnStart -> ClearBlock (:492-499) and BEFORE SetupPlayerTurn (:514) -- so the regained block is up before the energy reset and the draw. The sim clears the player's block and fires on_block_cleared at player.py:157-159, the first thing start_turn does, likewise before the energy reset (:163) and the draw (:183). The GainBlock -> Decrement order also matches (ToricToughnessPower.cs:40-41 vs powers.py:1218-1219). Note the sim gates the clear itself on should_clear_block, which is C#'s Hook.ShouldClearBlock -- turn_structure's G2 and G6 own that, not this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "ToricToughnessPower.cs:37 creature == base.Owner",
+      "verdict": "faithful",
+      "rationale": "powers.py:1215-1216. Identical, and load-bearing: on_block_cleared fires for enemies too (combat.py's enemy turn loop)."
+    },
+    {
+      "what": "ToricToughnessPower.cs:22 the block is a BlockVar(0m, ValueProp.Unpowered) set by SetBlock, NOT base.Amount",
+      "verdict": "faithful",
+      "rationale": "The two numbers are kept apart correctly on both sides -- Amount is the turn counter and the block is a separate field, which ToricToughnessPower.cs:24-33's own comment spells out. powers.py:1208 initialises self.block = 0 (matching the 0m canonical value) and :1210-1212 is the SetBlock port; :1218 gains self.block, not self.amount. Getting these backwards is exactly the mistake power/radiance's DynamicVars.Energy guard also had to rule out."
+    },
+    {
+      "what": "ToricToughnessPower.cs:40 GainBlock(..., Unpowered)",
+      "verdict": "faithful",
+      "rationale": "powers.py:1218 passes props=ValueProp.UNPOWERED explicitly -- correct, and the main report's section 4 item 4 counts this power among the eight siblings that get the props right where feel_no_pain and curl_up do not. NOTE C#'s call is GainBlock(base.Owner, base.DynamicVars.Block, null) with the props carried by the BlockVar itself rather than as a separate argument, which is why the argument list looks shorter than PlatingPower's."
+    },
+    {
+      "what": "ToricToughnessPower.cs:41 PowerCmd.Decrement",
+      "verdict": "faithful",
+      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

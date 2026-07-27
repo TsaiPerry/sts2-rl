@@ -1,0 +1,109 @@
+{
+  "unit": "relic/seal_of_gold",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SealOfGold.cs",
+    "sha256": "a23e02cded270f7ebc3320878a8279b08a61f9c6ec7c79374b318a9627e81d1c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\seal_of_gold.py",
+    "sha256": "300738c5f9b4317d2c872315804a22168bfcb305488ec1580d6f1b93213b58ee"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_attacks.py",
+      "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tezcatara.py",
+      "sha256": "fe83c36275e02c36d3807758f33658fab29bc39bf010c1e2941fe947f458d6f4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (seal_of_gold.py:18)",
+      "verdict": "faithful",
+      "rationale": "Matches SealOfGold.cs:15. Obtainable: the ported Tezcatara shrine offers it (events/tezcatara.py:19)."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (seal_of_gold.py:23-31) -- the sim's post-draw turn-start slot, executed-confirmed as the last of the five turn-start hooks (py audit/tools/relic_probes.py turn-order)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The relic pays 5 gold for 1 Energy at the start of every player turn on both sides and the constants match, but the sim reads the WRONG gold balance -- it omits combat.gold_gained, so gold won during the fight cannot be spent (G1, LIVE) -- and the hook sits in a collapsed turn-start pass where C# separates two (G2 = seam guard G12). Rule 7: turn_structure.json and combat.py are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the in-combat gold balance omits `combat.gold_gained`, so gold gained during the fight is invisible to the relic",
+      "verdict": "gap",
+      "issue": "MECHANISM: SealOfGold.cs:27 gates on `base.Owner.Gold >= base.DynamicVars.Gold.IntValue` and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable. seal_of_gold.py:25 computes `balance = combat.player_gold - combat.gold_stolen - combat.gold_spent` and never adds combat.gold_gained -- the field the sim uses to accumulate in-combat gains until RunState.finish_combat settles them (combat.py:178, run.py:1187). The sim already has the correct expression at the OTHER site that needs it: ThieveryPower computes `available = combat.player_gold + combat.gold_gained - combat.gold_stolen` (powers.py:1660), so this is an inconsistency inside the sim, not a missing capability. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py seal-gold): entering a combat with 4 gold, turn 1 correctly grants no energy on either side; after `combat.gold_gained += 20` (the exact mutation cards/colorless_attacks.py:208 performs) turn 2 still grants no energy and spends no gold in the sim, where C# grants 1 Energy and takes 5. Both sides ported: Seal of Gold comes from the ported Tezcatara shrine (events/tezcatara.py:19) and Hand of Greed -- the only in-combat gold source -- is a ported Colorless card (cards/colorless_attacks.py, 'hand_of_greed' in cards/pool.py:49's COLORLESS_POOL) reachable through Lead Paperweight, Neow's positive pool. The baseline behaviour is correct and was executed too: entering with 12 gold yields 1 Energy on turns 1 and 2 and none on turn 3. Rule 7: powers.py, combat.py, run.py, cards/colorless_attacks.py, cards/pool.py and PlayerCmd.cs are not hashed here."
+    },
+    {
+      "what": "G2 (DORMANT at this site, LIVE as a mechanism): AfterSideTurnStart is C#'s second turn-start pass and the sim runs one flat walk (seam guard G12, PROMPT.md class 25)",
+      "verdict": "gap",
+      "issue": "MECHANISM as recorded for relic/sai in this batch: Hook.AfterSideTurnStart is a complete pass that runs after every step-22 Hook.AfterPlayerTurnStart listener and is followed by a second AfterSideTurnStartLate pass (Hook.cs:1163-1175; audit/records/seam/turn_structure.json step 23 and guard G12, LIVE). The sim folds all three into hooks.on_player_turn_started in relic-registration order. EXECUTED (relic_probes_b14.py sai-seal-slot): 30 sim relics share the slot and 12 of them implement the earlier C# hook. DORMANT AT THIS SITE, checked rather than assumed: Seal of Gold reads the gold balance and grants Energy, and none of the twelve earlier-pass ports touches gold or energy (their bodies upgrade hand cards, heal, add cards, damage, discard-and-redraw, or draw) -- so no ordering changes the outcome. It goes live if any AfterPlayerTurnStart listener gains or loses gold, or reads energy: Hand of Greed reaching that hook, or a ported gold-granting turn-start relic, is the concrete shape. Binding rule 3 pins the verdict to the seam's. Rule 7: Hook.cs and turn_structure.json are not hashed here."
+    },
+    {
+      "what": "N1: EnergyVar(1).BaseValue and GoldVar(5).IntValue (SealOfGold.cs:19-20, :27, :30-31) vs ENERGY = 1 / GOLD = 5 (seal_of_gold.py:20-21)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 1 and 5 are the pinned non-ascension values, and the same GoldVar is read as IntValue for the gate and for the spend -- so the sim's single GOLD constant is right for both. The BaseValue/IntValue asymmetry across the two vars is the source idiom already recorded for relic/brilliant_scarf N2, not a port error."
+    },
+    {
+      "what": "N2: `PlayerCmd.GainEnergy` then `PlayerCmd.LoseGold` (SealOfGold.cs:30-31) vs the sim debiting gold_spent BEFORE gaining energy (seal_of_gold.py:30-31)",
+      "verdict": "faithful",
+      "rationale": "Order inverted, no observable difference: EnergyCmd.gain runs modify_energy_gain and adds to player.energy (cmds.py:546-554), and nothing in the sim's energy pipeline reads the gold ledger, so neither operation can see the other's effect. Checked deliberately because C#'s GainEnergy has two guards the sim's does not -- `amount <= 0` and `!CombatManager.Instance.IsEnding` (PlayerCmd.cs:31) -- both structurally satisfied here: the amount is the constant 1, and on_player_turn_started cannot fire on an ending combat (CombatState.start_turn runs only for a live combat). Rule 7: cmds.py, combat.py and PlayerCmd.cs are not hashed here."
+    },
+    {
+      "what": "N3: how the spend reaches the run's gold ledger -- combat.gold_spent, settled by RunState.finish_combat",
+      "verdict": "faithful",
+      "rationale": "C# debits Player.Gold directly, so the loss is visible immediately and permanent; the sim accumulates combat.gold_spent (combat.py:190) and RunState.finish_combat calls `self.lose_gold(combat.gold_spent)` (run.py:1189). Same end state, and the deliberate separation from gold_stolen keeps Gremlin Merc's Thievery semantics intact (the sim's own comment, combat.py:186-190). One real consequence, checked and benign: PlayerCmd.LoseGold clamps at 0 while the sim's gold_spent accumulates unclamped -- but every increment is gated on `balance >= 5` recomputed from the same three fields, so the accumulated spend can never exceed the entry balance. Rule 7: combat.py, run.py and PlayerCmd.cs are not hashed here."
+    },
+    {
+      "what": "N4: `participants.Contains(base.Owner.Creature)` (SealOfGold.cs:27) and the relic holding no state",
+      "verdict": "faithful",
+      "rationale": "The participants check is structurally satisfied -- on_player_turn_started is dispatched only for the player side. SealOfGold.cs declares no fields (its counter is the run's gold), so PROMPT.md classes 10 and 13 cannot fire and there is no combat-boundary reset to drop; the run-level ledger is per-run on both sides. Read both files."
+    },
+    {
+      "what": "N5: Flash() (SealOfGold.cs:29), CanonicalVars (lines 17-21) and ExtraHoverTips (line 23)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle / ForceMaxColumnsUntilEmpty are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

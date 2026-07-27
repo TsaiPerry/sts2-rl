@@ -1,0 +1,171 @@
+{
+  "unit": "event/punch_off",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\PunchOff.cs",
+    "sha256": "efb9357b4754fcb0e416a19b308ab859ee304e9b0ae882d8fa46e568cd7957b8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\punch_off.py",
+    "sha256": "605dec483c61cc46bd6f9596bc6b7a9f3a79d6268445ea09b2b9e7cea6545d3e"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Encounters/PunchOffEventEncounter.cs",
+      "sha256": "89b7198f96c26ae07a220b300937637fa2f2cf0c99119825c6fbc26ae7de3e7d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EventModel.cs",
+      "sha256": "ca991ec5fea146069498065563bbc4a63ee0786ceaafdeae823df822e955f240",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/TheArchitect.cs",
+      "sha256": "3ba94853f86839ee7dd48d1810fd98d0a9b4ace232a628419ab18b947fa9178c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/TheLanternKey.cs",
+      "sha256": "794c74da49770381f1a4e342d50ce91ee08e935de54ac827b8e45f415316cc5b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/PunchConstruct.cs",
+      "sha256": "f6551e08a1d0d00bc203d2d3c52369c3e1d9f1872e52e810aae1ebb12b48e39f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Events/NEventLayout.cs",
+      "sha256": "df91502ed77924accac3bd600a1c045d815f5bf9bef684faeedf020e7feda8dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/EventRoom.cs",
+      "sha256": "1038126138bdc9799ec3f1286bfddef80618dad80083c375d07cf2ae36e0e0f3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "LayoutType": {
+      "maps_to": "events/punch_off.py has no analogue",
+      "verdict": "gap",
+      "issue": "PunchOff.cs:33 `EventLayoutType.Combat` is NOT presentation-only: EventRoom.EnterInternal branches on it to call GenerateInternalCombatState (EventRoom.cs:67-71). See the EV-12 guard -- this hook is the trigger for that mechanism, so it carries EV-12's verdict rather than the UI waiver its sibling LayoutType overrides get (fake_merchant's Custom layout really is presentation)."
+    },
+    "CanonicalEncounter": {
+      "maps_to": "ModelDb.Encounter<PunchOffEventEncounter>() (PunchOff.cs:35) maps to events/punch_off.py:33-36 PUNCH_OFF_EVENT_ENCOUNTER, and Fight's `EnterCombatWithoutExitingEvent<PunchOffEventEncounter>` (PunchOff.cs:134) names the same encounter, so the sim's single module-level Encounter covers both readers. The composition -- two PunchConstructs, the FIRST with StartsWithFastPunch (PunchOffEventEncounter.cs:15-21) -- is reproduced at events/punch_off.py:23-25 with `starts_with_fast_punch=(i == 0)`. WHEN the encounter is built is a separate question: see EV-12.",
+      "verdict": "faithful"
+    },
+    "IsShared": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only. EventModel.IsShared (EventModel.cs:80-85) has exactly three readers and all are multiplayer: the vote-vs-independent choice split in EventSynchronizer, the shared-event label (NEventLayout.cs:227, gated on `Players.Count > 1`), and the per-event Rng seed term `IsShared ? 0 : GetPlayerSlotIndex(Owner)` (EventModel.cs:238), which is 0 in single player either way -- rng.make_event_rng records exactly that reduction (rng.py:74-80). The fourth use is an assertion that only a shared event may call EnterCombatWithoutExitingEvent (EventModel.cs:610-613). Out of scope per the shared contract's multiplayer waiver."
+    },
+    "IsAllowed": {
+      "maps_to": "PunchOff.is_allowed (events/punch_off.py:55-57) `run.total_floor >= 6`, matching PunchOff.cs:41-44's `runState.TotalFloor >= 6`. events/punch_off.py:15 names the literal _MIN_FLOOR = 6. No multiplayer quantifier.",
+      "verdict": "faithful"
+    },
+    "AfterEventStarted": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: PunchOff.cs:55-61 subscribes to RunManager's RoomExited and kicks off PunchEachOther (PunchOff.cs:63-99), an infinite anim/VFX/SFX loop -- TriggerAnim, PlayOnCreatureCenter, NHitSparkVfx, Cmd.Wait, a node Scale flip -- cancelled by a CancellationTokenSource on room exit (PunchOff.cs:138-142) or by TakeThem (PunchOff.cs:121). It deals no damage, applies no power and takes no stream draw; the two Creatures it animates are the display-only ones EV-12 covers."
+    },
+    "CalculateVars": {
+      "maps_to": "PunchOff.calculate_vars (events/punch_off.py:59-61) `self.rng.randint(91, 98)`, matching PunchOff.cs:101-104's `DynamicVars.Gold.BaseValue = base.Rng.NextInt(91, 99)`. The bound conversion is right -- NextInt's upper bound is exclusive, so [91, 99) is randint(91, 98), 8 outcomes either way -- and the sim keeps the throwaway draw with a comment saying the GoldVar is never granted by either option (which is true: grep of PunchOff.cs shows no GainGold). One draw in both. Only the stream diverges (EV-3).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars GoldVar(0) (PunchOff.cs:39)",
+      "maps_to": "no sim constant is needed: the var's only job is to declare the DynamicVar slot CalculateVars then overwrites, and neither Nab nor Fight reads DynamicVars.Gold. events/punch_off.py:59-61 rolls it and discards it, which is the same observable.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (PunchOff.cs:46-53): NAB then I_CAN_TAKE_THEM, both unconditional; TakeThem (PunchOff.cs:119-124) is a SetEventState page carrying the single FIGHT option",
+      "maps_to": "events/punch_off.py:63-67 and :74-75 reproduce both, including the second page's key. _set_state('I_CAN_TAKE_THEM', [EventOption('FIGHT', ...)]) matches the source's page/option key pair exactly.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Nab's ORDER (PunchOff.cs:106-117): CardPileCmd.AddCurseToDeck<Injury> FIRST, then the RelicReward",
+      "maps_to": "events/punch_off.py:69-72 add_card(make_card('injury')) then obtain_relic_from_grab_bag(). AddCurseToDeck is AddCursesToDeck of one (CardPileCmd.cs:1037-1054): a Type == Curse assertion, RunState.CreateCard, then CardPileCmd.Add(card, PileType.Deck) -- and run.add_card runs Hook.ModifyCardBeingAddedToDeck plus the AfterCardChangedPiles tail (run.py:341-354), which is what that Add runs. So this event is in the add_card set and NOT in creature_card_cmds G3's transform radius. Injury is ported (EXECUTED, `py audit/tools/event_probes_a.py reacha`).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Nab's relic comes from `new RelicReward(base.Owner)`, whose Populate is `RelicFactory.PullNextRelicFromFront(base.Player)` (RelicReward.cs:74-90) -- the per-player Rewards stream",
+      "maps_to": "events/punch_off.py:71 run.obtain_relic_from_grab_bag() is run.py:631-636's pull_relic_from_front + add_relic, and with no rarity_rng it falls back to run.rewards_rng (run.py:588-589), which IS PlayerRng.Rewards in parity runs (run.py:271-274). Same Pull -> Obtain pair, same stream; EV-3 does not apply to this leg. Same derivation the round_tea_party and relic_trader records made.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Fight (PunchOff.cs:126-136): a RelicReward AND a PotionReward per player ride the fight's reward screen via EnterCombatWithoutExitingEvent(extraRewards, shouldResumeAfterCombat: false)",
+      "maps_to": "events/punch_off.py:77-83 sets pending_encounter and pending_reward_extras = [RewardExtra.of_relic(), RewardExtra.of_potion()] -- the same two extras in the same order -- and the base Event declares that contract at events/base.py:95-99. `shouldResumeAfterCombat: false` is modelled by NOT overriding resume_after_combat, so the default no-op runs (events/base.py:116-122) and the run proceeds to the next map point. Both rewards are rolled at SCREEN time in both engines, so no draw happens here.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-12: a Combat-layout event builds its encounter -- monsters, HP rolls and AfterAddedToRoom -- when the ROOM IS ENTERED, not when the fight starts. EventRoom.EnterInternal calls GenerateInternalCombatState (EventRoom.cs:67-71), which runs `_mutableEncounter.GenerateMonstersWithSlots(runState)` and then CreateCreature + AddCreature per monster (EventModel.cs:383-403); CreateCreature rolls the monster's max HP on RunState.Rng.Niche (CombatState.cs:232-247). EnterCombatWithoutExitingEvent then REUSES that state -- `ShouldCreateCombat = (LayoutType != EventLayoutType.Combat)` (EventModel.cs:624-628)",
+      "verdict": "gap",
+      "issue": "The sim has no room-entry encounter generation at all: events/punch_off.py:77-83 merely records pending_encounter, and run.create_combat (run.py:1135-1152) builds the monsters when the DRIVER runs the fight. Two observables: (1) the draws move -- the game burns them unconditionally at entry, so a player who takes NAB still consumes them, while the sim consumes them only on the FIGHT path; (2) even on the FIGHT path they land at a different point in each stream. EXECUTED (`py audit/tools/event_probes_a.py combatlayout`): a parity run entering Punch-Off consumes 0 Niche draws on BOTH paths where the game consumes 2, plus 2 encounter-Rng NextInt(2,10) draws. LIVE for parity -- Punch-Off is an ordinary Underdocks event gated only on TotalFloor >= 6, and a desynced Niche/encounter stream misprices every later monster HP roll. MECHANISM EV-12, one verdict at every site (rule 3). Radius: `py audit/tools/event_probes_a.py combatlayout` lists the Combat-layout events in the source -- PunchOff.cs:33, TheLanternKey.cs:15 and TheArchitect.cs:52 (TheArchitect is unported and has no sim unit). event/the_lantern_key is in the radius and is not this record's to verdict."
+    },
+    {
+      "what": "PunchConstruct.StartingHpReduction is applied to the wrong HP value and in the wrong lifecycle slot. PunchOffEventEncounter.cs:15-19 rolls `StartingHpReduction = base.Rng.NextInt(2, 10)` per construct, and PunchConstruct.AfterAddedToRoom (PunchConstruct.cs:71-78) spends it as `Creature.SetCurrentHpInternal(Math.Max(1, CurrentHp - StartingHpReduction))` -- CURRENT HP only, MaxHp untouched, and AFTER the Niche max-HP roll that CreateCreature already did",
+      "verdict": "gap",
+      "issue": "events/punch_off.py:26-28 does `m.max_hp = max(1, m.max_hp - reduction); m.hp = min(m.hp, m.max_hp)` inside create_monsters, i.e. it moves MAX HP and it does so BEFORE the parity pass. Two legs, both EXECUTED (`py audit/tools/event_probes_a.py punchhp`): (1) LEGACY -- the two constructs come out at (50, 50) and (49, 49) where the game has max_hp 55 and current HP 55 - NextInt(2,10) (46..53); zero constructs are damaged in the sim, two are in the game. (2) PARITY -- CombatState._assign_parity_monster_hp (combat.py:152-153) runs AFTER create_monsters and assigns `creature.hp = creature.max_hp = hp` (combat.py:242), so both constructs come out at (55, 55) and the reduction is ERASED ENTIRELY. The sim already has the correct slot for this: Monster.adjust_hp_after_added (monsters/base.py:69-77) is the AfterAddedToRoom fix-up that runs after the Niche roll, and PunchConstruct does not implement it. LIVE -- Punch-Off is an ordinary act-2 Underdocks event, both constructs are ported (monsters/underdocks/punch_construct.py), and starting HP is the first thing a combat-parity diff compares."
+    },
+    {
+      "what": "EV-3: BOTH of Punch-Off's draw groups: CalculateVars' NextInt(91, 99) (PunchOff.cs:103), which the sim takes off `self.rng` (events/punch_off.py:61) instead of the per-event base.Rng; AND the encounter's two `base.Rng.NextInt(2, 10)` reduction draws (PunchOffEventEncounter.cs:17, :19), which come off the ENCOUNTER's own Rng in the source but off the shared combat rng in the sim (events/punch_off.py:26 uses create_monsters' `rng` argument, not its `selection_rng` argument, which run.create_combat:1141-1146 seeds with make_encounter_rng -- exactly EncounterModel.base.Rng). EXECUTED (`py audit/tools/event_probes_a.py punchhp`). The second group is not literally the per-event Rng, but it is the same defect shape and takes EV-3's verdict per rule 3, exactly as the room_full_of_cheese record did for its PlayerRng.Rewards draws rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "`foreach (Player player in base.Owner.RunState.Players)` in Fight (PunchOff.cs:129-133), which emits one RelicReward + one PotionReward PER PLAYER",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "HoverTipFactory.FromCardWithCardHoverTips<Injury> (PunchOff.cs:50), NGame.ScreenShakeTrauma + NDebugAudioManager.Play('blunt_attack.mp3') + Cmd.CustomScaledWait in Nab (PunchOff.cs:109-111)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

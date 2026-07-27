@@ -1,0 +1,74 @@
+{
+  "unit": "card/break",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Break.cs",
+    "sha256": "5cb33de81fedd493fe812859f40171badbb190366be98a7e8c6e2cdb9bad61fe"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\break_card.py",
+    "sha256": "17d27793cddfba582e51a3fc796afbcc3f7e15596fc5a5f69fad8243e3ad2f31"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (break_card.py:19-23) + _init_vars (25-28)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Ancient, TargetType.AnyEnemy)` (Break.cs:25-28) == cost 1 / ATTACK / ANCIENT / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 20, _vulnerable = 5 (break_card.py:27-28)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(20m, ValueProp.Move)` + `new PowerVar<VulnerablePower>(5m)` (Break.cs:19-23) == both numbers. Powered damage on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "BreakCard.on_play (break_card.py:34-40)",
+      "verdict": "gap",
+      "issue": "The damage, the ordering and every amount are faithful; the divergence is the sim's extra `if not target.is_gone:` guard before the debuff. C# applies it unconditionally and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose doc comment states that dead creatures CAN still receive powers -- it refuses only when `CombatState == null` (the corpse was REMOVED) or ShouldAllowHitting says no. The two agree for an ordinary monster, because `CreatureCmd.Damage` runs `await Kill(...)` before returning (CreatureCmd.cs:409) and `KillWithoutCheckingWinCondition` removes the creature at CreatureCmd.cs:523-525. They diverge for a corpse whose removal was VETOED (`Hook.ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; modelled in the sim as `retained_after_death`, cmds.py:100-104, for ReattachPower/Decimillipede), because `is_gone` is `is_dead or escaped` (creatures.py:44-46). Observable through ViciousPower, which draws on any Vulnerable the owner applies with no liveness test on the target (ViciousPower.cs:19-26; sim port powers.py:1160-1179): hold Vicious, kill a retained-corpse enemy with this card -- the game draws, the sim does not. LIVE; card/vicious, ViciousPower and the retained-corpse path are all ported. Same mechanism and same verdict as card/bash's OnPlay entry (rule 3). EXECUTED: `py audit/tools/card_probes.py dead-target-guards` lists 41 sim card classes that test liveness."
+    },
+    "OnUpgrade": {
+      "maps_to": "BreakCard._on_upgrade (break_card.py:30-32)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(10m)` + `DynamicVars.Vulnerable.UpgradeValueBy(2m)` (Break.cs:43-44) == `_damage += 10` (20 -> 30) and `_vulnerable += 2` (5 -> 7). Both upgraded numbers checked."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (Break.cs:32)",
+      "verdict": "faithful",
+      "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the equivalent contract. Presentation, folded in: WithAttackerAnim / WithHitFx / WithHitVfxSpawnedAtBase and the Vulnerable hover tip."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,88 @@
+{
+  "unit": "power/nemesis",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\NemesisPower.cs",
+    "sha256": "26f4d0934e270d6cc6ac3dbccf6174d61687f7ec798910fe7093d6a772a4c22e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Powers/PowerStackType.cs",
+      "sha256": "7251eb51775362338fe6fc5412a6e8304c23c5bad9b44a2b4a2c3bf9a3758407",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/test_subject.py",
+      "sha256": "ee82a7b8118e90eceac29b7e899cd29ec2efb9a4337aebe6f44e38e725150ba1",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3419 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:3431-3432 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single, and the sim overrides on_stack to `pass` citing it. Per the settled census (`py audit/tools/power_census.py stack`, 15 such units) that reasoning is wrong: Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13), and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch -- so C# really does reach Amount 2 on a second application while the sim stays at 1. Dormant because nothing reads Nemesis's Amount -- the alternation is driven by the private `_should_apply` bool (powers.py:3428, mirroring C#'s `_shouldApplyIntangible` at NemesisPower.cs:14) and not by Amount -- and because the only ported applier, monsters/glory/test_subject.py:139, applies it exactly once at the phase-3 transition. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:3434-3442 on_enemy_side_end",
+      "verdict": "faithful",
+      "rationale": "Correct slot (Hook.AfterTurnEnd, Hook.cs:1267, CombatManager.cs:1256 -> on_enemy_side_end, combat.py:345). The alternation, the Intangible 1 grant and the removal on the off-beat all match NemesisPower.cs:20-35, `HasPower<IntangiblePower>` test included (powers.py:3441). Note the removal mid-dispatch: hook_dispatch gap G7's ONLY whole-suite hit is exactly this pair -- on_enemy_side_end -> IntangiblePower x10, Nemesis removing Intangible while the dispatch walks -- and G7 records that C# makes the same call, because the PowerModel arm of CombatState.Contains (CombatState.cs:599) checks only `Owner.CombatState != null` and never that the power is still on its owner. Faithful by that already-executed cross-reference. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "NemesisPower.cs:22 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Replaced by `if self.owner.is_dead: return` (powers.py:3435) -- the same substitution as HighVoltage's and Territorial's, and one degree worse here, because the sim's early return also SKIPS THE TOGGLE (`_should_apply` is not flipped), so a Nemesis owner that is dead for one side end and alive for the next resumes on the wrong beat where C# would have flipped. DORMANT: the Test Subject's phase-3 Nemesis owner is the boss itself and a dead boss ends the combat (monsters/glory/test_subject.py), so no side end ever finds it dead-but-present. Trigger: Nemesis on a creature with ShouldStopCombatFromEnding or ShouldCreatureBeRemovedFromCombatAfterDeath -- i.e. an Illusion / Reattach / Adaptable / Infested / Steam Eruption / Stock / Surprise holder, all of which are ported."
+    },
+    {
+      "what": "NemesisPower.cs:27 Vfx on the Intangible grant",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

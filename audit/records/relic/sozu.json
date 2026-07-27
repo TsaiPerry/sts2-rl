@@ -1,0 +1,99 @@
+{
+  "unit": "relic/sozu",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Sozu.cs",
+    "sha256": "e4526ab54c41f21ad2aa135a7a41dff433b2f9b586041b319676b81011fc0c77"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\sozu.py",
+    "sha256": "424b9ec780ad43005cd0db2910d30076b3eb6b9a2b2afb5279002779fb2c2a30"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PotionCmd.cs",
+      "sha256": "101e099dcbfe8ef4622e79aee327ad2d6a46e4329ce06a52ddb3ec7fca89979b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/delicate_frond.py",
+      "sha256": "0cf7d5688b9436ff83a8bc91e362bad5f702521d412e7b0d3d142ddd8d62be21",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/petrified_toad.py",
+      "sha256": "653f11ba3db88edecd3993d4d779c1eff0db0112cb061a66cfd48c55177d71f8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (sozu.py:19)",
+      "verdict": "faithful",
+      "rationale": "Sozu.cs:11 is RelicRarity.Ancient. Executed (b15-pool): absent from the grab bag, granted by the ported Darv shrine (events/darv.py)."
+    },
+    "ShouldProcurePotion": {
+      "maps_to": "should_procure_potion (sozu.py:26-27), consulted by RunState.add_potion (run.py:480-481)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. The predicate itself is right and the out-of-combat gate works; the divergence is that C# funnels EVERY procurement through one gated command and the sim has a second, ungated in-combat path."
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (sozu.py:23-24), dispatched by HookSystem.modify_max_energy (hooks.py:203-208) from PlayerCombatState.start_turn (player.py:163)",
+      "verdict": "faithful",
+      "rationale": "Sozu.cs:22-29 returns `amount + DynamicVars.Energy.IntValue`; CanonicalVars is EnergyVar(1) (Sozu.cs:13) with no AscensionHelper.GetValueIfAscension anywhere in the file, so IntValue is the pinned non-ascension 1 and sozu.py:21's ENERGY = 1 is correct. EXECUTED (b15-sozu): turn-1 energy 3 without the relic, 4 with it. The dropped owner check is verdicted at N1."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the sim has TWO potion-procure paths and only the out-of-combat one consults should_procure_potion, so a mid-combat Alchemize gives a Sozu owner a potion the game refuses",
+      "verdict": "gap",
+      "issue": "MECHANISM: in C# there is exactly ONE procure entry point -- PotionCmd.TryToProcure (PotionCmd.cs:27-52) -- and its first statement is the Hook.ShouldProcurePotion gate (PotionCmd.cs:31); an executed grep finds all ten callers go through it (PotionReward, MerchantPotionEntry, AlchemicalCoffer, DelicateFrond, PhialHolster, EntropicBrew, Alchemize, the console and the multiplayer synchroniser). The sim splits the operation: RunState.add_potion (run.py:474-485) runs the gate, but PlayerCombatState.add_potion (player.py:107-121) does NOT -- its own docstring concedes it at player.py:112-115. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b15.py b15-sozu): `RunState.add_potion` with Sozu held returns kept=False and an empty belt (correct), while `PlayerCombatState.add_potion` with the same relic returns kept=True and belt ['fire_potion', None, None] where C# refuses. Both sides are ported content: Sozu comes from the ported Darv shrine (events/darv.py) and the ungated path has FOUR ported callers, printed by the probe -- cards/colorless_skills.py:53 (Alchemize, a ported Colorless Skill that generates a random combat potion), potions.py:1217 (Entropic Brew), relics/delicate_frond.py:25 and relics/petrified_toad.py:20. SCOPE NOTE: the shared contract defers potions, but this is not a potion-content audit finding -- it is a relic whose entire stated effect is the gate, and the divergent observable is the potion BELT, which the conformance runner asserts and resyncs slot-by-slot. Same reasoning as relic/belt_buckle's AfterPotionProcured entry, which likewise filed rather than waived."
+    },
+    {
+      "what": "N1: `return player != base.Owner;` (Sozu.cs:17-20) vs the sim's unconditional `return False` (sozu.py:27); and the same missing owner check on ModifyMaxEnergy (Sozu.cs:24-27)",
+      "verdict": "waiver",
+      "rationale": "Both are multiplayer owner filters. C#'s ShouldProcurePotion is dispatched over every listener in the run including other players' relics, so `player != Owner` means 'only refuse MY potions'; with one player that expression is constantly False, which is exactly what sozu.py:27 returns. The sim's own hook signature has no player parameter at all (relics/base.py:217-220), so the distinction is unrepresentable and unneeded. Waived as multiplayer-only under the shared contract's global scope, not under an unreachability claim about ported content."
+    },
+    {
+      "what": "N2: no per-combat or per-run state, and no reset hook of any kind",
+      "verdict": "faithful",
+      "rationale": "Checked against PROMPT.md bug class 13 and sweep A: Sozu.cs declares no field beyond the two overrides and sozu.py adds nothing to __init__, so there is no latched state to carry across a combat boundary. Confirmed mechanically -- `py audit/tools/relic_probes.py sweep-reset` does not list sozu in any of its buckets (it is one of the 200 relics holding no state at all). Rule 7: the sweep output is produced by audit/tools/relic_probes.py, not hashed here."
+    },
+    {
+      "what": "N3: ExtraHoverTips / CanonicalVars (Sozu.cs:13, 15)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

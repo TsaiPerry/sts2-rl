@@ -1,0 +1,103 @@
+{
+  "unit": "power/thorns",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ThornsPower.cs",
+    "sha256": "488d28a5eb58808fdf24a63cadc0ca3e55629c98cc21570f05da57949aa7d8d9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/juggernaut.py",
+      "sha256": "e82c56f25ac526d5c15a92c2e8a4585f5693dffe8429431c83f137c2eae591a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/spiny_toad.py",
+      "sha256": "56194dc18e5e87f815b9d8a7326f863f5f3762d17245e4f696b3fe62618fd060",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/toadpole.py",
+      "sha256": "b76431f98d263b23e9563d0f6c0f257dadab69a5de83ecc55661391625c1ebd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:337 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "BeforeDamageReceived": {
+      "maps_to": "powers.py:339-353 ThornsPower.on_damage_received (hooks.py:453-467)",
+      "verdict": "gap",
+      "issue": "LIVE, twice over: the sim implements C#'s BEFORE-damage hook with the AFTER-damage one and drops the powered-attack gate. ThornsPower.cs:17-24 is `BeforeDamageReceived` with the guard `target == Owner && dealer != null && (props.IsPoweredAttack() || cardSource is Omnislice)`; powers.py:339-348 is on_damage_received (cmds.py:122, fired after the HP write at cmds.py:92) with the guard `target is self.owner and dealer is not None` and no props test at all. Consequence 1 -- KILLING BLOW (PROMPT.md bug class 2): the sim's on_damage_received is skipped when the hit killed the victim (cmds.py:121, the CreatureCmd.cs:392 guard), but C#'s BeforeDamageReceived runs before any HP loss and is NOT subject to that guard, so the game reflects Thorns off the killing blow and the sim reflects nothing. EXECUTED: a 99-damage Strike into a 3-HP enemy holding Thorns 5 costs the sim's player 0 HP where the game costs it 5; a non-killing hit costs 5 in both (control). Reachable from the first Thorns enemy the player kills -- Spiny Toad (monsters/hive/spiny_toad.py:45) and Toadpole (monsters/underdocks/toadpole.py:75) both self-apply Thorns. Consequence 2 -- MISSING PROPS GATE: on_damage_received fires for every damage type, so the sim reflects Thorns off unpowered non-attack damage that the game ignores. EXECUTED: 3 unpowered non-card damage with dealer = player into a Thorns-5 enemy costs the sim's player 5 HP and the game 0. Reachable with the ported Ironclad card Juggernaut (cards/juggernaut.py:38 -> powers.py:791-794, DamageProps.NON_CARD_UNPOWERED with dealer = the player) against a Toadpole or Spiny Toad; Panache, Inferno, Rolling Boulder, The Bomb and Flame Barrier all deal damage in the same shape. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "ThornsPower.cs:19 `props.IsPoweredAttack() || cardSource is Omnislice`",
+      "verdict": "gap",
+      "issue": "Absent entirely -- see consequence 2 of the BeforeDamageReceived entry. Carried as its own guard because it survives a hook-slot fix: moving the sim to a before-damage slot would still reflect off Poison and power damage without this test. The Omnislice arm is separately dormant (Omnislice is unported)."
+    },
+    {
+      "what": "ThornsPower.cs:19 `dealer != null`",
+      "verdict": "faithful",
+      "rationale": "powers.py:347 `dealer is None -> return`. Identical, and load-bearing: it is why the sim's Thorns does not fire on the dealer-less Constrict/Demise/Disintegration damage (powers.py:1437-1439, :4055-4057, 2635-2637), which is what keeps consequence 2 from being far wider."
+    },
+    {
+      "what": "ThornsPower.cs:22 ValueProp.Unpowered | ValueProp.SkipHurtAnim, dealer = base.Owner",
+      "verdict": "faithful",
+      "rationale": "powers.py:351-353 passes DamageProps.NON_CARD_UNPOWERED (valueprops.py:42, UNPOWERED alone -- blockable, which matches C# omitting Unblockable) and no dealer. SkipHurtAnim has no sim analogue and is presentation. NOTE the sim omits `dealer=self.owner`, so the reflected damage is dealer-less where C#'s is dealt BY the Thorns owner -- that suppresses the reflect's own on_damage_dealt (cmds.py:123-124) and any Thorns-on-Thorns chain. FlameBarrierPower, the same shape one power over, DOES pass dealer=self.owner (powers.py:684-687), so this is an inconsistency inside the sim as well; it is folded into this guard rather than raised separately because both halves of the pair are already covered by the unit's `gap` rollup."
+    },
+    {
+      "what": "Applying Thorns with a NEGATIVE amount",
+      "verdict": "faithful",
+      "rationale": "Thorns is one of only five powers the whole C# source ever applies negatively -- SpinyToad.cs:-5 and Toadpole.cs:-SpikenAmount spend the Thorns they built up (executed: `py audit/tools/power_census.py neg-appliers`) -- and it is NOT AllowNegative, so ShouldRemoveDueToAmount (PowerModel.cs:478-489) removes it at <= 0. The sim agrees: ThornsPower leaves allow_negative False and cmds.py:317-319 expires the power at amount == 0 or below. Both ported spenders subtract exactly what they added (spiny_toad.py:45,51; toadpole.py:66,75), so the amount lands on 0 and both sides remove. Sign-aware typing is inert here for a third reason: with AllowNegative false and Type Buff, NEITHER GetTypeForAmount arm fires, so the type is Buff for every sign on both sides. Third-file citations, not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

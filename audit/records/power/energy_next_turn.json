@@ -1,0 +1,88 @@
+{
+  "unit": "power/energy_next_turn",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\EnergyNextTurnPower.cs",
+    "sha256": "22b833f1d2c6d1730df56aaabc2945ede621c22add0499700e2dc53af311982b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/relax.py",
+      "sha256": "5257dee75253a9c358f2988d41587ba8c044ed9ae46d41b44f20bab322e5b486",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2764 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterEnergyReset": {
+      "maps_to": "powers.py:2766-2771 EnergyNextTurnPower.on_energy_reset (hooks.py:312-316, player.py:168)",
+      "verdict": "faithful",
+      "rationale": "Correct slot and correct order, both of which needed checking. C# fires Hook.AfterEnergyReset at CombatManager.cs:650, immediately after ResetEnergy/AddMaxEnergyToCurrent at :644/:648 and BEFORE Hook.BeforeHandDraw (:652) and ModifyHandDraw (:654); the sim fires on_energy_reset at player.py:168, immediately after the same reset (player.py:163-167) and before on_player_turn_start (:169) and modify_hand_draw (:171). The energy therefore lands before any card is playable on both sides. Amount and effect match: PlayerCmd.GainEnergy(base.Amount) then PowerCmd.Remove(this) (EnergyNextTurnPower.cs:22-23) vs EnergyCmd.gain then _expire (powers.py:2770-2771), in the same order. Counter stacking means two Relaxes give one +4 grant on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "EnergyNextTurnPower.cs:20 player == base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "powers.py:2767-2768 player is not self.owner -> return. Identical."
+    },
+    {
+      "what": "PlayerCmd.GainEnergy vs the sim's EnergyCmd.gain",
+      "verdict": "faithful",
+      "rationale": "cmds.py:545-554 runs hooks.modify_energy_gain and then adds to player.energy, which is C#'s Hook.ModifyEnergyGain + AddEnergy shape. No ported listener on modify_energy_gain distinguishes this source. Third-file citation, not hashed here."
+    },
+    {
+      "what": "_expire standing in for PowerCmd.Remove",
+      "verdict": "faithful",
+      "rationale": "The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement, so the two are observationally identical. Same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json, per binding rule 3."
+    },
+    {
+      "what": "Both ported appliers",
+      "verdict": "faithful",
+      "rationale": "The ported card Relax (cards/relax.py:46) and the ported Trash Heap card Outmaneuver (cards/trash_heap_cards.py:210-228), both with applier=ctx.player. C#'s Relax.cs / Outmaneuver.cs pass an applier too, and unlike most of this batch the sim's callers DO pass applier=, so the recurring missing-applier shape does not apply here."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

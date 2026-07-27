@@ -1,0 +1,109 @@
+{
+  "unit": "card/mad_science",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\MadScience.cs",
+    "sha256": "3e1c18888bfd2f21944de1eb77ade020c0b0bdf1dc7bbff0e1a5f735150e0b93"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\mad_science.py",
+    "sha256": "be89a57eaadb928be99c364ad5df77b5d1b29c24892981699abfb53cb1e420dc"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_shared_enchantments.py",
+      "sha256": "8cd33315c1985186b30561d56c13fb547cf3f68a87f11df8f655a28f78ceaa14",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "MadScienceCard.card_type, set by `configure` (mad_science.py:119-120)",
+      "verdict": "faithful",
+      "rationale": "`public override CardType Type => TinkerTimeType` (MadScience.cs:80) == the sim's instance attribute, written by `configure(tinker_type, rider)` alongside `self.tinker_type`. The default of ATTACK matches the canonical constructor (MadScience.cs:167-170)."
+    },
+    "TargetType": {
+      "maps_to": "MadScienceCard.target_type, set by `configure` (mad_science.py:121-123)",
+      "verdict": "faithful",
+      "rationale": "`TinkerTimeType != CardType.Attack ? TargetType.Self : TargetType.AnyEnemy` (MadScience.cs:82-92) == `TargetType.ANY_ENEMY if tinker_type == CardType.ATTACK else TargetType.SELF`."
+    },
+    "GainsBlock": {
+      "maps_to": "NOT PORTED -- `gains_block` is left at its False class default (mad_science.py:92-97)",
+      "verdict": "gap",
+      "issue": "`public override bool GainsBlock => TinkerTimeType == CardType.Skill` (MadScience.cs:94) is TYPE-DEPENDENT, and the sim never sets `gains_block` at all -- not in the class body and not in `configure` (mad_science.py:114-125, which sets `card_type`, `target_type` and `rider` but not this). So a Skill-configured Mad Science, which gains 8 block, reports `gains_block = False`. Observable through the Nimble enchantment, whose `can_enchant` gates on exactly this flag (cards/base.py:65-69 names Nimble as the reader): in the game Nimble accepts a Skill Mad Science and in the sim it refuses. DORMANT only if Nimble is unreachable -- it is a ported enchantment (enchantments.py), and Mad Science reaches the deck from the ported Tinker Time event, so this is LIVE for the Skill configuration. Note the sim DOES get the related `base_block` right, via an overriding property that returns the block only for the Skill type (mad_science.py:131-133) -- so the type-dependence was clearly understood and this one flag was missed. REGRESSION TEST: `test/test_shared_enchantments.py:52-61` -- `test_nimble_requires_gains_block` is the existing gate for this attribute; it asserts `make_card(\"entrench\").gains_block` and `not make_card(\"feel_no_pain\").gains_block`. It has no Mad Science case, so the fix (setting `gains_block` from the configured type) should add one there rather than a new file."
+    },
+    "PortraitPath": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "Per-type card art path selection (MadScience.cs:69, 172-187). Presentation."
+    },
+    "BetaPortraitPath": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "Beta art path (MadScience.cs:71). Presentation."
+    },
+    "AllPortraitPaths": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "The three per-type art paths, used for asset preloading (MadScience.cs:73-78). Presentation."
+    },
+    "ctor": {
+      "maps_to": "class attrs (mad_science.py:92-104) + _init_vars (105-109)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.AnyEnemy, shouldShowInCardLibrary: false)` (MadScience.cs:167-170) == cost 1 / ATTACK / EVENT / ANY_ENEMY defaults. `shouldShowInCardLibrary: false` is a compendium-UI flag with no sim counterpart and no gameplay effect. `configure` then overwrites type and target."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 12, _block = 8 + module constants (mad_science.py:64-75, 107-108)",
+      "verdict": "faithful",
+      "rationale": "All ELEVEN C# vars are accounted for (MadScience.cs:96-109), which makes this the most var-dense card in the pool: DamageVar 12 -> `_damage`, BlockVar 8 -> `_block`, and the nine rider amounts as module constants with matching values -- SappingWeak 2, SappingVulnerable 2, ViolenceHits 3, ChokingDamage 6, EnergizedEnergy 2, WisdomCards 3, ExpertiseStrength 2, ExpertiseDexterity 2, CuriousReduction 1 (mad_science.py:66-75). The two printed vars are exposed through overriding `base_damage` / `base_block` properties that return them only for the matching type (128-133), which is more faithful than a plain attribute would be. The rider constants are module-level rather than instance vars, so `magic_number` does not surface them -- acceptable, since C# keys them by name rather than treating any one as the card's headline number."
+    },
+    "OnPlay": {
+      "maps_to": "MadScienceCard.on_play + _play_attack / _play_skill / _play_power (mad_science.py:135-215)",
+      "verdict": "gap",
+      "issue": "The type dispatch, every rider effect and every amount are faithful, and the rider-per-type partition is correct: C# handles Expertise/Curious/Improvement inside `ExecutePower` (MadScience.cs:232-248) and Sapping/Choking/Energized/Wisdom/Chaos in `ExecuteRider` (267-294), which the sim reorganises into `_play_attack` (sapping, choking), `_play_skill` (energized, wisdom, chaos) and `_play_power` (expertise, curious, improvement) -- the same nine effects, and `configure` enforces the per-type rider partition (mad_science.py:117-118) that C# leaves to Tinker Time. The Violence hit count is right (3 vs 1, MadScience.cs:218). The Chaos rider even gets the RNG STREAM right, branching on `crng.is_parity` and using `crng.card_gen` (mad_science.py:184-188) -- the correct shape that card/discovery, card/distraction, card/jack_of_all_trades, card/jackpot, card/metamorphosis and card/hidden_gem all miss. THE DIVERGENCE is the sim's two extra liveness guards: `if target.is_gone or ctx.player.is_dead: break` between the Violence hits (151-152) and `if target.is_gone: return` before the Sapping / Choking riders (154-155). The per-hit break is the correct analogue of AttackCommand's own breaks and carries nothing; the RIDER guard does. C# applies the power unconditionally and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose doc comment states that DEAD creatures can still receive powers -- it refuses only for a REMOVED corpse. The two agree for an ordinary kill (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, and removal happens at 523-525) and diverge for a corpse whose removal was VETOED (`ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104), because `is_gone` is `is_dead or escaped` (creatures.py:44-46). Observable through ViciousPower and any listener that fires on a power landing regardless of target liveness. Same mechanism and same verdict as card/bash's OnPlay entry (rule 3); LIVE. One more nuance recorded rather than verdicted: the Chaos rider uses `set_free_this_turn` where C# calls `SetToFreeThisTurn()` (MadScience.cs:287) -- the same verb -- and adds to hand via `add_to_hand` where C# uses `CardPileCmd.Add(cardModel, PileType.Hand)` (288), the pile-verb difference the creature_card_cmds seam owns."
+    },
+    "OnUpgrade": {
+      "maps_to": "MadScienceCard._on_upgrade (mad_science.py:111-112)",
+      "verdict": "faithful",
+      "rationale": "`AddKeyword(CardKeyword.Innate)` (MadScience.cs:252) == `self.innate = True`, and this card DOES re-seed the flag in `_init_vars` (`self.innate = False`, mad_science.py:109, with a comment saying why), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list mad_science. The correct pattern, unlike card/aggression, card/hello_world and card/juggling."
+    },
+    "AddExtraArgsToDescription": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`description.Add(\"CardType\", ...)` plus one boolean per rider (MadScience.cs:255-265) feeds the localisation template that renders the card text. Presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `can_be_generated_by_modifiers = False` (mad_science.py:97), which MadScience.cs does not override",
+      "verdict": "faithful",
+      "rationale": "Inert: the flag gates the random-CURSE pool and Mad Science is an Event-rarity Attack/Skill/Power, not a curse. Same inert extra as card/byrdonis_egg and card/lantern_key."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,82 @@
+{
+  "unit": "relic/astrolabe",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Astrolabe.cs",
+    "sha256": "8d8baaedd21687eaec5cb391cda4a6d0020b8951c3dbd688e570f6f0503ab928"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\astrolabe.py",
+    "sha256": "3d81571fbd58e9427aad66ed84f8517df0aa5cdda9c46c76b0157539aaae3abd"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (astrolabe.py:14)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (astrolabe.py:15)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (astrolabe.py:19-23)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The selection and the transform are faithful -- 3 cards (CardsVar(3), Astrolabe.cs:18 vs astrolabe.py:17), chosen from the deck's transformable cards, each replaced and then upgraded, on the Niche stream -- but the upgrade is applied unconditionally where C# skips non-upgradable cards."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `CardCmd.Upgrade(cardModel)` (Astrolabe.cs:26) silently skips a card whose IsUpgradable is false; the sim's `run.transform_card(card).upgrade()` (astrolabe.py:23) always increments upgrade_level",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardCmd.Upgrade(IEnumerable<CardModel>, style) guards each card with `if (!card.IsUpgradable)` and skips it; IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789) with MaxUpgradeLevel virtual and defaulting to 1 (line 781). Card.upgrade() in the sim (cards/base.py:146-147) is a bare `self.upgrade_level += 1` with no guard, and astrolabe.py:23 calls it directly rather than through anything that checks Card.is_upgradable (cards/base.py:168-170) -- unlike relic/bellows, which does check. REACHABILITY (LIVE, executed): CURSES ARE TRANSFORMABLE. RunState.transformable_cards() returns removable_cards() (run.py:406-408) and a probe confirms a Clumsy in the deck is included; C#'s own filter (CardSelectCmd.cs:487, `c.Type != CardType.Quest && c.IsTransformable`) likewise admits curses. Transforming a curse rolls another curse (run.transform_card routes CURSE cards to CURSE_POOL), and an executed run rolled curse_of_the_bell, whose max_upgrade_level is 0 -- an executed census finds 35 such cards (every curse and every status) -- and the unconditional .upgrade() then left it at upgrade_level 1, where C# leaves it at 0. The divergence is observable outside cosmetics: conformance/runner.py:618 compares the live deck as `(c.id, c.upgrade_level)` pairs against the save, so a spuriously-upgraded curse is a deck-parity failure; conformance/combat_driver.py:34 renders the '+' suffix from the same field. Astrolabe itself is obtainable via the ported Darv shrine (events/darv.py)."
+    },
+    {
+      "what": "N1: CreateRandomCardForTransform(item, isInCombat: false, Rng.Niche) (Astrolabe.cs:25) vs run.transform_card's default roll (astrolabe.py:23, no pick_rng argument)",
+      "verdict": "gap",
+      "issue": "C# names the Niche stream explicitly. transform_card's signature takes `pick_rng` for exactly this and its docstring (run.py:433-438) states that passing None 'keeps the shared-rng choice' for 'callers not yet parity-wired' -- Astrolabe is one of them, so the three replacement cards are rolled off the legacy shared random.Random instead of the run's Niche stream. REACHABILITY (LIVE for RNG parity, DORMANT for RL play): every conformance seed that picks Astrolabe at the Darv shrine will diverge in both the cards produced AND the downstream Niche stream position, which is the exact failure mode the SP3 grind chases; nothing outside the parity harness observes it. Cheap fix -- pass run.rng_set.niche the way the sibling callers do."
+    },
+    {
+      "what": "N2: `prefs.MinSelect` auto-select when the deck has 3 or fewer transformable cards (CardSelectCmd.cs:493-496)",
+      "verdict": "faithful",
+      "rationale": "C# skips the selector entirely and transforms all of them; the sim's run.select_cards(purpose, candidates, count) is documented as mirroring CardSelectCmd.FromDeck* and takes the same candidate list and count, so a short list yields the whole list on both sides. Recorded because the auto-select branch also changes whether a player-choice id is reserved, which is a replay-visible difference in the game -- but not one the sim's single-player selector can observe."
+    },
+    {
+      "what": "N3: the empty-deck early return (CardSelectCmd.cs:488-491)",
+      "verdict": "faithful",
+      "rationale": "Both sides no-op on an empty candidate list -- the sim's for loop over an empty selection does nothing. Not reachable with a real deck; no verdict rests on that."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

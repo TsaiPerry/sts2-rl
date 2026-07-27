@@ -1,0 +1,104 @@
+{
+  "unit": "relic/ruined_helmet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RuinedHelmet.cs",
+    "sha256": "a88f33545295ad4025ad3c95e7e5bed4f32f892309eb3c10246010e3d8b32ff3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\ruined_helmet.py",
+    "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (ruined_helmet.py:16)",
+      "verdict": "faithful",
+      "rationale": "Matches RuinedHelmet.cs:15. In the transcribed IRONCLAD grab bag as Rare (relic_pools.py:170), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "UsedThisCombat": {
+      "maps_to": "self._used (ruined_helmet.py:21, set at :36)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. RuinedHelmet.cs:17-28 is a plain bool with an AssertMutable setter; the divergence is not the field but the fact that nothing in the sim ever puts it back."
+    },
+    "TryModifyPowerAmountReceived": {
+      "maps_to": "modify_power_amount (ruined_helmet.py:23-39), dispatched by hooks.modify_power_amount (hooks.py:170-183) from PowerCmd.apply (cmds.py:297)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G2 and G3 per binding rule 4. The four C# clauses are reproduced exactly -- `canonicalPower is StrengthPower`, `target == Owner.Creature`, `amount <= 0`, `UsedThisCombat` (RuinedHelmet.cs:35-50) against ruined_helmet.py:31-37 -- and so is the `modifiedAmount *= 2m` (RuinedHelmet.cs:51 vs :38). EXECUTED (`py audit/tools/relic_probes_b13.py ruined-helmet`): a first +2 Strength lands as 4 and a second as +2 (total 6), which is C#'s answer; an applier=None application is also doubled, matching the fact that neither side has an applier clause here. What is verdicted is the RECEIVED-side phase being collapsed into the sim's single flat chain (G2) and the After-event's side effect being hand-inlined (G3)."
+    },
+    "AfterModifyingPowerAmountReceived": {
+      "maps_to": "the `self._used = True` assignment inside modify_power_amount (ruined_helmet.py:36) -- there is no separate sim hook",
+      "verdict": "gap",
+      "issue": "Rollup of guard G3 per binding rule 4. RuinedHelmet.cs:55-60 is a SEPARATE C# hook that fires only for listeners whose Try returned true (Hook.cs:1917-1931 collects them into `receivedModifiers`; PowerCmd.cs:152 and :242 dispatch to exactly those), and only after the amount has actually been set. The sim folds the 'mark used' effect into the modifier itself, which is audit/records/seam/power_cmd.json gap G4."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; `_used` is written only in modify_power_amount (ruined_helmet.py:36)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 -- the LIVE gap. RuinedHelmet.cs:62-66 sets `UsedThisCombat = false`; the sim clears `_used` nowhere, so the relic works in the first combat of a run only."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `_used` is never reset, so Ruined Helmet doubles nothing from combat 2 onward",
+      "verdict": "gap",
+      "issue": "MECHANISM: ruined_helmet.py:21 initialises `_used = False` and line 36 sets it True on the first doubling, but nothing ever sets it back. C# clears it in AfterCombatEnd (RuinedHelmet.cs:64). Relic instances live on RunState.relics and are re-attached to each new CombatState, so combat 2 enters modify_power_amount with `_used` already True and the `not self._used` clause (ruined_helmet.py:32) bails. REACHABILITY (LIVE, both sides ported, executed -- `py audit/tools/relic_probes_b13.py ruined-helmet`): the SAME instance given a +2 Strength in each of two combats reports strength 4 then strength 2, where C# reports 4 both times; a freshly constructed instance in the same combat 2 reports 4, isolating the carry. Ruined Helmet is Rare in the transcribed Ironclad grab bag, every run has more than one combat, and a Strength gain needs no second relic -- Inflame, Limit Break and Flex are ported Ironclad cards and relic/vajra, relic/red_skull (this batch), relic/rainbow_ring (this batch), relic/sword_of_jade, relic/girya and relic/sling_of_courage all grant Strength to the player. IDENTICAL SHAPE AND FIX to the recorded belt_buckle G2 / centennial_puzzle / paels_eye gaps: clear the flag in on_combat_start. WHY THE POOL-WIDE SWEEP DID NOT CATCH IT: `py audit/tools/relic_probes.py sweep-reset` flags it statically (`ruined_helmet ['_used'] ... C# resets: {'AfterCombatEnd': ['UsedThisCombat = false']}`) but `sweep-reset-exec` files it under 'agree with a fresh instance', because its driver plays no cards and applies no powers, so `_used` is False on both instances. That is a FALSE CLEAR, demonstrated by `py audit/tools/relic_probes_b13.py sweep-exec-blind`, and it is reported as a fifth defect in sweep A in .superpowers/sdd/relic-batch-13-lessons.md."
+    },
+    {
+      "what": "G2 (DORMANT): C#'s RECEIVED-side predicate chain is a separately-sequenced phase; the sim has one flat registration-order chain",
+      "verdict": "gap",
+      "issue": "This is audit/records/seam/power_cmd.json gap G3 at the site that record already names -- it cites `sts2_rl/relics/ruined_helmet.py:23-39` as the received-side listener and labels the mechanism a gap. One verdict per mechanism, binding rule 3; the seam owns the machinery and this record owns the relic's observable. MECHANISM restated for this site: PowerCmd.cs:120-127 runs BeforePowerAmountChanged, then Hook.ModifyPowerAmountGiven, then Hook.ModifyPowerAmountReceived as three fixed calls, so given-before-received holds regardless of registration order; hooks.py:170-183 is one `for l in list(self._listeners)` pass, so a given-side and a received-side listener resolve in whatever order they were registered. DORMANT for the reason power_cmd G3 gives and which still holds: the sim has exactly two modify_power_amount listeners -- relic/unsettling_lamp (given side, debuffs only) and this relic (received side, positive StrengthPower on the player only) -- and their domains are disjoint. Porting any second given-side power-amount modifier whose domain overlaps positive Strength on the player makes it live. NOTE per binding rule 7: power_cmd.json, PowerCmd.cs, Hook.cs, hooks.py and cmds.py are not hashed by this record."
+    },
+    {
+      "what": "G3 (DORMANT): the 'mark used' side effect is hand-inlined into the modifier, so it fires at a point C# would not have reached",
+      "verdict": "gap",
+      "issue": "This is audit/records/seam/power_cmd.json gap G4 at its own site -- that record names RuinedHelmet.AfterModifyingPowerAmountReceived (RuinedHelmet.cs:55-60) as one of the two live C# listeners on the missing companion event, and records that the sim hand-inlines both. Binding rule 3: verdict matched, not re-derived. WHAT THE INLINING COSTS, traced at this site: C# reaches AfterModifyingPowerAmountReceived only after four further gates that the sim's modify_power_amount runs BEFORE -- `CombatManager.IsEnding`, `amount == 0m` and `!target.CanReceivePowers` at the top of PowerCmd.Apply (PowerCmd.cs:103-106), and a second `if (target.CanReceivePowers)` around the whole post-apply block including the dispatch itself (PowerCmd.cs:133, 152). The sim's PowerCmd.apply (cmds.py) has none of them -- that absence is power_cmd's own gap G6 -- so a Strength application to an unhittable player, or one made while the combat is ending, spends Ruined Helmet's once-per-combat charge in the sim and not in the game. DORMANCY: the ported should_allow_hitting implementer gates on a mid-revival enemy state (IllusionPower) and cannot apply to the player, and no ported effect applies Strength to the player while the combat is ending. The Artifact ordering that the sibling relic/unsettling_lamp depends on (cmds.py runs modify_power_amount BEFORE the Artifact early-return, deliberately) does not reach this relic: Artifact intercepts DEBUFFS and Ruined Helmet only fires on positive StrengthPower, a Buff. Porting a player-side Intangible/untargetable state, or a should_allow_hitting implementation that can veto the player, makes it live."
+    },
+    {
+      "what": "N1: the guard SETS of the two paired C# hooks are checked side by side (PROMPT.md bug class 15)",
+      "verdict": "faithful",
+      "rationale": "This is the collapse point where the Lamp's G3/G4 hid, so it was checked deliberately rather than assumed. RuinedHelmet.TryModifyPowerAmountReceived carries four guards (power type, target, amount > 0, not used) and RuinedHelmet.AfterModifyingPowerAmountReceived carries NONE at all -- it unconditionally Flashes and sets UsedThisCombat. That asymmetry is safe in C# because Hook.ModifyPowerAmountReceived only puts a listener into `receivedModifiers` when its Try returned true (Hook.cs:1921-1928), so the guard-free After hook can only ever run for an application the Try already accepted. The sim's single collapsed method therefore applies exactly the union C# effectively applies, which is why this collapse -- unlike the Lamp's -- introduces no guard-level divergence. Only the TIMING of the mark diverges, and that is G3's."
+    },
+    {
+      "what": "N2 (PROMPT.md bug class 3): the amount test is `amount <= 0m` on both sides, and neither consults GetTypeForAmount",
+      "verdict": "faithful",
+      "rationale": "RuinedHelmet.cs:43-46 bails on `amount <= 0m` and ruined_helmet.py:35 on `amount > 0` -- the same partition. Unlike relic/unsettling_lamp, the source does NOT ask power.GetTypeForAmount here, because the relic keys on the concrete StrengthPower type rather than on Buff/Debuff classification; so the sign-aware typing gap that power_cmd G2 records for the Lamp has no site here. Checked deliberately because a negative Strength application (relic/red_skull's own removal in this batch, and the ported Mangle) reaches this hook and must NOT be doubled -- executed: `applier=None, +2 -> 4` doubles, and the `amount > 0` clause is what keeps -3 at -3."
+    },
+    {
+      "what": "N3: no applier clause on either side, and `canonicalPower is StrengthPower` is an exact-type test the sim reproduces with `is`",
+      "verdict": "faithful",
+      "rationale": "C# tests `canonicalPower is StrengthPower` (RuinedHelmet.cs:35), a C# type-pattern match that also accepts SUBCLASSES; ruined_helmet.py:33 tests `power_cls is StrengthPower`, which does not. That difference is real but empty in the sim: `grep -n 'StrengthPower)' sts2_rl/powers.py` shows the temporary-Strength family derives from TemporaryStrengthPower, not from StrengthPower, so no ported power class is a StrengthPower subclass and the two tests select the same single class. Relevant because relic/reptile_trinket in this same batch grants ReptileTrinketPower, a TemporaryStrengthPower -- C# would not match the wrapper either (it is not a StrengthPower), and both codebases instead double the INTERNAL StrengthPower the wrapper applies, once. Recorded as faithful with the enumeration rather than as a gap; porting a StrengthPower subclass would make the `is`-vs-isinstance difference live."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

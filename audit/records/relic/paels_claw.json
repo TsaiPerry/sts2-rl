@@ -1,0 +1,78 @@
+{
+  "unit": "relic/paels_claw",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PaelsClaw.cs",
+    "sha256": "666d40b2d85e26e2272d51779c51fc36c8085067ca7dad0d267762f1af9e7be1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\paels_claw.py",
+    "sha256": "e8e6cf3cf436f0e3c8c4ee678989d571a30d79d8b83992ee590d320fdfd1ef41"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Enchantments/Goopy.cs",
+      "sha256": "9ccd44649456f46e414df96031ce6ecef348f59b48144657db5624cd0d59f711",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Pael.cs",
+      "sha256": "35411063dc0bb8f3333285347e0116d6c79fdbac1bb2e3c97512ec5a96e3fb6d",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (paels_claw.py:14)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained(run) (paels_claw.py:19-24), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "PaelsClaw.cs:32-44 snapshots the deck pile (`.ToList()`, line 34), tests `ModelDb.Enchantment<Goopy>().CanEnchant(item)` (line 37) and calls `CardCmd.Enchant<Goopy>(item, 1m)` (line 39) on every card that passes -- there is NO count limit, so `cardsCount = 3` (line 18) and `CardsVar(3)` (line 26) are description/offer-gate values, not a cap. paels_claw.py:22-24 iterates `list(run.deck)` (the same snapshot), filters on `GoopyEnchantment.can_enchant` and attaches a default-amount Goopy. The amount matches: `CardCmd.Enchant<T>(card, amount)` (CardCmd.cs:518-521) forwards `amount` to `card.EnchantInternal(enchantment, amount)` (CardCmd.cs:532-543), so 1m is the starting Amount, and `Enchantment.__init__`'s default is `amount = 1`. Line 40's NCardEnchantVfx is presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: Goopy.CanEnchant (Goopy.cs:16-23) = base.CanEnchant AND the Defend tag, vs GoopyEnchantment.can_enchant",
+      "verdict": "faithful",
+      "rationale": "EnchantmentModel.CanEnchant's base contract (no Status/Curse/Quest, no unplayable deck card, one enchantment per card) is mirrored by Enchantment.can_enchant and the Defend-tag clause by `\"defend\" in card.tags`. NOTE per binding rule 7: this leans on sts2_rl/enchantments.py (lines 51-61 for the base test, 285-287 for the Goopy override), which this record does NOT hash -- a change there goes stale invisibly from here. Also checked: the sim pre-filters with can_enchant before calling attach, and attach itself raises on a failed test, so the two cannot disagree at runtime."
+    },
+    {
+      "what": "N2: Goopy.OnEnchant adds CardKeyword.Exhaust (Goopy.cs:25-28) -- an effect of the ENCHANTMENT, not the relic",
+      "verdict": "faithful",
+      "rationale": "The sim performs it in GoopyEnchantment.attach (enchantments.py:289-291 sets `card.exhausts = True`) and re-applies it per combat in reset (:293-296), so the relic's pickup produces the same card state on both sides. Recorded because the relic is the only ported grant path for Goopy, so a missing OnEnchant here would look like a relic defect."
+    },
+    {
+      "what": "N3: `_enchantmentAmount = 2` (PaelsClaw.cs:20) and `HoverTipFactory.FromEnchantment<Goopy>(2)` (:30) advertise 2 where the code applies 1",
+      "verdict": "waiver",
+      "rationale": "The constant is referenced only by ExtraHoverTips, i.e. the tooltip's sample rendering of the Goopy keyword; the applied amount is the literal 1m at line 39. Presentation-only under the shared contract's presentation/animation exclusion. Recorded explicitly because PROMPT.md bug class 19 is exactly this trap in reverse -- a port that copies the advertised constant instead of the applied one would set Goopy to 2 and give every Defend +1 Block from its first play. The sim copies the applied value."
+    },
+    {
+      "what": "N4: Goopy's run-level Amount growth. Goopy.AfterCardPlayed (Goopy.cs:29-41) increments base.Amount AND `base.Card.DeckVersion.Enchantment.Amount`, so the growth persists across combats; the sim's GoopyEnchantment grows Amount within a combat only (its own docstring concedes this)",
+      "verdict": "faithful",
+      "rationale": "NOT this unit's divergence, and named here so it is not double-counted: the divergence lives in GoopyEnchantment (sts2_rl/enchantments.py:271-306, not hashed by this record -- binding rule 7), and the enchantment kind is audited on the separate `audit-event` branch, which this worktree does not carry. Pael's Claw's own contract is 'attach Goopy at amount 1 to every eligible deck card', and it does exactly that. Flagged for the enchantment stream rather than verdicted here, since binding rule 3 wants one verdict per mechanism at the site that owns it."
+    },
+    {
+      "what": "N5: Pael.cs:159-162's offer gate (>= 3 Goopy-eligible deck cards) vs paels_claw.py:17's MIN_ELIGIBLE = 3",
+      "verdict": "faithful",
+      "rationale": "The sim's Pael event reads the relic class's own constant (events/pael.py, `if goopy_eligible >= PaelsClaw.MIN_ELIGIBLE`) and counts with the same `GoopyEnchantment.can_enchant` predicate C# counts with. Checked because the gate is the reason `cardsCount = 3` exists at all, and mistaking it for a cap is the obvious way to get this relic wrong."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

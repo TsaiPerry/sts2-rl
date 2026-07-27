@@ -1,0 +1,134 @@
+{
+  "unit": "relic/winged_boots",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\WingedBoots.cs",
+    "sha256": "7d0b9d0e3d301b54cb277d84a017c7fe1e74872943512e47a61fed20f843f7e7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\winged_boots.py",
+    "sha256": "d9318a7b535543e8833911c0eefb1627323843ea369783ba07db6b20d0a1075d"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Map/MapTravel.cs",
+      "sha256": "bb89d307669ff9537f6133212249e2122f0754b201984ae89ed84398d4cbb556",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/Flight.cs",
+      "sha256": "3772bb6e1684d20ae783ce5c2014f75cfa3e071c21e23f33fa99b5bc7c2340f8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (winged_boots.py:13)",
+      "verdict": "faithful",
+      "rationale": "WingedBoots.cs:20. Not bag-pullable (Ancient); granted by the ported Neow event (py audit/tools/relic_probes_b17.py pool -> granted_by sts2_rl/events/neow.py, plus sts2_rl/conformance/runner.py's relic resync). Merchant price is the Ancient sentinel 999999999 (sts2_rl/relics/base.py:54-62), i.e. never shop-stocked, matching RelicModel's own table."
+    },
+    "IsUsedUp": {
+      "maps_to": "is_used_up property (winged_boots.py:20-22)",
+      "verdict": "faithful",
+      "rationale": "WingedBoots.cs:22 is `TimesUsed >= 3`; winged_boots.py:22 is `self.times_used >= self.USES` with USES = 3 (winged_boots.py:14). Overriding the base property matters beyond display: Relic.is_tradable (sts2_rl/relics/base.py:126-136) excludes used-up relics, mirroring RelicModel.IsTradable, so a spent pair of Boots is correctly barred from the trade events -- although Ancient rarity already bars it, so the two exclusions agree here. EXECUTED (py audit/tools/relic_probes_b17.py boots): after three non-child travels is_used_up flips True and should_allow_free_travel returns False. Rule 7: sts2_rl/relics/base.py is NOT hashed by this record."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / base.Status = RelicStatus.Disabled / CanonicalVars and the DynamicVars['Rooms'] write in the TimesUsed setter (WingedBoots.cs:24-28, 41-44, 95-101) are presentation only -- the relic bar's remaining-uses counter and its greyed-out state. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Same presentation waiver as ShowCounter. `3 - TimesUsed` (WingedBoots.cs:26) is the displayed remaining count."
+    },
+    "IsAllowed": {
+      "maps_to": "NO COUNTERPART -- sts2_rl.relics.base.Relic declares no `is_allowed` member at all (executed: hasattr(Relic, 'is_allowed') is False)",
+      "verdict": "waiver",
+      "rationale": "WingedBoots.cs:47-50 is `runState.Players.Count == 1` -- a MULTIPLAYER-ONLY gate that is always true in the single-player sim, so its absence cannot change any outcome. Waived under the shared contract's multiplayer exclusion, NOT under the pool-eligibility gap that audit/records/relic/white_beast_statue.json and audit/records/relic/white_star.json record in this same batch: those two carry IsBeforeAct3TreasureChest, a real floor filter, and are live gaps. This is the correct verdict at THIS site and it is the reason binding rule 3 does not force a `gap` here -- the mechanism (a missing base member) is shared, but the PREDICATE this relic puts in it is out of scope. .superpowers/sdd/content-relic-sweeps.md sweep B reaches the same conclusion for this unit ('(b) 3 relics -- multiplayer player-count gates. Clean, verified.'), and it is confirmed here by execution rather than accepted: the probe prints hasattr(Relic,'is_allowed')=False for this relic too, so the member really is absent and the reason it is harmless really is the predicate. PROMPT.md v6 binding item 2 note: RelicModel.IsAllowedAtNeow defaults to IsAllowed(player.RunState) (RelicModel.cs:443-446), so in the game these Boots are Neow-allowed exactly because Players.Count == 1; the sim's is_allowed_at_neow = True (sts2_rl/relics/base.py:159) reaches the same answer, and this relic IS granted by the ported Neow event, so the agreement is load-bearing rather than incidental. Rule 7: RelicModel.cs, sts2_rl/relics/base.py, audit/records/relic/white_beast_statue.json, audit/records/relic/white_star.json and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    "ShouldAllowFreeTravel": {
+      "maps_to": "should_allow_free_travel (winged_boots.py:24-25), read by RunState.travelable_points (run.py:917)",
+      "verdict": "faithful",
+      "rationale": "WingedBoots.cs:52-55 returns `!IsUsedUp`; winged_boots.py:25 returns `not self.is_used_up`. Both are folded by an OR over listeners -- Hook.ShouldAllowFreeTravel is `flag = flag || item.ShouldAllowFreeTravel()` (Hook.cs:2485-2493) and run.py:917 is `any(r.should_allow_free_travel() for r in self.relics)` -- so the fold is faithful too. The base default is False on both sides (AbstractModel.cs:2424 returns false; sts2_rl/relics/base.py:255-257 returns False). Rule 7: Hook.cs, AbstractModel.cs, run.py and sts2_rl/relics/base.py are NOT hashed by this record."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "on_free_travel_used (winged_boots.py:27-28), an INVENTED sim hook called from RunState.enter_point (run.py:947-950) when the destination is not a child of the point being left",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim re-architects the charge accounting: C# detects the non-child travel itself, inside AfterRoomEntered, by comparing the CURRENT map point against the children of the second-to-last VISITED coord (WingedBoots.cs:75-91); the sim's travel code detects it and tells the relic directly. The predicates are equivalent -- see guard N1 for the trace, including the per-act lifetime of VisitedMapCoords -- and both increment by exactly 1 per charged travel. EXECUTED (py audit/tools/relic_probes_b17.py boots): three deliberate non-child travels leave times_used = 3 and the relic spent. Recorded as a divergence rather than faithful because the sim's version is a different mechanism with a different caller set (PROMPT.md bug class 22's warning), and the residual differences are enumerated in guards N1 and N2. Rule 7: run.py is NOT hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: C#'s charge predicate (WingedBoots.cs:59-91) clause by clause against the sim's `if point not in self.current_point.children` (run.py:947-950)",
+      "verdict": "faithful",
+      "rationale": "Five clauses, traced individually rather than waved through. (a) `if (IsUsedUp) return` -- the sim's loop only calls on_free_travel_used on a relic whose should_allow_free_travel() is True, which is `not is_used_up`. (b) `CurrentRoomCount > 1 -> return` guards against a SECOND room at the same map point (RunState.cs:171-173 makes CurrentRoomCount the depth of the current room stack); the sim charges inside enter_point, which runs once per travel, so a multi-room point cannot double-charge. (c) `VisitedMapCoords.Count <= 1 -> return` means the first room of an act never charges -- and `_visitedMapCoords` is CLEARED whenever CurrentActIndex changes (RunState.cs:70-86), so this is per-act, not per-run. That matters: if it were per-run, the act-2 opening node would be compared against the act-1 boss and the game would charge a boot on every act transition. The sim reaches the same place structurally -- start_act sets current_point directly and the first enter_point of an act travels to a child. (d)+(e) `point.Children.Contains(currentMapPoint)` where `point` is visitedMapCoords[Count-2]: at AfterRoomEntered time the current coord is already appended (RunState.cs:455-467), so Count-2 IS the point just left, making the C# test exactly 'is the destination a child of the origin' -- the sim's test, expressed the other way round. Rule 7: RunState.cs and run.py are NOT hashed by this record."
+    },
+    {
+      "what": "N2: C# REPLACES the travelable set with the whole next row; the sim UNIONS it with the children (MapTravel.cs:14-21 vs run.py:912-919)",
+      "verdict": "faithful",
+      "rationale": "This is the one place the re-architecture could have changed which nodes are reachable, so it was executed rather than reasoned. `MapTravel.GetTravelablePointsFrom` returns `Map.GetPointsInRow(row + 1)` INSTEAD OF `currentPoint.Children` while any model allows free travel; run.py:912-919 starts from the children and adds the next row. The two agree iff every child lives in row+1. EXECUTED (py audit/tools/relic_probes_b17.py boots): over 8 generated maps, 574 parent->child links, ZERO whose child is not in row+1. So the union equals the replacement for every reachable map and no node is reachable in one codebase and not the other. Recorded as faithful on that executed basis, with the residual named: the sim's formulation would diverge if map generation ever produced a row-skipping edge, which the C# formulation would silently make unreachable. Rule 7: MapTravel.cs, run.py and sts2_rl/actmap.py are NOT hashed by this record."
+    },
+    {
+      "what": "N3: the sim charges only the FIRST relic whose should_allow_free_travel() is True and then `break`s (run.py:947-950); C# charges every AfterRoomEntered implementer independently",
+      "verdict": "gap",
+      "issue": "MECHANISM: in C# the charge is each relic's own business, so two free-travel sources both react to the same non-child travel -- Winged Boots would still burn a use even if something else were already granting the travel. The sim's loop consumes exactly one charge and stops. DORMANT: Winged Boots is the ONLY sim relic implementing should_allow_free_travel (grep `def should_allow_free_travel` over sts2_rl/ returns sts2_rl/relics/base.py:255 -- the base default -- and sts2_rl/relics/winged_boots.py:24), so no second granter exists. [PREMISE CORRECTED 2026-07-26 by the relic fix pass; the CONCLUSION is unchanged. The entry used to add 'and relics are unique within a run'. THAT IS FALSE OF THE SIM: `RunState.add_relic` (sts2_rl/run.py:546-553) appends unconditionally with no held-relic check, and `RunState.pull_relic_from_front` (sts2_rl/run.py:559-595) filters only on rarity and `is_allowed_in_shops` -- so a duplicate is constructible, which is exactly the hedge relic/paper_phrog guard G1 makes on the same point ('the sim's only duplicate-relic mechanism is Toy Box's wax copies'). The DORMANCY survives by a route that does not need uniqueness, and it is specific to this relic: Winged Boots is RARITY ANCIENT (sts2_rl/relics/winged_boots.py:13), so it is not in the grab bag and Toy Box's four `pull_relic_from_front` wax copies cannot be it; its only ported grant path is the Neow option list (sts2_rl/events/neow.py:41), which a run takes at most once. So two Winged Boots cannot coexist today even though the sim would happily hold two.] The concrete unported thing that would make it live is the `Flight` run MODIFIER (Flight.cs:5, the game's other ShouldAllowFreeTravel implementer): with Flight active, C# still decrements the Boots on every off-path travel and the sim's break would leave that to ordering. No run modifiers are ported (grep for a modifiers module under sts2_rl/ finds none). Rule 7: sts2_rl/run.py, sts2_rl/relics/base.py, sts2_rl/events/neow.py, audit/records/relic/paper_phrog.json and Flight.cs are NOT hashed by this record."
+    },
+    {
+      "what": "N4: the ORDER of the charge against the room's own AfterRoomEntered pass",
+      "verdict": "faithful",
+      "rationale": "Checked because PROMPT.md bug class 22 says rerouting a hook inherits the new hook's callers and its position. C# increments TimesUsed inside its own AfterRoomEntered body, i.e. during the same Hook.AfterRoomEntered pass (Hook.cs:1116-1120) that every other relic sees; the sim charges at run.py:947-950, BEFORE `total_floor += 1` (run.py:976) and before the after_room_entered dispatch at run.py:983. So a sim relic reading times_used from after_room_entered sees the post-charge value, where in C# it depends on listener order. Unobservable today: nothing reads another relic's use counter -- the only readers of winged_boots.times_used are its own is_used_up and should_allow_free_travel. Recorded because it is the kind of ordering that a fix to N3 would have to preserve. Rule 7: Hook.cs and run.py are NOT hashed here."
+    },
+    {
+      "what": "N5: `_roomCount = 3` / DynamicVar('Rooms', 3m) / the literals `3` in IsUsedUp and DisplayAmount (WingedBoots.cs:16, 22, 26, 28, 41) vs the sim's USES = 3 (winged_boots.py:14)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in WingedBoots.cs, so 3 is unconditional. Note the source hard-codes the literal 3 in three places rather than reading `_roomCount` or the DynamicVar, and the DynamicVar is only written for display -- so the sim's single USES constant is the correct consolidation and there is no second number hiding in the file. Re-read against the C# rather than taken from the port's docstring, per PROMPT.md bug class 19."
+    },
+    {
+      "what": "N6: `[SavedProperty] TimesUsed` is per-RUN state, and the sim never resets `times_used`",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 13's trace, in the direction that AVOIDS a false gap. .superpowers/sdd/content-relic-sweeps.md's sweep A defect 3 records that an override census can wrongly credit a relic with a reset it does not perform; here the C# side performs none -- WingedBoots has no BeforeCombatStart, AfterCombatEnd, AfterCombatVictory or AfterCombatDefeat override at all, and TimesUsed is a [SavedProperty] (WingedBoots.cs:30-45), i.e. deliberately serialised across the whole run. The sim's per-run instance on RunState.relics matches exactly. Filing a missing reset here would be the `nunchaku` mistake. Rule 7: .superpowers/sdd/content-relic-sweeps.md is NOT hashed by this record."
+    },
+    {
+      "what": "N7: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. Operational note: this relic IS granted through the conformance runner's relic resync (py audit/tools/relic_probes_b17.py pool shows sts2_rl/conformance/runner.py among its grant sites), but its pickup mutates nothing outside run.relics -- the charge counter lives on the instance -- so a swap needs no unwind. Rule 7: sts2_rl/conformance/runner.py is NOT hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

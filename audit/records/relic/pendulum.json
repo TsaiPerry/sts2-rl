@@ -1,0 +1,104 @@
+{
+  "unit": "relic/pendulum",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Pendulum.cs",
+    "sha256": "47555d0f5375d77d6d193c7e029b29f9fe8eb57f6dbbb1d1a86fb23a5a4438aa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\pendulum.py",
+    "sha256": "5a670586fcbb78defc9f2a4a6182bc08458a325abdba78756ca7caa6eceba141"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BoneTea.cs",
+      "sha256": "3d73b9964544c5c448ae0493dbba658d0ce957806ad2db8662da013f70a05b18",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "FlashSfx": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.FlashSfx / Flash() / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / Cmd.Wait are presentation only -- the relic bar's glow, sfx, counter and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (pendulum.py:18), matching Pendulum.cs:24",
+      "verdict": "faithful",
+      "rationale": "Obtainable: Common in the transcribed shared grab bag (py audit/tools/relic_probes_b12.py b12-pool reports bag=Common)."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Same presentation exclusion as FlashSfx (Pendulum.cs:26)."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Pendulum.cs:28-38 shows TurnsSeen, or the Turns var while the activation animation runs. Same presentation exclusion as FlashSfx."
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "on_player_turn_started (pendulum.py:26-30), dispatched by HookSystem.on_player_turn_started (hooks.py:285-296) from PlayerCombatState.start_turn (player.py:171 draws first)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Everything the relic itself computes is faithful -- see guard N2 for the slot, the arithmetic and the constants -- but the sim collapses C#'s THREE AfterPlayerTurnStart passes and the separate AfterSideTurnStart dispatcher onto one on_player_turn_started walk, and that collapse is observable with today's ported content (G1)."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart -- and none is needed",
+      "verdict": "waiver",
+      "rationale": "Pendulum.cs:97-101 assigns `base.Status = RelicStatus.Normal` and NOTHING else. It does not touch TurnsSeen. Same presentation exclusion as FlashSfx; see guard N1 for why the absence of a counter reset is correct rather than a dropped reset."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (the pre-diagnosed one): `turns_seen` carries into combat 2 and that is INTENDED ON BOTH SIDES -- the raw cross-combat diff is not a gap",
+      "verdict": "faithful",
+      "rationale": "`py audit/tools/relic_probes.py sweep-reset-exec` reports `pendulum  self.turns_seen: 1 -> 2` and `sweep-reset` lists `C# resets: {'AfterCombatEnd': ['base.Status = RelicStatus.Normal']}`. Read naively that says the game clears something at combat end and the sim does not. It does not: TurnsSeen is a [SavedProperty] (Pendulum.cs:60-73) so it survives a save/load, and the ONLY statement in the C# AfterCombatEnd body is the display-flag assignment (Pendulum.cs:99). 'Every 3 turns' is therefore a run-level count in the game too, and the sim's relic instance living on RunState.relics and being re-attached to every CombatState (run.py:1153) is exactly the persistence it needs. Same family and same verdict as relic/happy_flower N1 and relic/fake_happy_flower N1 (binding rule 3 -- one verdict per mechanism, and this is the third site of it). PROMPT.md bug class 13's reader-trace: the only reader is on_player_turn_started, and a run-level counter is what it is supposed to see. EXECUTED (py audit/tools/relic_probes_b12.py b12-pendulum): the +1 card lands in combat 3 on the third turn SEEN across combats, and a fresh instance draws 5 where the carried one draws 6. SECONDARY FINDING, recorded here and not as a separate gap because it is not a behavioural divergence: pendulum.py:13-14 asserts 'The game's counter persists between combats; the sim's resets each combat, like Happy Flower' -- and BOTH halves are false. Executed: the class has no on_combat_start member at all (b12-pendulum prints the empty list) and the counter runs 1 -> 2 -> 0 across three combats. The port is right and its own documentation is wrong, which is a maintenance hazard rather than a defect: a reader who trusted the docstring and added the reset it claims exists would break a correct relic, and no test crosses a combat boundary for this relic. The sibling the docstring names carries the identical misdescription and batch 7 verdicted it faithful at relic/happy_flower N1; matched here per binding rule 3, with the hazard proposed as a bug class in .superpowers/sdd/relic-batch-12-lessons.md. NOTE per binding rule 7: relic_probes.py, content-relic-sweeps.md, run.py, happy_flower.py, happy_flower.json and fake_happy_flower.json are not hashed here."
+    },
+    {
+      "what": "G1 (LIVE): Pendulum's C# hook is the PLAIN AfterPlayerTurnStart pass while Bone Tea's is the separate, later AfterSideTurnStart dispatcher; the sim collapses both onto on_player_turn_started, so the outcome depends on relic PICKUP ORDER where the game's is fixed",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.AfterPlayerTurnStart (src/Core/Hooks/Hook.cs:882-905) runs three COMPLETE listener passes -- Early, plain, Late -- and audit/records/seam/turn_structure.json then puts the whole AfterSideTurnStart dispatcher after it (the C# order printed by `py audit/tools/relic_probes.py turn-order`: ... -> Draw -> AfterPlayerTurnStart -> AfterSideTurnStart). Pendulum implements the plain pass (Pendulum.cs:75) and Bone Tea implements AfterSideTurnStart (BoneTea.cs:51), so in the game Pendulum's extra card is ALWAYS in hand before Bone Tea upgrades the opening hand. hooks.py:285-296 is a single walk in listener-registration order, which for relics is RunState.relics order, i.e. acquisition order. REACHABILITY (LIVE, executed -- b12-pendulum): with turns_seen primed to 2 (the ordinary carried state entering a third combat, per N1) and a 12-Strike deck, relic order [pendulum, bone_tea] gives a 6-card hand at upgrade levels [1,1,1,1,1,1] and order [bone_tea, pendulum] gives [0,1,1,1,1,1] -- one card left un-upgraded. The game gives all six in both orders. Both relics are ported and obtainable (Pendulum Common in the grab bag; Bone Tea is a ported relic with a combats_left charge), both fire on turn 1, and nothing further is needed. This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes; 24 of Hook.cs's 147 dispatchers run 2-4 passes) at a NEW site, and that record labels the mechanism LIVE -- one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it and contributes the observable. Note the contrast with relic/happy_flower, whose C# hook IS AfterSideTurnStart and which therefore lands in the same collapsed slot from the other direction. NOTE per binding rule 7: Hook.cs, BoneTea.cs, bone_tea.py, hooks.py, turn_structure.json, hook_dispatch.json and relic_probes.py are NOT hashed by this record."
+    },
+    {
+      "what": "N2: the slot, the arithmetic and the constants of the relic's own body",
+      "verdict": "faithful",
+      "rationale": "SLOT: AfterPlayerTurnStart is a POST-DRAW slot -- audit/records/seam/turn_structure.json orders BeforeSideTurnStart -> ClearBlock -> AfterBlockCleared -> energy -> AfterEnergyReset -> BeforeHandDraw -> ModifyHandDraw -> Draw -> AfterPlayerTurnStart -- so Pendulum's card is an EXTRA draw after the ordinary hand, not an addition to the hand-draw count (contrast relic/pollinous_core, whose C# adds to ModifyHandDraw and which therefore maps to modify_hand_draw). The sim's on_player_turn_started is the executed post-draw slot: `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so the mapping is executed rather than read off relics/base.py's docstring (PROMPT.md bug class 11). ARITHMETIC: `(TurnsSeen + 1) % Turns` then `if (TurnsSeen == 0) draw Cards` (Pendulum.cs:79-85) vs `(self.turns_seen + 1) % self.TURNS` then the same test (pendulum.py:27-30). CONSTANTS: CanonicalVars is CardsVar(1) and DynamicVar('Turns', 3m) (Pendulum.cs:40-44), read as Cards.BaseValue and Turns.IntValue; TURNS = 3 (pendulum.py:20) and a literal 1 in DrawCmd.draw (pendulum.py:30). No AscensionHelper.GetValueIfAscension anywhere in the file, so 3 and 1 are the pinned non-ascension values -- checked against the C# rather than against the port's own text, per PROMPT.md bug class 19. The `player == base.Owner` clause (Pendulum.cs:77) is multiplayer scoping and is structurally satisfied: the sim dispatches on_player_turn_started only for its one player. NOTE per binding rule 7: turn_structure.json, relic_probes.py and pollinous_core.py are not hashed here."
+    },
+    {
+      "what": "N3: `CardPileCmd.Draw(choiceContext, base.DynamicVars.Cards.BaseValue, base.Owner)` (Pendulum.cs:84) vs `DrawCmd.draw(player, 1)` (pendulum.py:29-30)",
+      "verdict": "faithful",
+      "rationale": "Both are the ordinary mid-turn draw verb, not a bespoke pile edit: DrawCmd.draw (cmds.py:364-368) delegates to PlayerCombatState._draw(count, from_hand_draw=False), and from_hand_draw=False is the correct flag -- this draw is not part of the turn's hand draw, which is exactly why the source reaches for CardPileCmd.Draw here instead of ModifyHandDraw. Anything the draw verb itself gets wrong (a no-draw power, an empty-pile reshuffle) belongs to the shared verb and not to this relic. The `choiceContext` parameter is multiplayer plumbing; audit/records/seam/hook_dispatch.json guard N1 waives PlayerChoiceContext as multiplayer machinery and this entry matches that verdict per binding rule 3. NOTE per binding rule 7: cmds.py, player.py and hook_dispatch.json are not hashed here."
+    },
+    {
+      "what": "N4: `base.Status = ((TurnsSeen == Turns - 1) ? Active : Normal)` (Pendulum.cs:80) and `TaskHelper.RunSafely(DoActivateVisuals())` (Pendulum.cs:83, 89-95)",
+      "verdict": "waiver",
+      "rationale": "Presentation, same exclusion as FlashSfx. Worth naming for one ordering reason: DoActivateVisuals is fired with TaskHelper.RunSafely and NOT awaited, so its `await Cmd.Wait(1f)` cannot delay the draw on the following line. There is no ordering consequence to model, which is the same finding relic/fake_happy_flower N4 recorded for the same idiom."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

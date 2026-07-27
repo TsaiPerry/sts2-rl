@@ -1,0 +1,78 @@
+{
+  "unit": "event/tinker_time",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\TinkerTime.cs",
+    "sha256": "cac562ffd790a2eec13be854b4646d242dea639b212788bce977a517e9a87723"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\tinker_time.py",
+    "sha256": "9332376f529f4a18d2804beeb4dc0559521d2f5e0ebd61bf2694ff78b268a6f8"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Extensions/IEnumerableExtensions.cs",
+      "sha256": "d6062ab2a496c6d21aba6bdd48937a1097858f46197f2c17f2cbac7177b494a5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/mad_science.py",
+      "sha256": "be89a57eaadb928be99c364ad5df77b5d1b29c24892981699abfb53cb1e420dc",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "GenerateInitialOptions (TinkerTime.cs:70-73): a single CHOOSE_CARD_TYPE option",
+      "maps_to": "events/tinker_time.py:39-40 returns one EventOption('CHOOSE_CARD_TYPE'). Same key, same arity.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ChooseCardType (TinkerTime.cs:75-85): `collection.TakeRandom(2, base.Rng)` over the fixed option array [Attack, Skill, Power]; ChooseRiderEffect (:113-143): the same TakeRandom(2) over the chosen type's fixed 3-rider array",
+      "maps_to": "events/tinker_time.py:42-50 `_take_random_2` and its two callers (:53, :66). TakeRandom(n, rng) is literally `ToList().UnstableShuffle(rng).Take(n)` (IEnumerableExtensions.cs:17-20), and UnstableShuffle (ListExtensions.cs:44-60) is top-down Fisher-Yates taking NextInt(i+1) for i = n-1 .. 1. rng.Rng.shuffle (rng.py:270-273) is the identical loop, so this is the right primitive rather than a nearby one -- NOT an EV-5 site. EXECUTED (`py audit/tools/event_probes_b.py draws`): the two TakeRandom(2) calls over 3-element lists consume 4 draws off the event Rng in both. Order matters here and is preserved: the offered order is what a recording's `ChooseEventOption <n>` indexes into, and the sim's input lists are in source order -- `list(_TYPE_RIDERS)` is [ATTACK, SKILL, POWER] (tinker_time.py:15-19) matching TinkerTime.cs:79-81, and each rider triple matches TinkerTime.cs:117-134.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit has a parity RNG branch, so EV-3 does NOT apply",
+      "maps_to": "events/tinker_time.py:49 uses `self.event_rng` when present and falls back to the shared rng only in legacy mode. EXECUTED (`py audit/tools/event_probes_b.py rng5b`): tinker_time and vakuu are the two slice-B modules with a parity branch. Following the orobas lesson, the DRAW COUNT was checked on every path and not assumed: 2 draws per TakeRandom(2) over a 3-list, on both the type page and the rider page, regardless of which type is chosen (all three rider arrays have 3 elements), so 4 total on every path with no locked-option arm to skip.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "RiderChosen (TinkerTime.cs:153-160): CreateCard<MadScience> with TinkerTimeType = ChosenCardType and TinkerTimeRider = rider, then CardPileCmd.Add(card, PileType.Deck)",
+      "maps_to": "events/tinker_time.py:72-77 MadScienceCard().configure(type, rider) then run.add_card, which runs the deck-entry hook CardPileCmd.Add runs (run.py:341-354) -- so this is NOT in creature_card_cmds G3's radius. The option keys mirror GetRiderLocKey's suffixes (SAPPING, VIOLENCE, CHOKING, ENERGIZED, WISDOM, CHAOS, EXPERTISE, CURIOUS, IMPROVEMENT) via `rider.upper()`, and the type keys mirror ATTACK / SKILL / POWER.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "CanonicalVars' twelve constants (TinkerTime.cs:54-68)",
+      "maps_to": "every one matches the sim's Mad Science constants (cards/mad_science.py:31-41): DamageVar 12 -> _ATTACK_DAMAGE, BlockVar 8 -> _SKILL_BLOCK, SappingWeak 2 -> _SAPPING_WEAK, SappingVulnerable 2 -> _SAPPING_VULNERABLE, ViolenceHits 3 -> _VIOLENCE_HITS, ChokingDamage 6 -> _CHOKING_STRANGLE, EnergizedEnergy 2 -> _ENERGIZED_ENERGY, WisdomCards 3 -> _WISDOM_CARDS, ExpertiseStrength 2 -> _EXPERTISE_STRENGTH, ExpertiseDexterity 2 -> _EXPERTISE_DEXTERITY, CuriousReduction 1 -> _CURIOUS_REDUCTION, energyPrefix 1 -> the card's cost (mad_science.py:70). NOTE this leans on a third file, cards/mad_science.py, which this record does not hash (rule 7); the card's own OnPlay/OnUpgrade behaviour is the CARD stream's unit and is not verdicted here -- only that the event's declared numbers and the card the event builds agree.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GetCardTypeHoverTip (TinkerTime.cs:87-93), GetRiderHoverTip (:145-151), GetRiderLocKey (:162-178) and the static GetRiderHoverTips (:180-204) -- all `private`/`public static` helpers that build CardHoverTip previews and localization keys",
+      "verdict": "waiver",
+      "rationale": "presentation only: each constructs a throwaway MadScience purely to render a preview card in the tooltip, or maps a rider to a loc key. Note the throwaway CreateCard<MadScience> calls take no RNG draw and touch no pile, so skipping them cannot shift parity. presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "the RiderEffect enum and the ChosenCardType private setter (TinkerTime.cs:25-52)",
+      "maps_to": "events/tinker_time.py:16-19 `_TYPE_RIDERS` is the same type-to-riders partition, and `self._chosen_type` (:37, :61) is the same carried state. MadScienceCard.configure raises if a rider is offered for the wrong type (cards/mad_science.py:80-82), which is the sim's stand-in for the C# switch's ArgumentOutOfRangeException arms.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

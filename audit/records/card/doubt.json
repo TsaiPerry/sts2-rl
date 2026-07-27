@@ -1,0 +1,98 @@
+{
+  "unit": "card/doubt",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Doubt.cs",
+    "sha256": "881307a1a2b5264562a6f7b3239ed594840a9211650ce4060c38fe8195595581"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\doubt.py",
+    "sha256": "0a54c3a5c89de6db3a28389e9ecf7b9e50f010da3a43ecbf83fe00b2ead0b15e"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mummified_hand.py",
+      "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "DoubtCard.max_upgrade_level = 0 (doubt.py:29)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Doubt.cs:14) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "DoubtCard.is_playable = False (doubt.py:28)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Doubt.cs:16) == `is_playable = False`."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "DoubtCard.has_turn_end_in_hand_effect = True (doubt.py:31)",
+      "verdict": "faithful",
+      "rationale": "`=> true` (Doubt.cs:22) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (doubt.py:23-31) + _init_vars (33-34)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) on both sides, so only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: the ported cost readers all filter `> 0` or skip `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim passes the literal 1 (doubt.py:42)",
+      "verdict": "gap",
+      "issue": "`new PowerVar<WeakPower>(1m)` (Doubt.cs:20) is a printed var with no `_weak` in `_init_vars`, so `magic_number` returns None where the game prints 1. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "DoubtCard.on_turn_end_in_hand (doubt.py:39-42)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<WeakPower>(choiceContext, Owner.Creature, DynamicVars.Weak.BaseValue, null, this)` (Doubt.cs:32) == `PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, 1)`. The NULL applier is reproduced (the sim leaves `applier` at its None default), which matters for anything keyed on who applied the debuff. The explicit `if (powerModel != null && !alreadyHasWeak) powerModel.SkipNextDurationTick = true` (33-36) needs no counterpart: `PowerCmd.Apply` already sets that flag unconditionally for player-side debuffs on the NEW-power path (PowerCmd.cs:144-147), so Doubt's line is redundant with the engine in the fresh case and correctly absent in the already-Weak case. The sim's own `PowerCmd.apply` sets `skip_next_tick` at cmds.py:331-332. BLAST RADIUS, not re-verdicted here per rule 3: the sim's flag sits AFTER the new-vs-stacking if/else, so it also fires on RE-STACKING where C# does not -- already recorded as power_cmd step 20."
+    },
+    "OnPlay": {
+      "maps_to": "DoubtCard.on_play -> pass (doubt.py:36-37)",
+      "verdict": "faithful",
+      "rationale": "Doubt.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

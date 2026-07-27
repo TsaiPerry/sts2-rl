@@ -1,0 +1,88 @@
+{
+  "unit": "event/colossal_flower",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\ColossalFlower.cs",
+    "sha256": "ca0ee1f25d200ea85ddfe301965370d20e7930606409956c22c2317b2622c0d3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\colossal_flower.py",
+    "sha256": "fa9502c016a8ac658b1ff9e026e039a98a8f876baf541a7dcba0f449e46f88d1"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "ColossalFlower.is_allowed (events/colossal_flower.py:35-37) `run.hp >= 19`, matching ColossalFlower.cs:46-49 `p.Creature.CurrentHp >= 19`. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "the three constant tables (ColossalFlower.cs:20-22): _prizeCosts {35, 75, 135}, _prizeDamage {5, 6, 7}",
+      "maps_to": "events/colossal_flower.py:10-12 _PRIZE_COSTS = (35, 75, 135), _PRIZE_DAMAGE = (5, 6, 7), _MIN_HP = 19. Exact, and no ascension branch exists in the source.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ReachDeeper (ColossalFlower.cs:60-80): DealReachDeeperDamage() FIRST (reading _prizeDamage[NumberOfDigs] at the OLD index), then NumberOfDigs++, then the < 2 / >= 2 page split",
+      "maps_to": "events/colossal_flower.py:45-57: lose_hp(_PRIZE_DAMAGE[self.digs]); digs += 1; `if self.digs < 2`. The pre-increment index read and the boundary are both exact, and the second page's option pair (EXTRACT_INSTEAD / POLLINOUS_CORE) matches ColossalFlower.cs:74-78.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ExtractCurrentPrize / ExtractInstead (ColossalFlower.cs:82-95): both are PlayerCmd.GainGold(_prizeCosts[NumberOfDigs])",
+      "maps_to": "events/colossal_flower.py:59-65 -- two methods with the same body and different result pages, exactly as in the source. run.gain_gold (run.py:325-333) runs Hook.ModifyGoldGained (Ectoplasm) and truncates toward zero, matching PlayerCmd.GainGold.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ObtainPollinousCore (ColossalFlower.cs:100-105): DealReachDeeperDamage() at _prizeDamage[2] = 7, THEN RelicCmd.Obtain<PollinousCore>",
+      "maps_to": "events/colossal_flower.py:67-70: lose_hp(_PRIZE_DAMAGE[self.digs]) with digs == 2, then add_relic('pollinous_core'). Damage-before-relic order preserved; run.add_relic (run.py:546-553) runs the relic's AfterObtained, which is what RelicCmd.Obtain does.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`runState.Players.All(p => ...)` (ColossalFlower.cs:48)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the GoldVar CanonicalVars, the Pollinous Core hover tip and the ThatDoesDamage option annotations (ColossalFlower.cs:39-44, 56, 77)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "EV-1: the 5 / 6 / 7 dig damage (ColossalFlower.cs:109) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

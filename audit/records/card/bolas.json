@@ -1,0 +1,69 @@
+{
+  "unit": "card/bolas",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Bolas.cs",
+    "sha256": "e3b324c5d32d6f69356e70d28a8c4a5525338c7b8efa3c48dcd90a9950a84789"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/brand.py",
+      "sha256": "961213836047f408c905c811d7a23de67a16bc1d572605bec6828dce80007d1c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/burning_pact.py",
+      "sha256": "6acd2700a43b1bd9a6f752ced0c16c7ed0c1cf3cbe95242394217243c8df6395",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "BeforeHandDraw": {
+      "maps_to": "BolasCard.on_player_turn_start -> _return_to_hand_if_played_last_turn (colorless_attacks.py:47-48, 514-536)",
+      "verdict": "gap",
+      "issue": "The trigger condition is faithful -- C# checks `CombatManager.Instance.History.CardPlaysFinished.Any(e => e.HappenedLastPlayerTurn(Owner) && e.CardPlay.Card == this)` (Bolas.cs:41) and the sim checks `e.card is card and e.turn == combat.turn - 1` over `CardPlayedEntry` (colorless_attacks.py:523-526) -- and so is the pre-draw turn-start slot. THE PILE SEARCH IS NOT. C# tests only `pile == null || pile.Type != PileType.Hand` and then calls `CardPileCmd.Add(this, PileType.Hand)` (Bolas.cs:43-47), which moves the card to hand from WHEREVER it is -- including the EXHAUST pile. The sim's helper searches only `(player.draw_pile, player.discard_pile)` (colorless_attacks.py:532-535) and silently gives up otherwise, so an exhausted Bolas never comes back. Observable: play Bolas, then exhaust it -- next turn the game returns it to hand and the sim does not. LIVE: card/brand (brand.py:46) and card/burning_pact (burning_pact.py:36) are ported hand-exhausters that pass a NULL filter, so either can select a Bolas that has already returned to hand, and card/second_wind and card/fiend_fire exhaust the hand wholesale. The same helper backs card/thrumming_hatchet (colorless_attacks.py:479-480), which inherits the finding."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:29-33) + _init_vars (35-37)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Rare, TargetType.AnyEnemy)` (Bolas.cs:25-28) == cost 0 / ATTACK / RARE / ANY_ENEMY. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "BolasCard._damage = 3 (colorless_attacks.py:37)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(3m, ValueProp.Move)` (Bolas.cs:21) == `_damage = 3`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "BolasCard.on_play (colorless_attacks.py:40-45)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(3).FromCard(this).Targeting(cardPlay.Target)` (Bolas.cs:34-36) == the sim's single `DamageCmd.deal`. Presentation, folded in: the NBolasVfx node (33) and ExtraRunAssetPaths (23)."
+    },
+    "OnUpgrade": {
+      "maps_to": "BolasCard._on_upgrade (colorless_attacks.py:38-39)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(1m)` (Bolas.cs:53) == `self._damage += 1` (3 -> 4)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds a hand-size bail-out the C# site does not spell out: `len(player.hand) >= MAX_HAND_SIZE: return` (colorless_attacks.py:530)",
+      "verdict": "faithful",
+      "rationale": "C# reaches the same outcome one level down -- `CardPileCmd.Add` enforces `CardPile.MaxCardsInHand` (10, CardPile.cs:21) inside AddInternal. Both refuse to overfill a 10-card hand."
+    },
+    {
+      "what": "the `player == base.Owner` gate (Bolas.cs:41)",
+      "verdict": "faithful",
+      "rationale": "Multiplayer-only ownership check; the sim is single-player. Noted in the mapping, not a divergence."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

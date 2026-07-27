@@ -1,0 +1,48 @@
+{
+  "unit": "card/equilibrium",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Equilibrium.cs",
+    "sha256": "75570f531a16eb7b3b271279bf77b1d3f6c1c87327a545088c410d4df8b3b45d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "EquilibriumCard.gains_block = True (colorless_skills.py:238)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Equilibrium.cs:17) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:237-242) + _init_vars (244-246)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Equilibrium.cs:27-30) == cost 2 / SKILL / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_block = 13 declared; the RetainHandPower amount is inlined as 1 (colorless_skills.py:246, 253)",
+      "verdict": "gap",
+      "issue": "`new BlockVar(13m, ValueProp.Move)` maps to `_block = 13`, but the second var `new DynamicVar(\"Equilibrium\", 1m)` (Equilibrium.cs:19-23) has no `_`-attribute -- the sim passes the literal 1. `base_block` is right; `magic_number` returns None where the game prints a second var. The BlockVar is Move WITHOUT Unpowered -> POWERED block, so this card is NOT in gap G1's blast radius. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the applied number is identical), LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "EquilibriumCard.on_play (colorless_skills.py:248-253)",
+      "verdict": "faithful",
+      "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (Equilibrium.cs:34) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`, then `PowerCmd.Apply<RetainHandPower>(..., DynamicVars[\"Equilibrium\"].BaseValue, ...)` (35) == `PowerCmd.apply(..., RetainHandPower, 1, applier=ctx.player)`. Presentation, folded in: the Retain hover tip (25)."
+    },
+    "OnUpgrade": {
+      "maps_to": "EquilibriumCard._on_upgrade (colorless_skills.py:249-250 region)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (Equilibrium.cs:40) == `self._block += 3` (13 -> 16). The RetainHandPower amount stays 1 when upgraded on both sides -- upgraded values checked."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

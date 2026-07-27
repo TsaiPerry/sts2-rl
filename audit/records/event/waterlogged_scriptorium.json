@@ -1,0 +1,113 @@
+{
+  "unit": "event/waterlogged_scriptorium",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\WaterloggedScriptorium.cs",
+    "sha256": "2bdc5b5c44cfbfc45b575af00cc91495d3098d8fbfe1dcdc835286931f394aaf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\waterlogged_scriptorium.py",
+    "sha256": "79033c6316051fea71e42e95583df88ca51cebdd439c36a3c33898900f7aa42a"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/CardSelection/CardSelectorPrefs.cs",
+      "sha256": "be907ced510772bbac02fd30e7553a360e426c4868c4436224d454d0f8177086",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Gold/GoldLossType.cs",
+      "sha256": "875df980a3f0bac1accda6a69f0e07dcd833674187656f8305bca88a9b938d7a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Enchantments/Steady.cs",
+      "sha256": "85831d5f0b55aade756bbaa0d7e1a6c0565682c76d47b5dd1f154fbab7dd7851",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "WaterloggedScriptorium.is_allowed (events/waterlogged_scriptorium.py:34-36) `run.gold >= 55`, matching WaterloggedScriptorium.cs:35-38 `runState.Players.All(p => p.Gold >= 55)`. The literal 55 is the same number as GoldVar(55), and the source hardcodes it in IsAllowed rather than reading DynamicVars, which the sim reproduces by reusing _TENTACLE_QUILL_GOLD (events/waterlogged_scriptorium.py:12). Multiplayer quantifier waived separately.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars MaxHpVar(6), GoldVar(55), GoldVar('PricklySpongeGold', 99), CardsVar(2) (WaterloggedScriptorium.cs:27-33)",
+      "maps_to": "events/waterlogged_scriptorium.py:11-14 _MAX_HP = 6, _TENTACLE_QUILL_GOLD = 55, _PRICKLY_SPONGE_GOLD = 99, _PRICKLY_SPONGE_CARDS = 2. All four exact, and there is no CalculateVars on either side, so IntValue == BaseValue throughout -- which is why the source's mix of `DynamicVars.Gold.IntValue` in the option gate (:49) and `DynamicVars.Gold.BaseValue` in the payment (:87) is not a divergence.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (WaterloggedScriptorium.cs:40-66): BLOODY_INK is always offered; TENTACLE_QUILL is offered when Gold >= 55 and replaced by TENTACLE_QUILL_LOCKED (null onChosen) otherwise; PRICKLY_SPONGE likewise against 99. Option ORDER is ink, quill, sponge",
+      "maps_to": "events/waterlogged_scriptorium.py:38-48 builds exactly that list in that order, with the two DISTINCT locked keys the source uses (TENTACLE_QUILL_LOCKED / PRICKLY_SPONGE_LOCKED) rather than one shared key, and EventOption(key, None) is the sim's null onChosen (events/base.py:58-65).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BloodyInk (WaterloggedScriptorium.cs:101-105): CreatureCmd.GainMaxHp(Creature, 6)",
+      "maps_to": "events/waterlogged_scriptorium.py:55-57 run.gain_max_hp(6). CreatureCmd.GainMaxHp (CreatureCmd.cs:786-799) is SetMaxHp(MaxHp + amount) followed by Heal(creature, delta), and run.gain_max_hp (run.py:311-314) is `max_hp += amount; heal(amount)` -- the same two steps in the same order. This is the GAIN verb; EV-2 (lose_max_hp clamps instead of damaging) has no counterpart here because GainMaxHp runs no damage pipeline. The only skipped tail is the MapPointHistoryEntry.MaxHpGained counter (CreatureCmd.cs:794-798), which is run-history telemetry with no gameplay reader -- see the GoldLossType guard for the same class of omission.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "TentacleQuill (WaterloggedScriptorium.cs:85-99): LoseGold(55) FIRST, then FromDeckForEnchantment(Steady, prefs count 1).FirstOrDefault(), then CardCmd.Enchant<Steady>(card, 1m) under a null guard",
+      "maps_to": "events/waterlogged_scriptorium.py:59-62: lose_gold(55) then _enchant(1). Gold-before-selection order preserved. The sim's _enchant loops over run.select_cards(...) so an empty candidate list is the null guard. run.select_cards (run.py:371-390) is the headless stand-in for CardSelectCmd and reproduces its auto-select-all rule (`if cards.Count <= prefs.MinSelect` at CardSelectCmd.cs:576-579) via `count = min(count, len(candidates))`.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "PricklySponge (WaterloggedScriptorium.cs:68-83): LoseGold(99) then a TWO-card enchant selection, despite the call passing `amount: 1` -- the select count comes from CardSelectorPrefs(prompt, DynamicVars.Cards.IntValue = 2), not from `amount`",
+      "maps_to": "EXECUTED (`py audit/tools/event_probes_c.py enchsel`), which quotes CardSelectorPrefs.cs:62-66 (the two-argument ctor sets MinSelect = MaxSelect = selectCount) and CardSelectCmd.cs:576-583 (the selection reads prefs.MinSelect/MaxSelect; `amount` is only forwarded to the enchant PREVIEW). Running the sim's PRICKLY_SPONGE on a 5-Strike deck with 400 gold: one selection call ('enchant', 2), 2 cards enchanted, 2 cards left holding Retain, 99 gold spent -- all matching. events/waterlogged_scriptorium.py:64-67 is correct; recorded because the `amount: 1` argument reads like a one-card screen.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the enchant candidate filter and the Steady effect",
+      "maps_to": "C# filters the DECK pile by `enchantment.CanEnchant(c)` (CardSelectCmd.cs:549); events/waterlogged_scriptorium.py:51 filters `self.run.deck` by SteadyEnchantment.can_enchant. Steady itself is `OnEnchant: Card.AddKeyword(Retain)` (Steady.cs:11-14) against the sim's attach/reset pair (enchantments.py:135-142). Both the base CanEnchant port and the Steady body are already audited by audit/records/enchantment/steady.json -- cited, not re-verdicted (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "PlayerCmd.LoseGold's `GoldLossType.Spent` argument (WaterloggedScriptorium.cs:70, :87) is unmodelled -- run.lose_gold (run.py:335-337) takes no loss type",
+      "verdict": "deliberate-divergence",
+      "rationale": "SAME observable, so deliberate-divergence rather than gap (rule 2), and the SAME verdict the mechanism already carries at event/morphic_grove (GoldLossType.Stolen) and event/round_tea_party (ThatWontSaveToChoiceHistory) -- rule 3. Verified at the enum rather than assumed: GoldLossType.cs:3-5's own doc comment is 'Used to help flavor how the gold was lost in the Map History', and a grep for `GoldLossType` across src finds no reader outside the enum declaration itself and the call sites that pass it. A future run-history/telemetry port would need it."
+    },
+    {
+      "what": "NCardEnchantVfx.Create + CardPreviewContainer on both enchant branches (WaterloggedScriptorium.cs:76-80, :92-96) and HoverTipFactory.FromEnchantment<Steady> on both options (:51, :59)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "IsAllowed's `runState.Players.All(p => ...)` quantifier (WaterloggedScriptorium.cs:37)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "this event consumes NO randomness on any path",
+      "maps_to": "EXECUTED (`py audit/tools/event_probes_c.py drawcount`): BLOODY_INK, TENTACLE_QUILL and PRICKLY_SPONGE each take 0 shared-rng draws and 0 event-rng draws with the card choice pinned, matching a source with no CalculateVars and no Rng call. EV-3 therefore does not apply to this unit.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

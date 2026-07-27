@@ -1,0 +1,99 @@
+{
+  "unit": "card/debt",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Debt.cs",
+    "sha256": "3d905c35b7731c658893b2bc0f06a46c20777298181962a08543e5c6ffb0c315"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\debt.py",
+    "sha256": "dff73b641b392db0cc516c94f49dcc3b7d7633363fd71e77ad827b6ca8a530bc"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mummified_hand.py",
+      "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "DebtCard.max_upgrade_level = 0 (debt.py:29)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Debt.cs:13) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "DebtCard.is_playable = False (debt.py:28)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Debt.cs:15) == `is_playable = False`. NOT Eternal or Ethereal, and the sim leaves both False."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "NOT PORTED -- DebtCard has no `has_turn_end_in_hand_effect` attribute (debt.py:23-33)",
+      "verdict": "gap",
+      "issue": "`public override bool HasTurnEndInHandEffect => true` (Debt.cs:19) has no counterpart: the sim leaves the class default False (cards/base.py:63), so the end-of-turn hand pass never even asks Debt for an effect. This is the flag half of the same omission as the OnTurnEndInHand entry below and carries the same verdict."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "NOT PORTED -- DebtCard has no `on_turn_end_in_hand` override (debt.py)",
+      "verdict": "gap",
+      "issue": "`Mathf.Min(DynamicVars.Gold.IntValue, Owner.Gold)` then `PlayerCmd.LoseGold(num, Owner)` (Debt.cs:26-30) is simply absent from the sim. The sim's own docstring (debt.py:20-21) justifies it with \"The sim has no gold\" -- THAT CLAIM IS FALSE. `RunState.gold` exists and `RunState.lose_gold` is implemented with the matching floor-at-zero semantics and a `PlayerCmd.LoseGold` citation (run.py:335-337); ported content spends and loses gold routinely (e.g. events/welcome_to_wongos.py buys with `lose_gold`). So Debt is a strictly weaker curse in the sim: in the game, holding it at end of turn costs up to 10 gold per turn, which compounds across a combat and changes what the player can afford at the next shop. LIVE -- Debt is a ported curse and gold is a ported, spendable resource. Note this is a rule-1 case: \"the sim does not model it\" is a dormant-or-live GAP, never a waiver, and here the resource IS modelled so it is live. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
+    },
+    "ctor": {
+      "maps_to": "class attrs (debt.py:23-30) + _init_vars (32-33)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) on both sides, so only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: the ported cost readers all filter `> 0` or skip `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- there is no gold effect to hold the number (debt.py)",
+      "verdict": "gap",
+      "issue": "`new GoldVar(10)` (Debt.cs:17) has no sim counterpart at all, which follows from the missing OnTurnEndInHand. Recorded separately because the number is also the card's printed value: `magic_number` returns None and the observation encoder sees no secondary number for Debt. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "DebtCard.on_play -> pass (debt.py:35-36)",
+      "verdict": "faithful",
+      "rationale": "Debt.cs declares no OnPlay and the card is Unplayable; the sim's abstract method is a `pass`."
+    }
+  },
+  "guards": [
+    {
+      "what": "Mathf.Min(10, Owner.Gold) clamps the loss to the gold on hand (Debt.cs:28)",
+      "verdict": "faithful",
+      "rationale": "No sim counterpart to compare, but recorded so the port has the exact semantics to restore: `run.lose_gold` already floors at 0 (run.py:337), so a straight `lose_gold(10)` would reproduce the clamp."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

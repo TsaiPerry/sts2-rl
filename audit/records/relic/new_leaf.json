@@ -1,0 +1,138 @@
+{
+  "unit": "relic/new_leaf",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\NewLeaf.cs",
+    "sha256": "2f7b9b9549120353bcf6b219eeafd3ec821e76da0e41b4bfec3687b209bb6ec4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\new_leaf.py",
+    "sha256": "a0bb19d5ce5928c2f010e4a0f806c7a137a7c810aba5e1ef6ac9f8332177a923"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardTransformation.cs",
+      "sha256": "949790460f8a3c0ab82f5b09e010af9328fc2eb18b62b906e555656bb2222c6b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/byrdonis_nest.py",
+      "sha256": "473830e27e9bee955d9d537269c58475029270aad9355c538f929579bffbd80f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/endless_conveyor.py",
+      "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/morphic_grove.py",
+      "sha256": "ce535850554ab449755eae4274e742dcb077e5424734e14dcf5d628e9a58c049",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/symbiote.py",
+      "sha256": "daaf188ec9417d2628e75b104aec39089db1ac3489db9388cec5799d643203d3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_lantern_key.py",
+      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_legends_were_true.py",
+      "sha256": "f86d70924caa9fc588f54dcdbad9e363f9795a709a9c8f8e6debad92bce9ad5c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/trial.py",
+      "sha256": "3d435d5a33c144a8a91f5771516376a0257b059a7c083db920f1dc399e4f5568",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/whispering_hollow.py",
+      "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pandoras_box.py",
+      "sha256": "c5d6cba8c90a265d74278852730402aafc017e0ce324b0eb7a7f4796f34615a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (new_leaf.py:12)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (new_leaf.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches NewLeaf.cs:16."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (new_leaf.py:15-17), dispatched by RunState.add_relic (run.py:546-553)",
+      "verdict": "gap",
+      "issue": "Rollup of guards N1 and G1 per binding rule 4. Count, selection prompt and deck placement are all faithful; the named Niche RNG stream is dropped (N1, live for RNG parity) and the candidate list omits C#'s Quest-card exclusion (G1, dormant)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (LIVE for RNG parity): C# names `Rng.Niche` and the stream IS consumed; run.transform_card is called with no pick_rng, so the sim silently falls back to the legacy shared random.Random",
+      "verdict": "gap",
+      "issue": "MECHANISM: NewLeaf.cs:27 is `await CardCmd.TransformToRandom(item, base.Owner.RunState.Rng.Niche)`. TransformToRandom builds `new CardTransformation(original)` with NO explicit Replacement (CardCmd.cs:323-326), so GetReplacement(rng) reaches CardFactory.CreateRandomCardForTransform (CardTransformation.cs:71) and the Niche stream IS drawn -- this is the half PROMPT.md bug class 16 warns to check, and unlike relic/claws (which passes an explicit Replacement and therefore draws nothing) this call really consumes. new_leaf.py:17 calls `run.transform_card(card)` with no pick_rng, and run.py:430-435 documents that None 'keeps the shared-rng choice' for callers 'not yet parity-wired'. EXECUTED (py audit/tools/relic_probes_b10.py new-leaf): on a string-seeded run, add_relic('new_leaf') transforms a deck card while the Niche stream's draw counter stays at 0 -> 0, where C# takes one draw. Same mechanism and same verdict as relic/astrolabe N1 (binding rule 3), and the fix is the same one line the sibling relic/pandoras_box already has (`run.transform_card(card, pick_rng=niche)`, pandoras_box.py:32). LIVE for RNG parity -- New Leaf is a ported Neow positive option (events/neow.py:37-42) so any parity seed that takes it diverges in both the replacement card and every later Niche draw -- and dormant for RL play, where the shared rng is the convention. Rule 7: CardCmd.cs, CardTransformation.cs, CardFactory.cs, run.py, relics/astrolabe.py and relics/pandoras_box.py are NOT hashed by this record."
+    },
+    {
+      "what": "G1 (DORMANT): CardSelectCmd.FromDeckForTransformation also excludes Quest cards; run.transformable_cards() filters only Eternal",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:485-491) builds its candidate list as `Cards.Where(c => c.Type != CardType.Quest && c.IsTransformable)`. run.transformable_cards() (run.py:364-366) returns removable_cards(), i.e. every non-Eternal deck card, with no Quest clause -- its own docstring says 'in the deck this equals IsRemovable', which is true of IsTransformable (CardModel.cs:739-750) but ignores the caller's extra filter. So the sim can offer a Quest card for transformation where the game cannot. REACHABILITY (DORMANT, and the concrete blocker is named): the three ported Quest cards -- byrdonis_egg, lantern_key, spoils_map (executed census; all three have eternal=False, so nothing else excludes them) -- enter the deck only through later events (events/byrdonis_nest.py:45, events/the_lantern_key.py:44, events/the_legends_were_true.py:41), while New Leaf is granted ONLY at floor 0, by Neow or by relic/neows_bones drawing from the same pool, when the deck is still the pristine starting deck. What would make it live: any grant path for New Leaf after floor 0 (a relic-trade event that can hand out Ancient relics, or a second source). NOTE THE POOL-WIDE SHAPE, filed in .superpowers/sdd/relic-batch-10-lessons.md: run.transformable_cards() is the shared helper for relic/leafy_poultice and five ported events (events/endless_conveyor.py:97, morphic_grove.py:44, symbiote.py:52, trial.py:99, whispering_hollow.py:66), all of which ARE reachable after a Quest card can be in the deck -- so the mechanism is live somewhere, just not at this relic's site. Rule 7: CardSelectCmd.cs, CardModel.cs, run.py and every events/*.py named above are NOT hashed by this record."
+    },
+    {
+      "what": "N2: CardsVar(1) (NewLeaf.cs:18) read as `.IntValue` into CardSelectorPrefs (NewLeaf.cs:24) vs the literal 1 (new_leaf.py:16)",
+      "verdict": "faithful",
+      "rationale": "NewLeaf.cs contains no AscensionHelper.GetValueIfAscension call, so 1 is the pinned non-ascension value."
+    },
+    {
+      "what": "N3: FromDeckForTransformation's auto-select shortcut -- `if (list.Count <= prefs.MinSelect && !RequireManualConfirmation) enumerable = list;` (CardSelectCmd.cs:493-496)",
+      "verdict": "faithful",
+      "rationale": "run.select_cards (run.py:371-390) clamps `count = min(count, len(candidates))` and returns everything when the pool is at or below the requested count, which is the same behaviour: with one transformable card left, both sides transform it with no choice offered. The sim delegates the actual pick to run.card_selector when installed and otherwise samples with the run rng, which is the house model for a player choice."
+    },
+    {
+      "what": "N4: deck placement of the replacement (PROMPT.md bug class 8)",
+      "verdict": "faithful",
+      "rationale": "CardCmd.Transform on a DECK pile removes the original and APPENDS the replacement at the end of the deck (CardCmd.cs:437); run.transform_card's docstring (run.py:418-428) cites that line and implements the end-placement for the parity path, which is what keeps the combat-start shuffle in parity. Nothing relic-specific diverges here; recorded because the class was checked."
+    },
+    {
+      "what": "N5: ExtraHoverTips (StaticHoverTip.Transform, NewLeaf.cs:20)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

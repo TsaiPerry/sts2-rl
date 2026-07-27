@@ -1,0 +1,124 @@
+{
+  "unit": "relic/velvet_choker",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\VelvetChoker.cs",
+    "sha256": "418c2070e88c5f9145a55a393978a7f993ffd29ab4a1a9b514549294deb24140"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\velvet_choker.py",
+    "sha256": "f449681ff7609280b7dfdc2612a2fd4f4b57742746aafb115d30d0c0c5f3f225"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (velvet_choker.py:20)",
+      "verdict": "faithful",
+      "rationale": "VelvetChoker.cs:20. Not in the transcribed grab bag (Ancient relics are not bag-pullable); obtainable via the ported Darv shrine (py audit/tools/relic_probes_b17.py pool -> granted_by sts2_rl/events/darv.py), which is what the port's own docstring claims."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips are presentation only -- the relic bar's counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Same presentation waiver as ShowCounter. VelvetChoker.cs:24-34's `!base.IsCanonical` arm is the canonical/instance split the sim does not model for relics."
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (velvet_choker.py:29-30), dispatched by HookSystem.modify_max_energy (hooks.py:203-208) from PlayerCombatState.start_turn (player.py:163)",
+      "verdict": "faithful",
+      "rationale": "VelvetChoker.cs:46-53 returns `amount + Energy.BaseValue` = amount + 1 (EnergyVar(1), VelvetChoker.cs:39, no AscensionHelper branch in the file); velvet_choker.py:30 is `amount + self.ENERGY` with ENERGY = 1. EXECUTED (py audit/tools/relic_probes_b17.py choker): turn 1 opens with energy 4 on a base of 3, which is C#'s number. The dropped `player != base.Owner` clause is structurally satisfied (one player). Slot: turn_structure step 17 evaluates ModifyMaxEnergy inside the reset branch and the sim evaluates it at player.py:163 before should_reset_energy -- that swap is turn_structure's own step-17 finding (dormant there), not this relic's, and it is unobservable for a pure `+1`. Rule 7: hooks.py, player.py and audit/records/seam/turn_structure.json are NOT hashed by this record."
+    },
+    "ShouldPlay": {
+      "maps_to": "should_play_card (velvet_choker.py:32-33), dispatched by HookSystem.should_play_card (hooks.py:682-695) from CombatState.play_card (combat.py:398), auto_play_card (combat.py:536) and valid_actions (combat.py:695)",
+      "verdict": "faithful",
+      "rationale": "VelvetChoker.cs:55-62 returns `!ShouldPreventCardPlay`, i.e. `_cardsPlayedThisTurn < Cards.IntValue` with CardsVar(6) (VelvetChoker.cs:38, 44); velvet_choker.py:33 is `self.cards_played_this_turn < self.CARDS_PER_TURN` with CARDS_PER_TURN = 6. EXECUTED (probe `choker`): the 7th play of a turn is refused with the counter at 6, which is where C# refuses. The dropped `card.Owner != base.Owner` clause is single-player-structural. Note the C# signature is `ShouldPlay(CardModel card, AutoPlayType _)` -- the AutoPlayType is DISCARDED, so the relic blocks auto-plays as well as manual ones, and the sim's ignoring of its own `auto_play` parameter is therefore correct. PROMPT.md bug class 29 applied deliberately: relic/brilliant_scarf's sibling counter EXCLUDES auto-plays and that exclusion is its LIVE G1, but copying that verdict here would be a false gap. Rule 7: hooks.py, combat.py and audit/records/relic/brilliant_scarf.json are NOT hashed by this record."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (velvet_choker.py:35-36)",
+      "verdict": "faithful",
+      "rationale": "VelvetChoker.cs:64-72 increments `_cardsPlayedThisTurn` for any card the owner played, with no IsAutoPlay guard; velvet_choker.py:36 increments unconditionally. Same class-29 reasoning as ShouldPlay: counting auto-plays is correct at THIS site. The dropped owner clause is single-player-structural, and InvokeDisplayAmountChanged is presentation."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (velvet_choker.py:38-42)",
+      "verdict": "deliberate-divergence",
+      "rationale": "VelvetChoker.cs:92-101 zeroes the counter on the player side's turn start (guarded by `participants.Contains(base.Owner.Creature)`, which the sim's player-only on_player_turn_start reproduces). C#'s hook is turn_structure step 9, BEFORE the block clear and the energy reset; the sim's on_player_turn_start is executed-confirmed to sit after both (py audit/tools/relic_probes.py turn-order prints on_block_cleared -> on_energy_reset -> on_player_turn_start). Only a counter RESET happens here and nothing between the two points reads it -- the play phase opens at step 28, and the sim's own ModifyMaxEnergy at player.py:163 does not consult the counter -- so the value is 0 at every moment either codebase can observe it. Same reasoning and verdict as audit/records/relic/brilliant_scarf.json's BeforeSideTurnStart entry (binding rule 3). Rule 7: audit/records/seam/turn_structure.json and audit/records/relic/brilliant_scarf.json are NOT hashed by this record."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "no counterpart; on_player_turn_start (velvet_choker.py:38-42) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "See guard G1 -- one of TWO combat-boundary resets C# performs and the sim drops, and the trace PROMPT.md bug class 13 demands is done there and comes out safe."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (velvet_choker.py:38-42) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "The second of C#'s two combat-boundary resets (VelvetChoker.cs:85-90). Same trace and same verdict as AfterRoomEntered -- see guard G1."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: C# resets the counter in THREE places (BeforeSideTurnStart, AfterRoomEntered, AfterCombatEnd) and the sim in ONE -- traced to the first reader, and safe",
+      "verdict": "deliberate-divergence",
+      "rationale": "PROMPT.md bug class 13's trace, executed rather than argued. The stale counter's only reader is `should_play_card` (velvet_choker.py:33), consulted from CombatState.play_card / auto_play_card / valid_actions -- i.e. only once the play phase is open. CombatState.__init__ runs `hooks.on_combat_start()` and then `player.start_turn()` back to back (combat.py:208-209), and start_turn fires on_player_turn_start at player.py:169, so the counter is 0 before any card can be played in the new combat. EXECUTED (py audit/tools/relic_probes_b17.py choker): a relic instance carried out of combat 1 with the counter at 6 reads 0 at combat 2's turn 1 and its first play is accepted. THE ONE WINDOW THAT IS NOT SAFE, and why this is a divergence rather than faithful: a listener asking the hook from on_combat_start DOES see the stale value -- the probe registers a spy whose on_combat_start calls `hooks.should_play_card(strike)` with the counter forced to 6 and gets `False`, where C# would answer True because AfterRoomEntered has already zeroed it (CombatRoom.cs:228 fires strictly before Hook.BeforeCombatStart, CombatManager.cs:380-403). No ported content plays or previews a card from on_combat_start -- the four sim auto-play sites are powers.py:713, :1041, :3583 and enchantments.py:267, all turn-scoped or card-scoped -- so the window is empty today. Verdicted deliberate-divergence and NOT a gap because the observable is identical at every point today's content can look, and the port's chosen reset point (per turn) is the one the 6-cards-PER-TURN rule actually needs; flagged so that whoever adds combat-start card automation revisits it. Rule 7: combat.py, player.py, powers.py, enchantments.py, CombatRoom.cs and CombatManager.cs are NOT hashed by this record."
+    },
+    {
+      "what": "N1 (PROMPT.md bug class 24): the port's comment claims 'The source resets on AfterRoomEntered (once per combat); the sim resets per turn' (velvet_choker.py:39-41) -- the source ALSO resets per turn",
+      "verdict": "gap",
+      "issue": "VelvetChoker.cs:92-101 is a BeforeSideTurnStart override that zeroes `_cardsPlayedThisTurn` on every player turn start, so the comment's premise -- that the per-turn reset is a sim invention -- is false, and it invites a future reader to 'fix' a correct port back to a per-combat counter, which would break the relic's own rule. The CODE is right (see the ShouldPlay and BeforeSideTurnStart entries); only the comment is wrong. Filed as a gap entry rather than a note because it is the exact class-24 shape PROMPT.md warns costs a whole audit, and because a wrong comment on a correct port is the case nothing downstream re-checks; it adds no observable of its own. Discovered by reading the C# in full rather than trusting the port's citation -- the docstring names AfterRoomEntered and AfterCombatEnd accurately and simply omits the third override."
+    },
+    {
+      "what": "N2: CardsVar(6) read as `Cards.IntValue` in ShouldPreventCardPlay (VelvetChoker.cs:44) and EnergyVar(1) read as `Energy.BaseValue` in ModifyMaxEnergy (:52)",
+      "verdict": "faithful",
+      "rationale": "Both resolve to their declared literals (VelvetChoker.cs:36-40) with no AscensionHelper.GetValueIfAscension anywhere in the file, so 6 and 1 are the pinned non-ascension values and the sim's CARDS_PER_TURN = 6 / ENERGY = 1 are correct. The IntValue-vs-BaseValue asymmetry is a source idiom already recorded in audit/records/relic/brilliant_scarf.json N2, not a port error."
+    },
+    {
+      "what": "N3: an EXTRA player turn -- does the counter reset for it?",
+      "verdict": "faithful",
+      "rationale": "Checked because the relic's cap is per TURN and an extra turn is the one turn boundary that skips the enemy side. C# increments PlayerCombatState.TurnNumber for the players taking the extra turn and fires the same SwitchSides path (CombatManager.cs:1404-1418), so BeforeSideTurnStart runs and the counter zeroes. The sim's extra-turn branch calls `self.player.start_turn()` (combat.py:650-652), which fires on_player_turn_start, so the counter zeroes there too. Both sides give the relic's owner a fresh 6-card budget on an extra turn. Rule 7: CombatManager.cs and combat.py are NOT hashed here."
+    },
+    {
+      "what": "N4: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's pickup mutates nothing outside run.relics."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,119 @@
+{
+  "unit": "event/reflections",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Reflections.cs",
+    "sha256": "728bfd3c6044fc0a04411285a5e811e6b518d981e21257941b44f872f87e066e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\reflections.py",
+    "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "OnRoomEnter": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Reflections.cs:18-21 adds NMirrorVfx to the event room's VfxContainer. No game-state reader, and it takes no stream draw. Same shape as slippery_bridge's NRainVfx."
+    }
+  },
+  "guards": [
+    {
+      "what": "GenerateInitialOptions (Reflections.cs:23-30): TOUCH_A_MIRROR then SHATTER, both unconditional; the event declares no IsAllowed at all",
+      "maps_to": "events/reflections.py:27-31, same order, no gates, and the sim declares no is_allowed so it inherits the base True (events/base.py:103-107). Both engines therefore let a deck with nothing upgraded and nothing upgradable walk in and waste the option.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "TouchAMirror's two-phase shape (Reflections.cs:32-58): build `Deck.Cards.Where(IsUpgraded)` ONCE, loop 2 with a `Count <= 0` break, NextItem + Remove-from-candidates + Downgrade each time; THEN RE-DERIVE `Deck.Cards.Where(IsUpgradable)` and loop 4 the same way",
+      "maps_to": "events/reflections.py:33-48 reproduces both phases, both counts (events/reflections.py:8-9 _DOWNGRADES = 2, _UPGRADES = 4), both `if not <list>: break` guards, and -- the load-bearing detail -- the RE-DERIVATION between them, so a card just downgraded is eligible for the upgrade pass. `c.upgrade_level > 0` is IsUpgraded and `c.is_upgradable` is IsUpgradable (the same predicate run.upgradable_cards uses, run.py:368-369). EXECUTED (`py audit/tools/event_probes_a.py reflect`): with 3 upgraded cards in a 10-card starting deck the sim takes 6 picks over list sizes [3, 2, 9, 8, 7, 6] -- the 9 on the third pick is the re-derived list including the two downgrades.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`upgradedCards.Remove(cardModel)` / `upgradableCards.Remove(cardModel2)` (Reflections.cs:42, :55) remove the exact INSTANCE, so a duplicate Strike stays eligible",
+      "maps_to": "events/reflections.py:39 and :46 `list.remove(card)`, which is identity-based here: Card defines no __eq__ anywhere in sts2_rl. The C# side is identity-based too -- neither AbstractModel nor CardModel overrides Equals or implements IEquatable, so EqualityComparer<CardModel>.Default is reference equality (AbstractModel implements only IComparable, AbstractModel.cs:87-98). Same instance-exactness the slippery_bridge record recorded for RemoveFromDeck.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Shatter's snapshot (Reflections.cs:65-71): `originalDeckSize` is captured BEFORE the loop and the loop indexes `Deck.Cards[i]`, so the clones being appended are never themselves cloned",
+      "maps_to": "events/reflections.py:51 `for card in list(self.run.deck)` takes the same snapshot. Both append (run.deck.append, run.py:348; CardPileCmd.Add to PileType.Deck), so indices 0..n-1 stay the originals in the source too. EXECUTED (`py audit/tools/event_probes_a.py reflect`): a 10-card starting deck becomes 21 -- 10 originals + 10 clones + Bad Luck.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "RunState.CloneCard (RunState.cs:394-399) vs copy.deepcopy",
+      "maps_to": "CloneCard is `ClonePreservingMutability()` + RunState.AddCard, i.e. MemberwiseClone + DeepCloneFields + AfterCloned (AbstractModel.cs:144-169). CardModel.DeepCloneFields re-clones and RE-ATTACHES the enchantment and the affliction (CardModel.cs:1204-1216), so a clone of an enchanted card keeps its enchantment -- which copy.deepcopy also does, back-reference and all, because the sim's Card holds no run/combat reference outside a combat. Note CloneCard does NOT call AfterCreated (only RunState.CreateCard does, RunState.cs:385-389), and neither does deepcopy, so the two agree on that too.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Shatter's tail `CardPileCmd.AddCurseToDeck<BadLuck>` (Reflections.cs:73), AFTER the clone loop",
+      "maps_to": "events/reflections.py:53 add_card(make_card('bad_luck')) after the loop. AddCurseToDeck is AddCursesToDeck of one (CardPileCmd.cs:1037-1054): a Type == Curse assertion, RunState.CreateCard, then Add to PileType.Deck. Bad Luck is ported (EXECUTED, `py audit/tools/event_probes_a.py reacha`). The order is observable -- the Bad Luck is added after the clones, so it is not itself doubled -- and both engines do it that way.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "both of Shatter's adds run the deck-entry hook, so the egg relics see the clones",
+      "maps_to": "run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:341-354), which is what CardPileCmd.Add(PileType.Deck) runs. EXECUTED (`py audit/tools/event_probes_a.py reflect`): holding Molten Egg, SHATTER on the starting deck takes upgraded Attacks from 0 to 6 -- the six cloned Strikes and Bashes -- so the sim reproduces the game's clone-then-upgrade behaviour. This event is in the add_card set and NOT in creature_card_cmds G3's transform radius.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: all six of TouchAMirror's `base.Rng.NextItem` draws (Reflections.cs:41, :54), which events/reflections.py:38 and :45 take off `self.rng` via random.Random.choice. Right count on every path (EXECUTED, `py audit/tools/event_probes_a.py reflect`), right candidate lists, wrong stream. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists reflections among the modules that roll ONLY on the shared rng. Shatter rolls nothing on either side rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "BR-step52 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- CardCmd.Downgrade skips the Enchantment.ModifyCard() re-apply, and step 52's rationale names events/reflections.py:36-41 (TouchAMirror's downgrade loop) as one of its two legs",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Recorded here with a MEASUREMENT THAT NARROWS IT, which the stream report also surfaces as a cross-record note: EXECUTED (`py audit/tools/event_probes_a.py reflect`), a Souls-enchanted Discovery reads exhausts=False after attach, True after Reflections' downgrade -- and False AGAIN after the next combat's Enchantment.reset() (enchantments.py:214-216, called from combat.py:131 for every deck card). The game reads False at all three points. So the sim's window on THIS leg closes at the next combat setup, before the card can be played; step 52 stays LIVE on its in-combat Dampen leg (powers.py:3149-3183) but the out-of-combat Reflections leg self-heals. Recommendation for step 52's owner: narrow the liveness argument to the in-combat downgrade. No verdict change."
+    },
+    {
+      "what": "HoverTipFactory.FromCardWithCardHoverTips<BadLuck> (Reflections.cs:28), CardCmd.Preview / CardCmd.PreviewCardPileAdd with CardPreviewStyle.MessyLayout (Reflections.cs:44, :56, :69) and the five Cmd.CustomScaledWait pauses (Reflections.cs:45, :57, :59, :70, :72)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

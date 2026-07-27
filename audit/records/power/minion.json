@@ -1,0 +1,113 @@
+{
+  "unit": "power/minion",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\MinionPower.cs",
+    "sha256": "10ed71ca328a4cc2325a7424ea67df54ca93e73562f22ca7dcb3964962c05537"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Feed.cs",
+      "sha256": "99d3e68dbdc4c3d687c756d5c4c3acdc545a37d043d888bb476028faad684cb8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/HandOfGreed.cs",
+      "sha256": "8b0cd3b1f1bc7afff8fa91666fdbd031cae32cefe79b782775e252e55af51a52",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/TheHunt.cs",
+      "sha256": "17a3a70929aec9671a74ab1b0f2380f44e1df6c6bf4709d9d5395e527f4c043d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/feed.py",
+      "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/ovicopter.py",
+      "sha256": "79189b0410ab49908dad8328810cb95e4beed347b0d1025dac48c2befb12e0c5",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1542 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the sim does NOT override on_stack, so it adds -- which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Nothing on either side reads Minion's Amount; it is a pure marker power. Faithful, and the correct handling of Single -- worth contrasting with the 15 units that override on_stack to `pass`."
+    },
+    "ShouldPlayVfx": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    "OwnerIsSecondaryEnemy": {
+      "maps_to": "combat.py:276 `primaries = [e for e in self.enemies if \"minion\" not in e.powers]`",
+      "verdict": "faithful",
+      "rationale": "C# reads it through Creature.IsSecondaryEnemy (`Creature.cs:276`, `Powers.Any(p => p.OwnerIsSecondaryEnemy)`); the sim tests the power id directly in `_all_enemies_dead` (combat.py:272-277), so combat is won once every PRIMARY enemy is gone. Same predicate, and the `or self.enemies` fallback correctly handles an all-minion board. Third-file citations, not hashed here."
+    },
+    "ShouldPowerBeRemovedAfterOwnerDeath": {
+      "maps_to": "no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "`ShouldPowerBeRemovedAfterOwnerDeath() => false`. C# strips a dead creature's powers at CreatureCmd.cs:533 (`creature.RemoveAllPowersAfterDeath()`, then each power's AfterRemoved) and this override opts out so the power survives the death it is supposed to react to. The sim never removes powers on death at all -- a grep of cmds.py's kill/death path finds no `powers.clear()` or per-power removal, and cmds.py:96-105 goes straight from the HP write to should_die / should_remove_from_combat_after_death / on_death -- so `false` is the sim's universal behaviour and this override is satisfied for free. Faithful HERE. The inverse is a real machinery gap owned by nobody: the C# DEFAULT is `true`, so every power WITHOUT this override should be stripped on its owner's death and in the sim none is. That is reported in content-power-report-b.md section 3 rather than verdicted on this unit, because it is an engine-wide absence and not this power's divergence. Third-file citations, not hashed here. ENGINE-LEVEL SIBLING (added 2026-07-26): the INVERSE finding -- that C#'s DEFAULT is `true` so every power WITHOUT this override should be stripped on its owner's death and in the sim none is -- now carries a verdict of its own at audit/records/seam/creature_card_cmds.json step 8b (`gap`, LIVE, executed on the Decimillipede). It used to exist only as prose in content-power-report-b.md section 3c. This entry stays `faithful` because the override asks for exactly the behaviour the sim gives for free; the engine-wide absence is step 8b's, not this unit's."
+    },
+    "ShouldOwnerDeathTriggerFatal": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "**LIVE.** C# reads this at three card sites -- `Feed.cs:38`, `HandOfGreed.cs:49`, `TheHunt.cs:41`, each `cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` computed BEFORE the attack -- and MinionPower returns **false**, so killing a minion never triggers a Fatal payoff. The sim has no such hook anywhere (`hooks.py` defines none) and `cards/feed.py:45` tests only `target.is_dead`. **EXECUTED**: Feed played into a 4-HP Tough Egg carrying MinionPower 1 raises the sim player's max HP from 80 to 83 (delta **3**) where the game raises it by **0**; the control -- the same egg without MinionPower -- gives delta 3 on both sides, so the divergence is the marker power and nothing else. Rule-6 co-occurrence: Feed is a ported Rare Ironclad Attack (cards/feed.py) and Tough Eggs receive MinionPower from the ported Act-2 Hive Ovicopter (monsters/hive/ovicopter.py:153, `PowerCmd.apply(ctx.hooks, egg, MinionPower, 1, applier=self)`), which lays up to five of them; the Kin Followers are a second ported source. Hand of Greed and The Hunt are unported, so Feed is the whole live surface today -- and it is enough. The fix is a `should_owner_death_trigger_fatal` hook plus one line in cards/feed.py, both outside audit scope. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "Minion as the only reader of PowerStackType.Single done right",
+      "verdict": "faithful",
+      "rationale": "Recorded deliberately: MinionPower and IllusionPower are the two units in half B that leave Power.on_stack alone, and they are the two that are RIGHT about it."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

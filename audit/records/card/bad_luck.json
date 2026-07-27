@@ -1,0 +1,104 @@
+{
+  "unit": "card/bad_luck",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\BadLuck.cs",
+    "sha256": "74de0d3b4758cfcb2c3828750df1cee81d2965517224777e7a4c98f71eaa58d9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\bad_luck.py",
+    "sha256": "de5eaf64c65ffbe49d39936060aba2e1f2fca23e799f632d520accc96adb9da9"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mummified_hand.py",
+      "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanBeGeneratedByModifiers": {
+      "maps_to": "BadLuckCard.can_be_generated_by_modifiers = False (bad_luck.py:30)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (BadLuck.cs:13) == the class attribute; Bad Luck is therefore excluded from the random-curse pool on both sides."
+    },
+    "MaxUpgradeLevel": {
+      "maps_to": "BadLuckCard.max_upgrade_level = 0 (bad_luck.py:28)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (BadLuck.cs:15) == the class attribute, so `is_upgradable` is False and Apotheosis/Armaments skip it on both sides."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "eternal = True, is_playable = False (bad_luck.py:26-27)",
+      "verdict": "faithful",
+      "rationale": "`{ Eternal, Unplayable }` (BadLuck.cs:17-21) == `eternal` + `is_playable = False`. NOT Ethereal (unlike AscendersBane), and the sim correctly leaves `is_ethereal` at its False default."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "BadLuckCard.has_turn_end_in_hand_effect = True (bad_luck.py:31)",
+      "verdict": "faithful",
+      "rationale": "`public override bool HasTurnEndInHandEffect => true` (BadLuck.cs:23) == the class attribute (cards/base.py:63), the flag the end-of-turn hand pass consults before calling OnTurnEndInHand."
+    },
+    "ctor": {
+      "maps_to": "class attrs (bad_luck.py:22-31) + _init_vars (33-34)",
+      "verdict": "gap",
+      "issue": "Type/rarity/target map exactly (CURSE / CURSE / NONE), but the canonical energy cost is **-1** in C# (`base(-1, ...)`, BadLuck.cs:27-30) and **0** in the sim (`self._energy_cost = 0`, bad_luck.py:34). Same divergence as card/ascenders_bane's ctor entry and, per rule 3, the same verdict: `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), making the game's unplayable curse immune to every cost modifier, while the sim runs a base of 0 through the full modifier chain in `Card.energy_cost` (cards/base.py:222-232). DORMANT for the same executed reason -- the three ported cost readers (`relics/mummified_hand.py:25` and `potions.py:168` filter `> 0`; `cards/event_cards.py:328` skips `<= 1`) and the one pool filter (`events/infested_automaton.py:35`, over `pool_card_ids()`, which holds no curses) all treat -1 and 0 alike. Live as soon as any effect reads an unplayable card's cost without a `> 0` filter."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim inlines 13 at the damage site (bad_luck.py:43)",
+      "verdict": "gap",
+      "issue": "`new HpLossVar(13m)` (BadLuck.cs:25) is a printed card var; the sim declares no `_hp_loss` in `_init_vars`, so `Card.base_hp_loss` (cards/base.py:202-210) returns its 0 default for this card and the number 13 exists only as a literal inside `on_turn_end_in_hand`. The DEALT damage is identical (13 either way), so no player-visible combat outcome differs -- but the sim's own printed-number API misreports the card, and it is read: `full_env.py:488` encodes `card.base_hp_loss / ABS_SCALE` into the observation vector, so a policy sees Bad Luck as a harmless 0-HP-loss curse. Recorded as a gap rather than a deliberate divergence because nothing in the code marks it intentional and every other numbered card in this batch does declare its var. DORMANT with respect to game fidelity (no game-observable difference); LIVE with respect to the sim's observation encoder. The concrete fix is a one-line `self._hp_loss = 13` in `_init_vars` -- NOT applied, per the no-engine-edits rule."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "BadLuckCard.on_turn_end_in_hand (bad_luck.py:39-44)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.HpLoss.BaseValue, ValueProp.Unblockable | ValueProp.Unpowered | ValueProp.Move, this)` (BadLuck.cs:35) == `DamageCmd.deal(ctx.hooks, ctx.player, 13, card=self, props=DamageProps.CARD_HP_LOSS)`. `DamageProps.CARD_HP_LOSS` is exactly `UNBLOCKABLE | UNPOWERED | MOVE` (valueprops.py:38). Self-targeted, and both sides pass no dealer (C# omits the dealer argument entirely, the sim leaves `dealer` at its None default), so no AfterDamageGiven attribution fires on either side. Presentation, folded in: BadLuck.cs:34 awaits Cmd.Wait(0.25f) before the damage -- pacing only."
+    },
+    "OnPlay": {
+      "maps_to": "BadLuckCard.on_play -> pass (bad_luck.py:36-37)",
+      "verdict": "faithful",
+      "rationale": "BadLuck.cs declares no OnPlay; the card is Unplayable. The sim's abstract method is satisfied with a `pass`."
+    }
+  },
+  "guards": [
+    {
+      "what": "the damage is UNBLOCKABLE, so block never absorbs it, and UNPOWERED, so Strength/Vulnerable/Weak never scale it",
+      "verdict": "faithful",
+      "rationale": "`is_powered_attack` is `MOVE in props and UNPOWERED not in props` (valueprops.py:49), which is False here on both sides; and the UNBLOCKABLE branch of the sim's damage pipeline skips block exactly as C#'s does. The MOVE bit is still set on both sides, so effects keyed on 'card or monster move' (Vambrace's `IsCardOrMonsterMove()`) see it identically."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

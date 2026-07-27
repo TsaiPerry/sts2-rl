@@ -1,0 +1,58 @@
+{
+  "unit": "card/howl_from_beyond",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\HowlFromBeyond.cs",
+    "sha256": "93d4409c2c5faaace478e4697e003f1f1740f0e6f74b73e56015d3653d565314"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\howl_from_beyond.py",
+    "sha256": "3b489bebe90570b2054bcebc8a28f67a9832a4d8d4a762e5e7bf90b1160856f1"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "AfterAutoPostPlayPhaseEntered": {
+      "maps_to": "HowlFromBeyondCard.on_player_turn_end (howl_from_beyond.py:85-90)",
+      "verdict": "faithful",
+      "rationale": "`if (Pile != null && Pile.Type == PileType.Exhaust && player == Owner) await CardCmd.AutoPlay(choiceContext, this, null)` (HowlFromBeyond.cs:32-39) == `if self in self.combat.player.exhaust_pile: self.combat.auto_play_card(self)`. The pile test, the self-target and the auto-play verb all match, and unlike card/havoc this one really does go through `CombatState.auto_play_card`, so the full play bracket runs (combat.py:516-556) -- including the pile removal that pulls it back OUT of the exhaust pile (combat.py:526-535, which explicitly lists `exhaust_pile` with a Howl From Beyond comment). The sim maps the AutoPostPlay phase to its end-of-turn auto-play slot, the same slot Stampede uses; the `player == Owner` clause is the multiplayer ownership gate. Note the card is NOT Exhaust-keyworded -- the Exhaust hover tip (HowlFromBeyond.cs:17) advertises the TRIGGER -- so it only replays when something else exhausts it, and the sim leaves `exhausts` False."
+    },
+    "ctor": {
+      "maps_to": "class attrs (howl_from_beyond.py:65-69) + _init_vars (71-73)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Attack, CardRarity.Uncommon, TargetType.AllEnemies)` (HowlFromBeyond.cs:19-22) == cost 3 / ATTACK / UNCOMMON / ALL_ENEMIES."
+    },
+    "CanonicalVars": {
+      "maps_to": "HowlFromBeyondCard._damage = 16 (howl_from_beyond.py:73)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(16m, ValueProp.Move)` (HowlFromBeyond.cs:15) == `_damage = 16`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "HowlFromBeyondCard.on_play, routed per-enemy by the framework (howl_from_beyond.py:78-81; combat.py:481-487)",
+      "verdict": "gap",
+      "issue": "The damage and the single hit per enemy are faithful against `DamageCmd.Attack(16).FromCard(this).TargetingAllOpponents(CombatState)` (HowlFromBeyond.cs:26-29), and leaving `handles_own_routing` False is correct for a one-hit AoE -- the framework filters on `is_gone` (combat.py:483-484), the right analogue of `where c.IsAlive`. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call (AttackCommand.cs:650), which computes every DamageResult first and only then calls `await Kill(killedCreatures)` for the batch (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy, so each death resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage. Presentation, folded in: WithAttackerAnim(\"Cast\") and WithHitFx."
+    },
+    "OnUpgrade": {
+      "maps_to": "HowlFromBeyondCard._on_upgrade (howl_from_beyond.py:75-76)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(5m)` (HowlFromBeyond.cs:43) == `self._damage += 5` (16 -> 21)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

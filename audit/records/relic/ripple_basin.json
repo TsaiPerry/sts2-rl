@@ -1,0 +1,104 @@
+{
+  "unit": "relic/ripple_basin",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RippleBasin.cs",
+    "sha256": "9af3b9199ca392959df5543c6649ade095c546381165915a149304e89fbff58e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\ripple_basin.py",
+    "sha256": "da7a5483e434c950c29ac4741d6832fca472baee64db8925821e442d0d838ee9"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orichalcum.cs",
+      "sha256": "26ea7db10392ce478bef226d3b112f7b17575177d3d839ce176c135f031c06f8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsEye.cs",
+      "sha256": "0ff4149872257b8969c808d66f1e293c0aa33980f41be77618f2802d59b02d3e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/orichalcum.py",
+      "sha256": "5797b6afca188cd66619524d8ea170a678e96a2dfd831ce913462ff6dfce7a8c",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (ripple_basin.py:21)",
+      "verdict": "faithful",
+      "rationale": "Matches RippleBasin.cs:20. In the transcribed shared grab bag as Uncommon (relic_pools.py:128), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "CanonicalVars": {
+      "maps_to": "BLOCK = 4 with props=ValueProp.UNPOWERED (ripple_basin.py:23, 39)",
+      "verdict": "faithful",
+      "rationale": "RippleBasin.cs:22 is `new BlockVar(4m, ValueProp.Unpowered)` and BeforeSideTurnEnd passes the DynamicVar itself to CreatureCmd.GainBlock (line 32), so both the amount and the Unpowered prop travel together. The port passes 4 and ValueProp.UNPOWERED separately to BlockCmd.apply, which is the same pair. No AscensionHelper.GetValueIfAscension in the file, so 4 is the non-ascension value."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "on_player_turn_end (ripple_basin.py:36-39)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The condition and the amount are right; the SLOT is a flattened single listener walk where C# guarantees this relic runs after every VeryEarly and Early listener."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (ripple_basin.py:32-34) -- which does real work the C# override does not",
+      "verdict": "deliberate-divergence",
+      "rationale": "RippleBasin.cs:36-48's entire body, after the type and owner checks, is `base.Status = RelicStatus.Normal` -- presentation. C# needs no per-turn bookkeeping because BeforeSideTurnEnd queries the combat HISTORY instead: `History.CardPlaysFinished.Any(e => e.HappenedThisTurn(...) && e.CardPlay.Card.Type == Attack && e.CardPlay.Card.Owner == Owner)` (RippleBasin.cs:28). The sim substitutes a `_attack_this_turn` flag maintained from on_card_played (see guard N1 for why that substitution is equivalent today). Recorded as a divergence rather than faithful because the sim gives this hook behaviour the source does not have, so a future change to the sim's history or to on_card_played's firing rule would not be caught by looking at the C# override."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (ripple_basin.py:29-30) -- again the flag reset, not C#'s presentation body",
+      "verdict": "deliberate-divergence",
+      "rationale": "RippleBasin.cs:50-58's body after the participants check is `base.Status = RelicStatus.Active` -- presentation. The sim uses the slot to clear `_attack_this_turn`, which is the other half of the history substitution. The slot itself is turn_structure step 9 in C# and step 19 in the sim (`py audit/tools/relic_probes.py turn-order`), but only a flag reset happens here and the first READER is on_player_turn_end, so the values agree at every observable point -- the same reasoning as relic/rainbow_ring's BeforeSideTurnStart in this batch and relic/brilliant_scarf's in batch 2."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (ripple_basin.py:29-30) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "RippleBasin.cs:60-64 sets `base.Status = RelicStatus.Normal` and nothing else -- so, unlike relic/rainbow_ring, there is not even a counter for C# to zero here; the sim's dropped 'reset' is a dropped presentation update. `py audit/tools/relic_probes.py sweep-reset` files ripple_basin in the 'RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- genuinely safe)' bucket and prints `C# resets: ['AfterCombatEnd']`, which the corrected assignment column shows is `base.Status = RelicStatus.Normal`. TRACED TO THE FIRST READER as bug class 13 requires: `_attack_this_turn` can leave combat 1 True (a fight won on an attack skips the turn-end pass entirely -- combat.end_turn returns early once the phase is not PLAYER_TURN), and combat 2's own construction runs player.start_turn() -> on_player_turn_start, which clears it before any turn end can read it. Safe."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C# runs BeforeTurnEnd as three complete ordered passes and the sim as one flat listener walk, so Orichalcum's deliberate two-phase snapshot loses to Ripple Basin's block on relic-pickup order",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.BeforeTurnEnd dispatches BeforeSideTurnEndVeryEarly -> BeforeSideTurnEndEarly -> BeforeSideTurnEnd as three separate full passes (Hook.cs:1238-1261). Orichalcum is written for exactly that guarantee, and says so in a source comment: its VeryEarly override snapshots `Block > 0` into ShouldTrigger (Orichalcum.cs:44-56, with the remark 'This uses the _very early_ hook because it needs to check the player's block before PlatingPower triggers') and its plain BeforeSideTurnEnd then grants the 6 Block (Orichalcum.cs:58-66). Ripple Basin's hook is PLAIN BeforeSideTurnEnd (RippleBasin.cs:26), so C# guarantees Orichalcum's snapshot happens first. The sim folds both onto on_player_turn_end (relics/orichalcum.py:22-25 and ripple_basin.py:36-39), and hooks.on_player_turn_end is a single `for l in list(self._listeners)` pass, so the answer becomes listener-registration order -- which is relic PICKUP order on RunState.relics. THIS IS audit/records/seam/turn_structure.json gap G12, which names Ripple Basin as 'the same shape' as Fake Orichalcum and records it as UNEXECUTED; per binding rule 3 the verdict is matched, and the execution the seam left open is done here. EXECUTED (`py audit/tools/relic_probes_b13.py ripple-basin`), player at 0 block with no Attack played: relics=['ripple_basin','orichalcum'] gives 4 Block, relics=['orichalcum','ripple_basin'] gives 10, and C# always gives 10 because the VeryEarly snapshot sees block==0 before any plain listener runs. REACHABILITY (LIVE, both sides ported): both relics are Uncommon in the transcribed shared grab bag, no card needs to be played to reach the state (an attack-free turn is the relic's own trigger condition), and half of all pickup orders produce the wrong number. The sim's Fake Orichalcum (relics/fake_orichalcum.py) is the third member of the same contention set."
+    },
+    {
+      "what": "N1: C# asks the combat HISTORY 'was an Attack finished this turn'; the sim keeps a boolean set from on_card_played",
+      "verdict": "faithful",
+      "rationale": "Equivalent for every reachable case, checked clause by clause. (a) `HappenedThisTurn(Owner.Creature.CombatState)` is reproduced by the turn-start clear at ripple_basin.py:29-30, including on an extra turn (combat.end_turn increments `turn` and re-runs start_turn on the Pael's Eye path, so the flag clears there too). (b) `e.CardPlay.Card.Owner == base.Owner` is single-player-structural. (c) `e.CardPlay.Card.Type == CardType.Attack` matches ripple_basin.py:33. (d) The one real asymmetry is `CardPlaysFinished`: a play that STARTED but did not finish is absent from C#'s history, while the sim's on_card_played fires at the end of _resolve_card_play, so it too only records finished plays -- the same point, reached differently. (e) Auto-plays count on both sides: C# does not filter IsAutoPlay here (contrast PaelsEye.cs:155, which does, and BrilliantScarf.cs:84-87), and the sim's auto_play_card routes through the same card-play bracket. Recorded rather than skipped because a history-vs-flag substitution is exactly where PROMPT.md bug class 13 and the Pael's Eye G18 finding lived."
+    },
+    {
+      "what": "N2: `participants.Contains(base.Owner.Creature)` on BeforeSideTurnEnd and BeforeSideTurnStart (RippleBasin.cs:28, 52)",
+      "verdict": "faithful",
+      "rationale": "Both C# hooks fire for BOTH sides and the participants check narrows them to the player's own side turn; the sim's on_player_turn_end and on_player_turn_start are player-side-only dispatchers, so both are structurally satisfied. The enemy-side halves of those hooks are audit/records/seam/turn_structure.json guards G5/G11 and are not this record's to verdict."
+    },
+    {
+      "what": "N3: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, null)` (RippleBasin.cs:32) vs `BlockCmd.apply(hooks, player, 4, props=UNPOWERED)` (ripple_basin.py:39)",
+      "verdict": "faithful",
+      "rationale": "Same target, same amount, same Unpowered prop -- so no Dexterity or block-multiplier scaling applies on either side, which is what Unpowered means and is why the relic gives exactly 4. The trailing null is the source card. Checked because a dropped UNPOWERED would make the relic scale with Dexterity and diverge silently on any turn the player holds some."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

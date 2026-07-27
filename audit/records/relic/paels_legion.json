@@ -1,0 +1,188 @@
+{
+  "unit": "relic/paels_legion",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PaelsLegion.cs",
+    "sha256": "08bc0980dc3b133a256bb39d50881b6888fabb5f47033aaab02b7ccb36381530"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\paels_legion.py",
+    "sha256": "20f9950262269d972fff7aff6d200544ce02c445f956217cf9568890938e5f21"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Pael.cs",
+      "sha256": "35411063dc0bb8f3333285347e0116d6c79fdbac1bb2e3c97512ec5a96e3fb6d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/PaelsLegion.cs",
+      "sha256": "2aad21c76f8925ee2e8fa9073811c5601b68f9b1b06cfe4ba08eca0cd29f29be",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/cascade.py",
+      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_attacks.py",
+      "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "AddsPet": {
+      "maps_to": "adds_pet = True (paels_legion.py:25); consumed by the Pael shrine's option gate (events/pael.py's `if not run.has_event_pet`)",
+      "verdict": "faithful",
+      "rationale": "PaelsLegion.cs:32 `AddsPet => true` and Pael.cs:166-169 only offers PaelsLegionOption when `!base.Owner.HasEventPet()`; the sim mirrors both. Relic.adds_pet's own docstring (relics/base.py:91-93) names this exact use."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (paels_legion.py:24)",
+      "verdict": "faithful"
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PaelsLegion.cs:38 `ShowCounter => DisplayAmount > 0`. RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PaelsLegion.cs:56-74 returns the remaining cooldown (or -1 to hide it). RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PaelsLegion.cs:120-127 does two things, both waived: `Skin = new Rng(base.Owner, base.Id).NextItem(SkinOptions)` picks one of four cosmetic skins (line 122; SkinOptions at :40 is consumed only by the pet monster's SetupSkins, src/Core/Models/Monsters/PaelsLegion.cs:25-30), and SummonPet is the cosmetic creature of guard N1. The skin roll is NOT a shared-stream draw -- `new Rng(owner, id)` constructs a fresh generator from the owner and the relic id, so it cannot shift any other stream's position and PROMPT.md bug class 16's named-stream trap does not apply. Presentation exclusion."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PaelsLegion.cs:129-132 is `await SummonPet()` and NOTHING else -- in particular it performs NO state reset, which is why the dropped AfterCombatEnd reset (guard G1) has nothing to fall back on. Waived for the pet itself per guard N1. Recorded with the body spelled out because the batch-11 brief and an earlier reading of sweep A both stated that C# resets this relic's fields at BOTH BeforeCombatStart and AfterCombatEnd; it does not."
+    },
+    "ModifyBlockMultiplicative": {
+      "maps_to": "modify_block_multiplicative (paels_legion.py:36-43), dispatched by HookSystem.modify_block_multiplicative (hooks.py:111-122) from BlockCmd.apply (cmds.py:147)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G2, G3 and G4 per binding rule 4. The multiplier itself is right (2m at PaelsLegion.cs:152 vs 2.0 at paels_legion.py:43, no AscensionHelper.GetValueIfAscension in the file), and the `cardSource == null` and `cardSource.Owner != base.Owner` bails (lines 140-147) are matched by `card is None` plus the single-player CombatState. What diverges is the props filter (G2, LIVE), the extra target check the sim adds (G3) and the latch the sim performs inside this method instead of in AfterModifyingBlockAmount (G4)."
+    },
+    "AfterModifyingBlockAmount": {
+      "maps_to": "collapsed into modify_block_multiplicative's `self._affected_card = card` (paels_legion.py:42)",
+      "verdict": "gap",
+      "issue": "See guard G4. C# keeps the LATCH in a separate hook that Hook.AfterModifyingBlockAmount (Hook.cs:649-659) only calls for listeners that actually changed the value, and whose own body then applies two further guards -- `modifiedAmount <= 0` (PaelsLegion.cs:157) and `AffectedCardPlay != null && AffectedCardPlay != cardPlay` (:165) -- neither of which the sim has. This is PROMPT.md bug class 15 (the sim collapses two C# hooks into one method and the collapse is where the divergence hides): the modifier's guard set and the latch's guard set are NOT the same, and the sim applies only the modifier's."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (paels_legion.py:45-49), dispatched by HookSystem.on_card_played from CombatState._resolve_card_play (combat.py:514)",
+      "verdict": "faithful",
+      "rationale": "PaelsLegion.cs:173-185: if the latched play is this play, clear the latch and set `Cooldown = base.DynamicVars[\"Turns\"].IntValue` -- CanonicalVars pins Turns at 2m (PaelsLegion.cs:118), matching COOLDOWN_TURNS = 2 (paels_legion.py:27). The sim compares CARD identity where C# compares CARD PLAY identity, which is equivalent for the single-play case and for the replay case (the sim's play-count loop reuses one Card object and fires on_card_played once, combat.py:477-514). Flash(), the pet's BlockTrigger animation (line 182) and TriggeredBlockLastTurn (:183, read only by the sleep/wake animations at :199-206) are presentation."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_start (paels_legion.py:51-54)",
+      "verdict": "deliberate-divergence",
+      "rationale": "TIMING: C# ticks the cooldown at AfterSideTurnStart, i.e. the POST-draw turn-start slot (audit/records/seam/turn_structure.json step 23), which the sim spells on_player_turn_started; paels_legion.py:51 uses on_player_turn_start, the PRE-draw slot (~step 18, established by execution -- `py audit/tools/relic_probes.py turn-order` prints on_player_turn_start BEFORE modify_hand_draw, which is PROMPT.md bug class 11's whole point). VALUE: C# is `bool flag = Cooldown > 0; Cooldown--;` unconditionally (PaelsLegion.cs:191-192), so the counter goes NEGATIVE on every awake turn; the sim decrements only while positive. Both differences are non-observable and that is why this is a divergence rather than a gap. The negative values are read only by `Cooldown > 0` (:148, :199) and by DisplayAmount, which floors at -1 anyway (:68-72), so clamping at 0 is observationally identical. The slot difference needs a block gain BETWEEN the two slots to matter -- i.e. block from a card auto-played during the turn-start draw. That shape exists (HellraiserPower auto-plays a drawn Strike, powers.py:706-713; MayhemPower auto-plays from the draw pile at on_player_turn_started, powers.py:3576-3583) but neither can gain block: Hellraiser fires only on cards tagged 'strike', and Mayhem runs in on_player_turn_started, AFTER both slots. So no ported path can observe the difference today. Recorded as a divergence per binding rule 2 (same observable outcome) with the residual risk named: porting a draw-time auto-play of a block card, or any BeforeHandDraw/ModifyHandDraw listener that gains card block, makes the slot difference observable and this verdict must then be re-audited as a gap."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "PaelsLegion.cs:211-219 resets FOUR things -- base.Status, `Cooldown = 0`, `TriggeredBlockLastTurn = false`, `AffectedCardPlay = null` -- and the sim's port resets none of them. Carries guard G1's LIVE label. Status/TriggeredBlockLastTurn are presentation; Cooldown and AffectedCardPlay are not."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE, NEW -- not in sweep A's confirmed table): `cooldown` and `_affected_card` are never reset, so a combat that ENDS with the pet asleep starts the next combat asleep (PROMPT.md bug class 13)",
+      "verdict": "gap",
+      "issue": "MECHANISM: paels_legion.py:31 initialises cooldown = 0 in __init__ (once per RUN, at RunState.add_relic) and paels_legion.py:49 sets it to 2; the only other writer is the turn-start decrement (:53). C# clears it at PaelsLegion.cs:214 AfterCombatEnd -- its ONLY reset, since BeforeCombatStart (:129-132) merely summons the pet. Relic instances live on RunState.relics and are re-attached to every CombatState (relics/base.py:152-154). FIRST READER traced per bug class 13: paels_legion.py:40's `self.cooldown > 0`, and nothing shadows it -- the relic has no combat-start hook, and the turn-start decrement removes only ONE point of staleness per turn. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py legion-reset`): play one Defend in combat 1 (block 10 = 5 doubled, cooldown 2) and end the combat there, which is the ordinary case since a fight ends on the turn the last enemy dies; combat 2 turn 1 with the SAME instance reports cooldown=1 and a Defend gives block 5, where a FRESH instance in the identical combat gives 10. The probe then shows the sim needs one further player turn of combat 2 before the pet wakes. Both sides ported: Ancient from the ported Pael shrine (events/pael.py OPTION_POOL_3 + the has_event_pet gate), Defend is in the starting deck. WHY THE POOL-WIDE SWEEP MISSED THIS: `sweep-reset-exec`'s driver builds a CombatState and calls end_turn() up to three times without ever PLAYING A CARD, and both of this relic's fields are written only from card-play hooks -- the sweep's own static output says `cooldown<-['__init__', 'on_card_played', 'on_player_turn_start']` -- so it filed the relic as 'agrees with a fresh instance'. Reproduced side by side as `py audit/tools/relic_probes_b11.py legion-sweep`; reported in .superpowers/sdd/relic-batch-11-lessons.md rather than patched, per the concurrency contract. Same one-line fix shape as belt_buckle G2, centennial_puzzle, paels_eye G1 and paels_tears G1."
+    },
+    {
+      "what": "G2 (LIVE): C# doubles UNPOWERED card block; the sim never even calls the hook for it",
+      "verdict": "gap",
+      "issue": "MECHANISM: `Hook.ModifyBlock` (Hook.cs:1310-1340) is dispatched with NO props gate at all -- CreatureCmd.GainBlock calls it for every block gain (CreatureCmd.cs:644) and each listener applies its own filter. PaelsLegion's filter is `props.IsCardOrMonsterMove()` (PaelsLegion.cs:136), which is just `HasFlag(ValueProp.Move)` (ValuePropExtensions.cs:23-26) -- it does NOT exclude Unpowered, unlike Dexterity/Frail's `IsPoweredCardOrMonsterMoveBlock` (:14-21). The sim's BlockCmd.apply gates the WHOLE additive+multiplicative dispatch on `is_powered_attack(props)` = Move AND NOT Unpowered (cmds.py:145-147, valueprops.py:47-49), so a card whose block carries ValueProp.UNPOWERED never reaches modify_block_multiplicative. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py legion-unpowered`): Entrench is ported and gains block with `ValueProp.MOVE | ValueProp.UNPOWERED` (cards/trash_heap_cards.py:170-177, mirroring Entrench.cs's `GainBlock(current Block, Unpowered | Move)`). Probe output: Entrench on 10 block gives block 20 and cooldown 0 both with and without the relic, where C# gives 10 + (10 x 2) = 30 and cooldown 2. Control in the same probe: a Defend (powered card block) IS doubled to 10 with cooldown 2, so the port is not simply inert -- the divergence is specific to the Unpowered flag. Both sides ported: Entrench is an Event-rarity card granted by the Trash Heap event, Pael's Legion is Ancient from the Pael shrine. NOTE: the divergence is really in the sim's BlockCmd props gate (cmds.py, not hashed by this record -- binding rule 7), but Pael's Legion is the ONLY ported modify_block_multiplicative listener whose C# filter is the looser IsCardOrMonsterMove (the other two, powers.py:452 and :1105, are Dexterity-family and correctly powered-only), so the observable belongs here."
+    },
+    {
+      "what": "G3 (DORMANT): the sim adds a `target is not self.player` check that C#'s ModifyBlockMultiplicative does not have",
+      "verdict": "gap",
+      "issue": "MECHANISM: PaelsLegion.cs:134-153 checks props, cardSource and cardSource.Owner -- and NOTHING about the target. So in C#, a card played by the owner that grants block to any creature has that block doubled, including a creature that is not the player. paels_legion.py:40 requires `target is self.player`. REACHABILITY (DORMANT, with the concrete unported thing named): every ported card-sourced block gain targets `ctx.player` (`grep -rn 'BlockCmd.apply' sts2_rl/cards/` -- 20 sites, all `ctx.player`), and the only ported non-player block gains are monster moves and powers with `card=None`, which C#'s own `cardSource == null` bail (line 140) already excludes. Porting a player card that grants block to an enemy, or any player-side summon/minion a card could shield, makes it live. Recorded as a gap rather than a waiver: 'no ported card does this' is today's content, not the divergence's shape (binding rule 1)."
+    },
+    {
+      "what": "G4 (DORMANT): the latch. C# latches in AfterModifyingBlockAmount behind two extra guards (`modifiedAmount > 0` and 'a different play already latched'); the sim latches inside the multiplicative itself with neither",
+      "verdict": "gap",
+      "issue": "MECHANISM (PROMPT.md bug class 15 -- two C# hooks collapsed onto one sim method, and the guard sets differ): (a) CreatureCmd.GainBlock computes the modified amount, floors it at 0, and only then calls Hook.AfterModifyingBlockAmount (CreatureCmd.cs:644-646); PaelsLegion.cs:157-160 then returns without latching when `modifiedAmount <= 0`. The sim latches at paels_legion.py:42, before any total is known, so a card-sourced block gain that resolves to 0 starts the 2-turn cooldown for no block. (b) PaelsLegion.cs:165-168 refuses to overwrite a latch belonging to a DIFFERENT card play; the sim overwrites unconditionally, so in a nested auto-play (outer card gains block, then auto-plays an inner card that gains block) the sim's AfterCardPlayed for the INNER card starts the cooldown immediately, while C# keeps AffectedCardPlay on the outer play and stays awake for the rest of the outer card's resolution. (c) Hook.AfterModifyingBlockAmount only calls listeners that actually changed the value (`modifiers.Contains(modifier)`, Hook.cs:653) -- equivalent here, because the sim latches on exactly the calls where it returns 2.0. REACHABILITY (DORMANT for both halves, and the missing pieces are named): for (a), every ported card passes a positive printed block or guards on a positive computed value (`if dealt > 0` at cards/colorless_attacks.py:109-110), and Frail/Dexterity cannot reach a 0 total once the x2 is in the chain -- it needs a card that gains 0 block, or negative Dexterity, whose only two C# sources (Malaise, Resonance) are unported, the same unported pair audit/records/relic/unsettling_lamp.json G2 names. For (b), three ported cards auto-play another card from inside their own on_play (cards/cascade.py:58, cards/colorless_skills.py:117 and :164) but none of them gains block both before and after the nested play, which is what a demonstration needs."
+    },
+    {
+      "what": "N1: the pet creature. C# summons a real MonsterModel onto the player's side (PlayerCmd.AddPet, PaelsLegion.cs:221-224) at both AfterObtained and BeforeCombatStart; the sim models the pet as the adds_pet FLAG only and puts no creature in the combat",
+      "verdict": "waiver",
+      "rationale": "The port's docstring claims the pet is cosmetic; CHECKED rather than accepted (PROMPT.md bug class 12). src/Core/Models/Monsters/PaelsLegion.cs is 9999 MinInitialHp / 9999 MaxInitialHp (:19-21), `IsHealthBarVisible => false` (:23), and its move state machine is a single self-looping `NOTHING_MOVE` that returns Task.CompletedTask (:33-38); everything else in the file is SetupSkins and GenerateAnimator, i.e. Spine skins and animation states. It has no powers, no intent and no HP the player can reach, and the block doubling lives entirely on the RELIC. So the omission is presentation, and the one mechanical consequence of a pet existing -- HasEventPet gating the shrine option -- is carried by adds_pet. Waived under the presentation exclusion with the executed/read basis stated, not under a bare 'the sim has no pets' claim, which binding rule 1 would make a gap."
+    },
+    {
+      "what": "N2: the pet's BlockTrigger / SleepTrigger / WakeUpTrigger animations and TriggeredBlockLastTurn (PaelsLegion.cs:28, 90-102, 182, 199-207, 215)",
+      "verdict": "waiver",
+      "rationale": "TriggeredBlockLastTurn exists ONLY to decide which of the two animations plays at the next turn start (read at line 199 and nowhere else), so the sim's omission of the field and of the CreatureCmd.TriggerAnim calls is presentation. RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
+    },
+    {
+      "what": "N3 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; the one Rng in the file is a locally constructed one",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's fifteen C# relic files finds no IsAllowed override, so sweep B's 17-relic pool-eligibility cluster excludes this unit. The skin roll at PaelsLegion.cs:122 is `new Rng(base.Owner, base.Id)` -- a fresh generator, not a shared RunRngSet stream -- so nothing is consumed from a parity stream and the sim's omission cannot shift another draw's position. Obtainability confirmed by execution (`py audit/tools/relic_probes_b11.py pool`): Ancient, offered by the ported Pael shrine."
+    },
+    {
+      "what": "N4: Skin as a [SavedProperty] (PaelsLegion.cs:42-54) and the AssertMutable setters on all four fields",
+      "verdict": "waiver",
+      "rationale": "The save property carries a cosmetic skin name across a save/load; AssertMutable is the source's canonical-vs-mutable model invariant. Presentation/infrastructure, no observable effect."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

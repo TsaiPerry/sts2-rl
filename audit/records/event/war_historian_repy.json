@@ -1,0 +1,102 @@
+{
+  "unit": "event/war_historian_repy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\WarHistorianRepy.cs",
+    "sha256": "407e38a628ad60779054bf55c71fcb8cc7f2b93d6a3d942493e4db341eb0a737"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\war_historian_repy.py",
+    "sha256": "3d0273c48e42e3a7dd6202808ced621fa1f2b675734b523d3cab21a4b5c5313f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Cards/LanternKey.cs",
+      "sha256": "062853fba0b815dc9cbc7dea1fc4bc2517c743c1aca520c32fb821cdfc19a6cf",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/CrystalSphere.cs",
+      "sha256": "eb7331c7fdbd2d5dbd439450dfdbbe692fd83aa4b725012d1cf239e6d64fd2df",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Vfx/Backgrounds/NQueenRepyBgVfx.cs",
+      "sha256": "89aa8448221c6c697cdf44e81091e0626764cf904be15da15c4248bc76680b11",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/ExtraRunFields.cs",
+      "sha256": "3e60872fbc6d371eb7110194f86907e61f2ae8e2b834dba2f5be1bee2a0b0fcb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/__init__.py",
+      "sha256": "c170436e0540caaebac2e6703e83d385e003d7ea79a8dc6010b46e4d58908e87",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_lantern_key.py",
+      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/golden_compass.py",
+      "sha256": "90ca1a9fe31935161ebde5e9ac4032f9c63bb8c159adc292eaac554a36fa6f3f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsShared": {
+      "maps_to": "WarHistorianRepy.cs:16 `IsShared => true`; the sim carries shared membership as registry position (events/__init__.py:117-137, which names this unit in the 18-id SHARED_EVENTS tuple) rather than a per-event flag.",
+      "verdict": "faithful"
+    },
+    "IsAllowed": {
+      "maps_to": "WarHistorianRepy.cs:30-33 `IsAllowed(IRunState) => false` -- a bare `return false` in the SOURCE. WarHistorianRepy.is_allowed (events/war_historian_repy.py:29-32) is the same bare `return False`, so this hook is exact. NOTE this is where this unit differs from its sibling stub event/crystal_sphere, whose record verdicts IsAllowed a gap: CrystalSphere.cs:49-56 is a REAL gate (act 2+, 100 gold) that the sim overrides to False, whereas here the sim reproduces the source exactly. The gap in this unit is not in IsAllowed -- see the two DEFERRED-PORT guards.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "DEFERRED PORT, leg 1 -- THE ENTRY. `IsAllowed => false` does not mean the game never runs this event: LanternKey.cs:21-36 injects it. ModifyUnknownMapPointRoomTypes narrows every '?' node in act index 2 to RoomType.Event, and ModifyNextEvent returns ModelDb.Event<WarHistorianRepy>() for that act, so any run that carries a Lantern Key into Act 3 is routed here. The sim ports NEITHER hook on its Lantern Key",
+      "verdict": "gap",
+      "issue": "EXECUTED (`py audit/tools/event_probes_c.py repy`): the card 'lantern_key' IS ported (cards/event_cards.py:366-387) and the ported event 'the_lantern_key' hands it over as a reward extra (events/the_lantern_key.py:44); the sim has ZERO implementations of the ModifyNextEvent hook anywhere under sts2_rl/ (the hook does not exist), and LanternKeyCard does not override modify_unknown_map_point_room_types even though the sim DOES dispatch that hook over the deck and the relics (run.py:1045-1049; relics/golden_compass.py:42 is a working implementer). LIVE: the trigger is ordinary run state with ported content -- hold a Lantern Key, reach act index 2 -- and the observable is that the game turns a '?' node into this event and the sim cannot. The card's docstring justifies the omission with 'the sim has no map, so it is an inert unplayable card' (cards/event_cards.py:371), which is false in two ways: the sim has a map, and the hook it would need is already dispatched. Under rule 1 an unported C# side is a gap, never a waiver."
+    },
+    {
+      "what": "DEFERRED PORT, leg 2 -- THE BODY. Nothing below GenerateInitialOptions is ported: events/war_historian_repy.py:34-36 returns []. Unported: the two initial options UNLOCK_CAGE / UNLOCK_CHEST (WarHistorianRepy.cs:35-42); the second-reward page that offers the OTHER option (:44-70); UnlockCage's `RelicCmd.Obtain<HistoryCourse>` and `ExtraFields.FreedRepy = true` (:96-100); UnlockChest's RewardsCmd.OfferCustom of 2 PotionRewards + 2 RelicRewards (:86-94); and the Lantern-Key consumption (PlayerCmd.CompleteQuest + CardPileCmd.RemoveFromDeck, :102-132)",
+      "verdict": "gap",
+      "issue": "Same DEFERRED-PORT gap as leg 1 and reachable by the same trigger, recorded separately because the missing content is separately portable. EXECUTED (`py audit/tools/event_probes_c.py repy`): the payout relic 'history_course' is NOT in ALL_RELICS, so UnlockCage has no target in the sim today -- that is the one concrete unported dependency. Everything else in the body is expressible with verbs the sim already has (run.add_relic, run.remove_cards, the potion/relic reward offer path). In SINGLE PLAYER the branch shape is: RemoveLanternKeysForInitialChoice removes exactly ONE Lantern Key (:110), ShouldGetSecondReward is then simply 'the deck still holds a Lantern Key' (:22-27), and the second page removes ALL remaining ones (:124-132) -- i.e. a player holding two Lantern Keys gets BOTH rewards. UnlockChest's four-Reward OfferCustom would additionally be an EV-4 site if it were ported."
+    },
+    {
+      "what": "no RNG is consumed by the stub, so leaving the id in the 18-event shared pool is free",
+      "maps_to": "events/war_historian_repy.py:29-32 is a bare `return False` with no draw, exactly like the source's own `return false`. This is what makes carrying the id in SHARED_EVENTS (events/__init__.py:134) correct rather than merely harmless -- the game shuffles all 18 ids onto every act's queue and each one's IsAllowed filters it out again, so the UpFront event-shuffle draw count and order match.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`ExtraFields.FreedRepy = true` (WarHistorianRepy.cs:98) is unmodelled even as run state",
+      "verdict": "waiver",
+      "rationale": "presentation only, and grep-verified: EXECUTED (`py audit/tools/event_probes_c.py repy`) prints every FreedRepy line in the game source -- the writer at WarHistorianRepy.cs:98, the property + save round-trip in ExtraRunFields.cs:28/36/46, and exactly ONE reader, NQueenRepyBgVfx.cs:20 `base.Visible = !combatState.RunState.ExtraFields.FreedRepy`, which toggles a combat BACKGROUND's visibility. No gameplay reader exists. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "ShouldGetSecondReward's `RunState.Players.Count <= 1` (WarHistorianRepy.cs:24) and RemoveLanternKeysForInitialChoice's `Players.Count > 1` (:104)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "HoverTipFactory.FromRelic<HistoryCourse> / FromCardWithCardHoverTips<LanternKey> on both options (WarHistorianRepy.cs:39-40, :50, :64)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

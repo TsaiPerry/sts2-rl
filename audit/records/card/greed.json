@@ -1,0 +1,84 @@
+{
+  "unit": "card/greed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Greed.cs",
+    "sha256": "9eb93a20638e0f223df4ae026412958e278de0d2dc436f8baca8eb5e483f5a07"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\greed.py",
+    "sha256": "032a46d6b934246f2551b23d2a1b4723bef44406420de44d5fbe2cb62ec77959"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mummified_hand.py",
+      "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "GreedCard.max_upgrade_level = 0 (greed.py:27)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Greed.cs:8) == the class attribute."
+    },
+    "CanBeGeneratedByModifiers": {
+      "maps_to": "GreedCard.can_be_generated_by_modifiers = False (greed.py:29)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (Greed.cs:10) == the class attribute -- correctly mapped here, unlike card/disintegration and card/frantic_escape, where the sim set this flag in place of CanBeGeneratedInCombat."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "eternal = True, is_playable = False (greed.py:25-26)",
+      "verdict": "faithful",
+      "rationale": "`{ Eternal, Unplayable }` (Greed.cs:12-16) == both flags. No Ethereal on either side."
+    },
+    "ctor": {
+      "maps_to": "class attrs (greed.py:20-29) + _init_vars (31-32)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges -- `GetAmountToSpend()` clamps to 0 on both sides. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses."
+    },
+    "OnPlay": {
+      "maps_to": "GreedCard.on_play -> pass (greed.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "Greed.cs has no members beyond the three overrides -- no OnPlay, no OnTurnEndInHand, no vars, and (unlike card/debt, the other gold-themed curse) no gold effect at all. It is a pure dead draw on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "Greed is declared `public class`, not `sealed` (Greed.cs:6)",
+      "verdict": "faithful",
+      "rationale": "The second non-sealed card model in the pool after AscendersBane. No subclass exists in src/Core/Models/Cards, so there is nothing to mirror."
+    },
+    {
+      "what": "the sim adds `is_unpowered = True` (greed.py:28), which has no counterpart in Greed.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the card deals no damage."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

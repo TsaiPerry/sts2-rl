@@ -1,0 +1,78 @@
+{
+  "unit": "event/sapphire_seed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\SapphireSeed.cs",
+    "sha256": "34c6008129d3c88be4253cf2e901bed0ab8e89c4dd8eb1978ffb8d470d383092"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\sapphire_seed.py",
+    "sha256": "a8a1a307ca98bf1439d4f6dd43ca459b94bcbd7f040864bcebb17c6dfa957e95"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "CanonicalVars HealVar(9) (SapphireSeed.cs:24)",
+      "maps_to": "events/sapphire_seed.py:6 _HEAL = 9. Exact; the other CanonicalVar is a StringVar naming the Sown enchantment.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (SapphireSeed.cs:27-34): EAT then PLANT, both unconditional -- there is NO lock on PLANT even though the enchant can find no candidate",
+      "maps_to": "events/sapphire_seed.py:22-26 offers the same two keys in the same order with no gate. The source really does leave PLANT clickable and relies on FirstOrDefault returning null (SapphireSeed.cs:52), and the sim relies on select_cards returning [] for an empty candidate list (run.py:384-385) -- the same no-op. Note the contrast with spiraling_whirlpool, which gates the whole EVENT on Spiral having a candidate; Sapphire Seed has no IsAllowed at all, so an all-enchanted deck can walk in and waste the option in both engines.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Eat (SapphireSeed.cs:36-45): Heal(9) FIRST, then FromDeckForUpgrade(1) with the FirstOrDefault null guard, then CardCmd.Upgrade",
+      "maps_to": "events/sapphire_seed.py:28-33: heal(9), select_cards('upgrade', run.upgradable_cards(), 1), then `if chosen: chosen[0].upgrade()`. Order and guard both preserved. Plain CreatureCmd.Heal -- no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does not apply; `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Plant (SapphireSeed.cs:47-61): build the candidate list as `Deck.Cards.Where(sown.CanEnchant)`, select 1, then CardCmd.Enchant<Sown>(card, 1m)",
+      "maps_to": "events/sapphire_seed.py:35-40 builds the identical predicate over run.deck and attaches `SownEnchantment(amount=1)` -- the source's `1m`. The candidate rebuild is not redundant work the sim invented: the source passes the pre-filtered list explicitly (SapphireSeed.cs:50-51).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "CardCmd.Enchant's tail (CardCmd.cs:532-558) vs Enchantment.attach, for SOWN specifically",
+      "maps_to": "CardCmd.Enchant runs CanEnchant, EnchantInternal, enchantment.ModifyCard() and card.FinalizeUpgradeInternal(); Enchantment.attach (enchantments.py:63-68) runs can_enchant and the back-references. Observationally identical for Sown, which overrides neither OnEnchant nor RecalculateValues (Sown.cs is an OnPlay energy grant, ported at enchantments.py:79-96), so ModifyCard() has nothing to do. Same mapping the field_of_man_sized_holes record made for Perfect Fit. Sown's own behaviour is audited under enchantment/sown.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Enchant's stacking branch (CardCmd.cs:545-549) is unreachable from here",
+      "maps_to": "the sim's base can_enchant is a flat `card.enchantment is None` (enchantments.py:57), where EnchantmentModel.CanEnchant lets a SECOND copy of the same enchantment through when IsStackable is true (EnchantmentModel.cs:289-292), and CardCmd.Enchant then does `Amount += amount`. EXECUTED (`py audit/tools/event_probes.py enchantstack`): EnchantmentModel.IsStackable (EnchantmentModel.cs:173) defaults false and has ZERO overrides among enchantments in the whole game source -- the five IsStackable overrides that exist are all Afflictions or Relics. So the sim's flat check is exactly the source's behaviour and the stacking branch is dead code on both sides. Recorded here rather than asserted, per rule 5. Applies identically at the other four enchant sites in this batch (self_help_book, spiraling_whirlpool, stone_of_all_time, symbiote).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Sown StringVar, the Sown hover tip and NCardEnchantVfx (SapphireSeed.cs:23, 32, 55-59)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

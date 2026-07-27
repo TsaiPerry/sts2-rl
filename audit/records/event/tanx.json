@@ -1,0 +1,179 @@
+{
+  "unit": "event/tanx",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Tanx.cs",
+    "sha256": "cdf5618f1c15d03bf4c7fc9ca691fa3e9ce9701e8cfd255155b841a2529a8a71"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\tanx.py",
+    "sha256": "da7e5f6b2b2811e2b211e0fc6f0af420d903bef871435d06e2871844e6f1a054"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/DevConsole/ConsoleCommands/AncientConsoleCmd.cs",
+      "sha256": "8a42f286595e684919682777d7f39150bc9a6dfc1a404e04dca62300b61c6d0c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AncientEventModel.cs",
+      "sha256": "1c805375395bf04b49ee0e056de4dc717d96c649b718a9d87338052cb0855091",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/RelicCollection/NRelicCollectionCategory.cs",
+      "sha256": "3171d45189b145848ef4345e499a8351ce2cba9639399e72e3dc5f65161944b2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/ancient.py",
+      "sha256": "e446b8fe5b1ae1f8bd690b49dca771e7af98ab375ced1900545f196186a338ac",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/HoverTips/HoverTip.cs",
+      "sha256": "744865cfa0f5a64cbfa0120af795263b7ec1718d646f88c19b191efa69ec8c0b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Localization/LocManager.cs",
+      "sha256": "e0147eab02af2ec5b9a02097b55d0cb8876a09c90522a19f755390b29884aca3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Localization/LocString.cs",
+      "sha256": "0fa4a7264937562d14a388a5253cec7c46c72ed93e617011137c103aeb2c9358",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EventModel.cs",
+      "sha256": "ca991ec5fea146069498065563bbc4a63ee0786ceaafdeae823df822e955f240",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/EventRoom.cs",
+      "sha256": "1038126138bdc9799ec3f1286bfddef80618dad80083c375d07cf2ae36e0e0f3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Tanx.cs:27 concatenates BaseOptionPool with the Tri-Boomerang option for the run-history / compendium listing. Its readers in the source are all non-gameplay: AncientEventModel.GenerateInitialOptionsWrapper's DebugOption swap (AncientEventModel.cs:198-202) and the dev console's AncientConsoleCmd (AncientConsoleCmd.cs:41, 71), both dev tooling, plus NRelicCollectionCategory.cs:116, the relic-collection UI screen. GenerateInitialOptions builds its own list and never consults it. NARROWED IN THE REVIEW FIX PASS: the earlier wording called the DebugOption swap its \"only reader\", which is the over-broad negative this stream's own lesson #4 warns about -- `grep -rn AllPossibleOptions src` returns two more readers. Neither moves the verdict. NeowsBones.cs:33 reads `ModelDb.Event<Neow>().AllPossibleOptions`, hard-coded to NEOW's list, so it is not a reader of this unit's -- which is exactly why event/neow records ITS AllPossibleOptions as a real faithful function (events/neow.py:64-72) and every other ancient waives it. NRelicCollectionCategory is a compendium display. So the waiver stands on the presentation clause, now on an accurate reader list. Same mapping the nonupeipe record made (rule 3)."
+    },
+    "LocTable (inherited, AncientEventModel.cs:34)": {
+      "maps_to": "(nothing) -- the sim has no localization layer; events/base.py drives pages by loc KEY, never by text",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION. `=> \"ancients\"` (AncientEventModel.cs:34, a third file hashed by this record's extra_sources) names the localization table every L10NLookup in this event resolves against, overriding EventModel's default. Its only readers are LocManager's table lookup (LocString.cs:85 -> LocManager.cs:294, and LocString.cs:31/198-200 for emptiness and ordering) and HoverTip id construction (HoverTip.cs:41,53,66) -- it selects which text file a string is read from and decides nothing else. The sim stores no event text: its pages and options are keyed by the source's own loc KEYS (events/base.py:11-19), which is the part that is behaviourally load-bearing, and those keys are audited by the AllPossibleOptions entry and the option guards. Out of scope per the shared contract's presentation waiver."
+    },
+    "LayoutType (inherited, AncientEventModel.cs:108)": {
+      "maps_to": "(nothing) -- the sim has no scene or layout concept",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION -- verified rather than assumed, because EventLayoutType is NOT inert for every value. `=> EventLayoutType.Ancient` (AncientEventModel.cs:108, a third file hashed by this record's extra_sources). Every reader in the source was read. Scene/asset selection: LayoutScenePath (EventModel.cs:176-183) picks ancient_event_layout.tscn, GetAssetPaths (EventModel.cs:466-488) adds the background scene, SetNode (EventModel.cs:344) initialises a node only for Custom. The readers that DO change behaviour all test for Combat specifically -- whether the event owns a pre-built CombatState and whether entering the room creates one (EventModel.cs:376, 385, 407, 614, 624-635) and how the room is entered and exited (EventRoom.cs:69, 93) -- and Ancient takes the same branch Default does at every single one. So Ancient vs Default changes which .tscn loads and nothing a replay could observe. Out of scope per the shared contract's presentation waiver."
+    },
+    "InitialDescription (inherited, AncientEventModel.cs:143-153)": {
+      "maps_to": "(nothing) -- the sim stores no page text, only page keys (events/base.py:11-19)",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION -- and read in full rather than waived on the member name, because this one carries a BRANCH. It returns base.InitialDescription (EventModel.cs:68, the INITIAL page's loc entry) unless Hook.ShouldAllowAncient denies, in which case it swaps in the relics/WAX_CHOKER.blockMessage string (AncientEventModel.cs:143-153, a third file hashed by this record's extra_sources). It selects TEXT and nothing else. The BEHAVIOURAL half of the same gate is a different member: GenerateInitialOptionsWrapper (AncientEventModel.cs:193-207) replaces the whole option list with a single PROCEED when the hook denies -- and it is `protected sealed override`, so it is outside this record's enumeration, which follows `public override`. That gate is itself inert in this source: ShouldAllowAncient has NO implementer anywhere. AbstractModel.cs:2167 declares the virtual returning true, and a whole-tree grep for the name returns only that declaration, the dispatcher (Hook.cs:2116-2120) and these two call sites -- the Wax Choker relic whose message it names has no .cs file in this build. So the deny branch is unreachable and the sim's omission of both members drops nothing. Out of scope per the shared contract's presentation waiver."
+    }
+  },
+  "guards": [
+    {
+      "what": "BaseOptionPool's 9 relics (Tanx.cs:29-40)",
+      "maps_to": "events/tanx.py:11-14 OPTION_POOL: claws, crossbow, iron_club, meat_cleaver, sai, spiked_gauntlets, tanxs_whistle, throwing_axe, war_hammer -- the same nine in source order, which is the shuffle's input and therefore load-bearing (UnstableShuffle is order-dependent by construction, ListExtensions.cs:33-44). All nine are ported (EXECUTED, `py audit/tools/event_probes_a.py reacha`).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Tri-Boomerang gate (Tanx.cs:138-141): append it when `Deck.Cards.Count(Instinct.CanEnchant) >= 3`",
+      "maps_to": "events/tanx.py:27-31 counts InstinctEnchantment.can_enchant over the deck and compares against TriBoomerang.MIN_ELIGIBLE. EXECUTED (`py audit/tools/event_probes_a.py reacha`): MIN_ELIGIBLE is 3, the source's `_triBoomerangCount` (Tanx.cs:21). The threshold lives on the relic in the sim rather than inline, the same placement the nonupeipe record recorded for Beautiful Bracelet. Instinct's CanEnchant is audited under enchantment/instinct.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`list.UnstableShuffle(base.Rng).Take(3)` (Tanx.cs:142)",
+      "maps_to": "events/tanx.py:34-35 shuffles in place then slices [:3]. The primitive is exact, not merely similar: ListExtensions.UnstableShuffle walks i = Count-1 down to 1 taking one `rng.NextInt(i + 1)` and swapping list[i] with list[j] (ListExtensions.cs:45-58), and Rng.shuffle (rng.py:270-273) is that same loop -- which is why rng.py:290-291 already documents the equivalence for the map generator. No sort precedes it, so neither EV-5 nor EV-7 applies. EXECUTED (`py audit/tools/event_probes_a.py ancientdraws`): the shuffle takes 9 event-Rng draws on a 10-relic pool and 8 on the 9-relic pool -- Count - 1 in both cases, on both paths. The Tri-Boomerang is appended BEFORE the shuffle in both, so it competes for all three slots.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit is one of the events with a parity RNG branch, so EV-3 does NOT apply -- and the branch is CLEAN on every path (the check the orobas lesson asks for)",
+      "maps_to": "events/tanx.py:34 uses self.event_rng when present, falling back to the shared rng only in legacy mode. EXECUTED (`py audit/tools/event_probes_a.py ancientdraws`): the draw count matches Count - 1 with and without the Tri-Boomerang, and the event offers no locked option, so the orobas defect shape -- NextItem over a list that still holds a null-onChosen entry, taking a draw the sim's branch skips -- cannot arise here. NOTE the `eventrng` probe in audit/tools/event_probes.py misclassifies this module as 'rolls nothing': its regex looks for `self.rng.<method>(` and tanx writes `(self.event_rng if ... else self.rng).shuffle(pool)`. Flagged in the stream report; the probe module is not this batch's to edit.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited (AncientEventModel.cs:170-191)",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(), the between-acts heal every Ancient does. Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so this is NOT in turn_structure step 38a's radius. Same mapping the nonupeipe record made (rule 3); the WearyTraveler 0.8 scaling (AncientEventModel.cs:180-183) is out of scope per the non-ascension convention.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() (AncientEventModel.cs:268-288) -- an option whose choice runs RelicCmd.Obtain and then Done()",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Same mapping the nonupeipe record made (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel's Hook.ShouldAllowAncient gate (AncientEventModel.cs:195 and the InitialDescription swap at :147-152), which the sim's AncientEvent does not model at all",
+      "maps_to": "NEGATIVE CONTROL, EXECUTED (`py audit/tools/event_probes_a.py ancienthook`): AbstractModel.ShouldAllowAncient (AbstractModel.cs:2167) is a virtual returning true and has ZERO overrides in the entire game source; the only WaxChoker reference left anywhere is the block-message loc key itself (AncientEventModel.cs:151), and there is no WaxChoker.cs. So nothing can answer the hook, the wrapper always takes the GenerateInitialOptions branch, and the PROCEED-only fallback (AncientEventModel.cs:206) is dead on both sides. Recorded here rather than asserted, per rule 5. Applies identically to every Ancient -- including the four audited in batch 3, whose records did not enumerate it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DefineDialogues (Tanx.cs:44-133), the three SFX path constants (Tanx.cs:15-19) and the per-character / per-VisitIndex dialogue table",
+      "verdict": "waiver",
+      "rationale": "presentation only: AncientDialogueSet is an FMOD event-path table keyed by character and visit index, consumed by NAncientDialogueLine. No gameplay reader, no stream draw, and four of the five character keys are other characters (out of scope in an Ironclad-only sim)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

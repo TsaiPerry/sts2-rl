@@ -1,0 +1,58 @@
+{
+  "unit": "card/drum_of_battle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\DrumOfBattle.cs",
+    "sha256": "cacf678c75908500daab3407ac0f04777b38f7b5284f9cf6452667da281022d4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\drum_of_battle.py",
+    "sha256": "7c297aa6a07e664d0d58b1fe93b4871fe64fb70996a23c29c2cd778f05d583a2"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "AfterCardExhausted": {
+      "maps_to": "DrumOfBattleCard.on_card_exhausted (drum_of_battle.py:44-50)",
+      "verdict": "gap",
+      "issue": "The self-check and the payout loop are faithful -- `if (card == this && CombatState != null)` (DrumOfBattle.cs:33) == `if card is not self or self.combat is None: return`, and both then gain `Energy.BaseValue` once per play-count iteration. THE PLAY COUNT IS COMPUTED FROM THE WRONG BASE. C# calls `GeneratePlayCount(CombatState, null)` (DrumOfBattle.cs:35), which is `GetEnchantedReplayCount() + 1` fed through `Hook.ModifyCardPlayCount`, followed by `Hook.AfterModifyingCardPlayCount` (CardModel.cs:2015-2021); and `GetEnchantedReplayCount()` is `Enchantment?.EnchantPlayCount(BaseReplayCount) ?? BaseReplayCount` (CardModel.cs:1129-1132). The sim passes a bare `1` into `modify_card_play_count` (drum_of_battle.py:48), dropping `base_replay_count` entirely -- the field Hidden Gem raises (`card.base_replay_count += self._replay`, colorless_skills.py:322) and the field the sim's own normal play path DOES include (`1 + card.base_replay_count`, combat.py:469-470). It also drops the AfterModifyingCardPlayCount notification. Observable: use Hidden Gem on Drum of Battle, then exhaust it -- the game pays out twice, the sim once. LIVE: card/hidden_gem is a ported colorless Skill that raises `base_replay_count` on a chosen card, and Drum of Battle is a ported Uncommon. This is the card half of gap G4's blast radius identified by `py audit/tools/card_probes.py replay`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (drum_of_battle.py:24-28) + _init_vars (30-33)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (DrumOfBattle.cs:21-24) == cost 1 / SKILL / UNCOMMON / SELF. Drum of Battle has NO Exhaust keyword of its own -- the Exhaust hover tip (DrumOfBattle.cs:13) advertises the TRIGGER -- and the sim correctly leaves `exhausts` False, so the card only pays out when something else exhausts it."
+    },
+    "CanonicalVars": {
+      "maps_to": "_cards = 2, _energy = 2 (drum_of_battle.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(2)` + `new EnergyVar(2)` (DrumOfBattle.cs:15-19) == both numbers, both declared."
+    },
+    "OnPlay": {
+      "maps_to": "DrumOfBattleCard.on_play (drum_of_battle.py:38-40)",
+      "verdict": "faithful",
+      "rationale": "`CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (DrumOfBattle.cs:28) == `DrawCmd.draw(ctx.player, self._cards)`. Playing the card does NOT grant energy on either side."
+    },
+    "OnUpgrade": {
+      "maps_to": "DrumOfBattleCard._on_upgrade (drum_of_battle.py:35-36)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Energy.UpgradeValueBy(1m)` (DrumOfBattle.cs:45) == `self._energy += 1` (2 -> 3). The CARDS var stays 2 when upgraded on both sides -- checked, because the natural guess is that a draw card upgrades its draw."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

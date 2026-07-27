@@ -1,0 +1,109 @@
+{
+  "unit": "relic/fake_strike_dummy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FakeStrikeDummy.cs",
+    "sha256": "4c122525079879310ee5618d8e07076ac1f28036f49b8316daa6a7a18f98e7f9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fake_strike_dummy.py",
+    "sha256": "4eeb32a93171856dd92e73d129e7aa0167dd926b2c47a177bdc4634c1d579ae9"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/thrash.py",
+      "sha256": "6ffb7671ded4a4f5e00a8786ac110c677e02eef9139983e4effafceec8e3bdb5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/previews.py",
+      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Powers/SurroundedPower.cs",
+      "sha256": "e45d9c106a130f991f1c56ca620de9cf97f57096e1b5c400fc7d86acf0227971",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fake_strike_dummy.py:19)",
+      "verdict": "faithful"
+    },
+    "MerchantCost": {
+      "maps_to": "merchant_cost_override = 50 (fake_strike_dummy.py:20)",
+      "verdict": "faithful",
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+    },
+    "ModifyDamageAdditive": {
+      "maps_to": "modify_damage_additive (fake_strike_dummy.py:24-33), dispatched by hooks.py:52-64 from DamageCmd.deal (cmds.py:56-57)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. The amount is right -- DynamicVar('ExtraDamage', 1m) read as BaseValue (FakeStrikeDummy.cs:19, :39) vs EXTRA_DAMAGE = 1 (fake_strike_dummy.py:22), no AscensionHelper branch in the file, and executed (py audit/tools/relic_probes_b05.py strike-dummy) a 6-damage Strike lands for 7 -- and the Strike-tag guard matches, but of C#'s four guard clauses the port keeps two, relocates one and collapses the fourth from an OR into an AND."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `!props.IsPoweredAttack()` -> return 0 (FakeStrikeDummy.cs:23-26) is absent from the port -- the sim's modify_damage_additive hook carries no props argument at all (hooks.py:52-58)",
+      "verdict": "gap",
+      "issue": "RE-VERDICTED from deliberate-divergence to gap by the 2026-07-26 relic fix pass. The entry argued that 'for a listener that DOES self-gate in C#, as this one does, the two are exactly equivalent, so binding rule 2 is satisfied' -- and in the same breath cited audit/records/seam/damage_pipeline.json gap G3 as the owner of the relocation. Under binding rule 3 a mechanism carries ONE verdict at every site: damage_pipeline G3 verdicts the hoist a gap, relic/strike_dummy G1 verdicts the identical dropped self-gate a gap at the sibling relic, and this entry cannot cite both and land on deliberate-divergence. THE MECHANISM: `Hook.ModifyDamageInternal` walks every listener with no props gate of its own and each implementer self-gates -- FakeStrikeDummy.cs:23-26 bails on `!props.IsPoweredAttack()`. The sim's `HookSystem.modify_damage_additive` has no props parameter at all (sts2_rl/hooks.py:52-58), so the test was hoisted to the caller: sts2_rl/cmds.py:55-58 runs the additive AND multiplicative chains only `if is_powered_attack(props)`. PROMPT.md bug class 27 records exactly this shape at Hook.ModifyBlock. DORMANT AT THIS SITE, and the dormancy is unchanged and still executed: `py audit/tools/relic_probes_b05.py strike-dummy` enumerates all three sim callers of `hooks.modify_damage_additive` (sts2_rl/cmds.py, sts2_rl/previews.py:54-61, sts2_rl/cards/thrash.py:44-47) and prints each one's guard line -- all three gate -- then deals 6 from a Strike-tagged card twice: powered -> 7 (C#: 7), unpowered -> 6 (C#: 6). What makes it LIVE is the first ModifyDamageAdditive / ModifyDamageMultiplicative / ModifyDamageCap implementer that must run on UNPOWERED damage; see relic/strike_dummy guard G1 for the widened census, which names SurroundedPower.cs:46-72 as a ported, UNGATED multiplicative implementer already sitting on the other side of the same hoisted `if`. Filed as a dormant gap and not a waiver because 'no ported content needs the looser predicate' is today's content, not the divergence's shape (binding rule 1). Rule 7: sts2_rl/hooks.py, sts2_rl/cmds.py, sts2_rl/previews.py, sts2_rl/cards/thrash.py, sts2_rl/valueprops.py and src/Core/ValueProps/ValuePropExtensions.cs are unhashed here.",
+      "live": false
+    },
+    {
+      "what": "G1 (DORMANT): C#'s fourth clause is `if (dealer != Owner.Creature && cardSource.Owner != Owner) return 0;` -- an AND of two negatives, i.e. fire when EITHER holds; the sim requires `dealer is self.player` alone (fake_strike_dummy.py:31)",
+      "verdict": "gap",
+      "issue": "MECHANISM: FakeStrikeDummy.cs:35-38 declines only when the dealer is not the owner's creature AND the card does not belong to the owner. In single-player the card's owner is always the player, so the second half is always false and the clause NEVER declines -- C# adds the +1 to any powered attack from a Strike-tagged player card regardless of who the dealer is, including a null dealer. The sim's single `dealer is self.player` test declines whenever the dealer is anything else. EXECUTED (py audit/tools/relic_probes_b05.py strike-dummy): the same 6-damage Strike with dealer=None lands for 6 in the sim where C# gives 7. REACHABILITY (DORMANT, and the census is executed rather than asserted): the probe lists the 8 ported cards carrying CardTag.Strike (ashen_strike, perfected_strike, pommel_strike, seeker_strike, setup_strike, strike, twin_strike, ultimate_strike) and then AST-scans all 119 DamageCmd.deal call sites under sts2_rl/ for any that passes a card but no dealer -- 13 sites, every one of them a self-damage/HP-loss effect on a non-Strike card (bad_luck, beckon, blood_wall, bloodletting, burn, decay, hemokinesis, infection, offering, regret, toxic, wither) plus enchantments.py:500, whose props are UNBLOCKABLE|UNPOWERED|MOVE and therefore never reach the additive chain at all. So no ported path today deals a Strike-tagged card's POWERED damage with a dealer other than the player. Porting a player-side minion or ally that swings a player card, or any effect that deals a Strike card's damage with dealer=None, makes it live -- and the divergence is in the silent direction: the sim simply fails to add the 1. Rule 7: enchantments.py and the 12 card modules are unhashed here."
+    },
+    {
+      "what": "N2: `cardSource == null` -> return 0 (FakeStrikeDummy.cs:27-30) and the Strike-tag test (lines 31-34)",
+      "verdict": "faithful",
+      "rationale": "Both mirrored exactly by `card is not None and 'strike' in card.tags` (fake_strike_dummy.py:31). The sim represents CardTag.Strike as the lowercase string 'strike' in Card.tags -- executed: make_card('strike').tags == ['strike'] -- and 8 ported cards carry it. Note the tag, not the card id, is the test on both sides, so Perfected Strike and Twin Strike get the bonus too."
+    },
+    {
+      "what": "N3: FestivePopper-style ordering -- where this relic sits in the additive chain",
+      "verdict": "gap",
+      "issue": "The additive contribution is folded differently on the two sides: C#'s ModifyDamageInternal threads the RUNNING value through each listener and folds each contribution in immediately, in decimal (Hook.cs:2511-2558), while hooks.py:60-64 hands every listener the pre-step base and sums afterwards. For a listener whose return value is a CONSTANT, as this one's is, the two agree by construction -- the +1 does not depend on the value it is handed. It is recorded rather than skipped because the mechanism is audit/records/seam/hook_dispatch.json gap G9 / audit/records/seam/damage_pipeline.json guard N3, which those records label a LIVE gap at the multiplicative site (Shrink x0.7 + Vulnerable x1.5 giving sim 20 vs game 21), and binding rule 3 requires the same verdict for the same mechanism at every site. DORMANT AT THIS SITE for the constant-return reason above. Rule 7: Hook.cs and hooks.py are unhashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

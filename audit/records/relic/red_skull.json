@@ -1,0 +1,119 @@
+{
+  "unit": "relic/red_skull",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\RedSkull.cs",
+    "sha256": "cf57eb10a81ced7a20a845c53b1f58253fbf980f1b72f76243d57f1cbe165382"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\red_skull.py",
+    "sha256": "8d85bd8f0c5a8700b24cef96645e2fb9041b48a6acb4d7ffbc997296b1a3caf4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Girya.cs",
+      "sha256": "15d115ec16da25982fb9f8d363eda8c639b6c2797ae9a5c66c0e8bd1ca08bc10",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SlingOfCourage.cs",
+      "sha256": "275be872ac99ee8c7df47df277f55110e96750c035730b63b43120fa7707a8b3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SwordOfJade.cs",
+      "sha256": "26b124fec0f4564ea2ca63918f82bc9a52adaa2f869099d50b425998d63c2f6c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Vajra.cs",
+      "sha256": "a55eba805b932ba1e2eb2e77ce71104a1bdde3fec4299285c7ef788120557148",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (red_skull.py:18)",
+      "verdict": "faithful",
+      "rationale": "Matches RedSkull.cs:21. In the transcribed IRONCLAD grab bag as Common (relic_pools.py:169), executed by `py audit/tools/relic_probes_b13.py pool`."
+    },
+    "CanonicalVars": {
+      "maps_to": "HP_THRESHOLD_PCT = 50 and STRENGTH = 3 (red_skull.py:20-21)",
+      "verdict": "faithful",
+      "rationale": "RedSkull.cs:23-27 pins `new DynamicVar('HpThreshold', 50m)` and `new PowerVar<StrengthPower>(3m)`, and ModifyStrengthIfNecessary reads `.BaseValue` for both (RedSkull.cs:70, 72). No AscensionHelper.GetValueIfAscension in the file, so 50 and 3 are the non-ascension values. See guard N1 for the threshold arithmetic."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "on_combat_start (red_skull.py:42-43)",
+      "verdict": "deliberate-divergence",
+      "rationale": "RedSkull.cs:44-50 evaluates the threshold when a CombatRoom is entered. Hook.AfterRoomEntered for a combat room fires at CombatRoom.cs:228 -- AFTER `CombatManager.SetUpCombat` (CombatRoom.cs:225) but BEFORE `Hook.BeforeCombatStart`, which the sim's on_combat_start models (audit/records/seam/turn_structure.json step 3). [CORRECTED 2026-07-26 by the relic fix pass. This sentence used to gloss SetUpCombat as the step 'which adds the creatures and rolls their first move'. THE SECOND HALF IS FALSE and it matters, because it made this hook look later in the sequence than it is. `SetUpCombat` (src/Core/Combat/CombatManager.cs:350-378) resets and populates the players' combat state and calls `AddCreature` per creature -- it does NOT roll any move. `RollMove` lives at src/Core/Combat/CombatManager.cs:865, inside `AfterCreatureAdded` (CombatManager.cs:860-867), which runs inside `StartCombatInternal` (CombatManager.cs:387-396), which is launched by `AfterCombatRoomLoaded` (CombatManager.cs:380-385) -- and `AfterCombatRoomLoaded` is called from CombatRoom.cs:230, i.e. AFTER the `Hook.AfterRoomEntered` at CombatRoom.cs:228. So the opening RollMove comes after this hook on the C# side, not before it. audit/records/relic/vajra.json states the order correctly and this record now matches it (binding rule 3). NO VERDICT CHANGE, and the correction does not weaken the dormancy argument -- if anything it strengthens it, because the sim's later position now has MORE of the setup phase between the two positions, and the enumeration below still finds no reader. Checked specifically: the opening RollMove cannot be moved by the Strength the relic grants, because sts2_rl `Intent` is a plain dataclass of base damage/hits and `RollMove` takes no power input -- relic/philosophers_stone's enemy Strength has the same non-effect on intent selection.] So the sim runs the evaluation one phase later, which interleaves it with the other on_combat_start listeners instead of strictly preceding them. UNOBSERVABLE TODAY, established by enumeration rather than assumed: `grep -rln 'override.*Task BeforeCombatStart' src/Core/Models/Relics src/Core/Models/Powers` returns 22 files (Anchor, BeltBuckle, BoundPhylactery, Byrdpip, DelicateFrond, FakeAnchor, FakeSneckoEye, FurCoat, Kusarigama, LetterOpener, MeatOnTheBone, PaelsFlesh, PaelsLegion, Pantograph, PetrifiedToad, PhylacteryUnbound, SneckoEye, TeaOfDiscourtesy, UnsettlingLamp, Vambrace, GalvanicPower, VitalSparkPower) and not one of them applies or reads StrengthPower; the two that change HP (MeatOnTheBone, PaelsFlesh heal) converge anyway, because a heal fires on_hp_changed and the relic's own on_hp_changed re-evaluates. Also checked: every other ported relic that grants Strength at the start of a fight -- girya, sling_of_courage, sword_of_jade, vajra -- is AfterRoomEntered in C# TOO (Girya.cs:50, SlingOfCourage.cs:21, SwordOfJade.cs:21, Vajra.cs:21), so their relative order against Red Skull is preserved and the interaction with relic/ruined_helmet's first-Strength doubling is unchanged. Recorded as a divergence rather than faithful because the phase genuinely differs; the first BeforeCombatStart implementation that reads player Strength makes it a gap. NOTE per binding rule 7: CombatRoom.cs, the 22 files above and turn_structure.json are not hashed by this record."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; `_applied` is written only in _update (red_skull.py:31, 34)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 -- the LIVE gap. RedSkull.cs:52-57 sets `StrengthApplied = false` at combat end (the base.Status half is presentation); the sim clears `_applied` nowhere, so the flag latches across the combat boundary while the StrengthPower it describes does not survive it."
+    },
+    "AfterCurrentHpChanged": {
+      "maps_to": "on_hp_changed (red_skull.py:45-47), dispatched from cmds.py:93/165/189/198 and powers.py",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N2. The re-evaluation itself matches (ModifyStrengthIfNecessary is idempotent and driven by the owner's own HP), but this is the hook through which the stale `_applied` produces its second wrong outcome: with the flag latched True and the player now ABOVE the threshold, red_skull.py:33-35 applies -3 Strength to a player who has none. EXECUTED: `py audit/tools/relic_probes_b13.py red-skull` direction 2 reports strength=-3 in combat 2 at full HP."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / the N*Vfx nodes are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `_applied` is never reset, so from combat 2 onward the relic is either DEAD or actively harmful -- two distinct wrong outcomes, both executed",
+      "verdict": "gap",
+      "issue": "MECHANISM: red_skull.py:25 initialises `_applied = False` and _update flips it at lines 31 and 34, but nothing resets it at a combat boundary. C# resets it in AfterCombatEnd (RedSkull.cs:54, `StrengthApplied = false`). Relic instances live on RunState.relics and are re-attached to each new CombatState, while powers do NOT survive a combat, so the flag and the world disagree from the second fight on. REACHABILITY (LIVE, both sides ported, executed -- `py audit/tools/relic_probes_b13.py red-skull`): (a) same instance, player at 30/80 HP in both fights -- combat 1 gives Strength 3, combat 2 gives Strength 0 with `_applied` still True, where C# gives 3; a freshly constructed instance in the same combat 2 gives 3, isolating the carry. (b) same instance, player at 30/80 then healed to 80/80 -- combat 2 opens with `_applied` flipping False and StrengthPower at -3, i.e. the sim hands the player NEGATIVE 3 Strength for a relic that only ever grants it, where C# has no Strength power at all. Direction (b) is the worse of the two: every Strike for the rest of that fight does 3 less damage than it should. Red Skull is Common in the transcribed Ironclad grab bag and every run has more than one combat and heals between them, so nothing further is needed. THE FIX is one line -- clear `_applied` in on_combat_start before _update() -- the same shape as the recorded belt_buckle G2 / centennial_puzzle / paels_eye fixes. WHY THE POOL-WIDE SWEEP DID NOT CATCH IT: `py audit/tools/relic_probes.py sweep-reset` DOES flag it statically (`red_skull ['_applied'] ... C# resets: {'AfterCombatEnd': ['StrengthApplied = false', ...]}`), but `sweep-reset-exec` files it under 'agree with a fresh instance' because its driver runs a default full-HP combat and never drives the player below 50%, so `_applied` is False on both instances. That is a FALSE CLEAR, demonstrated by `py audit/tools/relic_probes_b13.py sweep-exec-blind`, and it is reported as a fifth defect in sweep A in .superpowers/sdd/relic-batch-13-lessons.md."
+    },
+    {
+      "what": "N1: C#'s threshold is a DECIMAL comparison `CurrentHp > MaxHp * (50/100)` (RedSkull.cs:70); the sim floors the threshold first (`max_hp * 50 // 100`, red_skull.py:28)",
+      "verdict": "faithful",
+      "rationale": "Equivalent for integer HP, and EXECUTED across both parities of max HP rather than argued: `py audit/tools/relic_probes_b13.py red-skull` walks max_hp 74/75/80/81 and reports Strength 3 at hp == floor(max_hp/2) and Strength 0 at one point above it in all four cases, which is exactly the partition `hp > max_hp*0.5` produces (for odd max HP the C# boundary is x.5 and no integer HP sits on it). Note the direction of C#'s flag: `flag` means ABOVE the threshold, so the relic applies on `!flag`, i.e. at or below 50% -- which the port's `below = hp <= threshold` reproduces including the boundary."
+    },
+    {
+      "what": "N2 (DORMANT): C#'s AfterCurrentHpChanged has NO `creature == Owner.Creature` check (RedSkull.cs:59-65); the sim gates on `creature is self.player` (red_skull.py:46)",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# re-evaluates the owner's threshold whenever ANY creature's HP changes during combat -- an enemy taking damage re-runs ModifyStrengthIfNecessary -- because the method reads Owner.Creature and ignores the hook's argument. The sim narrows the trigger to the player's own HP changes. Every extra C# invocation is idempotent, so the two agree wherever the sim also fires; the exposure is a state change the sim's narrower trigger would MISS. The only such shape is a max-HP change with no accompanying current-HP change (which moves the threshold without firing either side's hook) or a player HP change that reaches the state without dispatching on_hp_changed -- and `grep -n on_hp_changed sts2_rl/` finds it fired from all four CreatureCmd HP paths (cmds.py:93, 165, 189, 198) plus powers.py, so no ported player HP change is silent. EXECUTED: damaging the ENEMY with the player one point above the threshold leaves Strength at 0 on both sides. DORMANT; porting an effect that raises max HP mid-combat without changing current HP (CreatureCmd.GainMaxHp heals by the same amount, so it is not one) makes it live. Filed as a gap rather than faithful because the guard sets genuinely differ -- PROMPT.md bug class 15's collapse point -- and the sim's extra clause is a real narrowing, not a restatement."
+    },
+    {
+      "what": "N3: `new ThrowingPlayerChoiceContext()` (RedSkull.cs:76, 82) and applier = the owner's own creature",
+      "verdict": "faithful",
+      "rationale": "ThrowingPlayerChoiceContext is the 'this cannot prompt the player' context -- multiplayer plumbing, noted in the mapping rather than verdicted, per the shared contract. The applier DOES matter and matches: C# passes `creature` (the player) as applier with cardSource null on both the +3 and the -3 (RedSkull.cs:76, 82), and red_skull.py:40 passes `applier=self.player`. Consequences checked: relic/ruined_helmet in this batch doubles the first positive StrengthPower on the player regardless of applier, so it legitimately doubles Red Skull's +3 to +6 on BOTH sides; relic/unsettling_lamp requires `applier is self.player` and bails on `amount <= 0`, so the -3 removal is untouched on both sides too."
+    },
+    {
+      "what": "N4: the removal is `PowerCmd.Apply<StrengthPower>(-baseValue)` on both sides, not a power removal",
+      "verdict": "faithful",
+      "rationale": "RedSkull.cs:76 applies -3 rather than removing the power, and red_skull.py:35 calls the same _change_strength helper with a negative amount. This routes through the stacking arm of the sim's PowerCmd.apply (cmds.py:308-321), which removes the power when the total reaches 0 -- mirroring ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:247-250). So a player with exactly the relic's 3 Strength ends with no Strength power at all on both sides, and a player with additional Strength keeps the remainder. NOTE per binding rule 7: cmds.py and PowerCmd.cs are not hashed by this record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

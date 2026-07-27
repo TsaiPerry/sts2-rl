@@ -1,0 +1,83 @@
+{
+  "unit": "power/the_gambit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\TheGambitPower.cs",
+    "sha256": "79042e9a52b1beabe93a03ae23292711b7689faf59dcc85bd6470a1fb3de4faa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Powers/PowerStackType.cs",
+      "sha256": "7251eb51775362338fe6fc5412a6e8304c23c5bad9b44a2b4a2c3bf9a3758407",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3811 power_type = PowerType.DEBUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:3813-3814 TheGambitPower.on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single, and the sim overrides Power.on_stack to `pass` citing it -- which is WRONG about C# and inert about this power. Single means only 'Amount is hidden, and is always 1' (PowerStackType.cs:10-13); PowerCmd.ModifyAmount:236 adds the offset with no StackType branch at all, so in the game a second application really does raise Amount to 2. This unit is one of the 15 the stack census flags (py audit/tools/power_census.py stack) and the main report's section 7 item 5 covers the class. DORMANT here for the per-unit reason the census leaves open: nothing reads this power's Amount -- not the power itself, not any sim listener, and not the C# model (whose only Amount reader is the hidden DisplayAmount). Named trigger: any future effect that scales with the stack count, or a UI that shows it. The one ported applier applies exactly 1 (cards/colorless_skills.py:770-772) and the power kills its owner the first time it fires, so a second stack is doubly unobservable."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:3816-3829 TheGambitPower.on_damage_received (hooks.py:453-467, cmds.py:121-122)",
+      "verdict": "gap",
+      "issue": "The hook is the RIGHT one this time -- C# really is AfterDamageReceived, not a before-hook, so this unit does NOT have power/thorns's and power/curl_up's defect -- and the guards line up: target == base.Owner, props.IsPoweredAttack() and result.UnblockedDamage > 0 (TheGambitPower.cs:18) vs target is self.owner, is_powered_attack(props) and amount > 0 (powers.py:3826), where the sim's `amount` argument is hp_lost, i.e. post-block (cmds.py:122 passes the value written at :90-92). The GAP is the killing-blow interaction, PROMPT.md bug class 2. cmds.py:121 guards the whole dispatch with `if not target.is_dead`, mirroring CreatureCmd.cs:392, so when the hit that got through ALSO reduced the owner to 0 HP the sim never fires this hook -- and C# does not fire it either, for the same reason. So far so equal. Where they diverge is DEATH PREVENTION: cmds.py:96-113 runs should_die and, when a listener prevents the death, floors the owner at 1 HP and clears is_dead, after which cmds.py:121 lets this hook fire and it kills the owner outright via CreatureCmd.kill (powers.py:3829) -- bypassing the prevention the engine just honoured. In C# the same sequence runs but CreatureCmd.Kill is itself subject to the death pipeline, so the preventer gets a second say. DORMANT: the sim's should_die preventers are the Illusion revive (an enemy-only power) and Fairy in a Bottle, and The Gambit is player-only, so the pair is not currently co-reachable. Named trigger: porting any player-side death preventer, or applying The Gambit to an Illusion."
+    }
+  },
+  "guards": [
+    {
+      "what": "TheGambitPower.cs:20 PowerCmd.Remove(this) BEFORE the kill",
+      "verdict": "faithful",
+      "rationale": "powers.py:3828 _expires before CreatureCmd.kill at :3829 -- the same order, and the order matters: removing first is what stops the kill's own damage path from re-entering this hook. The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json per binding rule 3."
+    },
+    {
+      "what": "TheGambitPower.cs:22 CreatureCmd.Kill(base.Owner)",
+      "verdict": "faithful",
+      "rationale": "cmds.py's CreatureCmd.kill. Same verb; the divergence in what the death pipeline then does is carried by the hook entry above rather than duplicated here."
+    },
+    {
+      "what": "TheGambitPower.cs:18 props.IsPoweredAttack()",
+      "verdict": "faithful",
+      "rationale": "powers.py:3826 is_powered_attack(props) (valueprops.py). Present and correct -- so unblocked POISON or Constrict damage does not trigger it on either side. Contrast power/thorns, whose port dropped exactly this gate."
+    },
+    {
+      "what": "TheGambitPower.cs:18 result.UnblockedDamage > 0",
+      "verdict": "faithful",
+      "rationale": "The sim's on_damage_received amount is hp_lost, computed after block absorption and after modify_hp_lost (cmds.py:86-92), so `amount <= 0 -> return` (powers.py:3826) is the same test. A fully blocked attack does not kill the owner on either side."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

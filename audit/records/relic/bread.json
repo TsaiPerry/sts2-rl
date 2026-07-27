@@ -1,0 +1,63 @@
+{
+  "unit": "relic/bread",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Bread.cs",
+    "sha256": "06d6fdc5af92ae6c7b28f540fe7e46fc52b8dc31d08369ccfd34dff29ee3e85d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\bread.py",
+    "sha256": "f12afdef614c0691c469458be556b32d9c9560731d60ef6f6d9c1a49514df844"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (bread.py:16)",
+      "verdict": "faithful"
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (bread.py:18-21)",
+      "verdict": "faithful",
+      "rationale": "Bread.cs:19-31 returns the amount unchanged when TurnNumber == 1 and otherwise adds EnergyVar('GainEnergy', 1).BaseValue; bread.py:19-21 is the same branch with the same constant. Consulted at player.py:163 = turn_structure step 17. The C# null-check on PlayerCombatState is defensive and has no sim counterpart to diverge from."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (bread.py:23-25)",
+      "verdict": "faithful",
+      "rationale": "Bread.cs:33-39 spends EnergyVar('LoseEnergy', 2).BaseValue on the owner's turn 1; bread.py:24-25 subtracts 2 on `self.turn == 1`. The slot is correct -- on_player_turn_started is the post-draw AfterSideTurnStart position (executed via the turn-order probe), which matters because the two halves of this relic must net to -1 energy on turn 1 and +1 thereafter, and both codebases apply the loss after the reset that ModifyMaxEnergy fed. Both constants read BaseValue, the non-ascension branch, and neither has an AscensionHelper call."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `PlayerCmd.LoseEnergy` (Bread.cs:37) vs the sim's direct `player.energy = max(0, player.energy - 2)` (bread.py:25)",
+      "verdict": "faithful",
+      "rationale": "Unlike its sibling GainEnergy -- which runs Hook.ModifyEnergyGain and is why relic/booming_conch's direct assignment IS a divergence -- LoseEnergy dispatches NO hook: its whole body is two guards (`amount <= 0`, `CombatManager.IsEnding`) and a call to PlayerCombatState.LoseEnergy (PlayerCmd.cs:50-62). Neither guard can fire here (the amount is a constant 2 and turn-1 setup cannot run while combat is ending), so the direct subtraction is equivalent. The sim's max(0, ...) clamp matches the game's non-negative energy floor. Checked deliberately because the same shortcut in booming_conch is a recorded gap and the difference is entirely in which C# command was used."
+    },
+    {
+      "what": "N2: `player != base.Owner` / `participants.Contains(base.Owner.Creature)` (Bread.cs:21, 35)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `shuffler == base.Owner` / `cardPlay.Card.Owner != base.Owner` family is the multiplayer per-player filter on a hook the game dispatches for every player. The sim is single-player by construction (one RunState, one PlayerCombatState), so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N3: the Energy hover tip (Bread.cs:17)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N4: the two DynamicVars are keyed ('GainEnergy', 'LoseEnergy') rather than using the default Energy key",
+      "verdict": "faithful",
+      "rationale": "Both are EnergyVars with explicit keys because the relic has two energy numbers (Bread.cs:11-15); the sim uses two literals. Recorded because a keyed DynamicVar is read with `DynamicVars[\"Key\"]` rather than `DynamicVars.Energy`, and misreading which key feeds which branch would silently swap 1 and 2."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,229 @@
+{
+  "unit": "relic/silver_crucible",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SilverCrucible.cs",
+    "sha256": "f7495185bb9bedb4a90257a61520f36130af70a01374a2a4c5950febd767aaee"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\silver_crucible.py",
+    "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/SealedDeck.cs",
+      "sha256": "b19e18a5227209b7f00eefe801755957afcde9df3f85dbd1b260db4184540d68",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LastingCandy.cs",
+      "sha256": "66b57fa6350bd39c568093feeeb220d2be09e01826d43ea3b16f8e00e3dbb530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LeadPaperweight.cs",
+      "sha256": "3631dcf67276d245a1613031a97b95be33c3c0fdf83b2cf17fac22f10744f8b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Multiplayer/Game/OneOffSynchronizer.cs",
+      "sha256": "37b31a72adda904d855d5e0f6a054f6982554ea1880d8668bb8aa567f6e6fa36",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Multiplayer/Game/TreasureRoomRelicSynchronizer.cs",
+      "sha256": "3dd1144ba314cb0dc5cb791c33e4db0d30eb2c5e4aa1aab5a7fb489c7d747fcd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/CardReward.cs",
+      "sha256": "937a512def94d408efa9f06849658fde845918be76a144fb832b30335c03523d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/TreasureRoom.cs",
+      "sha256": "0b65d84f86c990e94c35f5f01c748a92355bed824ce4cb6af7a76b698d139e4a",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/spoils_map.py",
+      "sha256": "cd4880769f90dd631b9b39102faa291f5b600e1f2763ee77b05706b4289c184c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/__init__.py",
+      "sha256": "c170436e0540caaebac2e6703e83d385e003d7ea79a8dc6010b46e4d58908e87",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/brain_leech.py",
+      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/_eggs.py",
+      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/glitter.py",
+      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/lead_paperweight.py",
+      "sha256": "fe99206571e396ff03c9ed01cbb96e33c2fef8ab59bb429c48590d3bb3a11c9b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/silken_tress.py",
+      "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (silver_crucible.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches SilverCrucible.cs:20. Obtainable: one of Neow's 8 curse relics (events/neow.py:47)."
+    },
+    "IsUsedUp": {
+      "maps_to": "is_used_up property (silver_crucible.py:21-26)",
+      "verdict": "faithful",
+      "rationale": "SilverCrucible.cs:22-32 is `TimesUsed >= Cards.IntValue && TreasureRoomsEntered > 0`; silver_crucible.py:25-26 is `self.times_used >= self.CARD_REWARDS and self.treasure_rooms_entered > 0`. Same predicate, same operands. EXECUTED (py audit/tools/relic_probes_b14.py crucible-life): False after three card rewards, True once a treasure room has also been entered. Worth noting the asymmetry the predicate encodes and both sides reproduce: the relic is 'used up' after ONE treasure room even though ShouldGenerateTreasure keeps answering false until TWO have been entered."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CheckIfUsedUp's status write / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CheckIfUsedUp's status write / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "IsAllowed": {
+      "maps_to": "no counterpart -- `Relic` declares no is_allowed member (executed: `hasattr(Relic, 'is_allowed')` is False)",
+      "verdict": "waiver",
+      "rationale": "SilverCrucible.cs:81-84 is `runState.Players.Count == 1`, i.e. single-player only. Sweep B verified this bucket CLEAN and the verdict is confirmed here on its merits rather than copied: the sim has exactly one player by construction (CombatState holds one PlayerCombatState; RunState has no player collection), so the predicate is unconditionally true and the missing member cannot change any outcome. Waived as multiplayer-only under the shared contract's rule 1 -- NOT filed as a dormant gap, because the divergence's shape is a multiplayer gate rather than unported content, and it cannot become live by porting anything. Contrast this batch's shovel, whose IsAllowed override is the floor gate and IS a live gap: the two relics sit in different sweep-B buckets for a real reason, and PROMPT.md v6 binding item 2's fix-ordering note applies to shovel's cluster, not here. Rule 7: relics/base.py, combat.py and run.py are not hashed here."
+    },
+    "TryModifyCardRewardOptionsLate": {
+      "maps_to": "modify_card_reward_options (silver_crucible.py:28-34), dispatched by rewards.create_reward_cards (rewards.py:299-301)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and N1 per binding rule 4. The upgrade loop is faithful -- `card.IsUpgradable` then CardCmd.Upgrade maps to `if card.is_upgradable: card.upgrade()`, which closes PROMPT.md class 14's exposure at this site -- and the charge test `TimesUsed >= Cards.IntValue` matches. But the port drops both remaining clauses of the C# guard: the owner check and `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` (G1, LIVE). It also collapses C#'s two dispatch passes (G2) and upgrades in place where C# clones (N1)."
+    },
+    "AfterModifyingCardRewardOptions": {
+      "maps_to": "the `self.times_used += 1` tail of modify_card_reward_options (silver_crucible.py:34) -- the sim fuses C#'s separate companion hook into the modifier",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# spends the charge from a SEPARATE hook, and Hook.AfterModifyingCardRewardOptions only notifies models that RETURNED TRUE from the modifier pass (Hook.cs:679-690, against the `modifiers` list Hook.cs:1445-1467 collects). SilverCrucible.cs:94-119 returns false on three conditions -- wrong owner, charges spent, not a card reward -- and re-checks the charge count itself at :121-129 before incrementing. The sim's fused increment is reached after only the charge check (silver_crucible.py:29). The owner clause is structurally satisfied (single-player); the IsCardReward clause is guard G1's LIVE divergence, and it costs a charge each time it fires wrongly. Correct in one respect worth pinning: C# returns true (and so spends a charge) even when NO offered card was upgradable, because the `return true` at SilverCrucible.cs:118 is unconditional after the loop -- so the sim's unconditional increment is right, and a 'only spend it if something got upgraded' fix would be a NEW divergence. A SECOND C# path also modifies the options and does NOT spend a charge, and the sim has no counterpart for it: CardReward.OnRelicObtained (CardReward.cs:166-180) re-runs both modifier hooks when a relic is obtained while a reward screen is open, and calls `relic.AfterModifyingRewards()` -- a DIFFERENT hook that neither of this batch's two relics overrides. That path is dormant (the sim grants relics between rooms, never with a reward screen open) and is recorded here rather than as its own guard because it is the same hook pair. Rule 7: Hook.cs, CardReward.cs and rewards.py are not hashed here."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "after_room_entered (silver_crucible.py:36-40), dispatched by RunState.enter_room over run.relics (run.py:983)",
+      "verdict": "faithful",
+      "rationale": "SilverCrucible.cs:131-138 increments TreasureRoomsEntered when `room is TreasureRoom`; silver_crucible.py:39-40 does the same on `room_type == RoomType.TREASURE`. The ORDER against the chest check is the load-bearing part and it matches on both sides: C# fires Hook.AfterRoomEntered at TreasureRoom.cs:44, BEFORE `TreasureRoomRelicSynchronizer.BeginRelicPicking()` on line 46 which is what consults ShouldGenerateTreasure (TreasureRoomRelicSynchronizer.cs:107), and the sim fires after_room_entered at run.py:983 before the treasure branch at run.py:1001. So on the FIRST treasure room the counter reads 1 when the gate is evaluated and `1 > 1` is false on both sides. EXECUTED (relic_probes_b14.py crucible-life): entered=1 -> should_generate False; entered=2 -> True. Rule 7: run.py, TreasureRoom.cs and TreasureRoomRelicSynchronizer.cs are not hashed here."
+    },
+    "ShouldGenerateTreasure": {
+      "maps_to": "should_generate_treasure (silver_crucible.py:42-43), dispatched by RunState.enter_room as `all(r.should_generate_treasure(self) for r in self.relics)` (run.py:1001)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G3 per binding rule 4. The predicate matches (`TreasureRoomsEntered > 1`, SilverCrucible.cs:146) and so does the all-must-agree dispatcher (`if (!item.ShouldGenerateTreasure(player)) return false`, Hook.cs:2316-2322). What diverges is WHAT the gate covers: C# reaches the Spoils Map payout only inside the gated DoTreasureRoomRewards, and the sim pays map-point quests outside the gate (G3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the port drops `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` (SilverCrucible.cs:104-107), so charges are spent -- and cards upgraded -- by generations that are not card rewards",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# refuses to touch the options unless `options.Flags.HasFlag(CardCreationFlags.IsCardReward)`, and that flag is set by exactly two places in the whole game -- CardReward's two constructors (CardReward.cs:113-115 and :134) and the SealedDeck modifier (SealedDeck.cs:30). Every other CardFactory.CreateForReward caller leaves it clear, and CardFactory dispatches the hook regardless (CardFactory.cs:104, gated on the DIFFERENT flag NoModifyHooks), so this flag is the relic's own gate and nothing else enforces it. The sim has no flag at all: rewards.py:299-301 runs modify_card_reward_options for every create_reward_cards call whose `modify_hooks` argument is True -- and that argument is NoModifyHooks, not IsCardReward. Three ported call sites are therefore wrong, EXECUTED (py audit/tools/relic_probes_b14.py card-reward-flag): (a) relics/lead_paperweight.py:24-29 passes modify_hooks=True where LeadPaperweight.cs:21-22 builds a bare CardCreationOptions and calls CreateForReward directly -- IsCardReward CLEAR, so C# skips both relics; the probe offers [('restlessness', 1, 'glam'), ('impatience', 1, 'glam')] and reports Silver Crucible's times_used 0 -> 1 and Silken Tress's is_used False -> True, where C# offers two unmodified level-0 Colorless cards and spends neither relic. (b) events/brain_leech.py:44's SHARE_KNOWLEDGE leaves modify_hooks at its True default where BrainLeech.cs:66 is also a bare CreateForReward (ForNonCombatWithDefaultOdds) -- IsCardReward CLEAR; the probe reports six upgraded options and times_used 1. (c) the OPPOSITE direction: events/brain_leech.py:60's RIP passes modify_hooks=False, but BrainLeech.cs:57 builds a real `new CardReward(options, 3, Owner)` whose Populate sets IsCardReward -- so C# DOES modify those options and the sim does not; the probe reports three level-0 options and times_used 0. The reference case is correct on both sides: a normal combat card reward fires (probe case (d): three level-1 options, times_used 1). REACHABILITY (LIVE): both relics come from Neow's curse pool at floor 0 (events/neow.py:47); Lead Paperweight is in Neow's positive pool (events/neow.py:39) and Brain Leech is a ported event any run can roll (events/__init__.py:118) -- so a run holding either relic and reaching either site diverges, with no further content needed. The observable is compound: the wrong CARDS are offered, and a limited charge is spent (or not spent), which changes what the NEXT card reward looks like. The fix is a field, not a flag flip: create_reward_cards needs an is_card_reward parameter distinct from modify_hooks, and its four ported callers need auditing against their C# counterparts -- brain_leech's two arms are currently inverted. Rule 7: CardReward.cs, CardFactory.cs, SealedDeck.cs, LeadPaperweight.cs, BrainLeech.cs, rewards.py, relics/lead_paperweight.py, events/brain_leech.py and events/neow.py are not hashed here. AT THIS UNIT'S SITE specifically: the relic has only three charges, so each wrong fire both upgrades cards the game would leave alone AND removes a charge from a later real card reward. Executed case (a) shows Lead Paperweight's two Colorless options coming back at upgrade_level 1 with times_used at 1."
+    },
+    {
+      "what": "G2 (DORMANT): TryModifyCardRewardOptionsLate is C#'s SECOND dispatch pass and the sim runs one flat walk (PROMPT.md class 25)",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.TryModifyCardRewardOptions runs TWO complete listener passes -- every model's TryModifyCardRewardOptions first, then every model's TryModifyCardRewardOptionsLate (Hook.cs:1445-1467) -- so a Late implementer is guaranteed to see the plain pass's edits. The sim has one flat walk over run.relics (rewards.py:299-301), so the guarantee becomes relic-acquisition order. Same shape as audit/records/seam/turn_structure.json guard G12 and PROMPT.md class 25. DORMANT, checked by execution rather than assumed (py audit/tools/relic_probes_b14.py card-reward-flag case (e)): the sim has exactly four modify_card_reward_options implementers -- relics/_eggs.py:39, relics/glitter.py:16, relics/silken_tress.py:27 and relics/silver_crucible.py:28 -- and all four are TryModifyCardRewardOptionsLate in C#. The game's ONLY non-Late implementer is LastingCandy.cs:100, whose port (relics/lasting_candy.py) is a behaviourless stub, so nothing occupies the earlier pass today. Porting Lasting Candy's Power-card substitution makes it live, and directionally: C# guarantees the substituted Power card is in the list BEFORE the Late relics upgrade or enchant it. Rule 7: Hook.cs, LastingCandy.cs, rewards.py, relics/lasting_candy.py, relics/glitter.py, relics/_eggs.py and turn_structure.json are not hashed here."
+    },
+    {
+      "what": "G3 (DORMANT): a suppressed treasure room still pays out Spoils Map in the sim",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# reaches the Spoils Map payout only from INSIDE the gated reward routine -- OneOffSynchronizer.DoTreasureRoomRewards opens with `if (!Hook.ShouldGenerateTreasure(player.RunState, player)) return 0;` (OneOffSynchronizer.cs:130-132) and only then calls TryHandleSpoilsMap (line 143), which is the whole game's only SpoilsMap.OnQuestComplete caller (OneOffSynchronizer.cs:148-168). The sim gates the chest relic and the chest gold on `all(r.should_generate_treasure(...))` (run.py:1001) but calls `_complete_map_point_quests(point)` OUTSIDE that block (run.py:1020), so a Silver-Crucible-suppressed treasure room still pays the 600 gold. DORMANT, and the reachability was EXECUTED rather than assumed (py audit/tools/relic_probes_b14.py crucible-life): the two sides can only meet if Spoils Map's node is the FIRST treasure room of the run, because the sim suppresses only the first (`treasure_rooms_entered > 1` after the pre-increment). Spoils Map targets act 2 (`SPOILS_ACT_INDEX = 1`, cards/spoils_map.py:36) and act 1's treasure node is unavoidable: the generated act-1 map has exactly one TREASURE row and every column on it is TREASURE, so act 1 always eats the suppression and Spoils Map's node is always the second treasure room. Silver Crucible cannot be acquired later either -- it is Ancient (never in the grab bag) and reachable only from Neow at floor 0, directly or via Neow's Bones, which itself comes from Neow. The concrete things that would make it live: a mid-run grant path for Silver Crucible, a second ShouldGenerateTreasure implementer, a Spoils Map with SpoilsActIndex 0, or an act layout whose treasure row is skippable. Recorded because the fix is one indentation and because a reader would otherwise assume the sim's gate covers the same payload as C#'s. Rule 7: OneOffSynchronizer.cs, run.py, cards/spoils_map.py and actmap.py are not hashed here."
+    },
+    {
+      "what": "N1: `RunState.CloneCard(card)` then `cardReward.ModifyCard(card2, this)` (SilverCrucible.cs:113-115) vs the sim upgrading the offered card in place (silver_crucible.py:33) -- PROMPT.md class 17",
+      "verdict": "deliberate-divergence",
+      "rationale": "MECHANISM: C# does not mutate the offered card. It clones it (`base.Owner.RunState.CloneCard(card)`), edits the CLONE, and swaps it in through `cardReward.ModifyCard(card2, this)`, which keeps the untouched `originalCard` alongside it -- LastingCandy.cs:115's `o.originalCard.Id` is the one reader of that field in the game. The sim edits the offered Card object in place. PROMPT.md class 17 flags shallow rebuilds that DROP per-instance state, and this site is the inverse: because the sim mutates rather than rebuilds, enchantment, affliction and cost modifiers survive by construction, which is also what CloneCard's ClonePreservingMutability does (CardModel.cs:2168-2179). So the OFFERED card is equivalent on both sides and binding rule 2 is satisfied -- verdicted deliberate-divergence, not a gap. Two residues recorded rather than waved through: the sim cannot answer `originalCard` at all, which a ported Lasting Candy would need; and an unpicked C# clone is a real CardModel created on the run, so if RunState.CloneCard ever gains a side effect (a net-id counter, a discovered-cards ledger) the counts diverge. Neither is observable today. Rule 7: CardModel.cs, LastingCandy.cs and cards/base.py are not hashed here."
+    },
+    {
+      "what": "N2: `card.IsUpgradable` (SilverCrucible.cs:111) is present on both sides, closing PROMPT.md class 14 at this site",
+      "verdict": "faithful",
+      "rationale": "CardCmd.Upgrade skips non-upgradable cards internally (CardModel.cs:785-789's `CurrentUpgradeLevel < MaxUpgradeLevel`), and the sim's Card.upgrade() (cards/base.py:146-147) is a bare increment with no guard -- so every sim caller must supply its own. silver_crucible.py:32 supplies it. py audit/tools/relic_probes.py sweep-upgrade does not list silver_crucible.py among its 7 unguarded call sites, and reading the body confirms it. It matters here even though a card REWARD is unlikely to offer a level-0-max card: create_reward_cards draws from the reward pool, and PROMPT.md class 14's census puts all 35 max-level-0 cards in Curse/Status/Quest, none of which the reward pool offers -- so this is a correctly-placed guard rather than a load-bearing one. Rule 7: cards/base.py, rewards.py and CardModel.cs are not hashed here."
+    },
+    {
+      "what": "N3: `if (player != base.Owner) return false;` on both the modifier and ShouldGenerateTreasure (SilverCrucible.cs:96-99, :142-145)",
+      "verdict": "faithful",
+      "rationale": "Multiplayer guards -- another player's card reward must not be upgraded, and another player's treasure room must not be suppressed. Neither sim hook carries a player (modify_card_reward_options(run, cards), should_generate_treasure(run); relics/base.py:172, :189), and the sim is single-player, so both are unsatisfiable. Noted in the mapping per the shared contract's scope section. Worth pinning that the C# DEFAULT for the treasure clause is `true` -- a non-owner does NOT suppress the chest -- which is the direction that would matter if the sim ever grew a second player. Rule 7: relics/base.py is not hashed here."
+    },
+    {
+      "what": "N4: CardsVar(3) read as IntValue at four sites (SilverCrucible.cs:26, :38, :40, :46, :100, :123) vs CARD_REWARDS = 3 (silver_crucible.py:14)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 3 is the pinned non-ascension value at every read, and the sim's single constant serves all of them. EXECUTED (relic_probes_b14.py crucible-life): rewards 1-3 come back upgraded with times_used 1/2/3 and reward 4 comes back at level 0 with times_used still 3."
+    },
+    {
+      "what": "N5: `times_used` and `treasure_rooms_entered` are per-RUN on both sides (PROMPT.md classes 10, 13, 24)",
+      "verdict": "faithful",
+      "rationale": "py audit/tools/relic_probes.py sweep-reset lists silver_crucible in its 'NOT RESET BEFORE A READER' bucket with both fields, which is a candidate and not a verdict. Settled here: both C# fields are `[SavedProperty]` (SilverCrucible.cs:50, :66) -- persisted across combats and save/load by design -- and the relic has no BeforeCombatStart or AfterCombatEnd override at all, so there is no reset the port could have dropped. Its AfterRoomEntered override WRITES a counter rather than clearing one, which is the case sweep A's own defect-6 rescan flagged as worth checking (both tea sets ARM a flag there); checked, and this one is a genuine increment. Intended persistence on both sides -- the nunchaku shape of PROMPT.md class 24. Rule 7: relic_probes.py is never hashed (audit/tools/)."
+    },
+    {
+      "what": "N6: `undo_after_obtained` is not implemented, and the pickup itself mutates nothing",
+      "verdict": "faithful",
+      "rationale": "Vacuous at grant time -- SilverCrucible has no AfterObtained at all, so nothing needs undoing when the conformance runner swaps the relic. The relic's own state (charges, treasure rooms) travels with the instance and disappears with it. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+    },
+    {
+      "what": "N7: the `CheckIfUsedUp` / property-setter machinery (SilverCrucible.cs:50-92) and ExtraHoverTips",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CheckIfUsedUp's status write / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. CheckIfUsedUp's only effect is `base.Status = RelicStatus.Disabled`; the sim exposes is_used_up as a computed property instead of maintaining a status, which reaches the same answer without the write."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

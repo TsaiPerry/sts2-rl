@@ -1,0 +1,88 @@
+{
+  "unit": "power/possess_speed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\PossessSpeedPower.cs",
+    "sha256": "96bea597fc9827911f2a3d052f3f1061c0f1b6c5d18a15c685273e9617b35a86"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/PossessStrengthPower.cs",
+      "sha256": "983c6efcb84feb5dad5dabab06dfd319f2b220ae4620a50fe8edff50c8d65526",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3143 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py audit/tools/power_census.py stack`). Third-file citations, not hashed here."
+    },
+    "AfterPowerAmountChanged": {
+      "maps_to": "powers.py:3092-3109 _PossessPower._track via on_power_applied + on_power_amount_changed",
+      "verdict": "faithful",
+      "rationale": "C# hooks `AfterPowerAmountChanged(choiceContext, power, amount, applier, cardSource)` with four guards -- `applier != base.Owner`, `!power.Owner.IsPlayer`, `!(power is XPower)`, `amount >= 0m` -- and accumulates into a per-victim dictionary (PossessStrengthPower.cs:31-55 / PossessSpeedPower.cs:31-55). The sim reproduces all four in `_PossessPower._track` (powers.py:3092-3099: `applier is self.owner`, `target.side == \"player\"`, `name == self._stat_id`, `delta < 0`) and wires it to BOTH of the sim's power-change notifications, on_power_applied (powers.py:3101-3104) and on_power_amount_changed (powers.py:3106-3109). That double wiring is CORRECT and worth recording: C#'s single AfterPowerAmountChanged covers both the new-power and the stacking path, where the sim splits them (cmds.py:327 vs cmds.py:312), so hooking only one would have missed half the thefts. These two units are the ported READERS of the missing-`applier=` shape that appears all over half B -- which is why they had to be audited early -- and they are the reason it stays dormant there: the `applier is self.owner` AND player-target AND negative-delta conjunction excludes every applier-less enemy self-buff. Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:3114-3120 _PossessPower.on_death",
+      "verdict": "faithful",
+      "rationale": "C# returns the stolen total on the owner's real death: `foreach (var item in StolenStrength) PowerCmd.Apply<XPower>(choiceContext, item.Key, -item.Value, null, null)` (PossessStrengthPower.cs:57-67) -- note `applier: null`, deliberately, so the give-back does not re-enter this power's own tracker. powers.py:3114-3120 does the same with `PowerCmd.apply(self.hooks, target, self._stat_power(), -amount)` and no applier, then clears the dict and expires. Two things checked. (1) The SIGN: the tracker stores negative deltas, so `-amount` is a positive give-back on both sides. (2) The give-back's own applier is None on both sides, which is what keeps `_track` from re-firing -- and it is also why the sim's `-amount` re-application does NOT hit power_cmd gap G1's sign-aware Artifact hole: the target is the player, the amount is positive, and the census's typing finding shows only strength/dexterity flip and only at a negative amount. Faithful. The sim's added `self._expire()` matches C#'s CreatureCmd.cs:533 power strip in net effect. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "PossessSpeedPower.cs:59 `wasRemovalPrevented`",
+      "verdict": "faithful",
+      "rationale": "`wasRemovalPrevented: true` is passed when Hook.ShouldDie returned FALSE, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the real-death path (CreatureCmd.cs:519) -- the parameter is misnamed in the decompiled source and is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath (computed separately at CreatureCmd.cs:508). So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing on the prevented branch, so the guard is satisfied structurally. Third-file citations, not hashed here."
+    },
+    {
+      "what": "PossessSpeedPower.cs:37 `!power.Owner.IsPlayer`",
+      "verdict": "faithful",
+      "rationale": "powers.py:3096 `target.side == \"player\"`. Identical, and load-bearing: it is what stops the power tracking the Dexterity it drains from another enemy."
+    },
+    {
+      "what": "The per-victim dictionary keyed by Creature",
+      "verdict": "faithful",
+      "rationale": "`Dictionary<Creature, decimal>` vs `dict[Creature, int]` (powers.py:3090). One key in single-player; the shape is preserved rather than flattened, which is the right call."
+    },
+    {
+      "what": "Amount is never read",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the tracker uses the dictionary, not base.Amount, so the on_stack question is inert here on both sides. The owner is monsters/glory/the_lost_and_forgotten.py (The Forgotten)."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

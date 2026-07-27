@@ -1,0 +1,77 @@
+{
+  "unit": "power/flame_barrier",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\FlameBarrierPower.cs",
+    "sha256": "be2296ca372c0ebef6a2b529c04d839bbad734ee029588fe31bb778b3583d348"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:669 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:671-687 FlameBarrierPower.on_damage_received",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:689-690 on_enemy_side_end -> Power._expire",
+      "verdict": "gap",
+      "issue": "The removal condition is inverted from a side comparison into a hard-coded side. FlameBarrierPower.cs:26-32 removes the power whenever `base.Owner.Side != side` -- i.e. at the end of the turn belonging to the side the owner is NOT on, which for a player-held Flame Barrier is the enemy side's end and for an enemy-held one is the PLAYER side's end. The sim only implements on_enemy_side_end (powers.py:689), so an enemy holding Flame Barrier keeps it forever. DORMANT: the only ported applier is the Ironclad card (Flame Barrier is a player card, so the owner is always the player and the enemy-side-end leg is the right one). Named trigger: any monster or effect that puts Flame Barrier on an enemy -- at which point the sim needs an on_player_turn_end / after_player_turn_end leg exactly as ConstrictPower and DemisePower carry (powers.py:1441-1447, :4059-4065). Also note the sim uses _expire() where C# uses PowerCmd.Remove; Flame Barrier overrides no AfterRemoved so the observable matches. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "FlameBarrierPower.cs:20 `target == base.Owner && dealer != null`",
+      "verdict": "faithful",
+      "rationale": "powers.py:680 tests both. Identical."
+    },
+    {
+      "what": "FlameBarrierPower.cs:20 `props.IsPoweredAttack()`",
+      "verdict": "faithful",
+      "rationale": "powers.py:679-680 calls is_powered_attack(props) explicitly. This power gets the gate RIGHT where power/thorns and power/curl_up -- the same reflect-on-being-hit shape -- both drop it, which is what makes those two omissions omissions rather than a shared architectural absence."
+    },
+    {
+      "what": "FlameBarrierPower.cs:22 dealer = base.Owner on the reflected damage",
+      "verdict": "faithful",
+      "rationale": "powers.py:684-687 passes `dealer=self.owner` and DamageProps.NON_CARD_UNPOWERED (UNPOWERED alone -- blockable, matching C# omitting Unblockable). Contrast power/thorns, which drops the dealer."
+    },
+    {
+      "what": "Flame Barrier fires even when the hit was fully blocked",
+      "verdict": "faithful",
+      "rationale": "C# ignores the DamageResult entirely (`DamageResult _` at :18), so a fully blocked powered attack still burns; powers.py:671-687 likewise tests no amount. The sim's on_damage_received does fire at hp_lost == 0 (cmds.py:121-122 is unconditional on amount), so this holds."
+    },
+    {
+      "what": "Killing-blow guard (PROMPT.md bug class 2)",
+      "verdict": "gap",
+      "issue": "Both sides hang the reflect on the AFTER-damage hook, so C# skips it when the hit killed the victim (CreatureCmd.cs:392) and so does the sim (cmds.py:121) -- faithful. But note the contrast with power/thorns, whose C# hook is BeforeDamageReceived and therefore fires on the killing blow: the two powers really do differ in the game, and the sim collapses both onto on_damage_received, which is right here and wrong there. Verdict `gap` only to carry that cross-reference at the same precedence as the thorns finding it explains; nothing in THIS unit's behaviour diverges on the killing blow. Third-file citations, not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

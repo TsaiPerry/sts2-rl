@@ -1,0 +1,93 @@
+{
+  "unit": "power/curl_up",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CurlUpPower.cs",
+    "sha256": "6d8853584508a821720b91a1fb3afb8b0195884b563898a9ba02c4bc89f12100"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/juggernaut.py",
+      "sha256": "e82c56f25ac526d5c15a92c2e8a4585f5693dffe8429431c83f137c2eae591a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/louse_progenitor.py",
+      "sha256": "cec3386fb7ecf3d49dbbd2184110f19bd5451ac645d663e125609d99abfb40d5",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:297 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer feeds PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audit/records/seam/power_cmd.json."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "powers.py:299-312 CurlUpPower.on_damage_received",
+      "verdict": "gap",
+      "issue": "LIVE. C# only LATCHES the triggering card here and grants nothing; the sim grants the block and expires the power on the spot. CurlUpPower.cs:34-54 records cardSource in internal Data and returns; CurlUpPower.cs:56-70 (AfterCardPlayed) is what actually gains the block, once the whole card play has resolved. powers.py:309-312 calls BlockCmd.apply and _expire() inside the damage hook, so the SECOND and later hits of a multi-hit attack are absorbed by block the game would not have granted yet. The sim's own docstring (powers.py:307-308) states the weaker half of this correctly -- the triggering hit does take full damage -- and then stops one hit short. Reachable from the ported Louse Progenitor (monsters/hive/louse_progenitor.py:34) plus any multi-hit Attack card. Two guards are also missing; see their own entries. Third-file citations, not hashed here."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "CurlUpPower.cs:56-70 is where C# gains the block (ValueProp.Unpowered), clears the latch, sets `LouseProgenitor.Curled = true` and calls PowerCmd.Remove. The sim has none of it: the block and the removal moved into AfterDamageReceived (see that entry) and the Curled flag is never set at all. Whether the sim's Louse Progenitor needs Curled is the monster stream's unit (monsters/hive/louse_progenitor.py, a third file not hashed here); what this record owns is that the power drops the assignment C# makes."
+    }
+  },
+  "guards": [
+    {
+      "what": "CurlUpPower.cs:40-43 `!props.IsPoweredAttack()` -> return",
+      "verdict": "gap",
+      "issue": "Absent. powers.py:309 requires only `target is self.owner and dealer is not None`, and the sim's on_damage_received fires for every damage type (cmds.py:122 is outside the is_powered_attack gate at cmds.py:56), so the sim curls up off unpowered damage -- Juggernaut, Panache, Thorns, Flame Barrier -- that the game ignores. Exactly the same omission as power/thorns' missing props gate, and reachable the same way: the ported Ironclad card Juggernaut (cards/juggernaut.py:38 -> powers.py:791-794) deals DamageProps.NON_CARD_UNPOWERED with dealer = the player."
+    },
+    {
+      "what": "CurlUpPower.cs:44-47 `cardSource == null` -> return",
+      "verdict": "gap",
+      "issue": "Absent for the same reason: powers.py:309 does not require a card at all, so a dealer-carrying non-card damage source triggers Curl Up in the sim. C# needs a card because the whole mechanism is 'wait until THIS card finishes'. Folded together with the props gate in effect, but recorded separately because they are two distinct lines and a props fix alone would still leave monster-move damage (ValueProp.Move, no cardSource) triggering the sim's Curl Up while C# returns at :44."
+    },
+    {
+      "what": "CurlUpPower.cs:48-52 the one-card latch",
+      "verdict": "gap",
+      "issue": "`if (playedCard != null && cardSource != playedCard) return` keeps the latch on the FIRST qualifying card until it resolves. The sim has no latch because it never defers -- the same gap as the AfterDamageReceived and AfterCardPlayed entries, carried here so the guard-level reading of the C# file is complete."
+    },
+    {
+      "what": "CurlUpPower.cs:63 ValueProp.Unpowered on the block",
+      "verdict": "gap",
+      "issue": "powers.py:310-311 calls BlockCmd.apply with no props, which defaults to ValueProp.MOVE (cmds.py:143-144) and so runs the block modifier families (cmds.py:146-147). Identical omission to power/feel_no_pain's, with the same consequence in reverse: an enemy's Curl Up block is scaled by ITS Dexterity/Frail in the sim and flat in the game. Reachable -- the ported Louse Progenitor can be hit by a Frail source. See the feel_no_pain record for the eight sibling powers that pass UNPOWERED correctly."
+    },
+    {
+      "what": "CurlUpPower.cs:68 PowerCmd.Remove vs the sim's _expire",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same mechanism note as power/shriek's: Curl Up overrides no AfterRemoved, so the observable is identical, but the sim's _expire (powers.py:86-92) bypasses RemoveInternal/AfterRemoved. WHEN the removal happens is the separate gap recorded above."
+    },
+    {
+      "what": "CurlUpPower.cs:61-62 SfxCmd.Play / CreatureCmd.TriggerAnim",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

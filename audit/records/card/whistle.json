@@ -1,0 +1,63 @@
+{
+  "unit": "card/whistle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Whistle.cs",
+    "sha256": "9d4789f39294339d179056089ea7fc492b747aa2bcdbcdf4703731c2ad658aaa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\whistle.py",
+    "sha256": "37ec0928a0eeed31af718441b2875d4716815171e1f438fb46d8eecbb9cefc05"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "WhistleCard.exhausts = True (whistle.py:70)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Whistle.cs:20) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (whistle.py:65-70) + _init_vars (72-74)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Attack, CardRarity.Ancient, TargetType.AnyEnemy)` (Whistle.cs:22-25) == cost 3 / ATTACK / ANCIENT / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "WhistleCard._damage = 33 (whistle.py:74)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(33m, ValueProp.Move)` (Whistle.cs:18) == `_damage = 33`, powered on both sides -- the largest single-hit damage number in the pool after card/bludgeon's 32 upgrades to 42."
+    },
+    "OnPlay": {
+      "maps_to": "WhistleCard.on_play (whistle.py:79-87)",
+      "verdict": "gap",
+      "issue": "The damage is faithful and the STUN is the right verb. The divergence is the sim's extra `if not target.is_gone:` before it (whistle.py:86-87). C# calls `CreatureCmd.Stun(cardPlay.Target)` UNCONDITIONALLY (Whistle.cs:33), and `Stun` has NO liveness guard at all -- it is a bare `creature.StunInternal(Wrapper, nextMoveId)` plus a VFX wrapper (CreatureCmd.cs:870-903), with no `IsAlive`, `IsHittable` or `CombatState != null` test anywhere in either overload. So this is the card/bash family with a different verb: for an ordinary kill the two agree (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, and removal at 523-525 detaches the creature), but for a corpse whose removal was VETOED (`Hook.ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104) the game STUNS it and the sim does not -- and a retained corpse still takes turns, so being stunned actually skips one. LIVE: the retained-corpse path is ported (ReattachPower, powers.py:2360-2365; `combat.py:292,306`) and Whistle is a ported Ancient from Tanx's Whistle. Same family and same verdict as card/bash's OnPlay entry (rule 3), and the only member of it whose payload is a STUN rather than a power -- so the observable is the corpse's skipped turn rather than a Vicious draw. Presentation, folded in: WithHitFx and the StunIntent hover tip (16)."
+    },
+    "OnUpgrade": {
+      "maps_to": "WhistleCard._on_upgrade (whistle.py:76-77)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(11m)` (Whistle.cs:38) == `self._damage += 11` (33 -> 44)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

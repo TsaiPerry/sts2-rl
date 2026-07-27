@@ -1,0 +1,84 @@
+{
+  "unit": "relic/sea_glass",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SeaGlass.cs",
+    "sha256": "6833f9402cf40a44b2844589ef2b8391519c8181ad557ac8af2d9a1ebaa32665"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\sea_glass.py",
+    "sha256": "b340f4b035c12f61f8c2f1b0dae078f1fb824fdf557694c84a7da11917e0f344"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Orobas.cs",
+      "sha256": "eeb3c17628455969b8b77c28240c2954adf0d5d8b4a15898fa701ab411742d61",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/orobas.py",
+      "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Title": {
+      "maps_to": "no counterpart; the sim has no localized relic titles (sea_glass.py:15 is a plain `name`)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle / ForceMaxColumnsUntilEmpty are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (sea_glass.py:16)",
+      "verdict": "faithful",
+      "rationale": "Matches SeaGlass.cs:64. Obtainable: the ported Orobas shrine appends it to OPTION_POOL_1 when its NextFloat roll is >= 1/3 (events/orobas.py:56-58). Rule 7: events/orobas.py is not hashed here."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (sea_glass.py:17)",
+      "verdict": "faithful",
+      "rationale": "Matches SeaGlass.cs:66. Correct even though the port's effect is a no-op: the flag also drives Relic.is_tradable (relics/base.py:132), so a stubbed effect must not silently make the relic tradable. Rule 7: relics/base.py is not hashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart -- sea_glass.py is a behaviourless port (sweep C's 'out-of-combat pickup effect, stub' family)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. SeaGlass.cs:74-93 does two separable things: it offers 15 cards from ANOTHER character's pool (waived, N1 -- genuine other-character scope) and it burns 15 CardFactory.CreateForReward draws on the player's Rewards stream doing so (G1, a gap that is not about other characters at all)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: the 15 CardFactory.CreateForReward draws on PlayerRng.Rewards are never consumed, so every later Rewards draw in the run is shifted",
+      "verdict": "gap",
+      "issue": "MECHANISM: SeaGlass.cs:81 computes `cardCount = base.DynamicVars.Cards.IntValue / 3` == 15 / 3 == 5 (CardsVar(15), SeaGlass.cs:70, no AscensionHelper branch in the file), and lines 85-87 call CardFactory.CreateForReward three times with 5 cards each. CreateForReward draws each card off `options.RngOverride ?? player.PlayerRng.Rewards` (CardFactory.cs:98-101 for the upgrade roll, and the per-card pick inside CreateForReward), and Sea Glass passes no RngOverride -- so 15 reward-stream draws happen whether the player keeps any card or not. The sim's stub consumes nothing. EXECUTED (py audit/tools/relic_probes_b14.py sea-glass): with a parity rng_set attached, `add_relic('sea_glass')` moves the player Rewards counter 0 -> 0 and the deck 10 -> 10. LIVE for RNG parity -- Sea Glass is reachable on any seed whose Orobas roll lands above 1/3, and every subsequent Rewards consumer (combat card rewards, the treasure chest's gold, relic rarity rolls, Scroll Boxes' own bundles) then reads at the wrong stream position -- and DORMANT for RL play. Same live/dormant split and same shape as relic/calling_bell G2 (unconsumed PullNextRelicFromFront draws) and relic/astrolabe N1 (an unpassed named stream); recorded as a gap, not a waiver, because stream position is in scope even though the CARDS are not. Note the fix is awkward and should be scoped deliberately: reproducing the draw count faithfully requires the other character's pool, which the sim does not have, so a parity fix here means either porting the pools or burning the right number of draws against a placeholder. Rule 7: CardFactory.cs, events/orobas.py and rng.py are not hashed here."
+    },
+    {
+      "what": "N1: the effect itself -- 5 Common / 5 Uncommon / 5 Rare cards from ANOTHER character's CardPool, offered as a grid pick (SeaGlass.cs:82-92)",
+      "verdict": "waiver",
+      "rationale": "Genuinely out of scope under the shared contract's rule 1, which names 'other characters' explicitly, and the scope is not incidental -- it is the relic's whole design. Established by reading the ASSIGNMENT path rather than assumed from the relic: Orobas.cs:190 picks `base.Rng.NextItem(Owner.UnlockState.Characters.Where(c => c.Id != character.Id))` and line 204 stamps that id onto the relic, and Orobas.cs:44-53's SeaGlassOptions builds one option per character in ModelDb.AllCharacters. So the CharacterId is always a character other than the player's, and the sim -- which has exactly one character's card pool -- has nothing to draw from. The sim's own docstring (sea_glass.py:8-12) states this correctly, which is worth recording against PROMPT.md class 12: this is the rare stub whose premise checks out. The one arm that would be in scope is unreachable in the shipping game: SeaGlass.cs:76-80 defaults CharacterId to Ironclad, but only after `Log.Error(\"Sea Glass was obtained without a character ID assigned! This could be a bug, or the player could have used the console\")` -- an error path, not behaviour. Rule 7: Orobas.cs, events/orobas.py and Log.cs are not hashed here."
+    },
+    {
+      "what": "N2: the [SavedProperty] CharacterId setter (SeaGlass.cs:37-50) and the Character/Title accessors",
+      "verdict": "waiver",
+      "rationale": "The setter's only side effect is writing the StringVar that renders the relic's name (SeaGlass.cs:48), and Title (lines 25-35) picks a per-character localization key. Presentation plus other-character identity; the sim models neither. RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle / ForceMaxColumnsUntilEmpty are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N3: no state to reset and no other C# override -- PROMPT.md classes 10 and 13 checked",
+      "verdict": "faithful",
+      "rationale": "SeaGlass.cs's only field is `_characterId`, set once at grant time and read only by Title/Character; there is no combat or turn hook to lose a reset. Read both files. Note this relic is NOT in sweep A's candidate list precisely because the sim port holds no fields at all."
+    },
+    {
+      "what": "N4: `undo_after_obtained` is not implemented",
+      "verdict": "faithful",
+      "rationale": "Vacuous at this site and recorded to say so explicitly: the stub mutates no run state, so there is nothing for an undo to reverse and the conformance-runner consequence the other units in this batch carry does not arise here. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,123 @@
+{
+  "unit": "relic/kunai",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Kunai.cs",
+    "sha256": "acbf0464c5202e7e6446f7b3186113a23797ac15ddd0486cb23d71ee52936fcc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\kunai.py",
+    "sha256": "e78b3da66a811fd5deda740a9a810a536503742aaac6dcd40a06050e105ceaf6"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/UnsettlingLamp.cs",
+      "sha256": "f4d772296f344ba05eedcc2131f60435a9bd4afe1166bab435e13bce517cf9b3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/throwing_axe.py",
+      "sha256": "3ca1723abe8e39501df9c51b8a1f096dca7ee94990538b7947eb8cf9aae1ebc3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/unsettling_lamp.py",
+      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (kunai.py:18)",
+      "verdict": "faithful"
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (kunai.py:26-27)",
+      "verdict": "gap",
+      "issue": "C#'s Hook.BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 -- it fires for BOTH sides BEFORE any block is cleared. The sim has no such slot; `py audit/tools/relic_probes.py turn-order` shows on_player_turn_start executes AFTER on_block_cleared and on_energy_reset, i.e. step ~18. That record's step 9 verdicts the mechanism a gap, lists **Kunai by name** among the 26 ported implementers, and labels the player-side half DORMANT because every ported one is a per-turn counter reset that reads neither block nor energy. One verdict per mechanism (binding rule 3), so this entry reproduces it rather than re-deriving it. Kunai's body here is exactly that shape: `AttacksPlayedThisTurn = 0` plus a Status write. DORMANT: porting a relic or power whose BeforeSideTurnStart reads block or energy, or an ENEMY-side listener (turn_structure guard G5), makes it live. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied -- on_player_turn_start is only fired for the player side (hooks.py:279-283). Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (kunai.py:29-38)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N4 per binding rule 4. The arithmetic is right -- `Type == Attack`, `++`, `% CardsVar(3) == 0`, then PowerCmd.Apply<DexterityPower>(BaseValue 1) on the owner with applier = owner and no cardSource -- but the counter advances once per PLAY where C# advances it once per Replay ITERATION (G1, LIVE)."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (kunai.py:26-27) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "Kunai.cs:123-129 zeroes AttacksPlayedThisTurn (and the two presentation fields) at combat end as well as at turn start; the sim keeps only the turn-start half. `py audit/tools/relic_probes.py sweep-reset` classifies Kunai in the 'reset at a TURN boundary only' bucket, which is the relic/art_of_war shape, and PROMPT.md bug class 13 requires tracing to the first READER before verdicting. Done: the only reader of _attacks_this_turn is on_card_played (kunai.py:32-33), and a card can only be played in the play phase, which turn_structure step 28 opens AFTER the turn-start hooks. EXECUTED (py audit/tools/relic_probes_b08.py b08-turn-reset): the same instance carried out of a combat with _attacks_this_turn=2 reports 0 at combat 2 turn 1, identical to a freshly-constructed instance. Contrast relic/belt_buckle, where the analogous missing reset is live because nothing shadows it."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed Attack advances Kunai's counter by 1 instead of 2",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop, so a REPLAYED card advances this relic's per-turn counter once per iteration. The sim's _resolve_card_play runs the whole play-count loop (combat.py:477-494) and calls hooks.on_card_played once, after it (combat.py:514), so a doubled card advances the counter by ONE. This is audit/records/seam/hook_dispatch.json gap G4 -- one verdict per mechanism, binding rule 3, and that record already labels it LIVE -- observed at this relic's own site; the seam owns the machinery, this record owns the observable. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-replay): with Throwing Axe held, two Strike plays leave _attacks_this_turn=2 and Dexterity 0, where C# counts 3 and grants +1 Dexterity. Throwing Axe makes the first card of each combat play twice (relics/throwing_axe.py:30-36) and is granted by the ported Tanx shrine (events/tanx.py); the Spiral and Glam enchantments (enchantments.py:167, 232), One-Two Punch (powers.py:966) and Duplication (powers.py:3919) reach the same combat.py:469 play-count hook. Rule 7: CardModel.cs, combat.py, relics/throwing_axe.py, events/tanx.py, enchantments.py and powers.py are not hashed by this record. The observable is not a rounding detail: because the trigger is `count % 3 == 0`, a DIFFERENT card fires the relic, and every subsequent trigger in the turn is shifted by one play."
+    },
+    {
+      "what": "N1: C#'s AfterCardPlayed has NO `cardPlay.IsAutoPlay` exclusion (Kunai.cs:101-113), unlike BrilliantScarf.cs:84-87",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately, because the same-shaped relic/brilliant_scarf carries a LIVE gap (its G1) for exactly this clause and it would be easy to copy the finding across. Kunai's C# counts every play including auto-plays, and kunai.py:29-31 also counts every on_card_played, so the sim agrees here. The sim routes auto-plays through the same _resolve_card_play bracket (combat.py:516), so both sides count them. Rule 7: combat.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
+    },
+    {
+      "what": "N2: `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (Kunai.cs:103)",
+      "verdict": "waiver",
+      "rationale": "The Owner comparison is the multiplayer card-ownership filter (single-player: every played card is the player's), noted in maps_to per the contract rather than treated as a divergence. IsInProgress is structurally satisfied: on_card_played is a combat hook and combat.py:493-494 breaks the play loop once the combat is decided. Rule 7: combat.py are not hashed by this record."
+    },
+    {
+      "what": "N3: PowerVar<DexterityPower>(1m) read as `DynamicVars.Dexterity.BaseValue` (Kunai.cs:43, 110) vs the sim's literal 1 (kunai.py:37), and CardsVar(3) vs ATTACKS = 3 (kunai.py:20)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in Kunai.cs, so 1 and 3 are the pinned non-ascension values, and BaseValue (not IntValue) is the read the shared contract pins for the gameplay clause. Note the source reads IntValue in DisplayAmount/UpdateDisplay and BaseValue in the effect -- the same idiom relic/brilliant_scarf N2 and relic/big_mushroom record; harmless because both resolve equal."
+    },
+    {
+      "what": "N4: the applier and cardSource passed with the Dexterity -- C# `PowerCmd.Apply<DexterityPower>(ctx, Owner.Creature, amount, Owner.Creature, null)` (Kunai.cs:110) vs `PowerCmd.apply(..., applier=self.player)` (kunai.py:36-38)",
+      "verdict": "faithful",
+      "rationale": "Both pass the player as target AND as applier, and neither passes a card source. Recorded because relic/unsettling_lamp's doubling turns on exactly these two arguments (`applier is not self.player or target is self.player` -- unsettling_lamp.py:47): the Lamp bails on this application in the sim, and in C# it bails too because Dexterity at +1 is not a Debuff (UnsettlingLamp.cs:97 / :124). Same outcome on both sides, so Kunai introduces no new Lamp interaction. Rule 7: relics/unsettling_lamp.py and src/Core/Models/Relics/UnsettlingLamp.cs are not hashed by this record."
+    },
+    {
+      "what": "N5: `IsActivating` / `DoActivateVisuals` / `UpdateDisplay` / `InvokeDisplayAmountChanged` / `TaskHelper.RunSafely` / `Cmd.Wait(1f)` (Kunai.cs:20, 48-88, 109, 115-121)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Kunai's entire _isActivating field exists only to drive DisplayAmount and Status, and the sim omits both."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

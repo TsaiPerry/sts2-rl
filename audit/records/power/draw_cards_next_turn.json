@@ -1,0 +1,93 @@
+{
+  "unit": "power/draw_cards_next_turn",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DrawCardsNextTurnPower.cs",
+    "sha256": "4f1016ca490b0f374cdf4aa48d3d8a3a013867c0e5bad730c57649720cc0c8a5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ClarityPower.cs",
+      "sha256": "5bdcc464468e318c2e4f196e093b44318a3a7b3a001a5febb4a0d9d336b34034",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_powers.py",
+      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/relax.py",
+      "sha256": "5257dee75253a9c358f2988d41587ba8c044ed9ae46d41b44f20bab322e5b486",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2744 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyHandDraw": {
+      "maps_to": "powers.py:2746-2749 DrawCardsNextTurnPower.modify_hand_draw",
+      "verdict": "gap",
+      "issue": "The count is right (count + Amount, DrawCardsNextTurnPower.cs:32 vs powers.py:2749 -- and correctly NOT the flat +1 that its sibling power/clarity uses; the two classes exist precisely to differ here, ClarityPower.cs:12-15). The GUARD is missing: DrawCardsNextTurnPower.cs:28-31 returns count unchanged when base.AmountOnTurnStart == 0, i.e. when the power landed after this turn's snapshot. PowerModel.AmountOnTurnStart has NO sim counterpart -- grep -rn amount_on_turn_start sts2_rl/ returns nothing. C# snapshots every power's Amount into it in Creature.BeforeTurnStart (Creature.cs:673-679), called at CombatManager.cs:453 before any other turn-start hook, and its documented purpose (PowerModel.cs:199-205) is exactly 'preventing same-turn activation when applied mid-turn (e.g., via auto-play effects)'. Only three ported powers read it -- this one, HelloWorldPower and SummonNextTurnPower (unported) -- so it is a small but load-bearing field. DORMANT in isolation, because the sim's one pre-ModifyHandDraw slot (on_player_turn_start, player.py:169) has no ported listener that applies this power -- the ported appliers are the card Relax (cards/relax.py:42) and nothing else. Named trigger: any auto-play or turn-start effect that plays Relax between the sim's energy reset and its hand draw. The REACHABLE half of the same missing field is on the removal hook below."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "powers.py:2751-2754 on_player_turn_started -> Power._expire (player.py:186)",
+      "verdict": "gap",
+      "issue": "Right slot, wrong condition, and the wrongness is reachable. DrawCardsNextTurnPower.cs:37 removes the power only when participants.Contains(base.Owner) AND base.AmountOnTurnStart != 0; powers.py:2753-2754 expires it whenever the owner's turn starts, with no AmountOnTurnStart test. PowerModel.AmountOnTurnStart has NO sim counterpart -- grep -rn amount_on_turn_start sts2_rl/ returns nothing. C# snapshots every power's Amount into it in Creature.BeforeTurnStart (Creature.cs:673-679), called at CombatManager.cs:453 before any other turn-start hook, and its documented purpose (PowerModel.cs:199-205) is exactly 'preventing same-turn activation when applied mid-turn (e.g., via auto-play effects)'. Only three ported powers read it -- this one, HelloWorldPower and SummonNextTurnPower (unported) -- so it is a small but load-bearing field. LIVE, and it widens turn_structure's G8. MayhemPower is C#'s third ported AfterAutoPrePlayPhaseEntered implementer (MayhemPower.cs, applied by the ported Colorless power card Mayhem -- cards/colorless_powers.py:157-174) and G8 does not name it: G8 calls its AutoPrePlay half DORMANT on the grounds that 'the two ported users' effects (play cards / auto-play one Skill) do not read any other turn-start listener's output', naming only Whispering Earring and the Imbued enchantment. Mayhem does read another turn-start listener's output, and the pair is executed below. In the game Mayhem's auto-plays run at CombatManager.cs:568, strictly AFTER Hook.AfterSideTurnStart (:522) and after SetupPlayerTurn's Hook.AfterPlayerTurnStart (:675); in the sim MayhemPower.on_player_turn_started (powers.py:3572-3583) sits in the same dispatch as this power, so the order is registration order. EXECUTED with DrawCardsNextTurnPower 2 (from the ported card Relax, cards/relax.py:38-46) + MayhemPower 1 and Relax on top of the draw pile: applying the power FIRST expires it, Mayhem then plays Relax and the fresh Draw Cards Next Turn(2) survives to next turn -- which is the GAME's answer, because the game removes the old instance at :522 and only reaches Mayhem at :568. Applying Mayhem first makes Relax stack onto the live instance (2 -> 4) and the expiry then deletes the whole thing, so the player loses TWO bonus draws the game grants. Also note the sim uses _expire (powers.py:86-92) where C# uses PowerCmd.Remove (PowerCmd.cs:287-295): the sim skips power.AfterRemoved (PowerCmd.cs:293), which this power does not implement, so that half is inert -- same finding and same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json."
+    }
+  },
+  "guards": [
+    {
+      "what": "DrawCardsNextTurnPower.cs:24-27 / :37 the owner filters",
+      "verdict": "faithful",
+      "rationale": "powers.py:2747 and :2753 both test player is self.owner. Identical."
+    },
+    {
+      "what": "Phase collapse in the sim's single post-draw slot",
+      "verdict": "gap",
+      "issue": "PHASE COLLAPSE. The sim's on_player_turn_started (player.py:186) is a single slot serving THREE distinct C# phases that the game runs in a fixed order: Hook.AfterPlayerTurnStart (CombatManager.cs:675, inside the SetupPlayerTurn task launched at :514), then Hook.AfterSideTurnStart (:522), then Hook.AfterAutoPrePlayPhaseEntered (:568 -> RunAutoPrePlayPhase, :613-619). Collapsing them makes the relative order of this power and every other turn-start power a function of hook-REGISTRATION order, i.e. of which card the player happened to play first. Same shape as hook_dispatch's G3 (the Early/Late phase passes do not exist) one level up, and the AutoPrePlay/AutoPostPlay half of it is turn_structure's G8; neither is re-verdicted here per binding rule 3, but see this record's Mayhem guard for the executed consequence."
+    },
+    {
+      "what": "Counter stacking means replaying Relax stacks the pending draws",
+      "verdict": "faithful",
+      "rationale": "Both sides add (PowerCmd.cs:236 / powers.py:64-66) and both then remove the whole power rather than decrementing, so two Relaxes in one turn give a single +4 draw next turn on both sides. The sim's docstring says so (powers.py:2740)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

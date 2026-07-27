@@ -1,0 +1,138 @@
+{
+  "unit": "relic/paels_wing",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PaelsWing.cs",
+    "sha256": "90908efdfa3e6686395fbdc3ae6987a299f1bcdad5e8e128de56c79fe7e977ca"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\paels_wing.py",
+    "sha256": "6ebcf3b54cc79d720b2869c72565daae501c78764d99531bbba464a6805556ff"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/CardRewardAlternatives/CardRewardAlternative.cs",
+      "sha256": "f2d57662053c111db4205ac30305b446da29eaf73b8c9c7099716494e9ed25c2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Pael.cs",
+      "sha256": "35411063dc0bb8f3333285347e0116d6c79fdbac1bb2e3c97512ec5a96e3fb6d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/DreamCatcher.cs",
+      "sha256": "8b0d1e60c9d2b41151cd2e523df3dccd7af610f56b15cac30bdc286aee645af9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LostCoffer.cs",
+      "sha256": "96579eaef2fdec892f201d1e643f0659d589a6521025339b06e762a5be85b79e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/CardReward.cs",
+      "sha256": "937a512def94d408efa9f06849658fde845918be76a144fb832b30335c03523d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/SpecialCardReward.cs",
+      "sha256": "b2a54906146ebb2caf8408f77dea557b43f3606d4916304bb604ebab10acd372",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/brain_leech.py",
+      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/dream_catcher.py",
+      "sha256": "141dbc25ea89fffa0ad2bc118e1fda19ac29406d7331b76c6ff75b90c4af6e95",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/lead_paperweight.py",
+      "sha256": "fe99206571e396ff03c9ed01cbb96e33c2fef8ab59bb429c48590d3bb3a11c9b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/lost_coffer.py",
+      "sha256": "ed0c495e21dfb37787cffa60ff97ee7686b30d4e58cc496b3043a7a15f7aeafa",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (paels_wing.py:14)",
+      "verdict": "faithful"
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PaelsWing.cs:28 `ShowCounter => true`. RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "PaelsWing.cs:30-40 shows `RewardsSacrificed % Sacrifices`, or the full Sacrifices value during the activation flourish. RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
+    },
+    "TryModifyCardRewardAlternatives": {
+      "maps_to": "modify_combat_rewards (paels_wing.py:22-24), which sets rewards.sacrifice_relic (rewards.py:397); the driver surfaces the option (driver.py:142) and calls back into on_sacrifice (driver.py:365)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The alternative's payload is right -- the SACRIFICE key (PaelsWing.cs:79 vs rewards.py:393-397's documented \"SACRIFICE\" semantics) and PostAlternateCardRewardAction.EndSelectionAndCompleteReward, i.e. the cards are forgone and the reward completes, which is what driver.py:365 does -- and `base.Owner != player` (line 75) is structurally satisfied by the single-player run. What diverges is WHICH card rewards see it: C# adds the alternative to EVERY CardReward and the sim only to a CombatRewards. See G1."
+    },
+    "OnSacrifice": {
+      "maps_to": "on_sacrifice(run) (paels_wing.py:26-31)",
+      "verdict": "faithful",
+      "rationale": "PaelsWing.cs:83-92: `RewardsSacrificed++`, then on every Sacrifices-th sacrifice, `RelicCmd.Obtain(RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable(), base.Owner)`. paels_wing.py:29-31 increments and calls `run.obtain_relic_from_grab_bag()` on the same modulo. The period matches: CanonicalVars pins Sacrifices at 2m (PaelsWing.cs:42) with no AscensionHelper.GetValueIfAscension in the file, and SACRIFICES_PER_RELIC = 2 (paels_wing.py:16). The counter is a per-RUN [SavedProperty] (:58-71) that C# never resets, and the sim likewise never resets it -- sweep A's static scan flags `rewards_sacrificed` as unreset state and its own C#-reset column reports NONE for this relic, which is the correct reading (this is intended run-level persistence on both sides, like happy_flower's turn counter). RNG stream (PROMPT.md bug class 16): `PullNextRelicFromFront(player)` rolls the rarity on `player.PlayerRng.Rewards`, and run.obtain_relic_from_grab_bag -> pull_relic_from_front with rarity_rng=None falls through to `self.rewards_rng`, which IS player_rng.rewards on a parity run (run.py:586-590, :271-274) -- so the stream is right, not silently defaulted to the shared random.Random. TaskHelper.RunSafely(DoActivateVisuals()) (:89, :94-99) is presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the SACRIFICE alternative is attached to combat rewards only. C# attaches it to EVERY CardReward, including the rest-site card reward Dream Catcher adds",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# builds the alternatives list in `CardRewardAlternative.Generate(CardReward)` (CardRewardAlternative.cs:53-73), whose line 68 calls Hook.ModifyCardRewardAlternatives (Hook.cs:1413-1420) -- and Generate takes a CardReward, so ANY CardReward gets the offer regardless of where it came from. (SpecialCardReward is a sibling of CardReward, not a subclass -- SpecialCardReward.cs:22 vs CardReward.cs:33 -- so the take-or-skip single-card offers are correctly excluded on both sides.) The sim's port hangs the offer off `modify_combat_rewards`, which is dispatched from exactly one place: rewards.py:499-500, inside generate_combat_rewards. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py wing-rewards`): the only other sim path that populates a reward screen's `cards` is `RunState.rest_heal_rewards` (run.py:1097-1110), which builds a CombatRewards, runs `modify_rest_site_heal_rewards` over the relics, and does NOT run modify_combat_rewards -- so a Dream Catcher rest-site card choice carries `sacrifice_relic = None` and the player cannot sacrifice it. Both sides ported: relic/dream_catcher (Event rarity, granted by the ported Trash Heap event) adds a 3-card choice at every rest (relics/dream_catcher.py:22-25, mirroring DreamCatcher.cs:22's `new CardReward(...)`), and Pael's Wing is Ancient from the ported Pael shrine. Observable: a missed sacrifice is a missed grab-bag relic AND a missed `PullNextRelicFromFront` draw, which shifts every later pull. Two further sim paths generate card choices from a relic (relics/lost_coffer.py:17-19, relics/lead_paperweight.py:18-24) and one from an event (events/brain_leech.py:42-60); LostCoffer.cs:20 is a real `new CardReward(...)` on the C# side too, so it is a second instance of the same omission, while the other two need their own units audited before being counted."
+    },
+    {
+      "what": "N1: `if (rewards.cards)` (paels_wing.py:23) -- the sim only offers the option when the screen actually has a card choice; C# adds it unconditionally for the owner",
+      "verdict": "faithful",
+      "rationale": "Equivalent by construction: C#'s hook is only reached from Generate(cardReward), i.e. there IS a card reward whenever it fires, whereas the sim's modify_combat_rewards runs on every combat-reward screen including ones with no cards. The guard is the sim making its coarser hook match C#'s finer trigger, and it does so exactly. Recorded because without it the driver would offer a sacrifice on a cardless screen."
+    },
+    {
+      "what": "N2: `if (list.Count > 2) throw` (CardRewardAlternative.cs:69-72) -- the source hard-caps a card reward at two alternatives, Skip and Reroll being the built-ins",
+      "verdict": "waiver",
+      "rationale": "A UI-capacity invariant on the reward screen's two alternative buttons; the sim's rewards.CombatRewards carries a single `sacrifice_relic` slot plus its own `can_reroll` flag and skip, so it cannot exceed the cap either. No observable difference, and no ported second relic contributes an alternative (`grep -rn 'sacrifice_relic' sts2_rl/` returns only this relic, the field and the driver). Presentation/infrastructure exclusion."
+    },
+    {
+      "what": "N3: IsActivating and DoActivateVisuals (PaelsWing.cs:22, 44-56, 89, 94-99) -- a 1-second window in which DisplayAmount shows the full Sacrifices value",
+      "verdict": "waiver",
+      "rationale": "Purely the counter's flourish when the relic pays out; IsActivating is read only by DisplayAmount. RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
+    },
+    {
+      "what": "N4 (PROMPT.md bug class 16): no RelicModel.IsAllowed override",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's fifteen C# relic files finds no IsAllowed override, so sweep B's 17-relic pool-eligibility cluster excludes this unit. Obtainability confirmed (`py audit/tools/relic_probes_b11.py pool`): Ancient, offered by the ported Pael shrine as OptionPool2's guaranteed member (Pael.cs:37-49; events/pael.py's `pool2 = [\"paels_wing\"]`)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,48 @@
+{
+  "unit": "event/crystal_sphere",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\CrystalSphere.cs",
+    "sha256": "eb7331c7fdbd2d5dbd439450dfdbbe692fd83aa4b725012d1cf239e6d64fd2df"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\crystal_sphere.py",
+    "sha256": "9cc995057bd92ced914d27f31edfeed71c7416f2594357731e249e95d88cb679"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsDeterministic": {
+      "maps_to": "CrystalSphere.cs:34 `IsDeterministic => false` marks the event as consuming RNG at CalculateVars time. The sim has no IsDeterministic surface; the property's only consumer is the event-selection machinery, and this unit's CalculateVars is unreachable behind is_allowed (see below), so the flag has nothing to gate.",
+      "verdict": "faithful"
+    },
+    "CalculateVars": {
+      "maps_to": "nothing. CrystalSphere.cs:44-47 rolls `UncoverFutureCost += base.Rng.NextInt(1, 50)`; events/crystal_sphere.py has no calculate_vars, inheriting the base no-op (events/base.py:109-110)",
+      "verdict": "gap",
+      "issue": "Unreachable in the sim only because the whole event is stubbed off -- see the DEFERRED-PORT guard, which carries this unit's verdict."
+    },
+    "IsAllowed": {
+      "maps_to": "CrystalSphere.is_allowed (events/crystal_sphere.py:30-33) hard-returns False where CrystalSphere.cs:49-56 asks `Players.All(p => p.Gold >= 100) && CurrentActIndex > 0`",
+      "verdict": "gap",
+      "issue": "See the DEFERRED-PORT guard. The gate is satisfiable with ported content -- gold >= 100 in act 2+ is an ordinary run state -- so this is not an unreachability waiver."
+    }
+  },
+  "guards": [
+    {
+      "what": "DEFERRED PORT: the whole event is a stub. CrystalSphere.cs's payout is the CrystalSphereMinigame (Events/Custom/CrystalSphereEvent/), driven 3 times for UNCOVER_FUTURE (after LoseGold(50 + NextInt(1,50), GoldLossType.Spent)) and 6 times for PAYMENT_PLAN (after AddCurseToDeck<Debt>)",
+      "verdict": "gap",
+      "issue": "The sim registers the id so the 18-id shared-pool shuffle keeps its draw count and order (events/crystal_sphere.py:1-14, an SP2 requirement) but forces is_allowed False so the event is never surfaced. Under rule 1 an unported C# side is a GAP, not a waiver: the gate is reachable (act 2+ with 100 gold), and the divergence is that a real event node in the game becomes a node the sim can never present. The two side effects OUTSIDE the minigame are portable on their own -- a gold loss of 50 + NextInt(1,50) and an added Debt curse -- so the deferral is wider than the un-portable part strictly requires. Recorded as a gap with the deferral decision named: docs/superpowers/plans/2026-07-19-shared-events.md. DORMANT is the wrong label here (the trigger is ordinary run state), so: LIVE, with the caveat that the sim never presents the node at all rather than presenting it wrongly."
+    },
+    {
+      "what": "no RNG is consumed by the stub",
+      "maps_to": "events/crystal_sphere.py:13 states it and the code shows it: is_allowed is a bare `return False` with no draw, so gating the event off cannot shift any parity counter. This is the reason the stub is safe to leave in the pool.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

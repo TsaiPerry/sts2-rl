@@ -1,0 +1,48 @@
+{
+  "unit": "event/byrdonis_nest",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\ByrdonisNest.cs",
+    "sha256": "82f879d42393f8199548d815ea4c2c4d79c389c716c3653caa81d01d1b2bf130"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\byrdonis_nest.py",
+    "sha256": "473830e27e9bee955d9d537269c58475029270aad9355c538f929579bffbd80f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "ByrdonisNest.is_allowed (events/byrdonis_nest.py:28-32) reproduces Player.HasEventPet (Player.cs:244-251) exactly, both clauses and in the same precedence: `Relics.Any(r => r.AddsPet)` -> `any(getattr(relic, 'adds_pet', False) ...)`, else `Deck.Cards.Any(c is ByrdonisEgg)` -> `any(card.id == 'byrdonis_egg' ...)`. The Players.All quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "Eat (ByrdonisNest.cs:39-43): CreatureCmd.GainMaxHp(MaxHpVar 7)",
+      "maps_to": "events/byrdonis_nest.py:11, 40-42: _MAX_HP_GAIN = 7, run.gain_max_hp(7). GainMaxHp raises max HP then heals the same amount in both.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Take (ByrdonisNest.cs:45-50): CreateCard<ByrdonisEgg> + CardPileCmd.Add(card, PileType.Deck)",
+      "maps_to": "events/byrdonis_nest.py:44-46 run.add_card(make_card('byrdonis_egg')).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`runState.Players.All(p => !p.HasEventPet())` (ByrdonisNest.cs:34-37)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "CanonicalVars StringVar Card and the egg hover tip (ByrdonisNest.cs:19-23, 30)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

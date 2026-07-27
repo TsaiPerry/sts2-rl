@@ -1,0 +1,99 @@
+{
+  "unit": "relic/gambling_chip",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\GamblingChip.cs",
+    "sha256": "bf589d53ed86e59ab0cac026b9e640097e492588d9b44cee4720465b014c450b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\gambling_chip.py",
+    "sha256": "4e296eeb56b3dd93e6a6122b37e79fd921d1b15893bb09833eab3ebe34245be6"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (gambling_chip.py:21)",
+      "verdict": "faithful"
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "on_player_turn_started (gambling_chip.py:23-36), dispatched by HookSystem.on_player_turn_started (hooks.py:285-289) from PlayerCombatState.start_turn (player.py:183-186)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The hook SLOT is right and the turn gate matches, but CardCmd.DiscardAndDraw does two things the sim's inline loop does not: it routes each discard through CardPileCmd.Add (G2) and, after the draw, it AUTO-PLAYS every discarded card that was Sly this turn (G1). The selector's `min = 0` is also collapsed (G3). [2026-07-26 fix pass: guard G3 is now also a gap -- the min-0 decline is unreachable in the sim.]"
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): CardCmd.DiscardAndDraw auto-plays every discarded card that `IsSlyThisTurn`, AFTER the draw (CardCmd.cs:186-204); the sim's loop has no Sly concept",
+      "verdict": "gap",
+      "issue": "MECHANISM: DiscardAndDraw collects `if (card.IsSlyThisTurn) slyCards.Add(card)` while discarding (CardCmd.cs:188-191), draws, and then `foreach (CardModel item in slyCards) await AutoPlay(choiceContext, item, null, AutoPlayType.SlyDiscard)` (CardCmd.cs:201-204). So mulliganing a Sly card with Gambling Chip PLAYS it for free on turn 1. gambling_chip.py:32-36 moves cards to the discard pile and draws, with no Sly branch anywhere. DORMANT, and the concrete unported thing is named: Sly does not exist in the sim at all -- executed `git grep -in 'is_sly\\|CardKeyword.Sly' -- sts2_rl` returns ZERO hits (`py audit/tools/relic_probes_b06.py b06-misc`). Porting the Sly keyword (CardKeyword.Sly / CardCmd.ApplySingleTurnSly, CardCmd.cs:698-701) makes it live immediately, and it would land in the strongest possible direction: a free turn-1 card play the sim silently drops. Note the fix belongs in a shared discard helper, not in this relic -- the sim has no DiscardCmd at all (grep `class DiscardCmd` over cmds.py returns nothing), so every discard site would need it."
+    },
+    {
+      "what": "G2 (DORMANT): each discard goes through `CardPileCmd.Add(card, discardPile)` in C# (CardCmd.cs:192) where the sim mutates the two lists directly (gambling_chip.py:33-34)",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardPileCmd.Add runs the game's pile-change machinery -- Hook.ShouldAddToDeck / Hook.ModifyCardBeingAddedToDeck for deck adds, and Hook.AfterCardChangedPiles(+Late) generally -- plus `discardPile.InvokeContentsChanged()` after the loop. The sim has no card-changed-piles hook to dispatch, so the raw list mutation is all there is. DORMANT: `after_card_added_to_deck` is the sim's only pile-change hook and it is scoped to the run DECK (relics/base.py:208-210), not to combat piles; the one C# hook that fires on a combat pile change and has ported implementers is AfterCardChangedPiles(Late), whose absence is audit/records/seam/hook_dispatch.json's own step-28 phase/dispatch finding rather than this relic's. Porting an AfterCardChangedPiles listener (SoulFysh.cs's AfterCardChangedPilesLate is the ported-monster example) makes it live. Worth recording for the fixer: gambling_chip.py:33-35 appends to the discard pile BEFORE firing on_card_discarded, which is the C# order (Add then Hook.AfterCardDiscarded), whereas player.discard_hand (player.py:188-196) fires the hook FIRST -- the two sim discard sites disagree with each other and this one is the correct one."
+    },
+    {
+      "what": "G3: `CardSelectorPrefs(prompt, 0, 999999999)` -- minimum ZERO -- so the game lets the player keep the whole hand; the sim's default selector always discards `count` cards",
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP (see relic/black_star, relic/calling_bell G3 et al.) in its card-selection form; RE-VERDICTED from deliberate-divergence by the 2026-07-26 relic fix pass. GamblingChip.cs:20 builds `new CardSelectorPrefs(base.SelectionScreenPrompt, 0, 999999999)` -- MIN 0 -- and GamblingChip.cs:21 guards the payload with `if (list.Count != 0)`, so 'discard nothing' is a first-class outcome of the screen. The sim cannot express it. sts2_rl/relics/gambling_chip.py:26-28 calls `combat.select_cards('gambling_chip', list(player.hand), len(player.hand))`, and 'gambling_chip' is NOT in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES; sts2_rl/driver.py:246-249 then short-circuits -- `if not skippable and count >= len(remaining): return remaining` -- so the driver never even ISSUES a DecisionRequest and the whole hand is mulliganed. The no-selector fallback is the same outcome by a different route (sts2_rl/combat.py:580-581 `self._rng.sample(candidates, count)` with count == len(hand)). EXECUTED, two ways. (a) `py audit/tools/relic_probes_b06.py b06-misc`: with a 3-card hand and no selector all 3 are discarded and the hand refilled. (b) driving `RunDriver._card_selector` directly with an _ask that raises: purpose 'gambling_chip' with candidates ['a','b','c'] and count 3 RETURNS ['a','b','c'] without raising -- no DecisionRequest is ever issued -- while 'card_reward', 'obtain' and 'transform_optional' all raise, i.e. all three do ask. The old rationale claimed 'an installed policy can return the empty list, exactly as the C# screen can' -- under the real driver it is never asked, so it cannot. LIVE, grade A (stream desync): the forced discard-and-redraw of a full hand consumes N draw-pile draws every combat that the game need not consume, and Gambling Chip is a Rare relic in the live grab bag. The fix is a driver change (add 'gambling_chip' to SKIPPABLE_PURPOSES) plus letting select_cards return fewer than `count`, not a relic change.",
+      "live": true
+    },
+    {
+      "what": "N1: the hook SLOT -- C#'s AfterPlayerTurnStart vs the sim's on_player_turn_started",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 11 says never verdict a hook mapping off a docstring, so this is settled by execution. `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, and audit/records/seam/turn_structure.json step 22 records `CardPileCmd.Draw(..., fromHandDraw: true)` then `Hook.AfterPlayerTurnStart` mapping to `self._draw(...)` then `on_player_turn_started` -- verdicted faithful there. Correct slot for this relic: the hand must already be drawn before it can be mulliganed. NOTE per binding rule 7: audit/records/seam/turn_structure.json and player.py are not hashed by this record."
+    },
+    {
+      "what": "N2: `base.Owner.PlayerCombatState.TurnNumber <= 1` (GamblingChip.cs:18) vs `if self.turn > 1: return` (gambling_chip.py:24)",
+      "verdict": "faithful",
+      "rationale": "Exact complement, and CombatState.turn starts at 1 (combat.py:108), matching TurnNumber's first-turn value. C# uses `<= 1` rather than `== 1` defensively (an extra turn granted before turn 1 cannot exist); `> 1` covers both. Also faithful: the `player == base.Owner` half is the single-player waiver of the other records in this batch, and Owner.PlayerCombatState is self.player."
+    },
+    {
+      "what": "N3: `CardCmd.DiscardAndDraw(ctx, list, list.Count)` draws exactly as many as were discarded, and the discards all happen BEFORE the draw",
+      "verdict": "faithful",
+      "rationale": "gambling_chip.py:32-36 discards every chosen card in the loop and only then calls DrawCmd.draw(player, len(chosen)) -- same count, same order. This matters because the discarded cards must be in the discard pile before the draw so a reshuffle can pick them up, and DiscardAndDraw's own doc comment (CardCmd.cs:162-168) is explicit that only the SLY handling is deferred past the draw, not the discard itself. The `if list.Count != 0` / `if not chosen: return` early exits also match, which keeps a zero-card choice from burning a reshuffle."
+    },
+    {
+      "what": "N4: `CombatManager.Instance.IsOverOrEnding -> return` at the top of DiscardAndDraw (CardCmd.cs:174-177)",
+      "verdict": "faithful",
+      "rationale": "Structurally satisfied: on_player_turn_started is a combat hook dispatched from PlayerCombatState.start_turn, which a decided combat does not reach. Same reasoning as relic/brilliant_scarf N1 for the sibling IsInProgress guard."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/gambling_chip's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Commands/CardCmd.cs, src/Core/Models/Monsters/SoulFysh.cs, sts2_rl/cards/base.py, sts2_rl/cmds.py, sts2_rl/combat.py, sts2_rl/hooks.py, sts2_rl/player.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

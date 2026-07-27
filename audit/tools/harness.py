@@ -9,10 +9,12 @@ Usage:
   py audit/tools/harness.py roster [KIND]       # work queue + unmatched units
   py audit/tools/harness.py skeleton UNIT       # write record skeleton
   py audit/tools/harness.py validate [PATH...]  # validate records
+  py audit/tools/harness.py rehash UNIT|PATH... # re-pin hashes (NOT a re-audit)
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib
 import inspect
@@ -37,6 +39,12 @@ NAME_OVERRIDES_PATH = Path(__file__).with_name("name_overrides.json")
 # Audit verdicts in rollup precedence order (low -> high).
 VERDICTS = ("faithful", "waiver", "deliberate-divergence", "gap")
 
+# `extra_sources[i].side` — which root the entry's path resolves against.
+# Content records cite files from BOTH trees (a power record routinely rests on
+# PowerCmd.cs and on cmds.py), and unlike the singular game_source/sim_source
+# pair the extra list is unordered and mixed, so each entry names its own root.
+SOURCE_SIDES = ("game", "sim")
+
 GAME_MODEL_DIRS = {
     "relic": "src/Core/Models/Relics",
     "power": "src/Core/Models/Powers",
@@ -44,33 +52,146 @@ GAME_MODEL_DIRS = {
     "monster": "src/Core/Models/Monsters",
     "event": "src/Core/Models/Events",
     "enchantment": "src/Core/Models/Enchantments",
+    # `potion` added 2026-07-26 on Perry's instruction ("don't ignore potions
+    # anymore"), replacing the shared contract's blanket potion exclusion. The
+    # exclusion had become load-bearing in the wrong direction: 10 entries
+    # across the card and power tiers waived real behaviour on it, while the
+    # relic tier filed 45 potion-mechanic gaps. Making it a KIND is what turns
+    # "out of scope" into "unaudited", which is a fact the tools can report.
+    "potion": "src/Core/Models/Potions",
 }
 
 # `public override <type> <Name>(  |  => ...  |  { ...` — one-regex scan of
 # the decompiled output, which is uniform. Captures the member name whether
-# it is a method or an expression-bodied property.
+# it is a method or an expression-bodied property. The type character class
+# includes `()` so a parenthesised tuple return — `Task<(PileType, int)>`,
+# `(decimal, bool)` — is matched; without it those hooks were silently
+# skipped, and the enumeration cannot be trusted if it can miss a member.
+# The quantifier is non-greedy, so `void Foo(` still parses as type `void`.
 _OVERRIDE_RE = re.compile(
     r"^\s*public\s+override\s+(?:sealed\s+)?(?:async\s+)?"
-    r"[\w<>,.?\[\] ]+?\s(\w+)\s*(?:\(|=>|\{|$)",
+    r"[\w<>,.?\[\]() ]+?\s(\w+)\s*(?:\(|=>|\{|$)",
     re.M,
 )
 
+# `public sealed class Foo : Bar, IBaz` -> ("Foo", "Bar, IBaz").
+_CLASS_DECL_RE = re.compile(
+    r"^\s*(?:\[[^\]]*\]\s*)*"
+    r"(?:public|internal|private|protected)?\s*"
+    r"(?:abstract\s+|sealed\s+|static\s+|partial\s+|unsafe\s+)*"
+    r"(?:class|record)\s+(\w+)\s*(?:<[^>]*>)?\s*:\s*([^\{\r\n]+)",
+    re.M,
+)
 
-def list_overrides(cs_text: str) -> list[str]:
-    """Names of every `public override` member, in declaration order."""
-    seen: set[str] = set()
-    out: list[str] = []
-    for name in _OVERRIDE_RE.findall(cs_text):
-        if name not in seen:
-            seen.add(name)
-            out.append(name)
-    return out
+# Base classes whose members are the *framework*, not the unit. Every power
+# derives from PowerModel, so enumerating PowerModel's own overrides into all
+# 134 power records would add the same noise 134 times — and that layer is
+# already audited, once, by the seam tier (hook_dispatch hashes
+# AbstractModel.cs and the model files). Base-class following stops here.
+MODEL_ROOT_CLASSES = frozenset({
+    "AbstractModel", "AfflictionModel", "BadgeModel", "CardModel",
+    "CreatureModel", "EnchantmentModel", "EventModel", "ModifierModel",
+    "MonsterModel", "OrbModel", "PotionModel", "PowerModel", "RelicModel",
+})
+
+
+def _declared_overrides(cs_text: str) -> list[str]:
+    """Names of every `public override` member declared in this text."""
+    return list(dict.fromkeys(_OVERRIDE_RE.findall(cs_text)))
+
+
+def _base_class_name(cs_text: str) -> str | None:
+    """The immediate base CLASS of the first type declared in `cs_text`.
+
+    C# puts the base class first in the base list, so only the first entry can
+    be one. Returns None when the type has no base class (interfaces only) or
+    when the base is a framework root."""
+    m = _CLASS_DECL_RE.search(cs_text)
+    if not m:
+        return None
+    first = m.group(2).split(",")[0]
+    name = re.sub(r"<.*", "", first).strip()
+    if not name or name in MODEL_ROOT_CLASSES:
+        return None
+    if len(name) > 1 and name[0] == "I" and name[1].isupper():
+        return None  # interface, so the type has no base class at all
+    return name
+
+
+@functools.lru_cache(maxsize=8)
+def _cs_index(game_root: str) -> dict[str, tuple[str, ...]]:
+    """stem -> every .cs file with that stem, under the game root."""
+    idx: dict[str, list[str]] = {}
+    for p in Path(game_root).rglob("*.cs"):
+        idx.setdefault(p.stem, []).append(str(p))
+    return {k: tuple(v) for k, v in idx.items()}
+
+
+def find_class_file(name: str, game_root: Path | None = None) -> Path | None:
+    """Locate the .cs file declaring `name`. The base of a one-line subclass
+    routinely lives in a different file (and a different directory), so this
+    searches the whole game tree rather than the unit's own model dir."""
+    root = game_root or DEFAULT_GAME_ROOT
+    decl = re.compile(rf"\b(?:class|record)\s+{re.escape(name)}\b")
+    for cand in _cs_index(str(root)).get(name, ()):
+        p = Path(cand)
+        if decl.search(p.read_text(encoding="utf-8-sig", errors="replace")):
+            return p
+    return None
+
+
+def split_overrides(cs_text: str, game_root: Path | None = None,
+                    source_path: Path | None = None) -> tuple[list[str], list[str]]:
+    """(declared here, inherited from the immediate base), in declaration order.
+
+    A `.cs` file that declares only `OriginModel` while its base declares the
+    real behaviour used to enumerate as one hook, so `validate` confirmed a
+    verdict for that one and never noticed the other seven. One level of base
+    is enough for the shapes this source uses; `game_root` is required to
+    resolve it because the base normally lives in another file."""
+    declared = _declared_overrides(cs_text)
+    if game_root is None:
+        return declared, []
+    base = _base_class_name(cs_text)
+    if not base:
+        return declared, []
+    bp = find_class_file(base, game_root)
+    if bp is None or (source_path and bp.resolve() == Path(source_path).resolve()):
+        return declared, []
+    inherited = [n for n in _declared_overrides(
+        bp.read_text(encoding="utf-8-sig", errors="replace"))
+        if n not in declared]
+    return declared, inherited
+
+
+def list_overrides(cs_text: str, game_root: Path | None = None,
+                   source_path: Path | None = None) -> list[str]:
+    """Every `public override` member the unit really has, in declaration
+    order: the ones it declares, then the ones it inherits from its immediate
+    base. Pass `game_root` to get the inherited half."""
+    declared, inherited = split_overrides(cs_text, game_root, source_path)
+    return declared + inherited
+
+
+def hook_key(key: str) -> str:
+    """A record's hook key, reduced to the member name it starts with.
+
+    Records annotate keys with provenance — `"Type (inherited,
+    TemporaryStrengthPower.cs:32-42)"` — so enumeration is matched against the
+    leading identifier rather than the whole string."""
+    m = re.match(r"\s*([A-Za-z_]\w*)", key or "")
+    return m.group(1) if m else (key or "").strip()
 
 
 def file_sha256(path: Path) -> str:
     """sha256 of the file's text with line endings normalized to LF."""
     text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
     return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+
+def source_base(side: str, game_root: Path | None = None) -> Path:
+    """Root an `extra_sources` entry's path resolves against."""
+    return (game_root or DEFAULT_GAME_ROOT) if side == "game" else _REPO
 
 
 def _pascal(unit_id: str) -> str:
@@ -103,6 +224,9 @@ def _sim_units(kind: str) -> dict[str, type]:
     if kind == "enchantment":
         from sts2_rl.enchantments import ALL_ENCHANTMENTS
         return dict(ALL_ENCHANTMENTS)
+    if kind == "potion":
+        from sts2_rl.potions import ALL_POTIONS
+        return dict(ALL_POTIONS)
     if kind == "monster":
         return _monster_units()
     raise ValueError(f"unknown kind: {kind}")
@@ -597,14 +721,27 @@ def _hash_sources(paths: list[str], base: Path) -> list[dict]:
 
 
 def skeleton(unit: str, game_root: Path | None = None,
-             audits_dir: Path | None = None) -> Path:
+             audits_dir: Path | None = None, sim_only: bool = False) -> Path:
     """Write audit/records/<kind>/<id>.json with hooks/steps enumerated and
     verdicts empty, ready for an agent to fill in. Refuses to overwrite."""
     root = game_root or DEFAULT_GAME_ROOT
     adir = audits_dir or DEFAULT_AUDITS_DIR
     kind, _, unit_id = unit.partition("/")
 
-    if kind == "seam":
+    if sim_only:
+        row = next(r for r in roster(kind, root) if r["unit"] == unit)
+        record = {
+            "unit": unit,
+            "sim_only": True,
+            "rationale": "",
+            "sim_source": {"path": row["sim_path"],
+                           "sha256": file_sha256(_REPO / row["sim_path"])},
+            "hooks": {},
+            "guards": [],
+            "verdict": "",
+            "audited": "",
+        }
+    elif kind == "seam":
         game_paths, sim_paths = SEAM_SOURCES[unit_id]
         record: dict = {
             "unit": unit,
@@ -625,8 +762,9 @@ def skeleton(unit: str, game_root: Path | None = None,
                            "sha256": file_sha256(_REPO / row["sim_path"])},
             "hooks": {
                 name: {"maps_to": "", "verdict": ""}
-                for name in list_overrides(gp.read_text(encoding="utf-8-sig",
-                                                        errors="replace"))
+                for name in list_overrides(
+                    gp.read_text(encoding="utf-8-sig", errors="replace"),
+                    game_root=root, source_path=gp)
             },
             "guards": [],
             "verdict": "",
@@ -641,6 +779,46 @@ def skeleton(unit: str, game_root: Path | None = None,
     return out
 
 
+_SHA_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def _check_extra_sources(record: dict, errs: list[str]) -> None:
+    """Validate the optional `extra_sources` list.
+
+    Every file a verdict cites with a line number has to be hashed by the
+    record (audit/README.md, "Staleness"). The singular game_source/sim_source
+    pair only covers the unit's own two files, so any *other* file a content
+    record leans on goes here — one entry per file, each naming the root its
+    path resolves against. Optional: the key may be absent entirely."""
+    if "extra_sources" not in record:
+        return
+    srcs = record.get("extra_sources")
+    if not isinstance(srcs, list):
+        errs.append("extra_sources: must be a list")
+        return
+    for i, s in enumerate(srcs):
+        if not isinstance(s, dict):
+            errs.append(f"extra_sources[{i}]: must be an object")
+            continue
+        if not s.get("path") or not s.get("sha256"):
+            errs.append(f"extra_sources[{i}]: path and sha256 required")
+        elif not _SHA_RE.fullmatch(str(s["sha256"])):
+            errs.append(
+                f"extra_sources[{i}]: sha256 must be 64 lowercase hex digits")
+        if s.get("side") not in SOURCE_SIDES:
+            errs.append(
+                f"extra_sources[{i}]: side {s.get('side')!r} not one of "
+                f"{SOURCE_SIDES}")
+
+
+def record_entries(record: dict) -> list[dict]:
+    """Every verdict-bearing entry in a record: hooks, steps and guards."""
+    out = list((record.get("hooks") or {}).values())
+    out += list(record.get("steps") or [])
+    out += list(record.get("guards") or [])
+    return [e for e in out if isinstance(e, dict)]
+
+
 def _check_entry(where: str, entry: dict, errs: list[str]) -> None:
     v = entry.get("verdict", "")
     if v not in VERDICTS:
@@ -650,9 +828,38 @@ def _check_entry(where: str, entry: dict, errs: list[str]) -> None:
         errs.append(f"{where}: verdict {v!r} requires a non-empty rationale")
     if v == "gap" and not entry.get("issue"):
         errs.append(f"{where}: verdict 'gap' requires a non-empty issue")
+    # Optional `live` — liveness as data instead of a LIVE/dormant token buried
+    # in prose, which a third of the power tier's gap entries simply omitted.
+    if "live" in entry:
+        if not isinstance(entry["live"], bool):
+            errs.append(f"{where}: 'live' must be true or false, "
+                        f"got {entry['live']!r}")
+        elif v != "gap":
+            errs.append(f"{where}: 'live' only means something on a 'gap' "
+                        f"entry, not {v!r}")
 
 
-def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
+def enumeration_gaps(record: dict, game_root: Path | None = None) -> list[str]:
+    """`public override` members the unit INHERITS that the record gives no
+    verdict for. Reported separately from validate_record's errors because the
+    422 records predating base-class following were written against an
+    enumeration that could not see these; promoting them to errors in one step
+    would red-line the whole ledger. `validate --strict-inherited` does that
+    promotion once the records have caught up."""
+    root = game_root or DEFAULT_GAME_ROOT
+    if record.get("sim_only") or (record.get("unit", "").split("/", 1)[0] == "seam"):
+        return []
+    gp = root / (record.get("game_source") or {}).get("path", "")
+    if not gp.is_file():
+        return []
+    _, inherited = split_overrides(
+        gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp)
+    have = {hook_key(k) for k in (record.get("hooks") or {})}
+    return [n for n in inherited if n not in have]
+
+
+def validate_record(record: dict, game_root: Path | None = None,
+                    strict_inherited: bool = False) -> list[str]:
     """Completeness/vocabulary validation. Returns error strings; [] = valid.
     Staleness (hash drift) is audit_status.py's job, not validation's."""
     root = game_root or DEFAULT_GAME_ROOT
@@ -680,6 +887,29 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
                 errs.append(f"steps[{i}]: 'what' required")
             _check_entry(f"steps[{i}]", s, errs)
         entries += steps
+    elif record.get("sim_only") is not None and record.get("sim_only") is not False:
+        # A unit the sim has and the game does not (a test fixture, a
+        # scaffold). It cannot carry a game_source, so the ordinary shape
+        # rejects it and audit_status shows it unaudited forever. Recording it
+        # as sim-only-by-design is a CLAIM, so it costs a rationale.
+        if record.get("sim_only") is not True:
+            errs.append(f"sim_only must be true, got {record['sim_only']!r}")
+        if record.get("game_source"):
+            errs.append("sim_only record must not carry a game_source")
+        src = record.get("sim_source") or {}
+        if not src.get("path") or not src.get("sha256"):
+            errs.append("sim_source: path and sha256 required")
+        elif not (_REPO / src["path"]).is_file():
+            errs.append(f"sim source not found: {_REPO / src['path']}")
+        if not record.get("rationale"):
+            errs.append("sim_only requires a rationale naming why the unit has "
+                        "no C# counterpart")
+        if record.get("verdict") not in VERDICTS:
+            errs.append(f"verdict {record.get('verdict')!r} not one of {VERDICTS}")
+        hooks = record.get("hooks") or {}
+        for name, entry in hooks.items():
+            _check_entry(f"hooks[{name}]", entry, errs)
+        entries += list(hooks.values())
     else:
         for side in ("game_source", "sim_source"):
             src = record.get(side) or {}
@@ -691,9 +921,12 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
             hooks = {}
         gp = root / (record.get("game_source") or {}).get("path", "")
         if gp.is_file():
-            required = set(list_overrides(
-                gp.read_text(encoding="utf-8-sig", errors="replace")))
-            missing = required - set(hooks)
+            have = {hook_key(k) for k in hooks}
+            declared, inherited = split_overrides(
+                gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp)
+            missing = [n for n in declared if n not in have]
+            if strict_inherited:
+                missing += [n for n in inherited if n not in have]
             if missing:
                 errs.append(
                     f"hooks missing verdicts for overrides: {sorted(missing)}")
@@ -704,6 +937,8 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
             if entry.get("verdict") == "faithful" and not entry.get("maps_to"):
                 errs.append(f"hooks[{name}]: 'faithful' requires maps_to")
         entries += list(hooks.values())
+
+    _check_extra_sources(record, errs)
 
     guards = record.get("guards") or []
     for i, g in enumerate(guards):
@@ -723,6 +958,81 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
     return errs
 
 
+REHASH_WARNING = """\
+  ############################################################################
+  #  REHASH IS NOT A RE-AUDIT.                                               #
+  #                                                                          #
+  #  A source hash is not bookkeeping - it is the record's claim that its    #
+  #  verdicts were reached against exactly this text. Re-pinning it without  #
+  #  re-reading both sides converts a durable finding into a decoration:     #
+  #  the record then asserts a verdict over code nobody has looked at, and   #
+  #  the staleness detector can never flag it again.                         #
+  #                                                                          #
+  #  Only run this AFTER an agent has re-read the changed source and         #
+  #  confirmed every verdict in the record still holds. It is a mechanical   #
+  #  convenience for the last step of a re-audit, never a substitute for one.#
+  ############################################################################
+"""
+
+
+def rehash_record(record: dict, game_root: Path | None = None) -> list[str]:
+    """Recompute every hash the record carries. Mutates it in place and
+    returns one line per hash that actually changed (empty = already current).
+
+    Covers all three shapes: the seam plural lists, the content singular pair,
+    and the optional `extra_sources` list — a partial re-pin would leave the
+    record half-stale, which is worse than not re-pinning at all."""
+    root = game_root or DEFAULT_GAME_ROOT
+    changes: list[str] = []
+
+    def repin(where: str, src: dict, base: Path) -> None:
+        p = base / src.get("path", "")
+        if not p.is_file():
+            changes.append(f"{where}: MISSING {p} — left unchanged")
+            return
+        new = file_sha256(p)
+        if new != src.get("sha256"):
+            changes.append(
+                f"{where}: {src.get('path')} {str(src.get('sha256'))[:12]}"
+                f" -> {new[:12]}")
+            src["sha256"] = new
+
+    for side, base in (("game_sources", root), ("sim_sources", _REPO)):
+        for i, s in enumerate(record.get(side) or []):
+            repin(f"{side}[{i}]", s, base)
+    for side, base in (("game_source", root), ("sim_source", _REPO)):
+        src = record.get(side)
+        if isinstance(src, dict) and src.get("path"):
+            repin(side, src, base)
+    for i, s in enumerate(record.get("extra_sources") or []):
+        if isinstance(s, dict):
+            repin(f"extra_sources[{i}]", s, source_base(s.get("side"), root))
+    return changes
+
+
+def _record_path(target: str, audits_dir: Path | None = None) -> Path:
+    """Accept either a unit id (`power/artifact`) or a record file path."""
+    adir = Path(audits_dir or DEFAULT_AUDITS_DIR)
+    if not target.endswith(".json"):
+        kind, _, unit_id = target.partition("/")
+        return adir / kind / f"{unit_id}.json"
+    return Path(target)
+
+
+def rehash(targets: list[str], game_root: Path | None = None,
+           audits_dir: Path | None = None, write: bool = True) -> dict[str, list[str]]:
+    """Bulk `rehash_record` over unit ids and/or record paths."""
+    out: dict[str, list[str]] = {}
+    for t in targets:
+        p = _record_path(t, audits_dir)
+        record = json.loads(p.read_text(encoding="utf-8"))
+        changes = rehash_record(record, game_root=game_root)
+        if changes and write:
+            p.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        out[str(p)] = changes
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -730,8 +1040,24 @@ def main(argv: list[str] | None = None) -> int:
     ap_roster.add_argument("kind", nargs="?", choices=sorted(GAME_MODEL_DIRS))
     ap_skel = sub.add_parser("skeleton", help="write a record skeleton")
     ap_skel.add_argument("unit", help="e.g. relic/unsettling_lamp or seam/power_cmd")
+    ap_skel.add_argument(
+        "--sim-only", action="store_true",
+        help="unit exists in the sim with no C# counterpart (needs a rationale)")
     ap_val = sub.add_parser("validate", help="validate audit records")
     ap_val.add_argument("paths", nargs="*", help="record files (default: all)")
+    ap_val.add_argument(
+        "--strict-inherited", action="store_true",
+        help="treat un-audited INHERITED overrides as errors, not warnings")
+    ap_re = sub.add_parser(
+        "rehash",
+        help="re-pin a record's source hashes — NOT a re-audit, see the banner")
+    ap_re.add_argument("targets", nargs="*",
+                       help="unit ids (power/artifact) and/or record paths")
+    ap_re.add_argument("--all", action="store_true",
+                       help="every record under audit/records/ (bulk form)")
+    ap_re.add_argument("--kind", help="every record of one kind (bulk form)")
+    ap_re.add_argument("--dry-run", action="store_true",
+                       help="report what would be re-pinned, write nothing")
     args = ap.parse_args(argv)
 
     if args.cmd == "roster":
@@ -745,19 +1071,50 @@ def main(argv: list[str] | None = None) -> int:
             for x in unmatched:
                 print(f"  UNMATCHED {x['unit']} -> expected {x['game_path']}")
     if args.cmd == "skeleton":
-        out = skeleton(args.unit)
+        out = skeleton(args.unit, sim_only=args.sim_only)
         print(f"wrote {out}")
     if args.cmd == "validate":
         paths = ([Path(p) for p in args.paths]
                  or sorted(DEFAULT_AUDITS_DIR.rglob("*.json")))
-        bad = 0
+        bad = warned = 0
         for p in paths:
-            errs = validate_record(json.loads(p.read_text(encoding="utf-8")))
+            record = json.loads(p.read_text(encoding="utf-8"))
+            errs = validate_record(
+                record, strict_inherited=args.strict_inherited)
             for e in errs:
                 print(f"{p}: {e}")
             bad += bool(errs)
-        print(f"{len(paths)} record(s), {bad} invalid")
+            if not args.strict_inherited:
+                gaps = enumeration_gaps(record)
+                if gaps:
+                    print(f"{p}: WARN inherited overrides with no verdict: "
+                          f"{sorted(gaps)}")
+                    warned += 1
+        print(f"{len(paths)} record(s), {bad} invalid"
+              + (f", {warned} with un-audited inherited overrides "
+                 f"(re-run with --strict-inherited)" if warned else ""))
         return 1 if bad else 0
+    if args.cmd == "rehash":
+        print(REHASH_WARNING, file=sys.stderr)
+        targets = list(args.targets)
+        if args.all:
+            targets += [str(p) for p in sorted(DEFAULT_AUDITS_DIR.rglob("*.json"))]
+        if args.kind:
+            targets += [str(p) for p in
+                        sorted((DEFAULT_AUDITS_DIR / args.kind).glob("*.json"))]
+        if not targets:
+            print("rehash: nothing to do — pass unit ids, --all or --kind")
+            return 2
+        results = rehash(targets, write=not args.dry_run)
+        repinned = 0
+        for path, changes in results.items():
+            for c in changes:
+                print(f"{path}: {c}")
+            repinned += bool(changes)
+        verb = "would re-pin" if args.dry_run else "re-pinned"
+        print(f"{len(results)} record(s), {verb} {repinned}")
+        print("re-pinned hashes are worthless unless the record was re-audited "
+              "against the new text", file=sys.stderr)
     return 0
 
 

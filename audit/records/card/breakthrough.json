@@ -1,0 +1,79 @@
+{
+  "unit": "card/breakthrough",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Breakthrough.cs",
+    "sha256": "e1b0bbd0c5e779cc07929fae593bc545dd173075645fdb3e6f0b726ce733c76c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\breakthrough.py",
+    "sha256": "4192660bb07c535a49e5f3f4faffd4bfd1f1294bfd49c64f00d60c1eb193ed28"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/RupturePower.cs",
+      "sha256": "df96d99885ac965299a007c14234f028f4e4ba53d08be499b26fcd600ac7bc9a",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (breakthrough.py:27-31) + _init_vars (33-34)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AllEnemies)` (Breakthrough.cs:19-22) == cost 1 / ATTACK / COMMON / ALL_ENEMIES. `handles_own_routing = True` (breakthrough.py:31) is faithful, not an addition: C#'s OnPlay runs ONCE and `TargetingAllOpponents` fans out inside the attack command, whereas the sim's framework would call `on_play` once per living enemy (combat.py:481-487) and repeat the one-shot self-damage."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 9 declared; the 1 HP loss is inlined (breakthrough.py:34, 44)",
+      "verdict": "gap",
+      "issue": "`new DamageVar(9m, ValueProp.Move)` maps to `_damage = 9`, but `new HpLossVar(1m)` (Breakthrough.cs:13-17) has no `_hp_loss` in `_init_vars`, so `Card.base_hp_loss` reports 0. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt number is identical), LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "BreakthroughCard.on_play (breakthrough.py:39-56)",
+      "verdict": "gap",
+      "issue": "The AoE half is faithful (`DamageCmd.Attack(9).FromCard(this).TargetingAllOpponents(CombatState)`, Breakthrough.cs:28-30, == a per-enemy `DamageCmd.deal(..., dealer=ctx.player, card=self)`), and so is the order (self-damage FIRST). THE SELF-DAMAGE BYPASSES THE DAMAGE PIPELINE ENTIRELY. C# calls `CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.HpLoss.BaseValue, Unblockable | Unpowered | Move, this)` (Breakthrough.cs:27) -- the full pipeline: the damage modifiers, the damage cap, `Hook.AfterCurrentHpChanged`, `Hook.AfterDamageReceived`, the death check and Kill. The sim hand-rolls it: `p.hp = max(0, p.hp - 1)` plus a bare `on_hp_changed` and a manual `should_die`/`on_death` (breakthrough.py:42-50), so `on_damage_received` never fires and no damage modifier is consulted. Observable through RupturePower, which gains Strength on any unblocked damage its owner receives (`RupturePower.AfterDamageReceived`, RupturePower.cs:44-57 -- with cardSource null the immediate-apply branch at line 48 is taken) and whose sim port listens on `on_damage_received` (powers.py:272-289). Play Breakthrough holding Rupture: the game gains Strength, the sim does not. LIVE -- card/rupture is a ported Ironclad card (sts2_rl/cards/rupture_card.py) and Breakthrough is a ported Common. The bypass also skips the Intangible cap and Buffer, which would matter for any larger card-sourced HP loss. Presentation, folded in: VfxCmd.PlayOnCreatureCenter (26) and WithHitFx (29)."
+    },
+    "OnUpgrade": {
+      "maps_to": "BreakthroughCard._on_upgrade (breakthrough.py:37-38)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(4m)` (Breakthrough.cs:35) == `self._damage += 4` (9 -> 13). The 1 HP loss is unchanged by the upgrade on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the enemy loop skips on `enemy.is_dead`, not `enemy.is_gone` (breakthrough.py:54)",
+      "verdict": "gap",
+      "issue": "Every other AoE card in the sim filters on `not e.is_gone` (conflagration, shockwave, omnislice, sword_boomerang, rip_and_tear -- see `py audit/tools/card_probes.py dead-target-guards`), and `is_gone` is `is_dead or escaped` (creatures.py:44-46). Breakthrough alone uses `is_dead`, so an ESCAPED-but-alive enemy is still struck. C#'s `TargetingAllOpponents(CombatState)` resolves against the combat's live opponent list, from which an escaped creature has been removed (`CreatureCmd.Escape`, CreatureCmd.cs:579-603). DORMANT: no ported Ironclad-reachable monster escapes while a second enemy is still alive to keep the combat running, so the extra target is never reached today; live with any ported escaping monster in a multi-enemy fight."
+    },
+    {
+      "what": "the per-enemy `if ctx.player.is_dead: break` inside the AoE loop (breakthrough.py:55-56)",
+      "verdict": "faithful",
+      "rationale": "Mirrors the combat-over check the game's attack command performs between hits; both stop fanning out once the player has died mid-attack (thorns, Flame Barrier)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

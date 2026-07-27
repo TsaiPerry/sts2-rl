@@ -1,0 +1,88 @@
+{
+  "unit": "power/withering_presence",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\WitheringPresencePower.cs",
+    "sha256": "aa46615f0397905cd8f4becbed94af6ca1fdbf66010be9cc7f3c22392171be24"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Aeonglass.cs",
+      "sha256": "4a1e8159da55c48e2f7870832f199f6c8a62c29b7d98ae6183c431505f2b68d5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/aeonglass.py",
+      "sha256": "122f47b88b1d87fd6dec7dbe7f575fa92aa176adb2b1e3d1d03f70f04a4c4dd8",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3264 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "DisplayAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "WitheringPresencePower.cs:24 shows `DynamicVars[\"CardsLeft\"]`. Presentation only."
+    },
+    "InstanceType": {
+      "maps_to": "cmds.py:308 `if power_cls.id in target.powers`",
+      "verdict": "gap",
+      "issue": "PowerInstanceType.Instanced (WitheringPresencePower.cs:26): C# creates one instance per OPPONENT, each with its own `Target` (Aeonglass.cs:78-83 loops `GetOpponentsOf(base.Creature)`), and the counter is per-instance. The sim's stacking check always behaves as PowerInstanceType.None. power_cmd gap G5 owns the mechanism and this is one of its 11 named ported instances -- and one of the seven that do not acknowledge the distinction at all. DORMANT by scope: one player means one opponent means one instance, so like power/strangle this is dormant BY SCOPE rather than by content and will not become live by porting more Ironclad content. Third-file citations, not hashed here."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:3276-3289 on_card_played",
+      "verdict": "gap",
+      "issue": "The mechanism is right -- count the target player's card plays down from 6, add a Wither to HAND at 0, reset to 6 -- and the Wither's upgrade matching is preserved (`aeonglass.MatchWitherToUpgradeCount(wither)` at WitheringPresencePower.cs:37 vs powers.py:3287-3288's `for _ in range(wither_upgrade_count): wither.fake_upgrade()`). Two findings. (1) The COUNTER'S IDENTITY is conflated: C# keeps `CardsLeft` as a DynamicVar whose canonical default is 6 (WitheringPresencePower.cs:16,28) and resets it to the LITERAL `6m` (:57), entirely independent of `base.Amount`; the sim initialises and resets `_cards_left` from `self.amount` (powers.py:3274, 3283). Those coincide only because both appliers pass 6 -- Aeonglass.cs:82 applies `6m` and monsters/glory/aeonglass.py:19,40 applies `_WITHERING_PRESENCE = 6` -- so a Withering Presence applied at any other amount, or STACKED (StackType is Counter, so stacking really does raise Amount), would reset to the wrong number in the sim and to 6 in the game. DORMANT, by enumeration of the two appliers. (2) hook_dispatch gap G4: the sim fires on_card_played once per play where C# fires AfterCardPlayed once per CardPlay iteration, so a Throwing-Axe- or One-Two-Punch-doubled card advances the counter by 1 in the sim and by 2 in the game -- G4 is already LIVE with an executed witness and is not re-verdicted; the per-unit consequence is that Wither arrives later in the sim. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "WitheringPresencePower.cs:48 `cardPlay.Card.Owner == base.Target.Player`",
+      "verdict": "faithful",
+      "rationale": "The sim has no per-instance Target and tests nothing (powers.py:3276-3277), which is equivalent in single-player -- every played card belongs to the one player. Folded into the InstanceType finding."
+    },
+    {
+      "what": "WitheringPresencePower.cs:54 Cmd.Wait(0.5f)",
+      "verdict": "waiver",
+      "rationale": "Timing only."
+    },
+    {
+      "what": "Wither is added to PileType.Hand, not the discard",
+      "verdict": "faithful",
+      "rationale": "powers.py:3289 `CardPileCmd.add_to_hand`. Checked because a Wither in the draw pile would be a materially weaker punish."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

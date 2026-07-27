@@ -1,0 +1,133 @@
+{
+  "unit": "event/welcome_to_wongos",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\WelcomeToWongos.cs",
+    "sha256": "5a1f3c051a170105fe8445321aa7aa0f88e17312de91253e52f041104dd2299e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\welcome_to_wongos.py",
+    "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Orobas.cs",
+      "sha256": "eeb3c17628455969b8b77c28240c2954adf0d5d8b4a15898fa701ab411742d61",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Random/Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/wongos_mystery_ticket.py",
+      "sha256": "07c8b5f673135fecf9c15596ac7f8985a542fef6307448acd923822ddd1f67f3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "WelcomeToWongos.is_allowed (events/welcome_to_wongos.py:40-42) `run.act_index == 1 and run.gold >= 100`, matching WelcomeToWongos.cs:68-75 `CurrentActIndex == 1 && Players.All(p => p.Gold >= 100)`; the gate's 100 is the BargainBinCost DynamicVar's base value, which the sim reuses as _BARGAIN_BIN_COST. Multiplayer quantifier waived separately.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars BargainBinCost 100, MysteryBoxCost 300, FeaturedItemCost 200, MysteryBoxRelicCount 3, MysteryBoxCombatCount 5 (WelcomeToWongos.cs:55-66), and the three CheckObtainWongoBadge point awards 32 / 8 / 16 (:138, :145, :152)",
+      "maps_to": "events/welcome_to_wongos.py:11-16 carries 100 / 200 / 300 and _POINTS = {BARGAIN_BIN: 32, FEATURED_ITEM: 16, MYSTERY_BOX: 8}; the two MysteryBox vars belong to the purchased relic and are exact there (relics/wongos_mystery_ticket.py: COMBATS_TO_ACTIVATE = 5, RELIC_COUNT = 3). The remaining four CanonicalVars are display counters.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (WelcomeToWongos.cs:77-108) pre-rolls the featured relic BEFORE building the list, then emits four options in the order bargain bin / featured item / mystery box / leave, each paid one replaced by its _LOCKED twin when unaffordable; LEAVE is never locked",
+      "maps_to": "events/welcome_to_wongos.py:44-59 does exactly that, with the pull at the top of initial_options. The pre-roll ORDER matters even though it costs no draw, because it decides which relic leaves the bag before any purchase; the sim preserves it. RelicFactory.PullNextRelicFromFront(player, RelicRarity.Rare, r => r.IsAllowedInShops) is the THREE-argument overload (RelicFactory.cs:45-50), which does NOT call RollRarity -- EXECUTED (`py audit/tools/event_probes_c.py grabbag` / `drawcount`): all three purchase paths take 0 shared-rng and 0 event-rng draws in the sim, matching.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three purchases (WelcomeToWongos.cs:133-153): LoseGold FIRST, then RelicCmd.Obtain -- a Common shop-legal grab-bag pull for the bargain bin, the pre-rolled featured Rare, and a fixed WongosMysteryTicket for the mystery box",
+      "maps_to": "events/welcome_to_wongos.py:65-85 reproduces all three including the gold-first order. run.add_relic (run.py:546-553) runs the relic's after_obtained, which is RelicCmd.Obtain's job. The sim's extra `if relic is not None` guards are defensive: the source's PullNextRelicFromFront never returns null (it substitutes FallbackRelic) -- see the EV-11 guard for what the sim substitutes instead.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Leave (WelcomeToWongos.cs:155-166) downgrades ONE random UPGRADED deck card, and the sim's `if upgraded:` guard is not a missing draw",
+      "maps_to": "events/welcome_to_wongos.py:87-91 filters `c.upgrade_level > 0` (C#: `c.IsUpgraded`) and guards the empty case. EXECUTED (`py audit/tools/event_probes_c.py nextitem`), which quotes Rng.cs:255-265: NextItem's `if (num == 0) return default(T);` precedes its NextInt call, so an empty set costs ZERO draws in the game too. This is the negative control for the orobas defect shape (Orobas.cs:54-56 puts a LOCKED option INTO the list, so its NextItem runs over a ONE-element list and DOES draw). `py audit/tools/event_probes_c.py drawcount` confirms LEAVE takes exactly 1 draw when an upgraded card exists.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: Leave's `base.Rng.NextItem(Deck.Cards.Where(IsUpgraded))` (WelcomeToWongos.cs:158) -- events/welcome_to_wongos.py:90 uses self.rng.choice, so this event's single random draw rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "BR-52 (blast radius): WelcomeToWongos.Leave calls CardCmd.Downgrade (WelcomeToWongos.cs:161, CardCmd.cs:212-222), and card.downgrade() is the sim's port. audit/records/seam/creature_card_cmds.json step 52 records that the sim's downgrade skips the Enchantment.ModifyCard() re-apply the game runs",
+      "verdict": "deliberate-divergence",
+      "rationale": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted); noted here only so this unit's record shows it is in the radius. The stream-4 report's cross-record note 1 already narrowed step 52's liveness to the IN-COMBAT downgrade, because Enchantment.reset() (enchantments.py:214-216, called from combat.py:131 for every deck card) self-heals an out-of-combat downgrade before the card is next played -- and Wongo's LEAVE is an out-of-combat downgrade, so the divergence window closes at the next combat setup. Carried at step 52's verdict."
+    },
+    {
+      "what": "EV-11: BARGAIN_BIN's Common pull (WelcomeToWongos.cs:136) and GenerateInitialOptions' Rare pull (:80) calls run.pull_relic_from_front (run.py:559-595), which scans the merged bag for the first relic of the asked rarity passing the filter and, on no match, pops the FRONT OF THE BAG at any rarity. The game's RelicGrabBag.GetAvailableDeque (RelicGrabBag.cs:218-243) instead walks a rarity LADDER (Shop -> Common -> Uncommon -> Rare -> None) and RelicFactory.PullNextRelicFromFront falls back to `FallbackRelic` = Circlet (RelicFactory.cs:13, :47)",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-11, one verdict at every pull_relic_from_front site (rule 3). Neither leg costs an RNG draw -- WelcomeToWongos uses the THREE-argument overload (RelicFactory.cs:45-50), which skips RollRarity entirely -- so this is purely WHICH relic comes out. EXECUTED (`py audit/tools/event_probes_c.py grabbag`): with the Common deque emptied, BARGAIN_BIN's `pull_relic_from_front(COMMON, shop_legal=True)` hands out 'gremlin_horn', an UNCOMMON, without walking the ladder; with no Rare left, FEATURED_ITEM hands out 'gremlin_horn' where the game hands out Circlet, and `circlet` is not even ported (`circlet in ALL_RELICS` is False). DORMANT: the probe shows the parity bag holds 122 relics with 36 Rare + IsAllowedInShops, and nothing in ported content drains a whole rarity deque inside one run -- the concrete unported thing that would make it live is the Circlet relic itself, plus any content that empties a deque. Recorded so the sim's bag-front fallback is not mistaken for the source's shape. RADIUS beyond this record: every other pull_relic_from_front caller -- events/luminous_choir.py, events/round_tea_party.py, events/relic_trader.py, relics/wongos_mystery_ticket.py:47 -- whose records verdicted the pull faithful on the STREAM question without examining the ladder."
+    },
+    {
+      "what": "CheckObtainWongoBadge (WelcomeToWongos.cs:111-131) is not ported: the sim never grants WongoCustomerAppreciationBadge, and it tracks points on an ad-hoc attribute instead of run state",
+      "verdict": "gap",
+      "issue": "The badge is awarded when `SaveManager.Instance.Progress.WongoPoints % 2000 + pointsEarned >= 2000` (:113-123), i.e. off a PROFILE-lifetime counter -- the same shape as Test Subject's #C71. EXECUTED (`py audit/tools/event_probes_c.py wongo`): the relic IS ported (relics/wongo_customer_appreciation_badge.py) at rarity EVENT so it is not in the grab bag, there are ZERO `add_relic('wongo_customer...')` sites in the sim's event, and `wongo_points` appears in no sts2_rl file other than welcome_to_wongos.py -- it is created by `getattr(run, 'wongo_points', 0)` at events/welcome_to_wongos.py:63 rather than being RunState state. DORMANT, with the concrete unported thing named: there is no port of SaveManager.Progress (cross-run profile progression) at all, so a fresh sim profile can never reach 2000 -- but a real profile sitting at 1968+ points earns the badge on the very next purchase, which is why this is a dormant gap and not a waiver (rule 1). Two secondary notes, both executed by the same probe: (a) the relic's own docstring claims 'A single run can earn at most 32+16+8 = 56 points' -- false, because each of the three buy handlers ends in SetEventFinished / _finish (count = 3) and the event is act-2-only and once-per-run, so the true maximum is 32; (b) the game SETS `Owner.ExtraFields.WongoPoints = pointsEarned` (:120) where the sim ACCUMULATES, which coincides only because one purchase is possible per run."
+    },
+    {
+      "what": "StringVar('RandomRelic') + FeaturedItem.Title.GetFormattedText() (WelcomeToWongos.cs:65, :81), FeaturedItem.HoverTips (:93), and Leave's CardCmd.Preview + Cmd.CustomScaledWait(0.5f, 1.2f) (:162-163)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "IsAllowed's `runState.Players.All(p => ...)` quantifier (WelcomeToWongos.cs:72)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "EV-7 does NOT reach this unit",
+      "maps_to": "The stream-4 report flags wongo_customer_appreciation_badge / wongos_mystery_ticket as one of EV-7's four clashing id pairs, but EV-7 only bites where a StableShuffle SORTS before it samples. This event never shuffles: it pulls from the relic grab bag, and RelicGrabBag.Populate ends in `value2.UnstableShuffle(rng)` (RelicGrabBag.cs:86-89, :106-109) -- no sort. EXECUTED (`py audit/tools/event_probes_c.py grabbag`): zero stable_shuffle call sites in events/welcome_to_wongos.py, and relic_pools.py:195 documents the same UnstableShuffle shape on the sim side. Recorded so a future reader does not add an EV-7 entry here by pattern-matching on the relic ids.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

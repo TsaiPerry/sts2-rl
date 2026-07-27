@@ -1,0 +1,103 @@
+{
+  "unit": "power/ritual",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RitualPower.cs",
+    "sha256": "b8917547dbef7e61619523c35d30c478645b8eea612fbcc20e15eacac10f1912"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/devoted_sculptor.py",
+      "sha256": "8d8ec4a9c27320cc9457cc2223bd49063be46d5d5db1fbe732fc8a63ccfb1a8c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/cultists.py",
+      "sha256": "27087bdb5d122fbfb3650d828d0c33c8a5d8bc0811bbcada9a04aacddd904816",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:184 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "AfterApplied": {
+      "maps_to": "powers.py:186-196 RitualPower.__init__ sets _was_just_applied",
+      "verdict": "gap",
+      "issue": "LIVE. The skip-first-trigger condition is wrong. RitualPower.cs:36-43 sets `WasJustAppliedByEnemy = true` whenever **base.Owner.IsEnemy** -- the applier is not consulted at all. powers.py:194-196 instead sets it when `applier is not None and applier.side != owner.side`. Every ported Ritual source is a MONSTER buffing ITSELF, so the sim's test is False exactly where C#'s is True and the enemy gets one extra Strength application, on the very turn it casts Ritual. EXECUTED with the ported Calcified Cultist (monsters/underdocks/cultists.py:39, `applier=self`): after one round the sim shows Strength(2) and Ritual(2), where the game skips that first AfterSideTurnEnd and shows no Strength at all. Damp Cultist (Ritual 5) and Devoted Sculptor (monsters/glory/devoted_sculptor.py:42) are the same shape, so the error scales with the biggest Ritual in the game. The player-side direction is unaffected: with a player owner C#'s Owner.IsEnemy is false and the sim's applier-side test is also false, so both trigger on the first turn end. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:198-211 RitualPower._trigger via on_enemy_turn_end / on_player_turn_end",
+      "verdict": "gap",
+      "issue": "Slot divergence, separate from the AfterApplied defect. The enemy leg (powers.py:205-207) is the per-creature on_enemy_turn_end rather than on_enemy_side_end, and the player leg (powers.py:209-211) is Hook.BeforeTurnEnd rather than the sim's AfterTurnEnd slot after_player_turn_end (combat.py:665). Since Ritual's effect is a Strength gain on a creature that has already acted, the round-end state is usually the same; it stops being the same as soon as anything between the two slots reads the owner's Strength -- e.g. the intent preview for the next turn, or a second enemy whose move scales off an ally's Strength. Cross-referenced to turn_structure G5 for the enemy leg (see the guard entry)."
+    }
+  },
+  "guards": [
+    {
+      "what": "RitualPower.cs:47 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Same mechanism as turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game): the sim's on_enemy_turn_end (combat.py:341) runs immediately after THIS enemy's move, where Hook.AfterTurnEnd -- the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292) -- runs once at CombatManager.cs:1256 after EVERY enemy has moved. The sim does have the right slot available: on_enemy_side_end (combat.py:345). Per binding rule 3 the mechanism keeps G5's `gap` verdict and is cross-referenced rather than re-argued. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
+    },
+    {
+      "what": "RitualPower.cs:49-53 the one-shot reset of WasJustAppliedByEnemy",
+      "verdict": "faithful",
+      "rationale": "powers.py:199-201 clears the flag and returns on the first trigger, so the skip is once-only on both sides. The BUG is which applications set the flag, not how it is consumed -- see the AfterApplied entry."
+    },
+    {
+      "what": "RitualPower.cs:55 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",
+      "verdict": "deliberate-divergence",
+      "rationale": "powers.py:202-203 routes through StrengthCmd.apply (cmds.py:349-361) instead, which first runs hooks.modify_strength_given and then calls PowerCmd.apply with NO applier. Two differences with the same observable today: the extra modify_strength_given chain has no C# analogue at this site, and dropping `applier = Owner` means a Ritual-granted Strength is applier-less. Neither is observable now -- an executed grep finds no ported modify_strength_given listener that fires for an enemy target, and no ported effect keys on a Strength application's applier for an enemy owner. Kept as a divergence rather than faithful because the applier is exactly what PossessStrengthPower (powers.py:3092-3099) tracks, so a monster holding both Ritual and Possess Strength would expose it."
+    },
+    {
+      "what": "RitualPower.cs:54 Flash()",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

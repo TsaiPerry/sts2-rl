@@ -1,0 +1,93 @@
+{
+  "unit": "power/stampede",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\StampedePower.cs",
+    "sha256": "efc803dce77ed62afa8c57a61088c80eac386e54a3ca26111da3063120aa1a8a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/stampede.py",
+      "sha256": "93dc487d8ffdaee6da147e8e5973ce3320af7c730019ff805075c6d2c7589647",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1023 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterAutoPostPlayPhaseEntered": {
+      "maps_to": "powers.py:1025-1041 StampedePower.on_player_turn_end (hooks.py:297-301, combat.py:654)",
+      "verdict": "gap",
+      "issue": "WRONG PHASE. This is turn_structure's G8 -- the AutoPrePlay and AutoPostPlay phases do not exist in the sim and their two hooks are hand-rolled onto neighbouring slots. Not re-verdicted here (binding rule 3); the verdict is gap on both sides. on its AutoPostPlay side, which G8 already labels LIVE with a Cloak Clasp witness. C# fires Hook.AfterAutoPostPlayPhaseEntered at CombatManager.cs:1167, strictly BEFORE Hook.BeforeTurnEnd (:1179), CheckWinCondition (:1181), DoTurnEnd (:1191), FlushPlayerHand (:1296) and Hook.AfterTurnEnd (:1307). The sim puts the auto-plays INSIDE on_player_turn_end (combat.py:654), i.e. inside the BeforeTurnEnd dispatch itself, so their order relative to every other turn-end power is registration order. A SECOND EXECUTED WITNESS beyond G8's, on the other side of the turn-end sequence: SetupStrikePower 2 (a TemporaryStrengthPower, whose C# hook is AfterSideTurnEnd at :1307) + Stampede 1 with one Strike in hand -- applying Setup Strike first makes the auto-played Strike deal 6 (its +2 Strength has already been reverted), applying Stampede first makes it deal 8. The game always deals 8. So Stampede's phase error compounds with the player-side AfterSideTurnEnd slot error (the main report's section 4 item 11): moving the AfterSideTurnEnd group to after_player_turn_end (combat.py:665) fixes THIS witness, but Stampede still needs its own pre-BeforeTurnEnd phase for G8's Cloak Clasp witness, which is a plain BeforeSideTurnEnd relic. Both fixes are required."
+    }
+  },
+  "guards": [
+    {
+      "what": "StampedePower.cs:20-23 player != base.Owner.Player",
+      "verdict": "faithful",
+      "rationale": "powers.py:1026-1027. Identical."
+    },
+    {
+      "what": "StampedePower.cs:28 Rng.Shuffle.NextItem(items)",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM. C# picks the Attack to auto-play off base.Owner.Player.RunState.Rng.Shuffle -- the SHUFFLE stream, which is surprising but is what the source says -- and the sim uses combat._rng.choice(candidates) (powers.py:1041), the SHARED unseeded random.Random (combat.py:88). combat.combat_rng.shuffle (combat_rng.py:18,48) is the matching accessor and exists. Same defect as the one already recorded LIVE on power/aggression (main report section 4 item 8) and on power/hello_world and power/entropy in half A's batch 1, and live for the same reason: under seed parity a Stampede play both picks a different Attack and perturbs every later draw off the shared rng. Stampede is a ported Ironclad card (cards/stampede.py:36). Third-file citations, not hashed here."
+    },
+    {
+      "what": "StampedePower.cs:27 the candidate filter",
+      "verdict": "faithful",
+      "rationale": "C# is hand.Cards.Where(c => c.Type == Attack && !c.Keywords.Contains(CardKeyword.Unplayable)); powers.py:1035-1038 is [c for c in player.hand if c.card_type == CardType.ATTACK and c.is_playable]. Both recompute the list inside the loop, so a card the previous auto-play removed from hand is excluded on both sides. Note neither side checks energy -- CardCmd.AutoPlay is free, and the sim's auto_play_card spends none (combat.py:552 passes 0)."
+    },
+    {
+      "what": "StampedePower.cs:29-32 the null-candidate arm continues rather than breaks",
+      "verdict": "faithful",
+      "rationale": "C# calls NextItem on a possibly-empty list, gets null and skips that iteration without breaking; powers.py:1039-1040 `continue`s. Identical control flow, including that a later iteration can still find an Attack (it cannot in practice, since the hand only shrinks, but both sides agree)."
+    },
+    {
+      "what": "StampedePower.cs:31 CardCmd.AutoPlay(ctx, card, null) -- a null target",
+      "verdict": "faithful",
+      "rationale": "combat.auto_play_card with target_idx None resolves the target at combat.py:540-546 via combat_rng.targets.choice(living), citing CardCmd.cs:77's Rng.CombatTargets.NextItem(HittableEnemies) -- and that one IS on the right per-purpose stream, unlike the candidate pick above."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,114 @@
+{
+  "unit": "relic/tuning_fork",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TuningFork.cs",
+    "sha256": "b70f96a86a8d49bba98c50d815a85b3272f128fc1a5410db0e0ff565d54146a5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\tuning_fork.py",
+    "sha256": "d862087f7f6935a941bad58e6c5aade03e2ce531bbd1aa0783e732523872a224"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tanx.py",
+      "sha256": "da7e5f6b2b2811e2b211e0fc6f0af420d903bef871435d06e2871844e6f1a054",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (tuning_fork.py:20)",
+      "verdict": "faithful",
+      "rationale": "TuningFork.cs:21. Executed: Uncommon in the transcribed grab bag (relic_pools.py:146 'RELIC.TUNING_FORK'), `py audit/tools/relic_probes_b16.py pool`."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (tuning_fork.py:29-36), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Every clause of the relic is faithful -- the Skill test, the >= threshold, the `-= threshold` rather than a zeroing, the 10 and the 7, and (contrary to its own docstring) the per-run counter -- but the sim fires this hook ONCE PER PLAY where C# fires it once per REPLAY ITERATION, so a replayed Skill advances the counter by 1 instead of 2."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): a replayed Skill counts once instead of twice, so the counter drifts and every later trigger in the run is one Skill late",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904-1965 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop, so TuningFork.AfterCardPlayed (TuningFork.cs:97-109) runs once per iteration. The sim runs the whole play-count loop in CombatState._resolve_card_play and only then calls hooks.on_card_played (combat.py:514). REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b16.py axe-tuning`): with the counter preloaded to 9 and a Defend played, the relic alone gives block 12 and counter 0 (correct); with relic/throwing_axe also held -- which makes the first card of each combat play twice, and which is in THIS batch -- the sim gives block 17 and counter 0, where the game gives block 17 and counter **1** (iteration 0: 9 -> 10, GainBlock(7), -= 10 -> 0; iteration 1: 0 -> 1). The block total happens to agree for this one play, but the counter does not, and because the counter is per-run ([SavedProperty], see N1) the offset never washes out: every subsequent Tuning Fork trigger for the rest of the run needs one more Skill in the sim than in the game. Both sides ported: Tuning Fork is Uncommon in the transcribed grab bag, Throwing Axe is granted by the ported Tanx shrine (events/tanx.py:13), and three further ported replay sources reach the same combat.py:469 play-count hook -- the Spiral and Glam enchantments and Hidden Gem's base_replay_count. This is audit/records/seam/hook_dispatch.json gap G4 (the per-Replay CardPlay loop) at a third content site, after audit/records/relic/unsettling_lamp.json G1 -- one verdict per mechanism, binding rule 3; the seam owns the machinery and this record owns Tuning Fork's observable. Rule 7: combat.py, hooks.py, events/tanx.py, relics/throwing_axe.py, audit/records/seam/hook_dispatch.json and audit/records/relic/unsettling_lamp.json are NOT hashed by this record."
+    },
+    {
+      "what": "N1 (PROMPT.md bug class 24 -- A DOCSTRING THAT MISDESCRIBES THE PORT AND POINTS AT A FALSE GAP): tuning_fork.py:15-16 says 'the game's counter persists across the run; the sim's is per-combat, like Happy Flower'. The sim's is NOT per-combat, and the code is right",
+      "verdict": "faithful",
+      "rationale": "The CODE keeps `_skills_played` in __init__ (tuning_fork.py:25-27) and never resets it, and sim relic instances live on RunState.relics and are re-attached to every CombatState, so the counter is run-scoped. C#'s SkillsPlayed is a [SavedProperty] (TuningFork.cs:59-75) and TuningFork.cs has NO BeforeCombatStart, AfterRoomEntered, AfterCombatEnd or turn-boundary override at all -- so it is run-scoped there too. The two agree; only the comment is wrong. This settles the SECOND LOOK this batch was handed for `_skills_played`, and RE-EXECUTED against the current sweep: `py audit/tools/relic_probes.py sweep-reset` prints `tuning_fork ['_skills_played'] written by: _skills_played<-['__init__','on_card_played'] C# resets: NONE (may be per-run by design)`, which is the post-rewrite column (sweep-A defect 3) and is correct. A batch that had trusted the docstring instead of the code would have filed a false gap and 'fixed' a working relic -- exactly what class 24 was written for."
+    },
+    {
+      "what": "N2 (PROMPT.md bug class 29 -- SIBLINGS MAY DIFFER ON PURPOSE): C#'s AfterCardPlayed has NO `cardPlay.IsAutoPlay` exclusion, so the sim counting auto-played Skills is CORRECT",
+      "verdict": "faithful",
+      "rationale": "TuningFork.cs:99 tests only `cardPlay.Card.Owner == base.Owner && cardPlay.Card.Type == CardType.Skill`. Checked deliberately because audit/records/relic/brilliant_scarf.json G1 is a LIVE gap for exactly the opposite reason -- BrilliantScarf.cs:84-87 DOES skip auto-plays and the sim does not -- and class 29 says never to copy a sibling's verdict across. Here the absence is in the source, so tuning_fork.py:29-32's unconditional increment is faithful and an 'IsAutoPlay' fix applied family-wide would be a regression. Rule 7: audit/records/relic/brilliant_scarf.json is not hashed here."
+    },
+    {
+      "what": "N3: the order of GainBlock and the decrement -- C# grants the block and THEN does `SkillsPlayed -= SkillsThreshold` (TuningFork.cs:105-106); the sim decrements first (tuning_fork.py:34-36)",
+      "verdict": "faithful",
+      "rationale": "Nothing reads SkillsPlayed between the two statements except DisplayAmount (TuningFork.cs:25-35), which is presentation, and CreatureCmd.GainBlock cannot re-enter AfterCardPlayed. So the two orders reach the same state. Recorded because it is exactly the kind of ordering that would matter if the block gain ever triggered another Skill play -- the sim's order is the safer one, and it is not a divergence today."
+    },
+    {
+      "what": "N4: `SkillsPlayed >= SkillsThreshold` and `-=` rather than `== threshold` and `= 0` (TuningFork.cs:102, 106)",
+      "verdict": "faithful",
+      "rationale": "tuning_fork.py:33-34 uses the same `>=` and the same subtraction. This is load-bearing precisely BECAUSE of G1: in the game a replay can push the counter to 11 in one play, and `>=` plus `-= 10` leaves 1 rather than swallowing the overflow. The port would therefore behave correctly if G1 were fixed, without a second change -- worth stating so the fixer does not touch this arithmetic."
+    },
+    {
+      "what": "N5: CardsVar(10) and BlockVar(7m, ValueProp.Unpowered) (TuningFork.cs:39-43) vs SKILLS = 10 and BLOCK = 7 (tuning_fork.py:22-23)",
+      "verdict": "faithful",
+      "rationale": "SkillsThreshold is `DynamicVars.Cards.IntValue` (TuningFork.cs:77) and the block is `DynamicVars.Block` (:105). No AscensionHelper.GetValueIfAscension in the file, so 10 and 7 are the pinned non-ascension values. The Unpowered typing is carried through: tuning_fork.py:36 passes `props=ValueProp.UNPOWERED` to BlockCmd.apply, and `CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, null)` passes cardSource = null, which the sim's call also omits."
+    },
+    {
+      "what": "N6: `public void NotifySkillPlayed()` (TuningFork.cs:92-95) has no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "DEAD CODE IN THE C# SOURCE ITSELF: `grep -rn 'NotifySkillPlayed' src/` returns exactly one line -- the declaration at TuningFork.cs:92-95. Nothing in the game ever calls it, so it is a second, unused entry point to the same increment and the sim omitting it provably cannot change an outcome. [DELEGATION CORRECTED 2026-07-26 by the relic fix pass. This entry previously read 'Same basis as audit/records/relic/unsettling_lamp.json N1's IsVisibleInternal finding, AND THE SAME REASON IT IS A `faithful` RATHER THAN A `waiver`' -- but unsettling_lamp N1 was itself a `waiver` at the time, so the delegation asserted the opposite of its own target. The same fix pass settled the vocabulary the other way and moved unsettling_lamp N1, calling_bell G4, storybook N2, tanxs_whistle N2, touch_of_orobas N2, fake_snecko_eye N1 and the three egg-relic NoHookUpgrades guards to `faithful`, so the delegation is now true as written and points at a target that agrees with it.] The governing principle is PROMPT.md v6 item 3: a waiver is in-scope-adjacent and declined, and where the C# member is dead there is no source behaviour to be faithful to -- nothing is being declined, and the two codebases have the same observable. Rule 7: src/Core/Models/Relics/TuningFork.cs is this record's own game source; audit/records/relic/unsettling_lamp.json is not hashed here."
+    },
+    {
+      "what": "N7: `cardPlay.Card.Owner == base.Owner` (TuningFork.cs:99)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true."
+    },
+    {
+      "what": "N8: IsActivating / UpdateDisplay / `base.Status = RelicStatus.Active` when one Skill short / DoActivateVisuals / Cmd.Wait(1f) / InvokeDisplayAmountChanged / the Block ExtraHoverTips (TuningFork.cs:17, 23-37, 45-57, 79-90, 104, 111-117)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

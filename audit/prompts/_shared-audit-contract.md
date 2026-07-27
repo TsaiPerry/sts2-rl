@@ -105,9 +105,32 @@ review caught it. Expect to make the same mistakes.
 The sim is **Ironclad-only**. Findings about mechanics unreachable in that
 scope are `waiver` with the reason named — never silently skipped.
 
-**Out of scope everywhere:** potions (deferred by Perry), out-of-combat
-UI-only behavior, multiplayer-only paths, ascension values (the sim uses
-non-ascension numbers by convention).
+**Out of scope everywhere:** out-of-combat UI-only behavior, multiplayer-only
+paths, ascension values (the sim uses non-ascension numbers by convention).
+
+**Potions are IN SCOPE (changed 2026-07-26 by Perry: "don't ignore potions
+anymore").** The old clause read "Out of scope everywhere: potions (deferred by
+Perry)" and it has been deleted, not narrowed. `potion` is now an ordinary
+audit kind — 51 sim units, `audit/records/potion/`, in
+`harness.py roster potion` — and it is **unaudited**, exactly like `monster`.
+Unaudited is a fact the tools report; out-of-scope was a claim that hid things.
+
+Two consequences, both binding:
+
+- **A potion may never be the reason for a `waiver` again.** "The applier is a
+  potion" and "potions have no audit tier" are now dormancy arguments at best,
+  and usually not even that, because the potion is probably ported: the sim has
+  51 potion classes, 48 of them in the reward pool, and the potion belt is
+  asserted slot-by-slot by the conformance runner. If a divergence is real and
+  a potion triggers it, that is a **gap** — `live` if the potion is ported.
+- **The clause did real damage while it stood, in both directions.** Ten
+  entries across the `card` and `power` tiers waived genuine behaviour on it
+  while the `relic` tier filed 45 potion-mechanic gaps, 27 of them LIVE — one
+  mechanism, two answers, which is a binding-rule-3 break the contract itself
+  caused. It also protected a false claim: `damage_pipeline` N4 waived the
+  two-phase `ShouldDie` ordering because "FairyInABottle is out of scope", and
+  the potion turned out to be ported at `sts2_rl/potions.py:1242` with a real
+  `should_die`. Re-read any verdict that cites the old clause.
 
 Numeric constants are checked against the **non-ascension** branch of
 `AscensionHelper.GetValueIfAscension(...)`.

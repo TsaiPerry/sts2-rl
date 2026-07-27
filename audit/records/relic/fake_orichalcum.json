@@ -1,0 +1,93 @@
+{
+  "unit": "relic/fake_orichalcum",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FakeOrichalcum.cs",
+    "sha256": "1010bc68903e6cc43716a628162a44add0ebebcabe50c67ac548198779ccd506"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fake_orichalcum.py",
+    "sha256": "881f5af1f519559b4f4d68a69f3551898bfb8feee7c2c8cb2d718d6fa7f9b62a"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/fake_merchant.py",
+      "sha256": "73183c9c6c5cf62323231050e8cc10be476224de23b7a6d643760ea7044229e4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/cloak_clasp.py",
+      "sha256": "0be75771fbd507ec9984fabce3b9d1f0041a8a768bee9f09a9779a30c33aae67",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fake_orichalcum.py:20)",
+      "verdict": "faithful"
+    },
+    "MerchantCost": {
+      "maps_to": "merchant_cost_override = 50 (fake_orichalcum.py:21)",
+      "verdict": "faithful",
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+    },
+    "BeforeSideTurnEndVeryEarly": {
+      "maps_to": "no counterpart -- the sim reads player.block inline from on_player_turn_end (fake_orichalcum.py:25-26) instead of latching it a phase earlier",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. FakeOrichalcum.cs:46-58 exists ONLY to take the snapshot: it checks `participants.Contains(Owner.Creature)` then `Block > 0` and sets ShouldTrigger, and the source carries a doc comment (FakeOrichalcum.cs:40-45) explaining that the VeryEarly phase is required so the check happens before PlatingPower can grant block. The sim has no phase concept, so the check moved into the plain slot and became order-dependent."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "on_player_turn_end (fake_orichalcum.py:25-30)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The effect itself is right: FakeOrichalcum.cs:60-68 grants BlockVar(3m, ValueProp.Unpowered) (line 23) once, clearing the latch first, and fake_orichalcum.py:29-30 grants 3 at the same ValueProp.UNPOWERED. No AscensionHelper branch in the file (the real Orichalcum's 6 is the joke). What is wrong is WHEN the `no Block` test is evaluated."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "FakeOrichalcum.cs:70-78 clears ShouldTrigger at the start of the owner's side turn. The sim has no ShouldTrigger field at all -- it re-derives the condition from player.block on every turn end -- so there is no stale latch to clear and nothing to reset. PROMPT.md bug class 13's trace is trivially satisfied: the field that would need resetting does not exist. The sim's field-free design is also why .superpowers/sdd/content-relic-sweeps.md sweep A does not list this relic."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the VeryEarly snapshot is collapsed into the plain turn-end pass, so another turn-end listener that grants Block first silently switches the relic off",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.BeforeTurnEnd runs THREE complete listener passes in order -- BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then BeforeSideTurnEnd (Hook.cs:1238-1261, dispatched from CombatManager.cs:1250-1251) -- so C#'s ShouldTrigger is latched from the block value BEFORE any plain-phase listener runs, and FakeOrichalcum.cs:40-45's doc comment says that is exactly the point. The sim's hooks.py has one flat pass per hook and fake_orichalcum.py:26 tests `player.block == 0` at the moment its own listener happens to be reached, so the answer depends on relic ACQUISITION order. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b05.py orichalcum-order): with a 5-card hand, registration order [cloak_clasp, fake_orichalcum] ends the turn on 5 Block and [fake_orichalcum, cloak_clasp] on 8, where C# always gives 8. Both sides ported and obtainable: Cloak Clasp grants 1 Block per card in hand from the plain BeforeSideTurnEnd (relics/cloak_clasp.py:19-24) and is Rare in the transcribed grab bag; Fake Orichalcum is bought from the ported Fake Merchant event (events/fake_merchant.py:18-22, 50 gold, acts 2-3), so a single run can hold both. This is audit/records/seam/turn_structure.json gap G12 at a site that record already NAMES ('Fake Orichalcum and Ripple Basin are the same shape') -- one verdict per mechanism, binding rule 3; the seam owns the missing phase passes and this record owns the fake's observable, executed for the fake rather than inherited from the real Orichalcum. Rule 7: Hook.cs, CombatManager.cs, hooks.py, relics/cloak_clasp.py and events/fake_merchant.py are unhashed here."
+    },
+    {
+      "what": "N1: `participants.Contains(base.Owner.Creature)` on the VeryEarly and BeforeSideTurnStart overrides but NOT on BeforeSideTurnEnd (FakeOrichalcum.cs:48, 72 vs 60-68) -- PROMPT.md bug class 15's paired-hook guard asymmetry",
+      "verdict": "faithful",
+      "rationale": "The asymmetry is deliberate and harmless in C#: BeforeSideTurnEnd needs no side check because ShouldTrigger can only be true if the VeryEarly pass on the owner's own side turn set it, and BeforeSideTurnStart clears it again. The sim collapses all three into one player-side-only hook (on_player_turn_end fires only for the player), so the union of the guards is applied and the enemy side can neither set nor consume the condition. Listed side by side as class 15 requires; the divergence that does exist lives in G1's timing, not in the guard set."
+    },
+    {
+      "what": "N2: `base.Owner.Creature.Block > 0` -> return (FakeOrichalcum.cs:52) vs `if player.block == 0` (fake_orichalcum.py:26)",
+      "verdict": "faithful",
+      "rationale": "Exact logical complement: C# declines to latch when Block is positive, the sim grants when Block is zero. Block is never negative on either side (Creature.Block is clamped by the block pipeline), so `not (> 0)` and `== 0` are the same predicate. Recorded because inverting a guard while moving it is a common port error and here it was done correctly."
+    },
+    {
+      "what": "N3: Flash() (FakeOrichalcum.cs:65), the Block ExtraHoverTips (line 25) and AssertMutable in the ShouldTrigger setter (line 35)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / VfxCmd / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, the damage/heal numbers and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. AssertMutable is the source's own save/model-immutability assertion, not a gameplay rule."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

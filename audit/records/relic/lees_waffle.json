@@ -1,0 +1,78 @@
+{
+  "unit": "relic/lees_waffle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LeesWaffle.cs",
+    "sha256": "f49b1c72ff824d5560ed68806e177b660308a1872a466e976dee95d57e9ad887"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lees_waffle.py",
+    "sha256": "d8b2419a81cb7f20bfc3c657be20d8d4c9cb37240611f138b2760a892b639c53"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (lees_waffle.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (lees_waffle.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches LeesWaffle.cs:14. Load-bearing, not decorative: Relic.is_tradable (relics/base.py:126-136) returns False for any relic with an upon-pickup effect, so dropping this flag would make the Waffle offerable to the trade events after its max HP was already banked -- which is the defect audit/records/relic/byrdpip.json records for the same declaration. Shop rarity does NOT exclude it from trading, so unlike the Ancient relics in this batch the flag is the only thing doing the work here. Rule 7: relics/base.py are not hashed by this record."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (lees_waffle.py:18-20), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "LeesWaffle.cs:18-23 is `CreatureCmd.GainMaxHp(creature, MaxHpVar(7).BaseValue)` then `CreatureCmd.Heal(creature, creature.MaxHp - creature.CurrentHp)` -- i.e. +7 max HP (which itself heals 7) and then a top-up to full. lees_waffle.py:19-20 is `run.gain_max_hp(self.MAX_HP)` then `run.heal(run.max_hp - run.hp)`, statement for statement. RunState.gain_max_hp (run.py:311-314) raises max HP then heals the same amount, mirroring GainMaxHp's SetMaxHp-then-Heal, and the second heal's argument is re-read AFTER the first, on both sides. EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp): from 40/80 the relic gives 87/87, and from 80/80 it gives 87/87 -- C#'s numbers in both cases. So the relic is a full heal plus 7 max HP regardless of starting HP. Rule 7: run.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: MaxHpVar(7m).BaseValue (LeesWaffle.cs:16, 21) vs MAX_HP = 7 (lees_waffle.py:16)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in LeesWaffle.cs, so 7 is the pinned non-ascension value, and BaseValue is the read the shared contract pins."
+    },
+    {
+      "what": "N2: `CreatureCmd.GainMaxHp` throws on a negative amount and calls SetMaxHp, which Kills at MaxHp <= 0",
+      "verdict": "faithful",
+      "rationale": "Neither branch is reachable from a pinned +7: the throw needs amount < 0 and the Kill needs the new max at or below 0. audit/records/seam/creature_card_cmds.json step 24 already records that the sim has no standalone set_max_hp verb and that the MaxHp <= 0 kill is unreachable because the sim floors max HP at 1 in both of its own implementations -- same verdict, cited rather than re-derived (binding rule 3). Note GainMaxHp heals the DELTA SetMaxHp actually applied, not the requested amount; with no cap in play the two are equal, and RunState.gain_max_hp heals `int(amount)`."
+    },
+    {
+      "what": "N3: `CreatureCmd.Heal` vs RunState.heal -- the cap and the revive branch",
+      "verdict": "faithful",
+      "rationale": "Both cap at max HP: SetCurrentHpInternal is `CurrentHp = (int)Math.Min(amount, MaxHp)` and RunState.heal (run.py:288-292) is `max(0, min(int(amount), self.max_hp - self.hp))`. C#'s HealInternal additionally fires a Revived event when the creature was dead, which cannot apply out of combat to a live player taking a shop relic. Truncation direction agrees (both toward zero) and the argument here is an integer difference anyway. Rule 7: run.py are not hashed by this record."
+    },
+    {
+      "what": "N4: undo_after_obtained (lees_waffle.py:22-26) restores the max HP but not the healed current HP",
+      "verdict": "gap",
+      "issue": "SEPARATE, SIM-ONLY DEFECT worth recording here because this relic is one of only five that implement it: `undo_after_obtained` (relics/base.py:143-150) exists purely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was really picked (sts2_rl/conformance/runner.py:461, 694), and its stated purpose is that 'a discarded max-HP relic (Mango, Pear, ...) leaves its +MaxHp behind and the player-state parity check reads high for the rest of the run'. The implementation gives back the MAX HP but not the CURRENT HP the grant healed: EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp) a player at 40/80 who takes Lee's Waffle reaches 87/87, and undo_after_obtained then leaves 80/80 -- FORTY current HP that the un-granted relic paid for. (From 80/80 the undo is exact.) Contrast relic/looming_fruit, whose undo is wrong by the same mechanism but smaller: 40/80 -> 71/111 -> 71/80, i.e. 31 HP retained.) There is no C# counterpart to diverge from -- nothing in the game un-picks a relic -- so this is filed as a note on the sim's own machinery rather than a source-to-sim verdict, but it defeats exactly the DETECTOR 3 act-boundary HP assertion the helper was written for. Rule 7: relics/base.py and sts2_rl/conformance/runner.py are not hashed by this record."
+    },
+    {
+      "what": "N5: no state, no reset, no IsAllowed, no combat hooks",
+      "verdict": "faithful",
+      "rationale": "LeesWaffle.cs declares exactly four members (Rarity, HasUponPickupEffect, CanonicalVars, AfterObtained). PROMPT.md bug class 13 cannot apply -- the relic holds nothing; the shared `py audit/tools/relic_probes.py sweep-reset` puts it in the 200-relic 'holds no state' bucket. PROMPT.md bug class 16's first half likewise does not apply: no IsAllowed override, so the sim's missing is_allowed member costs nothing here (confirmed by the full-brace rescan, `py audit/tools/relic_probes_b08.py b08-isallowed`, which finds 20 overrides and this relic is not one of them)."
+    },
+    {
+      "what": "N6: CanonicalVars(MaxHpVar(7m)) (LeesWaffle.cs:16)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / DoActivateVisuals / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / TaskHelper.RunSafely of a visuals task are presentation only -- the relic bar's glow, counter, sfx, icon variant and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

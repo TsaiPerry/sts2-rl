@@ -1,0 +1,48 @@
+{
+  "unit": "card/scrawl",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Scrawl.cs",
+    "sha256": "f2b10e984f16324a4b643d1d794cfea9bdd330e19d192eddf954006e173594d7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "ScrawlCard.exhausts = True (colorless_skills.py:579)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Scrawl.cs:11) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:574-579) + _init_vars (581-583)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Scrawl.cs:13-16) == cost 1 / SKILL / RARE / SELF. No CanonicalVars -- the draw count is computed."
+    },
+    "OnPlay": {
+      "maps_to": "ScrawlCard.on_play (colorless_skills.py:588-590)",
+      "verdict": "faithful",
+      "rationale": "`int num = CardPile.MaxCardsInHand - Owner.PlayerCombatState.Hand.Cards.Count; await CardPileCmd.Draw(choiceContext, num, Owner)` (Scrawl.cs:20-21) == `DrawCmd.draw(ctx.player, ctx.player.MAX_HAND_SIZE - len(ctx.player.hand))`. MaxCardsInHand is 10 on both sides (CardPile.cs:21, player.py:56), and Scrawl itself is out of the hand when the count is taken on both sides (Play pile in C#, discard-pile limbo in the sim), so it draws to a FULL hand rather than one short."
+    },
+    "OnUpgrade": {
+      "maps_to": "ScrawlCard._on_upgrade (colorless_skills.py:585-586)",
+      "verdict": "faithful",
+      "rationale": "`AddKeyword(CardKeyword.Retain)` (Scrawl.cs:26) == `self.retain = True`, and the flag IS re-seeded in `_init_vars` (`self.retain = False`, colorless_skills.py:583), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list scrawl. The correct pattern, unlike card/wish, which gains the same keyword and does not re-seed."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

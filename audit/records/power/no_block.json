@@ -1,0 +1,83 @@
+{
+  "unit": "power/no_block",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\NoBlockPower.cs",
+    "sha256": "72c475f498ed9559ceac3bff15a2caeb10a0d738d1f4a7c50444aa8d48b7e419"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3671 power_type = PowerType.DEBUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:3680-3681 on_enemy_side_end -> Power._tick (combat.py:345)",
+      "verdict": "faithful",
+      "rationale": "CORRECT SLOT, and unusually easy to get right because NoBlockPower.cs:22-28 has NO participants filter at all -- it decrements whenever side == CombatSide.Enemy, regardless of who owns it. Hook.AfterSideTurnEnd for the enemy side is Hook.AfterTurnEnd at CombatManager.cs:1256, and the sim's on_enemy_side_end (combat.py:345) is that slot. Identical shape to audit/records/power/colossus.json's and audit/records/power/diamond_diadem's. The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    "ModifyBlockMultiplicative": {
+      "maps_to": "powers.py:3673-3678 NoBlockPower.modify_block_multiplicative (hooks.py:111-124, cmds.py:147)",
+      "verdict": "faithful",
+      "rationale": "Returns 0 for the owner's card-sourced block and 1 otherwise. All three C# guards are present, one of them structurally: target != base.Owner (NoBlockPower.cs:32-35 vs powers.py:3676), cardSource == null (:40-43 vs :3676 `card is not None`), and props.HasFlag(ValueProp.Unpowered) (:36-39), which the sim gets from BlockCmd.apply itself -- cmds.py:145 gates BOTH block-modifier families behind is_powered_attack(props), the same Move-and-not-Unpowered rule, so unpowered block never reaches this hook. That is why power/plating's and power/toric_toughness's Unpowered block correctly ignores No Block on both sides. 0.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py audit/tools/power_census.py multipliers)."
+    }
+  },
+  "guards": [
+    {
+      "what": "The multiplicative aggregation shape",
+      "verdict": "faithful",
+      "rationale": "hooks.py:111-124 multiplies every listener's factor together and cmds.py:147 applies the product once, where C# threads a running decimal (Hook.cs:1320-1337). hook_dispatch's G9 owns this and settled by execution that the BLOCK site is dormant because every ported block factor is binary-exact; 0.0 is one of them. Not re-verdicted here per binding rule 3. Note 0.0 is also absorbing, so No Block wins over power/unmovable's 2.0 under either aggregation shape."
+    },
+    {
+      "what": "The turn count",
+      "verdict": "faithful",
+      "rationale": "The only ported applier is the Colorless skill Panic Button (cards/colorless_skills.py:440-443, self._turns with applier=ctx.player). No AscensionHelper call in NoBlockPower.cs."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

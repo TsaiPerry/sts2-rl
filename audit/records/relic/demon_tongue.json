@@ -1,0 +1,118 @@
+{
+  "unit": "relic/demon_tongue",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DemonTongue.cs",
+    "sha256": "23a0a62f9b47c0fa786df2e8a56aee86a4223b015c5c4510f1cee5c891010d3e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\demon_tongue.py",
+    "sha256": "1940c74aeadbe2fffc8c3b510bb1f3e6a5c26b0d44ce9a85575deff5ac45cb11"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/anchor.py",
+      "sha256": "e77e6679508b418d9702662595518c274bd3b40f18a2f5094e33c20a907c312c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/art_of_war.py",
+      "sha256": "9ea9ed89b5f650b8d6e0bd0ad8a198d075348f1b7607bd836cf4de6807e4c7f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/captains_wheel.py",
+      "sha256": "68b0cc3f2130b718c54c557bb202b81767500a9d5b20ffa0d09131bb032ca85e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fake_anchor.py",
+      "sha256": "19fa95fdd8425d49b53dff011273ca39cd24038b8240b6daa5bf5843a7c0d84b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fake_venerable_tea_set.py",
+      "sha256": "4c401723e90cb5fc225f2c8a69aac3c8f0e4e8c98bb389306b7bae06091b9ddf",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/horn_cleat.py",
+      "sha256": "5142219d3758ef8eee61f9c513a5211915edb09122190d174e3e5f77bb68e5cb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/lizard_tail.py",
+      "sha256": "f8aaa651db2976dba3b1b3c3ce57cb5ecd79122742cf82ce10d98b0d30346ab6",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/venerable_tea_set.py",
+      "sha256": "3e00583428beb56b0aee34d4a01149ae26c88c1d468cc4f61a5e28e01804df9a",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (demon_tongue.py:20)",
+      "verdict": "faithful"
+    },
+    "AfterDamageReceived": {
+      "maps_to": "on_damage_received (demon_tongue.py:26-42)",
+      "verdict": "faithful",
+      "rationale": "All five C# clauses (DemonTongue.cs:21) map one-for-one onto demon_tongue.py:34-39, and the two that could have gone wrong are verdicted on their own guards. `CombatState != null` is structural (the hook is only dispatched by a live CombatState); `CombatState.CurrentSide == Owner.Creature.Side` is `self.combat.current_side == 'player'`; `target == Owner.Creature` is `target is self.player`; `result.UnblockedDamage > 0` is `amount > 0` (guard G2); `!_triggeredThisTurn` is `not self._triggered_this_turn`, latched before the heal exactly as C# latches before CreatureCmd.Heal. Executed (py audit/tools/relic_probes_b04.py demon-tongue): 7 unblockable self-damage on the player's turn leaves HP at 60 of 60 (fully healed) and a second 5 on the same turn leaves 55 (not healed)."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (demon_tongue.py:44-45)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C#'s hook is audit/records/seam/turn_structure.json step 9, before the block clear; the sim's on_player_turn_start is executed-confirmed to sit after the block clear and the energy reset (py audit/tools/relic_probes.py turn-order prints on_block_cleared -> on_energy_reset -> on_player_turn_start). Only a flag RESET happens here, and nothing in the intervening window can observe it: a scan of every ported on_block_cleared and on_energy_reset implementation -- relics/anchor.py:21, captains_wheel.py:19, fake_anchor.py:24, horn_cleat.py:19, art_of_war.py:37, venerable_tea_set.py:27, fake_venerable_tea_set.py:29 and powers.py:1214 / :2766 / :3841 / :4032 -- shows every one of them grants Block or Energy and not one deals damage to the player, which is the only way to read _triggered_this_turn. Same reasoning and same verdict as audit/records/relic/brilliant_scarf.json's BeforeSideTurnStart entry and relic/beating_remnant's in batch 1 (binding rule 3): recorded as a divergence rather than faithful because the slot genuinely differs and a future damage-to-player effect placed on AfterBlockCleared or AfterEnergyReset would expose it. `participants.Contains(Owner.Creature)` (DemonTongue.cs:31-34) is structurally satisfied -- on_player_turn_start is dispatched only for the player side. RULE 7: the scanned relic and power files are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: the killing-blow guard (PROMPT.md bug class 2) -- C# skips the victim's AfterDamageReceived when the blow killed it (CreatureCmd.cs:390-393 `!WasTargetKilled || !IsDead`)",
+      "verdict": "faithful",
+      "rationale": "Confirmed rather than assumed, because Demon Tongue is a HEAL on the player and an unguarded version would resurrect the Ironclad from a lethal Offering. cmds.py:121-122 wraps the on_damage_received dispatch in `if not target.is_dead`, and the sim's own comment cites CreatureCmd.cs:392. The C# condition is a disjunction, so a PREVENTED death (WasTargetKilled true, IsDead false after a resurrection) still fires -- and the sim matches, because its should_die preventer path sets hp back to 1 (cmds.py:110-113) before the is_dead test. Same mechanism and same verdict as relic/beating_remnant's AfterDamageReceived entry in batch 1 (binding rule 3)."
+    },
+    {
+      "what": "G2 (DORMANT): C# heals `result.UnblockedDamage`, which EXCLUDES OverkillDamage; the sim heals the raw `hp_lost`, which includes it",
+      "verdict": "gap",
+      "issue": "MECHANISM: DamageResult.cs documents UnblockedDamage as the damage the target received after blocking and OverkillDamage as the excess past 0 HP, and they are separate fields (CreatureCmd.cs:294 has to ADD them back together when it wants the total). The sim's DamageCmd passes `hp_lost` (cmds.py:122), which is the full post-block, post-ModifyHpLost amount and is never clamped to the victim's current HP -- `target.hp = max(0, target.hp - hp_lost)` clamps the HP, not the number. So a lethal-but-prevented hit heals MORE in the sim than in C#. REACHABILITY (DORMANT, and the concrete unported thing is named): the two amounts can only differ when overkill exists, i.e. on a blow that takes the player to 0, and the killing-blow guard of G1 suppresses the hook entirely unless something PREVENTS the death. The sim's only ported should_die preventers are relics/lizard_tail.py:35, potions.py:1242 (Fairy in a Bottle, out of scope) and three enemy powers (powers.py:1566, :2016, :3365) that protect enemies, not the player -- and Lizard Tail's own C# body heals the player to a fraction of max HP, which the Heal then cannot exceed. Porting a player-side death preventer that leaves the player at 0-1 HP makes it live, as does any effect that heals more than max HP. Filed as a gap rather than waived because 'no ported content reaches the difference' is today's content, not the divergence's shape (binding rule 1). RULE 7: cmds.py, relics/lizard_tail.py, potions.py, powers.py, DamageResult.cs and CreatureCmd.cs are not hashed here."
+    },
+    {
+      "what": "G3: `_triggeredThisTurn` is reset at a TURN boundary and at no combat boundary -- on EITHER side (PROMPT.md bug class 13)",
+      "verdict": "faithful",
+      "rationale": "The pool-wide scan (.superpowers/sdd/content-relic-sweeps.md sweep A) puts this relic in the 'reset only at a turn boundary' bucket, which that document explicitly does NOT clear -- it requires a trace to the first READER of the stale field. Two facts settle it. (a) SYMMETRY: DemonTongue.cs has no AfterCombatEnd / AfterCombatVictory / BeforeCombatStart override at all, so C# carries the flag across combats exactly as the sim does; unlike relic/belt_buckle there is no C# reset the port dropped. (b) SHADOWING, executed (py audit/tools/relic_probes_b04.py demon-tongue): a relic instance left at _triggered_this_turn=True by combat 1 reads False as soon as combat 2 is constructed, because CombatState.__init__ runs the first player turn and demon_tongue.py:44-45 clears it -- so no reader ever sees the stale value. This is the relic/art_of_war shape, not the relic/belt_buckle shape."
+    },
+    {
+      "what": "N1: `CreatureCmd.Heal(base.Owner.Creature, ...)` (DemonTongue.cs:25) vs CreatureCmd.heal (demon_tongue.py:42)",
+      "verdict": "faithful",
+      "rationale": "cmds.py:157-166 caps the heal at max HP, no-ops on a dead target and fires on_hp_changed -- the same three properties as CreatureCmd.Heal. The relic passes no applier and no card source on either side, so it creates no new interaction with relic/unsettling_lamp's applier-gated doubling (the same check relic/belt_buckle's N3 makes for the same reason). RULE 7: cmds.py is not hashed here."
+    },
+    {
+      "what": "N2: Flash() (DemonTongue.cs:24)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,88 @@
+{
+  "unit": "relic/darkstone_periapt",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DarkstonePeriapt.cs",
+    "sha256": "0fa9543b7048eaad65a5420c0a2b91df94415a5e6434a8a39ca7d831eb4b112a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\darkstone_periapt.py",
+    "sha256": "8382cec7373c160b00390dc5e45df3c904948aebe6eef710e9a63b84baaff8ad"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (darkstone_periapt.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterCardChangedPiles": {
+      "maps_to": "after_card_added_to_deck (darkstone_periapt.py:20-23), dispatched from run.add_card (run.py:352-353). The sim narrows C#'s generic pile-change event to the one case the relic cares about, so C#'s `card.Pile.Type == PileType.Deck` clause is structural in the sim and the `clonedBy` parameter has no counterpart (nothing in the sim tracks a cloner).",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 (LIVE) and G2 per binding rule 4. The narrowing is only sound if every C# path that puts a card into PileType.Deck reaches run.add_card. It does not: the out-of-combat TRANSFORM path writes the deck directly."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): a Curse produced by an out-of-combat TRANSFORM pays the +6 Max HP in C# and nothing in the sim, because RunState.transform_card writes the deck list directly instead of going through add_card",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardCmd's transform loop fires BOTH deck hooks for the replacement when the pile is the deck -- Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:429 and Hook.AfterCardChangedPiles at CardCmd.cs:447 -- so DarkstonePeriapt.cs:16-24 sees the new card and grants MaxHpVar(6). RunState.transform_card (run.py:406-470) removes the original and does `self.deck.append(into)` (run.py:466) or `self.deck[idx] = into` (run.py:469) with no hook dispatch of any kind. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py darkstone): with the relic on the run, run.add_card(make_card('regret')) takes Max HP 80 -> 86 (correct), and then transform_card on that curse yields another curse ('clumsy') with Max HP staying at 86 where C# gives 92 -- observed 'DIVERGENCE: sim +0, C# +6'. Both sides are ported content: Darkstone Periapt is granted by the Trash Heap event (events/trash_heap.py:15), and a curse always transforms into another curse because run.py:440-441 switches the pool to CURSE_POOL for a CardType.CURSE original -- the same fact audit/records/relic/astrolabe.json G1 established for its own gap. Fifteen ported call sites reach transform_card, including relic/astrolabe (Darv shrine, transforms deck cards), relic/pandoras_box, relic/leafy_poultice, relic/new_leaf and six events (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow). The gap is not Periapt-specific -- the same missing dispatch silently disables relic/book_of_five_rings and relic/lucky_fysh on the transform path and skips the egg relics' ModifyCardBeingAddedToDeck -- but the Periapt is where it is observable as a wrong Max HP, which DETECTOR 3's act-boundary HP assertion checks. RULE 7: this rationale leans on run.py, cards/pool.py and CardCmd.cs, none of which this record hashes."
+    },
+    {
+      "what": "G2 (DORMANT): C# fires AfterCardChangedPiles for a card entering PileType.Deck at ANY time, including mid-combat; the sim's after_card_added_to_deck exists only on the out-of-combat RunState.add_card path",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardPileCmd.cs:635 and :683 dispatch the hook from the general Add path, and PileType.Deck is a non-combat pile (CardPile.cs:29 IsCombatPile), so a card added to the run's deck while a fight is in progress still triggers it. The sim's CombatState works on a deep copy of the deck (run.create_combat) and nothing inside combat calls run.add_card, so a mid-combat deck add cannot reach the relic. DORMANT, and the concrete unported thing is named: no ported card, power, potion or relic adds a card to the RUN's deck from inside a combat -- the in-combat generators all target combat piles via CardPileCmd.add_to_hand / the draw and discard piles. Porting any effect that adds a Curse to the deck mid-fight (the C# shape is CardPileCmd.AddCurseToDeck called from a monster power) makes it live."
+    },
+    {
+      "what": "N1: MaxHpVar(6m) read as BaseValue (DarkstonePeriapt.cs:14, 22) vs MAX_HP = 6 (darkstone_periapt.py:18)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 6 is the pinned non-ascension value."
+    },
+    {
+      "what": "N2: `CreatureCmd.GainMaxHp` (DarkstonePeriapt.cs:22) vs run.gain_max_hp (run.py:311-314)",
+      "verdict": "faithful",
+      "rationale": "CreatureCmd.cs:786-798 rejects a negative amount, raises max HP via SetMaxHp and then heals the delta; run.gain_max_hp raises max_hp and heals the same amount, so the player gains both the cap and the current HP. Executed: 80/80 -> 86/86 (py audit/tools/relic_probes_b04.py darkstone). RULE 7: run.py and CreatureCmd.cs are not hashed here."
+    },
+    {
+      "what": "N3: `card.Owner == base.Owner` (DarkstonePeriapt.cs:19) and `card.Type == CardType.Curse` (same line)",
+      "verdict": "faithful",
+      "rationale": "The owner clause is the multiplayer per-player filter that the shared contract puts out of scope (one player in the sim, so it is vacuous); the Curse clause is mirrored exactly by darkstone_periapt.py:22's `card.card_type == CardType.CURSE`. Both clauses are AND-ed with the pile check in one C# expression and the sim keeps the only one that can vary."
+    },
+    {
+      "what": "N4: Flash() (DarkstonePeriapt.cs:21)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

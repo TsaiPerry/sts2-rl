@@ -1,0 +1,105 @@
+{
+  "unit": "power/intangible",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\IntangiblePower.cs",
+    "sha256": "40c86b71a68a50769c41b78fae9e46af0a2305ebf31d1239d541b25963416759"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:361 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "ModifyHpLostAfterOsty": {
+      "maps_to": "powers.py:374-384 IntangiblePower.modify_hp_lost",
+      "verdict": "faithful"
+    },
+    "AfterModifyingHpLostAfterOsty": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "IntangiblePower.cs:35-39 is Flash() only. Presentation. Note the sim DOES have the machinery this would need (hooks.py:149-154 after_modify_hp_lost, used by BufferPower), so this is a deliberate no-op rather than a missing hook."
+    },
+    "ModifyDamageCap": {
+      "maps_to": "powers.py:363-372 IntangiblePower.modify_damage_cap",
+      "verdict": "faithful"
+    },
+    "AfterModifyingDamageAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "IntangiblePower.cs:59-63 is Flash() only. Presentation."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:386-387 on_enemy_side_end -> Power._tick",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "IntangiblePower.cs:20-23 `!CombatManager.Instance.IsInProgress` -> unmodified",
+      "verdict": "gap",
+      "issue": "The sim has no combat-phase guard on any modifier hook. This is the power-level face of audit/records/seam/power_cmd.json's structural gap G6 (no IsEnding/CanReceivePowers backstop) and of hook_dispatch's gap G8 (no IsOverOrEnding gate on combat dispatches); per binding rule 3 it carries the same `gap` verdict and is cross-referenced rather than re-argued. Recorded here because Intangible is the only ported power that spells the guard out itself, so a reader comparing the two files sees a real missing line rather than an architectural absence. DORMANT for the same reason hook_dispatch G8 is: everything reachable on that path is combat-scoped state the combat then discards. Third-file citations, not hashed here."
+    },
+    {
+      "what": "IntangiblePower.cs:24-27 / :48-51 `target != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "powers.py:375 and :370 both test `target is self.owner`. C# returns the unmodified amount / decimal.MaxValue for a non-owner; the sim returns `amount` / None, and hooks.py:80-93 folds None out of the cap min. Equivalent."
+    },
+    {
+      "what": "IntangiblePower.cs:28-31 `amount < 1m` -> unmodified",
+      "verdict": "faithful",
+      "rationale": "powers.py:383 `min(amount, 1)` gives the same answer for every amount: below 1 it returns the amount unchanged, at or above 1 it returns 1. Exact rather than merely equivalent."
+    },
+    {
+      "what": "IntangiblePower.cs:69 PowerCmd.Decrement, NOT TickDownDuration",
+      "verdict": "faithful",
+      "rationale": "powers.py:387 calls _tick (powers.py:70-75), not _tick_duration -- so Intangible does NOT honour SkipNextDurationTick, matching C#'s use of the plain Decrement. Getting this right is the whole point of the sim having two tick verbs, and Intangible is on the correct one; contrast Vulnerable/Weak/Frail, which use TickDownDuration on both sides."
+    },
+    {
+      "what": "IntangiblePower.cs:67 `side == CombatSide.Enemy`, no participants filter",
+      "verdict": "faithful",
+      "rationale": "powers.py:386 on_enemy_side_end (combat.py:345) fires unconditionally once per enemy side end for every listener, which is exactly the C# shape -- an Intangible on the PLAYER also ticks at the enemy side's end. This is one of the rare AfterSideTurnEnd overrides where the sim is in the right slot for both owners."
+    },
+    {
+      "what": "The double implementation (ModifyHpLost + ModifyDamageCap) is reproduced",
+      "verdict": "faithful",
+      "rationale": "C#'s own comments (IntangiblePower.cs:41-45, :55-58) say the cap arm exists for block loss and damage previews while the HP arm does the real work; the sim ports both (powers.py:363-384) with the same split and the same comments."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

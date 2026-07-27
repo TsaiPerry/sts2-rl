@@ -1,0 +1,104 @@
+{
+  "unit": "power/regen",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\RegenPower.cs",
+    "sha256": "3d95e7b15142a38ac8c32500b7656dc123570cd6a573b4545bd07b7ada3c3d95"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:157 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+    },
+    "ShouldScaleInMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audit/records/seam/power_cmd.json. The sim is single-player."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:160-171 RegenPower._apply_regen via on_enemy_turn_end / on_player_turn_end",
+      "verdict": "gap",
+      "live": true,
+      "issue": "Both legs are in the wrong slot and the IsDead guard is missing. RegenPower.cs:20-28 is `if (participants.Contains(Owner) && !Owner.IsDead) { Heal(Amount); Decrement; }` on AfterSideTurnEnd. (a) The ENEMY leg uses the per-creature on_enemy_turn_end (powers.py:165-167) instead of the side-scoped on_enemy_side_end -- see the dedicated guard entry. (b) The PLAYER leg uses on_player_turn_end (powers.py:169-171), which is Hook.BeforeTurnEnd (combat.py:654), one slot before the sim's real AfterTurnEnd equivalent after_player_turn_end (combat.py:665); the game heals AFTER the turn-end card effects and the hand flush, the sim before them. (c) `!Owner.IsDead` is absent from _apply_regen (powers.py:160-163): CreatureCmd.heal does return 0 for a dead target (cmds.py:160-161) so no HP moves, but `self._tick()` still runs and still fires on_power_amount_changed, so a dead-but-retained owner burns a Regen stack the game would keep. LIVENESS RE-DERIVED 2026-07-26 (potion-scope re-verdict pass): **DORMANT -> LIVE.** The old text read 'ALL DORMANT, for one shared reason: the only ported Regen source in the sim is a potion (potions.py:613), and potions are out of scope by the shared contract's global-scope rule, so no in-scope content puts Regen on anybody. Named trigger: any non-potion Regen source -- at which point (b) becomes live immediately (the heal races the flush) and (a) becomes live with two or more enemies.' The clause has been DELETED on Perry's instruction (\"don't ignore potions anymore\"), so the named trigger has already fired: the trigger is the potion. Regen Potion is PORTED (sts2_rl/potions.py:605-615, id 'regen_potion', REGEN = 5) and is in the generation pool at sts2_rl/potion_pools.py:58 as uncommon -- note it is in NOT_GENERATED_IN_COMBAT (potion_pools.py:76), which bars in-COMBAT generation only, not the reward pool, so it is ordinary reachable Ironclad content. Therefore (b) is LIVE now -- the heal races the hand flush on every use -- and (a) is LIVE in any fight with two or more enemies. (c)'s dead-owner stack burn stays the narrower case. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "RegenPower.cs:22 `participants.Contains(base.Owner)`",
+      "verdict": "gap",
+      "issue": "Same mechanism as turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game): the sim's on_enemy_turn_end (combat.py:341) runs immediately after THIS enemy's move, where Hook.AfterTurnEnd -- the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292) -- runs once at CombatManager.cs:1256 after EVERY enemy has moved. The sim does have the right slot available: on_enemy_side_end (combat.py:345). Per binding rule 3 the mechanism keeps G5's `gap` verdict and is cross-referenced rather than re-argued. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
+    },
+    {
+      "what": "RegenPower.cs:22 `!base.Owner.IsDead`",
+      "verdict": "gap",
+      "issue": "Absent from the sim -- see clause (c) of the AfterSideTurnEnd entry. Carried as its own guard because it is a distinct omission from the slot problem and would survive a slot fix."
+    },
+    {
+      "what": "RegenPower.cs:26 PowerCmd.Decrement after the heal",
+      "verdict": "faithful",
+      "rationale": "powers.py:163 `self._tick()` decrements by 1 and expires at <= 0 (powers.py:70-75), which is Decrement plus ShouldRemoveDueToAmount for a non-AllowNegative power. Note the ORDER matches too: C# heals first and decrements second, so the heal uses the pre-decrement Amount, and powers.py:162-163 does the same."
+    },
+    {
+      "what": "RegenPower.cs:24 Flash()",
+      "verdict": "waiver",
+      "rationale": "Presentation."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

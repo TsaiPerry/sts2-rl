@@ -1,0 +1,173 @@
+{
+  "unit": "power/illusion",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\IllusionPower.cs",
+    "sha256": "7461c923281077a0f9acf3647dc08ec0ff75ed04e1098406f6dc8b6fbb6fb31d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/EyeWithTeeth.cs",
+      "sha256": "72f0a276381a9eb594a3486f66059e771187ba0529cb94075028331c23279c81",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Parafright.cs",
+      "sha256": "cf2ec86e1cab489f4c064be88254a4dae45455de2ffebb6c75b6c069ef5b6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/WaterfallGiant.cs",
+      "sha256": "526a68e24ae441923a3dbfa3175e95900d23e035630a220608ea6356a108afaa",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/AdaptablePower.cs",
+      "sha256": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SteamEruptionPower.cs",
+      "sha256": "84f1f3ed19556c3101079b793c7d7f6e0227a477c25103c686e0a3b6042ba7a0",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/feed.py",
+      "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/the_obscura.py",
+      "sha256": "8ffc0b4fdb22396d575ec4c72534b1c7812a85f2e220e75661b888346d578029",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/fogmog.py",
+      "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/waterfall_giant.py",
+      "sha256": "7a56cdc2b7100662f13350de2c6f3738989bb9b2501903c2a72ebebaf81de08c",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1551 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single, and this is the one unit in the on_stack family that goes the OTHER way: the sim does NOT override on_stack, so a second application adds. That happens to be what PowerCmd.ModifyAmount does (PowerCmd.cs:236), so it is *more* faithful than the 15 units that override it to `pass` -- but it is still a gap, because C#'s AfterApplied fires only on a genuinely new power while the sim's __init__-time Minion grant (powers.py:1562-1564) likewise only runs on construction. Dormant: nothing reads Illusion's Amount, and the sim's stacking path (cmds.py:308-322) would not re-run __init__ anyway. Recorded so the inconsistency between this unit and its 15 siblings is visible."
+    },
+    "ShouldPlayVfx": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    "ShouldPowerBeRemovedOnDeath": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "IllusionPower.cs:59-66 keeps the owner's BUFFS (including itself) through death and drops only non-ITemporaryPower Debuffs -- the source comment explains that Temporary powers are excluded so the temp powers THEY applied also go away. The sim has no `should_power_be_removed_on_death` hook (hooks.py defines none) and never removes powers on death at all, so the whole predicate is unreachable in the sim. **RE-DERIVED 2026-07-26 (review fix pass): the previous dormancy argument rested on a FALSE grep.** It said \"`grep IllusionPower` outside powers.py finds no sim applier at all\". There are two: `monsters/hive/the_obscura.py:38-39` (Parafright) and `monsters/overgrowth/fogmog.py:34-35` (Eye with Teeth) both `PowerCmd.apply(hooks, self, IllusionPower, 1)` from __init__, mirroring Parafright.cs:35-39 and EyeWithTeeth.cs:30-34's AfterAddedToRoom. Both are ported summons of ported enemies (The Obscura is a Hive elite, Fogmog an Overgrowth normal). So the buff half stays dormant-by-agreement (the sim keeps everything, which is what this override asks for) and the DEBUFF half is **LIVE, not dormant**: the game clears a dying Illusion's Vulnerable/Weak/Frail and the sim carries them into the revived creature. EXECUTED: an Eye with Teeth given Vulnerable 3, hit for 99, then revived, comes back at 6/6 HP still holding `vulnerable` 3 in the sim; in the game Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671) strips it, because VulnerablePower does not override ShouldPowerBeRemovedAfterOwnerDeath (default true, PowerModel.cs:637-640) and IllusionPower is the only ShouldPowerBeRemovedOnDeath implementer in the whole game, returning true for any non-temporary Debuff. Bash/Vulnerable and Clothesline/Weak are ported basic-pool Ironclad content, so a revived Illusion is straightforwardly weaker in the game than in the sim. The engine-level half of this -- that the sim never strips ANY power on death -- is audit/records/seam/creature_card_cmds.json step 8b (added in the same fix pass); this entry owns IllusionPower's own predicate. ITemporaryPower has no sim analogue either (there is no `dark_shackles`-style wrapper in the ported set that survives here), and no ported debuff on an Illusion is temporary, so the ITemporaryPower carve-out itself is inert. Third-file citations, not hashed here."
+    },
+    "AfterApplied": {
+      "maps_to": "powers.py:1562-1564 IllusionPower.__init__",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# grants MinionPower 1 from AfterApplied unless the owner already has it (IllusionPower.cs:68-75, applier null, cardSource null); the sim does it in __init__ with the same `\"minion\" not in owner.powers` test (powers.py:1562-1564) and the same absent applier. The sim has no AfterApplied slot, and __init__ runs at exactly the point PowerCmd.apply creates the power (cmds.py:324-327) -- i.e. BEFORE hooks.on_power_applied rather than after, which is the only difference and is unobservable because no ported listener reacts to a Minion grant. Named per the main report's section 7 item 6: the mechanism is __init__-for-AfterApplied, and it would break for any AfterApplied body that needs the power to already be registered."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:1566-1570 should_die",
+      "verdict": "gap",
+      "issue": "Same wrong-hook shape as AdaptablePower's, and not re-argued here: C# lets the death happen and retains the corpse; the sim prevents the death and floors the owner at 1 HP (cmds.py:112). Consequences (1) HP 1 vs 0 and (2) damage_pipeline gap G4's killing-blow-skip recomputation apply identically. The (3) Feed consequence does NOT apply here and it is worth saying why: IllusionPower auto-applies MinionPower, whose ShouldOwnerDeathTriggerFatal() is false, so C# also refuses the fatal -- which is exactly what cards/feed.py:17-18's docstring claims, correctly for Illusion and incorrectly for Adaptable. The (4) Gremlin Horn consequence DOES apply: see power/adaptable's AfterDeath entry, and note both of this power's ported appliers are enemies, so `target.Side != Owner.Creature.Side` holds and the game pays out on every Illusion \"death\". Additionally absent: C#'s AfterDeath installs a synthetic REVIVE_MOVE MoveState whose FollowUpStateId is `FollowUpStateId ?? MoveStateMachine.StateLog.Last().Id` and whose MustPerformOnceBeforeTransitioning is true (IllusionPower.cs:83-88) -- the sim has no such splice, leaving the revive to the owner's own take_turn calling `revive()` (powers.py:1577-1581). **RE-DERIVED 2026-07-26 (review fix pass): the old dormancy reason for this clause -- \"no sim applier exists\" -- was FALSE (see this record's ShouldPowerBeRemovedOnDeath entry; Parafright and Eye with Teeth both apply it).** It is dormant for a different and checkable reason: BOTH ported appliers have a single self-looping move state -- Parafright.cs:44-47 `SLAM_MOVE` with `moveState.FollowUpState = moveState`, EyeWithTeeth.cs:39-42 `DISTRACT_MOVE` likewise -- so `StateLog.Last().Id` is always that one state and \"resume the logged move\" cannot differ from \"resume where the machine is\", which is what the sim's take_turn does (monsters/overgrowth/fogmog.py:48-56, monsters/hive/the_obscura.py). Neither applier sets FollowUpStateId, so it stays null on both. Named trigger: porting an IllusionPower applier with a multi-state move machine, or any caller that sets FollowUpStateId. Third-file citations, not hashed here. ONE MECHANISM, ONE VERDICT (binding rule 3): power/adaptable, power/illusion and power/steam_eruption all implement a C# AfterDeath body by returning False from `should_die` (powers.py:3365-3369, :1566-1570, :2016-2020), so all three run the sim's single death-PREVENTION branch (cmds.py:106-113) where C# runs the REAL-DEATH branch (CreatureCmd.cs:505-559). None of the three overrides ShouldDie, and all three bodies sit behind `!wasRemovalPrevented` (AdaptablePower.cs:34, IllusionPower.cs:79, SteamEruptionPower.cs:17) -- i.e. they are explicitly EXCLUDED from the branch the sim is executing. All three therefore carry `gap`; steam_eruption's `deliberate-divergence` was corrected to `gap` in the 2026-07-26 review fix pass. The canonical statement of the shared observable (the Gremlin Horn witness) is on power/adaptable's AfterDeath entry."
+    },
+    "ShouldAllowHitting": {
+      "maps_to": "powers.py:1572-1575 should_allow_hitting",
+      "verdict": "gap",
+      "issue": "LIVE, and it upgrades a seam gap that was recorded as un-demonstrated. C#'s PowerCmd.Apply<T> refuses to apply anything to a creature `CanReceivePowers` says no to, and CanReceivePowers reuses Hook.ShouldAllowHitting -- which is exactly what this override's own doc comment says it is for (\"This is so the ... doesn't receive POWERS while it is reviving\"). The sim wires should_allow_hitting into DamageCmd.deal (cmds.py:51-52) but NOT into PowerCmd.apply, which has no such guard at all. That is `power_cmd` gap **G6**, whose text says \"No concrete broken interaction is demonstrated (spot-checked callers apply powers only to already-resolved targets)\". **That is now falsified. EXECUTED:** a TEST_SUBJECT_BOSS combat (the Test Subject starts with powers ['adaptable', 'enrage']), a lethal Strike, then Vulnerable 2 from the player -- the sim reports `is_reviving True`, `should_allow_hitting(ts) False`, and then still lands `Vulnerable(2)` on the reviving boss, where the game refuses the application outright. Control: a 10-damage Strike in the same window returns 0 HP lost, proving the predicate IS wired into the damage path and only the power path is missing it. Rule-6 co-occurrence: the Test Subject is the ported Act-3 Glory boss and applies this power to itself at combat start, Bash/Vulnerable is ported basic-pool Ironclad content, and the revive window is the remainder of the player's turn after the killing blow -- the ordinary flow of the fight, not a contrived state. The same override exists on IllusionPower and ReattachPower, so all three carry it. Verdict carried per rule 3; the seam record is not edited (half B does not own audit/records/seam/** or docs/audit/seams/**) -- reported in .superpowers/sdd/content-power-report-b.md section 2.3. Third-file citations, not hashed here. NOTE (2026-07-26 fix pass): this record's own appliers make the finding reachable without the Test Subject at all -- Parafright (monsters/hive/the_obscura.py:38-39) and Eye with Teeth (monsters/overgrowth/fogmog.py:34-35) each open the same revive window on their own \"death\", and a Vulnerable landed on either during it is refused by the game and accepted by the sim."
+    },
+    "ShouldCreatureBeRemovedFromCombatAfterDeath": {
+      "maps_to": "hooks.py:603 -- NOT implemented by this power",
+      "verdict": "gap",
+      "issue": "Same unused-hook finding as AdaptablePower's, and the same inconsistency with ReattachPower, which does implement it. Folded into the AfterDeath mechanism."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "IllusionPower.cs:117-123 triggers a \"Dead\" animation if the owner is not alive at combat end. Presentation only."
+    }
+  },
+  "guards": [
+    {
+      "what": "IllusionPower.cs:34-45 FollowUpStateId",
+      "verdict": "gap",
+      "issue": "A public settable property with no sim analogue: it lets an applier choose which state the revived creature resumes on, defaulting to the last LOGGED state. Folded into the AfterDeath entry; carried separately because it survives a should_die-to-AfterDeath fix. Dormant, but NOT for the reason recorded before the 2026-07-26 fix pass (\"no ported applier\", which was false): both ported appliers have single self-looping move machines (Parafright.cs:44-47, EyeWithTeeth.cs:39-42) and neither sets FollowUpStateId, so the default resolves to the only state there is. Trigger: an IllusionPower applier with more than one move state, or a caller that sets the property."
+    },
+    {
+      "what": "IllusionPower.cs:129 Heal(MaxHp - CurrentHp) on revive",
+      "verdict": "faithful",
+      "rationale": "powers.py:1581 `CreatureCmd.heal(hooks, owner, owner.max_hp - owner.hp)`. Identical, including going through the heal command rather than writing hp."
+    },
+    {
+      "what": "IllusionPower.cs:81,121,127 TriggerAnim StunTrigger / Dead / WakeUpTrigger",
+      "verdict": "waiver",
+      "rationale": "Presentation only."
+    },
+    {
+      "what": "IllusionPower.cs:130-133 `base.Owner.Monster is Parafright`",
+      "verdict": "waiver",
+      "rationale": "CORRECTED 2026-07-26 (review fix pass): the old rationale said \"Parafright is unported\", which is false -- Parafright IS ported, as The Obscura's summon (monsters/hive/the_obscura.py:28-39). The waiver stands on presentation alone and needs no reachability claim: the guarded body is a single `SfxCmd.Play(...)` (IllusionPower.cs:132), a sound cue with no state effect. Recorded so the reader knows the special case was seen."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    },
+    {
+      "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",
+      "verdict": "gap",
+      "issue": "Part of the should_die-for-AfterDeath mechanism, carried as its own entry because it survives any fix that only re-slots the AfterDeath body. cmds.py:112 writes `target.hp = 1` and stops. C# does NOT heal the creature: CreatureCmd.cs:560-571 leaves it at 0 HP, fires Hook.AfterDeath(wasRemovalPrevented: true) and Hook.AfterPreventingDeath, and then, `if (creature.IsDead)`, RE-ENTERS `KillWithoutCheckingWinCondition(creature, force, recursion + 1)` -- up to 10 times before throwing InvalidOperationException (:562-565). So in the game a preventer must actually raise the creature's HP (Fairy in a Bottle heals; these three do not, which is why they take C#'s DEATH branch and not this one), whereas the sim's single silent `hp = 1` makes any prevention permanent and models neither the re-entry nor the 10-deep bail-out. Two consequences beyond the 1-vs-0 HP that conformance asserts on directly: the sim cannot express a prevention that fails, and the sim's own steam_eruption HP restore only runs because this floor makes `target.is_dead` False at cmds.py:121 (damage_pipeline gap G4). Same verdict at all three sites per rule 3."
+    },
+    {
+      "what": "The non-damage kill path: CreatureCmd.kill reproduces both arms but fires no on_damage_received",
+      "verdict": "gap",
+      "issue": "Part of the same mechanism, at the second of the sim's two death sites. `CreatureCmd.kill` (cmds.py:191-205) mirrors DamageCmd.deal's should_die / should_remove_from_combat_after_death / on_death fork and the same `target.hp = 1` prevention floor, but it is not a damage event, so it fires neither on_damage_received nor after_preventing_death. Consequences: (a) power/steam_eruption's HP restore (powers.py:2022-2033) lives on on_damage_received and therefore does not run here at all, leaving the Waterfall Giant at hp 1 instead of the 999999999 WaterfallGiant.cs:305 sets; (b) the preventer never learns the death was prevented. DORMANT for these three powers today -- the only ported non-damage kill of a steam_eruption owner is the giant's own `_explode` (monsters/underdocks/waterfall_giant.py:142-145), which runs AFTER `_about_to_blow` removed the power at :140, and nothing kills the Test Subject or an Illusion off the damage path. Named trigger: any ported non-damage kill reaching a creature that still holds one of these three powers -- SandpitPower._expire (powers.py:2610-2619) and TheGambitPower (powers.py:3816-3829) are the two ported callers of CreatureCmd.kill outside a monster's own move. Same verdict at all three sites per rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

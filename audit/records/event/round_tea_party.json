@@ -1,0 +1,103 @@
+{
+  "unit": "event/round_tea_party",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\RoundTeaParty.cs",
+    "sha256": "f62d7fd9690aaff9930a9aedbebc6a76b493ca98f207701158247e6820f49940"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\round_tea_party.py",
+    "sha256": "bbba782f173b10060e43b855de1ee36cf3e0b4dde76e43ac97667eef52a2ac9f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Events/EventOption.cs",
+      "sha256": "02a8c24eb58efdb08f14b8801a598400c4bd590b675faf9b947413096562118c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/TheArchitect.cs",
+      "sha256": "3ba94853f86839ee7dd48d1810fd98d0a9b4ace232a628419ab18b947fa9178c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "RoundTeaParty.is_allowed (events/round_tea_party.py:29-31) `run.hp >= 12`, matching RoundTeaParty.cs:26-29's `p.Creature.CurrentHp >= 12`. The literal 12 is the source's, and it is deliberately ONE more than the 11 damage the fight branch deals -- the gate exists so the event can never be lethal, which is why EV-1 is dormant-by-gate here (see that guard). Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars DamageVar(11, Unblockable | Unpowered) (RoundTeaParty.cs:22)",
+      "maps_to": "events/round_tea_party.py:11 _DAMAGE = 11, and _MIN_HP = 12 for the gate. Both exact. The second CanonicalVar is a StringVar naming Royal Poison.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EnjoyTea (RoundTeaParty.cs:40-46): RelicCmd.Obtain<RoyalPoison> FIRST, then Heal(MaxHp - CurrentHp) with both read AFTER the obtain",
+      "maps_to": "events/round_tea_party.py:39-42 add_relic('royal_poison') then `run.heal(run.max_hp - run.hp)`, reading both after the grant, which is what the source does -- it captures the Creature reference before the obtain but evaluates MaxHp/CurrentHp inside the Heal call (RoundTeaParty.cs:42-44). The order is only observable for a relic that moves max HP on pickup, and Royal Poison does not (relics/royal_poison.py has no after_obtained, only a turn-1 AfterPlayerTurnStart chip) -- but the sim preserves it anyway. This is a plain CreatureCmd.Heal, which dispatches no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does NOT apply -- confirmed by `py audit/tools/event_probes.py heal`, which lists this event under the plain-heal verb.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "PickFight (RoundTeaParty.cs:48-52) starts NO combat despite the name -- it is a SetEventState page with a single CONTINUE_FIGHT option",
+      "maps_to": "events/round_tea_party.py:44-45 `_set_state('PICK_FIGHT', [EventOption('CONTINUE_FIGHT', ...)])`. The sim correctly leaves pending_encounter unset; nothing here is an EnterCombatWithoutExitingEvent.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ContinueFight (RoundTeaParty.cs:54-59): Damage(11) THEN PullNextRelicFromFront -> RelicCmd.Obtain",
+      "maps_to": "events/round_tea_party.py:47-50 lose_hp(11) then obtain_relic_from_grab_bag(), which is run.py:631-636's pull_relic_from_front + add_relic -- the same Pull -> Obtain pair. Order preserved. The rarity roll is on the right stream: the source's one-argument PullNextRelicFromFront rolls on `player.PlayerRng.Rewards`, and obtain_relic_from_grab_bag with no rarity_rng falls through to run.rewards_rng (run.py:588-589, run.py:271-274), which is that stream. EV-3 does not apply.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-1: ContinueFight's 11 HP loss (RoundTeaParty.cs:56) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    },
+    {
+      "what": "`runState.Players.All(...)` (RoundTeaParty.cs:28), the Royal Poison hover tip and the `.ThatDoesDamage(11)` annotation (RoundTeaParty.cs:35-36)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "`.ThatWontSaveToChoiceHistory()` on CONTINUE_FIGHT (RoundTeaParty.cs:50) is not modelled",
+      "verdict": "deliberate-divergence",
+      "rationale": "EventOption.ThatWontSaveToChoiceHistory (EventOption.cs:220) marks the option out of the run's MapPointHistory choice log. The sim has no choice-history subsystem at all, so there is nothing for the flag to switch off, and grep shows only three call sites in the whole source (RoundTeaParty.cs:50 and TheArchitect.cs:334, 339) -- all of them second-page 'continue' buttons, i.e. the flag exists so a history replay does not record a non-choice. Same observable game state; recorded as a divergence rather than a waiver because run history is not one of the contract's four out-of-scope categories, and a future history/telemetry port would need it. Same treatment as GoldLossType.Stolen on the morphic_grove record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

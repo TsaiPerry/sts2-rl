@@ -1,0 +1,103 @@
+{
+  "unit": "relic/meat_on_the_bone",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\MeatOnTheBone.cs",
+    "sha256": "26a3652b82aff11b27e20553d601959deac3dd6600f27c3e5a8d593e8964bdd9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\meat_on_the_bone.py",
+    "sha256": "94b2e218a6b3a9f82072fcf0308d7baeb6e615c02c509303d459dbdeaec42e11"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/black_blood.py",
+      "sha256": "254547adb216c08edb51fc54b3d39bc01ffd343615ecddf1d4bb073a8dbd684e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/burning_blood.py",
+      "sha256": "405e77409b015750d2a39b6b4c0c1281e3d2a003dd652d0027301b14c4309446",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/chosen_cheese.py",
+      "sha256": "67907b12c7831727ff42e1b670818565a98d0b39febe8860ba1bb28361cd89b5",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (meat_on_the_bone.py:12)",
+      "verdict": "faithful"
+    },
+    "BeforeCombatStart": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "MeatOnTheBone.cs:24-31 does exactly one thing -- `base.Status = RelicStatus.Active` when the heal would currently fire -- and assigns no gameplay state. RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Checked against PROMPT.md bug class 13 and sweep A: this is an override with NO assignment other than the display flag (the very defect batch 6 found in sweep A's old 'C# resets' column), so there is no dropped reset here and the relic holds no per-combat state at all -- it recomputes the threshold from live HP every time."
+    },
+    "AfterCurrentHpChanged": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "MeatOnTheBone.cs:33-45 likewise assigns only `base.Status`, gated on the creature being the owner and combat being in progress. RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. It exists so the relic bar lights up live as the player's HP crosses 50%; nothing reads it."
+    },
+    "AfterCombatVictoryEarly": {
+      "maps_to": "on_combat_end (meat_on_the_bone.py:17-23), the sim's single combat-end pass",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Every guard and both constants are faithful (N1-N3); the divergence is that C# runs this relic in a SEPARATE, EARLIER complete pass over all listeners and the sim folds it into the one on_combat_end pass in relic order, so Burning Blood's heal moves the HP above the threshold first."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): AfterCombatVictoryEarly is a SEPARATE, EARLIER full pass in C# and this relic is the ONLY implementer in the whole game; the sim's single on_combat_end pass lets Burning Blood heal first and push the HP above the 50% threshold",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.AfterCombatVictory (Hook.cs:340-351) makes TWO complete passes over `runState.IterateHookListeners` -- every listener's AfterCombatVictoryEarly first, then every listener's AfterCombatVictory. MeatOnTheBone is the sole AfterCombatVictoryEarly override anywhere under src/Core/Models/ (verified by grep), so its threshold test `CurrentHp <= (int)(MaxHp * 50/100)` (MeatOnTheBone.cs:47-58, 60-65) always sees the PRE-heal HP. The sim has one flat `on_combat_end` dispatch (hooks.py:271-275) in RunState.relics order, and the three other ported implementers -- burning_blood.py:15 (+6), black_blood.py:17 (+12) and chosen_cheese.py:19 (+1 Max HP and a heal) -- are all AfterCombatVictory/AfterCombatEnd relics that C# guarantees run SECOND. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-meat-bone): at 38/80 (threshold 40), the relic alone heals to 50; relic order [burning_blood, meat_on_the_bone] gives 44 and [meat_on_the_bone, burning_blood] gives 56, where C# gives 56 in BOTH cases -- a 12 HP divergence from listener order alone. And the losing order is the one that actually happens: Burning Blood is the Ironclad STARTER relic, granted by start_run, so it is index 0 of RunState.relics and always registers before any relic picked up later. Both sides ported and obtainable: Meat on the Bone is Rare in the transcribed grab bag (relic_pools.py:96), Burning Blood is in every run, and ending a fight between 41% and 50% of max HP is an ordinary outcome. Same FAMILY as audit/records/seam/turn_structure.json guard G12 (C# guarantees ordering with separate complete passes; the sim flattens them into registration-order luck) and carries that record's `gap` verdict per binding rule 3 -- but a DISTINCT site: G12 covers the turn-boundary hooks, this is the combat-victory pair, and neither the seam record nor any sweep reaches it. Rule 7: leans on hooks.py, Hook.cs, burning_blood.py, black_blood.py and chosen_cheese.py, none hashed here."
+    },
+    {
+      "what": "N1: the threshold arithmetic -- `(int)((decimal)MaxHp * (DynamicVars['HpThreshold'].BaseValue / 100m))` (MeatOnTheBone.cs:63) vs `self.player.max_hp * 50 // 100` (meat_on_the_bone.py:20)",
+      "verdict": "faithful",
+      "rationale": "Both truncate toward zero, and for non-negative operands `(int)(m * 0.5)` and `m * 50 // 100` agree for every m (odd max HP included: 75 -> 37 both ways, 81 -> 40 both ways). The constants are the DynamicVar defaults -- `DynamicVar(\"HpThreshold\", 50m)` and `HealVar(12m)` (MeatOnTheBone.cs:18-22) -- with no AscensionHelper.GetValueIfAscension anywhere in the file, so 50 and 12 are the non-ascension values and match HP_THRESHOLD_PCT = 50 and HEAL = 12. Both C# reads use `.BaseValue`, so no hook can move them. Comparison is `<=` on both sides (`CurrentHp <= num` vs `self.player.hp <= threshold`), so exactly 50% heals."
+    },
+    {
+      "what": "N2: `if (!base.Owner.Creature.IsDead)` (MeatOnTheBone.cs:49) vs `self.player.is_dead` (meat_on_the_bone.py:18)",
+      "verdict": "faithful",
+      "rationale": "Mirrored, and non-vacuous: the sim's on_combat_end fires from _end_combat (combat.py:347-350) on defeats too, and the sim has paths that end a combat with a dead player and player_won=False (combat.py:309). The same guard is present in the three sibling combat-end relics."
+    },
+    {
+      "what": "N3: the hook fires only on VICTORY in C#; the sim's on_combat_end fires on any conclusion and the port re-derives the restriction",
+      "verdict": "faithful",
+      "rationale": "AfterCombatVictoryEarly is dispatched only from Hook.AfterCombatVictory (Hook.cs:340-351), itself called only from CombatManager.cs:999 on the victory path. The port's `if not player_won: return` (meat_on_the_bone.py:18) reconstructs exactly that. Distinct from relic/chosen_cheese, whose C# hook is the any-conclusion AfterCombatEnd and whose port therefore does NOT check player_won -- worth stating side by side, because the two ports look inconsistent and both are right."
+    },
+    {
+      "what": "N4: WillHealOnCombatFinished is RE-EVALUATED inside AfterCombatVictoryEarly (MeatOnTheBone.cs:52) rather than reusing the cached RelicStatus",
+      "verdict": "faithful",
+      "rationale": "So the status flag really is display-only and the decision is always taken from live HP; meat_on_the_bone.py:20-21 likewise recomputes the threshold at combat end. This is what makes the two `base.Status` waivers above safe -- had the heal branched on the cached status, dropping the status updates would have been a gap."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

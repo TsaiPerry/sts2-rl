@@ -1,0 +1,93 @@
+{
+  "unit": "power/soar",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SoarPower.cs",
+    "sha256": "a1b35adba4b08d7c4e0334cce2ce935aeaa71c0f9211592780a8a3d9d4370298"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Powers/PowerStackType.cs",
+      "sha256": "7251eb51775362338fe6fc5412a6e8304c23c5bad9b44a2b4a2c3bf9a3758407",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/OwlMagistrate.cs",
+      "sha256": "4f9f445bfdaeb4ead3fd8876a2037266f3df55f20ceec87362065ac85e8b3537",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/owl_magistrate.py",
+      "sha256": "76d916ae1b0cc220a763ab8c3c1d0eaa47b7de38e30664d9e8650e5be6cc739f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:3057 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:3060-3061 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single, and the sim overrides on_stack to `pass` citing it. Per the settled census (`py audit/tools/power_census.py stack`) that reasoning is wrong: Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch. DORMANT here for a reason specific to this power and worth stating: Soar's multiplier reads `DynamicVars[\"DamageDecrease\"]`, NOT Amount (SoarPower.cs:29), so no C# behaviour depends on the amount either. The only ported applier applies it once and removes it on the dive (monsters/glory/owl_magistrate.py:59-60; OwlMagistrate.cs:134 apply, :146 PowerCmd.Remove<SoarPower>). Third-file citations, not hashed here."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:3063-3072 modify_damage_multiplicative",
+      "verdict": "faithful",
+      "rationale": "Constant checked: C# returns `DynamicVars[\"DamageDecrease\"].BaseValue / 100m` and CanonicalVars declares `new DynamicVar(\"DamageDecrease\", 50m)` (SoarPower.cs:17), i.e. exactly 0.5, which is what powers.py:3071 hard-codes. 0.5 is dyadic, so it is outside hook_dispatch G9's float-product problem (`py audit/tools/power_census.py multipliers` lists it as dyadic). `target != base.Owner -> 1m` matches powers.py:3070. The `!props.IsPoweredAttack() -> 1m` guard is carried separately below."
+    }
+  },
+  "guards": [
+    {
+      "what": "SoarPower.cs:25 `!props.IsPoweredAttack()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "The sim omits the per-power test and relies on the PIPELINE-level gate instead: cmds.py:56-58 runs modify_damage_additive/modify_damage_multiplicative only when `is_powered_attack(props)` (valueprops.py:47-49, Move && !Unpowered). C# never gates the dispatcher -- CreatureCmd.cs:261 calls Hook.ModifyDamage with ModifyDamageHookType.All for every damage type and Hook.ModifyDamageInternal (Hook.cs:2515-2538) calls every listener -- so the gate lives in each override. Equivalent HERE because this power's C# override does self-gate. The hoisting itself is damage_pipeline gap G3 and is not re-verdicted per rule 3. Independently reproduced: `py audit/tools/power_slot_probes.py ungated-modifiers` finds 37 gated vs 9 ungated C# Modify{Damage,Block}{Additive,Multiplicative} overrides. Third-file citations, not hashed here."
+    },
+    {
+      "what": "Hard-coding 0.5 where C# reads a DynamicVar",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no DynamicVar system, so the canonical default (50) is inlined as 0.5. Observably identical today; it would diverge if anything ever wrote DynamicVars[\"DamageDecrease\"] at runtime, and nothing in the decompiled source does (the key is only read, SoarPower.cs:11/29). Same shape as FlutterPower's."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

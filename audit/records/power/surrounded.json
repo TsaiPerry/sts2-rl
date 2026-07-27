@@ -1,0 +1,149 @@
+{
+  "unit": "power/surrounded",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SurroundedPower.cs",
+    "sha256": "e45d9c106a130f991f1c56ca620de9cf97f57096e1b5c400fc7d86acf0227971"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Crusher.cs",
+      "sha256": "0a13fd0f53e6660990457d555507d64a1a43300532cbb2198122c46b7fe5de9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Rocket.cs",
+      "sha256": "64ce4ca6aa17ca7c94c9d184dedcf9c4c2adf8f493298a90036b79f8fd9f1ca7",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/kaiser_crab.py",
+      "sha256": "450a8fdc792bfab4bbcdb7bf007f28ce3cadb00001d5b4889795d73e4f67eff3",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_hive.py",
+      "sha256": "29a90e9b992c8bf4892da4666d11dc716e0a5bc25af507b6bfb80d6b8b0266a0",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeltBuckle.cs",
+      "sha256": "1e72315fdaf11e92a555144fa8b255f3735bde2aaf590f92f6ece0288cab2831",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ReptileTrinket.cs",
+      "sha256": "73dfefc29119cc91bab25f406d8ab6b40611067b812b0629354106efd740c241",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2537 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:2549-2550 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` -- the settled census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally. DORMANT: Surrounded's behaviour is driven entirely by the private `_facing`/`self.facing` state (SurroundedPower.cs:27, powers.py:2547) and NOTHING reads Amount on either side; and the only ported applier, monsters/hive/kaiser_crab.py:112-114, applies it exactly once, guarded by `if combat is not None`, when the Rocket arm is constructed (Rocket.cs:93). Third-file citations, not hashed here."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:2552-2565 modify_damage_multiplicative",
+      "verdict": "gap",
+      "issue": "The arithmetic and the facing logic are exact -- `dealer == null -> 1m`, `target != base.Owner -> 1m`, then 1.5x only if the dealer holds the marker power OPPOSITE the facing (SurroundedPower.cs:46-72 vs powers.py:2559-2565), and 1.5 is dyadic so hook_dispatch G9 does not bite (`power_census.py multipliers`). The gap is that this is one of only NINE C# Modify{Damage,Block}{Additive,Multiplicative} overrides that do NOT self-gate on powered-ness (executed: `py audit/tools/power_slot_probes.py ungated-modifiers`, 37 gated / 9 ungated), while the sim gates the WHOLE dispatch at the pipeline level (cmds.py:56-58, `if is_powered_attack(props)`). So an Unpowered but dealer-attributed hit on a Surrounded player gets 1.5x in the game and 1.0x in the sim. `damage_pipeline` gap G3 already owns this mechanism AND already names SurroundedPower by name as its example, so the verdict is carried unchanged here per rule 3. DORMANT, verified rather than inherited: the multiplier needs a dealer holding BackAttackLeft/RightPower, and the only two such creatures anywhere are the Kaiser Crab arms (Crusher.cs:117, Rocket.cs:94; sim kaiser_crab.py:46,115), whose every damage source is an AttackIntent -- a grep of Crusher.cs and Rocket.cs for `Unpowered`/`Unblockable` returns nothing, and the sim's arms only ever call `_execute_attack` (kaiser_crab.py:76-97, 141-153). Trigger: any unpowered damage dealt BY a Kaiser Crab arm, or porting HangPower / ShadowmeldPower (the two other ungated power overrides, both unported). Third-file citations, not hashed here."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "powers.py:2573-2578 before_card_played (combat.py:466)",
+      "verdict": "faithful",
+      "rationale": "SurroundedPower.cs:74-80 flips facing on any TARGETED card play by the owner's player, damaging or not; powers.py:2573-2578 does the same on `target is not None`, and its comment correctly argues `cardPlay.Card.Owner == base.Owner.Player` is a single-player tautology (Surrounded only ever lands on the player). test/test_hive.py:957-983 pins the targeted-Skill case."
+    },
+    "BeforePotionUsed": {
+      "maps_to": "powers.py:2580-2582 on_potion_used -- but that is the sim's AfterPotionUsed slot (hooks.py:566-571, combat.py:610), NOT BeforePotionUsed, which the sim never dispatches",
+      "verdict": "gap",
+      "live": true,
+      "issue": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from faithful. The old rationale read 'Potions are out of scope by contract for *reachability* but the hook itself is ported and correct'. The clause it leaned on has been DELETED on Perry's instruction (\"don't ignore potions anymore\") -- and re-deriving the hook without it shows the second half was wrong too. THE HOOK IS NOT PORTED. WRONG SLOT (PROMPT.md bug classes 11 and 22). C# has TWO distinct potion-use hooks and PotionModel.OnUseWrapper fires them on either side of the effect: src/Core/Models/PotionModel.cs:293 RemoveBeforeUse, :297 `Hook.BeforePotionUsed(...)`, :325 `OnUse(...)`, :338 `Hook.AfterPotionUsed(...)`. An executed grep of src/ for both names returns exactly three model implementers: SurroundedPower.cs:82 is the ONLY BeforePotionUsed, while BeltBuckle.cs:81 and ReptileTrinket.cs:22 are AfterPotionUsed. The sim has ONE hook. sts2_rl/hooks.py:566-571 declares `on_potion_used` and its own docstring says 'Fires after a potion's effect resolves (mirrors AfterPotionUsed)', and sts2_rl/combat.py:604-610 dispatches it AFTER `potion.use(ctx, target)`. Belt Buckle and Reptile Trinket sit in the right slot; SurroundedPower's port (sts2_rl/powers.py:2580-2582) was hung on the same method and therefore runs one phase LATE. There is no dispatch of BeforePotionUsed anywhere in the sim (grep: `before_potion_used` returns nothing). OBSERVABLE, and it is a damage number. The facing flip and the potion's effect commute only while the potion does not change the board. It does whenever the potion kills its target: C# flips on the LIVE target, then the death fires AfterDeath which re-faces on the survivors; the sim runs the death re-face FIRST and then flips on the corpse, which is a different final facing, and facing is worth a 1.5x multiplier (SurroundedPower.cs:46-72, sts2_rl/powers.py:2552-2565). EXECUTED (heredoc probe, reproducible): CombatState(rng=Random(0), encounter=KAISER_CRAB_BOSS) with the Crusher dropped to 1 HP and a Fire Potion in slot 0; `cs.use_potion(0, target_idx=0)` leaves facing='left'. C# reaches 'right' -- BeforePotionUsed flips right->left on the still-alive Crusher (BackAttackLeft), the potion then kills it, and AfterDeath re-faces on the remaining hittable enemy, the Rocket (BackAttackRight), flipping left->right. The sim's on_death runs first and cannot flip (facing is still 'right' and _update_direction's right-arm needs BackAttackLeft), then on_potion_used flips right->left on the dead Crusher. The multiplier the Rocket then gets against the player is 1.5 in the sim and 1.0 in the game, and driving the Rocket's 18-damage Precision Beam through DamageCmd.deal on the resulting states takes the player from 80 HP to 44 (sim) versus 80 to 56 (game) -- 12 HP on one hit. LIVE (binding rule 6, both sides ported): the Kaiser Crab boss is the ported encounter at sts2_rl/monsters/hive/kaiser_crab.py:159-162 and its Rocket arm applies this very power at sts2_rl/monsters/hive/kaiser_crab.py:112-114; Fire Potion is registered by @register_potion, is targeted (sts2_rl/potions.py:59), and is Common in the generation pool (sts2_rl/potion_pools.py:50). Five other pooled potions are targeted too (weak_potion, vulnerable_potion, beetle_juice, powdered_demise). The one clause not re-verdicted here remains `CombatManager.Instance.IsInProgress` (SurroundedPower.cs:84), which is hook_dispatch gap G8's territory. FIX SHAPE: split the sim's single dispatch into before_potion_used (before `potion.use`, sts2_rl/combat.py:609) and on_potion_used (after, :610), and move SurroundedPower onto the former; Belt Buckle and Reptile Trinket stay put. RULE 7: src/Core/Models/PotionModel.cs, src/Core/Models/Relics/BeltBuckle.cs, src/Core/Models/Relics/ReptileTrinket.cs, sts2_rl/hooks.py, sts2_rl/potions.py, sts2_rl/potion_pools.py and sts2_rl/monsters/hive/kaiser_crab.py are cited here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:2584-2594 on_death",
+      "verdict": "gap",
+      "issue": "The logic matches SurroundedPower.cs:90-100 -- skip when the dead creature is on the owner's own side, then, if every remaining hittable enemy carries the SAME marker power, re-face on hittableEnemies[0] -- but the sim reads `[e for e in combat.enemies if not e.is_gone]` (powers.py:2590) where C# reads `base.Owner.CombatState.HittableEnemies`. Recurring gap shape 7: HittableEnemies applies Hook.ShouldAllowHitting, so a creature the game refuses to hit (a mid-revival Decimillipede segment, an Illusion/Adaptable/Reattach holder in its un-hittable window) is counted by the sim and not by the game, which can flip the `all(...)` test and hence the facing -- and facing is worth 1.5x damage. C#'s `wasRemovalPrevented` early-out is separately dropped by the sim (see the guard below). DORMANT: the Kaiser Crab boss is exactly the two arms (monsters/hive/kaiser_crab.py:159-162), neither of which overrides ShouldAllowHitting, so `not is_gone` and HittableEnemies agree for every creature that can ever be in this power's combat. Trigger: an encounter that puts a Kaiser Crab arm alongside an Illusion / Adaptable / Reattach holder, all three of which are ported powers. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "SurroundedPower.cs:92 `!wasRemovalPrevented`",
+      "verdict": "gap",
+      "issue": "Absent from powers.py:2584-2586, which tests only the side. C# skips the re-facing entirely when a death's REMOVAL was prevented (the creature is still there, so the board did not change); the sim re-runs its `all(...)` scan anyway. Folded into the AfterDeath entry's rollup and dormant by the same argument -- no ported creature in a Kaiser Crab combat prevents its own removal -- but it survives an is_gone-vs-HittableEnemies fix, so it is carried on its own."
+    },
+    {
+      "what": "SurroundedPower.cs:33-44 `Facing` starts at Direction.Right",
+      "verdict": "faithful",
+      "rationale": "`Direction.Right` is the zero value of the enum (SurroundedPower.cs:19-23) and powers.py:2547 initialises `self.facing = \"right\"`. Checked rather than assumed because the whole power hangs on it."
+    },
+    {
+      "what": "SurroundedPower.cs:102-119 UpdateDirection's asymmetric switch",
+      "verdict": "faithful",
+      "rationale": "Facing Right flips to Left only if the target has BackAttackLEFT, and vice versa (SurroundedPower.cs:104-118); powers.py:2567-2571 reproduces both arms including the `elif`, so a target with the marker matching the current facing does NOT flip. Easy to get backwards; it is right."
+    },
+    {
+      "what": "SurroundedPower.cs:121-159 FaceDirection / FlipScale / kaiser_crab_direction music",
+      "verdict": "waiver",
+      "rationale": "Presentation only -- sprite scale flips and a music parameter."
+    },
+    {
+      "what": "SurroundedPower.cs:125 base.Owner.Pets",
+      "verdict": "waiver",
+      "rationale": "Pets/Osty belong to the other characters; out of Ironclad scope."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

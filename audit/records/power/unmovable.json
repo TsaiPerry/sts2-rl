@@ -1,0 +1,109 @@
+{
+  "unit": "power/unmovable",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\UnmovablePower.cs",
+    "sha256": "b267db119bf6d000e1ccc146584cc1d648566a82a4ac7ef34bc2dd53ff5306a6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/unmovable.py",
+      "sha256": "0f2532ea055be41dcd8d0eb2549d75d6efb27843b5f893b66b88d4a7e71628bc",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Cards/Entrench.cs",
+      "sha256": "13a44165a21f2ce718442cad06acd796f3c1f69537884dde98340287f2e0d1e1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsLegion.cs",
+      "sha256": "08bc0980dc3b133a256bb39d50881b6888fabb5f47033aaab02b7ccb36381530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Vambrace.cs",
+      "sha256": "d804bb40a837fa90b9b5e734e7dcdd61643cd0328f35a884ce07d97f1dc4a34a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1092 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyBlockMultiplicative": {
+      "maps_to": "powers.py:1105-1120 UnmovablePower.modify_block_multiplicative plus the hand-rolled counters at :1094-1103, :1122-1130",
+      "verdict": "gap",
+      "issue": "The sim replaces C#'s HISTORY QUERY with hand-rolled per-power state, and the two disagree about when the allowance resets. C# counts, on every call, History.Entries.OfType<BlockGainedEntry>() where e.HappenedThisTurn(base.CombatState) && e.Actor == target && e.Props.IsCardOrMonsterMove() && e.CardPlay != cardPlay (UnmovablePower.cs:35) -- so the window is the game's own turn window and the exclusion is 'gains from THIS card play do not count against it'. The sim keeps self._plays_used and self._active_card and resets them from on_player_turn_start (powers.py:1127-1130), which is player.py:169. Two divergences follow. (a) THE RESET SLOT: the sim's counter survives the whole enemy turn and is cleared only at the player's next turn start, while C#'s HappenedThisTurn window is the CombatState's, so any block the owner gains during the ENEMY turn from a card or move -- a turn-end auto-play under power/stampede, an on_enemy_turn effect -- lands in a different window on the two sides. (b) THE per-CardPlay EXCLUSION: C# compares CardPlay identities so a card played twice (Duplication, Throwing Axe) counts as TWO plays against the allowance, where the sim compares CARD identity (powers.py:1113) and its on_card_played bump fires once per card (combat.py:514, outside the play loop), so a doubled block card consumes ONE stack in the sim and two in the game -- hook_dispatch's G4 again, not re-verdicted, but here it means a doubled Iron Wave gets DOUBLE block twice in the sim and once in the game. Reachable: Unmovable is a ported Ironclad card (cards/unmovable.py:36) and Throwing Axe is a ported relic from the ported Tanx shrine."
+    }
+  },
+  "guards": [
+    {
+      "what": "UnmovablePower.cs:23-26 target.IsMonster -> 1m",
+      "verdict": "faithful",
+      "rationale": "C# refuses to double a MONSTER's block outright, where powers.py:1111 only tests `target is not self.owner`. Equivalent for the ported content and checked rather than assumed: the sole applier is the Ironclad card (cards/unmovable.py:36, target = ctx.player), no ported monster applies it, and no ported effect copies a player power onto a monster. Named trigger: applying Unmovable to a monster, at which point the sim would double its block and the game would not."
+    },
+    {
+      "what": "UnmovablePower.cs:27-30 !props.IsCardOrMonsterMove() -> 1m",
+      "verdict": "gap",
+      "live": true,
+      "issue": "RE-VERDICTED 2026-07-26 (relic-tier merge review): `faithful` -> `gap`, LIVE, grade B. The old rationale claimed unpowered block 'is not doubled on either side'. THAT IS FALSE ON THE C# SIDE. ValuePropExtensions.cs:23-26 defines IsCardOrMonsterMove as exactly `props.HasFlag(ValueProp.Move)` -- Move ALONE. It does not exclude Unpowered, so UnmovablePower.cs:27-30 deliberately PERMITS an Unpowered|Move block gain to reach the multiplier, the same looser gating src/Core/Models/Relics/Vambrace.cs:57 and src/Core/Models/Relics/PaelsLegion.cs:134 use (the game ships two PaelsLegion.cs; the relic is the Relics one). The sim's BlockCmd.apply gate (cmds.py:145) is is_powered_attack(props) -- Move AND NOT Unpowered -- so the sim never reaches the listener at all. This is the block-side face of the props hoist owned by audit/records/seam/creature_card_cmds.json G1, whose census of looser-gating listeners omits this power; carried per binding rule 3, not re-argued. LIVE, and reachable with NO relic: Entrench.cs:23 is the game's only `ValueProp.Unpowered | ValueProp.Move` block gain and it carries a cardPlay, `unmovable` is in IRONCLAD_POOL, and `entrench` is granted by the ported Trash Heap event (sts2_rl/events/trash_heap.py:17). EXECUTED: sim Entrench from 10 block with Unmovable 1 yields 20; C# yields 30. Control: a powered Defend doubles correctly in the sim, proving only the Unpowered arm is missing. The sim's own docstring at powers.py:1086-1088 states the false premise verbatim and is what the old verdict was read off (PROMPT.md bug class 12/24). Found by the relic-tier rule-3 review; `py audit/tools/power_slot_probes.py ungated-modifiers` already listed UnmovablePower.cs:21 as UNGATED and no record had run it. The existing pin test/test_hook_order.py::TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers covers the fix. NOTE C#'s predicate also admits monster-MOVE block; that arm stays unreachable here because the owner is always the player. Third-file citations, not hashed here."
+    },
+    {
+      "what": "UnmovablePower.cs:31-34 cardSource.Owner.Creature != base.Owner -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:1111 `card is None -> 1.0` plus the owner test. Single-player tautology for the ownership half."
+    },
+    {
+      "what": "UnmovablePower.cs:35 the CardPlay != cardPlay exclusion, i.e. multiple block gains inside ONE play all double",
+      "verdict": "faithful",
+      "rationale": "powers.py:1113-1116 returns 2.0 unconditionally while card is self._active_card, with a comment saying exactly this. Correct for the within-one-play case; the ACROSS-plays case is the (b) divergence on the hook entry."
+    },
+    {
+      "what": "UnmovablePower.cs:36-40 num >= base.Amount -> 1m, else 2m",
+      "verdict": "faithful",
+      "rationale": "powers.py:1117-1120. The factor 2.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py audit/tools/power_census.py multipliers), and it composes with power/no_block's absorbing 0.0 the same way under either aggregation shape."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,48 @@
+{
+  "unit": "card/true_grit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\TrueGrit.cs",
+    "sha256": "05e1d60c99a232c327cf24767efee9c8e99ecd1a56a10315b7c8ed3f6ec15f1d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\true_grit.py",
+    "sha256": "9536814bdecafe56c0def793fe2342d4daf0ff237ea15f54e4a139d8f1aaf6a6"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "TrueGritCard.gains_block = True (true_grit.py:218)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (TrueGrit.cs:16) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (true_grit.py:217-222) + _init_vars (224-226)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Common, TargetType.Self)` (TrueGrit.cs:22-25) == cost 1 / SKILL / COMMON / SELF. True Grit has no Exhaust keyword of its own -- the Exhaust hover tip (TrueGrit.cs:20) refers to the card it exhausts -- and the sim leaves `exhausts` False."
+    },
+    "CanonicalVars": {
+      "maps_to": "TrueGritCard._block = 7 (true_grit.py:226)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(7m, ValueProp.Move)` (TrueGrit.cs:18) == `_block = 7`. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "TrueGritCard.on_play (true_grit.py:231-249)",
+      "verdict": "faithful",
+      "rationale": "Both branches and the RNG are right. Block first on both sides (TrueGrit.cs:29). UPGRADED: `CardSelectCmd.FromHand(prefs: (ExhaustSelectionPrompt, 1), filter: null)` then exhaust the result if non-null (30-38) == `CardSelectCmd.from_hand(ctx.hooks, ctx.player, 'exhaust')` then exhaust `chosen[0]`. UN-UPGRADED: `Owner.RunState.Rng.CombatCardSelection.NextItem(pile.Cards)` over the WHOLE hand, not just Attacks (39-44) == the sim's parity branch `crng.card_selection.choice(ctx.player.hand)` with the shared legacy rng kept only for non-parity runs (true_grit.py:243-247). This is one of only five cards in the pool that route CombatCardSelection correctly (with cinder, infernal_blade, thrash and mad_science's Chaos rider). True Grit cannot exhaust itself on either side (Play pile in C#, discard-pile limbo in the sim). The sim's early `if not ctx.player.hand: return` covers C#'s two null checks at once. BLAST RADIUS on the upgraded branch, not re-verdicted per rule 3: `CardSelectCmd` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) -- creature_card_cmds steps 104/105."
+    },
+    "OnUpgrade": {
+      "maps_to": "TrueGritCard._on_upgrade (true_grit.py:228-229)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(2m)` (TrueGrit.cs:49) == `self._block += 2` (7 -> 9). The upgrade ALSO swaps random selection for player choice, which lives in OnPlay's `IsUpgraded` branch rather than in a var -- the sim reads `self.upgrade_level > 0` at the same point."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

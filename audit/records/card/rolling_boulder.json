@@ -1,0 +1,43 @@
+{
+  "unit": "card/rolling_boulder",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\RollingBoulder.cs",
+    "sha256": "32faef95d2ee63a625ceb43f37f303aab8202278499a0180a96d4c9bfa4878e0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_powers.py",
+    "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_powers.py:297-301) + _init_vars (303-305)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Power, CardRarity.Rare, TargetType.Self)` (RollingBoulder.cs:23-26) == cost 3 / POWER / RARE / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_power_amount = 5 declared; the IncrementAmount var is not (colorless_powers.py:305)",
+      "verdict": "gap",
+      "issue": "`new PowerVar<RollingBoulderPower>(5m)` maps to `_power_amount = 5`, but the second var `new DynamicVar(\"IncrementAmount\", 5m)` (RollingBoulder.cs:17-21, mirrored by the `public const int incrementAmount = 5`) has no `_`-attribute -- the sim leaves the per-turn growth entirely to RollingBoulderPower. The APPLIED amount is right and the power's growth is the power stream's to audit; what is missing is the printed second number, so `magic_number` reports the starting 5 and nothing tells the observation encoder that it grows. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "RollingBoulderCard.on_play (colorless_powers.py:310-316)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<RollingBoulderPower>(choiceContext, Owner.Creature, DynamicVars[\"RollingBoulderPower\"].IntValue, Owner.Creature, this)` (RollingBoulder.cs:30) == `PowerCmd.apply(ctx.hooks, ctx.player, RollingBoulderPower, self._power_amount, applier=ctx.player)`. No animation on either side."
+    },
+    "OnUpgrade": {
+      "maps_to": "RollingBoulderCard._on_upgrade (colorless_powers.py:307-308)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"RollingBoulderPower\"].UpgradeValueBy(5m)` (RollingBoulder.cs:35) == `self._power_amount += 5` (5 -> 10). The IncrementAmount stays 5 when upgraded -- only the STARTING damage doubles, which is the distinction the missing var would have made visible."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

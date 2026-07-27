@@ -1,0 +1,59 @@
+{
+  "unit": "card/omnislice",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Omnislice.cs",
+    "sha256": "530c733ff4d578aff930b59bbdaee213fe6ec55e9786d3cb4015eed4c9a198a0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/DamageResult.cs",
+      "sha256": "33128b75cbb7863e8d56d116b0e517064500579284c1f9b668c07553b688dc49",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:299-303) + _init_vars (305-307)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (Omnislice.cs:19-22) == cost 0 / ATTACK / UNCOMMON / ANY_ENEMY. Note the TARGET type is AnyEnemy even though the card splashes -- the splash is a follow-up, not a fan-out -- and the sim carries ANY_ENEMY, which is what keeps the framework from routing it per-enemy."
+    },
+    "CanonicalVars": {
+      "maps_to": "OmnisliceCard._damage = 8 (colorless_attacks.py:307)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(8m, ValueProp.Move)` (Omnislice.cs:17) == `_damage = 8`, powered on both sides for the FIRST hit."
+    },
+    "OnPlay": {
+      "maps_to": "OmnisliceCard.on_play (colorless_attacks.py:312-325)",
+      "verdict": "gap",
+      "issue": "The structure is faithful: powered 8 to the target, then the splash to every OTHER hittable enemy as `Unpowered | Move` (Omnislice.cs:28-40) == `props=DamageProps.CARD_UNPOWERED` (colorless_attacks.py:322-324), and the target set matches -- C#'s `GetTeammatesOf(receiver).Except(target).Where(e => e.IsHittable)` == `[e for e in ctx.enemies if e is not target and not e.is_gone]`. The splash being UNPOWERED is the load-bearing detail and the sim has it right. THE SPLASH AMOUNT IS THE WRONG QUANTITY: C# splashes `damageResult.TotalDamage + damageResult.OverkillDamage` (Omnislice.cs:39). The sim uses `DamageCmd.deal`'s return value, which is `hp_lost` (cmds.py:126) -- HP actually removed -- where C# uses `DamageResult.TotalDamage + OverkillDamage`, and those are precisely `BlockedDamage + UnblockedDamage` (DamageResult.cs:64) plus the excess beyond the target's HP, with `UnblockedDamage = currentHp - CurrentHp` and `OverkillDamage = num - currentHp` on a kill (Creature.LoseHpInternal, Creature.cs:445-457). So C#'s figure is the ENTIRE post-modifier damage the attack put out, and the sim's is only the middle term: it under-reports by the blocked portion and by the overkill. Same mechanism and same verdict as card/fisticuffs's OnPlay entry (rule 3); LIVE, because enemy block is routine and overkill is the normal case late in a fight. Concretely: Omnislice into a target holding 8 block splashes 8 in the game and 0 in the sim; into a 3-HP target it splashes 8 in the game and 3 in the sim. Presentation, folded in: the AttackContext wrapper (Omnislice.cs:27, 29, 38-40), which exists to group the two damage instances into one visual attack."
+    },
+    "OnUpgrade": {
+      "maps_to": "OmnisliceCard._on_upgrade (colorless_attacks.py:309-310)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Omnislice.cs:46) == `self._damage += 3` (8 -> 11)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early when nothing got through (`if dealt <= 0: return`, colorless_attacks.py:319-320); C# proceeds whenever the DamageResult is non-null (Omnislice.cs:30-31)",
+      "verdict": "gap",
+      "issue": "C# proceeds whenever the DamageResult is non-null (Omnislice.cs:30-31) and would splash a value of 0, which damages nothing but still runs the splash through `CreatureCmd.Damage` on every other enemy; the sim returns before the splash loop (`if dealt <= 0: return`, colorless_attacks.py:319-320). The observable difference is the splash's `BeforeDamageReceived` / `AfterDamageReceived` bracket firing with a 0 amount on those enemies -- the sim's own `DamageCmd.deal` would also run its pipeline for a 0 amount, so the divergence is the sim skipping the dispatch entirely. DORMANT: no ported listener acts on a zero-damage instance. TRIGGER: any ported before/after-damage-received listener that fires on a 0 amount (a counter, a \"was attacked this turn\" flag, or a thorns-style reflect that does not gate on `amount > 0`). Note this guard becomes moot once the OnPlay amount above is fixed, because C#'s figure is 0 only when the attack was fully blocked AND dealt no overkill. Recorded as a gap rather than faithful because the entry's own reasoning is a dormancy argument (\"no ported listener acts on...\"), which rule 1 makes a dormant gap."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

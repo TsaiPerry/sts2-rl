@@ -1,0 +1,53 @@
+{
+  "unit": "relic/biiig_hug",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BiiigHug.cs",
+    "sha256": "3b936173431b86d6442f7ffa04cb982a354309dc356c642b5c025ec7782ba4d2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\biiig_hug.py",
+    "sha256": "66d3ae58953be95479e12d670714d4f9777ee41d6b67068359085e3f25701ece"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (biiig_hug.py:19)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (biiig_hug.py:23-26)",
+      "verdict": "faithful",
+      "rationale": "BiiigHug.cs:11-15 selects CardsVar(4) deck cards for removal and calls CardPileCmd.RemoveFromDeck; the sim selects from run.removable_cards() (which run.transformable_cards() also aliases, run.py:406-408, matching C#'s shared IsRemovable / IsTransformable predicate) and removes each from run.deck. Count 4 matches CardsVar(4) (line 9) with no ascension branch."
+    },
+    "AfterShuffle": {
+      "maps_to": "on_shuffle (biiig_hug.py:28-32)",
+      "verdict": "faithful",
+      "rationale": "BiiigHug.cs:17-27 creates a Soot and calls AddGeneratedCardToCombat(soot, PileType.Draw, owner, CardPilePosition.Random). The sim's CardPileCmd.add_to_draw (cmds.py) is documented as that exact call and carries the parity detail the naive port would miss: the random slot is drawn from the SHUFFLE stream (Rng.Shuffle.NextInt(Count+1)), not the shared run rng, and the game's index 0 = top is mapped onto the sim's end-is-top draw pile. Card identity matches (Soot)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `shuffler == base.Owner` (BiiigHug.cs:19)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `shuffler == base.Owner` / `cardPlay.Card.Owner != base.Owner` family is the multiplayer per-player filter on a hook the game dispatches for every player. The sim is single-player by construction (one RunState, one PlayerCombatState), so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: Flash(), CardCmd.Preview(soot, 0.75f), Cmd.Wait(1f) (BiiigHug.cs:23-25) and the Soot hover tip",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N3: AfterShuffle fires per RESHUFFLE, so the Soot count grows without bound over a long combat -- neither side caps it",
+      "verdict": "faithful",
+      "rationale": "Neither codebase guards the hook: C# adds one Soot on every AfterShuffle and the sim's on_shuffle does the same, with no once-per-combat latch on either side. Checked because three other relics in these two batches DO carry a once-per-combat flag and one of them (relic/belt_buckle) is a live gap for never clearing it -- here there is correctly nothing to clear."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

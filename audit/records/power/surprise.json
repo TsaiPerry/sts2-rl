@@ -1,0 +1,98 @@
+{
+  "unit": "power/surprise",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SurprisePower.cs",
+    "sha256": "3f425e1c3ec41c3112d61eb1e9f57de93994215ae212b53616e8d5e7d42f1c0e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1696 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py audit/tools/power_census.py stack`). Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:1698-1709 SurprisePower.on_death",
+      "verdict": "gap",
+      "issue": "Right hook and the right two spawns (`CreatureCmd.Add<SneakyGremlin>` then `<FatGremlin>`, SurprisePower.cs:23-24, vs powers.py:1704-1706 in the same order, which matters because it fixes the enemy-list indices). The gap is the THIEVERY TRANSFER. C# iterates `base.Owner.GetPowerInstances<ThieveryPower>()` -- plural, because ThieveryPower is per-target -- and for each one creates a HeistPower with `heistPower.Target = powerInstance.Target` and applies `DynamicVars.Gold.IntValue` with `applier: base.Owner` (SurprisePower.cs:26-33). The sim reads a single `self.owner.powers.get(\"thievery\")` and applies one HeistPower with `thievery.gold_stolen` and NO applier (powers.py:1707-1709). Three divergences in one: (a) one instance instead of N -- power_cmd gap G5's InstancedPerApplier/Instanced collapse, and ThieveryPower is per-Target so the game really can hold several; (b) no Target on the HeistPower, so the sim cannot say whose gold it is; (c) the missing `applier=`, the same shape as power/high_voltage's. DORMANT in Ironclad scope for (a) and (b) -- one player means one Thievery target -- and dormant for (c) by the executed applier-reader enumeration. Also absent: `GremlinMercNormal.MarkGoldStolen()` (SurprisePower.cs:34-37), which the sim does not call; that is the encounter's record. **BLOCKED DEPENDENCY worth naming:** both ThieveryPower and HeistPower are among the four ported powers missing from ALL_POWERS (main report section 8 item 1), so they cannot be audited through the harness at all -- this unit's correctness rests on two units nobody can record. Third-file citations, not hashed here."
+    },
+    "ShouldStopCombatFromEnding": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here. ENGINE-LEVEL HOME (added 2026-07-26): this mechanism now also carries `gap` at audit/records/seam/creature_card_cmds.json step 8c, which owns the missing hook surface itself; same verdict at every site per rule 3."
+    }
+  },
+  "guards": [
+    {
+      "what": "powers.py:1703 passes `combat._rng` for the spawn's HP roll",
+      "verdict": "faithful",
+      "rationale": "The sim passes `combat._rng` -- the shared LEGACY random.Random -- to the spawned monster's constructor (powers.py:1703), and Monster.__init__ rolls the spawn's HP from it (monsters/base.py:78-79 `hp = rng.randint(self.min_hp, self.max_hp)`), where the game rolls a mid-combat spawn's HP on a NAMED stream. Half A found seven power units reaching for `combat._rng` where C# names a stream, so this was checked as a systematic class rather than trusted: the sim REPAIRS it one level up. `CreatureCmd.add` calls `combat.assign_parity_hp(creature)` (cmds.py:254 -> combat.py:259-267), which re-rolls a mid-combat spawn's HP on the **Niche** stream against the current siblings, mirroring CombatState.CreateCreature's SetUniqueMonsterHpValue -- and it is a no-op in legacy mode, where the shared rng IS the model. The Sneaky/Fat Gremlin really does have HP variance (min_hp 10, max_hp 17), so the repair is load-bearing rather than vacuous. Faithful, with the caveat that the constructor's `randint` still consumes a draw from the unseeded shared rng in parity mode -- harmless, because no parity content reads that stream. Third-file citations, not hashed here."
+    },
+    {
+      "what": "SurprisePower.cs:19 `wasRemovalPrevented || base.Owner != target`",
+      "verdict": "faithful",
+      "rationale": "`wasRemovalPrevented: true` is passed when Hook.ShouldDie returned FALSE, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the real-death path (CreatureCmd.cs:519) -- the parameter is misnamed in the decompiled source and is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath (computed separately at CreatureCmd.cs:508). So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing on the prevented branch, so the guard is satisfied structurally. Third-file citations, not hashed here."
+    },
+    {
+      "what": "SurprisePower.cs:34 `totalStolen > 0` before MarkGoldStolen",
+      "verdict": "faithful",
+      "rationale": "powers.py:1708 gates the Heist on `thievery.gold_stolen > 0`, which is the same threshold; only the MarkGoldStolen side effect is missing (see the hook entry)."
+    },
+    {
+      "what": "Spawn slot names \"sneaky\" / \"fat\"",
+      "verdict": "waiver",
+      "rationale": "Layout only; the sim's CreatureCmd.add appends in the same relative order."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

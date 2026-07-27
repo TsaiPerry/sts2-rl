@@ -1,0 +1,124 @@
+{
+  "unit": "relic/unceasing_top",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\UnceasingTop.cs",
+    "sha256": "a00ca92b089176e93f9377585333323848fc7f7b50781397621a55ec54e3d323"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\unceasing_top.py",
+    "sha256": "fc9e1f4b5772a120a7d84674b3975f750ecd25e8a05ff1c6d0be956b69df50c3"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/PlayerTurnPhase.cs",
+      "sha256": "33cda99dd8304176d76e668ebbab28741030c00dcfa5c1f34e177b39a75b8009",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/cascade.py",
+      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "FlashSfx": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (unceasing_top.py:19)",
+      "verdict": "faithful",
+      "rationale": "UnceasingTop.cs:14. Executed: Rare in the transcribed grab bag (relic_pools.py:147 'RELIC.UNCEASING_TOP'), `py audit/tools/relic_probes_b16.py pool`."
+    },
+    "AfterHandEmptied": {
+      "maps_to": "on_card_played (unceasing_top.py:21-28) -- the port REROUTES the C# hook onto a different sim hook rather than implementing the sim's own on_hand_emptied",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The reroute is deliberate and mostly right (N1): the sim's on_hand_emptied fires only from the end-of-turn flush, which is the one site C# deliberately excludes, so listening on on_card_played reproduces C#'s CheckForEmptyHand gating better than the same-named hook would. But CheckForEmptyHand has TWO call sites and the port covers only one -- a potion that empties the hand draws nothing (G1, LIVE) -- and the `IsExecutingCardOrPotionEffect` gate has no counterpart (G2, dormant)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (CROSS-RECORD, binding rule 3): the reroute of AfterHandEmptied onto on_card_played",
+      "verdict": "gap",
+      "issue": "audit/records/seam/turn_structure.json guard G16 already verdicts this mechanism a `gap` and names this exact port as the reason it is DORMANT there: 'The one C# AfterHandEmptied implementer was re-wired away from it: relics/unceasing_top.py:21-28 uses on_card_played with `not self.combat.is_over and self.combat.current_side == \"player\"` and `not self.player.hand`, which reproduces C#'s CheckForEmptyHand gating (play-time only, in-progress only).' Matched, not re-derived: the sim's on_hand_emptied has exactly one call site, player.py:197 inside discard_hand -- the end-of-turn flush -- and UnceasingTop.cs:25-28 carries a source remark saying that site must NOT trigger it ('if a card is autoplayed during this time, the player's hand will always be empty, so Unceasing Top will always draw'). So implementing the sim's on_hand_emptied would have been the WRONG port. What this record adds, and what G16 could not see from the machinery side, is that the reroute is INCOMPLETE: PROMPT.md bug class 22 says rerouting C# hook A onto sim hook B inherits B's caller set, and on_card_played's caller set is one of CheckForEmptyHand's two -- see G1. Rule 7: audit/records/seam/turn_structure.json and player.py are not hashed here."
+    },
+    {
+      "what": "G1 (LIVE): CheckForEmptyHand is called from TWO sites and the port covers only the card-play one -- a potion that empties the hand draws nothing",
+      "verdict": "gap",
+      "issue": "MECHANISM: `grep -rn 'CheckForEmptyHand' src/` gives the definition (CombatManager.cs:887-893) and exactly two callers -- CardModel.cs:1992, after a card play resolves, and PotionModel.cs:340, after a potion's effect resolves -- and CombatManager.cs:880-883 says in so many words that those are 'the two ways a player can manually interact with combat state (besides ending turn)'. unceasing_top.py:21 listens on on_card_played only; the sim has no on_potion_used-shaped equivalent wired into this relic and CombatState.use_potion does not fire on_card_played. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b16.py top-empty`): with the relic held and a 2-card hand, using the ported Uncommon potion **Ashwater** -- 'Exhaust any number of cards in your hand', potions.py:920-938, which exhausts the whole hand -- leaves the sim's hand at **0**, where the game's PotionModel.cs:340 fires AfterHandEmptied and Unceasing Top draws, leaving it at 1. The same probe shows the card-play route working correctly (hand 1 -> 0 -> 1), so this is specifically the missing second caller. Both sides ported: the relic is Rare in the transcribed grab bag and Ashwater is a registered Uncommon potion in the sim's pool. SCOPE NOTE: the shared contract defers potions, but the divergent OBSERVABLE is a card draw -- one more card in hand for the rest of the turn -- so this is filed as a gap rather than waived, on the same basis as audit/records/relic/belt_buckle.json AfterPotionProcured (the potion is only the trigger). Rule 7: potions.py, combat.py and audit/records/relic/belt_buckle.json are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): `!IsExecutingCardOrPotionEffect(player)` (CombatManager.cs:889) has no sim counterpart, so a card that auto-plays another card mid-resolution can fire the draw early",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# refuses the empty-hand check while any card or potion effect is still executing -- CardModel.cs's play path releases the depth counter at EndCardOrPotionEffect (CardModel.cs:1968-1969) and only then reaches CheckForEmptyHand at :1992 -- so a nested auto-play inside an outer card's OnPlay does NOT trigger Unceasing Top; the outer card's own check does, once. The sim's CombatState.auto_play_card routes through the same _resolve_card_play bracket, so hooks.on_card_played fires for the INNER card while the outer card's effect is still running (combat.py:514), and unceasing_top.py:22-24 has no depth guard. REACHABILITY (DORMANT): three ported cards auto-play another card from inside their own on_play (cards/cascade.py:58, cards/colorless_skills.py:117 and :164) so the SHAPE exists, but the net draw count comes out the same for each of them -- the inner play removes its card from the draw pile before either codebase draws, and none of the three does anything to the draw pile between the inner play's end and the outer play's end. What would make it live: porting a card that auto-plays a card and THEN modifies the draw pile (or auto-plays twice) while the hand is empty, at which point the sim draws a different card, or draws twice. Rule 7: combat.py, cards/cascade.py and cards/colorless_skills.py are not hashed here."
+    },
+    {
+      "what": "N2: `IsValidPhase(player.PlayerCombatState.Phase)` -- `(uint)(phase - 2) <= 2u`, i.e. AutoPrePlay, Play or AutoPostPlay (UnceasingTop.cs:29-36)",
+      "verdict": "faithful",
+      "rationale": "PlayerTurnPhase is None=0, Start=1, AutoPrePlay=2, Play=3, AutoPostPlay=4, End=5 (PlayerTurnPhase.cs:11-60), so the decompiled arithmetic admits exactly the three phases in which a card can be auto-played or manually played, and excludes Start (hand draw) and End (hand flush) -- which is what the source's own remark at UnceasingTop.cs:25-28 is about. unceasing_top.py:22-24 checks `not self.combat.is_over and self.combat.current_side == 'player'`, and on_card_played can only fire from a card play, which in the sim happens only in those three windows: the turn-start auto-play pass, the play phase, and the turn-end auto-play pass. So the admitted set matches without the sim needing a Phase enum. The `is_over` half additionally covers CombatManager.IsInProgress (CombatManager.cs:889)."
+    },
+    {
+      "what": "N3: `CardPileCmd.Draw(choiceContext, player)` (UnceasingTop.cs:21) vs `DrawCmd.draw(self.player, 1)` (unceasing_top.py:28)",
+      "verdict": "faithful",
+      "rationale": "The no-count overload of CardPileCmd.Draw draws one card, and DrawCmd.draw with 1 routes through PlayerCombatState._draw (player.py:277-292), which applies the max-hand-size cap, the should_draw predicate and the ShuffleIfNecessary reshuffle -- the same three things the C# draw loop does (CardPileCmd.cs:838-855). No DynamicVar and no ascension branch on either side. Rule 7: player.py and CardPileCmd.cs are not hashed here."
+    },
+    {
+      "what": "N4: re-entrancy -- can the relic draw more than once from one trigger?",
+      "verdict": "faithful",
+      "rationale": "No, on either side. In C# AfterHandEmptied is dispatched from CheckForEmptyHand, and the draw leaves the hand non-empty, so the next CheckForEmptyHand (after the next play) finds a card. In the sim the same holds: on_card_played fires once per play (that is G1 of relic/unsettling_lamp and this record's own AfterCardPlayed sibling, tuning_fork G1 -- the per-Replay defect), and after the draw `self.player.hand` is non-empty. The pathological case -- the draw pile AND discard pile both empty, so the draw does nothing and the hand stays empty -- also behaves the same: one attempted draw per play on both sides, not a loop. Checked because a hook that fires on 'hand is empty' and then makes the hand non-empty is the classic re-entrancy shape."
+    },
+    {
+      "what": "N5: `player == base.Owner` (UnceasingTop.cs:18)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

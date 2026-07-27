@@ -1,0 +1,58 @@
+{
+  "unit": "event/aroma_of_chaos",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\AromaOfChaos.cs",
+    "sha256": "663a6eb3c9fc090ff451a0e9ec7d6844ec2efb48d15d14d54914c76c6481090e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\aroma_of_chaos.py",
+    "sha256": "65eed9d483c599eab68132983c68b8823a0d01a74ad268296abe6ef2cd801fd2"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "MaintainControl (AromaOfChaos.cs:38-48): FromDeckForUpgrade(1) then CardCmd.Upgrade",
+      "maps_to": "events/aroma_of_chaos.py:30-34: select_cards('upgrade', run.upgradable_cards(), 1) then chosen[0].upgrade(). CardCmd.Upgrade (CardCmd.cs:254-283) guards on IsUpgradable and calls UpgradeInternal + FinalizeUpgradeInternal; the sim's caller filters on is_upgradable (run.py:368-369, mirroring CardModel.IsUpgradable) so the guard cannot be violated.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "LetGo (AromaOfChaos.cs:28-36): FromDeckForTransformation(1) then CardCmd.TransformToRandom, with the `if (cardModel != null)` guard for an empty/cancelled selection",
+      "maps_to": "events/aroma_of_chaos.py:24-28: select_cards('transform', run.transformable_cards(), 1), `if chosen:`, transform_card(chosen[0]). The candidate filter matches (IsTransformable == IsRemovable in the deck, run.py:364-366) and the null guard is reproduced. WHICH card it becomes is EV-3, and the deck-entry hooks are BR-G3.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: CardCmd.TransformToRandom(cardModel, base.Rng, ...) (AromaOfChaos.cs:33) passes the per-event Rng as the roll stream; events/aroma_of_chaos.py:27 calls run.transform_card(chosen[0]) with no `pick_rng`, so run.py:457-458 falls back to `self.rng.choice` rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "BR-G3 (blast radius): AromaOfChaos's LET_GO calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as audit/records/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py audit/tools/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+    },
+    {
+      "what": "the AromaPrinciple per-character LocString substitution (AromaOfChaos.cs:45-47) and the Transform hover tip (AromaOfChaos.cs:23)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

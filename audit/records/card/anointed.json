@@ -1,0 +1,89 @@
+{
+  "unit": "card/anointed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Anointed.cs",
+    "sha256": "4f5ad80b8b82a8811fc119d999d9ec0cd3b3a0b871cc65d2ba5e1f58dffe3902"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/IEnumerableExtensions.cs",
+      "sha256": "d6062ab2a496c6d21aba6bdd48937a1097858f46197f2c17f2cbac7177b494a5",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_rng_tripwire.py",
+      "sha256": "f6bed2b1db59d7bab3be63259896987637e4f92d665c830fd7ed6fac0a80eba7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "AnointedCard.exhausts = True (colorless_skills.py:69)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Anointed.cs:13) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:64-69) + _init_vars (71-73)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Anointed.cs:15-18) == cost 1 / SKILL / RARE / SELF. No CanonicalVars on either side (the count is computed, not printed)."
+    },
+    "OnPlay": {
+      "maps_to": "AnointedCard.on_play (colorless_skills.py:78-84)",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM AND WRONG SELECTION ALGORITHM. C#: `PileType.Draw.GetPile(Owner).Cards.Where(c => c.Rarity == Rare).TakeRandom(count, Owner.RunState.Rng.CombatCardSelection)` (Anointed.cs:23), and `TakeRandom` is `collection.ToList().UnstableShuffle(rng).Take(count)` (IEnumerableExtensions.cs:17-20) -- a full Fisher-Yates over the candidate list on the named CombatCardSelection stream, then take-first-N. The sim calls `ctx.combat._rng.sample(rares, min(space, len(rares)))` (colorless_skills.py:82): the unseeded shared `random.Random`, not `ctx.combat.combat_rng.card_selection` (the accessor exists -- combat_rng.py:21,55 maps `card_selection -> combat_card_selection`), and `random.sample` is a reservoir/partial-selection algorithm, not shuffle-then-take, so even fed the same stream it would consume a different number of draws in a different order. Observable: under a string-seeded parity/conformance run the set of Rare cards pulled into hand differs from the recorded run, and the CombatCardSelection stream desyncs for everything downstream. The count itself is faithful (`CardPile.MaxCardsInHand` is 10, CardPile.cs:21, == `player.MAX_HAND_SIZE = 10`, player.py:56). LIVE -- Anointed is a ported Rare colorless Skill reachable from the colorless pool, and the parity streams it should be using are already wired (`CombatRng.parity`, combat_rng.py:41-46). REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+    },
+    "OnUpgrade": {
+      "maps_to": "AnointedCard._on_upgrade (colorless_skills.py:75-76)",
+      "verdict": "faithful",
+      "rationale": "`AddKeyword(CardKeyword.Retain)` (Anointed.cs:29) == `self.retain = True`, and unlike aggression/apparition this card DOES re-seed the flag in `_init_vars` (`self.retain = False`, colorless_skills.py:73), so `downgrade()` restores it -- confirmed by `py audit/tools/card_probes.py downgrade`, which does not list anointed."
+    }
+  },
+  "guards": [
+    {
+      "what": "count = MaxCardsInHand - Hand.Count can be <= 0 when the hand is already full (Anointed.cs:22)",
+      "verdict": "faithful",
+      "rationale": "C# `Take(count)` with count <= 0 yields nothing; the sim's `min(space, len(rares))` with `space <= 0` makes `random.sample(..., <=0)` return `[]` (a negative would raise, but `space` is `10 - len(hand)` and the hand is capped at 10 by player.py:278, so it cannot go negative). Same outcome."
+    },
+    {
+      "what": "cards are moved to the hand with CardPileCmd.Add(cards, PileType.Hand) (Anointed.cs:24) vs direct list mutation",
+      "verdict": "gap",
+      "issue": "The sim pops each card out of `player.draw_pile` and appends to `player.hand` in place (colorless_skills.py:83-84) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal`. This is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding (docs/audit/seams/creature_card_cmds.md:643-666), recorded here because it is Anointed's own code doing the bypass, not the machinery's. Note these cards arrive in hand WITHOUT being 'drawn', so no on_card_drawn is expected on either side. DORMANT: the sim has no `after_card_changed_piles` listener at all, so nothing observable is dropped until such a listener is ported; the concrete unported thing that makes it live is any C# model overriding `AfterCardChangedPiles` for a Draw->Hand move."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

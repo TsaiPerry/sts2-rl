@@ -1,0 +1,33 @@
+{
+  "unit": "event/bugslayer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Bugslayer.cs",
+    "sha256": "5ea3d90ad9ac2ec95fb1316662f5669cfba1b346e7dce24406393d7875564f7f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\bugslayer.py",
+    "sha256": "f0bf0f5fc885a5c409bad1a55240ed63abcc955edd604bde455accd35a5d4865"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "Extermination / Squash (Bugslayer.cs:30-45): AddAndPreview<T> = CreateCard<T> then CardPileCmd.Add(card, PileType.Deck)",
+      "maps_to": "events/bugslayer.py:25-31 run.add_card(make_card('exterminate')) / make_card('squash'). run.add_card (run.py:341-354) runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail, which is what CardPileCmd.Add does for the deck pile, so the egg relics upgrade the offered card in both engines. No gate, no vars, no RNG: this event is a pure two-way card grant.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "CanonicalVars StringVar Card1/Card2 and the two card hover tips (Bugslayer.cs:15-19, 25-26)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

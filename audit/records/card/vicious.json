@@ -1,0 +1,48 @@
+{
+  "unit": "card/vicious",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Vicious.cs",
+    "sha256": "97742f63322d7a1556391e06bc9ed120c2881d1e47ea0ca8d9ca2fcc8c5ecf8e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\vicious.py",
+    "sha256": "731e976860a0e2b55059a3a5f6fdfa1934780fff41107a3a80b72319d1f36871"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (vicious.py:101-105) + _init_vars (107-109)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Vicious.cs:18-21) == cost 1 / POWER / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "ViciousCard._cards = 1 (vicious.py:109)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(1)` (Vicious.cs:16) == `_cards = 1`, the number of cards DRAWN per Vulnerable application."
+    },
+    "OnPlay": {
+      "maps_to": "ViciousCard.on_play (vicious.py:114-119)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<ViciousPower>(choiceContext, Owner.Creature, DynamicVars.Cards.BaseValue, Owner.Creature, this)` (Vicious.cs:26) == `PowerCmd.apply(ctx.hooks, ctx.player, ViciousPower, self._cards, applier=ctx.player)`. Presentation, folded in: TriggerAnim (25) and the Vulnerable hover tip (14). THIS CARD IS THE WITNESS FOR THE POOL'S LARGEST GAP FAMILY: `ViciousPower.AfterPowerAmountChanged` fires on any Vulnerable its owner applies with NO liveness test on the target (ViciousPower.cs:19-26; sim port powers.py:1160-1179), which is what makes the `if not target.is_gone` guards on card/bash, card/break, card/fight_me, card/mangle, card/squash, card/taunt, card/tremble, card/uppercut and card/mad_science LIVE rather than dormant. Its own port is faithful."
+    },
+    "OnUpgrade": {
+      "maps_to": "ViciousCard._on_upgrade (vicious.py:111-112)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (Vicious.cs:31) == `self._cards += 1` (1 -> 2)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

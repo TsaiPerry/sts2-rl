@@ -1,0 +1,103 @@
+{
+  "unit": "power/buffer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\BufferPower.cs",
+    "sha256": "bf95bf58bf220b5e5dfe112a32834d857be8f9ce44c0ebbebb69a6caef805231"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Potions/LuckyTonic.cs",
+      "sha256": "437f845d51020ef01a72e69eedb764d48aecbb92b18435f8fe8138b42c642849",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:4002 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyHpLostAfterOstyLate": {
+      "maps_to": "powers.py:4004-4013 BufferPower.modify_hp_lost (hooks.py:126-147, cmds.py:86)",
+      "verdict": "gap",
+      "issue": "The arithmetic is exact -- 0 for the owner, unchanged otherwise (BufferPower.cs:20-27 vs powers.py:4011-4013) -- and the AFTER-Osty position is right, since cmds.py:86 runs after block absorption (:74-81). What is lost is the LATE half, and BufferPower.cs:16-19 states in as many words why it is Late: 'We use Late because other effects may reduce damage taken to 0 too, and it's more player-friendly for them to trigger first so that this power doesn't have to decrement.' PHASE COLLAPSE, and it is wider here than anywhere else in the stream. AbstractModel declares FOUR hp-loss modifier hooks -- ModifyHpLostBeforeOsty (AbstractModel.cs:1669), ModifyHpLostBeforeOstyLate (:1689), ModifyHpLostAfterOsty (:1708) and ModifyHpLostAfterOstyLate (:1728) -- plus TWO notification hooks, AfterModifyingHpLostBeforeOsty (:905) and AfterModifyingHpLostAfterOsty (:913). The sim has ONE modify_hp_lost (hooks.py:126-147) and ONE after_modify_hp_lost (:149-154), called once at cmds.py:86-87 after block absorption. So both the before/after-Osty split and the plain/Late split are folded away, and the sim's single bucket currently holds seven listeners: powers intangible (powers.py:374, ModifyHpLostAfterOsty per its own comment), slippery (:1513), hardened_shell (:1974) and this one, plus relics beating_remnant, the_boot and tungsten_rod. This is hook_dispatch's G3 in the one modifier family where the sim DOES carry the out-param/notification machinery that power_cmd's G4 finds missing from the power-amount family, so the notification half is faithful and only the ordering is lost. CONSEQUENCE, precisely: if a plain-pass listener already brings the loss to 0, C# hands Buffer a 0, Buffer returns 0, the value did not change, Buffer is NOT in the modifiers list and its stack survives; in the sim, whenever Buffer happens to be registered before that listener it changes the value itself, lands in the modifiers list (hooks.py:145-146) and is consumed. DORMANT, and the reachability was checked rather than assumed: of the six co-listeners only hardened_shell can return 0 (powers.py:1983's min(amount, self.amount - self._damage_received_this_turn) once the shell's budget is spent) -- intangible and slippery cap at 1, tungsten_rod subtracts 1, the_boot RAISES small damage and beating_remnant is a heal -- and hardened_shell is an enemy power that self-filters to its owner (powers.py:1981), so it can never share a creature with player-side Buffer. Named trigger: porting any player-side effect that reduces HP loss to exactly 0 (C#'s own reason for writing the Late phase), or applying Hardened Shell to the player."
+    },
+    "AfterModifyingHpLostAfterOsty": {
+      "maps_to": "powers.py:4015-4016 BufferPower.after_modify_hp_lost (hooks.py:149-154)",
+      "verdict": "faithful",
+      "rationale": "FAITHFUL, and worth recording because it is the one place in the whole power stream where the sim implements C#'s two-phase modify-then-notify-the-modifiers protocol properly. C# takes no arguments and unconditionally Decrements (BufferPower.cs:29-32), relying on Hook.ModifyHpLost* to have called it only if it actually changed the amount; cmds.py:85-87 collects a `modifiers` list, hooks.py:145-146 appends only listeners whose return differed from what they were handed, and hooks.py:152-154 notifies exactly those. So a hit fully absorbed by block never reaches the call at all (cmds.py:84's `if hp_lost > 0`) and does not cost a stack -- which the sim's docstring at powers.py:3995-3997 states. Contrast power_cmd's G4, where the same machinery is entirely absent from the power-amount family and Artifact and Ruined Helmet both hand-inline it. The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250) -- Decrement, not TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical for a Buff: ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+    },
+    "GetScaledAmountForMultiplayer": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "BufferPower.cs:34-37 is ((Players.Count - 1) * 2 + 1) * amount, i.e. exactly `amount` at one player. Multiplayer-only; already waived as step 14 of audit/records/seam/power_cmd.json."
+    }
+  },
+  "guards": [
+    {
+      "what": "BufferPower.cs:22-25 target != base.Owner -> unchanged",
+      "verdict": "faithful",
+      "rationale": "powers.py:4011-4012. Identical, and load-bearing -- the sim's single modify_hp_lost bucket is walked for every creature's HP loss."
+    },
+    {
+      "what": "Buffer prevents ALL of the loss, not `Amount` of it",
+      "verdict": "faithful",
+      "rationale": "C# returns a literal 0m and the sim returns 0; Amount is the number of INSTANCES prevented, consumed one per notification. Both sides agree, and the sim's docstring says so (powers.py:3992). No AscensionHelper call in BufferPower.cs."
+    },
+    {
+      "what": "N: the power's sole applier is Lucky Tonic -- a PORTED potion, not a scope boundary (LuckyTonic.cs:26-30 vs sts2_rl/potions.py:825-842)",
+      "verdict": "faithful",
+      "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL. src/Core/Models/Potions/LuckyTonic.cs:22 declares CanonicalVars = new PowerVar<BufferPower>(1m) with no AscensionHelper.GetValueIfAscension anywhere in the file, so 1 is the pinned non-ascension amount, and LuckyTonic.cs:29 is `PowerCmd.Apply<BufferPower>(choiceContext, target, DynamicVars[\"BufferPower\"].BaseValue, base.Owner.Creature, null)`. sts2_rl/potions.py:835 pins BUFFER = 1 and sts2_rl/potions.py:840-842 is `PowerCmd.apply(ctx.hooks, ctx.player, BufferPower, self.BUFFER, applier=ctx.player)`. Amount, power class and APPLIER all match -- C#'s fourth argument is `base.Owner.Creature`, i.e. the player's creature, which is what `applier=ctx.player` passes (checked against the signature at src/Core/Commands/PowerCmd.cs:101, where the fourth parameter is `Creature? applier` and the fifth `CardModel? cardSource`). The card-source `null` matches the sim's omission. TargetType.AnyPlayer (LuckyTonic.cs:20) and PotionModel.AssertValidForTargetedPotion (LuckyTonic.cs:28) are the multiplayer target-validity path and stay waived under the contract's multiplayer exclusion, not under any potion clause; PotionUsage.CombatOnly (LuckyTonic.cs:18) is structurally satisfied because the sim only exposes potion use from CombatState.use_potion (sts2_rl/combat.py:588-616). REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): the potion is registered by @register_potion into ALL_POTIONS and sits in the generation pool at sts2_rl/potion_pools.py:55 (rare), and the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:625-631). WHAT IS STILL NOT JUDGED HERE, and it is a coverage fact rather than a verdict: `potion/lucky_tonic` has no record yet, because the whole potion kind is unaudited. Nothing in this record depends on it -- the applier's one behaviour that touches this power is the PowerCmd.Apply call above, and that is verdicted."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

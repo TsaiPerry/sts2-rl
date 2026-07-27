@@ -1,0 +1,31 @@
+{
+  "unit": "card/dark_embrace",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\DarkEmbrace.cs",
+    "sha256": "6117894bf33a62c231627b48893805160a22af9b7ca11d3d771fadfecf518206"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\dark_embrace_card.py",
+    "sha256": "2d0c844de6ece6add93974cd0fc9225ee5d5a074362be9f3a42b5d72718ce97e"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (dark_embrace_card.py:19-23) + _init_vars (25-26)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Power, CardRarity.Rare, TargetType.Self)` (DarkEmbrace.cs:15-18) == cost 2 / POWER / RARE / SELF. No keywords -- the Exhaust hover tip (DarkEmbrace.cs:13) describes the TRIGGER of DarkEmbracePower, not a keyword on this card -- and the sim correctly leaves `exhausts` False."
+    },
+    "OnPlay": {
+      "maps_to": "DarkEmbraceCard.on_play (dark_embrace_card.py:31-34)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<DarkEmbracePower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (DarkEmbrace.cs:23) == `PowerCmd.apply(ctx.hooks, ctx.player, DarkEmbracePower, 1, applier=ctx.player)`. Literal 1 on both sides, no CanonicalVars. Presentation, folded in: TriggerAnim (22)."
+    },
+    "OnUpgrade": {
+      "maps_to": "DarkEmbraceCard._on_upgrade (dark_embrace_card.py:28-29)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (DarkEmbrace.cs:28) == `self._energy_cost = max(0, self._energy_cost - 1)` (2 -> 1)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

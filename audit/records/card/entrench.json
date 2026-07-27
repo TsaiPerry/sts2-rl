@@ -1,0 +1,79 @@
+{
+  "unit": "card/entrench",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Entrench.cs",
+    "sha256": "13a44165a21f2ce718442cad06acd796f3c1f69537884dde98340287f2e0d1e1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsLegion.cs",
+      "sha256": "08bc0980dc3b133a256bb39d50881b6888fabb5f47033aaab02b7ccb36381530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Vambrace.cs",
+      "sha256": "d804bb40a837fa90b9b5e734e7dcdd61643cd0328f35a884ce07d97f1dc4a34a",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_hook_order.py",
+      "sha256": "c1deb8102e1a92975c9090d88ec4d15a463992010d2e8c906eb93b2076b62c49",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<IroncladCardPool>()` (Entrench.cs:12) selects the card's ART pool. Presentation."
+    },
+    "GainsBlock": {
+      "maps_to": "EntrenchCard.gains_block = True (trash_heap_cards.py:160)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Entrench.cs:14) == the class attribute. Load-bearing precisely because Entrench has NO printed block number, which is why cards/base.py:65-69 says the flag cannot be derived from `base_block`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:159-164) + _init_vars (166-167)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Event, TargetType.Self)` (Entrench.cs:16-19) == cost 2 / SKILL / EVENT / SELF. No CanonicalVars on either side -- the amount is the owner's current block."
+    },
+    "OnPlay": {
+      "maps_to": "EntrenchCard.on_play (trash_heap_cards.py:172-178)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.GainBlock(Owner.Creature, Owner.Creature.Block, ValueProp.Unpowered | ValueProp.Move, cardPlay)` (Entrench.cs:23) == `BlockCmd.apply(ctx.hooks, ctx.player, ctx.player.block, card=self, props=ValueProp.MOVE | ValueProp.UNPOWERED)`. Amount, target and PROP SET all transcribed correctly, including the Unpowered bit that most block cards do not carry. What the sim's block PIPELINE then does with those props is the guard below."
+    },
+    "OnUpgrade": {
+      "maps_to": "EntrenchCard._on_upgrade (trash_heap_cards.py:169-170)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Entrench.cs:28) == `self._energy_cost = max(0, self._energy_cost - 1)` (2 -> 1). The doubling is unchanged by the upgrade on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "THIS CARD IS THE ENTIRE PORTED BLAST RADIUS OF SEAM GAP G1 (block modifiers gated on is_powered_attack)",
+      "verdict": "gap",
+      "issue": "Recorded here with the seam's own verdict (`gap`), not re-verdicted: creature_card_cmds G1 states that `BlockCmd.apply` (cmds.py:145-147) skips the whole `modify_block_additive` / `modify_block_multiplicative` dispatch unless the props are `Move && !Unpowered`, while C#'s `Hook.ModifyBlock` (Hook.cs:1310-1340) calls EVERY listener and lets each self-gate -- and Vambrace (Vambrace.cs:59-63) and Pael's Legion (PaelsLegion.cs:132-134) self-gate only on `IsCardOrMonsterMove()`, which ignores Unpowered. Entrench gains block with exactly `Unpowered | Move`, so the real game doubles Entrench's block under Vambrace and the sim does not. EXECUTED and pool-wide: `py audit/tools/card_probes.py unpowered-block` scans every C# card model for a block gain carrying Unpowered and finds THREE -- Entrench, PillarOfCreation and Shroud -- of which only Entrench is ported. So G1's card-side blast radius is this one unit, exactly the witness the seam already named. LIVE (the seam pins it with a strict xfail); every other block-gaining card audited so far -- armaments 5, blood_wall 16, colossus 5, defend 5, equilibrium 13, evil_eye 8, finesse 4 -- uses a plain `BlockVar(n, ValueProp.Move)` and is correctly doubled on both sides. REGRESSION TEST: `test/test_hook_order.py:296-320` -- `TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers`, a **strict** xfail that builds `make_card(\"entrench\")` with a Vambrace and `ValueProp.MOVE | ValueProp.UNPOWERED` and asserts the game's 20. It flips to an unexpected PASS the moment G1 is fixed, so the fix cannot land silently."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

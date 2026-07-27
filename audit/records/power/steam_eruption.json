@@ -1,0 +1,153 @@
+{
+  "unit": "power/steam_eruption",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SteamEruptionPower.cs",
+    "sha256": "84f1f3ed19556c3101079b793c7d7f6e0227a477c25103c686e0a3b6042ba7a0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/DamageResult.cs",
+      "sha256": "33128b75cbb7863e8d56d116b0e517064500579284c1f9b668c07553b688dc49",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Feed.cs",
+      "sha256": "99d3e68dbdc4c3d687c756d5c4c3acdc545a37d043d888bb476028faad684cb8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/WaterfallGiant.cs",
+      "sha256": "526a68e24ae441923a3dbfa3175e95900d23e035630a220608ea6356a108afaa",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/AdaptablePower.cs",
+      "sha256": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/IllusionPower.cs",
+      "sha256": "7461c923281077a0f9acf3647dc08ec0ff75ed04e1098406f6dc8b6fbb6fb31d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/GremlinHorn.cs",
+      "sha256": "a132a06a66a9e90ee324e2a2316cbfb4f324705e0fef8e3c07561ce73b605ae6",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/feed.py",
+      "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/waterfall_giant.py",
+      "sha256": "7a56cdc2b7100662f13350de2c6f3738989bb9b2501903c2a72ebebaf81de08c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2014 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:2016-2020 should_die + powers.py:2022-2033 on_damage_received",
+      "verdict": "gap",
+      "issue": "RE-VERDICTED 2026-07-26 (review fix pass): `deliberate-divergence` -> `gap`. The old rationale was that this unit \"repairs the only observable it produces\" by restoring `hp = max_hp = 999_999_999` from on_damage_received (powers.py:2022-2033), mirroring WaterfallGiant.cs:305's `CreatureCmd.SetMaxAndCurrentHp(base.Creature, 999999999m)`. **That is false on three counts.** (a) It repairs the HP DISPLAY only. It does not restore the AfterDeath dispatch, so every non-owner listener the game pays out to is still missed -- see the Gremlin Horn witness on power/adaptable's AfterDeath entry, which applies verbatim here (the Waterfall Giant is the ported Underdocks boss, rooms.py:139 and monsters/underdocks/waterfall_giant.py:148-151, and Gremlin Horn is a ported Uncommon relic whose AfterDeath carries no wasRemovalPrevented guard, GremlinHorn.cs:24-32). Feed applies too: SteamEruptionPower does not override ShouldOwnerDeathTriggerFatal (default true, PowerModel.cs:646-649) and Feed.cs:42 gates on DamageResult.WasTargetKilled, which DamageResult.cs:89-99 documents as true even when the death is prevented, so the game grants +3 max HP for Feeding the giant to death and cards/feed.py:45's `if target.is_dead` grants nothing. `InvokeDiedEvent` (CreatureCmd.cs:507) likewise has no counterpart. (b) The repair runs from a dispatch the game deliberately SKIPS on a killing blow -- CreatureCmd.cs:392's `if (!WasTargetKilled || !originalTarget.IsDead)`, which the sim mirrors at cmds.py:115-122 -- and it only fires in the sim because the prevention branch reset hp to 1 first, making `target.is_dead` False. So the repair is BUILT ON damage_pipeline gap G4 rather than being independent of it. (c) It does not fire at all on the non-damage kill path (cmds.py:191-205, which has no on_damage_received call), leaving the giant at hp 1 instead of 999999999; see this record's non-damage-kill guard. LIVE via (a): the Gremlin Horn payout and the Feed payout are both reachable in an ordinary Waterfall Giant fight. ONE MECHANISM, ONE VERDICT (binding rule 3): power/adaptable, power/illusion and power/steam_eruption all implement a C# AfterDeath body by returning False from `should_die` (powers.py:3365-3369, :1566-1570, :2016-2020), so all three run the sim's single death-PREVENTION branch (cmds.py:106-113) where C# runs the REAL-DEATH branch (CreatureCmd.cs:505-559). None of the three overrides ShouldDie, and all three bodies sit behind `!wasRemovalPrevented` (AdaptablePower.cs:34, IllusionPower.cs:79, SteamEruptionPower.cs:17) -- i.e. they are explicitly EXCLUDED from the branch the sim is executing. All three therefore carry `gap`; steam_eruption's `deliberate-divergence` was corrected to `gap` in the 2026-07-26 review fix pass. The canonical statement of the shared observable (the Gremlin Horn witness) is on power/adaptable's AfterDeath entry."
+    },
+    "ShouldStopCombatFromEnding": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here. ENGINE-LEVEL HOME (added 2026-07-26): this mechanism now also carries `gap` at audit/records/seam/creature_card_cmds.json step 8c, which owns the missing hook surface itself; same verdict at every site per rule 3."
+    },
+    "ShouldCreatureBeRemovedFromCombatAfterDeath": {
+      "maps_to": "hooks.py:603 -- NOT implemented by this power",
+      "verdict": "gap",
+      "issue": "The sim has the hook and this power does not use it, because it prevents the death instead. Same unused-hook finding as adaptable's and illusion's, and the same inconsistency with reattach, which does use it. Folded into the AfterDeath mechanism; carried separately because it is a concrete unused sim slot."
+    },
+    "ShouldPowerBeRemovedAfterOwnerDeath": {
+      "maps_to": "no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> false`. C# strips a dead creature's powers at CreatureCmd.cs:533; the sim never removes powers on death at all, so `false` is its universal behaviour and this override is satisfied for free. The inverse -- that the C# DEFAULT is `true` and the sim strips nothing -- is an engine-wide absence reported in content-power-report-b.md rather than verdicted here. ENGINE-LEVEL SIBLING (added 2026-07-26): the INVERSE finding -- that C#'s DEFAULT is `true` so every power WITHOUT this override should be stripped on its owner's death and in the sim none is -- now carries a verdict of its own at audit/records/seam/creature_card_cmds.json step 8b (`gap`, LIVE, executed on the Decimillipede). It used to exist only as prose in content-power-report-b.md section 3c. This entry stays `faithful` because the override asks for exactly the behaviour the sim gives for free; the engine-wide absence is step 8b's, not this unit's."
+    }
+  },
+  "guards": [
+    {
+      "what": "SteamEruptionPower.cs:19 `((WaterfallGiant)creature.Monster).TriggerAboutToBlowState()`",
+      "verdict": "faithful",
+      "rationale": "powers.py:2018 `self.owner.trigger_about_to_blow()`, unguarded by a type test, relying on the Waterfall Giant being the only applier."
+    },
+    {
+      "what": "powers.py:2032 `getattr(self.owner, \"is_about_to_blow\", False)`",
+      "verdict": "faithful",
+      "rationale": "The sim needs this because its restore runs from a generic damage hook rather than from the death path; without it every later hit would re-inflate the HP. Correct and load-bearing."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    },
+    {
+      "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",
+      "verdict": "gap",
+      "issue": "Part of the should_die-for-AfterDeath mechanism, carried as its own entry because it survives any fix that only re-slots the AfterDeath body. cmds.py:112 writes `target.hp = 1` and stops. C# does NOT heal the creature: CreatureCmd.cs:560-571 leaves it at 0 HP, fires Hook.AfterDeath(wasRemovalPrevented: true) and Hook.AfterPreventingDeath, and then, `if (creature.IsDead)`, RE-ENTERS `KillWithoutCheckingWinCondition(creature, force, recursion + 1)` -- up to 10 times before throwing InvalidOperationException (:562-565). So in the game a preventer must actually raise the creature's HP (Fairy in a Bottle heals; these three do not, which is why they take C#'s DEATH branch and not this one), whereas the sim's single silent `hp = 1` makes any prevention permanent and models neither the re-entry nor the 10-deep bail-out. Two consequences beyond the 1-vs-0 HP that conformance asserts on directly: the sim cannot express a prevention that fails, and the sim's own steam_eruption HP restore only runs because this floor makes `target.is_dead` False at cmds.py:121 (damage_pipeline gap G4). Same verdict at all three sites per rule 3."
+    },
+    {
+      "what": "The non-damage kill path: CreatureCmd.kill reproduces both arms but fires no on_damage_received",
+      "verdict": "gap",
+      "issue": "Part of the same mechanism, at the second of the sim's two death sites. `CreatureCmd.kill` (cmds.py:191-205) mirrors DamageCmd.deal's should_die / should_remove_from_combat_after_death / on_death fork and the same `target.hp = 1` prevention floor, but it is not a damage event, so it fires neither on_damage_received nor after_preventing_death. Consequences: (a) power/steam_eruption's HP restore (powers.py:2022-2033) lives on on_damage_received and therefore does not run here at all, leaving the Waterfall Giant at hp 1 instead of the 999999999 WaterfallGiant.cs:305 sets; (b) the preventer never learns the death was prevented. DORMANT for these three powers today -- the only ported non-damage kill of a steam_eruption owner is the giant's own `_explode` (monsters/underdocks/waterfall_giant.py:142-145), which runs AFTER `_about_to_blow` removed the power at :140, and nothing kills the Test Subject or an Illusion off the damage path. Named trigger: any ported non-damage kill reaching a creature that still holds one of these three powers -- SandpitPower._expire (powers.py:2610-2619) and TheGambitPower (powers.py:3816-3829) are the two ported callers of CreatureCmd.kill outside a monster's own move. Same verdict at all three sites per rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

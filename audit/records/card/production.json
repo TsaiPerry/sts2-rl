@@ -1,0 +1,48 @@
+{
+  "unit": "card/production",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Production.cs",
+    "sha256": "f24b6dee4dea5a4c6e6ef20797a6e7f0324a946da9238220a350684f530976af"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "ProductionCard.exhausts = True (colorless_skills.py:457)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Production.cs:15) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:452-457) + _init_vars (459-461)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Production.cs:19-22) == cost 0 / SKILL / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "ProductionCard._energy_gain = 2 (colorless_skills.py:461)",
+      "verdict": "faithful",
+      "rationale": "`new EnergyVar(2)` (Production.cs:13) == `_energy_gain = 2`. `_energy_gain` is in `Card._MAGIC_ATTRS` (cards/base.py:185-189) so `magic_number` surfaces it -- note the sim uses `_energy_gain` here and `_energy` on card/outmaneuver and card/luminesce for the same kind of number; both are in the magic list, so both report."
+    },
+    "OnPlay": {
+      "maps_to": "ProductionCard.on_play (colorless_skills.py:466-468)",
+      "verdict": "faithful",
+      "rationale": "`PlayerCmd.GainEnergy(DynamicVars.Energy.BaseValue, Owner)` (Production.cs:26) == `EnergyCmd.gain(ctx.hooks, ctx.player, self._energy_gain)`. A single-effect card with no guards and no animation on either side. Presentation, folded in: the energy hover tip (17)."
+    },
+    "OnUpgrade": {
+      "maps_to": "ProductionCard._on_upgrade (colorless_skills.py:463-464)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Energy.UpgradeValueBy(1m)` (Production.cs:31) == `self._energy_gain += 1` (2 -> 3)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

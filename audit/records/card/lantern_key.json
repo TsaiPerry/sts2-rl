@@ -1,0 +1,74 @@
+{
+  "unit": "card/lantern_key",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\LanternKey.cs",
+    "sha256": "062853fba0b815dc9cbc7dea1fc4bc2517c743c1aca520c32fb821cdfc19a6cf"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "LanternKeyCard.max_upgrade_level = 0 (event_cards.py:379)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (LanternKey.cs:12) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "LanternKeyCard.is_playable = False (event_cards.py:378)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (LanternKey.cs:14) == `is_playable = False`."
+    },
+    "ModifyUnknownMapPointRoomTypes": {
+      "maps_to": "NOT PORTED -- LanternKeyCard does not override the hook, which DOES exist on the sim's Card base (cards/base.py:296-299)",
+      "verdict": "gap",
+      "issue": "`if (2 != Owner.RunState.CurrentActIndex) return roomTypes; return new HashSet<RoomType> { RoomType.Event };` (LanternKey.cs:21-28) forces every \"?\" node in ACT 3 (act index 2, the Glory act) to roll an Event room. The sim's `Card.modify_unknown_map_point_room_types` exists precisely for this shape of hook and `RunState.start_act` runs deck cards through the map pipeline (cards/base.py:277-299 documents it, naming the Spoils Map card as the one card that uses it), but LanternKeyCard overrides nothing, so the hook is a no-op. The sim's docstring justifies this with \"the sim has no map\" -- THAT CLAIM IS FALSE, and it is the third instance of the same false premise after card/debt's \"no gold\" and card/guilty's \"no persistent deck\": the sim generates a per-act map, `card/spoils_map` already rewrites it through this very pipeline, and `modify_unknown_map_point_room_types` is wired. Observable across a run: in the game a kept Lantern Key turns every act-3 unknown node into an event; in the sim act 3's unknown nodes roll normally. LIVE. Note this is a rule-1 case -- \"not modelled\" is a GAP, never a waiver. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/cards/base.py is not hashed by this record."
+    },
+    "ModifyNextEvent": {
+      "maps_to": "NOT PORTED, and the sim's Card base has no such hook at all",
+      "verdict": "gap",
+      "issue": "`if (2 != Owner.RunState.CurrentActIndex) return currentEvent; return ModelDb.Event<WarHistorianRepy>();` (LanternKey.cs:30-37) redirects the next act-3 event to War Historian Repy -- the payoff the Lantern Key quest exists for. The sim's `Card` class exposes four map hooks and one rest-site hook (cards/base.py:277-308) but no `modify_next_event`, so unlike the room-types half this one cannot even be overridden without adding the hook. The C# dispatcher is `Hook.ModifyNextEvent` (Hook.cs:1830, in hook_dispatch's chain-family census). DORMANT with a named blocker rather than live: making it live requires porting the `modify_next_event` listener category AND the WarHistorianRepy event, neither of which exists in the sim today. Recorded as a gap, not a waiver, because \"the C# side is unported\" is explicitly a dormant gap per rule 1."
+    },
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:373-381) + _init_vars (383-384)",
+      "verdict": "gap",
+      "issue": "QUEST / QUEST map exactly, and so does the unusual `TargetType.Self` (LanternKey.cs:17) -- most Quest cards use TargetType.None, and the sim correctly carries SELF here. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
+    },
+    "OnPlay": {
+      "maps_to": "LanternKeyCard.on_play -> pass (event_cards.py:386-387)",
+      "verdict": "faithful",
+      "rationale": "LanternKey.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `can_be_generated_by_modifiers = False` (event_cards.py:381) and `is_unpowered = True` (380), neither of which LanternKey.cs overrides",
+      "verdict": "faithful",
+      "rationale": "Both inert, for the reasons already established: the modifiers flag gates the random-CURSE pool, which a Quest card of Quest rarity is not in, and `is_unpowered` only steers `DamageCmd.deal`'s prop inference for a card that deals no damage. Same pair of inert extras as card/byrdonis_egg."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

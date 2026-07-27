@@ -1,0 +1,73 @@
+{
+  "unit": "power/dark_embrace",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\DarkEmbracePower.cs",
+    "sha256": "e33847a1e5a34a66eebc8f196384e6ac4f21c26374dff7d7c6110d6f88c5119c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/dark_embrace_card.py",
+      "sha256": "2d0c844de6ece6add93974cd0fc9225ee5d5a074362be9f3a42b5d72718ce97e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:249 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterCardExhausted": {
+      "maps_to": "powers.py:251-255 DarkEmbracePower.on_card_exhausted",
+      "verdict": "gap",
+      "issue": "Two divergences. (a) THE DRAW COUNT IS HARD-CODED TO 1. DarkEmbracePower.cs:47 draws `base.Amount`; powers.py:255 is `DrawCmd.draw(self.owner, 1)`. Dormant only because the one ported applier always passes 1 (cards/dark_embrace_card.py:34, including its upgrade, which raises no amount) -- the moment any effect stacks Dark Embrace the sim draws one card where the game draws Amount. Named trigger: a second Dark Embrace play, or any card/relic that stacks it. (b) THE ETHEREAL DEFERRAL IS MISSING -- see the AfterSideTurnEnd entry and the causedByEthereal guard. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "issue": "DarkEmbracePower.cs:52-60 is half of a two-phase mechanism the sim has none of: an exhaust caused by the Ethereal keyword increments an internal etherealCount instead of drawing, and this hook then draws `Amount * etherealCount` at the side's end -- deliberately, so the cards arrive AFTER the hand flush rather than being flushed away (the source comment at :18-23 says exactly that). The sim draws immediately for every exhaust (powers.py:251-255), so cards Dark Embrace draws off a turn-end ethereal exhaust are discarded by the flush that follows. LIVE the moment both halves co-occur: the sim's ethereal exhausts happen at turn end (cards/base.py's ethereal handling via combat._process_turn_end_cards, combat.py:352-...) and should_ethereal_trigger exists as a hook (hooks.py:696), while Dark Embrace is a ported card. The sim's on_card_exhausted signature (hooks.py:415-419) has no causedByEthereal argument, so this cannot be fixed inside the power. Same missing parameter that turn_structure's gaps G4/G17 record for Joss Paper; per binding rule 3 the shared mechanism -- the absent causedByEthereal flag -- keeps that `gap` verdict, and what is recorded here is Dark Embrace's own deferral being absent on top of it. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "DarkEmbracePower.cs:39 `card.Owner.Creature == base.Owner`",
+      "verdict": "faithful",
+      "rationale": "`card.Owner.Creature != base.Owner` reduces to a tautology in the sim: there is one player, every Card belongs to it, and this power is only ever applied to the player. Same reading power_cmd's sim-entry note and SurroundedPower's own comment (powers.py:2574-2576) already record."
+    },
+    {
+      "what": "DarkEmbracePower.cs:41 `causedByEthereal`",
+      "verdict": "gap",
+      "issue": "The parameter does not exist on the sim's hook, so the branch cannot be taken. Carried as its own guard because it is the root of the AfterSideTurnEnd gap and a fix has to start here."
+    },
+    {
+      "what": "The sim's extra PlayerCombatState isinstance test",
+      "verdict": "faithful",
+      "rationale": "powers.py:252-253 refuses to draw unless the owner is a PlayerCombatState. C# reaches `base.Owner.Player` at :47 and would NullReference on a monster owner, so the sim is defensively equivalent; no ported effect puts Dark Embrace on an enemy."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

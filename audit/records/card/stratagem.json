@@ -1,0 +1,31 @@
+{
+  "unit": "card/stratagem",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Stratagem.cs",
+    "sha256": "db143ebe8bd30961f41ea9cd951e2ba74d823c9a145920b817e54fdd8c8ebfbd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_powers.py",
+    "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_powers.py:326-330) + _init_vars (332-333)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Stratagem.cs:11-14) == cost 1 / POWER / UNCOMMON / SELF. No keywords, no CanonicalVars, no animation trigger."
+    },
+    "OnPlay": {
+      "maps_to": "StratagemCard.on_play (colorless_powers.py:338-341)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<StratagemPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (Stratagem.cs:18) == `PowerCmd.apply(ctx.hooks, ctx.player, StratagemPower, 1, applier=ctx.player)`. Literal 1 on both sides. StratagemPower's on-shuffle selection is the power stream's -- and note card/cascade's record already cites it by name: an AfterShuffle listener that drains the draw pile is exactly the case Cascade's pull loop has to tolerate, and both sides do."
+    },
+    "OnUpgrade": {
+      "maps_to": "StratagemCard._on_upgrade (colorless_powers.py:335-336)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Stratagem.cs:23) == `self._energy_cost = max(0, self._energy_cost - 1)` (1 -> 0)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

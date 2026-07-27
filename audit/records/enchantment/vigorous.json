@@ -1,0 +1,163 @@
+{
+  "unit": "enchantment/vigorous",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Vigorous.cs",
+    "sha256": "d3b1738fae73f45744597822ec600104614d833784b433fcb331ffe263de3222"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Anger.cs",
+      "sha256": "a257b4fa27cf13a9a7b9b8d1b3ebb82cac1b6c1f6f6b21da1198f8edd8690aa4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/DualWield.cs",
+      "sha256": "9477b1abf5642c96590d44e9f791e391dcfb8a4465ac40cb22510507f465ca6f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/JugglingPower.cs",
+      "sha256": "ceb563698f5ba534edee10f779f2713d4d772dbe791fc9590ad3fe1f7d38fc44",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BurningSticks.cs",
+      "sha256": "7c01f7308ea8d12a84161c069c669dbdadc18fb48ef5f551a5d9adcfbe3e8cf9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MusicBox.cs",
+      "sha256": "0dbade89edc069b750d2c1c41ad9597f036d1897cd9cfb9b0dbb22988da4550b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/anger.py",
+      "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/reflections.py",
+      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/stone_of_all_time.py",
+      "sha256": "1fe55cc8561d3947fa0672ea4e3a0502d6712f84b44342339c89e7d9d23c337a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/bing_bong.py",
+      "sha256": "16432616467aff2cbd30eb4ca54ab0dfdd663256bcf3e3c63b714d6e423695c8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/burning_sticks.py",
+      "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/music_box.py",
+      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_growth.py",
+      "sha256": "1e9597d2278c55d09e942119f2df1df00f57c56d5cab173f2f52bc232d6d2871",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ShowAmount": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "CanEnchantCardType": {
+      "maps_to": "VigorousEnchantment.can_enchant (enchantments.py:448-452) -- `card_type == CardType.ATTACK`, matching Vigorous.cs:13-16. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "EnchantDamageAdditive": {
+      "maps_to": "VigorousEnchantment.modify_damage_additive (enchantments.py:454-458) -- returns `amount` for its own card while not disabled, matching Vigorous.cs:18-29's two guards (`Status != Normal -> 0m`, `!props.IsPoweredAttack() -> 0m`, else `base.Amount`); the powered gate is hoisted into the caller (cmds.py:56). The grant sets amount 8 (events/stone_of_all_time.py:_VIGOROUS_AMOUNT). Additive-only, so BR-1's phase difference cannot bite. Pinned: test/test_shared_enchantments.py::test_vigorous_bonus_applies_once_then_spends.",
+      "verdict": "faithful"
+    },
+    "AfterCardPlayed": {
+      "maps_to": "VigorousEnchantment.on_card_played (enchantments.py:460-462) -- sets `disabled` for its own card, matching Vigorous.cs:31-38",
+      "verdict": "gap",
+      "issue": "Per-replay firing. See guard EG1: C# fires AfterCardPlayed once per Replay iteration (CardModel.cs:1959), so the FIRST play gets the bonus and the second does not; the sim's on_card_played runs once, after the whole loop, so every replay of the same play gets it. EXECUTED (`py audit/tools/enchantment_probes.py replay`): Vigorous(8) on a base-6 Strike played twice by the ported Throwing Axe relic deals 28 in the sim and 20 in the game (6+8 then 6). LIVE: Vigorous comes from the ported Stone of All Time event (events/stone_of_all_time.py:69-71) and Throwing Axe is a ported Ancient relic; an 8-damage error is the largest single-play divergence in this kind."
+    }
+  },
+  "guards": [
+    {
+      "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
+      "verdict": "gap",
+      "issue": "Vigorous's AfterCardPlayed leg, executed above (28 vs 20). Same mechanism as Goopy's Amount++ and Corrupted's OnPlay: the sim has no per-replay slot, so every enchantment hook that C# fires inside the loop is collapsed to one firing outside it. LIVE."
+    },
+    {
+      "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
+      "extra": "Vigorous is the highest-magnitude witness of the replay leg: 8 damage."
+    },
+    {
+      "what": "FOUR-VERB COVERAGE (enchant / upgrade+downgrade / transform / copy) -- stated explicitly so the hole cannot reopen silently. Verb 3, TRANSFORM: CardCmd.Transform (CardCmd.cs:369-451) removes the original from its pile and adds a freshly-built replacement; it never touches Enchantment, and the destroyed original takes its enchantment with it",
+      "maps_to": "TRANSFORM verdict: FAITHFUL, both engines drop the enchantment. C#: CardCmd.Transform's loop takes `item.GetReplacement(rng)`, calls `item.Original.RemoveFromCurrentPile()` (CardCmd.cs:400) and adds the replacement (CardCmd.cs:437/440); the word Enchantment does not appear anywhere in the method, and neither AfterTransformedFrom nor AfterTransformedTo (CardModel.cs:1625-1631, both empty virtuals -- SovereignBlade is the only override in the source) moves it. So the enchantment dies with the original. SIM: run.transform_card (run.py:406-470) and CardCmd.transform_to_random (cmds.py:415-449) both build the replacement with `make_card(...)`, which carries no enchantment. EXECUTED, this unit: `py -c \"import sys,random;sys.path.insert(0,'.');from sts2_rl.run import RunState;from sts2_rl.cards import make_card;from sts2_rl.enchantments import make_enchantment;r=RunState(rng=random.Random(0));c=make_card('strike');r.deck=[c];e=make_enchantment('vigorous');e.amount=2;e.attach(c);n=r.transform_card(c,into=make_card('bash'));print(n.id, n.enchantment)\"` -> `bash None`, matching C#. The in-combat twin (CardCmd.transform_to_random on a Sharp'd Strike) also prints a replacement with `enchantment=None`. Same result for all 17 ids. COVERAGE TABLE for this unit -- (1) ENCHANT: the CanEnchantCardType hook entry plus the reachability guard above. (2) UPGRADE / DOWNGRADE: cannot bite here, and that is now executed rather than assumed: `py -c \"import sys;sys.path.insert(0,'.');from sts2_rl.enchantments import ALL_ENCHANTMENTS, Enchantment;print(sorted(k for k,v in ALL_ENCHANTMENTS.items() if v.attach is not Enchantment.attach))\"` -> `['goopy','souls','steady','tezcataras_ember']`. Only those four override attach() to mutate a static card property (exhausts / retain / cost / eternal), so only those four can be undone by the card rebuild that upgrade()/downgrade() performs. This unit is not one of them -- it works through the modify_* hooks, which are read live off the still-attached enchantment -- so upgrade and downgrade are no-ops for it. (3) TRANSFORM: this entry, faithful. (4) COPY: guard EG2, gap. All four verbs are now on the record; before this pass transform and copy were 0/17.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
+      "verdict": "gap",
+      "issue": "MECHANISM EG2, one verdict at every site (rule 3). FIVE ported sim copy sites drop the enchantment, each a `type(card)()` / `make_card(card.id)` rebuild plus a re-upgrade loop with no `card.enchantment` carry: cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, DualWield.cs:35), powers.py:827-830 (JugglingPower.cs:48), relics/music_box.py:46-48 (MusicBox.cs:78), cards/anger.py:36-38 (Anger.cs:27) and relics/burning_sticks.py:30-32 (BurningSticks.cs:49). All five map to a C# `CreateClone()` call, so all five are the same defect. The sim's OTHER copy paths are correct and are what makes this a bug rather than a design choice: relics/bing_bong.py:37 and events/reflections.py:52 use `copy.deepcopy` (the enchantment rides along), relics/paels_growth.py:39-46 re-attaches Clone by hand, and the per-combat deck copy (run.py:1136 `copy.deepcopy`) carries it too. EXECUTED, this unit: `py -c \"import sys;sys.path.insert(0,'.');from sts2_rl.cards import make_card;from sts2_rl.cards.trash_heap_cards import _clone;from sts2_rl.enchantments import make_enchantment;c=make_card('strike');e=make_enchantment('vigorous');e.amount=2;e.attach(c);print(type(c.enchantment).__name__, _clone(c).enchantment)\"` -> `VigorousEnchantment None`. The same one-liner run over all 17 ids prints `None` for every one of the 16 that any probe card accepts (souls needs an Exhaust card, so it was run against fiend_fire). RULE 6, both legs -- reachability of the copy site for THIS unit: ATTACK-only (executed matrix A/P/S = True/False/False), so cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, hand ATTACK|POWER -- trash_heap_cards.py:143-149), powers.py:827-830 (Juggling, every 3rd ATTACK played), relics/music_box.py:46-48 (first ATTACK played each turn) and cards/anger.py:36-38 (Anger copies itself). Every one of the five sites is ported and reachable (Dual Wield from the ported Trash Heap event pool, events/trash_heap.py:17; Anger from the Ironclad common pool; Juggling from cards/juggling.py; Music Box and Burning Sticks are ported relics). LIVENESS: LIVE via Dual Wield (unplayed hand card, Status Normal): the game's copy deals +[amount] on its first play, the sim's does not. Grant path is the ported Stone of All Time event. SECONDARY (false docstring): `_clone`'s docstring claims it \"mirrors CreateClone for the sim's needs\". It does not -- CreateClone carries the enchantment AND the affliction; `_clone` carries neither. Fifth entry in this stream's false-docstring list."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

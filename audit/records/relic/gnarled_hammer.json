@@ -1,0 +1,83 @@
+{
+  "unit": "relic/gnarled_hammer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\GnarledHammer.cs",
+    "sha256": "b1b407a4651335ab9303393f6e193a556021b40f8231b9d0c833d15a11f70c01"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\gnarled_hammer.py",
+    "sha256": "d44dd89e732d9238f3c4b7df124dcd59632b031427441e86f51859bbc5bb8bbd"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/glass_eye.py",
+      "sha256": "7ef04680abff681c776a22e61914c9d794218d206102020c2d398b0d10defb32",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (gnarled_hammer.py:12)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (gnarled_hammer.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches GnarledHammer.cs:24. Load-bearing even though the effect itself is missing: Relic.is_tradable (relics/base.py:132-136) uses it to keep upon-pickup relics out of the trade events, as RelicModel.IsTradable does, and SHOP rarity would otherwise be tradable."
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart; the sim's dispatch site is RunState.add_relic (run.py:551-552) and its out-of-combat card-selection seam is run.select_cards (run.py:371-388)",
+      "verdict": "gap",
+      "issue": "See guard G1 (LIVE). GnarledHammer.cs:28-40 offers a non-cancelable pick-up-to-`Cards`(3) deck screen filtered to cards Sharp can enchant, then enchants each pick with Sharp at `SharpAmount`(3). gnarled_hammer.py implements nothing; its docstring says 'no enchantments in the sim, stub'. That premise is FALSE -- SharpEnchantment is ported at enchantments.py:387-410 -- and `after_obtained` is dispatched for every relic. Executed (`py audit/tools/relic_probes_b06.py b06-stubs`): with a selector installed that takes the first candidates, `run.add_relic('gnarled_hammer')` leaves ZERO enchanted deck cards, while `SharpEnchantment.can_enchant` accepts 6 of the 10 starting-deck cards (5 Strikes and Bash). So the sim silently drops up to +9 attack damage per turn for the rest of the run."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the stub's premise -- 'no enchantments in the sim' -- is false",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 12: a port that does nothing usually justifies itself with a claim about the sim, so check the claim. Executed (`py audit/tools/relic_probes_b06.py b06-stubs`): (a) `sts2_rl.enchantments.SharpEnchantment` exists (enchantments.py:387-410) and is a faithful port of Sharp.cs -- CanEnchantCardType == Attack, EnchantDamageAdditive returns Amount on powered attacks -- and it is already granted by the ported Self Help Book event at amount 2; (b) `after_obtained` is dispatched by RunState.add_relic for every relic (run.py:551-552), which is the same live dispatch site relic/big_mushroom's batch-1 gap turned on, and 14 other behaviourless relic ports drop the same hook (sweep-stubs). Under binding rule 1 this cannot be a waiver: 'the sim has no such system' would be a dormant gap even if it were true, and here it is not true. Both sides ported and obtainable: Gnarled Hammer is SHOP rarity in the transcribed grab bag, so any run with a merchant can buy it, and the sim has the selection seam the effect needs -- run.select_cards with a purpose label, already used by relics/glass_eye.py:49 and relics/claws.py for the same kind of out-of-combat pick. The pool-wide `sweep-stub-premises` reached the same conclusion for this relic under the 'the sim has no enchantments' premise family, which it lists as one of eight false premise families. NOTE per binding rule 7: enchantments.py, run.py and relics/base.py are not hashed by this record."
+    },
+    {
+      "what": "N1: CardsVar(3) read as **IntValue** for the screen maximum and DynamicVar('SharpAmount', 3m) read as **IntValue** for the enchant amount (GnarledHammer.cs:30, 36, 38)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in GnarledHammer.cs, so both are 3 at non-ascension. Recorded because the stub gives neither number a home: a fix must pass max_count=3 to run.select_cards and `SharpEnchantment(amount=3)` to attach -- note SharpAmount is 3 here where the Self Help Book event grants Sharp 2 (enchantments.py:392), so the amount is per-source and cannot be defaulted."
+    },
+    {
+      "what": "N2: `CardSelectorPrefs(EnchantSelectionPrompt, 0, Cards.IntValue) { Cancelable = false, RequireManualConfirmation = true }` (GnarledHammer.cs:30-34) -- minimum ZERO",
+      "verdict": "faithful",
+      "rationale": "The screen is uncancelable but its minimum is 0, so the player may confirm an empty selection and enchant nothing. run.select_cards has the matching shape -- `count` is a maximum (run.py:386 clamps it to the candidate count) and an installed selector may return fewer or none -- so a fix needs no new machinery, and the sim's default random selector picking `count` is the same player-choice-model divergence recorded at relic/gambling_chip G3 rather than a new one. Cancelable/RequireManualConfirmation are UI affordances."
+    },
+    {
+      "what": "N3: `CardSelectCmd.FromDeckForEnchantment(Owner, canonicalEnchantment, SharpAmount, prefs)` filters the deck to cards the enchantment accepts, and `CardCmd.Enchant(canonicalEnchantment.ToMutable(), item, amount)` enchants a MUTABLE copy of the canonical enchantment onto the deck card in place",
+      "verdict": "faithful",
+      "rationale": "Recorded because it is the one place in this batch where C# does NOT clone the card -- Gnarled Hammer enchants the existing deck card, unlike Fresnel Lens and Glitter, which clone. So a fix here can use `SharpEnchantment(3).attach(card)` directly and bug class 17 does not apply. `ToMutable()` on the enchantment is the sim's per-card Enchantment instance (enchantments.py:42-49 constructs one per attach), so the sim's shape already matches; the candidate filter is `SharpEnchantment.can_enchant`, executed above as accepting the 5 Strikes and Bash."
+    },
+    {
+      "what": "N4: ExtraHoverTips, CanonicalVars and `CardCmd.Preview(item)` (GnarledHammer.cs:26, 18-22, 39)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/gnarled_hammer's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Models/Enchantments/Sharp.cs, sts2_rl/cards/base.py, sts2_rl/enchantments.py, sts2_rl/relics/claws.py, sts2_rl/relics/glass_eye.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

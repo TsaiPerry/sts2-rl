@@ -1,0 +1,63 @@
+{
+  "unit": "power/hard_to_kill",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HardToKillPower.cs",
+    "sha256": "a5c6ec0b52940cb28eed69afe0353428f5383b6bc2e764d3ee41ce1f4afa5e97"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2080 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "ModifyDamageCap": {
+      "maps_to": "powers.py:2082-2090 modify_damage_cap (hooks.py, applied at cmds.py:61-63)",
+      "verdict": "faithful",
+      "rationale": "`target != base.Owner -> decimal.MaxValue` maps to `return None` (powers.py:2090), which cmds.py:62 reads as \"no cap\"; otherwise both return base.Amount. Two things checked. (1) The cap is applied to EVERY damage type on both sides -- cmds.py:60-63 sits OUTSIDE the `is_powered_attack` gate, and C# runs ModifyDamageCap in the same unconditional ModifyDamageInternal pass as the additive/multiplicative families (Hook.cs:2533-2542) -- so the pipeline-level gate that makes SurroundedPower a gap does not touch this power. (2) The MIN-of-all-caps aggregation matches: C# folds `if (num5 < num4) num4 = num5` over the listeners and the sim's dispatcher returns the minimum, so multiple caps compose identically (Intangible's cap 1 plus this power's). Owner is the ported Hive Exoskeleton. Third-file citations, not hashed here."
+    },
+    "AfterModifyingDamageAmount": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "The whole body is `Flash();` -- presentation only. Recorded rather than skipped because it is the companion notification for a modifier chain, i.e. power_cmd gap G4's shape one family over, and here it costs nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,109 @@
+{
+  "unit": "relic/spiked_gauntlets",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SpikedGauntlets.cs",
+    "sha256": "f68af9cb8e3369692db2538a06e81460a51fde3b66648e4bc2ccc9f472aa8faa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\spiked_gauntlets.py",
+    "sha256": "f46a1d09206e1ae5d8e2205312b7954a6298e0b827adff470a1b39f3653fcad7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/CuriousPower.cs",
+      "sha256": "f3df630baac3366c2e297a029df30eee1abd014d0e752fa4142c540ee545ec6c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/previews.py",
+      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (spiked_gauntlets.py:19)",
+      "verdict": "faithful",
+      "rationale": "SpikedGauntlets.cs:12 is RelicRarity.Ancient. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Act-3 Glory Ancient Tanx shrine (events/tanx.py) -- the same obtainability audit/records/seam/hook_dispatch.json cites when it uses this relic as its witness."
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (spiked_gauntlets.py:23-24), dispatched by HookSystem.modify_max_energy (hooks.py:203-208) from PlayerCombatState.start_turn (player.py:163)",
+      "verdict": "faithful",
+      "rationale": "SpikedGauntlets.cs:18-25 returns `amount + DynamicVars.Energy.IntValue`; CanonicalVars is EnergyVar(1) (SpikedGauntlets.cs:14) and the file has no AscensionHelper.GetValueIfAscension, so 1 is the pinned non-ascension value and spiked_gauntlets.py:21's ENERGY = 1 is right. EXECUTED (b15-misc): turn-1 energy 4 with the relic. The missing owner check is at guard N1."
+    },
+    "TryModifyEnergyCostInCombat": {
+      "maps_to": "modify_card_energy_cost (spiked_gauntlets.py:26-31), dispatched by HookSystem.modify_card_energy_cost (hooks.py:196-201) from combat.py:408 / :701 and previews.py:181",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The arithmetic is right -- a Power card costs 1 more -- but the sim has no phase structure and no per-creature listener grouping, and this relic is the named ported witness for BOTH of audit/records/seam/hook_dispatch.json's gaps G2 and G3."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): cross-listener ORDER -- C# walks a player's Powers before that player's Relics; the sim's flat list registers relics before powers, so Spiked Gauntlets' +1 and a cost-reducing power compose the wrong way round",
+      "verdict": "gap",
+      "issue": "This is audit/records/seam/hook_dispatch.json gap G2 at the site that record already names as its executed witness, so per binding rule 3 this entry cites and matches rather than re-deriving: the seam's steps 1, 2, 5, 41 and 43 all carry the same G2 issue text, and it reads 'LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31 (the seam record's own text says :26-32, which is one line past the end of a 31-line file -- a stale citation in audit/records/seam/hook_dispatch.json, reported in .superpowers/sdd/relic-batch-15-lessons.md rather than edited, since that file is read-only to this batch), ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0.' The seam owns the machinery; this record owns the relic's observable. Re-confirmed at the source for this batch: CuriousPower.TryModifyEnergyCostInCombat clamps its own result at 0 (CuriousPower.cs:27-31) and Hook.ModifyEnergyCostInCombat does NOT clamp between listeners or at the end (Hook.cs:1573-1589), so the game's 1 and the sim's 0 are both faithful to their own dispatch order and the divergence is purely the order. EXECUTED for this record (b15-misc): with the relic alone a 1-cost Power (Inflame) reports cost 2 and a 1-cost Attack (Strike) reports 1, which is the correct isolated behaviour -- the divergence needs the second listener the seam names."
+    },
+    {
+      "what": "G2 (DORMANT at this site): the hook has a PLAIN pass and a LATE pass and the sim has neither",
+      "verdict": "gap",
+      "issue": "Hook.ModifyEnergyCostInCombat runs TWO complete listener passes -- every TryModifyEnergyCostInCombat, then every TryModifyEnergyCostInCombatLate (Hook.cs:1580-1588). SpikedGauntlets implements the PLAIN one (SpikedGauntlets.cs:27), so in C# its +1 is guaranteed to run BEFORE any Late listener; hooks.py:196-201 is a single flat walk with no phase concept. This is audit/records/seam/hook_dispatch.json gap G3 (steps 27-30, 46) and relic/brilliant_scarf guard G2 at the other end of the same pair -- Brilliant Scarf is the ported LATE implementer -- so per binding rule 3 all three entries carry the verdict `gap` and none re-derives it. DORMANT AT THIS SITE, and the reason is arithmetic rather than absence: Spiked Gauntlets only ADDS, and addition commutes with Brilliant Scarf's zeroing only when the Late zero runs last -- which the sim cannot guarantee. Concretely: on the fifth card of a turn, C# gives a 1-cost Power `1 + 1 = 2` in the plain pass and then Brilliant Scarf's Late pass zeroes it to 0, whereas the sim gives 0 or 2 depending on which relic was obtained first. That IS observable, but it needs both relics at once and Brilliant Scarf is Ancient (Darv/Tanx-class), so I am labelling it dormant rather than live only because I did not execute the two-relic co-occurrence; the seam's own G3 witness (TangledPower Early x FreeAttackPower Late) is already LIVE and carries the mechanism."
+    },
+    {
+      "what": "G3 (DORMANT): the sim drops the `card.Owner.Creature != base.Owner.Creature` guard AND the dispatcher's `originalCost < 0` X-cost bail; it adds a final max(0, cost) clamp C# does not have",
+      "verdict": "gap",
+      "issue": "Three differences in the same collapse, checked side by side per PROMPT.md bug class 15. (a) The owner guard (SpikedGauntlets.cs:30-33) is multiplayer-only and is separately waived at N1. (b) Hook.ModifyEnergyCostInCombat opens with `if (originalCost < 0m) return originalCost;` (Hook.cs:1575-1578) -- the game's X-cost cards carry a negative canonical cost, so the WHOLE chain is skipped for them, while hooks.py:196-201 has no such bail. DORMANT and executed (b15-censuses): the sim represents an X cost as energy_cost 0 plus an `energy_cost_x` flag (cards/base.py:223-232 clamps at 0, so a negative never reaches the hook), and the ported X-cost cards are exactly cascade, volley and whirlwind -- of which ZERO are Powers, so Spiked Gauntlets' `card_type == POWER` test could not fire on one anyway. Porting an X-cost Power card makes it live (the sim would charge X+1 where the game charges X). (c) hooks.py:201 returns `max(0, cost)` where the C# dispatcher returns the raw modifiedCost; harmless for a relic that only adds, and it is the sim-side half of the G1 witness above."
+    },
+    {
+      "what": "N1: `card.Owner.Creature != base.Owner.Creature` (SpikedGauntlets.cs:30-33) and `player != base.Owner` on ModifyMaxEnergy (SpikedGauntlets.cs:20-23)",
+      "verdict": "waiver",
+      "rationale": "Both are multiplayer owner filters; C# needs them because Hook.ModifyEnergyCostInCombat and Hook.ModifyEnergyGain are dispatched over every combat listener including other players' relics. The sim has one player, one hand and one energy pool, and hooks.py's modify_card_energy_cost signature carries no owner at all. Waived as multiplayer-only under the shared contract's global scope, not under an unreachability claim about ported content."
+    },
+    {
+      "what": "N2: `card.Type != CardType.Power` (SpikedGauntlets.cs:34-37) vs `card.card_type == CardType.POWER` (spiked_gauntlets.py:29)",
+      "verdict": "faithful",
+      "rationale": "Same predicate, inverted; the sim returns the unmodified cost on the other branch (spiked_gauntlets.py:31) exactly as C# returns false with modifiedCost = originalCost (SpikedGauntlets.cs:29, 36). EXECUTED (b15-misc): Inflame (Power) 1 -> 2, Strike (Attack) 1 -> 1. The literal +1m (SpikedGauntlets.cs:38) has no AscensionHelper branch, so the sim's `cost + 1` is the pinned value."
+    },
+    {
+      "what": "N3: no state, no reset hook, and no IsAllowed pool gate",
+      "verdict": "faithful",
+      "rationale": "Checked against PROMPT.md bug classes 13 and 16 and against sweeps A and B. SpikedGauntlets.cs declares no field; `py audit/tools/relic_probes.py sweep-reset` does not list spiked_gauntlets in any bucket, and `sweep-isallowed` does not list it either (the C# file has no IsAllowed / IsAllowedAtNeow override, confirmed by reading it in full), so the 17-relic TotalFloor<41 cluster does not touch this relic. Rule 7: the sweep outputs come from audit/tools/relic_probes.py, not hashed here."
+    },
+    {
+      "what": "N4: CanonicalVars / ExtraHoverTips (SpikedGauntlets.cs:14, 16)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

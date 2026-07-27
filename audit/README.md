@@ -21,14 +21,29 @@ they are what the tools in `tools/` do. They never judge faithfulness.
 
 ## Status
 
-**What is established: the engine-seam tier is complete — 6 of 6 seams
-audited, 0 invalid.** That is the claim this folder supports with evidence.
+**Audited and merged here: all 6 engine seams, plus the power, card, event,
+enchantment and relic content tiers — 686 records, 0 invalid.** Every one has
+been through an independent review pass and a fix pass. The relic tier (258
+records) merged on 2026-07-26.
 
-**The content tier is in progress, and none of it is on this branch.** The
-relic, power, card and event+enchantment streams are running in sibling
-worktrees and have written several hundred records between them. So the
-content rows below read 0 because nothing has been *merged here* — not
-because the work has not started.
+**Not audited at all: `monster` (109 units) and `potion` (51).** The monster
+stream is gated on the `monster_state_machine` seam, which is done, so it can
+start. **`potion` became a kind on 2026-07-26**, when Perry replaced the shared
+contract's blanket "potions are out of scope" clause with an ordinary unaudited
+kind — so those 51 units were not merely unaudited, they were *invisible*, and
+ten entries across the card and power tiers had waived real behaviour on the
+clause. Anything here that reads as a whole-project claim covers **5 of the 7
+content kinds**; 160 units are not looked at yet, and `GAP-QUEUE.md` says so in
+its header too.
+
+**What the relic merge did to the tiers that were already "done" is the reason
+to keep that caveat loud.** Merging one kind did not merely append its own
+gaps: it unblocked `power/diamond_diadem` (whose verdict had been waiting on a
+record that did not exist), corrected two stale seam citations, flipped a seam
+`waiver` to a `gap` by disproving its "no ported listener" claim, raised a seam
+guard from dormant to LIVE, and turned up **`UnmovablePower` × `Entrench`** — a
+live gap that the `power` and `seam` records had between them recorded as
+`faithful` and omitted from a census. Expect the same from `monster`.
 
 Do not trust a status number written in prose, including in this file. Run it:
 
@@ -37,23 +52,34 @@ py audit/tools/audit_status.py      # coverage, staleness, gaps, per kind
 py audit/tools/gap_queue.py counts  # gap entries, mechanisms, pins
 ```
 
-Two things to expect from that output rather than be surprised by:
+Three things to expect from that output rather than be surprised by:
 
 - **`stale` is nonzero whenever `sts2_rl/` has uncommitted edits.** Records
-  hash the sim files they audited, so any working-tree change to an audited
-  file marks its records stale on sight. That is the detector working. See
-  [Staleness](#staleness).
-- **Every seam rolls up to `gap`**, because one gap anywhere in a record makes
+  hash every file their verdicts cite, so a working-tree change to an audited
+  file marks its records stale on sight — editing `cmds.py` alone stales 146.
+  That is the detector working. See [Staleness](#staleness).
+- **Most records roll up to `gap`**, because one gap anywhere in a record makes
   the record a gap. Gaps are **queued, not fixed** — a standing decision, not
   an oversight.
+- **The `live` column is nearly all zero** even though most gap entries are
+  labelled live in prose. The `live` boolean is a newer field; the relic tier's
+  fix pass is the first to populate it as data, so `relic` and one `power`
+  record report a real number and everything else reports 0 because nothing was
+  stated, not because nothing is live. Until the other tiers catch up, liveness
+  lives in `GAP-QUEUE.md` rather than in the status table.
 
-> **Merging a content stream needs one extra step.** Those streams were cut
-> before this folder existed and write to the **pre-restructure** path
-> `audits/<kind>/*.json`. Merging one drops its records there, beside the empty
-> `audit/records/<kind>/` here, and the status table will keep reading 0 until
-> they are moved. See *Merge order* in
-> [`prompts/README-parallel-streams.md`](prompts/README-parallel-streams.md)
-> for the one-line repath.
+> **Content gaps still have no acceptance tests of their own.** All 31 pinned
+> mechanisms are seam-anchored; not one content-anchored mechanism has a
+> `strict=True` xfail. The relic merge softened this without fixing it — relic
+> entries now sit under four *already-pinned* seam mechanisms
+> (`damage_pipeline/G3`, `hook_dispatch/G3`, `hook_dispatch/G4`,
+> `turn_structure/G13`), so those particular relic gaps can prove themselves.
+> Every other content fix still cannot. Adding pins as gaps are worked is the
+> cheapest way to keep that from rotting, and `GAP-QUEUE.md` entry 51
+> (`relic/_combat_reset`, 16 sites, one parametrised test) is the highest-value
+> place to start. Note the ownership snag: `test/test_hook_order.py` is
+> seam-tier-owned, so content pins need either that ownership widened or a
+> sibling module the same `gap_queue.py pins` scanner reads.
 
 ---
 
@@ -62,13 +88,15 @@ Two things to expect from that output rather than be surprised by:
 ```
 audit/
   README.md          you are here
-  GAP-QUEUE.md       every gap, de-duplicated by mechanism, ordered for work
+  GAP-QUEUE.md       every gap in every audited kind, de-duplicated by
+                     mechanism, ordered for work (monster + potion unaudited)
   records/
     seam/*.json      the 6 engine-seam audit records — the evidence
-    relic/ power/ card/ event/ enchantment/ monster/    empty; one per stream
+    power/ card/ event/ enchantment/ relic/             680 content records
+    monster/ potion/                                    empty; stream never run
   seams/*.md         the 6 seam narration docs — the ordering specs
   tools/             the harness, the status tool, the queue generator, probes
-  prompts/           the shared contract + the 8 stream prompts
+  prompts/           the shared contract + the 9 stream prompts
 ```
 
 **Deliberately not here:** `test/test_hook_order.py`, `test/test_audit_harness.py`
@@ -90,20 +118,33 @@ dormant.
 | **B** | state divergence — changes a damage/block/HP number, a hand, a pile, a deck entry; the next conformance assert fires |
 | **C** | bookkeeping only — hook order or event identity, no numeric effect on ported content |
 
-**Entries are not jobs.** At the seam tier, 224 entries de-duplicate to 90
-mechanisms. The largest one — the missing `IsEnding`/`IsOverOrEnding` dispatch
-gate — is recorded at 22 sites across three records; the missing
-`AfterModifyingXxx(modifiers)` companion events at 12. Fixing one site of a
-mechanism generally clears all of them, so treating the entries as independent
-overstates the work by roughly 2.5x. Expect the same ratio to hold as content
-records land and the queue grows — re-run `py audit/tools/gap_queue.py counts`
-rather than reusing the figures above. The queue is organised by mechanism, and
+**The queue covers 5 of the 7 content kinds.** `seam`, `power`, `card`, `event`,
+`enchantment` and `relic` are in it; **`monster` (109 units) and `potion` (51)
+are not audited at all**, so a mechanism that lives only there is missing from
+the queue because nobody looked, not because it was cleared. The queue's header
+says so first, before any number.
+
+**Entries are not jobs, and the relic tier is the sharpest illustration yet.**
+1410 gap entries across the 686 records de-duplicate to 809 mechanisms; the
+relic tier alone contributes 620 entries that collapse to 404, with 16 recurring
+families carrying 227 of them. The extreme case is `relic/_is_allowed` — **34
+recorded sites and one missing base-class member.** The largest cross-kind
+mechanism is now `hook_dispatch/G4` at 36 sites across four kinds.
+
+Fixing one site of a mechanism generally clears all of them, so treating the
+entries as independent overstates the work badly, and the overstatement is worse
+in the content tiers than it was at the seam tier. Do not reuse the figures in
+this paragraph — re-run
+`py audit/tools/gap_queue.py counts`. The queue is organised by mechanism, and
 each one carries a **fix recipe**: sites, impact grade, divergence
 (sim `file:line` vs C# `file:line`), observable, dormancy trigger, pin, which
 sim file changes and roughly how, and the blast radius.
 
-**The pins are the acceptance test.** A third of the seam-tier mechanisms are
-pinned by a `strict=True` xfail in `test/test_hook_order.py`. Strict means the
+**The pins are the acceptance test.** 31 mechanisms — all of them
+seam-*anchored* — are pinned by a `strict=True` xfail in
+`test/test_hook_order.py`; **no content-anchored mechanism has a pin of its
+own**, though since the relic merge some content entries do fall under four
+already-pinned seam mechanisms. Strict means the
 test *fails* if it unexpectedly passes — so when you fix the gap the pin flips
 from xfail to a failure, and you delete the marker in the same commit. That is
 the fix's proof. `py audit/tools/gap_queue.py pins` lists what is pinned and
@@ -141,6 +182,31 @@ Two halves, and you generally want both:
 and the record must name the concrete unported thing that would make it live.
 Dormancy describes today's content, not the divergence's shape.
 
+State that as **data**, not only as prose: a `gap` entry may carry
+`"live": true` or `"live": false` beside its `issue`. The key is optional and
+only legal on a gap, and `audit_status.py`'s `live` column counts the records
+carrying at least one `live: true` entry. Absence means *not stated* — 64 of
+the 258 power gap entries carried neither a `LIVE` nor a `dormant` token
+anywhere, and nothing could tell them apart from the dormant ones.
+
+### Sim-only units
+
+A handful of sim units have no C# counterpart at all — `card/sweep` is
+`sts2_rl/cards/sweep.py` with no `Sweep.cs`. The ordinary record shape requires
+a `game_source`, so those units could not be recorded and read as permanently
+unaudited. Generate them with `harness.py skeleton <unit> --sim-only`:
+
+```json
+{"unit": "card/sweep", "sim_only": true,
+ "rationale": "why the unit has no C# counterpart",
+ "sim_source": {"path": "…", "sha256": "…"}, "hooks": {}, "guards": [],
+ "verdict": "waiver", "audited": "YYYY-MM-DD"}
+```
+
+"There is no C# side" is a **claim**, so the shape costs a `rationale`, a
+verdict and a date like any other, and its `sim_source` is hashed and goes
+stale normally. It counts as audited.
+
 ### Rollup rule
 
 Precedence low→high is exactly the order above. A record's `verdict` must equal
@@ -153,6 +219,23 @@ The same mechanism gets **one** verdict at every site, including across records.
 In the seam tier this worked as a gap *detector*: two records disagreed about
 one mechanism, and settling the conflict showed neither was right.
 
+### What counts as "a `public override` the C# file declares"
+
+The enumeration follows the unit's **immediate base class**, which normally
+lives in another file: `FlexPotionPower.cs` declares one member and inherits
+seven from `TemporaryStrengthPower`, so the record owes eight verdicts, not one.
+Following stops at the framework roots (`PowerModel`, `CardModel`, …) — that
+layer is audited once by the seam tier, not 680 times.
+
+A hook key is matched on the identifier it starts with, so a record may annotate
+one with provenance: `"Type (inherited, TemporaryStrengthPower.cs:32-42)"`.
+
+Un-audited **inherited** overrides are a `WARN` from `validate`, not an error,
+because the records written before base-class following existed could not see
+them; `validate --strict-inherited` promotes them to errors and is what the
+ledger should be held to once those records catch up. Un-audited **declared**
+overrides are an error, as they always were.
+
 ---
 
 ## The tools
@@ -163,9 +246,10 @@ All run from the repo root. None of them judges faithfulness.
 |---|---|
 | `py audit/tools/audit_status.py` | the coverage / staleness / gap table above. `--strict` exits 1 on stale, gaps or unaudited; exit 2 means an invalid record |
 | `py audit/tools/harness.py roster <kind>` | the work queue for one kind: every sim unit joined to its C# model file, plus unmatched units and unported C# files |
-| `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite |
+| `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite. `--sim-only` for a unit with no C# counterpart |
 | `py audit/tools/harness.py validate` | completeness + vocabulary check over every record. **Staleness is not validation's job** |
-| `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from the records — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json` |
+| `py audit/tools/harness.py rehash <unit>` | re-pins a record's source hashes after a re-audit. **Not a re-audit** — see [Staleness](#staleness) |
+| `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from every `records/<kind>/` — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json`. Names the unaudited kinds rather than reporting them as 0 gaps |
 | `py audit/tools/gap_queue.py cite-check` | every `file:line` in `GAP-QUEUE.md` resolves to a real line |
 | `py audit/tools/gap_queue.py coverage` | every mechanism and every gap entry is findable in `GAP-QUEUE.md` |
 | `py audit/tools/dormancy_probes.py [probe]` | re-derives every "executed evidence" number `hook_dispatch` states about which classes implement which hook |
@@ -191,6 +275,23 @@ Every record stores the sha256 of every source file its verdicts rest on —
 use the singular `game_source`/`sim_source`). Hashes are over the file text with
 line endings normalised, so a checkout with different newlines does not lie.
 
+**`extra_sources` pins everything else.** A content record's singular pair only
+covers the unit's own two files, and content verdicts routinely cite others —
+`PowerCmd.cs`, `cmds.py`, `combat.py`, `cards/base.py`. Those citations go in an
+optional `extra_sources` list, one entry per file:
+
+```json
+"extra_sources": [
+  {"path": "src/Core/Commands/PowerCmd.cs", "sha256": "…", "side": "game"},
+  {"path": "sts2_rl/cmds.py",               "sha256": "…", "side": "sim"}
+]
+```
+
+`side` is required and names the root the path resolves against — `game` for the
+game source tree, `sim` for the repo root — because unlike the singular pair the
+list is mixed and unordered. The key is optional: a record without it is still
+valid, it just pins less. `audit_status.py` checks it for every record shape.
+
 **Editing `sts2_rl/` marks every record that hashed the edited file stale.**
 `audit_status.py` reports the count; `--strict` exits non-zero on it.
 
@@ -200,6 +301,12 @@ distinction is the entire point. A hash is not the finding — it is the claim
 the tool converts a durable audit into a decoration. Re-audits cost agent time,
 not script time, and staleness is expected to be rare: the game source is
 frozen, and sim files change only when a gap is fixed.
+
+`harness.py rehash <unit|path>...` (also `--all`, `--kind <kind>`, `--dry-run`)
+re-pins every hash a record carries — singular, plural and `extra_sources` — and
+prints the warning above every time it runs. It is the **last** step of a
+re-audit, after an agent has re-read the changed source and confirmed the
+verdicts still hold; run on its own it is exactly the decoration described.
 
 The rule that makes this bite: **every file a verdict cites with a line number
 must be hashed by the record.** If a dormancy argument rests on
@@ -235,6 +342,7 @@ Paths below are relative to `audit/` except the two that are not in it:
 | `records/card/**` | card stream |
 | `records/event/**`, `records/enchantment/**` | event+enchantment stream |
 | `records/monster/**` | monster stream |
+| `records/potion/**` | potion stream (not started; kind created 2026-07-26) |
 | `GAP-QUEUE.md` | gap-queue stream |
 | `records/seam/**`, `seams/**`, `tools/harness.py`, `test/test_hook_order.py` | seam tier only |
 | `sts2_rl/**` | gap-fix stream only, once authorised |
@@ -250,7 +358,7 @@ read-only and sends lessons back via its report; the relic stream folds them in
 and bumps the version header. That single exception is why the branches merge
 trivially.
 
-A new *kind* beyond the six needs a `GAME_MODEL_DIRS` entry and a `_sim_units`
+A new *kind* beyond the seven needs a `GAME_MODEL_DIRS` entry and a `_sim_units`
 branch in `harness.py` — that is a seam-tier change, so propose it rather than
 making it.
 

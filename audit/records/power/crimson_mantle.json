@@ -1,0 +1,73 @@
+{
+  "unit": "power/crimson_mantle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\CrimsonMantlePower.cs",
+    "sha256": "863c2606e84d464dff6eef9af47c9c6485f62c0f5d219110f06f436a5e77e89f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:623 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "powers.py:638-648 CrimsonMantlePower.on_player_turn_start",
+      "verdict": "gap",
+      "issue": "SLOT. AfterPlayerTurnStart is a POST-draw hook -- hook_dispatch step 27 lists Hook.AfterPlayerTurnStart (882-908) among the multi-pass dispatchers and it runs after SetupPlayerTurn -- but the sim uses on_player_turn_start, which is pre-draw. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. Live consequence: Crimson Mantle deals self-damage and then gains block at turn start, and the sim does both BEFORE the hand is drawn. A lethal self-damage tick therefore cancels a hand draw the game has already made, which is conformance-visible even when nothing dies because the draw consumes rng; and Hellraiser's draw-triggered auto-plays (powers.py:707-713) see the block in the sim and not in the game. The sim also has the correct slot available and unused: on_player_turn_started (player.py:186), which is where the phase-aware relics live."
+    }
+  },
+  "guards": [
+    {
+      "what": "CrimsonMantlePower.cs:27 `player == base.Owner.Player`",
+      "verdict": "faithful",
+      "rationale": "powers.py:639-640 `player is not self.owner -> return`."
+    },
+    {
+      "what": "CrimsonMantlePower.cs:31 the SelfDamage DamageVar and its Props",
+      "verdict": "faithful",
+      "rationale": "The counter starts at 0 and IncrementSelfDamage (:36-40) raises it per Crimson Mantle play; powers.py:633-636 mirrors both with `self.self_damage` and increment_self_damage(). powers.py:644-647 passes DamageProps.NON_CARD_HP_LOSS (UNBLOCKABLE | UNPOWERED) with dealer=self.owner, matching a DamageVar's self-damage Props and C#'s `base.Owner` dealer."
+    },
+    {
+      "what": "CrimsonMantlePower.cs:31 fires the damage UNCONDITIONALLY",
+      "verdict": "gap",
+      "issue": "C# calls CreatureCmd.Damage with the DamageVar's BaseValue every turn, including the first, when the value is 0; powers.py:643 guards on `if self.self_damage > 0`. A 0-damage CreatureCmd.Damage is not a no-op in C#: it still runs the pipeline and fires BeforeDamageReceived. DORMANT -- the sim's 0-damage skip only suppresses hooks that would observe a 0 hit, and the ported listeners that could (Thorns powers.py:339-353, Curl Up :299-312) both need `dealer is not None` plus, in Thorns' case, would fire on the player's own self-damage. Named trigger: any ported before/after-damage listener that reacts to a 0-amount unblockable self-hit. Related to but distinct from audit/records/seam/power_cmd.json's step-6 zero-amount finding, which is about PowerCmd rather than DamageCmd."
+    },
+    {
+      "what": "CrimsonMantlePower.cs:32 ValueProp.Unpowered on the block",
+      "verdict": "faithful",
+      "rationale": "powers.py:648 passes `props=ValueProp.UNPOWERED` explicitly, so the block skips Dexterity/Frail exactly as C# does. Contrast power/feel_no_pain and power/curl_up, which omit it."
+    },
+    {
+      "what": "Damage strictly before block, both turns",
+      "verdict": "faithful",
+      "rationale": "C# awaits the Damage at :31 and the GainBlock at :32 in that order; powers.py:643-648 does the same, so a lethal self-damage prevents the block gain on both sides."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

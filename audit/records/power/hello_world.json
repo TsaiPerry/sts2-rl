@@ -1,0 +1,133 @@
+{
+  "unit": "power/hello_world",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\HelloWorldPower.cs",
+    "sha256": "f1601b6e650ab7a9c93be878a3a1925126f5b5762d1cc27856aa782226d97d2d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/IEnumerableExtensions.cs",
+      "sha256": "d6062ab2a496c6d21aba6bdd48937a1097858f46197f2c17f2cbac7177b494a5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/infernal_blade.py",
+      "sha256": "37ff6079bd824334debd034331858e9b884ddbfc2eb0adf0e45bec24427deb61",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/vexing_puzzlebox.py",
+      "sha256": "5e65caadd45b80578a41755a1abe765a98579f0dde92e68e6f2198fefa03c6be",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2808 power_type = PowerType.BUFF",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeHandDraw": {
+      "maps_to": "powers.py:2810-2827 HelloWorldPower.on_player_turn_start (hooks.py:279-283, player.py:169)",
+      "verdict": "faithful",
+      "rationale": "The sim has NO before_hand_draw hook among hooks.py's 66 dispatchers, so this lands on on_player_turn_start (player.py:169) -- and that happens to be the RIGHT relative position, which is worth stating because it is the wrong one for this slot's other occupants. C# fires Hook.BeforeHandDraw at CombatManager.cs:652: after the energy reset (:644) and Hook.AfterEnergyReset (:650), before Hook.ModifyHandDraw (:654) and CardPileCmd.Draw (:673). The sim's on_player_turn_start sits at player.py:169: after the energy reset and on_energy_reset (:163-168), before modify_hand_draw (:171) and _draw (:183). Same neighbours in the same order, so the added cards are in hand before the draw count is computed on both sides. The powers whose C# hook is BeforeSideTurnStart (CombatManager.cs:458, i.e. BEFORE the energy reset) share this one sim slot and are the ones misplaced by it -- see power/plating, and py audit/tools/power_census.py slots."
+    }
+  },
+  "guards": [
+    {
+      "what": "HelloWorldPower.cs:22 base.AmountOnTurnStart >= 1 (used as BOTH the guard and the card count)",
+      "verdict": "gap",
+      "issue": "The guard is ported as self.amount < 1 (powers.py:2811) and the count as self.amount (:2825), where C# uses base.AmountOnTurnStart for both (HelloWorldPower.cs:22 and :27). PowerModel.AmountOnTurnStart has NO sim counterpart -- grep -rn amount_on_turn_start sts2_rl/ returns nothing. C# snapshots every power's Amount into it in Creature.BeforeTurnStart (Creature.cs:673-679), called at CombatManager.cs:453 before any other turn-start hook, and its documented purpose (PowerModel.cs:199-205) is exactly 'preventing same-turn activation when applied mid-turn (e.g., via auto-play effects)'. Only three ported powers read it -- this one, HelloWorldPower and SummonNextTurnPower (unported) -- so it is a small but load-bearing field. The two numbers differ exactly when the power's Amount changed between the snapshot at CombatManager.cs:453 and BeforeHandDraw at :652 -- i.e. when a BeforeSideTurnStart, AfterTurnStart, AfterBlockCleared or AfterEnergyReset listener applied or stacked Hello World. DORMANT: the only ported applier is the Trash Heap card Hello World itself (cards/trash_heap_cards.py:186-203, applied on play during the play phase), so nothing reaches that window today. Named trigger: any auto-play or turn-start effect that plays Hello World, at which point the sim would add cards on the turn the power landed and the game would not."
+    },
+    {
+      "what": "HelloWorldPower.cs:25-27 the card pool: Character.CardPool.GetUnlockedCards filtered to CardRarity.Common",
+      "verdict": "faithful",
+      "rationale": "powers.py:2819-2822 filters pool_card_ids() (cards/pool.py:100-117, the documented port of CardFactory.FilterForCombat -- Basic and Ancient rarities and can_be_generated_in_combat=False excluded) to CardRarity.COMMON. The Common filter and the FilterForCombat step are both present and in the right order. GetDistinctForCombat's other two steps are FilterForPlayerCount (CardFactory.cs:126, multiplayer -- waived) and CombatState.CreateCard (:128, the sim's make_card). Third-file citations, not hashed here."
+    },
+    {
+      "what": "HelloWorldPower.cs:27 the draw runs on Rng.CombatCardGeneration via TakeRandom",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM AND WRONG ALGORITHM, and the correct sim helper exists and is not used. C# is CardFactory.GetDistinctForCombat(..., base.AmountOnTurnStart, base.Owner.Player.RunState.Rng.CombatCardGeneration) (HelloWorldPower.cs:25-27 -> CardFactory.cs:119-129), whose selection is FilterForCombat(...).TakeRandom(count, rng) == UnstableShuffle(rng).Take(n) (IEnumerableExtensions.cs:17). The sim does combat._rng.sample(commons, n) (powers.py:2826), and combat._rng is the SHARED unseeded random.Random (combat.py:88) -- not the per-purpose accessor. cards.pool.get_distinct_for_combat_parity (pool.py:182-204) is an already-written, already-documented parity port of exactly this call, driven by combat.combat_rng.card_gen (combat_rng.py:20,50), and this power does not call it; seven other sites do (potions.py:435,468,1082,1120,1148, cards/infernal_blade.py:40, relics/vexing_puzzlebox.py:26). LIVE under seed parity: the identical defect is already recorded LIVE on power/aggression (report section 4 item 8), and here it is sharper because a wrong-stream/wrong-algorithm pick both names a different card AND perturbs every later draw off the shared rng. Hello World is a ported Trash Heap card (cards/trash_heap_cards.py:186-203) reachable from the ported Trash Heap event, so both halves of binding rule 6 hold. Third-file citations, not hashed here."
+    },
+    {
+      "what": "HelloWorldPower.cs:28 AddGeneratedCardsToCombat(..., PileType.Hand, ...)",
+      "verdict": "faithful",
+      "rationale": "powers.py:2827 CardPileCmd.add_to_hand per card, which is the same destination and fires the same on_card_entered_combat path. The sim also clamps n to len(commons) (powers.py:2825) where TakeRandom's Take(n) does the clamping implicitly -- equivalent."
+    },
+    {
+      "what": "Hello World is never removed",
+      "verdict": "faithful",
+      "rationale": "Neither side ticks or removes it, so it adds cards every turn for the rest of the combat. Both agree."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

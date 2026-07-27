@@ -1,0 +1,108 @@
+{
+  "unit": "relic/cloak_clasp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\CloakClasp.cs",
+    "sha256": "1b8e9638fab92d0ea0322f48e9c4e48fe10ae7f2fb6696b21932dc1d73995f0d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\cloak_clasp.py",
+    "sha256": "0be75771fbd507ec9984fabce3b9d1f0041a8a768bee9f09a9779a30c33aae67"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orichalcum.cs",
+      "sha256": "26ea7db10392ce478bef226d3b112f7b17575177d3d839ce176c135f031c06f8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/howl_from_beyond.py",
+      "sha256": "3b489bebe90570b2054bcebc8a28f67a9832a4d8d4a762e5e7bf90b1160856f1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (cloak_clasp.py:17)",
+      "verdict": "faithful"
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "on_player_turn_end (cloak_clasp.py:19-24)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The arithmetic, the empty-hand guard and the Unpowered prop all match, and the slot is correctly ahead of the hand flush -- but the sim has no sub-phase ordering inside its turn-end walk (G1) and no AutoPostPlay phase before it (G2), so the hand this relic counts can differ from the hand the game counts."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the BeforeSideTurnEndVeryEarly / Early / plain sub-phases are flattened into one listener walk, and Cloak Clasp is the named witness",
+      "verdict": "gap",
+      "issue": "audit/records/seam/turn_structure.json guard G12 owns this mechanism and verdicts it a gap; binding rule 3 means it is cited and matched, not re-derived. C# guarantees ordering by running three complete passes -- BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then BeforeSideTurnEnd (Hook.cs:1238-1261) -- and CloakClasp.cs:24 sits in the LAST of the three. The sim's hooks.on_player_turn_end (hooks.py:297-301) is a single `for l in list(self._listeners)` pass, so the guaranteed position becomes registration order. The seam's executed evidence is this relic's: with a 5-card hand, '[cloak_clasp, orichalcum] gives 5 block and [orichalcum, cloak_clasp] gives 11; C# always gives 11 because the VeryEarly snapshot runs before ANY plain listener'. Both sides ported -- Orichalcum is an Uncommon relic whose C# implementation is deliberately two-phase (Orichalcum.cs:44-56 snapshots `Block > 0` in VeryEarly), Fake Orichalcum and Ripple Basin are the same shape, and Cloak Clasp is Rare in the transcribed grab bag (confirmed by `py audit/tools/relic_probes.py batch3-pool`). Pinned there by test_orichalcum_snapshots_block_before_other_turn_end_listeners."
+    },
+    {
+      "what": "G2 (LIVE): the AutoPostPlay phase does not exist, so end-of-turn auto-plays that C# runs BEFORE this relic can run after it",
+      "verdict": "gap",
+      "issue": "audit/records/seam/turn_structure.json guard G8 owns this mechanism and verdicts it a gap; cited and matched under binding rule 3. C# enters a dedicated AutoPostPlay phase strictly BEFORE Hook.BeforeTurnEnd (CombatManager.cs:1160-1176), so every end-of-turn auto-play has already resolved -- and already left the hand -- when Cloak Clasp counts cards. The sim has no such phase: StampedePower fires from on_player_turn_end (powers.py:1025), the same walk this relic is in, so the answer depends on listener order. The seam's executed evidence is again this relic's: 'with a 5-card hand and Stampede 2, forcing Stampede first gives 3 block (the C# answer), the natural relics-before-powers order gives 5'. The ported Howl From Beyond card (cards/howl_from_beyond.py:45) is the same shape. Recorded separately from G1 because they are different missing structures -- G1 is sub-phase ordering WITHIN BeforeTurnEnd, G2 is a whole phase BEFORE it -- and fixing either alone leaves the other."
+    },
+    {
+      "what": "N1: `participants.Contains(base.Owner.Creature)` (CloakClasp.cs:26)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `card.Owner != base.Owner` / `participants.Contains(base.Owner.Creature)` family is the multiplayer per-player filter on a hook the game dispatches for every player (and, for the participants form, also admits pets). The sim is single-player by construction (one RunState, one PlayerCombatState) and models no pet creature, so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: the slot -- on_player_turn_end fires before the hand is discarded",
+      "verdict": "faithful",
+      "rationale": "Load-bearing for a relic that counts the hand: BeforeSideTurnEnd precedes both EndOfTurnCleanup and FlushPlayerHand in C# (CombatManager.cs:1250-1255 and the flush that follows). The sim matches -- combat.py:654 fires on_player_turn_end, and only then come _process_turn_end_cards (:658) and `if self.hooks.should_flush_hand(): self.player.discard_hand()` (:662-663), with hooks.after_player_turn_end (the AfterTurnEnd slot, where relic/parrying_shield lives) after the flush. Confirmed by execution in `py audit/tools/relic_probes.py turn-order`, which shows on_player_turn_end as the last player-turn event before the next turn's on_block_cleared. Rule 7: combat.py is not hashed here."
+    },
+    {
+      "what": "N3: `(int)((decimal)cards.Count * BlockVar(1m).BaseValue)` (CloakClasp.cs:20, 31) vs `len(player.hand)` (cloak_clasp.py:23)",
+      "verdict": "faithful",
+      "rationale": "The BlockVar is 1, so the multiply is the identity and the truncating cast can never bite; no AscensionHelper call in the file. C#'s `if (cards.Count != 0)` maps to the sim's `if player.hand`, and both are redundant against a 0-block application -- kept on both sides. Read carefully because a BlockVar of 1 is exactly the kind of constant a port drops as 'obviously 1' and then cannot ascend later."
+    },
+    {
+      "what": "N4: `PileType.Hand.GetPile(base.Owner).Cards` (CloakClasp.cs:28) vs `player.hand` (cloak_clasp.py:20, 23)",
+      "verdict": "faithful",
+      "rationale": "The same list. Notably NOT the pile-limbo case of PROMPT.md bug class 7: this fires between plays, so no card is sitting in PileType.Play."
+    },
+    {
+      "what": "N5: `CreatureCmd.GainBlock(Owner.Creature, num, ValueProp.Unpowered, null)` (CloakClasp.cs:33) vs `BlockCmd.apply(..., props=ValueProp.UNPOWERED)` (cloak_clasp.py:22-24)",
+      "verdict": "faithful",
+      "rationale": "Same prop, and it matters: BlockCmd.apply skips modify_block_additive/multiplicative unless is_powered_attack(props) (cmds.py:141-144), so Dexterity does not add to Cloak Clasp's block. Same handling as relic/captains_wheel N3 in this batch. The card source is null on both sides."
+    },
+    {
+      "what": "N6: Flash() and ExtraHoverTips (CloakClasp.cs:22, 32)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

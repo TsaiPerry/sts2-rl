@@ -1,0 +1,93 @@
+{
+  "unit": "power/vital_spark",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\VitalSparkPower.cs",
+    "sha256": "a38f842d4de1fa70c3f268f1df8c168290b3b66b87cfbb11736999a5821db1fe"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/PlayerCombatState.cs",
+      "sha256": "c908ea3144a466dc0d979ec44ade207dd692d6b23b9512afbcccae3468fea123",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2410 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "powers.py:2426-2429 on_combat_start",
+      "verdict": "gap",
+      "issue": "Identical shape to GalvanicPower's, one card type over (Skills rather than Powers, Tainted rather than Galvanized): the sim adds a `card.affliction is None` test that VitalSparkPower.cs:33-38 does not have, where C#'s CardCmd.Afflict overwrites. Same mechanism, same verdict (rule 3), same dormancy -- GalvanicPower afflicts the disjoint Power-card set and nothing else afflicts at combat start. Third-file citations, not hashed here."
+    },
+    "AfterCardEnteredCombat": {
+      "maps_to": "powers.py:2431-2433 on_card_entered_combat",
+      "verdict": "faithful",
+      "rationale": "`card.Affliction == null && card.Type == CardType.Skill` (VitalSparkPower.cs:43) maps exactly to powers.py:2432."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:2435-2441 on_card_played",
+      "verdict": "faithful",
+      "rationale": "`cardPlay.Card.Affliction is Tainted` -> `PowerCmd.Apply<TaintedPower>(..., cardPlay.Card.Owner.Creature, base.Amount, null, null)` (VitalSparkPower.cs:49-56) maps to powers.py:2437-2441. Note the applier is `null` in C# AND omitted in the sim -- the one place in half B where omitting it is CORRECT, and worth recording next to the units where it is not (high_voltage, territorial, crab_rage, ravenous, suck)."
+    },
+    "AfterRemoved": {
+      "maps_to": "powers.py:2451-2460 VitalSparkPower.on_death",
+      "verdict": "gap",
+      "issue": "C#'s AfterRemoved clears every Tainted affliction on EVERY removal path (VitalSparkPower.cs:58-77, guarded by `oldOwner.CombatState == null`); the sim hangs the same sweep on `on_death` filtered to the owner (powers.py:2451-2460) and then calls `self._expire()`. So the afflictions survive any removal that is not the owner's death -- and, symmetrically, they are cleared on a death where C# would only clear them because the death strips the power. DORMANT, and the two halves currently cancel: the sim never strips powers on death (content-power-report-b.md section 3c) so death is the only removal route in practice, and monsters/hive/infested_prism.py never removes this power by hand. Trigger: a hand removal of Vital Spark, or wiring ShouldPowerBeRemovedAfterOwnerDeath's default. Same shape as BurrowedPower's inlined AfterRemoved. Third-file citations, not hashed here."
+    },
+    "AfterPowerAmountChanged": {
+      "maps_to": "powers.py:2443-2449 VitalSparkPower.on_stack",
+      "verdict": "gap",
+      "issue": "C# re-syncs every Tainted affliction's Amount to the power's new Amount from `AfterPowerAmountChanged` with a `power != this` guard (VitalSparkPower.cs:79-98), so it fires on ANY amount change -- a stack, a decrement, or an Unsettling-Lamp-doubled application. The sim folds the sync into `on_stack` (powers.py:2443-2449), which cmds.py:311 calls only on the re-application path. Consequences: a DECREMENT of Vital Spark leaves the afflictions at the old amount in the sim; and the sync runs before `hooks.on_power_amount_changed` (cmds.py:312) rather than after. DORMANT: nothing ports a Vital Spark decrement (`grep VitalSparkPower` outside powers.py finds only monsters/hive/infested_prism.py's single application), so on_stack is the only reachable amount change. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "VitalSparkPower.cs:21 the AfflictionTitle StringVar",
+      "verdict": "waiver",
+      "rationale": "Localization only."
+    },
+    {
+      "what": "Iterating `Allies` players' AllCards vs `combat.player.all_cards`",
+      "verdict": "faithful",
+      "rationale": "Single-player equivalent. The Play-pile omission (player.py:100-103 vs PlayerCombatState.cs:70-80) is live-shaped for the on_death sweep -- the owner usually dies inside a player card play -- but the identical question was EXECUTED on power/hex, whose AfterRemoved sweep DID reach the in-play card, so it is recorded as checked rather than assumed here."
+    },
+    {
+      "what": "IsVisible",
+      "verdict": "waiver",
+      "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,79 @@
+{
+  "unit": "card/cascade",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Cascade.cs",
+    "sha256": "378b9700653813e3c68b9915a7a70f097c01530fda5ab5d6bca4cb872bd63fa0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\cascade.py",
+    "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (cascade.py:23-28) + _init_vars (30-31)",
+      "verdict": "faithful",
+      "rationale": "`base(-1, CardType.Skill, CardRarity.Rare, TargetType.Self)` with `protected override bool HasEnergyCostX => true` (Cascade.cs:10-15) == `energy_cost_x = True` (cards/base.py:84-87) plus `_energy_cost = 0`. The -1 sentinel does NOT carry the unplayable-cost finding here: `CardEnergyCost`'s constructor sets `Canonical = ((!CostsX) ? canonicalCost : 0)` (CardEnergyCost.cs:86), so an X-cost card's base is 0 in C# too -- the sim's 0 is exactly right, and `GetWithModifiers`'s `if (CostsX) return num` short-circuit matches `Card.energy_cost`'s X handling at the play site."
+    },
+    "OnPlay": {
+      "maps_to": "CascadeCard.on_play (cascade.py:33-61)",
+      "verdict": "faithful",
+      "rationale": "`int num = ResolveEnergyXValue(); if (IsUpgraded) num++;` (Cascade.cs:19-23) == `num = self.captured_x + (1 if self.upgrade_level > 0 else 0)`; `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), which is the sim's ResolveEnergyXValue (the Chemical-X style hook). The sim then reimplements `CardPileCmd.AutoPlayFromDrawPile(num, CardPilePosition.Top, forceExhaust: false)` (Cascade.cs:24) inline and does so faithfully: it pulls all `num` cards off the TOP of the draw pile FIRST, reshuffling the discard in when the pile runs dry, and only then auto-plays them in order -- matching CardPileCmd.cs:937-965's two-phase pull-then-play with its per-iteration ShuffleIfNecessary (CardPileCmd.cs:941) and its `FirstOrDefault()` top-of-pile pick (945; the sim's `draw_pile.pop()` is the same end, since the sim stores its draw pile top-LAST). `forceExhaust: false` needs no counterpart."
+    },
+    "OnUpgrade": {
+      "maps_to": "handled inline as `+ (1 if self.upgrade_level > 0 else 0)` (cascade.py:34)",
+      "verdict": "faithful",
+      "rationale": "Cascade.cs declares NO OnUpgrade override -- the upgrade changes no printed number, it adds 1 to the count read from `IsUpgraded` inside OnPlay. The sim mirrors that exactly, including having no `_on_upgrade`."
+    }
+  },
+  "guards": [
+    {
+      "what": "Cascade must not auto-play itself when its own effect triggers a reshuffle (Cascade.cs holds the card in PileType.Play; the sim parks it in the discard pile)",
+      "verdict": "faithful",
+      "rationale": "The sim removes itself from `discard_pile` for the duration and restores it in a `finally` (cascade.py:38-40, 59-61), on top of the `_playing_card` limbo marker the reshuffle already honours (combat.py:452-454). Belt-and-braces, and the outcome matches C#'s Play-pile exclusion."
+    },
+    {
+      "what": "the pull loop stops when both piles are empty, and again when an AfterShuffle listener drains the pile (cascade.py:46-53)",
+      "verdict": "faithful",
+      "rationale": "C# `AutoPlayFromDrawPile` breaks on `cardModel == null` after ShuffleIfNecessary (CardPileCmd.cs:949-952), which is the same two conditions. The sim's comment names the Stratagem case explicitly."
+    },
+    {
+      "what": "the play loop bails on `ctx.combat.is_over or ctx.player.is_dead` (cascade.py:56-57)",
+      "verdict": "faithful",
+      "rationale": "C# breaks the play loop on `item.Owner.Creature.IsDead` (CardPileCmd.cs:958-964) and `CardCmd.AutoPlay` additionally early-returns on `CombatManager.Instance.IsOverOrEnding` (CardCmd.cs:53-56). Both sides stop; the cards already pulled stay out of the draw pile either way."
+    },
+    {
+      "what": "during the PULL phase C# has already moved each card into PileType.Play (CardPileCmd.cs:954); the sim holds them in a local list, in no pile at all (cascade.py:44-54)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same observable outcome, so this is a re-architecture rather than a gap: the cards are out of the draw pile on both sides and land in their normal result piles after playing. The only difference is which pile a hook listener would see them in DURING the pull, and the sim has no card-in-Play-pile listener category at all (the hook_dispatch seam records the missing Play-pile position as its own finding). Recorded so the difference is visible rather than silent."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

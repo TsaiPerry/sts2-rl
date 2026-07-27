@@ -1,0 +1,53 @@
+{
+  "unit": "relic/neows_torment",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\NeowsTorment.cs",
+    "sha256": "ab4f7b9dbf1a3f2cb659935ac31a72716c3c62a84b31abe4133a5381815cf30a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\neows_torment.py",
+    "sha256": "2b781bcd68a2277158776dad20703407c915feca048c7e7a4868cba19b2fe859"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (neows_torment.py:12)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (neows_torment.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches NeowsTorment.cs:17."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (neows_torment.py:15-18), dispatched by RunState.add_relic (run.py:546-553)",
+      "verdict": "faithful",
+      "rationale": "NeowsTorment.cs:19-23 creates one NeowsFury and adds it to the Deck pile; neows_torment.py:18 is `run.add_card(make_card('neows_fury'))`. EXECUTED (py audit/tools/relic_probes_b10.py nutritious): a one-Strike deck becomes ['strike', 'neows_fury'] -- the card is ported (sts2_rl/cards/neows_fury.py) and lands at the end of the deck. Same mapping relic/calling_bell N1 already verdicted faithful (binding rule 3): run.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and the append lands at the end of the deck like CardPileCmd's default CardPilePosition.Bottom. Hook.ShouldAddToDeck, which CardPileCmd.Add also consults, is waived as dead code in the C# source itself: calling_bell G4 established by grep that the whole game contains zero overrides. Rule 7: run.py, relics/calling_bell.py and CardPileCmd.cs are unhashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `CardCmd.PreviewCardPileAdd(..., 2f)` (NeowsTorment.cs:22) and ExtraHoverTips (NeowsTorment.cs:15)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N2: `base.Owner.RunState.CreateCard<NeowsFury>(base.Owner)` (NeowsTorment.cs:21) vs `make_card('neows_fury')` (neows_torment.py:18)",
+      "verdict": "faithful",
+      "rationale": "RunState.CreateCard registers the new card against the run's CardScope and stamps its owner; the sim's Card objects belong to the run's deck list and have no owner field because there is one player. No RNG is drawn on either side -- the card is named by type, not rolled -- so there is no named-stream question here (PROMPT.md bug class 16 does not fire)."
+    },
+    {
+      "what": "N3: no numeric constants and no AscensionHelper call anywhere in NeowsTorment.cs",
+      "verdict": "faithful",
+      "rationale": "Checked against the non-ascension-branch requirement: the relic declares only Rarity, ExtraHoverTips, HasUponPickupEffect and AfterObtained, and the port pins no numbers either. Whatever the added card costs or does belongs to cards/neows_fury.py and to the card stream's audit, not here."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

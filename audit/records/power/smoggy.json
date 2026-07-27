@@ -1,0 +1,96 @@
+{
+  "unit": "power/smoggy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\SmoggyPower.cs",
+    "sha256": "9acf25cc93cf64462fd19c51a80ee7366fca655f5891f9ba8d8db30b28ff6c4b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/PlayerCombatState.cs",
+      "sha256": "c908ea3144a466dc0d979ec44ade207dd692d6b23b9512afbcccae3468fea123",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Powers/PowerStackType.cs",
+      "sha256": "7251eb51775362338fe6fc5412a6e8304c23c5bad9b44a2b4a2c3bf9a3758407",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1719 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:1731-1732 on_stack -> pass",
+      "verdict": "gap",
+      "issue": "The sim drops a re-application's offset citing PowerStackType.Single, which only means 'Amount is hidden' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds regardless. DORMANT: Smoggy reads Amount nowhere (it afflicts with the literal 1). One of the 15 units making this misreading (`py audit/tools/power_census.py stack`)."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "powers.py:1744-1750 SmoggyPower.on_card_played",
+      "verdict": "faithful"
+    },
+    "AfterCardEnteredCombat": {
+      "maps_to": "powers.py:1752-1758 SmoggyPower.on_card_entered_combat",
+      "verdict": "gap",
+      "issue": "Same pile-limbo shape as power/ringing's matching entry: the sim walks `getattr(self.owner, 'all_cards', ())`, and PlayerCombatState.all_cards (player.py:100-103) is hand + draw + discard + exhaust with NO Play pile, where C#'s PlayerCombatState.AllCards includes Play (PlayerCombatState.cs:70-80). Sharper here than for Ringing, because Smoggy's AfterCardPlayed sweep (powers.py:1748-1750) runs while the triggering Skill is itself mid-resolution: in C# that Skill is in the Play pile and IS afflicted with Smog, in the sim it is in neither all_cards nor the discard pile yet and is skipped -- so it can be replayed by an effect that returns it to hand, where the game would block it. PROMPT.md bug class 7. Reachable with any ported return-to-hand effect plus Living Fog. Third-file citations, not hashed here."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1768-1776 on_player_turn_end clears Smog and resets the flag",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. Note C#'s AfterSideTurnEnd here only CLEARS the afflictions -- unlike Ringing's and Tangled's, it does NOT remove the power -- and the sim matches that, clearing without expiring."
+    },
+    "ShouldPlay": {
+      "maps_to": "powers.py:1760-1762 SmoggyPower.should_play_card",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "SmoggyPower.cs:24 `cardPlay.Card.Owner.Creature != base.Owner || cardPlay.Card.Type != CardType.Skill`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1745-1746 tests Skill; the owner half is a single-player tautology."
+    },
+    {
+      "what": "SmoggyPower.cs:32 `item.Type == Skill && item.Affliction == null`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1749 tests both. Smoggy never overwrites another affliction."
+    },
+    {
+      "what": "SmoggyPower.cs:41 the history query on AfterCardEnteredCombat",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# asks the history whether a Skill was played this turn; the sim keeps the `_skill_played_this_turn` boolean (powers.py:1729, set at :1747, cleared at :1766 and :1776). Unlike power/ringing's ShouldPlay, the flag and the history agree here: this hook fires when a card ENTERS combat, never from inside the triggering Skill's own resolution, so the start-vs-finish difference cannot bite. Recorded as a divergence rather than faithful because it is the same substitution that IS observable on power/ringing, and a reader comparing the two should see that the difference is the call site, not the technique."
+    },
+    {
+      "what": "SmoggyPower.cs:66-70 ShouldPlay tests only `Affliction is Smog`",
+      "verdict": "faithful",
+      "rationale": "powers.py:1760-1762 `not isinstance(card.affliction, SmogAffliction)`. Identical -- and note it does NOT consult the played-this-turn flag, because the Smog affliction only exists once a Skill has been played. Contrast Ringing, whose ShouldPlay must consult the turn state."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,68 @@
+{
+  "unit": "event/drowning_beacon",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\DrowningBeacon.cs",
+    "sha256": "c8bcbd0c528afb6a1207679c4aef0cced4c1e2ef355573b5558aff01917c841a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\drowning_beacon.py",
+    "sha256": "c8412b0f13e08508820c18751bbdf5ac4e2ea4f51cb30a7143c20c16c9aaa35a"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/tungsten_rod.py",
+      "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "CanonicalVars HpLossVar(13) (DrowningBeacon.cs:22)",
+      "maps_to": "events/drowning_beacon.py:6 _HP_LOSS = 13. Exact; the other two CanonicalVars are StringVars naming the potion and the relic.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ClimbOption (DrowningBeacon.cs:51-56): LoseMaxHp(13, isFromCard: false) THEN RelicCmd.Obtain(FresnelLens) -- in that order",
+      "maps_to": "events/drowning_beacon.py:31-34: lose_max_hp(13) then add_relic('fresnel_lens'). Order preserved; add_relic runs the relic's AfterObtained (run.py:546-553), which is RelicCmd.Obtain's job. The `isFromCard: false` argument only selects the ValueProp set on the overflow damage (Move is added when true), and the sim's clamp has no props at all -- see EV-2.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-4: BottleOption's Glowwater Potion (DrowningBeacon.cs:39-46) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a colourless card reward can be a card the player does not want in the deck, and a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` on its grid pick (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all of which are reachable event branches with no exotic gate."
+    },
+    {
+      "what": "the potion is the right one and the belt rules are respected",
+      "maps_to": "events/drowning_beacon.py:28 add_potion(make_potion('glowwater')) matches ModelDb.Potion<GlowwaterPotion>, and run.add_potion (run.py:474-485) gates on Hook.ShouldProcurePotion (Sozu) and on a free slot, which is what PotionReward's take path does.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-2: ClimbOption's 13 Max HP loss (DrowningBeacon.cs:53) calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+    },
+    {
+      "what": "the potion and relic hover tips and the ThatDecreasesMaxHp option annotation (DrowningBeacon.cs:31-32)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

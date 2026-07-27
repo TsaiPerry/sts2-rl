@@ -1,0 +1,88 @@
+{
+  "unit": "power/rebound",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ReboundPower.cs",
+    "sha256": "74fc67ced869f295e8ee6f1452ab22795e9123c195aea32e6f5fedcf41bac80d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:2784 `power_type = PowerType.BUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+    },
+    "ModifyCardPlayResultPileTypeAndPosition": {
+      "maps_to": "powers.py:2786-2794 ReboundPower.on_card_played",
+      "verdict": "gap",
+      "issue": "The destination-pile DECISION is replaced by an after-the-fact move. The sim has the matching hook -- hooks.modify_card_play_result_pile (hooks.py:236-246), dispatched at combat.py:510 -- and this power does not use it, reaching into the piles from on_card_played (combat.py:514) instead. Because combat.py:510 runs FIRST, NostalgiaPower (powers.py:3595-3612), which does use the hook, can move the card to the top of the draw pile before this power looks for it in the discard pile, at which point this power's `card in discard_pile` test fails and it silently does nothing -- neither its effect nor its stack consumption. In C# both are listeners on ONE ModifyCardPlayResultPileTypeAndPosition chain (Hook.cs:1391-1405) and the last writer wins, so both always get a say. Which one wins in C# is hook_dispatch G2's listener-order question and is not re-verdicted here. Both powers are ported Ironclad-pool content, so the contention is reachable. Third-file citations, not hashed here. Rebound is the sharper case of the pair, because Nostalgia and Rebound BOTH want the discard -> draw-top redirect: in C# they contend on one chain and one of them wins; in the sim Nostalgia runs first at combat.py:510, moves the card, and Rebound then finds nothing in the discard pile -- so Rebound gets its effect for free and, worse, never consumes its stack (powers.py:2794's _tick is inside the `card in discard_pile` branch). A Rebound stack therefore survives a play Nostalgia handled, where in C# exactly one AfterModifyingCardPlayResultPileOrPosition fires."
+    },
+    "AfterModifyingCardPlayResultPileOrPosition": {
+      "maps_to": "powers.py:2794 the inline `self._tick()`",
+      "verdict": "gap",
+      "issue": "C# consumes the stack from this dedicated after-hook (ReboundPower.cs:32-39 -> PowerCmd.Decrement), which Hook.ModifyCardPlayResultPileTypeAndPosition fires over exactly the listeners that changed the value (Hook.cs:1396-1405, one of hook_dispatch step 38's notification lists). The sim folds the tick into its on_card_played move, so the tick happens if and only if the move happened -- which is the right coupling but the wrong mechanism, and it is exactly what breaks under the Nostalgia contention described on the previous entry. Same absent machinery as audit/records/seam/power_cmd.json's gap G4, one family over."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:2796-2798 on_player_turn_end -> Power._expire",
+      "verdict": "gap",
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "ReboundPower.cs:21 `card.Owner.Creature != base.Owner`",
+      "verdict": "faithful",
+      "rationale": "Tautology in single-player; omitted."
+    },
+    {
+      "what": "ReboundPower.cs:25-28 `pileType != PileType.Discard` -> unchanged",
+      "verdict": "faithful",
+      "rationale": "powers.py:2790-2791 tests `card not in player.discard_pile`, which is the sim's way of asking the same question -- power cards leave combat and exhausted cards are already gone, as the sim's comment says. Equivalent for the ported pile set."
+    },
+    {
+      "what": "ReboundPower.cs:29 (PileType.Draw, CardPilePosition.Top)",
+      "verdict": "faithful",
+      "rationale": "powers.py:2793 appends to draw_pile, and the sim's convention is that the list END is the top of the draw pile (stated at powers.py:2793 and used identically by NostalgiaPower). Correct position, not just correct pile."
+    },
+    {
+      "what": "Rebound redirects the Rebound card itself",
+      "verdict": "faithful",
+      "rationale": "The power is applied during Rebound's own resolution, so the card that applied it is the first play redirected -- on both sides. C# gets this from the power being registered before the pile chain runs; the sim's docstring (powers.py:2779-2780) states it and the on_card_played ordering delivers it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

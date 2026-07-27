@@ -1,0 +1,84 @@
+{
+  "unit": "card/dual_wield",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\DualWield.cs",
+    "sha256": "9477b1abf5642c96590d44e9f791e391dcfb8a4465ac40cb22510507f465ca6f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/grave_of_the_forgotten.py",
+      "sha256": "e57a52a9d23e4e9409d249128dfcc4d38b857771f117f70630f31ea07473e9d7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/self_help_book.py",
+      "sha256": "19718722e260e9a3e96f1aa74d6acf5ea4970ea20b9fdcd2795b6afcecb217fd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/spiraling_whirlpool.py",
+      "sha256": "41a9efc1e1580159647fbdf2e2bbf8057d0c9a4543eb4843d6a1d74419959ee7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<IroncladCardPool>()` (DualWield.cs:17) selects the card's ART pool. Presentation."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:127-131) + _init_vars (133-135)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Event, TargetType.Self)` (DualWield.cs:19-22) == cost 1 / SKILL / EVENT / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "DualWieldCard._cards = 1 (trash_heap_cards.py:135)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(1)` (DualWield.cs:15) == `_cards = 1`, the number of COPIES made."
+    },
+    "OnPlay": {
+      "maps_to": "DualWieldCard.on_play (trash_heap_cards.py:140-149)",
+      "verdict": "gap",
+      "issue": "The selection filter and the loop are faithful: C#'s `filter: c => c.Type == Attack || c.Type == Power` with MinSelect 1 (DualWield.cs:26-30) == `predicate=lambda c: c.card_type in (CardType.ATTACK, CardType.POWER)`, the null/empty result skips everything on both sides, and the copies go to PileType.Hand. THE COPY IS NOT A CLONE: `_clone` (trash_heap_cards.py:18-24) is `type(card)()` plus replayed upgrades. The sim's clone helper builds a FRESH instance and replays `upgrade()` `upgrade_level` times instead of reproducing `CardModel.CreateClone()` (CardModel.cs:2168-2181 -> RunState.CloneCard:394-399 -> AbstractModel.MutableClone:162-169 + CardModel.DeepCloneFields:1193-1216), which carries over the live keyword set, the cloned `_energyCost` object (so SetThisCombat / AddThisTurn / free-this-turn overrides survive), `BaseReplayCount`, and DEEP-CLONES the card's Enchantment (1204-1209) and Affliction (1210-1214) onto the copy. The sim's copy loses all of that. Observable: duplicate a Spiral-enchanted Attack -- in the game the copy is also Spiral-enchanted and replays when played; in the sim it is vanilla. LIVE: enchantments.py:372-375 (Spiral) accepts any ATTACK card and events/spiraling_whirlpool.py:46 attaches it to a player-chosen deck card; events/self_help_book.py:71 and events/grave_of_the_forgotten.py:47 are two more ported attach sites. Same mechanism and same verdict as card/anger's OnPlay entry (rule 3). Dual Wield is the card that makes this most visible, because copying an ENCHANTED Attack is the whole point of the card. Also BLAST RADIUS per rule 3: `CardSelectCmd.FromHand` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates (combat.py:575-581) -- creature_card_cmds steps 104/105."
+    },
+    "OnUpgrade": {
+      "maps_to": "DualWieldCard._on_upgrade (trash_heap_cards.py:137-138)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (DualWield.cs:43) == `self._cards += 1` (1 -> 2 copies)."
+    }
+  },
+  "guards": [
+    {
+      "what": "Dual Wield cannot select itself (DualWield.cs's filter admits only Attack and Power; Dual Wield is a Skill)",
+      "verdict": "faithful",
+      "rationale": "Both sides are doubly safe: the type filter excludes it, and it is out of the hand anyway (Play pile in C#, discard-pile limbo in the sim, combat.py:452-454)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

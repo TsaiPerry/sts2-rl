@@ -1,0 +1,73 @@
+{
+  "unit": "event/self_help_book",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\SelfHelpBook.cs",
+    "sha256": "702c88748d43fae31df190b686ae8812bdd48d1fcbabcd16b191876906b3076f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\self_help_book.py",
+    "sha256": "19718722e260e9a3e96f1aa74d6acf5ea4970ea20b9fdcd2795b6afcecb217fd"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "CanonicalVars Enchantment{1,2,3}Amount = 2 and the _sharpAmount / _nimbleAmount / _swiftAmount consts, all 2 (SelfHelpBook.cs:27-31, 38-40)",
+      "maps_to": "events/self_help_book.py:13 _AMOUNT = 2, used for all three. Exact. The three StringVars are display only.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the (enchantment, card type) pairing: Sharp/Attack, Nimble/Skill, Swift/Power (SelfHelpBook.cs:46-48, 83-96)",
+      "maps_to": "events/self_help_book.py:16-20 _CHOICES is that exact triple, in that order. All three enchantments are ported -- EXECUTED (`py audit/tools/event_probes.py reach`): sharp, nimble and swift are all in _ENCHANTMENT_CLASSES. This is the grant path the enchantment records cite, and it is a STRING-keyed one (make_enchantment('sharp')), which is why a grep for the class name misses it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DeckFilter (SelfHelpBook.cs:116-123): pile is Deck AND card type matches AND enchantment.CanEnchant",
+      "maps_to": "events/self_help_book.py:39-45 `_candidates` iterates run.deck (the pile clause), tests `c.card_type == card_type`, and tests `cls.can_enchant(c)`. Same three clauses.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions' all-or-nothing shape (SelfHelpBook.cs:43-81): compute all three availability flags FIRST; if ANY is true, emit all three options, each either live or a null-onChosen _LOCKED variant; if none, emit the single NO_OPTIONS exit instead",
+      "maps_to": "events/self_help_book.py:47-63 reproduces it exactly, including the `if not any(available.values())` short-circuit and the `_LOCKED` key suffix with on_chosen None (EventOption.locked, events/base.py:62-64, and choose() refuses it, events/base.py:153-154). The three flags are computed before any option is built in both.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "SelectAndEnchant (SelfHelpBook.cs:104-114): FromDeckForEnchantment(owner, enchantment, amount, c => c.Type == typeRestriction, prefs) with the FirstOrDefault null guard, then ApplyEnchantment",
+      "maps_to": "events/self_help_book.py:65-72 passes `self._candidates(...)` -- which is CanEnchant AND type -- and loops the (0- or 1-element) result. The source's additionalFilter is ONLY the type test, but FromDeckForEnchantment ANDs the enchantment's own CanEnchant in itself (CardSelectCmd.cs:547-551), so the two candidate sets are identical. Verified in the source rather than assumed, because the call site alone reads as a narrower filter.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ApplyEnchantment (SelfHelpBook.cs:125-134) is CardCmd.Enchant<T>(card, 2) plus VFX",
+      "maps_to": "events/self_help_book.py:69-71 builds the enchantment, sets `amount = 2`, and attaches. Sharp/Nimble/Swift override neither OnEnchant nor RecalculateValues in a way attach misses -- their behaviour is audited under enchantment/{sharp,nimble,swift}, and enchantment/swift is EG1's negative-control neighbour. Same attach-vs-Enchant mapping the field_of_man_sized_holes record made. The stacking branch is dead on both sides -- see the sapphire_seed record's enchantstack guard (rule 3, one verdict).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "SkipBook (SelfHelpBook.cs:136-140) just finishes",
+      "maps_to": "events/self_help_book.py:53 `lambda: self._finish('NO_OPTIONS')`.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this event rolls NOTHING",
+      "maps_to": "no NextItem, no NextInt, no shuffle anywhere in SelfHelpBook.cs, and no rng call in events/self_help_book.py -- confirmed by `py audit/tools/event_probes.py eventrng`, which lists self_help_book among the modules that roll nothing. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three Enchantment StringVars, the three HoverTipFactory.FromEnchantment(2) tips and NCardEnchantVfx (SelfHelpBook.cs:35-37, 53, 61, 69, 128-132)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

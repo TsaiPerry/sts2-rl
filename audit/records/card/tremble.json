@@ -1,0 +1,68 @@
+{
+  "unit": "card/tremble",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Tremble.cs",
+    "sha256": "4aeff120553628b5ccd4449e9d033eda97903022719006b95b1902ffc4f88ea7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\tremble.py",
+    "sha256": "9fe24401f9b0cbea3c3f75fa221fe203fae2d0bce804c4c4932c19182aa66f45"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "TrembleCard.exhausts = True (tremble.py:181)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Tremble.cs:15) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (tremble.py:176-181) + _init_vars (183-185)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Common, TargetType.AnyEnemy)` (Tremble.cs:21-24) == cost 1 / SKILL / COMMON / ANY_ENEMY -- another enemy-targeting Skill, like card/taunt, card/dominate and card/dark_shackles."
+    },
+    "CanonicalVars": {
+      "maps_to": "TrembleCard._vulnerable = 3 (tremble.py:185)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<VulnerablePower>(3m)` (Tremble.cs:17) == `_vulnerable = 3`, which `magic_number` surfaces."
+    },
+    "OnPlay": {
+      "maps_to": "TrembleCard.on_play (tremble.py:190-195)",
+      "verdict": "gap",
+      "issue": "C# applies the debuff unconditionally and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose doc comment states that DEAD creatures can still receive powers -- it refuses only for a REMOVED corpse. The two agree for an ordinary kill (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, removal at 523-525) and diverge for a corpse whose removal was VETOED (`ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104), because `is_gone` is `is_dead or escaped` (creatures.py:44-46). Observable through ViciousPower, which draws on any Vulnerable its owner applies with no liveness test on the target (ViciousPower.cs:19-26) -- and card/vicious, audited in this same batch, is its ported source. Same mechanism and same verdict as card/bash's OnPlay entry (rule 3); LIVE. Note this card has NO damage step at all, so the guard is even less justified here than on the attack+debuff cards: nothing in Tremble's own resolution can kill or remove the target, so the only way the guard fires is if the target was ALREADY a removal-vetoed corpse when the card was played -- which the sim's own `ctx.resolve_target` would have to have selected. Recorded with the same verdict for consistency (rule 3); its reachability is narrower than card/bash's. Presentation, folded in: TriggerAnim (29) and the Vulnerable hover tip (19)."
+    },
+    "OnUpgrade": {
+      "maps_to": "TrembleCard._on_upgrade (tremble.py:187-188)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Vulnerable.UpgradeValueBy(1m)` (Tremble.cs:35) == `self._vulnerable += 1` (3 -> 4)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

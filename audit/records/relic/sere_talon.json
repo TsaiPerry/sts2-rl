@@ -1,0 +1,104 @@
+{
+  "unit": "relic/sere_talon",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SereTalon.cs",
+    "sha256": "f5988db19bf9cc6334cb0150371d322441e693eccbed27fb774e2019cb3cb48b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\sere_talon.py",
+    "sha256": "0b9296634519bdf1116f5a43a7c1b231e49890cabc3702e6d83add012a7e29d6"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/vakuu.py",
+      "sha256": "8342368cf750f853a60f1d6bfa1c46170dd100c96139132dccabe5568e2337e5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fishing_rod.py",
+      "sha256": "ae3a7caf55d4b59f67ad2dd7c25f2808e55a122807cc70baecb934cfbe674da6",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fragrant_mushroom.py",
+      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/neows_bones.py",
+      "sha256": "f88e908e6a135e9fe825a4539a650580fd9a9f6c7ab39aca9456bd37c0608961",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (sere_talon.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches SereTalon.cs:20. Obtainable: the ported Vakuu shrine's POOL_2 (events/vakuu.py:17)."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (sere_talon.py:15)",
+      "verdict": "faithful",
+      "rationale": "Matches SereTalon.cs:22, and correctly excludes the relic from the trade events via Relic.is_tradable (relics/base.py:132). Rule 7: relics/base.py is not hashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (sere_talon.py:20-27), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "gap",
+      "issue": "Rollup of guard N1 per binding rule 4. The counts, the pool filter, the distinctness and the curse-then-Wish order all match, but SereTalon.cs:41 draws each curse off `base.Owner.RunState.Rng.Niche` and the sim's random_curses takes the legacy shared RNG with no way to pass a stream (N1)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `Rng.Niche` is named in C# and never consumed, and the draw PATTERN differs (PROMPT.md bug class 16)",
+      "verdict": "gap",
+      "issue": "MECHANISM: SereTalon.cs:39-45 loops `DynamicVars[\"Curses\"].IntValue` times doing `RunState.Rng.Niche.NextItem(availableCurses)` then `availableCurses.Remove(...)`. sere_talon.py:24 calls `random_curses(run.rng, self.CURSES, distinct=True)`, which is `rng.sample(options, k)` on the legacy shared random.Random (cards/pool.py:92-97) -- the helper has no stream parameter, so even a parity run cannot reach the Niche stream. Two divergences in one: the stream is wrong, and `sample(k=2)` is not two NextItem-and-remove draws even against the same generator. The capability plainly exists: the sibling relics/neows_bones.py:30-34 does exactly the C# thing when run.rng_set is present (`sorted(curse_pool_ids())`, then `run.rng_set.niche.next_item` with removal), and relics/fishing_rod.py:31 and relics/fragrant_mushroom.py:34 also reach run.rng_set.niche -- PROMPT.md class 12's 'check whether a sibling already does the thing'. EXECUTED (py audit/tools/relic_probes_b14.py sere-talon): with a parity rng_set attached, add_relic('sere_talon') moves the Niche counter 0 -> 0 while adding ['debt', 'decay', 'wish', 'wish', 'wish']; the sibling neows_bones moves it 0 -> 1 for its single curse. LIVE for RNG parity -- Sere Talon is offered by the ported Vakuu shrine, so any recorded seed that takes it gets the wrong two curses AND leaves every later Niche consumer at the wrong position (monster unique-HP rolls, Fishing Rod, Fragrant Mushroom, Pandora's Box) -- and DORMANT for RL play. Same mechanism and same live/dormant split as relic/astrolabe N1 and this batch's sand_castle G2; binding rule 3. Rule 7: cards/pool.py, relics/neows_bones.py, relics/fishing_rod.py, relics/fragrant_mushroom.py and rng.py are not hashed here."
+    },
+    {
+      "what": "N2: the candidate pool -- `ModelDb.CardPool<CurseCardPool>().GetUnlockedCards(...)` filtered on `CanBeGeneratedByModifiers` and ordered `orderby c.Id` (SereTalon.cs:34-37)",
+      "verdict": "faithful",
+      "rationale": "cards/pool.py's curse_pool_ids() applies exactly the CanBeGeneratedByModifiers filter over CURSE_POOL, and the ORDER matters because it is the index space NextItem draws from. EXECUTED (relic_probes_b14.py sere-talon): the generatable pool is 10 ids and `opts == sorted(opts)` is True, so the sim's declaration order already equals C#'s `orderby c.Id` -- which is the reason the sibling neows_bones can call `sorted(curse_pool_ids())` and get the same list. Checked rather than assumed because a wrong order would be invisible outside the conformance harness. The unlock-state argument is a waiver of its own (the sim assumes full unlocks; the executed `git grep UnlockState -- sts2_rl` hits are the driver's own flag and event gates, not a card-unlock system). Rule 7: cards/pool.py and relics/neows_bones.py are not hashed here."
+    },
+    {
+      "what": "N3: the counts -- DynamicVar(\"Curses\", 2m) and DynamicVar(\"Wishes\", 3m) (SereTalon.cs:26-27) read as IntValue (lines 39, 49)",
+      "verdict": "faithful",
+      "rationale": "CURSES = 2 and WISHES = 3 (sere_talon.py:17-18) match, and there is no AscensionHelper.GetValueIfAscension anywhere in the file, so both are the pinned non-ascension values. Re-read against the C# rather than trusting the port's docstring, per PROMPT.md bug class 19 -- which is exactly how this batch's sand_castle G1 was found."
+    },
+    {
+      "what": "N4: distinctness -- C# removes each picked curse from availableCurses (SereTalon.cs:42); the Wishes are three copies of the same card and are NOT distinct",
+      "verdict": "faithful",
+      "rationale": "sere_talon.py:24 passes distinct=True for the curses (random_curses' documented Neow's-Bones/Sere-Talon mode) and line 26-27 loops make_card('wish') three times with no distinctness at all, matching SereTalon.cs:49-53's `RunState.CreateCard(ModelDb.Card<Wish>(), Owner)` per iteration. Executed output confirms three separate 'wish' cards in the deck. Rule 7: cards/pool.py is not hashed here."
+    },
+    {
+      "what": "N5: `CardPileCmd.Add(card, PileType.Deck)` (SereTalon.cs:44, :52) vs run.add_card (sere_talon.py:25, :27), and the curse-then-Wish ORDER",
+      "verdict": "faithful",
+      "rationale": "run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it (run.py:341-354), which are the sim's two deck-add hooks -- the same bracket CardPileCmd.Add provides. The order is load-bearing and matches: C# adds both curses (lines 39-45) before any Wish (lines 48-53), and the sim does the same, so a relic that reacts to a deck add (Darkstone Periapt's +6 Max HP on a gained Curse) sees the curses first on both sides. Rule 7: run.py and relics/darkstone_periapt.py are not hashed here."
+    },
+    {
+      "what": "N6: `undo_after_obtained` is not implemented, and the pickup adds 5 cards to the run deck",
+      "verdict": "faithful",
+      "rationale": "The consequence, for the record: a conformance-runner relic swap leaves two curses and three Wishes in the deck, which the (id, upgrade_level) deck comparison reports. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+    },
+    {
+      "what": "N7: the relic holds no state (PROMPT.md classes 10, 13); `CardCmd.PreviewCardPileAdd` and `Cmd.Wait(0.75f)` (SereTalon.cs:46-47, :54-55); ExtraHoverTips (line 30)",
+      "verdict": "waiver",
+      "rationale": "No fields beyond the two key consts, so nothing to reset on either side -- read both files, with sweep-reset's 'hold no state' bucket as corroboration only. The rest: RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

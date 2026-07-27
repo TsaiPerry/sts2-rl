@@ -1,0 +1,98 @@
+{
+  "unit": "relic/diamond_diadem",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DiamondDiadem.cs",
+    "sha256": "e7091c2d07a1689dde9693988dd0ab23875147c5379252c9fb9301d86c670c49"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\diamond_diadem.py",
+    "sha256": "bbf7d768cc0b4033712c0f1652bfad73a5583b759a502e0b1b0e8343bb273f70"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/nonupeipe.py",
+      "sha256": "8ecd4c4afbb545903025c44f0b845dba8dd94bb1a0f2a0423572073ff06b03e9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (diamond_diadem.py:20)",
+      "verdict": "faithful"
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (diamond_diadem.py:28-29)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4 -- the sim counts one card per logical play where C# counts one per CardPlay, so a replayed card advances the counter by 1 instead of 2 and the relic's 'at most 2 cards' condition is easier to satisfy than it should be."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "on_player_turn_end (diamond_diadem.py:31-39)",
+      "verdict": "faithful",
+      "rationale": "DiamondDiadem.cs:58-70 tests `CardsPlayedThisTurn <= DynamicVars['CardThreshold'].BaseValue`, applies one stack of DiamondDiademPower to the owner and then zeroes the counter, all inside the participants check; diamond_diadem.py:35-39 does the same three steps in the same order, and on_player_turn_end is the sim's player-side BeforeSideTurnEnd slot (audit/records/seam/turn_structure.json). Executed (py audit/tools/relic_probes_b04.py diadem): a fresh instance at the end of a zero-card turn 1 leaves the player at [('diamond_diadem', 1)]. The participants check is structurally satisfied -- on_player_turn_end is dispatched only for the player side. ORDERING NOTE, not a divergence of this relic: audit/records/seam/turn_structure.json guard G12 records as a LIVE gap that the sim flattens C#'s BeforeSideTurnEndVeryEarly/Early/plain passes into one, so a VeryEarly listener like Orichalcum loses its guaranteed position. Diamond Diadem is a plain BeforeSideTurnEnd listener and neither reads nor writes Block, so G12 does not change its answer."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "Carries guard G1's LIVE label. DiamondDiadem.cs:78-84 zeroes CardsPlayedThisTurn at combat end; the sim has no such reset, and its only reset (in on_player_turn_end) does not run on the turn a combat ends."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the sim's only reset of cards_played_this_turn is inside on_player_turn_end, which does NOT run on the turn the player wins -- so the winning turn's count is carried into the next combat and suppresses the relic on that combat's first turn",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# resets in TWO places -- BeforeSideTurnEnd (DiamondDiadem.cs:67) and AfterCombatEnd (DiamondDiadem.cs:80) -- and the sim only in on_player_turn_end (diamond_diadem.py:39). That would be the safe relic/art_of_war shape if the turn-end reset always ran, and it does not: CombatState.end_turn opens with `if self.phase != Phase.PLAYER_TURN: return` (combat.py:641-642), so when the player kills the last enemy during their own turn -- the NORMAL way a fight ends -- hooks.on_player_turn_end (combat.py:654) is never reached. Relic instances live on RunState.relics and are re-attached to each new CombatState, so the count survives. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py diadem): combat 1 ends with three cards played (phase=Phase.COMBAT_OVER) and cards_played_this_turn stays at 3 through end_turn(); in combat 2, at the moment on_player_turn_end runs on a turn where ZERO cards were played, the carried instance grants nothing ([]) while a fresh instance grants [('diamond_diadem', 1)] -- and C# always gives the fresh answer. Both sides ported: Diamond Diadem is a Nonupeipe shrine option (events/nonupeipe.py:12) and DiamondDiademPower is ported (powers.py:2716); every run has more than one combat. The observable is a whole combat's worth of halved incoming attack damage missing on turn 1. This is the third instance of the relic/belt_buckle shape (sweep A confirmed belt_buckle, centennial_puzzle and paels_eye) and the FIRST one found in the 'reset at a turn boundary only' bucket that sweep A explicitly left uncleared -- the sweep's executed arm never ran it, because the C# relic DOES have a combat-boundary reset and the field-level diff of a turn-reset relic looks clean. It also generalises: any relic whose only reset is on_player_turn_end has the same hole. Cheapest fix: reset in on_combat_start. RULE 7: combat.py, events/nonupeipe.py and powers.py are not hashed here."
+    },
+    {
+      "what": "G2 (LIVE): Hook.AfterCardPlayed fires once per Replay iteration in C# and once per logical play in the sim, so the card count is too LOW and the relic triggers when the game would not",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904-1965 fires Hook.AfterCardPlayed inside the `for (i = 0; i < playCount; i++)` loop; combat.py:514 fires on_card_played once after it. This is audit/records/seam/hook_dispatch.json gap G4, LIVE and pinned there; one verdict per mechanism, binding rule 3 -- the seam owns the machinery and this record owns the Diadem's observable. THE OBSERVABLE IS THE INVERSE OF THE USUAL ONE: because the threshold is 'at most 2', undercounting makes the relic FIRE when the game withholds it. Three cards played, one of them replayed by Throwing Axe (relics/throwing_axe.py, Tanx shrine), is 3 in the sim and 4 in the game -- the sim halves the incoming damage and the game does not. REACHABILITY (LIVE): the relic is a Nonupeipe shrine option, Throwing Axe is a Tanx shrine option, and hook_dispatch G4 enumerates four further ported replay sources (the Spiral and Glam enchantments, One-Two Punch, Duplication) plus its own executed evidence. NOTE: unlike relic/brilliant_scarf, whose C# AfterCardPlayed skips auto-plays (BrilliantScarf.cs:84-87) and whose port therefore has an EXTRA gap, DiamondDiadem.cs:43-56 has no IsAutoPlay clause, so counting auto-plays is CORRECT here -- worth recording, because the two relics look identical and only one of them may count them. RULE 7: relics/throwing_axe.py, combat.py and CardModel.cs are not hashed here."
+    },
+    {
+      "what": "G3: the two C# guards on AfterCardPlayed -- `cardPlay.Card.Owner != base.Owner` and `!CombatManager.Instance.IsInProgress` (DiamondDiadem.cs:45-52) -- which diamond_diadem.py:28-29 omits",
+      "verdict": "faithful",
+      "rationale": "Both are structurally satisfied rather than dropped. The owner clause is the multiplayer per-player filter the shared contract puts out of scope (one player in the sim). The IsInProgress clause is satisfied because on_card_played is a combat hook dispatched only by a live CombatState, and combat.py:493-494 breaks the play loop once the combat is decided -- the same argument audit/records/relic/brilliant_scarf.json's N1 makes for the identical pair of clauses, so binding rule 3 keeps the verdict aligned. The residual post-lethal window is audit/records/seam/hook_dispatch.json G8's subject, verdicted there and dormant for a counter the combat discards."
+    },
+    {
+      "what": "G4: DynamicVar('CardThreshold', 2m) read as BaseValue (DiamondDiadem.cs:41, 62, 74) vs CARD_THRESHOLD = 2 (diamond_diadem.py:22), and PowerCmd.Apply's amount of 1m (DiamondDiadem.cs:65)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 2 and 1 are the pinned non-ascension values, and the comparison is `<=` on both sides (a turn with exactly 2 cards played still triggers). The applier is the owner on both sides (`base.Owner.Creature` vs `applier=player`), which matters only for relic/unsettling_lamp's doubling and is a Buff either way."
+    },
+    {
+      "what": "N1: the CardsPlayedThisTurn property's AssertMutable (DiamondDiadem.cs:28-39) and RefreshCounter's Status/InvokeDisplayAmountChanged (DiamondDiadem.cs:54, 68, 72-76, 81-82)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

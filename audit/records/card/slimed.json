@@ -1,0 +1,48 @@
+{
+  "unit": "card/slimed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Slimed.cs",
+    "sha256": "b3a292d4813bb5eda5bdd41ae82656817563274bdae2fb988416834b414648e8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\slimed.py",
+    "sha256": "e74f448e425d27c500272b62f588ffbc574d21d6a796cc6ad30d2bf482212765"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "SlimedCard.max_upgrade_level = 0 (slimed.py:191)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Slimed.cs:15) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "SlimedCard.exhausts = True (slimed.py:190)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Slimed.cs:19) == `exhausts = True`, and crucially NOT Unplayable: Slimed is one of the few PLAYABLE statuses, and the sim correctly leaves `is_playable` at True."
+    },
+    "ctor": {
+      "maps_to": "class attrs (slimed.py:185-191) + _init_vars (193-194)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Status, CardRarity.Status, TargetType.None)` (Slimed.cs:21-24) == cost 1 / STATUS / STATUS / NONE. A REAL cost of 1, not the -1 sentinel the unplayable statuses use, so the ascenders_bane cost finding does not apply and `_energy_cost = 1` is exact."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim passes the literal 1 (slimed.py:198)",
+      "verdict": "gap",
+      "issue": "`new CardsVar(1)` (Slimed.cs:17) is a printed var with no `_cards` in `_init_vars`, so `magic_number` returns None where the game prints 1. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "SlimedCard.on_play (slimed.py:196-198)",
+      "verdict": "faithful",
+      "rationale": "`CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (Slimed.cs:33) == `DrawCmd.draw(ctx.player, 1)`. So Slimed is a 1-cost cantrip that replaces itself and exhausts -- annoying rather than harmful, on both sides. Presentation, folded in: the NGoopyImpactVfx node (28-32)."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

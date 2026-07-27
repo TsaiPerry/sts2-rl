@@ -1,0 +1,123 @@
+{
+  "unit": "relic/music_box",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\MusicBox.cs",
+    "sha256": "0dbade89edc069b750d2c1c41ad9597f036d1897cd9cfb9b0dbb22988da4550b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\music_box.py",
+    "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tezcatara.py",
+      "sha256": "fe83c36275e02c36d3807758f33658fab29bc39bf010c1e2941fe947f458d6f4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/astrolabe.py",
+      "sha256": "3d81571fbd58e9427aad66ed84f8517df0aa5cdda9c46c76b0157539aaae3abd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/bone_tea.py",
+      "sha256": "2f0231e12edbedddd9f4dc5c3dc6b559d01b90d43fef5ab56ade54f0a4e1912b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (music_box.py:21)",
+      "verdict": "faithful"
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "before_card_played (music_box.py:28-38), dispatched at combat.py:466",
+      "verdict": "faithful",
+      "rationale": "All four C# guards are reproduced except the multiplayer owner test: MusicBox.cs:53 `CardBeingPlayed != null` -> `self._card_being_played is None`; :61 `WasUsedThisTurn` -> `not self.used_this_turn`; :65 `Type != CardType.Attack` -> `card.card_type == CardType.ATTACK`; :57 `cardPlay.Card.Owner != base.Owner` is structurally satisfied in a one-player sim. The latch assignment (MusicBox.cs:69 vs music_box.py:38) is the same."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (music_box.py:40-53), dispatched at combat.py:514",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The identity test (`cardPlay.Card == CardBeingPlayed`, MusicBox.cs:75), the Ethereal keyword, the destination pile and both state writes all match; what does not is `cardPlay.Card.CreateClone()` (MusicBox.cs:78), which the sim replaces with `make_card(card.id)` plus an upgrade replay (music_box.py:46-49) and so drops every piece of per-instance state the card carries."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (music_box.py:55-57)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C#'s BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed to sit at step ~19, after the block clear and the energy reset (py audit/tools/relic_probes.py turn-order). Only a latch RESET happens here and no card can be played between the two points -- the play phase opens at step 28 -- so both `used_this_turn` and `_card_being_played` are already cleared at every moment either codebase can observe them. Same mechanism and same verdict as relic/brilliant_scarf's and relic/beating_remnant's BeforeSideTurnStart (binding rule 3); recorded as a divergence rather than faithful because the slot genuinely differs. C#'s `participants.Contains(base.Owner.Creature)` filter (MusicBox.cs:88) is the multiplayer extra-turn guard and is structurally satisfied by a player-scoped sim hook. Rule 7: relics/brilliant_scarf.py, relics/beating_remnant.py and the turn_structure record are unhashed here."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (music_box.py:55-57) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "MusicBox.cs:96-100 zeroes WasUsedThisTurn at combat end as well as at turn start; the sim keeps only the turn-start half. PROMPT.md bug class 13 requires tracing to the first READER of the stale field, and .superpowers/sdd/content-relic-sweeps.md's fixed Sweep A files this relic in the 'reset at TURN START, before any reader' bucket -- a SAFETY CLAIM, executed here rather than inherited. EXECUTED (py audit/tools/relic_probes_b10.py music-box): the same relic instance run through two consecutive combats produces one Ethereal copy in BOTH, and a hand-poisoned instance carried in with `used_this_turn = True` and a stale `_card_being_played` still produces one copy in combat 2 -- because on_player_turn_start clears both fields before the play phase opens and the only readers are before_card_played and on_card_played. So the sweep's claim holds here. Contrast relic/belt_buckle, whose analogous missing reset has no turn-start shadow and is live. Rule 7: relics/belt_buckle.py and the sweeps document are unhashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): CardModel.CreateClone() is a full model clone; the sim rebuilds the card from its id, so the copy loses the original's enchantment, affliction, keyword edits and cost modifiers",
+      "verdict": "gap",
+      "issue": "MECHANISM: MusicBox.cs:78 calls `cardPlay.Card.CreateClone()`, which is CardScope.CloneCard -> ClonePreservingMutability (CardModel.cs:2168-2179) and carries the card's upgrade level, Enchantment, Affliction, keyword edits and local energy-cost modifiers. music_box.py:46-49 builds `make_card(card.id)` and replays the upgrade levels, so ONLY the level survives. This is PROMPT.md bug class 17 and .superpowers/sdd/content-relic-sweeps.md Sweep E, which already lists relics/music_box.py:46 as one of its five sim sites; the mechanism is verdicted `gap` and LIVE at relic/burning_sticks G3, so one verdict per mechanism (binding rule 3) -- matched, not re-derived. EXECUTED AT THIS SITE (py audit/tools/relic_probes_b10.py music-box): a Strike carrying Tezcatara's Ember (enchantment='Tezcatara's Ember', energy_cost=0, eternal=True) is copied as enchantment=None, energy_cost=1, eternal=False -- the game hands the player a free +3-damage Ethereal Strike and the sim hands them a plain 1-cost one. A Ringing affliction is likewise dropped (original.affliction=Ringing(1) -> clone.affliction=None). REACHABILITY (both sides ported, no second relic needed for the affliction leg): Music Box is granted by the ported Vakuu event (events/vakuu.py); Tezcatara's Ember is attached to every Basic Strike by relic/nutritious_soup, audited in this same batch, from the ported Tezcatara event (events/tezcatara.py:44); and Ringing is applied to cards in hand by a ported enemy power (powers.py:1332). Music Box only ever copies an ATTACK and Nutritious Soup enchants exactly Basic Strikes, so the two intersect on the commonest card in the deck. Rule 7: CardModel.cs, relics/burning_sticks.py, enchantments.py, powers.py, events/vakuu.py, events/tezcatara.py and both sweep documents are NOT hashed by this record."
+    },
+    {
+      "what": "N1: the upgrade replay loop is GUARDED (`if copy.is_upgradable`, music_box.py:48), so PROMPT.md bug class 14 does not fire here",
+      "verdict": "faithful",
+      "rationale": "CardCmd.Upgrade skips cards whose IsUpgradable is false (CardCmd.cs:265-276; CardModel.cs:785-795) and the sim's bare Card.upgrade() (cards/base.py:146-148) has no such guard -- but this port supplies one, unlike relics/astrolabe.py:23 and relics/bone_tea.py:31 which Sweep D records as live. The loop exists only BECAUSE there is no clone helper; the one-helper fix Sweep E proposes removes it. Rule 7: CardCmd.cs, CardModel.cs, cards/base.py and the two sibling relic files are unhashed here."
+    },
+    {
+      "what": "N2: per-Replay AfterCardPlayed (audit/records/seam/hook_dispatch.json G4) is NOT observable at this relic's site",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because the same mechanism is a LIVE gap at three other relics in this batch (mummified_hand G3, nunchaku G1, ornamental_fan G1). Here the relic's own guards absorb it: C# fires BeforeCardPlayed and AfterCardPlayed once per play-count iteration (CardModel.cs:1929, :1959, inside the loop opened at :1904), and iteration 0's AfterCardPlayed sets `WasUsedThisTurn = true` and `CardBeingPlayed = null` (MusicBox.cs:81-82), so iteration 1's BeforeCardPlayed bails at MusicBox.cs:61 and no second copy is made. The sim fires each hook once and makes one copy. Same observable, so nothing is verdicted here -- the mechanism's verdict stays with hook_dispatch G4. Rule 7: CardModel.cs and the hook_dispatch record are unhashed here."
+    },
+    {
+      "what": "N3: `CardCmd.ApplyKeyword(card, CardKeyword.Ethereal)` (MusicBox.cs:79) vs `copy.is_ethereal = True` (music_box.py:50)",
+      "verdict": "faithful",
+      "rationale": "CardCmd.ApplyKeyword is `card.AddKeyword(keyword)` plus a visual refresh (CardCmd.cs:676-683); the sim models Ethereal as the `is_ethereal` flag on Card (cards/base.py:62), which is what the end-of-turn ethereal pass reads. Rule 7: CardCmd.cs and cards/base.py are unhashed here."
+    },
+    {
+      "what": "N4: `CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, base.Owner)` (MusicBox.cs:80) vs `CardPileCmd.add_to_hand` (music_box.py:51)",
+      "verdict": "faithful",
+      "rationale": "AddGeneratedCardsToCombat (CardPileCmd.cs:202-249) bails when the combat is not in progress, records a CardGenerated history entry, routes through Add(card, pile) and then fires Hook.AfterCardGeneratedForCombat. cmds.py:500-512 appends to the hand (overflowing to the discard pile at MAX_HAND_SIZE) and calls CardPileCmd._enter_combat; its own docstring names AddGeneratedCardToCombat as the mirror. The history entry is the game's save bookkeeping, which the sim's conformance layer reads rather than writes. Rule 7: CardPileCmd.cs and cmds.py are unhashed here, and the hand-overflow equivalence rests on cmds.py's docstring rather than on a line of CardPileCmd.cs that I read."
+    },
+    {
+      "what": "N5: ExtraHoverTips (the Ethereal keyword tip, MusicBox.cs:23), Flash() (MusicBox.cs:77) and the AssertMutable property setters (MusicBox.cs:33, :46)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. AssertMutable is the source's canonical-vs-mutable model discipline, which the sim does not model at all (one mutable object per relic); it guards against editing a canonical ModelDb entry and has no gameplay effect."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

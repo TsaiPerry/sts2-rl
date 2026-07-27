@@ -1,0 +1,93 @@
+{
+  "unit": "relic/belt_buckle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BeltBuckle.cs",
+    "sha256": "1e72315fdaf11e92a555144fa8b255f3735bde2aaf590f92f6ece0288cab2831"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\belt_buckle.py",
+    "sha256": "6ded9da9910f07db43c3554b5bc11ce71183f48ce6ff8286449da10fefaaf806"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Relics/PaelsEye.cs",
+      "sha256": "0ff4149872257b8969c808d66f1e293c0aa33980f41be77618f2802d59b02d3e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (belt_buckle.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "no counterpart; the sim has no after_obtained and no mid-combat pickup path",
+      "verdict": "gap",
+      "issue": "BeltBuckle.cs:39-45 applies the Dexterity immediately if the relic is picked up DURING a combat with no potions held. The sim's port defines only on_combat_start and on_potion_used, so a Belt Buckle obtained mid-combat grants nothing until the next combat -- and, per guard G2, not even then. DORMANT on the pickup path alone: the sim grants relics through RunState.add_relic between rooms, so a mid-combat pickup needs ported content that grants a relic inside a fight, which is a shape the sim does not currently reach. It is recorded as a gap rather than a waiver because 'the sim has no path here' is today's content, not the divergence's shape -- binding rule 1."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_combat_start (belt_buckle.py:29-30)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4. BeltBuckle.cs:47-55 does THREE things -- `DexterityApplied = false`, RefreshStatus(), then ApplyDexterity() when potionless -- and the sim's on_combat_start does only the third. The missing reset is what makes the relic a one-combat relic in the sim."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart (RefreshStatus() only)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "AfterPotionProcured": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "MECHANISM: BeltBuckle.cs:63-70 REMOVES the 2 Dexterity (RemoveDexterity -> PowerCmd.Apply<DexterityPower>(-2)) as soon as a potion is procured while combat is in progress -- the relic reads 'while you have no potions', and this is the half that enforces the 'no'. belt_buckle.py implements no analogue at all. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py buckle-potion): with the relic attached, combat starts at Dexterity=2 as it should, and after player.add_potion the sim still reports Dexterity=2 where C# reports 0. Both sides are ported content: the relic is Shop rarity in the transcribed grab bag (relic_pools.py:'RELIC.BELT_BUCKLE') and the sim has a live potion belt with a procure path (player.add_potion, player.py:120). SCOPE NOTE: the shared contract defers potions, but the divergent OBSERVABLE here is Dexterity -- a combat mechanic that changes every Block number for the rest of the fight -- so this is filed as a gap, not waived under the potion exclusion. The potion is only the trigger."
+    },
+    "AfterPotionDiscarded": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "The mirror of AfterPotionProcured: BeltBuckle.cs:72-79 RE-APPLIES the Dexterity when discarding leaves the player potionless mid-combat. The sim implements on_potion_used but not a discard analogue, so the two ways of emptying the belt behave differently in the sim and identically in C#. Same reachability argument and same scope note as AfterPotionProcured; DORMANT only to the extent that the sim's driver may not surface a discard action, which is a content-today fact and not a property of the divergence (binding rule 1)."
+    },
+    "AfterPotionUsed": {
+      "maps_to": "on_potion_used (belt_buckle.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "BeltBuckle.cs:81-88 re-applies the Dexterity when using a potion leaves the player potionless in combat; belt_buckle.py:32-33 calls the same _apply_if_potionless helper with the same `not held_potions` condition (belt_buckle.py:23 vs `!base.Owner.Potions.Any()`, whose definition player.py:140-143 mirrors). The one C# guard the sim omits here, `CombatManager.Instance.IsInProgress`, is structurally satisfied: on_potion_used is a combat hook."
+    },
+    "AfterCombatVictory": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "The SECOND of C#'s two DexterityApplied resets (BeltBuckle.cs:90-95). Recorded separately from BeforeCombatStart because C# is deliberately redundant here and the sim has neither: with both missing, the flag latches for the whole run. Carries guard G2's LIVE label."
+    }
+  },
+  "guards": [
+    {
+      "what": "G2 (LIVE): `DexterityApplied` is reset in TWO places in C# (BeltBuckle.cs:49 BeforeCombatStart, :92 AfterCombatVictory) and NOWHERE in the sim, so `self._applied` latches True for the rest of the run and the relic works in the first combat only",
+      "verdict": "gap",
+      "issue": "MECHANISM: belt_buckle.py:20 initialises _applied = False in __init__ and belt_buckle.py:22-27 sets it True on the first successful application, but nothing ever sets it back. Relic instances live on RunState.relics and are re-attached to each new CombatState, so combat 2 onward enters _apply_if_potionless with _applied already True and returns immediately. Powers do not survive a combat, so the player simply has no Dexterity. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py buckle-potion): the SAME relic instance passed to a second CombatState reports Dexterity=0 with _applied=True, where C# reports 2. The relic is Shop rarity in the transcribed grab bag and every run has more than one combat, so nothing further is needed to make this live -- it is the highest-impact finding in this batch and the cheapest fix (reset _applied in on_combat_start before the potion check). It also explains why the sibling reset in relic/art_of_war and relic/unsettling_lamp is safe to omit and this one is not: those relics re-derive their state each turn, this one does not. POOL-WIDE FOLLOW-UP: this defect is a CLASS, not a one-off. py audit/tools/relic_probes.py sweep-reset-exec runs every relic whose sim port never resets a mid-combat field but whose C# relic does, and finds THREE that carry state into combat 2 -- this one, relic/centennial_puzzle (_used_this_combat, C# CentennialPuzzle.cs AfterCombatEnd clears it; Common in the grab bag) and relic/paels_eye (used_this_combat, C# PaelsEye.cs:142-145; granted by the ported Pael shrine). Neither of those units is audited yet, so no verdict is issued for them here -- they are recorded in .superpowers/sdd/content-relic-sweeps.md as pre-populated work for their own batches. Worth knowing when fixing this one: the same one-line on_combat_start reset closes all three."
+    },
+    {
+      "what": "N1: RefreshStatus() (BeltBuckle.cs:117-127) and Flash() (lines 102, 112)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N2: PowerVar<DexterityPower>(2m) (BeltBuckle.cs:35) read as BaseValue at both call sites (lines 103, 113) vs the sim's literal 2 (belt_buckle.py:27)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 2 is the pinned non-ascension value, and the removal uses the negation of the same var on both call sites."
+    },
+    {
+      "what": "N3: C# applies the Dexterity with applier = null and cardSource = null (BeltBuckle.cs:103); the sim's PowerCmd.apply call also omits applier (belt_buckle.py:27)",
+      "verdict": "faithful",
+      "rationale": "Matters because relic/unsettling_lamp's doubling requires `applier is self.player` -- an applier-carrying Belt Buckle would be a new Lamp interaction. Both sides pass none, so no such interaction exists. Checked deliberately: this is the same applier-omission mechanism that makes the Lamp's N2 double-dip equivalence work, and it is worth knowing it holds here for the same reason."
+    },
+    {
+      "what": "N4: the `!base.Owner.Potions.Any()` condition is evaluated AFTER RefreshStatus in every C# handler, and the sim's held_potions filters empty slots",
+      "verdict": "faithful",
+      "rationale": "Player.cs's `Potions => _potionSlots.Where(p => p != null)` is mirrored exactly by PlayerCombatState.held_potions (player.py:140-143), which the sim's own docstring cites. So 'potionless' means the same thing on both sides -- empty slots do not count as held potions -- which matters because relic/alchemical_coffer hands out four slots at once."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

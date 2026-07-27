@@ -1,0 +1,63 @@
+{
+  "unit": "relic/cursed_pearl",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\CursedPearl.cs",
+    "sha256": "efb50e73b017efc572fd5cf2beac968a4751af94bff36ead70ec6d0abba4f742"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\cursed_pearl.py",
+    "sha256": "a4d88e353db689e4d44d895d1364b61e19f40df9e359f5076d29919f5512a750"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/greed.py",
+      "sha256": "032a46d6b934246f2551b23d2a1b4723bef44406420de44d5fbe2cb62ec77959",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (cursed_pearl.py:12)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (cursed_pearl.py:15-19)",
+      "verdict": "faithful",
+      "rationale": "CursedPearl.cs:19-23 does exactly two things in order -- CardPileCmd.AddCurseToDeck<Greed> then PlayerCmd.GainGold(333) -- and cursed_pearl.py:18-19 does the same two in the same order. run.add_card (run.py:341-354) runs Hook.ModifyCardBeingAddedToDeck before the append and the deck-entry hook after it, which is what CardPileCmd.Add(card, PileType.Deck) does; run.gain_gold (run.py:325-333) runs Hook.ModifyGoldGained then truncates toward zero and no-ops on a non-positive amount, matching PlayerCmd.cs:141-169. The one C# step the sim has no analogue for is Hook.AfterGoldGained (PlayerCmd.cs:169) -- that omission is a base-class gap recorded on its only ported implementer, relic/dragon_fruit, and is not double-counted here (binding rule 3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: CanonicalVars GoldVar(333) read as BaseValue (CursedPearl.cs:17, 22) vs the literal GOLD = 333 (cursed_pearl.py:13)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 333 is the pinned non-ascension value, and BaseValue is the un-modified read."
+    },
+    {
+      "what": "N2: the ORDER -- the Greed curse joins the deck BEFORE the 333 gold is granted",
+      "verdict": "faithful",
+      "rationale": "Recorded because it is load-bearing for two other relics in this same batch, and both would break if the order were flipped. relic/darkstone_periapt pays +6 Max HP on a Curse entering the deck, so it must fire on the curse; relic/dragon_fruit pays +1 Max HP on a gold gain. C# and the sim agree on the order, so the interaction sequence is the same on both sides. Worth knowing when the Dragon Fruit gap is fixed: PlayerCmd.cs:146-149 bails out BEFORE Hook.AfterGoldGained when the modified amount is not positive, so a player holding Ectoplasm (which zeroes the gain) gets NO Dragon Fruit Max HP from the Pearl."
+    },
+    {
+      "what": "N3: `CardPileCmd.AddCurseToDeck<Greed>` asserts the card is a Curse and routes through Add(card, PileType.Deck) (CursedPearl.cs:21)",
+      "verdict": "faithful",
+      "rationale": "The ported curse satisfies the assertion: cards/greed.py:22-29 is CardType.CURSE, CardRarity.CURSE, is_playable=False, eternal=True, max_upgrade_level=0 and can_be_generated_by_modifiers=False, which is the full declaration set of Greed.cs. Hook.ShouldAddToDeck, consulted by CardPileCmd.Add, has no sim counterpart and is WAIVED at every site -- audit/records/relic/calling_bell.json guard G4 established by grep that the game source contains zero overrides of it, so it is dead code in C# too rather than unported content; same verdict here per binding rule 3."
+    },
+    {
+      "what": "N4: ExtraHoverTips (HoverTipFactory.FromCardWithCardHoverTips<Greed>, CursedPearl.cs:15) and the GoldVar canonical var (line 17)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,103 @@
+{
+  "unit": "relic/golden_compass",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\GoldenCompass.cs",
+    "sha256": "4c444add3c7a77ce07c202661e5507d1666966fb1e7f69ff21b52d2db2091f86"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\golden_compass.py",
+    "sha256": "90ca1a9fe31935161ebde5e9ac4032f9c63bb8c159adc292eaac554a36fa6f3f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Map/GoldenPathActMap.cs",
+      "sha256": "73ec1a3f7baee9ef5596f80e9a7b52a6000103b1f814c8c59ed982d608603783",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunManager.cs",
+      "sha256": "c5dea3e235eaf54f48d1189d7a68d368bea59f44e42567874d7c880f0b409899",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/actmap.py",
+      "sha256": "1d4cb7a59c716b79d7b13d8478d0d705b7ea092cb41380fcb241860bd722206a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (golden_compass.py:21)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (golden_compass.py:22)",
+      "verdict": "faithful",
+      "rationale": "Matches GoldenCompass.cs:17. Shadowed by ANCIENT rarity in Relic.is_tradable (relics/base.py:132-136), but correct."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (golden_compass.py:30-33), dispatched by RunState.add_relic (run.py:551-552)",
+      "verdict": "faithful",
+      "rationale": "GoldenCompass.cs:33-37 sets GoldenPathAct = CurrentActIndex then awaits RunManager.Instance.GenerateMap(); golden_compass.py:32-33 sets self.golden_path_act = run.act_index then calls run.regenerate_map(), in the same order -- which matters, because the modifier the regeneration consults is keyed on the field just written. Executed (`py audit/tools/relic_probes_b06.py b06-misc`): `run.add_relic('golden_compass')` on a started act-0 run leaves golden_path_act 0 and a 16-point single-column map. See guard N3 for the one difference in what the regeneration touches besides the map."
+    },
+    "ModifyGeneratedMap": {
+      "maps_to": "modify_generated_map (golden_compass.py:35-40), dispatched by RunState._generate_map (run.py:855-856)",
+      "verdict": "faithful",
+      "rationale": "GoldenCompass.cs:39-46 returns the map unchanged unless `GoldenPathAct == actIndex`, and otherwise returns `new GoldenPathActMap(runState)`; golden_compass.py:36-40 is the same guard and returns actmap.golden_path_map(...). The layouts match exactly: GoldenPathActMap's 16 _defaultPointTypes (GoldenPathActMap.cs:9-27) are Monster, Unknown, Monster, RestSite, Monster, RestSite, Unknown, Treasure, Unknown, Treasure, Unknown, Shop, Elite, RestSite, Elite, RestSite, and actmap.py's _GOLDEN_PATH_TYPES is the identical 16-tuple in the same order; width 7 with the column fixed at 3, an ANCIENT starting point at (3, 0) and a BOSS beyond the last row, each row chained to the next. Executed (`py audit/tools/relic_probes_b06.py b06-misc`): the post-pickup map is 16 points in exactly that type order. Correct phase, too -- this is ModifyGeneratedMap and not the Late pass, so it is unaffected by the dispatch-site divergence recorded at relic/fur_coat G2. The dropped `Players.Count > 1` branch is N2 (waived)."
+    },
+    "ModifyUnknownMapPointRoomTypes": {
+      "maps_to": "modify_unknown_map_point_room_types (golden_compass.py:42-47), dispatched by RunState (run.py:1046-1048)",
+      "verdict": "faithful",
+      "rationale": "GoldenCompass.cs:48-55 returns the incoming set unless `GoldenPathAct == RunState.CurrentActIndex` and otherwise returns `new HashSet<RoomType> { RoomType.Event }`; golden_compass.py:43-47 is the same guard and returns `{RoomType.EVENT}`. Note both compare against the CURRENT act rather than against a parameter -- so once the player leaves the golden-path act the '?' nodes behave normally again, on both sides. Executed (`py audit/tools/relic_probes_b06.py b06-misc`): with golden_path_act 0 and the run in act 0, the hook replaces any incoming set with {RoomType.EVENT}. This is the chain hook audit/records/seam/hook_dispatch.json step 32 lists as ModifyUnknownMapPointRoomTypes (Hook.cs:2061) and verdicts faithful; a REPLACING listener makes the chain order matter, but the sim has exactly one implementer (relics/juzu_bracelet.py's is a dropped hook per sweep C, not an implementation), so no ordering question arises today."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `GoldenPathAct` initialised to -1 on both sides (GoldenCompass.cs:13; golden_compass.py:28) and never reset",
+      "verdict": "faithful",
+      "rationale": "Per-RUN state by design: C# marks it [SavedProperty] (GoldenCompass.cs:19) so it survives save/load, and nothing assigns it back to -1. sweep-reset lists golden_compass among the 32 never-reset candidates with 'C# resets: NONE (may be per-run by design)', and that reading is right -- the sentinel -1 also guarantees the two modifier hooks are inert before pickup, since no act index is negative. PROMPT.md bug class 13's reader trace is trivial here: the only readers are the two modifier hooks, and both compare for equality with an act index."
+    },
+    {
+      "what": "N2: `if (runState.Players.Count > 1) list.RemoveAt(2)` -- multiplayer drops the third node, shortening the golden path to 15 (GoldenPathActMap.cs:42-45)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only: single-player keeps all 16 point types, which is what actmap.py's _GOLDEN_PATH_TYPES hard-codes. Waived under the shared contract's multiplayer exclusion. Recorded rather than skipped because it is a length difference in a fixed layout, so a future multiplayer port must add the branch rather than adjust a number."
+    },
+    {
+      "what": "N3: `run.regenerate_map()` also resets current_point, map_history and _last_room_types (run.py:890-900), where RunManager.GenerateMap sets State.Map and calls State.RemoveStaleVisitedMapCoords(map) (RunManager.cs:753-754)",
+      "verdict": "faithful",
+      "rationale": "Both sides leave the room queues and the '?'-odds alone -- rooms are rolled once per act -- and the sim's docstring says so. The player position agrees: an Ancient relic is obtained at the act's Ancient node, which is row 0 column `_MAP_WIDTH // 2` = 3 on a standard map and (3, 0) on GoldenPathActMap, so `current_point = self.map.starting_point` lands on the same coord C# leaves CurrentMapPoint on. The visited-coord bookkeeping differs in form -- C# PRUNES stale coords and keeps (3, 0), the sim clears map_history outright -- but map_history has no reader that changes behaviour: `grep -rn map_history sts2_rl/` shows the only consumers are conformance/runner.py and conformance/save.py reading the ORACLE's history from the save file, never the sim's own list. Recorded per binding rule 7: this rationale leans on run.py and conformance/runner.py, which this record does NOT hash, so a change there goes stale invisibly."
+    },
+    {
+      "what": "N4 (SETTLED BY EXECUTION): GoldenPathActMap is a fixed layout that consumes NO rng, yet golden_path_map takes an rng argument and RunState._generate_map builds a full StandardMap first",
+      "verdict": "faithful",
+      "rationale": "Binding rule 5 plus PROMPT.md bug class 16: a named-or-passed rng is only a divergence if it is CONSUMED. GoldenPathActMap's constructor (GoldenPathActMap.cs:39-68) contains no Rng use at all, and actmap.golden_path_map (actmap.py:1027-1057) stores `fixed.rng = rng or random.Random()` and never draws from it -- it walks a fixed tuple. The wasted base-map generation is faithful too, and that is the non-obvious half: RunManager.GenerateMap builds `State.Act.CreateMap(State, replaceTreasureWithElites: false)` FIRST (RunManager.cs:745) and only then lets Hook.ModifyGeneratedMap replace it, so the game also burns a full StandardActMap's worth of map draws that Golden Compass discards. Executed (`py audit/tools/relic_probes_b06.py b06-misc`): the shared run rng does advance across the pickup, which is correct rather than a leak."
+    },
+    {
+      "what": "N5: the sim has no `undo_after_obtained` for this relic (relics/base.py:143-150)",
+      "verdict": "faithful",
+      "rationale": "Recorded and dismissed deliberately, because Golden Compass is exactly the shape the undo hook exists for -- a pickup that mutates run state outside run.relics -- and the conformance runner grants a node's relic before swapping it for the one the save recorded, so a golden-pathed map would survive the swap. That is a sim-only concern with NO C# counterpart (nothing in the game ever un-picks a relic; the base docstring says so), so it is not a source-to-sim divergence and cannot be a gap on this record. Flagged for the conformance stream rather than verdicted here."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/golden_compass's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Hooks/Hook.cs, src/Core/Map/GoldenPathActMap.cs, src/Core/Runs/RunManager.cs, sts2_rl/actmap.py, sts2_rl/cards/base.py, sts2_rl/conformance/runner.py, sts2_rl/conformance/save.py, sts2_rl/relics/juzu_bracelet.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

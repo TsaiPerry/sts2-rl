@@ -1,0 +1,94 @@
+{
+  "unit": "relic/phial_holster",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PhialHolster.cs",
+    "sha256": "2e9e9460a133a4243176c018bf9aa7bce5aaf4744b38997d33be068b3229a63f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\phial_holster.py",
+    "sha256": "50c6f6e8477e9207fbfaf020a905451cbfdb217ef55e9bfb033732b6b761a606"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/alchemical_coffer.py",
+      "sha256": "e1d39c02a3ea0907e3b4a542f5b25a7a26491b79ddf2704c206d8a0bcb608e45",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (phial_holster.py:12), matching PhialHolster.cs:16",
+      "verdict": "faithful",
+      "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Neow event -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/neow.py']. Ancient rarity also makes it untradable through Relic.is_tradable (relics/base.py:134-136), which matches RelicModel.IsTradable."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (phial_holster.py:13), read by Relic.is_tradable (relics/base.py:132)",
+      "verdict": "faithful",
+      "rationale": "Matches PhialHolster.cs:18. Recorded because the sibling batch-12 relic relic/preserved_fog does NOT declare it -- correctly, because its C# does not override the property either."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (phial_holster.py:17-20), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. Both halves of PhialHolster.cs:26-34 are present in shape -- one extra slot then two random potions -- but the potion generation ignores the RNG stream the source names and rolls a flat pool instead of the rarity-weighted one (G1), and the slot half is the potion-capacity mechanism the contract defers (N1)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE for RNG parity): PhialHolster.cs:29 names `base.Owner.RunState.Rng.CombatPotionGeneration` explicitly and the port draws on the LEGACY shared run.rng instead, with a flat instead of a rarity-weighted pool",
+      "verdict": "gap",
+      "issue": "MECHANISM: PhialHolster.cs:29 calls `PotionFactory.CreateRandomPotionsOutOfCombat(Owner, 2, RunState.Rng.CombatPotionGeneration)`, which is `rng.NextFloat()` for the rarity band (<= 0.1f Rare, <= 0.35f Uncommon, else Common) plus `rng.NextItem(...)` inside that band, per potion, removing each pick from the working list (src/Core/Factories/PotionFactory.cs:46-81). phial_holster.py:19 calls `run.random_potions(2, distinct=True)`, which is `self.rng.choice(pool)` over the WHOLE reward pool sorted by id (run.py:522-540) -- a different distribution AND a different stream. This is PROMPT.md bug class 16's second half, and the check the class demands (is the stream CONSUMED, not merely named?) answers yes: two draws per potion. The correct helper already exists and the sibling relic with the IDENTICAL C# call uses it -- alchemical_coffer.py:25-31 branches on `run.rng_set is not None` and calls potion_pools.generate_random_potions (potion_pools.py:148-164), which is the line-for-line port. REACHABILITY (LIVE for conformance/RNG parity, executed -- py audit/tools/relic_probes_b12.py b12-phial): on a string-seeded run the CombatPotionGeneration stream sits at 0 draws before AND after add_relic('phial_holster'), where alchemical_coffer's 4 potions advance the same stream from 0 to 8 -- so the game's 4 draws for Phial Holster are never taken, every later CombatPotionGeneration draw in the run is shifted, and the potions themselves are drawn from the wrong distribution. Both sides ported: the relic is granted by the ported Neow event, the stream exists (rng.py:382) and the helper exists. Same verdict and same mechanism as relic/astrolabe N1 (binding rule 3), which recorded a named-but-unpassed stream as a gap that is live for RNG parity and dormant for RL play. NOTE per binding rule 7: PotionFactory.cs, run.py, alchemical_coffer.py, potion_pools.py and rng.py are NOT hashed by this record."
+    },
+    {
+      "what": "N1: `PlayerCmd.GainMaxPotionCount(PotionSlots = 1, Owner)` (PhialHolster.cs:28) vs `run.add_potion_slots(1)` (sts2_rl/relics/phial_holster.py:18) -- the port implements it",
+      "verdict": "faithful",
+      "rationale": "Re-verdicted from waiver to FAITHFUL by the 2026-07-26 relic fix pass. SCOPE RULING (2026-07-26 relic fix pass, applied at every potion site in this tier). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' means POTION IS NOT AN AUDITED KIND -- there is no `potion` roster kind and no `audit/records/potion/`. It does NOT mean that potion-affecting behaviour of an AUDITED relic is invisible. The relic tier itself already reads it that way at the overwhelming majority of its sites: 45 relic gap entries across 25 records turn on potion mechanics, 27 of them tagged LIVE (relic/belt_buckle, relic/cauldron, relic/sozu, relic/delicate_frond, relic/petrified_toad, relic/tiny_mailbox, relic/white_beast_statue, relic/wongos_mystery_ticket, relic/phial_holster G1 ...), against only four records that waived on the exclusion. Binding rule 3 forces one answer and the majority is also the better-reasoned side: potions ARE ported (51 registered classes, 48 in the reward pool) and the belt is conformance-asserted -- sts2_rl/conformance/runner.py:623-631 diffs `floor_potions` slot by slot and sts2_rl/conformance/runner.py:715-717 reads `max_potions`. A divergence the conformance runner asserts on is by definition one a replay sees, which is the README's definition of a gap. Under that ruling a waiver here was a vocabulary error twice over: the behaviour is in scope, and the port implements it CORRECTLY, so there is nothing to decline. `run.add_potion_slots` (sts2_rl/run.py:492-498) is Player.cs's SetMaxPotionCountInternal grow path -- it raises `max_potions` and appends `count` null slots, never compacting -- and the shrink path is unported because nothing in ported content shrinks the belt. EXECUTED (`py audit/tools/relic_probes_b12.py b12-phial`): `phial_holster: max_potions=4`, i.e. 3 -> 4, matching `DynamicVar('PotionSlots', 1m)` (PhialHolster.cs:28; no AscensionHelper.GetValueIfAscension in the file). The old verdict also had a second cost worth naming: relic/potion_belt cited this waiver as precedent for waiving the OPPOSITE mechanism -- a GainMaxPotionCount the port drops entirely -- so a waiver on a correctly-ported behaviour was actively shielding a live gap. potion_belt's AfterObtained and guard N1 are now gaps. Rule 7: sts2_rl/run.py and audit/records/relic/potion_belt.json are cited and not hashed by this record."
+    },
+    {
+      "what": "N2: `distinct` -- C# removes each picked potion from its working list (PotionFactory.cs:78), the sim passes distinct=True",
+      "verdict": "faithful",
+      "rationale": "The shapes agree for the reachable counts: C#'s `list.Remove(item)` makes a second pick of the same potion impossible, and run.random_potions' distinct branch (run.py:534-540) removes the chosen class from `available`. The one behavioural difference is exhaustion: the sim REFILLS `available` from the whole pool when it empties, while C# would throw on an empty rarity bucket. Unreachable at count 2 against a pool of dozens, and it is the shared helper's property rather than this relic's. Recorded because it is the kind of divergence a shape-level sweep would pass over."
+    },
+    {
+      "what": "N3: `DynamicVar('PotionSlots', 1m)` and `DynamicVar('Potions', 2m)` (PhialHolster.cs:20-24) vs POTION_SLOTS = 1 and POTIONS = 2 (phial_holster.py:14-15)",
+      "verdict": "faithful",
+      "rationale": "Both read as IntValue at their single call sites (PhialHolster.cs:28, 29) and no AscensionHelper.GetValueIfAscension appears anywhere in the file, so 1 and 2 are the pinned non-ascension values. Checked against the C# rather than the port's own docstring per PROMPT.md bug class 19; the docstring's 'gain 1 potion slot and 2 random potions' agrees."
+    },
+    {
+      "what": "N4: `item.ToMutable()` and the per-potion `PotionCmd.TryToProcure` loop (PhialHolster.cs:30-33) vs `run.add_potion(potion)` per potion (phial_holster.py:20)",
+      "verdict": "faithful",
+      "rationale": "The loop structure matches -- one procure per generated potion, each failing silently if the belt is full -- and RunState.add_potion (run.py:474-486) is the run-side twin that DOES run the Hook.ShouldProcurePotion gate TryToProcure requires, so Sozu correctly refuses these two. That is the opposite of the combat-side path, where the gate is missing: see relic/petrified_toad guard G1 for the site where the same C# verb loses it. ToMutable() is model-instance bookkeeping with no sim analogue (the sim constructs a fresh Potion object per pick). Note that TryToProcure also fires Hook.AfterPotionProcured, which the run-side add_potion does not dispatch either -- that dispatch is verdicted a LIVE gap at its own site in audit/records/relic/belt_buckle.json and is not re-derived here (binding rule 3); out of combat there is no Dexterity to strip, so the omission has no observable here. NOTE per binding rule 7: run.py, petrified_toad.json and belt_buckle.json are not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

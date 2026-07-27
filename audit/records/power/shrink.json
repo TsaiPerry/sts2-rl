@@ -1,0 +1,113 @@
+{
+  "unit": "power/shrink",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\ShrinkPower.cs",
+    "sha256": "e007fb069c7e9364e165d7ba74d29b582adaa8fb00d12c8940a928fb9eb5acfb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/shrinker_beetle.py",
+      "sha256": "c2268b7ba399aa5578d3e61521d8d276b6317d7272a332436c99c52f5567bca9",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Type": {
+      "maps_to": "powers.py:1376 `power_type = PowerType.DEBUFF`",
+      "verdict": "faithful"
+    },
+    "StackType": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "ShrinkPower.cs:26-36 is the only DYNAMIC StackType among the 134 ported powers: Counter while finite, Single once IsInfinite (Amount < 0). The sim models no StackType. Inert here: the only non-presentation reader is GetTypeForAmount, and at a negative amount StackType is Single so the Counter&&AllowNegative arm cannot fire while the !AllowNegative&&Debuff arm is excluded by AllowNegative, leaving Type == Debuff -- the same answer the sim's static attribute gives. Executed: `py audit/tools/power_census.py typing` shows shrink with neither arm set."
+    },
+    "AllowNegative": {
+      "maps_to": "powers.py:1366-1400 ShrinkPower (no allow_negative)",
+      "verdict": "gap",
+      "issue": "ShrinkPower.cs:38 declares `AllowNegative => true`; the sim's ShrinkPower never sets allow_negative, so it inherits False from Power (powers.py:47). That changes ShouldRemoveDueToAmount (PowerModel.cs:478-489): C# removes an AllowNegative power only at EXACTLY 0 and lets it sit negative, while the sim's stacking branch removes it at any amount < 0 (cmds.py:317-319). EXECUTED: applying Shrink -1 twice gives the sim Shrink(-1) then None, where the game keeps Shrink(-2) -- and a negative Shrink is C#'s INFINITE-duration encoding (ShrinkPower.cs:40 `IsInfinite => Amount < 0`), so the sim loses a permanent debuff outright. DORMANT: the only ported non-potion source is Shrinker Beetle's SHRINKER move at -1 (monsters/overgrowth/shrinker_beetle.py:40) and its move machine plays SHRINKER exactly once (_TRANSITIONS at shrinker_beetle.py:13 never returns to it), with one beetle per ported encounter. Named trigger: any second negative-amount Shrink source -- a two-beetle encounter, or a repeat of the SHRINKER move. Third-file citations, not hashed here."
+    },
+    "AfterApplied": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "ShrinkPower.cs:48-64 is presentation: ScaleTo(0.5f) on the creature node (or Vantom.ScaleTo) plus filling the ApplierName StringVar for the tooltip."
+    },
+    "AfterRemoved": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "ShrinkPower.cs:66-77 is the matching ScaleTo(1f) presentation undo."
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "powers.py:1389-1395 on_player_turn_end + on_enemy_side_end",
+      "verdict": "gap",
+      "issue": "Two divergences in one hook. (a) The `!IsInfinite` guard (ShrinkPower.cs:81, i.e. Amount >= 0) is spelled `self.amount > 0` on both sim legs (powers.py:1390,1394); those agree only because Amount == 0 is unreachable (ShouldRemoveDueToAmount removes at exactly 0), so this half is equivalent rather than identical. (b) The SLOT is wrong on the player leg: AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), which CombatManager calls at :1307 for the player side -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654, before both), and the sim's actual AfterTurnEnd slot is after_player_turn_end (combat.py:665). So a player-held Shrink ticks one slot early. DORMANT: Shrink's tick has no interaction with the flush or with turn-end card effects, and the ported source applies Shrink at -1 (infinite), where neither leg ticks at all. Named trigger: a positive-amount non-potion Shrink source together with a turn-end card effect that reads the damage multiplier. Third-file citations, not hashed here."
+    },
+    "AfterDeath": {
+      "maps_to": "powers.py:1397-1399 ShrinkPower.on_death",
+      "verdict": "gap",
+      "issue": "The `wasRemovalPrevented` guard is missing. ShrinkPower.cs:87-93 removes Shrink only when `!wasRemovalPrevented && creature == base.Applier`; the sim tests only `creature is self.applier` (powers.py:1398). A prevented removal (a death whose corpse the combat keeps) therefore drops Shrink in the sim and keeps it in the game. The sim's on_death carries no wasRemovalPrevented argument at all (hooks.py:574-580), so this cannot be fixed inside the power. DORMANT: the sim's one retained-corpse mechanism is ReattachPower's Decimillipede (powers.py:2338-2341) and no Decimillipede segment applies Shrink. Named trigger: any Shrink applier whose death is removal-prevented. Third-file citations, not hashed here."
+    },
+    "ModifyDamageMultiplicative": {
+      "maps_to": "powers.py:1378-1387 ShrinkPower.modify_damage_multiplicative",
+      "verdict": "gap",
+      "issue": "NON-DYADIC FACTOR. C# computes `(100m - DamageDecrease) / 100m` in DECIMAL from the DynamicVar (ShrinkPower.cs:105, DamageDecrease = 30m at :18/:44) = exactly 0.7m; the sim returns the float literal 0.7 (powers.py:1386), which is not a binary fraction. This is the executed witness for hook_dispatch gap G9 (the sim multiplies the factors together in float and applies the product once, where C# folds each into a running decimal): Shrink x0.7 with Vulnerable x1.5 on a 20-damage attack gives the sim 20 and the game 21. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded here because the FACTOR is this unit's, and because a census of every literal operand in the sim's multiplicative power hooks (`py audit/tools/power_census.py multipliers`) finds exactly two non-dyadic values, both on damage: this 0.7 and SlowPower's 0.1. Every ported BLOCK multiplier stays dyadic, so hook_dispatch's block-site dormancy argument is unaffected. Third-file citations, not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "ShrinkPower.cs:97-100 `base.Owner != dealer` -> 1m",
+      "verdict": "faithful",
+      "rationale": "powers.py:1385 `dealer is self.owner`. Identical."
+    },
+    {
+      "what": "ShrinkPower.cs:101-104 `!props.IsPoweredAttack()` -> 1m",
+      "verdict": "faithful",
+      "rationale": "Enforced by DamageCmd.deal's is_powered_attack gate (cmds.py:56-58); the power's own `card is not None and not card.is_unpowered` (powers.py:1385) is the redundant restatement. See the strength record's matching guard."
+    },
+    {
+      "what": "ShrinkPower.cs:81 `participants.Contains(base.Owner)`",
+      "verdict": "faithful",
+      "rationale": "The sim's two legs self-filter to the owner instead: `player is self.owner` (powers.py:1390) and `self.owner.side == 'enemy'` (powers.py:1394)."
+    },
+    {
+      "what": "Enemy-side leg uses the sim's only side-scoped enemy slot",
+      "verdict": "faithful",
+      "rationale": "powers.py:1393 on_enemy_side_end (combat.py:345) is the sim's Hook.AfterTurnEnd(Enemy) equivalent (CombatManager.cs:1256), so the enemy leg is in the right slot even though the player leg is not."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

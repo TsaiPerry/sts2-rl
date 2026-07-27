@@ -1,0 +1,63 @@
+{
+  "unit": "relic/jewelry_box",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\JewelryBox.cs",
+    "sha256": "2046dc5ff02c3adaa595cdc2944c4a514b90cd71161ae03995378fd3451fc8dd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\jewelry_box.py",
+    "sha256": "b23e7a4774752b9bce3c0862e8d87286113fed91d1f78e523a2e09d5951b2724"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (jewelry_box.py:12)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (jewelry_box.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches JewelryBox.cs:17; same is_tradable consequence recorded for relic/golden_pearl in this batch."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (jewelry_box.py:15-18) -> run.add_card(make_card('apotheosis')) (run.py:341-354)",
+      "verdict": "faithful",
+      "rationale": "JewelryBox.cs:19-23 creates an Apotheosis on the run and adds it to PileType.Deck. run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and appends at the END of the deck, which is the position CardCmd.cs:437 pins for out-of-combat additions. EXECUTED (py audit/tools/relic_probes_b07.py box-apotheosis): deck 10 -> 11 with 'apotheosis' as the last entry. The card is ported (cards/apotheosis.py, an Ancient 2-cost Skill). Rule 7: run.py and cards/apotheosis.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `CardCmd.PreviewCardPileAdd(..., 2f)` (JewelryBox.cs:22) and the Apotheosis hover tip (line 15)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N2: `RunState.CreateCard<Apotheosis>(Owner)` vs `make_card('apotheosis')` -- the C# card is created ON THE RUN and owned by the player; the sim's make_card has no owner",
+      "verdict": "faithful",
+      "rationale": "Ownership is a multiplayer concept (`card.Owner == base.Owner` guards exist all over the source for exactly that reason) and collapses in a single-player sim, where every card in run.deck belongs to the one player. Checked deliberately because CreateCard also assigns the card its combat scope; run.add_card's card enters combat through CombatState.__init__'s pile build (combat.py:72-209), which is the sim's equivalent binding. Rule 7: combat.py is not hashed by this record."
+    },
+    {
+      "what": "N3: the sim's Relic.undo_after_obtained is not implemented, so a Jewelry Box the conformance runner grants and then un-picks leaves an Apotheosis in the deck",
+      "verdict": "faithful",
+      "rationale": "Same reasoning and same verdict as relic/golden_pearl guard N3 in this batch (binding rule 3): undo_after_obtained has no C# counterpart, so its absence is not a divergence from the source. Flagged for the same reason -- the runner compares the deck as (id, upgrade_level) pairs, so the stray Apotheosis reads as a deck divergence until the next resync. Rule 7: relics/base.py and conformance/runner.py are not hashed by this record."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

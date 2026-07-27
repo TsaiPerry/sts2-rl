@@ -1,0 +1,79 @@
+{
+  "unit": "card/jackpot",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Jackpot.cs",
+    "sha256": "a18d00ff31a4764733729ec60e0a487552da45a4078a63695ff86404cb4aa9ed"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_rng_tripwire.py",
+      "sha256": "f6bed2b1db59d7bab3be63259896987637e4f92d665c830fd7ed6fac0a80eba7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:220-224) + _init_vars (226-229)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Attack, CardRarity.Rare, TargetType.AnyEnemy)` (Jackpot.cs:22-25) == cost 3 / ATTACK / RARE / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 25, _cards = 3 (colorless_attacks.py:228-229)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(25m, ValueProp.Move)` + `new CardsVar(3)` (Jackpot.cs:16-20) == both numbers, both declared."
+    },
+    "OnPlay": {
+      "maps_to": "JackpotCard.on_play (colorless_attacks.py:234-254)",
+      "verdict": "gap",
+      "issue": "Order, filter and the upgrade-the-generated-cards branch are all faithful. Attack first (Jackpot.cs:30-32), then generation. The filter is transcribed exactly, including the subtle part: C# tests `energyCost.Canonical == 0 && !energyCost.CostsX` (Jackpot.cs:35-37) -- the CANONICAL cost, not the current one, so a card discounted this turn does not qualify -- and the sim reads `_CARD_CLASSES[cid]()._energy_cost` off a FRESH instance (colorless_attacks.py:244), which is the canonical value, plus the same `energy_cost_x` exclusion. The upgrade branch matches too: `if (IsUpgraded) CardCmd.Upgrade(item)` BEFORE the pile add (Jackpot.cs:40-44) == `if self.upgrade_level > 0 and new_card.is_upgradable: new_card.upgrade()` before `add_to_hand`, and C#'s `CardCmd.Upgrade` self-checks IsUpgradable (CardCmd.cs:270-273) so the sim's explicit test is equivalent. The generation is `GetForCombat` -- WITH replacement, so duplicates are allowed -- and the sim's per-card `_rng.choice` reproduces that shape. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` / `rng.choice` (pool.py:157-161) rather than the game's draw sequence, so the number of draws differs too. Same mechanism and same verdict as card/discovery's and card/distraction's OnPlay entries (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists. card/infernal_blade in this same batch shows the correct shape: branch on `crng.is_parity` and use `crng.card_gen`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+    },
+    "OnUpgrade": {
+      "maps_to": "JackpotCard._on_upgrade (colorless_attacks.py:231-232)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(5m)` (Jackpot.cs:50) == `self._damage += 5` (25 -> 30). The CARDS var stays 3 when upgraded -- the upgrade's second effect is the free upgrade of the generated cards, which lives in OnPlay, not in a var change. Both checked."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (Jackpot.cs:29)",
+      "verdict": "faithful",
+      "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the equivalent contract."
+    },
+    {
+      "what": "the generation runs even if the attack killed the last enemy (Jackpot.cs:33-45 is unguarded)",
+      "verdict": "faithful",
+      "rationale": "The sim is equally unguarded (colorless_attacks.py:242-254), so both add the three cards to a hand that is about to be discarded by the combat-end cleanup. Same outcome."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

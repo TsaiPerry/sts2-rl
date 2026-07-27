@@ -1,0 +1,54 @@
+{
+  "unit": "card/bloodletting",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Bloodletting.cs",
+    "sha256": "02dbb861ed91dc7dc58d1509fbe80dd0fa50e20bb293ee4a5bf1c7e34e7fe4d3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\bloodletting.py",
+    "sha256": "63b74523b3fab1dd116a591579c896b55354cf7f5994c01b0019d08634171558"
+  },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (bloodletting.py:20-24) + _init_vars (26-29)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Common, TargetType.Self)` (Bloodletting.cs:22-25) == cost 0 / SKILL / COMMON / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "_hp_loss = 3, _energy = 2 (bloodletting.py:28-29)",
+      "verdict": "faithful",
+      "rationale": "`new HpLossVar(3m)` + `new EnergyVar(2)` (Bloodletting.cs:14-18) == both numbers, both declared. `_energy` is in `Card._MAGIC_ATTRS` (cards/base.py:185-189) so `magic_number` reports 2."
+    },
+    "OnPlay": {
+      "maps_to": "BloodlettingCard.on_play (bloodletting.py:34-40)",
+      "verdict": "faithful",
+      "rationale": "Order matches: `CreatureCmd.Damage(..., 3, Unblockable | Unpowered | Move, this)` (Bloodletting.cs:31) == `DamageCmd.deal(..., props=DamageProps.CARD_HP_LOSS)`, then `PlayerCmd.GainEnergy(DynamicVars.Energy.BaseValue, Owner)` (32) == `EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)`. The energy verb's own semantics (the sim runs `hooks.modify_energy_gain` first, cmds.py:553) belong to the PlayerCmd half of the creature_card_cmds seam. Presentation, folded in: TriggerAnim (29) and VfxCmd.PlayOnCreatureCenter (30)."
+    },
+    "OnUpgrade": {
+      "maps_to": "BloodlettingCard._on_upgrade (bloodletting.py:31-32)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Energy.UpgradeValueBy(1m)` (Bloodletting.cs:37) == `self._energy += 1` (2 -> 3). The HP loss stays 3 when upgraded on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early on `if ctx.player.is_dead` between the HP loss and the energy gain (bloodletting.py:38-39)",
+      "verdict": "gap",
+      "issue": "Bloodletting.cs has no such early return; C# would still await PlayerCmd.GainEnergy. C# has no such early return: if the HP loss is lethal it still awaits the next command on the dying player. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

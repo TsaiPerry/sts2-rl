@@ -1,0 +1,63 @@
+{
+  "unit": "relic/candelabra",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Candelabra.cs",
+    "sha256": "d5cd6181a82f34159c72c7938f891fe589e8ce152f9942c4dd280289903d1424"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\candelabra.py",
+    "sha256": "c164c5101af9071ef7d3d9dd79dea92429c35451642a6b84962595419f629d36"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (candelabra.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (candelabra.py:18-21)",
+      "verdict": "faithful",
+      "rationale": "Candelabra.cs:23-30 gains EnergyVar(2).BaseValue when the owner is among the turn's participants and PlayerCombatState.TurnNumber == 2; candelabra.py:19-21 is the same branch with the same constant. The slot is right and was checked by execution rather than off relics/base.py's docstring (PROMPT.md bug class 11): `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so on_player_turn_started is the post-draw slot that audit/records/seam/turn_structure.json step 23 assigns to AfterSideTurnStart. Placement after the energy reset (step 17) is what makes the +2 stick rather than being overwritten."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `participants.Contains(base.Owner.Creature)` (Candelabra.cs:25)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `card.Owner != base.Owner` / `participants.Contains(base.Owner.Creature)` family is the multiplayer per-player filter on a hook the game dispatches for every player (and, for the participants form, also admits pets). The sim is single-player by construction (one RunState, one PlayerCombatState) and models no pet creature, so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: `base.Owner.PlayerCombatState.TurnNumber == 2` vs `self.turn == 2` (candelabra.py:19)",
+      "verdict": "faithful",
+      "rationale": "audit/records/seam/turn_structure.json's extra-turn step settles this: CombatState.turn increments once per player turn including extra turns, which is what PlayerCombatState.TurnNumber does too (only RoundNumber diverges), and that record explicitly lists the ported turn-number readers -- Horn Cleat turn 2, Captain's Wheel turn 3, Sparkling Rouge turn 3, Royal Poison turn 1, Anchor turn 1 -- as all reading TurnNumber, 'which is what self.turn models'. Candelabra is the same shape. One verdict per mechanism (binding rule 3)."
+    },
+    {
+      "what": "N3: `PlayerCmd.GainEnergy` (Candelabra.cs:28) vs `EnergyCmd.gain(self.hooks, player, 2)` (candelabra.py:21)",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because relic/booming_conch's direct `player.energy = ...` IS a recorded gap for skipping this exact chain. PlayerCmd.GainEnergy (PlayerCmd.cs:29-43) guards amount <= 0 and IsEnding, runs Hook.ModifyEnergyGain, then AfterModifyingEnergyGain, then adds. EnergyCmd.gain (cmds.py:547-553) runs hooks.modify_energy_gain and adds. The only missing leg is AfterModifyingEnergyGain, which is the same missing-companion-event shape as relic/bag_of_preparation's N1 and belongs to the hook layer, not to this relic. The two guards are structurally satisfied (the amount is a constant 2, and a combat hook cannot fire while the combat is ending). Rule 7: PlayerCmd.cs and cmds.py are not hashed here."
+    },
+    {
+      "what": "N4: `EnergyVar(2)` read as BaseValue (Candelabra.cs:19, 28) and the unused `private const int _energyTurn = 2` (line 15)",
+      "verdict": "faithful",
+      "rationale": "Both the turn index and the energy amount are 2, which is exactly the kind of coincidence that hides a swap. The const is dead in the decompiled source (nothing reads it; the literal 2 on line 25 is the turn test), and the DynamicVar is the energy. The sim's two literals sit on the matching lines. No AscensionHelper call in the file."
+    },
+    {
+      "what": "N5: Flash() and ExtraHoverTips (Candelabra.cs:21, 27)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}
