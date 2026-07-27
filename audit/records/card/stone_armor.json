@@ -1,0 +1,36 @@
+{
+  "unit": "card/stone_armor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\StoneArmor.cs",
+    "sha256": "c0e2f5b634fff26c011f3bf46a7ba34fce850bab3e1f1f160fbc32c0c15eb7b6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\stone_armor.py",
+    "sha256": "f40ce2bacb7822297c174ea3c4d5d370c7a9ecb1ddc1c1b5f7cde27efb55fc30"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (stone_armor.py:197-201) + _init_vars (203-205)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (StoneArmor.cs:22-25) == cost 1 / POWER / UNCOMMON / SELF. It does NOT override GainsBlock even though PlatingPower grants block each turn, and the sim correctly leaves `gains_block` False -- the same distinction card/eternal_armor and card/feel_no_pain draw."
+    },
+    "CanonicalVars": {
+      "maps_to": "StoneArmorCard._plating = 4 (stone_armor.py:205)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<PlatingPower>(4m)` (StoneArmor.cs:14) == `_plating = 4`, stored in the `_plating` slot `magic_number` reads -- the same correct storage card/eternal_armor uses for the same power, and the counterpart to card/feel_no_pain's mistake of putting a power amount in `_block`."
+    },
+    "OnPlay": {
+      "maps_to": "StoneArmorCard.on_play (stone_armor.py:210-215)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<PlatingPower>(choiceContext, Owner.Creature, DynamicVars[\"PlatingPower\"].BaseValue, Owner.Creature, this)` (StoneArmor.cs:29) == `PowerCmd.apply(ctx.hooks, ctx.player, PlatingPower, self._plating, applier=ctx.player)`. Same power and same shape as card/eternal_armor, so the two cards are consistent on both sides. Presentation, folded in: two hover tips (16-20)."
+    },
+    "OnUpgrade": {
+      "maps_to": "StoneArmorCard._on_upgrade (stone_armor.py:207-208)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"PlatingPower\"].UpgradeValueBy(2m)` (StoneArmor.cs:34) == `self._plating += 2` (4 -> 6)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

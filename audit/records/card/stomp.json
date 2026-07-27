@@ -1,0 +1,46 @@
+{
+  "unit": "card/stomp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Stomp.cs",
+    "sha256": "f1e847b84e9822dab52cde842db1d1fec60f56ed8aa93e30673a88bf9c411351"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\stomp.py",
+    "sha256": "62381062367f9d305c1e7f3b5150e051829e73d4771879ca9a2e75cecb4e1652"
+  },
+  "hooks": {
+    "AfterCardEnteredCombat": {
+      "maps_to": "StompCard.on_card_entered_combat (stomp.py:167-172)",
+      "verdict": "deliberate-divergence",
+      "rationale": "`int amount = History.CardPlaysFinished.Count(e => e.CardPlay.Card.Type == CardType.Attack && e.CardPlay.Card.Owner == Owner && e.HappenedThisTurn(CombatState)); ReduceCostBy(amount);` (Stomp.cs:57-58) == `plays = self.combat.history.attack_plays_this_turn(); if plays > 0: self.add_cost_this_turn(-plays)`, behind the same `card is not self` gate. The divergence is C#'s SECOND gate, `if (base.IsClone) return` (Stomp.cs:53-56), which the sim does not have. Recorded as a deliberate divergence rather than a gap, and the sim's docstring gives the argument: C# skips clones because `CreateClone` deep-copies the original's `_energyCost` object (CardModel.cs:1202), so a clone ALREADY carries the accumulated discount and seeding it again would double-count; the sim's clone helpers build fresh instances at base cost (trash_heap_cards.py:18-24, cards/anger.py:36-38), so seeding from history IS how the clone acquires the discount it should have. Both arrive at cost 3 minus the number of Attacks played this turn. It would become a gap if the two quantities could differ -- i.e. if a Stomp accumulated discount from something other than this turn's Attack plays -- and `AddThisTurn` is cleared at every turn start (cards/base.py:265-269, EnergyCost's EndOfTurn expiration), so they cannot."
+    },
+    "BeforeCardPlayed": {
+      "maps_to": "StompCard.on_energy_spent (stomp.py:174-176)",
+      "verdict": "faithful",
+      "rationale": "`if (cardPlay.Card.Owner != Owner) return; if (cardPlay.Card.Type != CardType.Attack) return; ReduceCostBy(1);` (Stomp.cs:62-74) == `if card.card_type == CardType.ATTACK: self.add_cost_this_turn(-1)`. The sim's `on_energy_spent` is the hook the play pipeline fires at the BeforeCardPlayed point (combat.py:552, which the code comments identify as the BeforeCardPlayed slot), the ownership clause is the single-player gate, and the discount applies for STOMP'S OWN play too -- neither side excludes the triggering card, which is why a Stomp played as the turn's first Attack still costs 2 rather than 3. The hook fires wherever the card sits (hand, draw or discard), because both sides register the card as a listener from any combat pile."
+    },
+    "ctor": {
+      "maps_to": "class attrs (stomp.py:147-151) + _init_vars (153-155)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Attack, CardRarity.Uncommon, TargetType.AllEnemies)` (Stomp.cs:23-26) == cost 3 / ATTACK / UNCOMMON / ALL_ENEMIES."
+    },
+    "CanonicalVars": {
+      "maps_to": "StompCard._damage = 12 (stomp.py:155)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(12m, ValueProp.Move)` (Stomp.cs:21) == `_damage = 12`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "StompCard.on_play, routed per-enemy by the framework (stomp.py:160-163; combat.py:481-487)",
+      "verdict": "gap",
+      "issue": "The damage, the single hit per enemy and the target set are faithful against `DamageCmd.Attack(12).FromCard(this).TargetingAllOpponents(CombatState)` (Stomp.cs:35-39), and leaving `handles_own_routing` False is correct for a one-hit AoE -- the framework filters on `is_gone`, the right analogue of `where c.IsAlive`. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call (AttackCommand.cs:650), computing every DamageResult before any `Kill` (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy, so each death resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage. Presentation, folded in: TriggerAnim (30), the per-enemy NSpikeSplashVfx loop (31-34), the Ironclad heavy-anim helpers, WithHitFx and WithHitVfxSpawnedAtBase."
+    },
+    "OnUpgrade": {
+      "maps_to": "StompCard._on_upgrade (stomp.py:157-158)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(3m)` (Stomp.cs:44) == `self._damage += 3` (12 -> 15). The discount mechanic is untouched by the upgrade on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

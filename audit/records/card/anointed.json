@@ -1,0 +1,47 @@
+{
+  "unit": "card/anointed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Anointed.cs",
+    "sha256": "4f5ad80b8b82a8811fc119d999d9ec0cd3b3a0b871cc65d2ba5e1f58dffe3902"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "AnointedCard.exhausts = True (colorless_skills.py:69)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Anointed.cs:13) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:64-69) + _init_vars (71-73)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Anointed.cs:15-18) == cost 1 / SKILL / RARE / SELF. No CanonicalVars on either side (the count is computed, not printed)."
+    },
+    "OnPlay": {
+      "maps_to": "AnointedCard.on_play (colorless_skills.py:78-84)",
+      "verdict": "gap",
+      "issue": "WRONG RNG STREAM AND WRONG SELECTION ALGORITHM. C#: `PileType.Draw.GetPile(Owner).Cards.Where(c => c.Rarity == Rare).TakeRandom(count, Owner.RunState.Rng.CombatCardSelection)` (Anointed.cs:23), and `TakeRandom` is `collection.ToList().UnstableShuffle(rng).Take(count)` (IEnumerableExtensions.cs:17-20) -- a full Fisher-Yates over the candidate list on the named CombatCardSelection stream, then take-first-N. The sim calls `ctx.combat._rng.sample(rares, min(space, len(rares)))` (colorless_skills.py:82): the unseeded shared `random.Random`, not `ctx.combat.combat_rng.card_selection` (the accessor exists -- combat_rng.py:21,55 maps `card_selection -> combat_card_selection`), and `random.sample` is a reservoir/partial-selection algorithm, not shuffle-then-take, so even fed the same stream it would consume a different number of draws in a different order. Observable: under a string-seeded parity/conformance run the set of Rare cards pulled into hand differs from the recorded run, and the CombatCardSelection stream desyncs for everything downstream. The count itself is faithful (`CardPile.MaxCardsInHand` is 10, CardPile.cs:21, == `player.MAX_HAND_SIZE = 10`, player.py:56). LIVE -- Anointed is a ported Rare colorless Skill reachable from the colorless pool, and the parity streams it should be using are already wired (`CombatRng.parity`, combat_rng.py:41-46)."
+    },
+    "OnUpgrade": {
+      "maps_to": "AnointedCard._on_upgrade (colorless_skills.py:75-76)",
+      "verdict": "faithful",
+      "rationale": "`AddKeyword(CardKeyword.Retain)` (Anointed.cs:29) == `self.retain = True`, and unlike aggression/apparition this card DOES re-seed the flag in `_init_vars` (`self.retain = False`, colorless_skills.py:73), so `downgrade()` restores it -- confirmed by `py tools/audit/card_probes.py downgrade`, which does not list anointed."
+    }
+  },
+  "guards": [
+    {
+      "what": "count = MaxCardsInHand - Hand.Count can be <= 0 when the hand is already full (Anointed.cs:22)",
+      "verdict": "faithful",
+      "rationale": "C# `Take(count)` with count <= 0 yields nothing; the sim's `min(space, len(rares))` with `space <= 0` makes `random.sample(..., <=0)` return `[]` (a negative would raise, but `space` is `10 - len(hand)` and the hand is capped at 10 by player.py:278, so it cannot go negative). Same outcome."
+    },
+    {
+      "what": "cards are moved to the hand with CardPileCmd.Add(cards, PileType.Hand) (Anointed.cs:24) vs direct list mutation",
+      "verdict": "gap",
+      "issue": "The sim pops each card out of `player.draw_pile` and appends to `player.hand` in place (colorless_skills.py:83-84) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal`. This is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding (docs/audit/seams/creature_card_cmds.md:643-666), recorded here because it is Anointed's own code doing the bypass, not the machinery's. Note these cards arrive in hand WITHOUT being 'drawn', so no on_card_drawn is expected on either side. DORMANT: the sim has no `after_card_changed_piles` listener at all, so nothing observable is dropped until such a listener is ported; the concrete unported thing that makes it live is any C# model overriding `AfterCardChangedPiles` for a Draw->Hand move."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

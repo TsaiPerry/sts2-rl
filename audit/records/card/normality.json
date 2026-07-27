@@ -1,0 +1,57 @@
+{
+  "unit": "card/normality",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Normality.cs",
+    "sha256": "954751de4b47da3ccddd0096b553a2836dd7e7821b907190c429dbaec6f0bce5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\normality.py",
+    "sha256": "6bfcaf8a10c6983ab40533412922c46b612606e6fc28ed37bcd239e74f763936"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "NormalityCard.max_upgrade_level = 0 (normality.py:436)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Normality.cs:22) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "NormalityCard.is_playable = False (normality.py:435)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Normality.cs:24) == `is_playable = False`."
+    },
+    "ShouldPlay": {
+      "maps_to": "NormalityCard.should_play_card (normality.py:447-454)",
+      "verdict": "gap",
+      "issue": "The hook choice is RIGHT (unlike card/clash) -- C# really does override `ShouldPlay`, which both the manual path (`CardModel.CanPlay`, CardModel.cs:1755) and the auto-play path (`CardCmd.AutoPlay`, CardCmd.cs:64) consult -- and so are the ownership and in-hand clauses and the threshold of 3. THE COUNTER READS A DIFFERENT HISTORY. C# counts `History.CardPlaysStarted.Count(e => e.HappenedThisTurn(CombatState) && e.CardPlay.Card.Owner == Owner)` (Normality.cs:33) -- plays STARTED; the sim counts `CardPlayedEntry` with `this_turn=True` (normality.py:451-453), which the combat loop appends at the END of resolution (`hooks.on_card_played(card)`, combat.py:513) -- plays FINISHED. The two agree for simple sequential plays, and diverge whenever a play is IN FLIGHT while another card's playability is tested, which is exactly what an auto-play does. Concretely: with Normality in hand, play two cards, then play Havoc as the third. C# has three STARTED plays when Havoc's auto-played card is checked, so `3 >= 3` blocks it and the auto-play is discarded unplayed; the sim has two FINISHED plays, so `2 < 3` allows it. LIVE -- card/normality is a ported curse and card/havoc, card/catastrophe, card/cascade and card/beat_down all auto-play mid-resolution. The sim's history would need a started-plays entry (or the count taken before `on_card_played`) to fix it."
+    },
+    "ctor": {
+      "maps_to": "class attrs (normality.py:430-437) + _init_vars (441-442)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim inlines the threshold as a class constant (normality.py:439)",
+      "verdict": "gap",
+      "issue": "`CalculationBaseVar(3m)` + `CalculationExtraVar(-1m)` + `CalculatedVar(\"CalculatedCards\").WithMultiplier(card => Math.Min(3, CardsPlayedThisTurn))` (Normality.cs:26-31) is a live countdown: `base + extra * multiplier` (CalculatedVar.cs:62-71) = `3 - min(3, played)`, i.e. the card face shows how many plays you have LEFT this turn. The sim stores only `CARDS_PER_TURN = 3` and exposes no such number, so `magic_number` returns None and the observation encoder cannot see how close the player is to the cap -- which for this card is the single most decision-relevant number on the board. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "NormalityCard.on_play -> pass (normality.py:444-445)",
+      "verdict": "faithful",
+      "rationale": "Normality.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [
+    {
+      "what": "the `AutoPlayType` argument is IGNORED by C#'s override (Normality.cs:40, `AutoPlayType _`)",
+      "verdict": "faithful",
+      "rationale": "So Normality blocks auto-plays too, unlike card/enthralled, which returns true for them. The sim matches: its `should_play_card` never reads the `auto_play` parameter (normality.py:447). The contrast between these two cards is what makes card/clash's mis-hooking visible -- all three go through `should_play_card`, and only Clash should not."
+    },
+    {
+      "what": "the sim adds `is_unpowered = True` (normality.py:437), which has no counterpart in Normality.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the card deals no damage."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

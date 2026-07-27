@@ -1,0 +1,41 @@
+{
+  "unit": "card/rip_and_tear",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\RipAndTear.cs",
+    "sha256": "4153c6f970a3dc075079580330ddef393d00f50441a71cebfa0b0f48cc597b4c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<DefectCardPool>()` (RipAndTear.cs:18) selects the card's ART pool. Presentation."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:268-272) + _init_vars (274-277)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.RandomEnemy)` (RipAndTear.cs:20-23) == cost 1 / ATTACK / EVENT / RANDOM_ENEMY. The RANDOM_ENEMY target type is what keeps the framework from resolving a single target up front (combat.py:463-468 only resolves ANY_ENEMY), leaving the per-hit roll to the card."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 7, _hits = 2 (trash_heap_cards.py:276-277)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(7m, ValueProp.Move)` (RipAndTear.cs:16) == `_damage = 7`; the hit count of 2 is a literal `WithHitCount(2)` in C# (27) rather than a RepeatVar, and the sim stores it as `_hits = 2` so `base_hits` reports it -- the same small improvement card/maul makes."
+    },
+    "OnPlay": {
+      "maps_to": "RipAndTearCard.on_play (trash_heap_cards.py:282-289)",
+      "verdict": "gap",
+      "issue": "The per-hit re-roll, the duplicate policy and the living-target filter are all faithful. C#'s `TargetingRandomOpponents(CombatState)` defaults `allowDuplicates: true` (AttackCommand.cs:309, 325) and `_doesRandomTargetingAllowDuplicates` is initialised true (72), so both hits MAY land on the same enemy -- which the sim's independent `choice` per hit reproduces -- and AttackCommand re-derives `validTargets` from `where c.IsAlive` at the top of each hit (544-546) == the sim's per-hit `[e for e in ctx.combat.enemies if not e.is_gone]`, with both breaking when none remain. WRONG RNG STREAM: C# rolls `(Attacker.Player ?? Attacker.PetOwner).RunState.Rng.CombatTargets.NextItem(validTargets)` (AttackCommand.cs:601-602); the sim calls `ctx.combat._rng.choice(living)` (trash_heap_cards.py:288) on the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.targets` maps to `combat_targets` (combat_rng.py:22,54) and `CombatState.auto_play_card` already uses it correctly with the CardCmd.cs:77 citation in-line (combat.py:540-546). LIVE -- Rip and Tear is a ported Event Attack from the Trash Heap, the targets parity stream is wired, and under a string-seeded run the two hits land on different enemies than the recorded run. Same mechanism and same verdict as the other shared-rng cards (rule 3); this is the 10th of the 21 the probe lists. Presentation, folded in: the NScratchVfx hit node."
+    },
+    "OnUpgrade": {
+      "maps_to": "RipAndTearCard._on_upgrade (trash_heap_cards.py:279-280)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` (RipAndTear.cs:35) == `self._damage += 2` (7 -> 9). The hit count stays 2 when upgraded on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

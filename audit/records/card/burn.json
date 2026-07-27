@@ -1,0 +1,51 @@
+{
+  "unit": "card/burn",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Burn.cs",
+    "sha256": "d5ceb118517684c6426899ac5bfb4b0e21f7eb1341d5e642554a4d2221883648"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\burn.py",
+    "sha256": "19fdb687a528c34d97f20ec36e829312a25585518780539fbad8513b9bdf4f52"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "BurnCard.max_upgrade_level = 0 (burn.py:19)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Burn.cs:16) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "BurnCard.is_playable = False (burn.py:18)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Burn.cs:20) == `is_playable = False`. No Ethereal, Eternal or Exhaust on either side -- Burn is a Status that simply sits in hand."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "BurnCard.has_turn_end_in_hand_effect = True (burn.py:21)",
+      "verdict": "faithful",
+      "rationale": "`=> true` (Burn.cs:22) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (burn.py:13-21) + _init_vars (23-24)",
+      "verdict": "gap",
+      "issue": "STATUS / STATUS / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every local and global cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain in `Card.energy_cost` (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) (CardEnergyCost.cs:134-139), so the two agree on what is SPENT -- only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's and card/bad_luck's ctor entries (rule 3). DORMANT: the three ported cost readers agree today -- relics/mummified_hand.py:25 and potions.py:168 filter `> 0`, cards/event_cards.py:328 (Enlightenment) skips `<= 1` -- and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests. Live as soon as any effect reads an unplayable card's cost without a `> 0` filter."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim inlines 2 at the damage site (burn.py:31)",
+      "verdict": "gap",
+      "issue": "`new DamageVar(2m, ValueProp.Unpowered | ValueProp.Move)` (Burn.cs:18) is a printed card var; the sim declares no `_damage` in `_init_vars`, so `Card.base_damage` (cards/base.py:191-195) returns None and `full_env.py:479-481` writes no damage feature for Burn. The PROP SET is nonetheless reproduced correctly: the sim passes no explicit props and `DamageCmd.deal` infers `DamageProps.CARD_UNPOWERED` (UNPOWERED | MOVE) from `is_unpowered = True` (cmds.py:44-50, burn.py:20), so Burn's 2 damage is NOT scaled by Strength/Vulnerable/Weak on either side and IS blockable on both (no Unblockable bit). Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt number is identical), LIVE for the observation encoder."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "BurnCard.on_turn_end_in_hand (burn.py:29-31)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.Damage, this)` (Burn.cs:35) -- note it passes the VAR, so the Unpowered|Move props ride along from CanonicalVars -- == `DamageCmd.deal(ctx.hooks, ctx.player, 2, dealer=None, card=self)` with the inferred UNPOWERED | MOVE props. Explicit null dealer on both sides. Presentation, folded in: the ground-fire VFX (33), the SFX (34) and ExtraRunAssetPaths (24)."
+    },
+    "OnPlay": {
+      "maps_to": "BurnCard.on_play -> pass (burn.py:26-27)",
+      "verdict": "faithful",
+      "rationale": "Burn.cs declares no OnPlay and the card is Unplayable; the sim's abstract method is a `pass`."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

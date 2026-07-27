@@ -1,0 +1,36 @@
+{
+  "unit": "card/cruelty",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Cruelty.cs",
+    "sha256": "ca3ce7fd13425cb94ec82f8f78428d9e0e15916d757450807d9e0b4df890e5c4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\cruelty.py",
+    "sha256": "5a6e34a8bb78fa56810e614892e225c153696fd289ea67e4cc2a52c272672ad2"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (cruelty.py:21-25) + _init_vars (27-29)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Power, CardRarity.Rare, TargetType.Self)` (Cruelty.cs:18-21) == cost 1 / POWER / RARE / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "CrueltyCard._power_amount = 25 (cruelty.py:29)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<CrueltyPower>(25m)` (Cruelty.cs:14) == `_power_amount = 25`. The value is a PERCENTAGE the power adds to Vulnerable's multiplier, not a damage number, and both sides carry the raw 25."
+    },
+    "OnPlay": {
+      "maps_to": "CrueltyCard.on_play (cruelty.py:34-39)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<CrueltyPower>(choiceContext, Owner.Creature, DynamicVars[\"CrueltyPower\"].BaseValue, Owner.Creature, this)` (Cruelty.cs:26) == `PowerCmd.apply(ctx.hooks, ctx.player, CrueltyPower, self._power_amount, applier=ctx.player)`. Presentation, folded in: TriggerAnim (25) and the Vulnerable hover tip (16)."
+    },
+    "OnUpgrade": {
+      "maps_to": "CrueltyCard._on_upgrade (cruelty.py:31-32)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars[\"CrueltyPower\"].UpgradeValueBy(25m)` (Cruelty.cs:31) == `self._power_amount += 25` (25 -> 50). Note the upgrade DOUBLES rather than increments -- checked against the source, not assumed."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

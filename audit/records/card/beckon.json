@@ -1,0 +1,52 @@
+{
+  "unit": "card/beckon",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Beckon.cs",
+    "sha256": "66b6d9793a5aba6555ab072030e441522cf3cf0d627993e5c71c886b4ab14c37"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\beckon.py",
+    "sha256": "1e2645b251a2a0808d24bf62d199e81d32a0365056967f799d7dded60961ea11"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "BeckonCard.max_upgrade_level = 0 (beckon.py:25)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Beckon.cs:13) == the class attribute, so `is_upgradable` is False and Apotheosis/Armaments skip it."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "BeckonCard.has_turn_end_in_hand_effect = True (beckon.py:27)",
+      "verdict": "faithful",
+      "rationale": "`=> true` (Beckon.cs:15) == the class attribute (cards/base.py:63)."
+    },
+    "ctor": {
+      "maps_to": "class attrs (beckon.py:20-27) + _init_vars (29-30)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Status, CardRarity.Status, TargetType.None)` (Beckon.cs:19-22) == cost 1 / STATUS / STATUS / NONE. Beckon declares NO CanonicalKeywords, so it is NOT Unplayable, and the sim correctly leaves `is_playable` at its True default -- a playable no-effect Status on both sides. The cost is a real 1, not the -1 sentinel the unplayable statuses use, so the ascenders_bane cost finding does not apply here."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim inlines 6 at the damage site (beckon.py:39)",
+      "verdict": "gap",
+      "issue": "`new HpLossVar(6m)` (Beckon.cs:17) is a printed card var; the sim declares no `_hp_loss` in `_init_vars`, so `Card.base_hp_loss` (cards/base.py:202-210) returns its 0 default and the number 6 exists only as a literal inside `on_turn_end_in_hand`. A policy sees Beckon as a harmless 0-HP-loss status. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt number is identical), LIVE for the observation encoder."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "BeckonCard.on_turn_end_in_hand (beckon.py:35-40)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.HpLoss.BaseValue, Unblockable | Unpowered | Move, this)` (Beckon.cs:26) == `DamageCmd.deal(ctx.hooks, ctx.player, 6, card=self, props=DamageProps.CARD_HP_LOSS)`; `CARD_HP_LOSS` is exactly that prop triple (valueprops.py:38). No dealer on either side. Unlike Bad Luck there is no Cmd.Wait, so the two bodies are step-for-step identical."
+    },
+    "OnPlay": {
+      "maps_to": "BeckonCard.on_play -> pass (beckon.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "Beckon.cs declares no OnPlay, so playing it does nothing; the sim's abstract method is a `pass`. Because Beckon IS playable this is a reachable no-op on both sides, not dead code."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (beckon.py:26), which has no counterpart in Beckon.cs",
+      "verdict": "faithful",
+      "rationale": "`is_unpowered` only steers `DamageCmd.deal`'s prop inference (cmds.py:44-50), and this card's only damage passes explicit `CARD_HP_LOSS` props, so the flag is never read. Inert."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

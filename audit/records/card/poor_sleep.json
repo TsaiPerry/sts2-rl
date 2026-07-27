@@ -1,0 +1,47 @@
+{
+  "unit": "card/poor_sleep",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\PoorSleep.cs",
+    "sha256": "6ea2c09b02e8208f07eee0cc0dc9637907975332643bf41b3796ee9ab92f1d69"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\poor_sleep.py",
+    "sha256": "5478e88e17adf33963a37df98b2e703fec072d44cdce741f58c13324be6184d6"
+  },
+  "hooks": {
+    "CanBeGeneratedByModifiers": {
+      "maps_to": "PoorSleepCard.can_be_generated_by_modifiers = False (poor_sleep.py:157)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (PoorSleep.cs:8) == the class attribute."
+    },
+    "MaxUpgradeLevel": {
+      "maps_to": "PoorSleepCard.max_upgrade_level = 0 (poor_sleep.py:155)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (PoorSleep.cs:10) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "is_playable = False, retain = True (poor_sleep.py:153-154)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable, CardKeyword.Retain }` (PoorSleep.cs:12-16) == both flags, and the RETAIN is the whole curse: an unplayable card that the end-of-turn hand flush will not discard, so it clogs the hand for the rest of the combat. As a CANONICAL keyword it carries no downgrade-rebuild hazard, unlike card/gold_axe's and card/wish's upgrade-added Retain."
+    },
+    "ctor": {
+      "maps_to": "class attrs (poor_sleep.py:148-157) + _init_vars (159-160)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses."
+    },
+    "OnPlay": {
+      "maps_to": "PoorSleepCard.on_play -> pass (poor_sleep.py:162-163)",
+      "verdict": "faithful",
+      "rationale": "PoorSleep.cs has no members beyond the three overrides -- no OnPlay, no OnTurnEndInHand, no vars. Its whole effect is the keyword pair."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (poor_sleep.py:156), which has no counterpart in PoorSleep.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the flag only steers `DamageCmd.deal`'s prop inference and the card deals no damage."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

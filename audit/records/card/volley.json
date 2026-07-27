@@ -1,0 +1,36 @@
+{
+  "unit": "card/volley",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Volley.cs",
+    "sha256": "56f3f83ff6ba003ff27242d4c6d8ca754674f7f5fbd1abff2b60a43838337ed3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_attacks.py",
+    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_attacks.py:490-495) + _init_vars (497-499)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Uncommon, TargetType.RandomEnemy)` with `protected override bool HasEnergyCostX => true` (Volley.cs:13-20) == `energy_cost_x = True` (cards/base.py:84-87) plus `_energy_cost = 0`. As with card/cascade, the base cost of 0 is exactly right for an X-cost card: `CardEnergyCost`'s constructor sets `Canonical = ((!CostsX) ? canonicalCost : 0)` (CardEnergyCost.cs:86), so C# also holds 0."
+    },
+    "CanonicalVars": {
+      "maps_to": "VolleyCard._damage = 10 (colorless_attacks.py:499)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(10m, ValueProp.Move)` (Volley.cs:15) == `_damage = 10`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "VolleyCard.on_play (colorless_attacks.py:504-512)",
+      "verdict": "gap",
+      "issue": "The X-value plumbing, the hit count and the duplicates policy are all faithful: `WithHitCount(ResolveEnergyXValue())` (Volley.cs:24) == `for _ in range(self.captured_x)`, where `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), the sim's ResolveEnergyXValue; and `TargetingRandomOpponents(CombatState)` defaults `allowDuplicates: true` (AttackCommand.cs:309, 325, 72) so repeats are allowed, which independent per-hit choices reproduce, with the living-target set re-derived per hit on both sides (AttackCommand.cs:544-546). WRONG RNG STREAM: C# rolls `Rng.CombatTargets.NextItem(validTargets)` per hit (AttackCommand.cs:601-602); the sim calls `ctx.combat._rng.choice(living)` (colorless_attacks.py:510) on the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.targets` maps to `combat_targets` (combat_rng.py:22,54). Same mechanism and same verdict as card/rip_and_tear's OnPlay entry (rule 3); LIVE, and this is the 12th of the 21 cards the `shared-rng` probe lists. card/sword_boomerang -- the same multi-hit random-target shape -- shows the correct fix, branching on `crng.is_parity` and using `crng.targets`."
+    },
+    "OnUpgrade": {
+      "maps_to": "VolleyCard._on_upgrade (colorless_attacks.py:501-502)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(4m)` (Volley.cs:32) == `self._damage += 4` (10 -> 14 per hit). The hit count stays X on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,42 @@
+{
+  "unit": "card/hemokinesis",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Hemokinesis.cs",
+    "sha256": "0da212258133ca67234cb46e98de286c84353566320452d17c23f846a6618166"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\hemokinesis.py",
+    "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (hemokinesis.py:20-24) + _init_vars (26-29)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (Hemokinesis.cs:20-23) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_hp_loss = 2, _damage = 15 (hemokinesis.py:28-29)",
+      "verdict": "faithful",
+      "rationale": "`new HpLossVar(2m)` + `new DamageVar(15m, ValueProp.Move)` (Hemokinesis.cs:14-18) == both numbers, both declared -- so `base_hp_loss` and `base_damage` both report correctly, unlike card/breakthrough's inlined HP loss."
+    },
+    "OnPlay": {
+      "maps_to": "HemokinesisCard.on_play (hemokinesis.py:34-40)",
+      "verdict": "faithful",
+      "rationale": "Order matches: self-damage FIRST (`CreatureCmd.Damage(..., 2, Unblockable | Unpowered | Move, this)`, Hemokinesis.cs:28) == `DamageCmd.deal(ctx.hooks, ctx.player, self._hp_loss, card=self, props=DamageProps.CARD_HP_LOSS)`, then the attack (29-31). Crucially the self-damage goes through the full `DamageCmd.deal` pipeline here, so `on_damage_received` fires and RupturePower triggers -- exactly what card/breakthrough's hand-rolled HP loss fails to do. Presentation, folded in: WithHitFx."
+    },
+    "OnUpgrade": {
+      "maps_to": "HemokinesisCard._on_upgrade (hemokinesis.py:31-32)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(5m)` (Hemokinesis.cs:36) == `self._damage += 5` (15 -> 20). The HP loss stays 2 when upgraded on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim returns early on `if ctx.player.is_dead` between the HP loss and the attack (hemokinesis.py:38-39)",
+      "verdict": "gap",
+      "issue": "Hemokinesis.cs has no such early return; C# would still run the attack command, which self-guards on `Attacker.IsDead` (AttackCommand.cs:528-531) and returns without hitting -- so the two actually agree on the attack itself. What C# still does and the sim skips is `Hook.BeforeAttack` / `AfterAttack` (AttackCommand.cs:536, 655), which fire around the no-op attack. DORMANT: the sim floors a death-prevented creature at 1 HP (cmds.py:106-112), so `is_dead` means the combat is already lost, and no ported before/after-attack listener acts after the player's death. Same family as card/blood_wall's and card/bloodletting's guards (rule 3)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

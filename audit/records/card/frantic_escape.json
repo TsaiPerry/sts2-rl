@@ -1,0 +1,47 @@
+{
+  "unit": "card/frantic_escape",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\FranticEscape.cs",
+    "sha256": "fbd36d62124e9fdcdeb59c4cdd02cd483a1f8973cb10fe09e529a0da9dbbffa4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\frantic_escape.py",
+    "sha256": "d7cbdc8b69a01457f9eb6ff70781c996f8b047819c5ea74ba0411c3fc977d70b"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "FranticEscapeCard.max_upgrade_level = 0 (frantic_escape.py:26)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (FranticEscape.cs:28) == the class attribute."
+    },
+    "CanBeGeneratedInCombat": {
+      "maps_to": "NOT PORTED -- the sim sets `can_be_generated_by_modifiers = False` instead (frantic_escape.py:28)",
+      "verdict": "gap",
+      "issue": "`public override bool CanBeGeneratedInCombat => false` (FranticEscape.cs:30) has no counterpart: the sim leaves `can_be_generated_in_combat` at its True default and instead turns off `can_be_generated_by_modifiers`, which FranticEscape.cs does not override (C# leaves it `=> true`, CardModel.cs:648). Two mismatched flags in one card -- the SAME mistake as card/disintegration, and the same verdict (rule 3). DORMANT both ways: the in-combat generators the first flag gates draw from `pool_card_ids()` (IRONCLAD_POOL), which holds no Status cards, and the second gates the random-CURSE pool, which a Status of Status rarity is not in. Live for the first flag the moment an in-combat generator is pointed at a pool including statuses."
+    },
+    "ctor": {
+      "maps_to": "class attrs (frantic_escape.py:21-28) + _init_vars (30-31)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Status, CardRarity.Status, TargetType.Self)` (FranticEscape.cs:32-35) == cost 1 / STATUS / STATUS / SELF. A REAL cost of 1, and the card is PLAYABLE (no Unplayable keyword) on both sides -- the sim correctly leaves `is_playable` True, which matters because playing it is the card's entire purpose."
+    },
+    "OnPlay": {
+      "maps_to": "FranticEscapeCard.on_play (frantic_escape.py:33-42)",
+      "verdict": "gap",
+      "issue": "TWO DIVERGENCES. (1) THE COST BUMP IS PERMANENT IN THE SIM. `base.EnergyCost.AddThisCombat(1)` (FranticEscape.cs:45) registers a LocalCostModifier with `LocalCostModifierExpiration.EndOfCombat` (CardEnergyCost.cs, the AddThisCombat overload), so the card resets to cost 1 in the NEXT combat. The sim writes `self._energy_cost += 1` (frantic_escape.py:42), mutating the card's BASE cost -- and `_energy_cost` is re-seeded only by `_init_vars`, which `reset_combat_state` (cards/base.py:239-245) does not call. So a Frantic Escape played twice in one combat and then carried into the next starts that combat at cost 3 in the sim and cost 1 in the game. LIVE: The Insatiable's LIQUIFY_GROUND adds these cards, the sim keeps deck cards across combats (RunState.deck), and `reset_combat_state` exists precisely to clear per-combat cost state -- it already handles `_cost_this_combat`, which is the field this should have used (`set_cost_this_combat` is a SET, so an ADD needs `self.set_cost_this_combat(self._energy_cost + 1)` or an equivalent per-combat delta). (2) APPLY vs MODIFYAMOUNT AND A MISSING TARGET FILTER: C# finds the Sandpit power `s.Target == Owner.Creature` (FranticEscape.cs:40) and calls `PowerCmd.ModifyAmount(sandpitPower, 1m, sandpitEnemy, this)` on that exact instance; the sim takes the first enemy with ANY `sandpit` power and calls `PowerCmd.apply(..., SandpitPower, 1)` (frantic_escape.py:36-40), which routes through the stacking path and, unlike ModifyAmount, runs the full apply pipeline. DORMANT: single-player means one Sandpit can only target the one player, so the `Target ==` filter selects the same instance, and the sim's `PowerCmd.apply` reaches `existing.on_stack(amount)` (cmds.py:308-322) for an already-present power, which is ModifyAmount's job. Live if a second Sandpit or a multi-target Sandpit is ever reachable."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim skips gone enemies when hunting for the Sandpit (`not enemy.is_gone`, frantic_escape.py:38) and breaks after the first (40); C# takes `Enemies.FirstOrDefault(c => c.HasPower<SandpitPower>())` (FranticEscape.cs:50)",
+      "verdict": "faithful",
+      "rationale": "Both take the first match and stop. The sim's extra liveness filter is not the card/bash family -- it selects which creature to affect rather than gating an effect on an already-chosen one, and C#'s `Enemies` list has already had removed corpses taken out of it (CreatureCmd.cs:523-525)."
+    },
+    {
+      "what": "the sim adds `is_unpowered = True` (frantic_escape.py:27), which has no counterpart in FranticEscape.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the card deals no damage, so `DamageCmd.deal`'s prop inference never reads it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

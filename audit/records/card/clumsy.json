@@ -1,0 +1,42 @@
+{
+  "unit": "card/clumsy",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Clumsy.cs",
+    "sha256": "dd7b6af48036835a8cb5ce2180272ab7f5f8ab576017eb9a45854c04a55cc805"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\clumsy.py",
+    "sha256": "157f33b50f390993d28b18e0a7c602a8d24b0b71722345a9b9b5920ee3523de2"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "is_playable = False, is_ethereal = True (clumsy.py:24-25)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable, CardKeyword.Ethereal }` (Clumsy.cs:8-12) == both flags. NOT Eternal -- unlike AscendersBane and CurseOfTheBell -- and the sim correctly leaves `eternal` False, so Clumsy IS removable from the deck on both sides."
+    },
+    "MaxUpgradeLevel": {
+      "maps_to": "ClumsyCard.max_upgrade_level = 0 (clumsy.py:26)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Clumsy.cs:14) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (clumsy.py:19-27) + _init_vars (29-30)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every local and global cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain in `Card.energy_cost` (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) (CardEnergyCost.cs:134-139), so the two agree on what is SPENT -- only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's and card/bad_luck's ctor entries (rule 3). DORMANT: the three ported cost readers agree today -- relics/mummified_hand.py:25 and potions.py:168 filter `> 0`, cards/event_cards.py:328 (Enlightenment) skips `<= 1` -- and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses. Live as soon as any effect reads an unplayable card's cost without a `> 0` filter."
+    },
+    "OnPlay": {
+      "maps_to": "ClumsyCard.on_play -> pass (clumsy.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "Clumsy.cs declares no OnPlay and the card is Unplayable; the sim's abstract method is a `pass`."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (clumsy.py:27), which has no counterpart in Clumsy.cs",
+      "verdict": "faithful",
+      "rationale": "`is_unpowered` only steers `DamageCmd.deal`'s prop inference (cmds.py:44-50) and Clumsy deals no damage at all, so the flag is inert. Same inert-extra as card/ascenders_bane."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

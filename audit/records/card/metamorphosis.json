@@ -1,0 +1,41 @@
+{
+  "unit": "card/metamorphosis",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Metamorphosis.cs",
+    "sha256": "4bdffa4fe4edfaeafd34d6d7a2318604beb4053a2b8c9a4d147fd497052767b4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "MetamorphosisCard.exhausts = True (event_cards.py:289)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Metamorphosis.cs:14) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:284-289) + _init_vars (291-293)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Event, TargetType.Self)` (Metamorphosis.cs:18-21) == cost 2 / SKILL / EVENT / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "MetamorphosisCard._cards = 3 (event_cards.py:293)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(3)` (Metamorphosis.cs:16) == `_cards = 3`."
+    },
+    "OnPlay": {
+      "maps_to": "MetamorphosisCard.on_play (event_cards.py:298-304)",
+      "verdict": "gap",
+      "issue": "The pool filter (character-pool ATTACKS), the count, the free-for-the-combat marking and the destination pile are all faithful in shape: `CardFactory.GetForCombat` WITH replacement (so duplicates are allowed, matching `random_pool_cards(..., distinct` unset), `item.SetToFreeThisCombat()` == `card.set_cost_this_combat(0)` (cards/base.py:234-237 documents that verb as EnergyCost.SetThisCombat's mirror), and PileType.Draw. TWO DIVERGENCES. (1) THE PILE POSITION IS WRONG AND COSTS RNG: C# adds at `CardPilePosition.Random` (Metamorphosis.cs:31), which `CardPileCmd`'s Random branch resolves with a draw on the CombatCardSelection stream (the same `Rng.CombatCardSelection.NextItem(drawPile.Cards)` shape CardPileCmd.cs:946 uses for AutoPlayFromDrawPile's Random position); the sim's `add_to_draw` appends to the end of the draw pile, i.e. deterministically on TOP, taking no draw at all. So the three generated Attacks are scattered through the game's draw pile and sit on top of the sim's, AND the sim is three CombatCardSelection draws short. Observable immediately -- the very next draw is a generated Attack in the sim and usually is not in the game. (2) WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` / `rng.choice` (pool.py:157-161) rather than the game's draw sequence. Same mechanism and same verdict as card/discovery's OnPlay entry (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists. card/infernal_blade and card/mad_science's Chaos rider both show the correct shape -- branch on `crng.is_parity` and use `crng.card_gen`."
+    },
+    "OnUpgrade": {
+      "maps_to": "MetamorphosisCard._on_upgrade (event_cards.py:295-296)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(2m)` (Metamorphosis.cs:37) == `self._cards += 2` (3 -> 5). Note the upgrade adds TWO, not one -- the only +2 CardsVar upgrade in the pool so far, and easy to transcribe as +1."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

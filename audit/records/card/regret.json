@@ -1,0 +1,62 @@
+{
+  "unit": "card/regret",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Regret.cs",
+    "sha256": "74784ddfefc306ef56027006fbf79a8831ec1d8495ce400eb2830a120b82b53e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\regret.py",
+    "sha256": "34b2f18999b7bb13c278cc43d60482e27bcf92a6ed6784d52a5d1d9fc7812ec0"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "RegretCard.max_upgrade_level = 0 (regret.py:146)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Regret.cs:17) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "RegretCard.is_playable = False (regret.py:145)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Regret.cs:19) == `is_playable = False`."
+    },
+    "HasTurnEndInHandEffect": {
+      "maps_to": "RegretCard.has_turn_end_in_hand_effect = True (regret.py:148)",
+      "verdict": "faithful",
+      "rationale": "`=> true` (Regret.cs:34) == the class attribute."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "RegretCard.on_player_turn_end (regret.py:157-161)",
+      "verdict": "faithful",
+      "rationale": "`if (!participants.Contains(Owner.Creature)) return; if (Pile.Type != PileType.Hand) return; CardsInHand = Pile.Cards.Count;` (Regret.cs:41-53) == `if self.combat is not None and self in self.combat.player.hand: self._cards_in_hand = len(self.combat.player.hand)`. Both clauses map: the participants test is the side/ownership gate, and the in-hand test is the same `self in hand`. THE SNAPSHOT IS THE POINT -- Regret must count the hand BEFORE the end-of-turn hand processing starts removing cards, and it must count ITSELF, which both sides do because Regret is still in the hand at that moment. The sim's comment states exactly this."
+    },
+    "ctor": {
+      "maps_to": "class attrs (regret.py:140-148) + _init_vars (150-152)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses."
+    },
+    "OnTurnEndInHand": {
+      "maps_to": "RegretCard.on_turn_end_in_hand (regret.py:163-173)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Damage(choiceContext, Owner.Creature, CardsInHand, Unblockable | Unpowered | Move, this)` then `CardsInHand = 0` (Regret.cs:57-58) == `DamageCmd.deal(ctx.hooks, ctx.player, self._cards_in_hand, card=self, props=DamageProps.CARD_HP_LOSS)` then `self._cards_in_hand = 0`. `CARD_HP_LOSS` is exactly that prop triple (valueprops.py:38), the reset is reproduced, and the damage goes through the full pipeline so `on_damage_received` and RupturePower fire -- unlike card/breakthrough's hand-rolled loss."
+    },
+    "OnPlay": {
+      "maps_to": "RegretCard.on_play -> pass (regret.py:154-155)",
+      "verdict": "faithful",
+      "rationale": "Regret.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [
+    {
+      "what": "Regret has NO CanonicalVars -- the damage is the snapshot, and the sim declares `_cards_in_hand = 0` in `_init_vars` (regret.py:152)",
+      "verdict": "faithful",
+      "rationale": "So there is no printed number to miss, and the state field is re-seeded on downgrade. The one curse in the pool whose damage number is purely dynamic."
+    },
+    {
+      "what": "the sim adds `is_unpowered = True` (regret.py:147), which has no counterpart in Regret.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the card's only damage passes explicit CARD_HP_LOSS props, so the prop inference never reads the flag."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

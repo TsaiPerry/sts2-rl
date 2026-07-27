@@ -1,0 +1,47 @@
+{
+  "unit": "card/distraction",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Distraction.cs",
+    "sha256": "a4a0e1336c7625bf0e5b4b81999a447549c5001f7df906b3cec084c1c2994d2b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<SilentCardPool>()` (Distraction.cs:14) selects the card's ART pool, not its generation pool. Presentation."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "DistractionCard.exhausts = True (trash_heap_cards.py:101)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Distraction.cs:16) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:96-101) + _init_vars (103-104)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Event, TargetType.Self)` (Distraction.cs:18-21) == cost 1 / SKILL / EVENT / SELF."
+    },
+    "OnPlay": {
+      "maps_to": "DistractionCard.on_play (trash_heap_cards.py:109-116)",
+      "verdict": "gap",
+      "issue": "The shape is right -- generate 1 distinct SKILL from the character pool, make it free this turn, add it to hand, in that order. WRONG RNG STREAM: `CardFactory.GetDistinctForCombat(..., 1, Owner.RunState.Rng.CombatCardGeneration)` (Distraction.cs:25-27) names the CombatCardGeneration stream; the sim calls `random_pool_cards(ctx.combat._rng, 1, _CT.SKILL, distinct=True)` (trash_heap_cards.py:113) on the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `rng.sample` (pool.py:158) is a different draw sequence from GetDistinctForCombat's. Same mechanism and same verdict as card/anointed, card/beat_down and card/discovery (rule 3). LIVE -- Distraction is a ported Event Skill from the Trash Heap and the parity stream is wired."
+    },
+    "OnUpgrade": {
+      "maps_to": "DistractionCard._on_upgrade (trash_heap_cards.py:106-107)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Distraction.cs:37) == `self._energy_cost = max(0, self._energy_cost - 1)` (1 -> 0)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the C# filter is `c.Type == CardType.Skill` over `Character.CardPool.GetUnlockedCards(...)` (Distraction.cs:25-26)",
+      "verdict": "faithful",
+      "rationale": "The sim passes `_CT.SKILL` to `random_pool_cards`, whose default pool is IRONCLAD_POOL (pool.py:141), i.e. the character pool. Same membership; only the stream and the draw algorithm diverge, which the OnPlay entry owns."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

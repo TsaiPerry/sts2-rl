@@ -1,0 +1,36 @@
+{
+  "unit": "card/tear_asunder",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\TearAsunder.cs",
+    "sha256": "82cdf2eb117a1f2f07a72f7ea30a6e88b4cdae1e7879fbdaa057ba6326592712"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\tear_asunder.py",
+    "sha256": "f3be124e5e55dcf13f46a2c862f008447279183e7d2176319671c4fa70e2f33a"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (tear_asunder.py:64-68) + _init_vars (70-72)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Attack, CardRarity.Rare, TargetType.AnyEnemy)` (TearAsunder.cs:29-32) == cost 2 / ATTACK / RARE / ANY_ENEMY."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 5; the hit count is computed (tear_asunder.py:72, 80)",
+      "verdict": "faithful",
+      "rationale": "Five vars in C# (TearAsunder.cs:20-27): `DamageVar(5m, Move)` -> `_damage = 5`; `CalculationBaseVar(0m)` + `CalculationExtraVar(1m)` + `CalculatedVar(\"CalculatedHits\").WithMultiplier(card => 1 + History.Entries.OfType<DamageReceivedEntry>().Count(e => e.Receiver == card.Owner.Creature && e.Result.UnblockedDamage > 0))` -> the sim's `hits = 1 + ctx.combat.history.times_damaged(ctx.player)`; and `RepeatVar(1)`, which is NEVER READ by OnPlay -- the hit count comes from CalculatedHits, not from Repeat -- so its absence from the sim costs nothing, the same display-only situation as card/dominate's StrengthPerVulnerable. Note the multiplier's `1 +` is INSIDE the lambda while CalculationBase is 0, so `Calculate` = `0 + 1 * (1 + timesDamaged)`, which is exactly the sim's expression. The count is over the WHOLE COMBAT -- there is no HappenedThisTurn filter, unlike card/spite's -- and the sim's `times_damaged` matches; getting that wrong would be the easiest mistake on this card."
+    },
+    "OnPlay": {
+      "maps_to": "TearAsunderCard.on_play (tear_asunder.py:77-84)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(5).WithHitCount((int)CalculatedHits.Calculate(target)).FromCard(this).Targeting(target)` (TearAsunder.cs:37-40) == the sim's `hits`-iteration loop of `DamageCmd.deal`. The hit count is computed BEFORE the attack on both sides, so damage taken from this card's own thorns retaliation cannot raise it mid-attack. The per-hit `if target.is_gone or ctx.player.is_dead: break` is AttackCommand's own break, not a CanReceivePowers guard."
+    },
+    "OnUpgrade": {
+      "maps_to": "TearAsunderCard._on_upgrade (tear_asunder.py:74-75)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` (TearAsunder.cs:45) == `self._damage += 2` (5 -> 7 per hit). The hit formula is untouched by the upgrade on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,46 @@
+{
+  "unit": "card/relax",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Relax.cs",
+    "sha256": "a8df004b0e85cac7cd28bc84760059513d2583974d6532ad1665287abfb8fdb1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\relax.py",
+    "sha256": "5257dee75253a9c358f2988d41587ba8c044ed9ae46d41b44f20bab322e5b486"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "RelaxCard.gains_block = True (relax.py:191)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Relax.cs:15) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "RelaxCard.exhausts = True (relax.py:196)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (Relax.cs:26) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (relax.py:190-196) + _init_vars (198-202)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Skill, CardRarity.Ancient, TargetType.Self)` (Relax.cs:28-31) == cost 3 / SKILL / ANCIENT / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_block = 15, _cards = 2, _energy = 2 (relax.py:200-202)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(15m, ValueProp.Move)` + `new CardsVar(2)` + `new EnergyVar(2)` (Relax.cs:17-22) == all three numbers, all declared as SEPARATE fields -- which matters because the upgrade raises them by DIFFERENT amounts (+2/+1/+1), so the collapse card/prowess gets away with would break here. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "RelaxCard.on_play (relax.py:209-221)",
+      "verdict": "faithful",
+      "rationale": "All three steps and their order match: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` (Relax.cs:36) == `BlockCmd.apply`, then `PowerCmd.Apply<DrawCardsNextTurnPower>(..., Cards.BaseValue, ...)` (37), then `PowerCmd.Apply<EnergyNextTurnPower>(..., Energy.BaseValue, ...)` (38) -- both == the sim's two `PowerCmd.apply` calls in the same order. Neither the draw nor the energy happens NOW on either side; the two powers deliver them next turn. Presentation, folded in: TriggerAnim (35) and the energy hover tip (24)."
+    },
+    "OnUpgrade": {
+      "maps_to": "RelaxCard._on_upgrade (relax.py:204-207)",
+      "verdict": "faithful",
+      "rationale": "`Block.UpgradeValueBy(2m)` + `Cards.UpgradeValueBy(1m)` + `Energy.UpgradeValueBy(1m)` (Relax.cs:43-45) == `_block += 2` (15 -> 17), `_cards += 1` (2 -> 3), `_energy += 1` (2 -> 3). All three upgraded numbers checked, and the +2/+1/+1 asymmetry is exactly the kind of detail a collapsed var would lose."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

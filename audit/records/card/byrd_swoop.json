@@ -1,0 +1,42 @@
+{
+  "unit": "card/byrd_swoop",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\ByrdSwoop.cs",
+    "sha256": "c520fa1d2e87f75a1f62f0a3f553d7d6e604caa4a34fae79fd02fcd80e96cbf9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\event_cards.py",
+    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (event_cards.py:59-63) + _init_vars (65-67)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Attack, CardRarity.Event, TargetType.AnyEnemy)` (ByrdSwoop.cs:19-22) == cost 0 / ATTACK / EVENT / ANY_ENEMY. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "ByrdSwoopCard._damage = 14 (event_cards.py:67)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(14m, ValueProp.Move)` (ByrdSwoop.cs:17) == `_damage = 14`, powered on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "ByrdSwoopCard.on_play (event_cards.py:72-77)",
+      "verdict": "faithful",
+      "rationale": "`DamageCmd.Attack(14).FromCard(this).Targeting(cardPlay.Target)` (ByrdSwoop.cs:27-30) == the sim's single `DamageCmd.deal(..., dealer=ctx.player, card=self)`. Presentation, folded in: WithAttackerAnim's `GetPet<Byrdpip>()` and WithHitFx (28-29) are animation/SFX routing -- the pet is the ANIMATION source, not a second dealer, so damage attribution is unchanged."
+    },
+    "OnUpgrade": {
+      "maps_to": "ByrdSwoopCard._on_upgrade (event_cards.py:69-70)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(4m)` (ByrdSwoop.cs:35) == `self._damage += 4` (14 -> 18)."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (ByrdSwoop.cs:26)",
+      "verdict": "faithful",
+      "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the equivalent contract."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

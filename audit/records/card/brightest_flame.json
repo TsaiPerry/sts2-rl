@@ -1,0 +1,42 @@
+{
+  "unit": "card/brightest_flame",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\BrightestFlame.cs",
+    "sha256": "f2c1d2598853469557cbdc97cb8fb00b365f2e21c85c6e2f68cefa6169f92d7e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\brightest_flame.py",
+    "sha256": "7b34a415ca88acfa29e1104221537af594a8893575ca050f1d024d11c6fa8c76"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (brightest_flame.py:16-20) + _init_vars (22-26)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Ancient, TargetType.Self)` (BrightestFlame.cs:22-25) == cost 0 / SKILL / ANCIENT / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "_max_hp = 1, _energy = 2, _cards = 2 (brightest_flame.py:24-26)",
+      "verdict": "faithful",
+      "rationale": "`new MaxHpVar(1m)` + `new EnergyVar(2)` + `new CardsVar(2)` (BrightestFlame.cs:13-18) == all three numbers, all declared. `_energy` precedes `_cards` in `Card._MAGIC_ATTRS` so `magic_number` reports the energy, the card's headline number."
+    },
+    "OnPlay": {
+      "maps_to": "BrightestFlameCard.on_play (brightest_flame.py:32-37)",
+      "verdict": "faithful",
+      "rationale": "All three steps and their order match: `PlayerCmd.GainEnergy(Energy.IntValue, Owner)` -> `CardPileCmd.Draw(choiceContext, Cards.BaseValue, Owner)` -> `CreatureCmd.LoseMaxHp(choiceContext, Owner.Creature, MaxHp.BaseValue, isFromCard: true)` (BrightestFlame.cs:29-31) == `EnergyCmd.gain` -> `DrawCmd.draw` -> `CreatureCmd.lose_max_hp`. The order matters (the draw precedes the max-HP loss, so the loss cannot cancel the draw) and is preserved. The card's OWN logic is faithful; see the guard for the verb it calls."
+    },
+    "OnUpgrade": {
+      "maps_to": "BrightestFlameCard._on_upgrade (brightest_flame.py:28-30)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Energy.UpgradeValueBy(1m)` + `DynamicVars.Cards.UpgradeValueBy(1m)` (BrightestFlame.cs:36-37) == `_energy += 1` (2 -> 3) and `_cards += 1` (2 -> 3). The MaxHp loss stays 1 when upgraded on both sides -- both upgraded numbers checked."
+    }
+  },
+  "guards": [
+    {
+      "what": "CROSS-RECORD DISAGREEMENT (rule 3): CreatureCmd.LoseMaxHp(..., isFromCard: true) is seam gap G6, which labels itself DORMANT; this card makes it LIVE",
+      "verdict": "gap",
+      "issue": "The seam's VERDICT (`gap`) is not disputed and is not re-verdicted here -- only its liveness label is. creature_card_cmds guard G6 reasons: \"Dormant: the two in-combat callers are Brightest Flame (cards/brightest_flame.py:37) and PaperCutsPower (powers.py:2959), neither of which reaches a fatal magnitude, and the isFromCard Move flag exists for cards that are not ported.\" That covers the KILL consequence and the Move flag but misses a third: C# `LoseMaxHp` routes the overflow through `Damage(..., Unblockable | Unpowered | Move, null, null)` (CreatureCmd.cs:826), which fires `Hook.AfterDamageReceived`; the sim's `lose_max_hp` (cmds.py:179-189) only clamps HP and calls `on_hp_changed`. `RupturePower.AfterDamageReceived` gains Strength on ANY unblocked damage its owner receives, and its `cardSource == null` branch (RupturePower.cs:48-51) is exactly the branch LoseMaxHp's null cardSource takes. Rupture IS ported (sts2_rl/cards/rupture_card.py; power at powers.py:272-289, listening on `on_damage_received`). Play Brightest Flame at full HP holding Rupture: newMaxHp < CurrentHp, so the game deals 1 damage and Rupture triggers; the sim gains no Strength. Both halves are ported Ironclad content, so this is LIVE. Reported for the seam owner; this record does not edit audits/seam/**."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

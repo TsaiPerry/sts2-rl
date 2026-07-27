@@ -1,0 +1,37 @@
+{
+  "unit": "card/splash",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Splash.cs",
+    "sha256": "8bb94eb7cae037635a02465e7136586f9c2454167c7845b759b894486196f5dd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:691-695) + _init_vars (697-698)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Splash.cs:15-18) == cost 1 / SKILL / UNCOMMON / SELF. No keywords, no CanonicalVars -- the three-option count is a literal on both sides."
+    },
+    "OnPlay": {
+      "maps_to": "SplashCard.on_play (colorless_skills.py:700-714)",
+      "verdict": "gap",
+      "issue": "The three-options / upgrade-the-options / choose-one / free-this-turn / add-to-hand sequence is faithful, including that the upgrade is applied to the OPTIONS before the choice (Splash.cs:34-40 == colorless_skills.py:706-709) so the player sees upgraded cards, and that `SetToFreeThisTurn` precedes the pile add (53-54 == 712-714). THE POOL AND THE STREAM. C# builds its candidate list from `Owner.UnlockState.CharacterCardPools`, REMOVING the owner's own pool only when more than one character pool is unlocked (Splash.cs:25-29), then filters to Attacks. With a single unlocked character the own pool is kept, which is exactly the sim's situation -- so `random_pool_cards(..., CardType.ATTACK, ...)` over IRONCLAD_POOL is the CORRECT membership for the sim's Ironclad-only scope, and the sim's docstring says so. That half is faithful. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` (pool.py:157-161) rather than GetDistinctForCombat's draw sequence. Same mechanism and same verdict as card/discovery's OnPlay entry (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists; card/infernal_blade and card/mad_science's Chaos rider show the correct shape. Also `canSkip: true` (Splash.cs:41) is not modelled: `CombatState.select_cards` always returns a card when candidates exist (combat.py:575-581), so the sim cannot decline -- dormant, the same residue as card/discovery's."
+    },
+    "OnUpgrade": {
+      "maps_to": "handled inline as `if self.upgrade_level > 0` (colorless_skills.py:706)",
+      "verdict": "faithful",
+      "rationale": "Splash.cs declares NO OnUpgrade override -- the upgrade changes no printed number, it upgrades the generated options, read from `IsUpgraded` inside OnPlay. The sim mirrors that exactly, including having no `_on_upgrade`. Same shape as card/armaments, card/cascade and card/primal_force. The sim's extra `if card.is_upgradable` test matches C#'s `CardCmd.Upgrade`, which self-checks IsUpgradable (CardCmd.cs:270-273)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the `_mockGeneratedCard` test hook (Splash.cs:13, 23, 43-50, 61-65)",
+      "verdict": "faithful",
+      "rationale": "Test-only scaffolding, explicitly marked \"ONLY USE THIS IN TESTS!\", with no gameplay path. The same shape as card/discovery's `MockSelectedCard` and card/mad_science's `MockChaosCard`. Out of scope."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

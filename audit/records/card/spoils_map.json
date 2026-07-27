@@ -1,0 +1,72 @@
+{
+  "unit": "card/spoils_map",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\SpoilsMap.cs",
+    "sha256": "bb52465415aa2e7df7024e94b04013f8fca94b01d0af47d2f188619528ef99bc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\spoils_map.py",
+    "sha256": "cd4880769f90dd631b9b39102faa291f5b600e1f2763ee77b05706b4289c184c"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "SpoilsMapCard.max_upgrade_level = 0 (spoils_map.py:75)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (SpoilsMap.cs:17) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "SpoilsMapCard.is_playable = False (spoils_map.py:74)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (SpoilsMap.cs:21) == `is_playable = False`, with the sim's comment naming the keyword."
+    },
+    "AfterCreated": {
+      "maps_to": "SpoilsMapCard._init_vars + the SPOILS_ACT_INDEX constant (spoils_map.py:79, 81-84)",
+      "verdict": "faithful",
+      "rationale": "`public override void AfterCreated() { SpoilsActIndex = 1; }` (SpoilsMap.cs:44-47) == `SPOILS_ACT_INDEX = 1` copied into `self.spoils_act_index` by `_init_vars`. Act index 1 is Act 2, which the sim's constant comment states. Using `_init_vars` rather than a class attribute also means the value survives the downgrade rebuild, though with MaxUpgradeLevel 0 that is moot."
+    },
+    "ModifyGeneratedMap": {
+      "maps_to": "SpoilsMapCard.modify_generated_map (spoils_map.py:96-104)",
+      "verdict": "faithful",
+      "rationale": "`if (actIndex != SpoilsActIndex) return map; if (Pile == null || Pile.Type != PileType.Deck) return map; return new SpoilsActMap(runState);` (SpoilsMap.cs:49-61) == the sim's `_active_in(run, act_index)` guard (spoils_map.py:89-92, which is `act_index == self.spoils_act_index and self in run.deck` -- the same act test and the same in-DECK test) then `SpoilsActMap(...)`. The RNG is handled with care and correctly: the sim's `_map_rng` (106-119) reproduces `new Rng(runState.Rng.Seed, \"spoils_map\")` (SpoilsActMap.cs:92) as a transient named stream so no serialized counter moves, exactly the shape StandardActMap uses -- the same level of parity care card/cinder and card/infernal_blade show, in a much harder place."
+    },
+    "ModifyGeneratedMapLate": {
+      "maps_to": "SpoilsMapCard.modify_generated_map_late (spoils_map.py:121-131)",
+      "verdict": "faithful",
+      "rationale": "`map.GetAllMapPoints().FirstOrDefault(p => p.PointType == MapPointType.Treasure)` then `SpoilsCoord = mapPoint.coord` (SpoilsMap.cs:63-80) == the sim's first-TREASURE scan writing `self.spoils_coord`, behind the same act + in-deck guard. The sim additionally clears `spoils_coord` to None before the scan (126), which C# leaves at its previous value if no treasure is found -- a difference that cannot bite, because the late pass only runs on a map this card itself just replaced with a SpoilsActMap, which always has a treasure node."
+    },
+    "AfterMapGenerated": {
+      "maps_to": "SpoilsMapCard.after_map_generated (spoils_map.py:133-138)",
+      "verdict": "faithful",
+      "rationale": "`if (SpoilsCoord.HasValue && map.HasPoint(SpoilsCoord.Value)) map.GetPoint(...)?.AddQuest(this)` (SpoilsMap.cs:82-98) == the sim's `point = act_map.get_point(*self.spoils_coord); if point is not None: point.add_quest(self)`, behind the same guards. The three-pass structure -- replace the map, then find the treasure, then mark it -- is preserved, which matters because the mark must land on the FINAL map object."
+    },
+    "BeforeCardRemoved": {
+      "maps_to": "NOT PORTED -- SpoilsMapCard has no such hook, and the sim's Card base has none (spoils_map.py)",
+      "verdict": "gap",
+      "issue": "`if (card != this) return; if (SpoilsActIndex != Owner.RunState.CurrentActIndex) return; if (!SpoilsCoord.HasValue) return; Owner.RunState.Map.GetPoint(SpoilsCoord.Value)?.RemoveQuest(this);` (SpoilsMap.cs:100-116) is the CLEANUP path: if the Spoils Map card leaves the deck by any route OTHER than completing its own quest, the quest marker is taken off the map point. The sim removes the marker only inside `on_quest_complete` (spoils_map.py:145-148), and its `Card` base exposes no `before_card_removed` hook at all, so there is nowhere to put it. Observable: remove Spoils Map at a shop or event during Act 2 and the treasure node keeps a quest pointing at a card that is no longer in the deck. LIVE -- `RunState.remove_cards` (run.py:356-358) is the ported deck-removal verb and card removal is ordinary Act-2 play; the dangling marker then makes the treasure node behave as a quest node with an owner that is gone. Recorded as a gap, not a waiver: \"the hook category is unported\" is explicitly a dormant-or-live gap per rule 1, and here the removal path IS ported, so it is live. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
+    },
+    "ctor": {
+      "maps_to": "class attrs (spoils_map.py:69-75) + _init_vars (81-84)",
+      "verdict": "gap",
+      "issue": "QUEST / QUEST map exactly, and so does the unusual `TargetType.Self` (SpoilsMap.cs:40) -- the same non-None target type card/lantern_key carries. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
+    },
+    "CanonicalVars": {
+      "maps_to": "GOLD = 600 as a class constant, not a printed var (spoils_map.py:77)",
+      "verdict": "gap",
+      "issue": "`new GoldVar(600)` (SpoilsMap.cs:19) is the card's printed reward. The sim stores it as the class constant `GOLD` rather than a `_`-attribute, so `magic_number` returns None. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "SpoilsMapCard.on_play -> pass (spoils_map.py:86-87)",
+      "verdict": "faithful",
+      "rationale": "SpoilsMap.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [
+    {
+      "what": "OnQuestComplete: gain 600 gold, complete the quest, remove the card from the deck (SpoilsMap.cs:118-124)",
+      "verdict": "faithful",
+      "rationale": "`PlayerCmd.GainGold(Gold.BaseValue)` + `PlayerCmd.CompleteQuest(this)` + `CardPileCmd.RemoveFromDeck(this)` == the sim's `on_quest_complete` (spoils_map.py:142-151): `run.gain_gold(self.GOLD)`, the marker removal, and `run.deck.remove(self)`. The sim folds `CompleteQuest`'s bookkeeping into the marker removal, which is the same observable outcome. Not enumerated by the harness because `OnQuestComplete` is a plain public method rather than an override -- added by hand."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

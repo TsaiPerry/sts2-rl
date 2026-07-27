@@ -1,0 +1,42 @@
+{
+  "unit": "card/apotheosis",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Apotheosis.cs",
+    "sha256": "c16c21079f8aea484f03a473d9f6214947de2cf20f1b6468d47830f4052df2dd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\apotheosis.py",
+    "sha256": "3fe9e98ae7cab27c7848f390705ff71345d40c830bc4b740114d3598b595bbcb"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "ApotheosisCard.exhausts = True, innate = True (apotheosis.py:22-23)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust, CardKeyword.Innate }` (Apotheosis.cs:11-15) == both class attributes. These are CANONICAL keywords (set at construction), not upgrade-added ones, so the downgrade-rebuild hazard that hits aggression/apparition does not apply -- `card_probes.py downgrade` does not list apotheosis."
+    },
+    "ctor": {
+      "maps_to": "class attrs (apotheosis.py:17-23) + _init_vars (25-26)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Ancient, TargetType.Self)` (Apotheosis.cs:17-20) == cost 2 / SKILL / ANCIENT / SELF."
+    },
+    "OnPlay": {
+      "maps_to": "ApotheosisCard.on_play (apotheosis.py:31-34)",
+      "verdict": "faithful",
+      "rationale": "`foreach (allCard in Owner.PlayerCombatState.AllCards) if (allCard != this && allCard.IsUpgradable) CardCmd.Upgrade(allCard)` (Apotheosis.cs:24-30) == `for card in ctx.player.all_cards: if card is not self and card.is_upgradable: card.upgrade()`. `is_upgradable` mirrors `CardModel.IsUpgradable` exactly (`upgrade_level < max_upgrade_level`, cards/base.py:167-170), so statuses/curses with MaxUpgradeLevel 0 are skipped on both sides. `CardCmd.Upgrade` adds only a deck-history entry and VFX on top of `UpgradeInternal` (CardCmd.cs:266-311), neither of which is in scope."
+    },
+    "OnUpgrade": {
+      "maps_to": "ApotheosisCard._on_upgrade (apotheosis.py:28-29)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Apotheosis.cs:36) == `self._energy_cost -= 1` (2 -> 1). No clamp needed at this base cost."
+    }
+  },
+  "guards": [
+    {
+      "what": "the `allCard != this` self-exclusion, and whether the two AllCards sets are the same set (Apotheosis.cs:26)",
+      "verdict": "faithful",
+      "rationale": "C# `PlayerCombatState.AllCards` is `AllPiles.SelectMany(p => p.Cards)` (PlayerCombatState.cs:82) over Hand, Draw, Discard, Exhaust AND Play (PlayerCombatState.cs:70-80, quoted by docs/audit/seams/hook_dispatch.md:302-355); the sim's `all_cards` is `hand + draw_pile + discard_pile + exhaust_pile` (player.py:100-103) with no Play pile. They still agree here because the sim parks a non-Power card being played in the DISCARD pile for the duration of OnPlay (combat.py:452-454, the `_playing_card` limbo marker), so Apotheosis itself is in `all_cards` and is excluded by the same `is not self` test. DORMANT nuance: the sets diverge only when a POWER card is mid-play while Apotheosis resolves, because the sim removes Power cards from every pile for the duration (combat.py:452) while C# holds them in Play. That needs a nested play whose OUTER card is a Power and whose inner card is Apotheosis; no ported content does that today (Havoc/Beat Down/Mad Science auto-play from piles but are themselves Skills). It becomes live if any Power card is ported that auto-plays another card."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

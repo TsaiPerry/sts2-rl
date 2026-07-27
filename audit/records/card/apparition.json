@@ -1,0 +1,41 @@
+{
+  "unit": "card/apparition",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Apparition.cs",
+    "sha256": "108391d46dcacf68b0c0bce425f40dc3119901ba739240585dea800c8370ea63"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\apparition.py",
+    "sha256": "2e3f76a090559cfc244803561d216616a6128a29cd3b3d91ef54a6fea223fcee"
+  },
+  "hooks": {
+    "CanonicalKeywords": {
+      "maps_to": "ApparitionCard.exhausts = True, is_ethereal = True (apparition.py:21-22)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Ethereal, CardKeyword.Exhaust }` (Apparition.cs:14-18) == `is_ethereal = True` + `exhausts = True` at base."
+    },
+    "ctor": {
+      "maps_to": "class attrs (apparition.py:17-22) + _init_vars (24-26)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Ancient, TargetType.Self)` (Apparition.cs:24-27) == cost 1 / SKILL / ANCIENT / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "ApparitionCard._intangible = 1 (apparition.py:26)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<IntangiblePower>(1m)` (Apparition.cs:22) == `_intangible = 1`, read back as `base.DynamicVars[\"IntangiblePower\"].BaseValue` at the apply site (Apparition.cs:32)."
+    },
+    "OnPlay": {
+      "maps_to": "ApparitionCard.on_play (apparition.py:31-37)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<IntangiblePower>(choiceContext, Owner.Creature, DynamicVars[\"IntangiblePower\"].BaseValue, Owner.Creature, this)` (Apparition.cs:32) == `PowerCmd.apply(ctx.hooks, ctx.player, IntangiblePower, self._intangible, applier=ctx.player)`. Self-target, self-applier, amount 1. Presentation, folded in: Apparition.cs:31 runs CreatureCmd.TriggerAnim(\"Cast\") first, and ExtraHoverTips (line 20) is hover-tip wiring; neither has a sim counterpart and neither is in scope."
+    },
+    "OnUpgrade": {
+      "maps_to": "ApparitionCard._on_upgrade (apparition.py:28-29)",
+      "verdict": "gap",
+      "issue": "The UPGRADE is faithful; the DOWNGRADE is not. `RemoveKeyword(CardKeyword.Ethereal)` (Apparition.cs:37) maps to `self.is_ethereal = False`, correct at level 1. But `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars`, and `ApparitionCard._init_vars` (apparition.py:24-26) sets only `_energy_cost` and `_intangible` -- it never re-seeds `is_ethereal` -- so the instance attribute written by `_on_upgrade` survives and the downgraded card stays NON-Ethereal. C# `DowngradeInternal` rebuilds the keyword set from canonical (`_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()`, CardModel.cs:2143), restoring Ethereal. Observable and strictly player-favourable in the sim: in the game a downgraded Apparition exhausts itself at end of turn if unplayed; in the sim it is kept. EXECUTED: `py tools/audit/card_probes.py downgrade` prints `apparition: is_ethereal: True -> False` (5 of 203 sim cards affected). LIVE -- `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` (both registered in `events/__init__.py`) and `powers.py:3171` (DampenPower). Apparition itself is reachable: it is the Ancient card granted by Distinguished Cape (apparition.py:13-14). RATIONALE CITES THIRD FILES (rule 7): cards/base.py, CardModel.cs and the two event modules are not hashed by this record."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

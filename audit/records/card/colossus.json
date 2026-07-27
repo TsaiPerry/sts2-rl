@@ -1,0 +1,41 @@
+{
+  "unit": "card/colossus",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Colossus.cs",
+    "sha256": "7533cc64ca49aa267d44c09ef6264d57cff7d3fca666bed2bdbaa04a9368ecb4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colossus.py",
+    "sha256": "6580db016757356e219e44e5da621cf93cbbf4c0714b33fc1622533a8a2b4b4d"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "ColossusCard.gains_block = True (colossus.py:22)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Colossus.cs:19) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colossus.py:21-26) + _init_vars (28-30)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Colossus.cs:27-30) == cost 1 / SKILL / UNCOMMON / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "_block = 5 declared; the ColossusPower amount is inlined as 1 (colossus.py:30, 39)",
+      "verdict": "gap",
+      "issue": "`new BlockVar(5m, ValueProp.Move)` maps to `_block = 5`, but the second var `new DynamicVar(\"Colossus\", 1m)` (Colossus.cs:21-25) has no `_`-attribute in `_init_vars` -- the sim passes the literal 1 at the apply site. `base_block` is right, but `magic_number` returns None where the game prints a second var. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder. The BlockVar carries Move WITHOUT Unpowered -> POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and this card is NOT in gap G1's blast radius; confirmed pool-wide by `py tools/audit/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
+    },
+    "OnPlay": {
+      "maps_to": "ColossusCard.on_play (colossus.py:35-39)",
+      "verdict": "faithful",
+      "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (Colossus.cs:35) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`, then `PowerCmd.Apply<ColossusPower>(choiceContext, Owner.Creature, DynamicVars[\"Colossus\"].BaseValue, Owner.Creature, this)` (36) == `PowerCmd.apply(..., ColossusPower, 1, applier=ctx.player)`. Presentation, folded in: TriggerAnim (34) and the Vulnerable hover tip (17)."
+    },
+    "OnUpgrade": {
+      "maps_to": "ColossusCard._on_upgrade (colossus.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (Colossus.cs:41) == `self._block += 3` (5 -> 8). The ColossusPower amount stays 1 when upgraded on both sides -- upgraded values checked."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

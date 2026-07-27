@@ -1,0 +1,41 @@
+{
+  "unit": "card/finesse",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Finesse.cs",
+    "sha256": "e219c239f27683ceba64fae31836b7317c3b274eaf29422580bbb20f3d41c00f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "FinesseCard.gains_block = True (colorless_skills.py:266)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Finesse.cs:13) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:265-270) + _init_vars (272-275)",
+      "verdict": "faithful",
+      "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Finesse.cs:21-24) == cost 0 / SKILL / UNCOMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_block = 4, _cards = 1 (colorless_skills.py:274-275)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(4m, ValueProp.Move)` + `new CardsVar(1)` (Finesse.cs:15-19) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "FinesseCard.on_play (colorless_skills.py:280-283)",
+      "verdict": "faithful",
+      "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (Finesse.cs:33) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`, then `CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (34) == `DrawCmd.draw(ctx.player, self._cards)`."
+    },
+    "OnUpgrade": {
+      "maps_to": "FinesseCard._on_upgrade (colorless_skills.py:277-278)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (Finesse.cs:28) == `self._block += 3` (4 -> 7). The CARDS var stays 1 when upgraded on both sides. Note C# declares OnUpgrade BEFORE OnPlay in this file, which is the only card in the batch to do so -- no behavioural consequence, but worth stating so the read order is not mistaken for a missing override."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

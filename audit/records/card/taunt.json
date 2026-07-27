@@ -1,0 +1,41 @@
+{
+  "unit": "card/taunt",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Taunt.cs",
+    "sha256": "c87666a4a236daef1365e9a8c9accfc1c9133372bcccef3053ce9442b1c3eecd"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\taunt.py",
+    "sha256": "0909d10984ea7ba2644c2509e9dc54a5deaef964813ec3ffe65e7e55ff89c337"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "TauntCard.gains_block = True (taunt.py:21)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (Taunt.cs:16) == the class attribute -- notable because Taunt is a SKILL that targets an enemy AND gains block, so neither the type nor the target type implies the flag."
+    },
+    "ctor": {
+      "maps_to": "class attrs (taunt.py:20-25) + _init_vars (27-30)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.AnyEnemy)` (Taunt.cs:26-29) == cost 1 / SKILL / UNCOMMON / ANY_ENEMY -- another enemy-targeting Skill, like card/dark_shackles and card/dominate."
+    },
+    "CanonicalVars": {
+      "maps_to": "_block = 7, _vulnerable = 1 (taunt.py:29-30)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(7m, ValueProp.Move)` + `new PowerVar<VulnerablePower>(1m)` (Taunt.cs:18-22) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "TauntCard.on_play (taunt.py:36-42)",
+      "verdict": "gap",
+      "issue": "C# applies the debuff unconditionally and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose doc comment states that DEAD creatures can still receive powers -- it refuses only for a REMOVED corpse. The two agree for an ordinary kill (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, removal at 523-525) and diverge for a corpse whose removal was VETOED (`ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104), because `is_gone` is `is_dead or escaped` (creatures.py:44-46). Observable through ViciousPower, which draws on any Vulnerable its owner applies with no liveness test on the target (ViciousPower.cs:19-26). Same mechanism and same verdict as card/bash's OnPlay entry (rule 3); LIVE. EXECUTED: `py tools/audit/card_probes.py dead-target-guards` lists 41 sim card classes that test liveness. Block 7 FIRST then Vulnerable 1 -- amounts and order faithful (Taunt.cs:35-36). Presentation, folded in: TriggerAnim (34) and the Vulnerable hover tip (24)."
+    },
+    "OnUpgrade": {
+      "maps_to": "TauntCard._on_upgrade (taunt.py:32-34)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(1m)` + `DynamicVars.Vulnerable.UpgradeValueBy(1m)` (Taunt.cs:41-42) == `_block += 1` (7 -> 8) and `_vulnerable += 1` (1 -> 2). Both upgraded numbers checked, and the +1 block is unusually small -- the common value is +3 -- so it is easy to transcribe wrongly."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

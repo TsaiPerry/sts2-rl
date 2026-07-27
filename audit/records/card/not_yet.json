@@ -1,0 +1,46 @@
+{
+  "unit": "card/not_yet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\NotYet.cs",
+    "sha256": "0f8360191b896e66f0f807a3fe3e675bb7d83d3392780564c347ff6a02cd0225"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\not_yet.py",
+    "sha256": "d1ee47fe1cc2df829374871317af7fc4f667e4e1fcee8e6ebffe0683c650b446"
+  },
+  "hooks": {
+    "CanBeGeneratedInCombat": {
+      "maps_to": "NotYetCard.can_be_generated_in_combat = False (not_yet.py:481)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (NotYet.cs:12) == the class attribute, with the sim's comment naming the same FilterForCombat consumers -- the correct treatment, unlike card/neows_fury (relies on rarity) and card/mind_rot (sets the wrong flag)."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "NotYetCard.exhausts = True (not_yet.py:478)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (NotYet.cs:16) == `exhausts = True`."
+    },
+    "ctor": {
+      "maps_to": "class attrs (not_yet.py:473-481) + _init_vars (483-485)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Skill, CardRarity.Rare, TargetType.Self)` (NotYet.cs:18-21) == cost 2 / SKILL / RARE / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "NotYetCard._heal = 10 (not_yet.py:485)",
+      "verdict": "faithful",
+      "rationale": "`new HealVar(10m)` (NotYet.cs:14) == `_heal = 10`. `_heal` is in `Card._MAGIC_ATTRS` (cards/base.py:185-189) so `magic_number` surfaces it."
+    },
+    "OnPlay": {
+      "maps_to": "NotYetCard.on_play (not_yet.py:490-492)",
+      "verdict": "faithful",
+      "rationale": "`CreatureCmd.Heal(Owner.Creature, DynamicVars.Heal.BaseValue)` (NotYet.cs:26) == `CreatureCmd.heal(ctx.hooks, ctx.player, self._heal)`. BLAST RADIUS, not re-verdicted per rule 3: `CreatureCmd.heal` is the subject of creature_card_cmds gaps G4 (the sim refuses to heal a dead creature where C#'s Heal revives) and G5 (the sim reports the CLAMPED heal where C# reports the requested amount, and reports nothing at full HP). Not Yet is a ported live caller of that verb, so it is in both blast radii; the seam records them as dormant, and nothing about this card changes that -- the player is alive when playing it, and the only ported `on_hp_changed` listener (Red Skull) recomputes idempotently. Presentation, folded in: TriggerAnim (25)."
+    },
+    "OnUpgrade": {
+      "maps_to": "NotYetCard._on_upgrade (not_yet.py:487-488)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Heal.UpgradeValueBy(3m)` (NotYet.cs:31) == `self._heal += 3` (10 -> 13)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

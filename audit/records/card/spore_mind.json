@@ -1,0 +1,47 @@
+{
+  "unit": "card/spore_mind",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\SporeMind.cs",
+    "sha256": "1f90e27bff074c87f5aa3eccfd31ea854b78b35e310fe5180f2c21322d27466c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\spore_mind.py",
+    "sha256": "d18cab7b88ec6ec901d726b2c90b8d0d37f1ad52772f5c8e405e457903cc4b19"
+  },
+  "hooks": {
+    "CanBeGeneratedByModifiers": {
+      "maps_to": "SporeMindCard.can_be_generated_by_modifiers = False (spore_mind.py:28)",
+      "verdict": "faithful",
+      "rationale": "`=> false` (SporeMind.cs:8) == the class attribute."
+    },
+    "MaxUpgradeLevel": {
+      "maps_to": "SporeMindCard.max_upgrade_level = 0 (spore_mind.py:26)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (SporeMind.cs:10) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "SporeMindCard.exhausts = True (spore_mind.py:25)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Exhaust }` (SporeMind.cs:12) == `exhausts = True`, and crucially NOT Unplayable -- Spore Mind is a PLAYABLE curse whose whole function is that you can pay 1 energy to make it go away. The sim correctly leaves `is_playable` at True."
+    },
+    "ctor": {
+      "maps_to": "class attrs (spore_mind.py:20-28) + _init_vars (30-31)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Curse, CardRarity.Curse, TargetType.None)` (SporeMind.cs:14-17) == cost 1 / CURSE / CURSE / NONE. A REAL cost of 1, not the -1 sentinel the unplayable curses use, so the ascenders_bane cost finding does not apply and `_energy_cost = 1` is exact -- the same shape as card/enthralled."
+    },
+    "OnPlay": {
+      "maps_to": "SporeMindCard.on_play -> pass (spore_mind.py:33-34)",
+      "verdict": "faithful",
+      "rationale": "SporeMind.cs declares no OnPlay, so playing it costs 1 energy, does nothing, and exhausts. A reachable no-op on both sides."
+    }
+  },
+  "guards": [
+    {
+      "what": "the sim adds `is_unpowered = True` (spore_mind.py:27), which has no counterpart in SporeMind.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the flag only steers `DamageCmd.deal`'s prop inference and the card deals no damage."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

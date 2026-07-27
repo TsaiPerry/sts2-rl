@@ -1,0 +1,47 @@
+{
+  "unit": "card/bash",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Bash.cs",
+    "sha256": "88bdf7b02f3206a2f91f5b3876ad0ff66980102424ae5d47fdd059ac3b09c9d5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\bash.py",
+    "sha256": "0ca7440e59a66925e07717821334816a777ebd07b0f366712e7242e77256f0f0"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (bash.py:20-24) + _init_vars (26-29)",
+      "verdict": "faithful",
+      "rationale": "`base(2, CardType.Attack, CardRarity.Basic, TargetType.AnyEnemy)` (Bash.cs:24-27) == cost 2 / ATTACK / BASIC / ANY_ENEMY. No keywords, no tags (Bash carries no CardTag.Strike, and the sim leaves `tags` empty)."
+    },
+    "CanonicalVars": {
+      "maps_to": "_damage = 8, _vulnerable = 2 (bash.py:28-29)",
+      "verdict": "faithful",
+      "rationale": "`new DamageVar(8m, ValueProp.Move)` + `new PowerVar<VulnerablePower>(2m)` (Bash.cs:18-22) == `_damage = 8`, `_vulnerable = 2`. Damage props are Move without Unpowered -> powered on both sides (`DamageProps.CARD`, valueprops.py:34). `_vulnerable` is first in `Card._MAGIC_ATTRS` (cards/base.py:185-189) so `magic_number` returns 2, matching the game's second printed var."
+    },
+    "OnPlay": {
+      "maps_to": "BashCard.on_play (bash.py:35-41)",
+      "verdict": "gap",
+      "issue": "The damage, the ordering (damage BEFORE the debuff) and both amounts are faithful. The divergence is the sim's extra liveness guard: `if not target.is_gone: PowerCmd.apply(..., VulnerablePower, ...)` (bash.py:40-41). C# applies the Vulnerable UNCONDITIONALLY (`PowerCmd.Apply<VulnerablePower>(choiceContext, cardPlay.Target, ...)`, Bash.cs:35) and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose own doc comment says the quiet part out loud: \"a creature is not hittable if it's dead, but dead creatures CAN still have powers applied to them\" -- it refuses only when `CombatState == null` (the corpse was REMOVED) or `Hook.ShouldAllowHitting` says no. For an ordinary monster the two agree, because `CreatureCmd.Damage` runs `await Kill(killedCreatures)` before returning (CreatureCmd.cs:409) and `KillWithoutCheckingWinCondition` removes the creature from combat at CreatureCmd.cs:523-525, nulling its CombatState before Bash's next statement. They DIVERGE for a corpse whose removal was vetoed: `Hook.ShouldCreatureBeRemovedFromCombatAfterDeath` (CreatureCmd.cs:508) can return false, the sim models exactly that as `target.retained_after_death = not hooks.should_remove_from_combat_after_death(target)` (cmds.py:100-104, with ReattachPower/Decimillipede named as the case), and `is_gone` is `is_dead or escaped` (creatures.py:44-46), so the sim SKIPS a creature C# still powers. Observable via a ported listener: `ViciousPower` draws `Amount` cards on any Vulnerable the owner applies, with no liveness test on the target (`ViciousPower.cs:19-26`: `if (!(amount <= 0m) && applier == Owner && power is VulnerablePower)`), and the sim's port is the same shape (powers.py:1160-1179). So: hold Vicious, Bash a retained-corpse enemy to death -- the game draws cards, the sim does not. LIVE: card/vicious, card/bash, ViciousPower and the retained-corpse path (`powers.py:2360-2365` ReattachPower, `combat.py:292,306`) are all ported. EXECUTED: `py tools/audit/card_probes.py dead-target-guards` enumerates the pool-wide pattern -- 41 sim card classes test liveness, and bash is one of the `if not target.is_gone:` form. RATIONALE CITES THIRD FILES (rule 7): CreatureCmd.cs, Creature.cs, ViciousPower.cs, cmds.py, creatures.py and powers.py are not hashed by this record. Presentation, folded in: ExtraHoverTips -> HoverTipFactory.FromPower<VulnerablePower> (Bash.cs:16) is hover-tip wiring."
+    },
+    "OnUpgrade": {
+      "maps_to": "BashCard._on_upgrade (bash.py:31-33)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` + `DynamicVars.Vulnerable.UpgradeValueBy(1m)` (Bash.cs:40-41) == `_damage += 2` (8 -> 10) and `_vulnerable += 1` (2 -> 3). Both upgraded numbers checked, not just the base pair. Downgrade-safe; `card_probes.py downgrade` does not list bash."
+    }
+  },
+  "guards": [
+    {
+      "what": "ArgumentNullException.ThrowIfNull(cardPlay.Target) (Bash.cs:31)",
+      "verdict": "faithful",
+      "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the sim's equivalent contract."
+    },
+    {
+      "what": "the Vulnerable is applied with `applier = Owner.Creature` and `cardSource = this` (Bash.cs:35)",
+      "verdict": "faithful",
+      "rationale": "The sim passes `applier=ctx.player`, which is what ViciousPower's `applier == Owner` test needs. The dropped `cardSource` argument on `PowerCmd.apply` is the power_cmd seam's finding, not a card-level one."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

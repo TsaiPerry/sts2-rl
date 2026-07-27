@@ -1,0 +1,41 @@
+{
+  "unit": "card/shrug_it_off",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\ShrugItOff.cs",
+    "sha256": "8ade3858ece71ae87bac9748a992e53011280705375326ac8325672467299b7f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\shrug_it_off.py",
+    "sha256": "b38157dd16e141ada6bb84e322ba9eb49db0ada4fde044568532490d2a8fb95b"
+  },
+  "hooks": {
+    "GainsBlock": {
+      "maps_to": "ShrugItOffCard.gains_block = True (shrug_it_off.py:148)",
+      "verdict": "faithful",
+      "rationale": "`public override bool GainsBlock => true` (ShrugItOff.cs:13) == the class attribute."
+    },
+    "ctor": {
+      "maps_to": "class attrs (shrug_it_off.py:147-152) + _init_vars (154-157)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Common, TargetType.Self)` (ShrugItOff.cs:21-24) == cost 1 / SKILL / COMMON / SELF."
+    },
+    "CanonicalVars": {
+      "maps_to": "_block = 8, _cards = 1 (shrug_it_off.py:156-157)",
+      "verdict": "faithful",
+      "rationale": "`new BlockVar(8m, ValueProp.Move)` + `new CardsVar(1)` (ShrugItOff.cs:15-19) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
+    },
+    "OnPlay": {
+      "maps_to": "ShrugItOffCard.on_play (shrug_it_off.py:162-165)",
+      "verdict": "faithful",
+      "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (ShrugItOff.cs:28) == `BlockCmd.apply`, then `CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (29) == `DrawCmd.draw`. No animation on either side."
+    },
+    "OnUpgrade": {
+      "maps_to": "ShrugItOffCard._on_upgrade (shrug_it_off.py:159-160)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (ShrugItOff.cs:34) == `self._block += 3` (8 -> 11). The CARDS var stays 1 when upgraded on both sides."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

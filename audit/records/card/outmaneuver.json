@@ -1,0 +1,41 @@
+{
+  "unit": "card/outmaneuver",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Outmaneuver.cs",
+    "sha256": "81f953a0000feb1d2dac5b07511d4ac3b6f136b1a7ca8954359e6f00a5a0909f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\trash_heap_cards.py",
+    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+  },
+  "hooks": {
+    "VisualCardPool": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "`=> ModelDb.CardPool<SilentCardPool>()` (Outmaneuver.cs:17) selects the card's ART pool, not its generation pool. Presentation."
+    },
+    "ctor": {
+      "maps_to": "class attrs (trash_heap_cards.py:212-216) + _init_vars (218-220)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Event, TargetType.Self)` (Outmaneuver.cs:21-24) == cost 1 / SKILL / EVENT / SELF. No keywords."
+    },
+    "CanonicalVars": {
+      "maps_to": "OutmaneuverCard._energy = 2 (trash_heap_cards.py:220)",
+      "verdict": "faithful",
+      "rationale": "`new EnergyVar(2)` (Outmaneuver.cs:19) == `_energy = 2`, which `magic_number` surfaces."
+    },
+    "OnPlay": {
+      "maps_to": "OutmaneuverCard.on_play (trash_heap_cards.py:225-228)",
+      "verdict": "faithful",
+      "rationale": "`PowerCmd.Apply<EnergyNextTurnPower>(choiceContext, Owner.Creature, DynamicVars.Energy.IntValue, Owner.Creature, this)` (Outmaneuver.cs:28) == `PowerCmd.apply(ctx.hooks, ctx.player, EnergyNextTurnPower, self._energy, applier=ctx.player)`. The energy is NOT gained now on either side -- the power grants it next turn. Presentation, folded in: the energy hover tip (15)."
+    },
+    "OnUpgrade": {
+      "maps_to": "OutmaneuverCard._on_upgrade (trash_heap_cards.py:222-223)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Energy.UpgradeValueBy(1m)` (Outmaneuver.cs:33) == `self._energy += 1` (2 -> 3)."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

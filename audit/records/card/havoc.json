@@ -1,0 +1,42 @@
+{
+  "unit": "card/havoc",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Havoc.cs",
+    "sha256": "2571cd74ec58e5c8e1e52dc7a04ca6ba43ec41bb96e4a622cbb3aea2a8668045"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\havoc.py",
+    "sha256": "42366d565da62e49fc6eb6a67e15ab89b05ff100a591261659adb13685b3134f"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (havoc.py:24-27) + _init_vars (29-30)",
+      "verdict": "faithful",
+      "rationale": "`base(1, CardType.Skill, CardRarity.Common, TargetType.Self)` (Havoc.cs:14-17) == cost 1 / SKILL / COMMON / SELF. Havoc has no Exhaust keyword of its own -- the hover tip (Havoc.cs:12) refers to the card it exhausts -- and the sim leaves `exhausts` False."
+    },
+    "OnPlay": {
+      "maps_to": "HavocCard.on_play (havoc.py:35-64)",
+      "verdict": "gap",
+      "issue": "C# is a single line: `CardPileCmd.AutoPlayFromDrawPile(choiceContext, Owner, 1, CardPilePosition.Top, forceExhaust: true)` (Havoc.cs:21). The sim reimplements the whole verb inline AND, unlike card/cascade -- which reimplements the same verb faithfully -- it does not route the play through `CombatState.auto_play_card`. It calls `card.on_play(ctx, idx)` directly (havoc.py:52, 57), which SKIPS the entire play bracket that `_resolve_card_play` provides (combat.py:441-513): `hooks.on_energy_spent(card, 0)` (so Free Attack and any other BeforeCardPlayed listener never fires -- C#'s AutoPlay reaches `OnPlayWrapper` and runs the full bracket, CardCmd.cs:129), `hooks.before_card_played`, the play-count loop from `modify_card_play_count` (so a Spiral-enchanted or Hidden-Gem'd card plays ONCE instead of twice), the `before_attack`/`after_attack` bracket (so Vigor from Akabeko is not consumed), and `captured_x` for X-cost cards (so a Whirlwind auto-played by Havoc does nothing). It also picks the random target with `ctx.combat._rng.choice(living)` (havoc.py:56) -- the unseeded shared rng -- where `auto_play_card` correctly uses `self.combat_rng.targets` with the CardCmd.cs:77 citation in-line (combat.py:540-546), so Havoc is also one of the 21 cards the `shared-rng` probe lists. LIVE on every count: Havoc is a ported Common, and Akabeko, Hidden Gem, the Spiral enchantment and X-cost cards are all ported. The fix shape is the one card/cascade already uses -- pull the card off the draw pile, then call `ctx.combat.auto_play_card(card)`. Presentation: none in the C# body."
+    },
+    "OnUpgrade": {
+      "maps_to": "HavocCard._on_upgrade (havoc.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "`EnergyCost.UpgradeBy(-1)` (Havoc.cs:26) == `self._energy_cost = max(0, self._energy_cost - 1)` (1 -> 0)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the reshuffle-then-pop preamble (havoc.py:38-45)",
+      "verdict": "faithful",
+      "rationale": "Faithful to `AutoPlayFromDrawPile`'s per-iteration `ShuffleIfNecessary` (CardPileCmd.cs:941) and its `FirstOrDefault()` top-of-pile pick (945): the sim reshuffles only when the draw pile is empty and the discard is not, uses the named `combat_rng.shuffle` stream, fires `on_shuffle`, and pops the END of its draw pile, which is its top. Returning early when both piles are empty matches C#'s `cardModel == null` break (949-952)."
+    },
+    {
+      "what": "`forceExhaust: true` is reproduced by appending to the exhaust pile directly (havoc.py:62-64)",
+      "verdict": "gap",
+      "issue": "C# sets `item.ExhaustOnNextPlay = forceExhaust` (CardPileCmd.cs:960) and lets the play pipeline route the card to the exhaust pile, which means the card passes through PileType.Play first and lands in Exhaust through `CardPileCmd.Add`. The sim appends straight to `exhaust_pile` and fires `on_card_exhausted`, skipping the result-pile redirect hook (`modify_card_play_result_pile`, combat.py:505-509 -- Nostalgia) that C# would consult. DORMANT: Nostalgia redirects Attack/Skill plays to the top of the DRAW pile, and C#'s ExhaustOnNextPlay takes precedence over the result-pile choice, so the two agree today; live if a ported result-pile modifier ever outranks a forced exhaust. Recorded separately from the OnPlay entry because it is a distinct mechanism."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

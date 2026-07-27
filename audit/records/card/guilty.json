@@ -1,0 +1,57 @@
+{
+  "unit": "card/guilty",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\Guilty.cs",
+    "sha256": "773f91ffbd7f91ff535e0147936f1c3c7ed281068f82da5caf0e290930eed266"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\guilty.py",
+    "sha256": "a87722dddbc7f440f1e1cf76669a4f83bc78963878506ae11a8c251b480ed4d4"
+  },
+  "hooks": {
+    "MaxUpgradeLevel": {
+      "maps_to": "GuiltyCard.max_upgrade_level = 0 (guilty.py:30)",
+      "verdict": "faithful",
+      "rationale": "`=> 0` (Guilty.cs:19) == the class attribute."
+    },
+    "CanonicalKeywords": {
+      "maps_to": "GuiltyCard.is_playable = False (guilty.py:29)",
+      "verdict": "faithful",
+      "rationale": "`{ CardKeyword.Unplayable }` (Guilty.cs:23) == `is_playable = False`. NOT Eternal -- which matters, because the card's whole mechanic is removing ITSELF from the deck -- and the sim leaves `eternal` False."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "NOT PORTED -- GuiltyCard has no after-combat hook (guilty.py)",
+      "verdict": "gap",
+      "issue": "`AfterCombatEnd` increments `CombatsSeen` while the card is in the Deck pile and, at 5, calls `CardPileCmd.RemoveFromDeck(this)` (Guilty.cs:45-56). None of it is ported: the sim's `Card` base has no after-combat hook at all, so Guilty NEVER leaves the deck. The sim's docstring justifies this with \"the persistent deck, which the sim doesn't model\" -- THAT CLAIM IS FALSE, and it is the same false premise as card/debt's \"the sim has no gold\": `RunState.deck` is the persistent deck, it survives combats, and RunState already has deck-mutating verbs (`add_card`, `transform_card`, run.py:341-469). Observable across a run: in the game Guilty is a temporary curse that deletes itself after five fights; in the sim it is permanent, so every later draw pile is one dead card heavier for the rest of the run. LIVE. Note this is a rule-1 case -- \"the sim does not model the hook\" is a GAP, never a waiver -- and the deck IS modelled, so it is live rather than dormant. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
+    },
+    "ctor": {
+      "maps_to": "class attrs (guilty.py:20-31) + _init_vars (33-34)",
+      "verdict": "gap",
+      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges -- `GetAmountToSpend()` clamps to 0 on both sides. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses."
+    },
+    "CanonicalVars": {
+      "maps_to": "nothing -- the sim has no counter at all (guilty.py)",
+      "verdict": "gap",
+      "issue": "`new DynamicVar(\"Combats\", 5m)` (Guilty.cs:21) is the COUNTDOWN the card prints, and C# keeps it live: the `[SavedProperty] CombatsSeen` setter writes `DynamicVars[\"Combats\"].BaseValue = 5 - CombatsSeen` (Guilty.cs:25-38), so the card face counts down 5, 4, 3... The sim stores neither the var nor `CombatsSeen`, which follows from the missing AfterCombatEnd. `magic_number` returns None. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity, LIVE for the observation encoder."
+    },
+    "OnPlay": {
+      "maps_to": "GuiltyCard.on_play -> pass (guilty.py:36-37)",
+      "verdict": "faithful",
+      "rationale": "Guilty.cs declares no OnPlay and the card is Unplayable."
+    }
+  },
+  "guards": [
+    {
+      "what": "the `pile.Type == PileType.Deck` gate is checked TWICE -- once before incrementing and once before removing (Guilty.cs:47-51)",
+      "verdict": "faithful",
+      "rationale": "No sim counterpart to compare, but recorded so the port has the exact semantics: the counter advances only while the card is in the DECK (i.e. between combats), not while it sits in a combat pile, and the removal re-checks in case the first check's side effects moved it."
+    },
+    {
+      "what": "the sim adds `is_unpowered = True` (guilty.py:31), which has no counterpart in Guilty.cs",
+      "verdict": "faithful",
+      "rationale": "Inert: the card deals no damage."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

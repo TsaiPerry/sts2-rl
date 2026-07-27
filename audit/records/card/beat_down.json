@@ -1,0 +1,52 @@
+{
+  "unit": "card/beat_down",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\BeatDown.cs",
+    "sha256": "55f57d14071137e07984b667e80c5a2b2fe63b1a827b026ef139bc2137b46308"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+  },
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:95-99) + _init_vars (101-103)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Skill, CardRarity.Rare, TargetType.RandomEnemy)` (BeatDown.cs:18-21) == cost 3 / SKILL / RARE / RANDOM_ENEMY. No keywords, no tags."
+    },
+    "CanonicalVars": {
+      "maps_to": "BeatDownCard._cards = 3 (colorless_skills.py:103)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(3)` (BeatDown.cs:16) == `_cards = 3`, read as `DynamicVars.Cards.IntValue` at the Take site."
+    },
+    "OnPlay": {
+      "maps_to": "BeatDownCard.on_play (colorless_skills.py:108-117)",
+      "verdict": "gap",
+      "issue": "The candidate FILTER is faithful (`c.Type == CardType.Attack && !c.Keywords.Contains(CardKeyword.Unplayable)` on the discard pile, BeatDown.cs:26, == `c.card_type == CardType.ATTACK and c.is_playable` over `ctx.player.discard_pile`), and so is the per-card auto-play with the loop's early exit. THE SELECTION IS NOT. C# does `.ToList().StableShuffle(Owner.RunState.Rng.Shuffle).Take(IntValue)`: StableShuffle first SORTS the list (`list2.Sort()`, ListExtensions.cs:22-31 -- by CardModel.CompareTo, i.e. the canonical UPPERCASE-id order noted in the seed facts) so the result no longer depends on discard-pile order, THEN Fisher-Yates shuffles it on the named **Shuffle** stream. The sim calls `ctx.combat._rng.shuffle(candidates)` (colorless_skills.py:113): the unseeded shared `random.Random`, not `ctx.combat.combat_rng.shuffle` (the accessor exists -- combat_rng.py:17,50), with NO pre-sort, and Python's `random.shuffle` is a different Fisher-Yates variant. Three independent divergences stack: wrong stream, missing stabilising sort (so identical discard contents in a different order pick different cards), and a different draw sequence. Observable: under a string-seeded parity run Beat Down auto-plays a different set of attacks than the recorded run and desyncs the Shuffle stream for every later reshuffle. LIVE -- Beat Down is a ported Rare colorless Skill and the Shuffle parity stream is already wired (`CombatRng.parity`, combat_rng.py:41-46)."
+    },
+    "OnUpgrade": {
+      "maps_to": "BeatDownCard._on_upgrade (colorless_skills.py:105-106)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (BeatDown.cs:49) == `self._cards += 1` (3 -> 4). Downgrade-safe; `card_probes.py downgrade` does not list beat_down."
+    }
+  },
+  "guards": [
+    {
+      "what": "the per-iteration `if (!CombatManager.Instance.IsOverOrEnding) { ... } else break;` bail-out (BeatDown.cs:30-43)",
+      "verdict": "faithful",
+      "rationale": "== `if ctx.combat.is_over or ctx.player.is_dead: break` (colorless_skills.py:115-116). Both stop auto-playing the remaining attacks once the combat has been decided mid-loop."
+    },
+    {
+      "what": "target selection for AnyEnemy attacks: C# rolls `Rng.CombatTargets.NextItem(CombatState.HittableEnemies)` in BeatDown itself and passes it to AutoPlay; the sim lets `auto_play_card` roll (BeatDown.cs:32-40)",
+      "verdict": "gap",
+      "issue": "The stream is right on both sides -- `combat.auto_play_card` uses `self.combat_rng.targets.choice(living)` with the CardCmd.cs:77 citation in-line (combat.py:540-546) -- and the candidate set matches (`living` = not `is_gone` == HittableEnemies). What differs is WHEN the draw is taken. C# rolls the target BEFORE calling `CardCmd.AutoPlay`, so the CombatTargets draw is spent even if AutoPlay then declines to play the card; the sim rolls it INSIDE `auto_play_card`, after the `card.is_playable` and `hooks.should_play_card(card, auto_play=True)` checks (combat.py:536-546), so a hook-blocked play spends no draw. Under seed parity a differing draw COUNT is an observable desync. DORMANT: BeatDown's own filter already excludes Unplayable cards, so only a `should_play_card` preventer can reach the divergence, and no such preventer is ported that fires on an auto-played Attack -- it goes live the moment one is (any C# `ShouldPlayCard` implementer for Attack cards)."
+    },
+    {
+      "what": "cards are taken from the DISCARD pile and auto-played from there; the played card ends in its normal result pile",
+      "verdict": "faithful",
+      "rationale": "`auto_play_card` removes the card from whichever of hand/draw/discard/exhaust holds it before resolving (combat.py:526-535) and routes it through `_resolve_card_play`, matching CardCmd.AutoPlay's pile handling. Beat Down itself is in the discard-pile limbo while this runs (combat.py:452-454) but is a Skill, so it is never its own candidate."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
