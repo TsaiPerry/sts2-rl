@@ -660,3 +660,136 @@ knowing for any other unit that moves gold.
   managed to move the suite off baseline, and it is a trap for anyone who
   experiments with a registry edit in an audit worktree. On the engine branch the
   `vocab.json` append is correct and belongs in the same commit.
+
+## Review fix pass (2026-07-26)
+
+Six targeted corrections from the post-approval review, applied to
+`audit/records/power/*.json` and `audit/records/seam/creature_card_cmds.json`
+only. The tier was not re-audited. Every liveness claim below was executed.
+
+**FIX 1 (critical) — `adaptable` / `illusion` / `steam_eruption` are one
+mechanism, and its shared observable is LIVE.** All three implement a C#
+`AfterDeath` body by returning `False` from `should_die` (`powers.py:3365-3369`,
+`:1566-1570`, `:2016-2020`), so all three execute the sim's death-*prevention*
+branch (`cmds.py:106-113`) where C# executes the *real-death* branch
+(`CreatureCmd.cs:505-559`) — and all three C# bodies sit behind
+`!wasRemovalPrevented`, i.e. are explicitly excluded from the branch the sim
+runs. `steam_eruption`'s `AfterDeath` was `deliberate-divergence` on the
+rationale that it "repairs the only observable it produces"; that is false three
+ways (it repairs the HP display only; the repair runs from an
+`on_damage_received` dispatch the game deliberately skips on a killing blow,
+`CreatureCmd.cs:392`; and it does not fire at all on the non-damage kill path),
+so it is now `gap`, LIVE. All three carry the same verdict and cross-reference
+each other. **The shared witness:** `Hook.AfterDeath` is dispatched to *every*
+listener on **both** C# branches (`:519` and `:566`) and in the sim on
+**neither** — `GremlinHorn.cs:24-32` has no `wasRemovalPrevented` guard, so the
+game grants +1 energy and draws a card on every Test Subject / Waterfall Giant /
+Eye with Teeth / Parafright death while `relics/gremlin_horn.py:18-22` never
+runs. Feed is the second witness for `adaptable` and `steam_eruption`
+(`DamageResult.cs:89-99` documents `WasTargetKilled` as true even when the death
+is prevented). Two smaller divergences added as guards on all three: the sim's
+`hp = 1` floor vs C# leaving the creature at 0 and re-entering
+`KillWithoutCheckingWinCondition` up to ten times (`CreatureCmd.cs:560-571`), and
+the non-damage kill path (`cmds.py:191-205`).
+
+**FIX 2 (important) — the two engine-wide death-time absences now carry a
+verdict.** Both were prose-only in `content-power-report-b.md` section 3c and
+reached neither `audit_status` nor the gap queue. Filed as steps on
+`seam/creature_card_cmds`, which already owns the sibling *Escape* strip at step
+8. Step **8b** (`gap`, **LIVE**): `ShouldPowerBeRemovedAfterOwnerDeath` inverted
+by omission — C#'s default is `true` (`PowerModel.cs:637-640`) and
+`CreatureCmd.cs:533-537` strips through `Creature.RemoveAllPowersAfterDeath`
+(`Creature.cs:668-671`) then awaits each `AfterRemoved`; the sim never strips.
+Executed: a Decimillipede segment given Vulnerable 3, killed, and reattached
+comes back at 25 HP *still Vulnerable 3*, where nothing in the game vetoes the
+strip. Step **8c** (`gap`, dormant with a named trigger):
+`ShouldStopCombatFromEnding` has no sim hook at all (`CombatManager.cs:196` /
+`Hook.cs:2442-2452` vs `combat.py:272-277`); all five ported overrides are paired
+with a death prevention or a mid-death spawn, so the outcome coincides today.
+Cross-referenced from `adaptable`, `minion`, `painful_stabs`, `reattach`,
+`steam_eruption` (8b) and `adaptable`, `infested`, `steam_eruption`, `stock`,
+`surprise` (8c); those per-power verdicts are unchanged.
+
+**FIX 3 (important) — `the_bomb`'s `InstanceType` dd → `gap`.** Two live fuses
+are trivially reachable (a ported non-exhausting Colorless Skill played on two
+consecutive turns). Executed: the sim holds one `the_bomb` with fuses
+`[[2,40],[3,40]]` and `amount = min() = 2`; C# holds two `TheBombPower`
+instances with Amount 2 and 3. The damage is reproduced exactly, the **state** is
+not, and `full_env.py:412` encodes one signed amount per power id, so the game's
+state cannot even be represented. The identical G5 mechanism is `gap` on
+`rolling_boulder`; the two now agree and cross-reference.
+
+**FIX 4 (important) — `speed_potion`'s LIVE tag, and the self-contradicting
+potion waiver.** (a) The `AfterSideTurnEnd` slot gap's verdict is inherited under
+rule 3 from `setup_strike`, but that witness is a *Strength* witness; this unit's
+Dexterity leg is dormant with a named trigger. Enumerated: Dexterity's only sim
+consumer is `modify_block_additive`, `BlockCmd.apply` dispatches the
+block-modifier families only when `is_powered_attack(props)`
+(`valueprops.py:47-49`), all four ported turn-end block relics pass
+`ValueProp.UNPOWERED`, an AST sweep of every `on_player_turn_end` finds only
+`PlatingPower` (also unpowered, owner-filtered), and none of the ten ported
+`on_turn_end_in_hand` bodies gains block. (b) The waiver claiming to waive "only
+the reachability of its one applier" is logically incompatible with any LIVE tag
+and is stale — every one of these potions is ported *and* pool-registered. It is
+narrowed to what is genuinely out of scope (the potion *unit's* own record;
+there is no `audit/records/potion/` tier), with reachability stated
+affirmatively. Applied at all **seven** sites carrying the guard (`buffer`,
+`clarity`, `flex_potion`, `gigantification`, `radiance`, `shackling_potion`,
+`speed_potion`) so the mechanism keeps one verdict per rule 3.
+
+**FIX 5 (important) — `illusion`'s dormancy rested on a false grep.**
+`monsters/hive/the_obscura.py:38-39` (Parafright) and
+`monsters/overgrowth/fogmog.py:34-35` (Eye with Teeth) both apply
+`IllusionPower`. Re-derived: the `ShouldPowerBeRemovedOnDeath` **debuff half is
+LIVE, not dormant** (executed — an Eye with Teeth revives at 6/6 still holding
+Vulnerable 3 where the game strips it); the `FollowUpStateId` / `REVIVE_MOVE`
+splice *is* dormant, but for a real reason — both ported appliers have a single
+self-looping move state (`Parafright.cs:44-47`, `EyeWithTeeth.cs:39-42`) and
+neither sets the property; and the "Parafright is unported" waiver rationale is
+corrected, the waiver now standing on presentation alone (the guarded body is one
+`SfxCmd.Play`).
+
+**FIX 6 (minor) — three smaller corrections.** `power/diamond_diadem`'s "the
+applier's own condition" guard was a `waiver` delegating to
+`audits/relic/diamond_diadem`, which does not exist (relic tier 0/258) — rule 4
+made it a waiver over an unaudited verdict. Re-verdicted `gap` on its own
+evidence and marked explicitly blocked-on-relic-tier: `DiamondDiadem.cs:78-84`
+resets `CardsPlayedThisTurn` in `AfterCombatEnd` and `relics/diamond_diadem.py`
+does not, so (executed) killing the last enemy with your third card of a turn
+leaves the counter at 3 and silently suppresses the power for turn 1 of the next
+combat. `power/flex_potion` and `power/speed_potion`'s "HARNESS: base-class hooks
+not enumerated" guards moved out of the `waiver` class into a new top-level
+`notes` list — a tooling defect is not a scope exclusion. The IsVisible
+boilerplate (49 sites) is canonicalised: `IsVisible` is the non-virtual property
+at `src/Core/Models/PowerModel.cs:150-160` (the file is directly under `Models/`,
+**not** under `Models/Powers/`), the overridable virtual `IsVisibleInternal` is
+at `:167`, and 260 is the `.cs` files directly under `src/Core/Models/Powers`,
+**excluding** the 16 in `Powers/Mocks/` (276 including them; a recursive grep
+covering `Mocks/` also returns 0). Rider: every power record cited the probes as
+`py tools/audit/<probe>.py`, a path that does not exist; corrected to
+`py audit/tools/<probe>.py` in 75 records.
+
+### Recomputed power-tier verdict counts (138 records, computed, not recalled)
+
+| scope | faithful | waiver | deliberate-divergence | gap |
+|---|---|---|---|---|
+| unit rollups | 7 | 11 | 3 | **117** |
+| hook entries | 374 | 55 | 5 | 181 |
+| guard entries | 353 | 99 | 40 | 86 |
+| all entries (1193) | 727 | 154 | 45 | 267 |
+
+Deltas against the pre-fix state: unit rollups `waiver` 12 → 11 and `gap` 116 →
+117 (only `diamond_diadem` moved tier; the other two re-verdicts were on records
+already rolling up to `gap`). Entries: `gap` 258 → 267 (+6 new guards from FIX 1,
++2 dd→gap, +1 waiver→gap), `waiver` 157 → 154 (−2 harness guards moved to
+`notes`, −1 to `gap`), `deliberate-divergence` 47 → 45, `faithful` unchanged at
+727. `audit_status` power gaps: 112 → **113**.
+
+### Verification
+
+- `py audit/tools/harness.py validate` → 428 records, **0 invalid**.
+- `py audit/tools/audit_status.py` → power `134 total / 134 audited / 0 invalid /
+  0 stale / 113 gaps / 0 unaudited`.
+- `py -m pytest test/ -q` → **2522 passed, 38 xfailed** (the brief's 2478 predates
+  concurrent test additions by the other streams; no failures, no regressions).
+- `git diff --name-only main...audit-pipeline | grep "^sts2_rl/"` → empty.
