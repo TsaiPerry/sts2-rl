@@ -32,11 +32,11 @@ second combat with the same instance, and diff both the relic's own fields *and*
 the player/enemy state against a freshly-constructed instance entering its first
 combat.
 
-### REWRITTEN 2026-07-26 — the first version was unsound, in seven ways
+### REWRITTEN 2026-07-26 — the first version was unsound, in eight ways
 
-**Seven of the fifteen batches that used this sweep independently faulted it** —
-batches 4, 5, 6 and 7 before the rewrite, then 12, 13 and 18 after it, each on
-different grounds. Every fault was confirmed at the source and every one is now
+**Eight of the seventeen batches that used this sweep independently faulted it**
+— batches 4, 5, 6 and 7 before the rewrite, then 12, 13, 14 and 18 after it,
+each on different grounds. Every fault was confirmed at the source and every one is now
 fixed. Read this before trusting any earlier sweep-A output:
 
 1. **Turn-*end* resets were pooled with turn-*start* resets.** The old output
@@ -126,8 +126,35 @@ fixed. Read this before trusting any earlier sweep-A output:
    18's witness — statically flagged, absent from every executed bucket, and it
    carries a LIVE gap. The pass now prints the skipped set with its count.
 
-**Seven defects, three of them false clears, one of them pure silence, and the
-sweep is still not an oracle.** `permafrost` is now a candidate but lands in `INCONCLUSIVE`, because
+8. **The "genuinely safe" bucket never tested its own safety claim.** Found by
+   batch 14, and the fourth false clear. The bucket checked only WHICH METHOD
+   writes the field, never whether the write precedes the read **inside** that
+   method. `self_forming_clay.on_player_turn_started` reads `_pending_block` to
+   pay out the block and only THEN zeroes it — a **consume-then-clear** — so
+   combat 1's stale value really is read at combat 2's turn 1. Executed: a
+   killing-blow Hemokinesis leaves 3 pending and combat 2 opens turn 1 with
+   block 3 where a fresh instance has 0. LIVE, and it sat in a bucket whose
+   label promised safety — precisely what `PROMPT.md` v6 item 1 forbids, in a
+   label I wrote myself two rounds earlier.
+
+   `_reset_precedes_reads` now compares AST line positions within the resetting
+   method, and a consume-then-clear is routed OUT of the safe bucket. It returns
+   "not proven safe", never "broken": `art_of_war` does
+   `_attacks_last_turn = _attacks_this_turn` and then clears the latter, and
+   that transfer is the intended behaviour. Safe bucket **13 -> 11**; the three
+   flagged are `self_forming_clay` (LIVE), `pocketwatch` (batch 12, gap) and
+   **`art_of_war` — the pilot's founding example of this very bucket**, whose
+   own verdict traced to the first reader and so probably stands, but which is
+   no longer cleared by the tool that was named after it.
+
+**Eight defects: four false clears, one pure silence, two under-reports, one
+mixed. The sweep is a candidate generator and nothing more.**
+
+Worth stating flatly, because it is the finding with the longest reach: **every
+one of the eight was found by a batch auditing a unit on its merits. Not one was
+found by reviewing the tooling** — including the four rounds where I went back
+into this sweep specifically to fix it, and twice introduced or preserved a
+false clear while doing so. `permafrost` is now a candidate but lands in `INCONCLUSIVE`, because
 the driver plays a Defend and Permafrost triggers on a Power. That is the
 correct behaviour for a candidate-generator: escalate, never clear. Chasing full
 generality in the driver is the wrong investment — the sixth defect was found,
@@ -146,7 +173,7 @@ and now has mechanical backing.
 |---|---|---|
 | Relics holding no state at all | 200 | 200 |
 | Reset every mid-combat field at a combat boundary | 5 | 5 |
-| Reset every field at **turn start** — genuinely safe | 21 *(mixed)* | **13** |
+| Reset every field at **turn start**, reset BEFORE the read | 21 *(mixed)* | **11** |
 | **Frozen constructor state — relic cannot fire** | *(invisible)* | **2** |
 | **Not reset before a reader** | 32 | **38** |
 | …executed by `sweep-reset-exec` | 16 | **19** |

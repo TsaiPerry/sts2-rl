@@ -581,6 +581,43 @@ def _is_reset_value(attr: str, value: ast.expr) -> bool:
     return False
 
 
+def _reset_precedes_reads(fn: ast.FunctionDef, attr: str) -> bool:
+    """Does the reset of `self.<attr>` come BEFORE every read of it in `fn`?
+
+    EIGHTH sweep-A defect, found by batch 14, and the fourth false clear. The
+    "RESET AT TURN START, BEFORE ANY READER (genuinely safe)" bucket checked
+    only WHICH METHOD writes the field, never whether the write precedes the
+    read *inside* that method. `self_forming_clay.on_player_turn_started` reads
+    `_pending_block` (to pay out block) and only THEN zeroes it -- a
+    consume-then-clear -- so combat 1's stale value really is read at combat 2's
+    turn 1. It is a LIVE gap that sat in a bucket whose label promised safety,
+    which is exactly what PROMPT.md v6 forbids.
+
+    A read-before-reset is NOT automatically a bug: `art_of_war` does
+    `_attacks_last_turn = _attacks_this_turn` then clears the latter, and that
+    transfer is the intended behaviour. So this returns False to mean "not
+    PROVEN safe, needs a per-unit trace", never "broken" -- escalate, never
+    clear.
+    """
+    resets, reads = [], []
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if (isinstance(t, ast.Attribute) and t.attr == attr
+                        and isinstance(t.value, ast.Name)
+                        and t.value.id == "self"
+                        and _is_reset_value(attr, node.value)):
+                    resets.append(node.lineno)
+        if (isinstance(node, ast.Attribute) and node.attr == attr
+                and isinstance(node.ctx, ast.Load)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "self"):
+            reads.append(node.lineno)
+    if not resets:
+        return False
+    return min(resets) <= min(reads, default=10**9)
+
+
 def _ctor_param_fields(cls) -> dict[str, str]:
     """`self.X = <param>` fields in __init__, mapped to the parameter name.
 
@@ -698,6 +735,7 @@ def probe_sweep_reset() -> None:
         reset_at_combat: set[str] = set()
         reset_at_turn_start: set[str] = set()
         reset_at_turn_end: set[str] = set()
+        consume_then_clear: set[str] = set()
         in_play: set[str] = set()
         for name, fn in methods.items():
             plain, aug = _self_writes(fn)
@@ -713,7 +751,12 @@ def probe_sweep_reset() -> None:
             if name in _COMBAT_BOUNDARY:
                 reset_at_combat |= resets
             if name in _TURN_START:
-                reset_at_turn_start |= resets
+                # A turn-start reset only shadows the stale value if it runs
+                # BEFORE the read. A consume-then-clear does not.
+                reset_at_turn_start |= {
+                    a for a in resets if _reset_precedes_reads(fn, a)}
+                consume_then_clear |= {
+                    a for a in resets if not _reset_precedes_reads(fn, a)}
             if name in _TURN_END:
                 reset_at_turn_end |= resets
             if name not in _COMBAT_BOUNDARY and name != "__init__":
@@ -772,14 +815,16 @@ def probe_sweep_reset() -> None:
         entry = (rid, sorted(unreset), boundary,
                  sorted(unreset & reset_at_turn_start),
                  sorted(unreset & reset_at_turn_end),
-                 {a: sorted(writers[a]) for a in sorted(unreset)})
+                 {a: sorted(writers[a]) for a in sorted(unreset)},
+                 sorted(unreset & consume_then_clear))
         # SAFE only if every unreset field is cleared at turn START. A field
         # cleared only at turn END is NOT safe -- see _TURN_END. And a frozen
         # constructor field is not "safely reset", it is DEAD: reporting the
         # tea sets as safe was the misleading half of the old output.
         if never_written:
             pass                          # already reported under FROZEN
-        elif unreset and unreset <= reset_at_turn_start:
+        elif (unreset and unreset <= reset_at_turn_start
+                and not (unreset & consume_then_clear)):
             shadowed.append(entry)
         else:
             hits.append(entry)
@@ -792,7 +837,7 @@ def probe_sweep_reset() -> None:
           "'C# resets' now lists the ASSIGNMENTS the C# boundary\n"
           "  override actually makes -- an override with no assignment is not "
           "a reset, which the override-census version got wrong:")
-    for rid, unreset, boundary, t_start, t_end, who in hits:
+    for rid, unreset, boundary, t_start, t_end, who, ctc in hits:
         print(f"    {rid:<26} {unreset}")
         print(f"    {'':<26} written by: "
               f"{'; '.join(f'{a}<-{w}' for a, w in who.items())}")
@@ -800,13 +845,17 @@ def probe_sweep_reset() -> None:
             print(f"    {'':<26} !! reset at TURN END only: {t_end} -- "
                   f"end_turn early-returns on the winning turn, so this "
                   f"crosses into the next combat")
+        if ctc:
+            print(f"    {'':<26} !! CONSUME-THEN-CLEAR at turn start: {ctc} -- "
+                  f"the reset runs AFTER the read in the same method, so it "
+                  f"does NOT shadow combat 1's value")
         if t_start:
             print(f"    {'':<26} (partly reset at turn start: {t_start})")
         print(f"    {'':<26} C# resets: "
               f"{boundary or 'NONE (may be per-run by design)'}")
     print("\n  RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- "
           "genuinely safe: combat 2's turn 1 clears it first):")
-    for rid, unreset, boundary, t_start, _t_end, _who in shadowed:
+    for rid, unreset, boundary, t_start, _t_end, _who, _ctc in shadowed:
         # Batch 10 caught this: the brace-matched assignment evidence was wired
         # into the hits bucket only, so THIS bucket still printed a bare hook
         # name and implied a reset that may not exist -- ornamental_fan's
