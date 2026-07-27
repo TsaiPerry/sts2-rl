@@ -213,6 +213,160 @@ class TestValidateRecord:
         assert any("steps" in e for e in errs)
 
 
+class TestExtraSources:
+    """The optional `extra_sources` list: the files a content record's
+    verdicts cite beyond the unit's own two. Optional by design — the 422
+    records written before it existed must stay valid."""
+
+    def test_record_without_the_key_still_validates(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        assert "extra_sources" not in rec
+        assert harness.validate_record(rec, game_root=tmp_path) == []
+
+    def test_well_formed_entries_accepted(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["extra_sources"] = [
+            {"path": "FixtureRelic.cs", "sha256": "a" * 64, "side": "game"},
+            {"path": "sts2_rl/cmds.py", "sha256": "b" * 64, "side": "sim"},
+        ]
+        assert harness.validate_record(rec, game_root=tmp_path) == []
+
+    def test_missing_side_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["extra_sources"] = [{"path": "FixtureRelic.cs", "sha256": "a" * 64}]
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("side" in e for e in errs)
+
+    def test_bad_side_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["extra_sources"] = [
+            {"path": "x.cs", "sha256": "a" * 64, "side": "elsewhere"}]
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("elsewhere" in e for e in errs)
+
+    def test_missing_sha_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["extra_sources"] = [{"path": "x.cs", "side": "game"}]
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("sha256" in e for e in errs)
+
+    def test_non_hex_sha_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["extra_sources"] = [
+            {"path": "x.cs", "sha256": "not-a-hash", "side": "game"}]
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("hex" in e for e in errs)
+
+    def test_non_list_rejected(self, tmp_path):
+        rec = _valid_record(harness, tmp_path)
+        rec["extra_sources"] = {"path": "x.cs"}
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("must be a list" in e for e in errs)
+
+    def test_seam_records_may_carry_it_too(self, tmp_path):
+        rec = {
+            "unit": "seam/damage_pipeline",
+            "game_sources": [{"path": "FixtureRelic.cs", "sha256": "0" * 64}],
+            "sim_sources": [{"path": "sts2_rl/cmds.py", "sha256": "0" * 64}],
+            "extra_sources": [{"path": "nope", "sha256": "z", "side": "game"}],
+            "steps": [{"what": "ordering", "verdict": "faithful"}],
+            "guards": [],
+            "verdict": "faithful",
+            "audited": "2026-07-24",
+        }
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("extra_sources[0]" in e for e in errs)
+
+    def test_source_base_routes_by_side(self, tmp_path):
+        assert harness.source_base("game", tmp_path) == tmp_path
+        assert harness.source_base("sim", tmp_path) == harness._REPO
+
+
+class TestRehash:
+    def _record_with_drift(self, tmp_path):
+        cs = tmp_path / "FixtureRelic.cs"
+        cs.write_text(FIXTURE_CS, encoding="utf-8")
+        extra = tmp_path / "Extra.cs"
+        extra.write_text("public class Extra {}\n", encoding="utf-8")
+        rec = _valid_record(harness, tmp_path)
+        rec["game_source"]["sha256"] = "0" * 64            # drifted
+        rec["sim_source"]["path"] = "sts2_rl/cmds.py"      # drifted ("0"*64)
+        rec["extra_sources"] = [
+            {"path": "Extra.cs", "sha256": "1" * 64, "side": "game"},
+            {"path": "sts2_rl/hooks.py", "sha256": "2" * 64, "side": "sim"},
+        ]
+        return rec
+
+    def test_repins_every_shape(self, tmp_path):
+        rec = self._record_with_drift(tmp_path)
+        changes = harness.rehash_record(rec, game_root=tmp_path)
+        assert len(changes) == 4, changes
+        assert rec["game_source"]["sha256"] == harness.file_sha256(
+            tmp_path / "FixtureRelic.cs")
+        assert rec["extra_sources"][0]["sha256"] == harness.file_sha256(
+            tmp_path / "Extra.cs")
+        assert rec["extra_sources"][1]["sha256"] == harness.file_sha256(
+            harness._REPO / "sts2_rl/hooks.py")
+
+    def test_idempotent(self, tmp_path):
+        rec = self._record_with_drift(tmp_path)
+        harness.rehash_record(rec, game_root=tmp_path)
+        assert harness.rehash_record(rec, game_root=tmp_path) == []
+
+    def test_missing_file_reported_not_silently_zeroed(self, tmp_path):
+        rec = self._record_with_drift(tmp_path)
+        rec["extra_sources"][0]["path"] = "Gone.cs"
+        changes = harness.rehash_record(rec, game_root=tmp_path)
+        assert any("MISSING" in c for c in changes)
+        assert rec["extra_sources"][0]["sha256"] == "1" * 64
+
+    def test_seam_plural_lists_repinned(self, tmp_path):
+        cs = tmp_path / "Seam.cs"
+        cs.write_text("public class Seam {}\n", encoding="utf-8")
+        rec = {
+            "unit": "seam/fixture",
+            "game_sources": [{"path": "Seam.cs", "sha256": "0" * 64}],
+            "sim_sources": [{"path": "sts2_rl/cmds.py", "sha256": "0" * 64}],
+        }
+        harness.rehash_record(rec, game_root=tmp_path)
+        assert rec["game_sources"][0]["sha256"] == harness.file_sha256(cs)
+        assert rec["sim_sources"][0]["sha256"] == harness.file_sha256(
+            harness._REPO / "sts2_rl/cmds.py")
+
+    def test_bulk_writes_the_file(self, tmp_path):
+        adir = tmp_path / "records"
+        (adir / "relic").mkdir(parents=True)
+        rec = self._record_with_drift(tmp_path)
+        p = adir / "relic" / "fixture_relic.json"
+        p.write_text(json.dumps(rec), encoding="utf-8")
+        harness.rehash(["relic/fixture_relic"], game_root=tmp_path,
+                       audits_dir=adir)
+        after = json.loads(p.read_text(encoding="utf-8"))
+        assert after["game_source"]["sha256"] == harness.file_sha256(
+            tmp_path / "FixtureRelic.cs")
+
+    def test_dry_run_leaves_the_file_alone(self, tmp_path):
+        adir = tmp_path / "records"
+        (adir / "relic").mkdir(parents=True)
+        rec = self._record_with_drift(tmp_path)
+        p = adir / "relic" / "fixture_relic.json"
+        p.write_text(json.dumps(rec), encoding="utf-8")
+        harness.rehash(["relic/fixture_relic"], game_root=tmp_path,
+                       audits_dir=adir, write=False)
+        assert json.loads(p.read_text(encoding="utf-8")) == rec
+
+    def test_cli_prints_the_not_a_re_audit_warning(self, tmp_path, capsys):
+        adir = tmp_path / "records"
+        (adir / "relic").mkdir(parents=True)
+        (adir / "relic" / "fixture_relic.json").write_text(
+            json.dumps(self._record_with_drift(tmp_path)), encoding="utf-8")
+        harness.main(["rehash", str(adir / "relic" / "fixture_relic.json"),
+                      "--dry-run"])
+        err = capsys.readouterr().err
+        assert "REHASH IS NOT A RE-AUDIT" in err
+        assert "re-audited" in err
+
+
 class TestSkeleton:
     def test_skeleton_lists_every_override(self, tmp_path):
         (tmp_path / "src/Core/Models/Relics").mkdir(parents=True)

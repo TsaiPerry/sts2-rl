@@ -32,6 +32,14 @@ def _is_stale(record: dict, unit: str, game_root: Path) -> bool:
         p = base / src.get("path", "")
         return (not p.is_file()) or harness.file_sha256(p) != src.get("sha256")
 
+    # Every record shape can carry `extra_sources`: the files a verdict cites
+    # beyond the unit's own two. Without this a content record's citations of
+    # PowerCmd.cs / cmds.py / combat.py go unpinned, and the record reports
+    # fresh while resting on line numbers nothing hashes.
+    if any(drifted(s, harness.source_base(s.get("side"), game_root))
+           for s in record.get("extra_sources") or []):
+        return True
+
     if unit.startswith("seam/"):
         return (any(drifted(s, game_root) for s in record.get("game_sources", []))
                 or any(drifted(s, _REPO) for s in record.get("sim_sources", [])))

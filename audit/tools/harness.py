@@ -9,6 +9,7 @@ Usage:
   py audit/tools/harness.py roster [KIND]       # work queue + unmatched units
   py audit/tools/harness.py skeleton UNIT       # write record skeleton
   py audit/tools/harness.py validate [PATH...]  # validate records
+  py audit/tools/harness.py rehash UNIT|PATH... # re-pin hashes (NOT a re-audit)
 """
 from __future__ import annotations
 
@@ -36,6 +37,12 @@ NAME_OVERRIDES_PATH = Path(__file__).with_name("name_overrides.json")
 
 # Audit verdicts in rollup precedence order (low -> high).
 VERDICTS = ("faithful", "waiver", "deliberate-divergence", "gap")
+
+# `extra_sources[i].side` — which root the entry's path resolves against.
+# Content records cite files from BOTH trees (a power record routinely rests on
+# PowerCmd.cs and on cmds.py), and unlike the singular game_source/sim_source
+# pair the extra list is unordered and mixed, so each entry names its own root.
+SOURCE_SIDES = ("game", "sim")
 
 GAME_MODEL_DIRS = {
     "relic": "src/Core/Models/Relics",
@@ -71,6 +78,11 @@ def file_sha256(path: Path) -> str:
     """sha256 of the file's text with line endings normalized to LF."""
     text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
     return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+
+def source_base(side: str, game_root: Path | None = None) -> Path:
+    """Root an `extra_sources` entry's path resolves against."""
+    return (game_root or DEFAULT_GAME_ROOT) if side == "game" else _REPO
 
 
 def _pascal(unit_id: str) -> str:
@@ -641,6 +653,38 @@ def skeleton(unit: str, game_root: Path | None = None,
     return out
 
 
+_SHA_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def _check_extra_sources(record: dict, errs: list[str]) -> None:
+    """Validate the optional `extra_sources` list.
+
+    Every file a verdict cites with a line number has to be hashed by the
+    record (audit/README.md, "Staleness"). The singular game_source/sim_source
+    pair only covers the unit's own two files, so any *other* file a content
+    record leans on goes here — one entry per file, each naming the root its
+    path resolves against. Optional: the key may be absent entirely."""
+    if "extra_sources" not in record:
+        return
+    srcs = record.get("extra_sources")
+    if not isinstance(srcs, list):
+        errs.append("extra_sources: must be a list")
+        return
+    for i, s in enumerate(srcs):
+        if not isinstance(s, dict):
+            errs.append(f"extra_sources[{i}]: must be an object")
+            continue
+        if not s.get("path") or not s.get("sha256"):
+            errs.append(f"extra_sources[{i}]: path and sha256 required")
+        elif not _SHA_RE.fullmatch(str(s["sha256"])):
+            errs.append(
+                f"extra_sources[{i}]: sha256 must be 64 lowercase hex digits")
+        if s.get("side") not in SOURCE_SIDES:
+            errs.append(
+                f"extra_sources[{i}]: side {s.get('side')!r} not one of "
+                f"{SOURCE_SIDES}")
+
+
 def _check_entry(where: str, entry: dict, errs: list[str]) -> None:
     v = entry.get("verdict", "")
     if v not in VERDICTS:
@@ -705,6 +749,8 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
                 errs.append(f"hooks[{name}]: 'faithful' requires maps_to")
         entries += list(hooks.values())
 
+    _check_extra_sources(record, errs)
+
     guards = record.get("guards") or []
     for i, g in enumerate(guards):
         if not g.get("what"):
@@ -723,6 +769,81 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
     return errs
 
 
+REHASH_WARNING = """\
+  ############################################################################
+  #  REHASH IS NOT A RE-AUDIT.                                               #
+  #                                                                          #
+  #  A source hash is not bookkeeping - it is the record's claim that its    #
+  #  verdicts were reached against exactly this text. Re-pinning it without  #
+  #  re-reading both sides converts a durable finding into a decoration:     #
+  #  the record then asserts a verdict over code nobody has looked at, and   #
+  #  the staleness detector can never flag it again.                         #
+  #                                                                          #
+  #  Only run this AFTER an agent has re-read the changed source and         #
+  #  confirmed every verdict in the record still holds. It is a mechanical   #
+  #  convenience for the last step of a re-audit, never a substitute for one.#
+  ############################################################################
+"""
+
+
+def rehash_record(record: dict, game_root: Path | None = None) -> list[str]:
+    """Recompute every hash the record carries. Mutates it in place and
+    returns one line per hash that actually changed (empty = already current).
+
+    Covers all three shapes: the seam plural lists, the content singular pair,
+    and the optional `extra_sources` list — a partial re-pin would leave the
+    record half-stale, which is worse than not re-pinning at all."""
+    root = game_root or DEFAULT_GAME_ROOT
+    changes: list[str] = []
+
+    def repin(where: str, src: dict, base: Path) -> None:
+        p = base / src.get("path", "")
+        if not p.is_file():
+            changes.append(f"{where}: MISSING {p} — left unchanged")
+            return
+        new = file_sha256(p)
+        if new != src.get("sha256"):
+            changes.append(
+                f"{where}: {src.get('path')} {str(src.get('sha256'))[:12]}"
+                f" -> {new[:12]}")
+            src["sha256"] = new
+
+    for side, base in (("game_sources", root), ("sim_sources", _REPO)):
+        for i, s in enumerate(record.get(side) or []):
+            repin(f"{side}[{i}]", s, base)
+    for side, base in (("game_source", root), ("sim_source", _REPO)):
+        src = record.get(side)
+        if isinstance(src, dict) and src.get("path"):
+            repin(side, src, base)
+    for i, s in enumerate(record.get("extra_sources") or []):
+        if isinstance(s, dict):
+            repin(f"extra_sources[{i}]", s, source_base(s.get("side"), root))
+    return changes
+
+
+def _record_path(target: str, audits_dir: Path | None = None) -> Path:
+    """Accept either a unit id (`power/artifact`) or a record file path."""
+    adir = Path(audits_dir or DEFAULT_AUDITS_DIR)
+    if not target.endswith(".json"):
+        kind, _, unit_id = target.partition("/")
+        return adir / kind / f"{unit_id}.json"
+    return Path(target)
+
+
+def rehash(targets: list[str], game_root: Path | None = None,
+           audits_dir: Path | None = None, write: bool = True) -> dict[str, list[str]]:
+    """Bulk `rehash_record` over unit ids and/or record paths."""
+    out: dict[str, list[str]] = {}
+    for t in targets:
+        p = _record_path(t, audits_dir)
+        record = json.loads(p.read_text(encoding="utf-8"))
+        changes = rehash_record(record, game_root=game_root)
+        if changes and write:
+            p.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        out[str(p)] = changes
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -732,6 +853,16 @@ def main(argv: list[str] | None = None) -> int:
     ap_skel.add_argument("unit", help="e.g. relic/unsettling_lamp or seam/power_cmd")
     ap_val = sub.add_parser("validate", help="validate audit records")
     ap_val.add_argument("paths", nargs="*", help="record files (default: all)")
+    ap_re = sub.add_parser(
+        "rehash",
+        help="re-pin a record's source hashes — NOT a re-audit, see the banner")
+    ap_re.add_argument("targets", nargs="*",
+                       help="unit ids (power/artifact) and/or record paths")
+    ap_re.add_argument("--all", action="store_true",
+                       help="every record under audit/records/ (bulk form)")
+    ap_re.add_argument("--kind", help="every record of one kind (bulk form)")
+    ap_re.add_argument("--dry-run", action="store_true",
+                       help="report what would be re-pinned, write nothing")
     args = ap.parse_args(argv)
 
     if args.cmd == "roster":
@@ -758,6 +889,27 @@ def main(argv: list[str] | None = None) -> int:
             bad += bool(errs)
         print(f"{len(paths)} record(s), {bad} invalid")
         return 1 if bad else 0
+    if args.cmd == "rehash":
+        print(REHASH_WARNING, file=sys.stderr)
+        targets = list(args.targets)
+        if args.all:
+            targets += [str(p) for p in sorted(DEFAULT_AUDITS_DIR.rglob("*.json"))]
+        if args.kind:
+            targets += [str(p) for p in
+                        sorted((DEFAULT_AUDITS_DIR / args.kind).glob("*.json"))]
+        if not targets:
+            print("rehash: nothing to do — pass unit ids, --all or --kind")
+            return 2
+        results = rehash(targets, write=not args.dry_run)
+        repinned = 0
+        for path, changes in results.items():
+            for c in changes:
+                print(f"{path}: {c}")
+            repinned += bool(changes)
+        verb = "would re-pin" if args.dry_run else "re-pinned"
+        print(f"{len(results)} record(s), {verb} {repinned}")
+        print("re-pinned hashes are worthless unless the record was re-audited "
+              "against the new text", file=sys.stderr)
     return 0
 
 

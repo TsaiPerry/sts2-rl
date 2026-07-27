@@ -165,6 +165,7 @@ All run from the repo root. None of them judges faithfulness.
 | `py audit/tools/harness.py roster <kind>` | the work queue for one kind: every sim unit joined to its C# model file, plus unmatched units and unported C# files |
 | `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite |
 | `py audit/tools/harness.py validate` | completeness + vocabulary check over every record. **Staleness is not validation's job** |
+| `py audit/tools/harness.py rehash <unit>` | re-pins a record's source hashes after a re-audit. **Not a re-audit** — see [Staleness](#staleness) |
 | `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from the records — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json` |
 | `py audit/tools/gap_queue.py cite-check` | every `file:line` in `GAP-QUEUE.md` resolves to a real line |
 | `py audit/tools/gap_queue.py coverage` | every mechanism and every gap entry is findable in `GAP-QUEUE.md` |
@@ -191,6 +192,23 @@ Every record stores the sha256 of every source file its verdicts rest on —
 use the singular `game_source`/`sim_source`). Hashes are over the file text with
 line endings normalised, so a checkout with different newlines does not lie.
 
+**`extra_sources` pins everything else.** A content record's singular pair only
+covers the unit's own two files, and content verdicts routinely cite others —
+`PowerCmd.cs`, `cmds.py`, `combat.py`, `cards/base.py`. Those citations go in an
+optional `extra_sources` list, one entry per file:
+
+```json
+"extra_sources": [
+  {"path": "src/Core/Commands/PowerCmd.cs", "sha256": "…", "side": "game"},
+  {"path": "sts2_rl/cmds.py",               "sha256": "…", "side": "sim"}
+]
+```
+
+`side` is required and names the root the path resolves against — `game` for the
+game source tree, `sim` for the repo root — because unlike the singular pair the
+list is mixed and unordered. The key is optional: a record without it is still
+valid, it just pins less. `audit_status.py` checks it for every record shape.
+
 **Editing `sts2_rl/` marks every record that hashed the edited file stale.**
 `audit_status.py` reports the count; `--strict` exits non-zero on it.
 
@@ -200,6 +218,12 @@ distinction is the entire point. A hash is not the finding — it is the claim
 the tool converts a durable audit into a decoration. Re-audits cost agent time,
 not script time, and staleness is expected to be rare: the game source is
 frozen, and sim files change only when a gap is fixed.
+
+`harness.py rehash <unit|path>...` (also `--all`, `--kind <kind>`, `--dry-run`)
+re-pins every hash a record carries — singular, plural and `extra_sources` — and
+prints the warning above every time it runs. It is the **last** step of a
+re-audit, after an agent has re-read the changed source and confirmed the
+verdicts still hold; run on its own it is exactly the decoration described.
 
 The rule that makes this bite: **every file a verdict cites with a line number
 must be hashed by the record.** If a dormancy argument rests on

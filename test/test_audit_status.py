@@ -97,6 +97,58 @@ def test_hash_drift_is_stale(tmp_path, monkeypatch):
     assert out["relic"]["stale"] == 1
 
 
+def test_extra_sources_drift_is_stale(tmp_path, monkeypatch):
+    """A content record's citations beyond its own two files are pinned by
+    `extra_sources`; drift in one of them must mark the record stale."""
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    extra_cs = tmp_path / "src/Core/Commands/PowerCmd.cs"
+    extra_cs.parent.mkdir(parents=True, exist_ok=True)
+    extra_cs.write_text("public static class PowerCmd {}\n", encoding="utf-8")
+
+    rec = _make_record(tmp_path)
+    rec["extra_sources"] = [
+        {"path": "src/Core/Commands/PowerCmd.cs",
+         "sha256": harness.file_sha256(extra_cs), "side": "game"},
+        {"path": "sts2_rl/cmds.py",
+         "sha256": harness.file_sha256(Path("sts2_rl/cmds.py")), "side": "sim"},
+    ]
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["audited"] == 1
+    assert out["relic"]["stale"] == 0
+
+    # Drift the game-side extra source only: the singular pair is untouched,
+    # so the pre-fix _is_stale reported 0 here.
+    rec["extra_sources"][0]["sha256"] = "0" * 64
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+    # And the sim-side one, resolved against the repo root rather than the
+    # game root.
+    rec["extra_sources"][0]["sha256"] = harness.file_sha256(extra_cs)
+    rec["extra_sources"][1]["sha256"] = "0" * 64
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+
+def test_extra_sources_missing_file_is_stale(tmp_path, monkeypatch):
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    rec = _make_record(tmp_path)
+    rec["extra_sources"] = [
+        {"path": "src/Core/Gone.cs", "sha256": "0" * 64, "side": "game"}]
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["stale"] == 1
+
+
 def test_gap_counted(tmp_path, monkeypatch):
     audits = _setup(tmp_path)
     monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
