@@ -254,8 +254,11 @@ class TestInterfaceContract:
     """Pins the module-level names later tasks consume verbatim."""
 
     def test_game_model_dirs_keys(self):
+        # `potion` joined 2026-07-26, replacing the shared contract's blanket
+        # "potions are out of scope" clause with an ordinary unaudited kind.
         assert set(harness.GAME_MODEL_DIRS) == {
             "relic", "power", "card", "monster", "event", "enchantment",
+            "potion",
         }
 
     def test_verdicts_order(self):

@@ -52,6 +52,13 @@ GAME_MODEL_DIRS = {
     "monster": "src/Core/Models/Monsters",
     "event": "src/Core/Models/Events",
     "enchantment": "src/Core/Models/Enchantments",
+    # `potion` added 2026-07-26 on Perry's instruction ("don't ignore potions
+    # anymore"), replacing the shared contract's blanket potion exclusion. The
+    # exclusion had become load-bearing in the wrong direction: 10 entries
+    # across the card and power tiers waived real behaviour on it, while the
+    # relic tier filed 45 potion-mechanic gaps. Making it a KIND is what turns
+    # "out of scope" into "unaudited", which is a fact the tools can report.
+    "potion": "src/Core/Models/Potions",
 }
 
 # `public override <type> <Name>(  |  => ...  |  { ...` — one-regex scan of
@@ -217,6 +224,9 @@ def _sim_units(kind: str) -> dict[str, type]:
     if kind == "enchantment":
         from sts2_rl.enchantments import ALL_ENCHANTMENTS
         return dict(ALL_ENCHANTMENTS)
+    if kind == "potion":
+        from sts2_rl.potions import ALL_POTIONS
+        return dict(ALL_POTIONS)
     if kind == "monster":
         return _monster_units()
     raise ValueError(f"unknown kind: {kind}")

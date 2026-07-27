@@ -26,10 +26,15 @@ enchantment and relic content tiers — 686 records, 0 invalid.** Every one has
 been through an independent review pass and a fix pass. The relic tier (258
 records) merged on 2026-07-26.
 
-**Not audited at all: `monster` (109 units).** That stream is gated on the
-`monster_state_machine` seam, which is done, so it can start. Anything here that
-reads as a whole-project claim covers **5 of the 6 content kinds** — 109 units
-are simply not looked at yet, and `GAP-QUEUE.md` says so in its header too.
+**Not audited at all: `monster` (109 units) and `potion` (51).** The monster
+stream is gated on the `monster_state_machine` seam, which is done, so it can
+start. **`potion` became a kind on 2026-07-26**, when Perry replaced the shared
+contract's blanket "potions are out of scope" clause with an ordinary unaudited
+kind — so those 51 units were not merely unaudited, they were *invisible*, and
+ten entries across the card and power tiers had waived real behaviour on the
+clause. Anything here that reads as a whole-project claim covers **5 of the 7
+content kinds**; 160 units are not looked at yet, and `GAP-QUEUE.md` says so in
+its header too.
 
 **What the relic merge did to the tiers that were already "done" is the reason
 to keep that caveat loud.** Merging one kind did not merely append its own
@@ -84,14 +89,14 @@ Three things to expect from that output rather than be surprised by:
 audit/
   README.md          you are here
   GAP-QUEUE.md       every gap in every audited kind, de-duplicated by
-                     mechanism, ordered for work (monster is unaudited)
+                     mechanism, ordered for work (monster + potion unaudited)
   records/
     seam/*.json      the 6 engine-seam audit records — the evidence
     power/ card/ event/ enchantment/ relic/             680 content records
-    monster/                                            empty; stream never run
+    monster/ potion/                                    empty; stream never run
   seams/*.md         the 6 seam narration docs — the ordering specs
   tools/             the harness, the status tool, the queue generator, probes
-  prompts/           the shared contract + the 8 stream prompts
+  prompts/           the shared contract + the 9 stream prompts
 ```
 
 **Deliberately not here:** `test/test_hook_order.py`, `test/test_audit_harness.py`
@@ -113,11 +118,11 @@ dormant.
 | **B** | state divergence — changes a damage/block/HP number, a hand, a pile, a deck entry; the next conformance assert fires |
 | **C** | bookkeeping only — hook order or event identity, no numeric effect on ported content |
 
-**The queue covers 5 of the 6 content kinds.** `seam`, `power`, `card`, `event`,
-`enchantment` and `relic` are in it; **`monster` (109 units) is not audited at
-all**, so a mechanism that lives only there is missing from the queue because
-nobody looked, not because it was cleared. The queue's header says so first,
-before any number.
+**The queue covers 5 of the 7 content kinds.** `seam`, `power`, `card`, `event`,
+`enchantment` and `relic` are in it; **`monster` (109 units) and `potion` (51)
+are not audited at all**, so a mechanism that lives only there is missing from
+the queue because nobody looked, not because it was cleared. The queue's header
+says so first, before any number.
 
 **Entries are not jobs, and the relic tier is the sharpest illustration yet.**
 1410 gap entries across the 686 records de-duplicate to 809 mechanisms; the
@@ -337,6 +342,7 @@ Paths below are relative to `audit/` except the two that are not in it:
 | `records/card/**` | card stream |
 | `records/event/**`, `records/enchantment/**` | event+enchantment stream |
 | `records/monster/**` | monster stream |
+| `records/potion/**` | potion stream (not started; kind created 2026-07-26) |
 | `GAP-QUEUE.md` | gap-queue stream |
 | `records/seam/**`, `seams/**`, `tools/harness.py`, `test/test_hook_order.py` | seam tier only |
 | `sts2_rl/**` | gap-fix stream only, once authorised |
@@ -352,7 +358,7 @@ read-only and sends lessons back via its report; the relic stream folds them in
 and bumps the version header. That single exception is why the branches merge
 trivially.
 
-A new *kind* beyond the six needs a `GAME_MODEL_DIRS` entry and a `_sim_units`
+A new *kind* beyond the seven needs a `GAME_MODEL_DIRS` entry and a `_sim_units`
 branch in `harness.py` — that is a seam-tier change, so propose it rather than
 making it.
 

@@ -19,7 +19,7 @@ file. Re-run `counts`.
 
 ## What this queue does NOT cover
 
-**Five of the six content kinds are audited. One is not.**
+**Five of the seven content kinds are audited. Two are not.**
 
 | kind | units | records | in this queue |
 |---|---|---|---|
@@ -30,13 +30,40 @@ file. Re-run `counts`.
 | enchantment | 17 | 17 | yes |
 | relic | 258 | 258 | yes — **merged 2026-07-26** |
 | **monster** | **109** | **0** | **no — stream never run** |
+| **potion** | **51** | **0** | **no — kind created 2026-07-26** |
 
-109 sim units have no record at all, and a record is the only thing that turns
-a divergence into a queue entry. So a mechanism that lives only in a monster
-model is not absent from this queue because it was cleared — it is absent
-because nobody looked. 11 C# monster models override an `AbstractModel` hook
-and no seam claims them (`py audit/tools/dormancy_probes.py cs-monster-hooks`);
-see [Behaviour in no tier's scope](#behaviour-in-no-tiers-scope).
+160 sim units have no record at all, and a record is the only thing that turns
+a divergence into a queue entry. So a mechanism that lives only in a monster or
+a potion model is not absent from this queue because it was cleared — it is
+absent because nobody looked. 11 C# monster models override an `AbstractModel`
+hook and no seam claims them
+(`py audit/tools/dormancy_probes.py cs-monster-hooks`); see
+[Behaviour in no tier's scope](#behaviour-in-no-tiers-scope).
+
+**`potion` is a new row for an old problem, and it is worth understanding why
+it appears here rather than having always been here.** Until 2026-07-26 the
+shared contract said "Out of scope everywhere: potions (deferred by Perry)", so
+potions were not an unaudited kind — they were an *excluded* one, which meant
+nothing counted them and nothing reported them missing. Perry has replaced that
+clause ("don't ignore potions anymore") and `potion` is now an ordinary kind:
+51 sim units, `audit/records/potion/`, `harness.py roster potion` resolves all
+51 against `src/Core/Models/Potions`.
+
+The exclusion did damage in both directions while it stood, which is the
+argument for never expressing scope as an exclusion again:
+
+- **It manufactured a rule-3 break.** Ten entries across the `card` and `power`
+  tiers waived real behaviour on it — including the whole of `card/alchemize`,
+  a ported Colorless card whose entire effect is potion procurement — while the
+  `relic` tier filed **45** potion-mechanic gaps, 27 of them LIVE. One
+  mechanism, two answers, caused by the contract itself.
+- **It protected a false claim.** `damage_pipeline` N4 waived the two-phase
+  `ShouldDie` ordering on the grounds that Fairy in a Bottle was out of scope.
+  The potion is **ported**, at `sts2_rl/potions.py:1242`, with a real
+  `should_die` — so the waiver was hiding a live gap, not deferring a decision.
+  It is now entry 57.
+
+Unaudited is a fact the tools report. Out-of-scope was a claim that hid things.
 
 **What the relic tier's arrival did to the rest of the queue** is the strongest
 evidence available that this "nobody looked" caveat is not boilerplate. Adding

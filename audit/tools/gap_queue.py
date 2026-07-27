@@ -77,8 +77,8 @@ KINDS = ["seam"] + CONTENT_KINDS
 # Kinds the pipeline defines but has NOT audited -- reported by ``counts`` so a
 # reader of the queue cannot mistake it for complete coverage.  The unit counts
 # are ``py audit/tools/harness.py roster <kind>``'s "N sim units" line.
-UNAUDITED_KINDS = ["monster"]
-_UNAUDITED_UNITS = {"monster": 109}
+UNAUDITED_KINDS = ["monster", "potion"]
+_UNAUDITED_UNITS = {"monster": 109, "potion": 51}
 
 # --- mechanism merges the records themselves declare -------------------------
 # key: mechanism key as auto-derived, value: canonical mechanism key.
