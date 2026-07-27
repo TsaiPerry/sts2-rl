@@ -868,3 +868,196 @@ Running the last 23 as three concurrent slices cut wall-clock roughly threefold
 (~27 min versus ~75 min sequential at batch-4's rate) for the same token spend,
 at the cost of the id collision documented at the top of this file and one
 duplicated discovery (two slices independently finding the two halves of EV-9).
+
+## Review fix pass
+
+Six review findings applied on `audit-pipeline`. No re-audit of the tier: only
+the named defects were touched, plus the sites rule 3 forces along with them.
+
+| kind | units | rollups after the pass | entries |
+|---|---|---|---|
+| `event` | 65 | 47 gap / 16 waiver / 2 deliberate-divergence | 350 faithful, 127 waiver, 103 gap, 10 dd |
+| `enchantment` | 17 | **17 gap** (was 12 gap / 3 faithful / 2 waiver) | 56 faithful, 43 gap, 14 waiver |
+
+Counts recomputed programmatically over the record files, not carried forward
+from the first cut. Verification: `py audit/tools/harness.py validate` -> 428
+records, 0 invalid; `py audit/tools/audit_status.py` -> `enchantment 17/17, 0
+invalid, 0 stale, 17 gaps` and `event 65/65, 0 invalid, 0 stale, 47 gaps`;
+`py -m pytest test/ -q` -> 2522 passed, 38 xfailed (the suite grew under
+concurrent streams; this pass adds no executable code and changed no test);
+`git diff --name-only main...audit-pipeline | grep ^sts2_rl/` -> empty.
+
+Commits: `87a4cec5` (FIX 1+2), `d9bd3da1` (FIX 3), `d4f320d8` (FIX 5),
+`e3737645` (FIX 6), `17345543` (FIX 4).
+
+### FIX 1 + FIX 2 — the copy verb was a live gap, and the four-verb check is now closed
+
+**EG2 (new mechanism, `gap`, recorded on all 17 enchantment records).** C#
+`CardModel.CreateClone` -> `MutableClone` -> `DeepCloneFields`
+(`CardModel.cs:1204-1209`) re-attaches the source card's enchantment onto the
+copy — `ClonePreservingMutability()`, `Enchantment = null`,
+`EnchantInternal(...)` — and does the same for the Affliction at 1210-1215.
+`CreateClone` throws unless the card is in a **combat** pile
+(`CardModel.cs:2170-2173`), so every site is a combat-pile copy.
+
+**Five** ported sim copy sites drop it, each a `type(card)()` /
+`make_card(card.id)` rebuild plus a re-upgrade loop with no `card.enchantment`
+carry:
+
+| sim | C# | trigger |
+|---|---|---|
+| `cards/trash_heap_cards.py:18-24` `_clone` | `DualWield.cs:35` | hand ATTACK or POWER |
+| `powers.py:827-830` | `JugglingPower.cs:48` | every 3rd ATTACK played |
+| `relics/music_box.py:46-48` | `MusicBox.cs:78` | first ATTACK played each turn |
+| `cards/anger.py:36-38` | `Anger.cs:27` | Anger copies itself |
+| `relics/burning_sticks.py:30-32` | `BurningSticks.cs:49` | first SKILL exhausted each combat |
+
+The sim's *other* copy paths are correct, which is what makes this a bug rather
+than a design choice: `relics/bing_bong.py:37`, `events/reflections.py:52` and
+the per-combat deck copy `run.py:1136` all use `copy.deepcopy` (the enchantment
+rides along), and `relics/paels_growth.py:39-46` re-attaches Clone by hand.
+
+**Recorded on all 17, not the five the review named.** The review named
+`sharp`/`vigorous`/`corrupted`/`instinct`/`goopy`, but an executed
+`can_enchant` matrix over ATTACK/POWER/SKILL shows every one of the 17 reaches
+at least one dropping site, and rule 3 puts one verdict at every site — the
+same convention EV-1 ("all 18 `lose_hp` sites") and EV-3 already follow. Two
+corrections fell out of that matrix:
+
+- **Goopy is not Dual-Wield-reachable.** `Goopy.cs:16-21` requires
+  `CardTag.Defend`, so the matrix reads False/False/True. Its reachable site is
+  Burning Sticks — and it is a tight fit rather than luck, because Goopy is the
+  enchantment that *adds* the Exhaust that fires Burning Sticks.
+- **Souls is reachable**, which was not obvious: it needs a card with Exhaust
+  and its own effect removes Exhaust. 36 ported cards qualify, 6 of them
+  ATTACKs (`dramatic_entrance`, `feed`, `fiend_fire`, `molten_fist`,
+  `neows_fury`, `whistle`), so it reaches the four attack sites as well as
+  Burning Sticks.
+
+**LIVE on 15, DORMANT on 2.** `clone` is dormant because its only reader is the
+Clone rest-site option over the *deck* and every dropping site produces a
+combat card; `imbued` is dormant because both its effects are combat-*setup*
+effects (`ShouldStartAtBottomOfDrawPile`, the turn-1 auto-play) and a Burning
+Sticks copy is minted after both windows close. Dormant, not waived — rule 1.
+Three enchantments (`glam`, `sown`, `swift`) are live specifically *through*
+Dual Wield: they fire once per combat, and C#'s `ClonePreservingMutability`
+carries `Status = Disabled` from an already-played card, so the three
+play-triggered sites are dormant for them and the unplayed-hand-card site is
+not.
+
+**FIX 2's transform finding: FAITHFUL, both engines drop it.**
+`CardCmd.Transform` (`CardCmd.cs:369-451`) takes `item.GetReplacement(rng)`,
+calls `RemoveFromCurrentPile()` on the original and adds the replacement; the
+word `Enchantment` never appears in the method, and both `AfterTransformedFrom`
+and `AfterTransformedTo` are empty virtuals (`CardModel.cs:1625-1631`;
+`SovereignBlade` is the source's only override). The sim's `run.transform_card`
+and `CardCmd.transform_to_random` build the replacement with `make_card(...)`.
+Executed on all 17 ids, both engines drop the enchantment — so the review's
+"presumably should not carry" is confirmed, and it is now *on the record*
+instead of being nobody's assumption.
+
+Each record now carries an explicit **four-verb coverage table** (enchant /
+upgrade+downgrade / transform / copy). The upgrade+downgrade radius was
+executed too, and it exactly matches the four units the `creature_card_cmds`
+step-52 hand-off covered: only `goopy`, `souls`, `steady` and
+`tezcataras_ember` override `attach()` to mutate a static card property, so
+only those four can be undone by a card rebuild. The other 13 work through the
+`modify_*` hooks, read live off the still-attached enchantment. That was
+previously an unstated assumption; it is now a one-liner in every record.
+
+**False docstring #5.** `_clone`'s "mirrors `CreateClone` for the sim's needs"
+is false: `CreateClone` carries the enchantment *and* the affliction, `_clone`
+carries neither. Same bug class as the four the first cut found — a docstring
+asserting behaviour is a claim to be checked, not context to be trusted.
+
+### FIX 3 — a waiver that admitted it was a gap
+
+`event/jungle_maze_adventure` guard:4 stated outright that
+`JungleMazeAdventure.cs:60`'s `_fx.ToList().StableShuffle(base.Rng)` "IS a real
+stream draw the sim does not take" and then filed `waiver`. Re-verified at
+source: it is the **first, unconditional statement** of `DontNeedHelp`, over
+the static 3-entry `_fx` list. That is EV-3's exact mechanism, verdicted `gap`
+at **28 other entries across 27 event records** — including the `CalculateVars`
+guard two entries up in the same file. Re-verdicted `gap`, citing EV-3, with
+EV-5/EV-7's StableShuffle shape noted (sort-then-Fisher-Yates makes it a
+deterministic, countable stream advance, which is a second reason a *cosmetic*
+shuffle cannot be waived). The presentation half (waits, SFX) stays in the same
+guard because a guard carries max(verdict) of what it aggregates. Rollup was
+already `gap`; nothing else moved.
+
+### FIX 4 — 183 unrunnable probe citations
+
+The `tools/audit/*` -> `audit/tools/*` restructure left every probe citation in
+these records pointing at a path that no longer exists. Swept all 183 in scope
+across 69 records: `event_probes` 87, `event_probes_a` 29,
+`enchantment_probes` 28, `event_probes_b` 20, `event_probes_c` 19. Then
+verified the citations actually *run*: all **45** distinct
+(probe, subcommand) pairs the records name resolve against the probe modules'
+`PROBES` tables. A citation that cannot be executed is not evidence, so the
+check is worth keeping as a lint.
+
+### FIX 5 — two rationale corrections
+
+- `event/vakuu` hook:`CalculateVars` was waived "out of scope: profile
+  metadata" — not one of the four permitted categories, so it read as a rule-3
+  violation against `event/welcome_to_wongos`, which files the same unported
+  `SaveManager.Progress` dependency as a dormant **gap**. Re-grounded on the
+  presentation clause, with the negative narrowed to what is actually true:
+  a grep for the `Visits` key returns only the three Vakuu.cs sites that
+  *create* the var plus one unrelated serializer entry, and the dialogue
+  *selection* does not read it either — `AncientDialogueSet.GetValidDialogues`
+  (`AncientDialogueSet.cs:104-135`) matches `VisitIndex` against a `charVisits`
+  argument its caller supplies. So it is a localization substitution token. The
+  Wongos distinction is the **consequence**, not the dependency: there
+  `Progress` feeds a relic grant, here a spoken line.
+- The `AllPossibleOptions` "its only reader is the DebugOption swap" claim is
+  false as written — `AncientConsoleCmd.cs:41,71` and
+  `NRelicCollectionCategory.cs:116` also read it. Narrowed. The review named
+  two sites; the same over-broad negative was at **four** (`tanx`,
+  `tezcatara`, `vakuu`, `nonupeipe`). No verdict moves: the extra readers are
+  dev console and compendium UI, and `NeowsBones.cs:33` reads
+  `ModelDb.Event<Neow>().AllPossibleOptions` — hard-coded to *Neow's* list,
+  which is exactly why `event/neow` records its `AllPossibleOptions` as a real
+  faithful function and every other ancient waives it.
+
+### FIX 6 — the eventsVisited hole, executed rather than noted
+
+No record named `eventsVisited`, so two consequence claims rode on it unproven.
+Both are now executed, and they came out differently:
+
+- **`unrest_site`'s "shifts every later event pick" — PROVEN.**
+  `RoomSet.EnsureNextEventIsValid` (`rooms.py:441-457`) increments
+  `events_visited` past every event whose `IsAllowed` fails, and
+  `mark_visited` (`rooms.py:431-439`) increments it again when the room is
+  served, so a wrongly-refused event does not merely go missing — it advances
+  the cursor and re-indexes the whole tail. Executed over the queue
+  `[unrest_site, doll_room, tea_master, this_or_that]` at 90/63: the game
+  serves `[unrest_site, doll_room, tea_master]`, the sim serves
+  `[doll_room, tea_master, this_or_that]`. Recorded as a `faithful` guard —
+  the ordering machinery itself matches the source; the divergence is the
+  `IsAllowed` gap, not re-verdicted (rule 3).
+- **`morphic_grove`'s "can make the sim offer a map node the game would not" —
+  DISPROVEN.** The claim lived in `event/trial`'s EV-10 text.
+  `MorphicGrove.cs:26` gates on `c.IsTransformable`, which for a Deck card is
+  `!Eternal` (`CardModel.cs:739-750`) with **no Quest clause** — the Quest
+  clause is only on the transform *screen* (`CardSelectCmd.cs:487`). Executed:
+  deck `[strike, spoils_map]`, gold 100 — sim `is_allowed` True, game count
+  2 -> True. **The gates agree.** EV-10's verdict is unaffected, because the
+  real divergence is one step later and is still LIVE, with a sharper witness
+  than the withdrawn one: the sim's screen offers 2 candidates where the game's
+  offers 1, and since GROUP passes `CardSelectorPrefs(prompt, 2)` (MinSelect ==
+  MaxSelect, so `RequireManualConfirmation` is false), the game auto-takes its
+  1-card list (`CardSelectCmd.cs:493-495`) and transforms **one** card while
+  the sim transforms **two** and destroys the Quest card. Recorded as an EV-10
+  site on `event/morphic_grove`.
+
+### Residual from this pass
+
+`harness.py validate` now emits `WARN inherited overrides with no verdict` on
+**8 event records** (`darv`, `neow`, `nonupeipe`, `orobas`, `pael`, `tanx`,
+`tezcatara`, `vakuu` — `InitialDescription` / `LayoutType` / `LocTable`) and
+**8 power records**. That check did not exist when these records were written;
+it arrived mid-flight from the tooling stream, and the same warning spans a
+tier this pass does not own. Left for whoever owns the check, since deciding
+how inherited presentation overrides get recorded is a convention call, not a
+correction. `invalid` is still 0.
