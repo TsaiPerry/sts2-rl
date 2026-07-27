@@ -651,7 +651,54 @@ def probe_order():
     print(f"  differences: {diffs if diffs else 'NONE'}")
 
 
+def probe_hprange():
+    """Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:95-109) while Python's
+    random.randint(a, b) INCLUDES b.  Creature.SetUniqueMonsterHpValue
+    (Creature.cs:371-383) compensates with `int num = MaxInitialHp + 1` and
+    then uses BOTH `Enumerable.Range(min, num - min)` and
+    `rng.NextInt(min, num)`, so the game's HP range is [Min, Max] INCLUSIVE.
+    This probe executes the sim's parity roll and reports the observed
+    endpoints, which is what an off-by-one at the top of the range would
+    show up as."""
+    from sts2_rl.monsters.base import Monster
+    units = [
+        ("byrdonis", "byrdonis:Byrdonis"), ("flyconid", "flyconid:Flyconid"),
+        ("fuzzy_wurm_crawler", "fuzzy_wurm_crawler:FuzzyWurmCrawler"),
+        ("inklet", "inklets:Inklet"), ("mawler", "mawler:Mawler"),
+        ("nibbit", "nibbit:Nibbit"), ("phrog_parasite", "phrog_parasite:PhrogParasite"),
+        ("wriggler", "phrog_parasite:Wriggler"),
+        ("shrinker_beetle", "shrinker_beetle:ShrinkerBeetle"),
+        ("snapping_jaxfruit", "snapping_jaxfruit:SnappingJaxfruit"),
+        ("bygone_effigy", "bygone_effigy:BygoneEffigy"),
+        ("ceremonial_beast", "ceremonial_beast:CeremonialBeast"),
+        ("cubex_construct", "cubex_construct:CubexConstruct"),
+        ("eye_with_teeth", "fogmog:EyeWithTeeth"), ("fogmog", "fogmog:Fogmog"),
+    ]
+    print("hprange -- parity Niche HP roll endpoints vs the declared class bounds")
+    print("  (game range is [MinInitialHp, MaxInitialHp] INCLUSIVE: "
+          "Creature.cs:378 `num = MaxInitialHp + 1`)")
+    bad = []
+    for label, spec in sorted(units):
+        cls = _load(spec)
+        lo, hi = cls.min_hp, cls.max_hp
+        seen = set()
+        for i in range(400):
+            enc = Encounter(id="h", monster_classes=[lambda h, r, c=cls: c(h, r)])
+            combat = CombatState(rng_set=RunRngSet("hp-%d" % i), encounter=enc)
+            seen.add(combat.enemies[0].max_hp)
+        ok = (min(seen) == lo and max(seen) == hi
+              and seen == set(range(lo, hi + 1)))
+        if not ok:
+            bad.append(label)
+        print(f"  {label:<20} declared [{lo},{hi}]  observed "
+              f"[{min(seen)},{max(seen)}] distinct={len(seen)} "
+              f"{'OK' if ok else 'OFF-BY-ONE / GAP'}")
+    print("hprange:", "all endpoints inclusive on both sides"
+          if not bad else "PROBLEMS: %s" % bad)
+
+
 _PROBES = {
+    "hprange": probe_hprange,
     "order": probe_order,
     "chain": probe_chain, "branch": probe_branch, "inklet": probe_inklet,
     "machine": probe_machine, "reach": probe_reach, "deadlock": probe_deadlock,

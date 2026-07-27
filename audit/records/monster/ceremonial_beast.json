@@ -22,7 +22,7 @@
     "ShouldDisappearFromDoom": {
       "maps_to": "no sim counterpart; the sim has no DoomPower at all",
       "verdict": "waiver",
-      "rationale": "NOT reflex-waived (SHARED-FINDINGS section 4 flags this one). Executed: `grep -rn ShouldDisappearFromDoom src/` returns the MonsterModel.cs:171 default, ten monster overrides and exactly ONE reader -- DoomPower.cs:90, inside the private `PlayVfx` helper, where it only decides `StartDoomAnim(nCreature, flag)`. It gates no kill, no removal and no hook; the actual doom kill is DoomKill(doomedCreatures) above it. So it is presentation. Doubly moot: `grep -n 'class DoomPower' sts2_rl/powers.py` finds nothing, i.e. DoomPower is unported."
+      "rationale": "Presentation, and this is the CROSS-BATCH ADJUDICATED verdict on the mechanism (binding rule 3) after two batches disagreed -- recorded as ruled, and independently re-derived before recording. `ShouldDisappearFromDoom` has exactly one reader in the whole game tree: DoomPower.cs:90, and line 90 sits inside the PRIVATE helper `PlayVfx`, which early-returns when the creature has no visual node (DoomPower.cs:82-86). The `flag` it computes is consumed in exactly two places -- `StartDoomAnim(nCreature, flag)` (DoomPower.cs:92) and a Cmd.Wait(0.25f)/Cmd.Wait(1.5f) timing branch (DoomPower.cs:101-111). StartDoomAnim's shouldDie arm (DoomPower.cs:117-134) is `Monster?.OnDieToDoom()`, an AnimDisableUi tween, QueueFreeSafely, a Spine \"Hit\" trigger, `NCombatRoom.RemoveCreatureNode` (removal of the VIEW node) and an NDoomVfx variant; `OnDieToDoom` is documented at MonsterModel.cs:485-491 as 'Primarily used set up the creature visuals for the Doom vfx', has an empty base body, and its one override (TorchHeadAmalgam.cs:67-79) hides three light nodes. DECISIVE: the kill does NOT consult it -- DoomPower.DoomKill (DoomPower.cs:40-53) is `await PlayVfx(creature); await CreatureCmd.Kill(creature);`, so the Kill is UNCONDITIONAL and outside PlayVfx. The flag therefore gates whether the sprite vanishes with the doom animation, never whether the creature dies or leaves Enemies. Waiver on presentation, matching monster_state_machine N2 and the KinPriest N6 precedent (read the override to the end before verdicting). That the sim has no Doom at all is a secondary observation and is NOT the load-bearing part of this argument."
     },
     "ShouldFadeAfterDeath": {
       "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
@@ -90,19 +90,19 @@
       "what": "Ascension gating on HP and all five move numerics",
       "verdict": "waiver",
       "rationale": "Out of scope; non-ascension branch compared (N4)."
+    },
+    {
+      "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
+      "verdict": "faithful",
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit's MaxInitialHp is `=> MinInitialHp`, so the range is the single value 252 and no endpoint can be lost; the check is recorded anyway because an off-by-one would turn a one-element candidate list into an empty one and change which ARM of SetUniqueMonsterHpValue runs (NextItem vs NextInt), which is a stream-position difference even when the HP is identical. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [252,252], observed [252,252], and the observed set is exactly the full inclusive range, so the top endpoint 252 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
     }
   ],
   "verdict": "waiver",
   "audited": "2026-07-27",
   "extra_sources": [
     {
-      "path": "src\\Core\\Models\\Powers\\PlowPower.cs",
-      "sha256": "3c59d2c0e4bcae4dc599453d81188eeeef4aa6d9d4e5290181f3fa0279bf2f89",
-      "side": "game"
-    },
-    {
-      "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
-      "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
       "side": "game"
     },
     {
@@ -111,8 +111,28 @@
       "side": "game"
     },
     {
+      "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
+      "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\PlowPower.cs",
+      "sha256": "3c59d2c0e4bcae4dc599453d81188eeeef4aa6d9d4e5290181f3fa0279bf2f89",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Random\\Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
       "path": "sts2_rl\\combat.py",
       "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
       "side": "sim"
     },
     {
@@ -121,8 +141,8 @@
       "side": "sim"
     },
     {
-      "path": "sts2_rl\\monsters\\state_machine.py",
-      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "path": "sts2_rl\\rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
       "side": "sim"
     }
   ]
