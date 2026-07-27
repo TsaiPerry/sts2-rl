@@ -1,0 +1,121 @@
+{
+  "unit": "monster/the_insatiable",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\TheInsatiable.cs",
+    "sha256": "66c6ad48b3544056e8f8057bea38376c919e70dfc153b79cf9525737eb68660f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\the_insatiable.py",
+    "sha256": "e04f5abac0020de91548e97fbe7938891e18018bb3fa0fb8da3c19527ae65290"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "the_insatiable.py:30 `min_hp = 321`",
+      "verdict": "faithful",
+      "rationale": "TheInsatiable.cs:58 GetValueIfAscension(ToughEnemies, 341, 321) -> 321."
+    },
+    "MaxInitialHp": {
+      "maps_to": "the_insatiable.py:31 `max_hp = 321`",
+      "verdict": "faithful",
+      "rationale": "TheInsatiable.cs:60 `MaxInitialHp => MinInitialHp` -> 321. Fixed HP, no roll."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4)."
+    },
+    "AfterDeath": {
+      "maps_to": "no sim counterpart, and none is needed",
+      "verdict": "waiver",
+      "rationale": "ONE OF THE ELEVEN UNCLAIMED C# HOOK OVERRIDES handed to the content tier by monster_state_machine boundary hole 5. Read to the end (the KinPriest N6 lesson): the ENTIRE body of TheInsatiable.cs:83-91 is a `creature != base.Creature` self-filter and `NRunMusicController.Instance?.UpdateMusicParameter(TheInsatiableTrackName, 10f)` -- one music parameter, no state change, no command, no power, no card. Identical shape to KinPriest.AfterDeath (monster_state_machine N6, `waiver`) and to Aeonglass.AfterDeath in this same batch. Verdict is presentation, exactly as N6, and this does NOT re-verdict hook_dispatch's G5 (the sim having no MonsterModel listener category): there is simply no mechanical behaviour here for a ported equivalent to be missing."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4)."
+    },
+    "GenerateBestiaryMoveList": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "TheInsatiable.cs:206-211 inserts a DEVOUR entry built from an anim name and an sfx path into the Bestiary list. Presentation; the sim has no Bestiary (monster_state_machine N5)."
+    },
+    "GenerateMoveStateMachine (protected; added by hand -- the skeleton only enumerates `public override` members)": {
+      "maps_to": "the_insatiable.py:33-58 build_machine",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against TheInsatiable.cs:93-112. Five MoveStates with identical ids (LIQUIFY_GROUND_MOVE, THRASH_MOVE, THRASH_MOVE_2, LUNGING_BITE_MOVE, SALIVATE_MOVE); follow-ups liquify->thrash, thrash->bite, bite->salivate, salivate->thrash2, thrash2->thrash on BOTH sides; same registration list order [liquify, bite, thrash, thrash2, salivate]; same initial state. Note the two THRASH nodes share one perform delegate and differ only in id -- the game's own near-miss on monster_state_machine G8a (duplicate ids would throw), avoided by the distinct id. EXECUTED (`monster_probes_b06.py branch-args`): no branch state on either side."
+    }
+  },
+  "guards": [
+    {
+      "what": "LIQUIFY_GROUND's six Frantic Escapes are added at a RANDOM pile position; the sim appends the discard half",
+      "verdict": "gap",
+      "issue": "LIVE. TheInsatiable.cs:130-137 loops i in [0,6) and calls `CardPileCmd.AddGeneratedCardToCombat(card, i < 3 ? PileType.Draw : PileType.Discard, null, CardPilePosition.Random)` -- CardPilePosition.Random resolves to `card.Owner.RunState.Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)` (CardPileCmd.cs:512-514) for BOTH pile types, so the game makes SIX Shuffle-stream draws and inserts each card at a random index. the_insatiable.py:65-68 routes the draw half through CardPileCmd.add_to_draw (cmds.py:475-497), which does reproduce the Random slot and the Shuffle stream, but routes the discard half through CardPileCmd.add_to_discard (cmds.py:464-472), whose own docstring says it mirrors AddToCombatAndPreview -- it APPENDS and draws nothing. Two observables: (1) the sim makes 3 Shuffle draws where the game makes 6, so every subsequent shuffle/random-slot result in the combat is off by three draws in a parity run (combat_rng.py:20-25,48 is the parity Shuffle accessor); (2) the three discard-pile Frantic Escapes land at the bottom in a fixed order instead of at three random positions, which the StableShuffle at the next reshuffle preserves as incoming order. LIVE on both sides (rule 6): `the_insatiable` is in the Hive's boss_keys (rooms.py:166), THE_INSATIABLE_BOSS is exported (the_insatiable.py:82-85), LIQUIFY_GROUND is the boss's guaranteed opening move (it is the machine's initial state), and Frantic Escape is the fight's only counterplay to Sandpit. **RULE-3 CONFLICT, REPORTED NOT EDITED:** audit/records/power/sandpit.json carries a guard `Frantic Escape as the counterplay` verdicted `faithful` on the grounds that '3 to Draw and 3 to Discard' matches; it compared the counts and the pile types but not CardPilePosition, and so cleared a divergence. That record is not mine to edit.",
+      "live": true
+    },
+    {
+      "what": "SandpitPower is applied once per target with a per-target `Target` field",
+      "verdict": "faithful",
+      "rationale": "TheInsatiable.cs:121-126 loops `targets`, builds a mutable SandpitPower per target, sets `sandpitPower.Target = target` and applies 4m to base.Creature. In Ironclad scope `targets` is the single player, so the loop runs once; the_insatiable.py:64 applies SandpitPower 4 to self. The per-instance Target and PowerInstanceType.Instanced halves are audit/records/power/sandpit.json's InstanceType gap, not re-verdicted here."
+    },
+    {
+      "what": "Damage / power constants",
+      "verdict": "faithful",
+      "rationale": "ThrashDamage (DeadlyEnemies, 9, 8) -> 8 with WithHitCount(2) = _THRASH_DMG 8 x _THRASH_HITS 2 (the_insatiable.py:14-15); BiteDamage (..., 31, 28) -> 28 (:16); SalivateStrength (..., 3, 2) -> 2 (:17); Sandpit 4m (TheInsatiable.cs:125) = _SANDPIT 4 (:18); 3 draw + 3 discard Frantic Escapes (TheInsatiable.cs:26-28, :131-134) = _ESCAPE_DRAW/_ESCAPE_DISCARD (:19-20)."
+    },
+    {
+      "what": "LIQUIFY's intent drops StatusIntent's count",
+      "verdict": "gap",
+      "issue": "TheInsatiable.cs:96 telegraphs `new BuffIntent(), new StatusIntent(6)` -- the 6 is the number of status cards the player is about to receive and is rendered in the intent. The sim's Intent (monsters/base.py:36-59) collapses a C# AbstractIntent[] into one MoveType plus an `also` tuple with no status-count field, so the_insatiable.py:36 records `Intent(MoveType.BUFF, also=(MoveType.STATUS_CARD,))` and the 6 is lost. Same mechanism as aeonglass's StatusIntent(WitherAmount) and the empty intent array on the three BattleFriends; monster_state_machine's scope boundary item 2 records the whole AbstractIntent -> Intent mapping as audited by no seam. NOT LIVE: nothing in the sim consumes an intent's status count because the field does not exist, so no ported consumer can observe the loss today. Named trigger: adding a status-count field to Intent, or any observation/replay consumer that reads one.",
+      "live": false
+    },
+    {
+      "what": "`_liquify` order: Sandpit before the cards",
+      "verdict": "faithful",
+      "rationale": "TheInsatiable.cs:121-143 applies every Sandpit first (loop 1), then generates the six statuses (loop 2), then sets HasLiquified. the_insatiable.py:64-68 has the same order. Checked because Sandpit's counter is what playing a Frantic Escape increments."
+    },
+    {
+      "what": "`HasLiquified` (TheInsatiable.cs:68-79)",
+      "verdict": "waiver",
+      "rationale": "Read only by the animator's `Hit` AddAnyState conditions (TheInsatiable.cs:201-202). Presentation."
+    },
+    {
+      "what": "PowerCmd.Apply's `applier` argument",
+      "verdict": "deliberate-divergence",
+      "rationale": "ONE MECHANISM ACROSS THIS BATCH (rule 3), recorded at every site: the sim's monster ports drop PowerCmd.Apply's `applier` argument. C# is `Apply<T>(choiceContext, target, amount, applier, cardSource)` (PowerCmd.cs:67) and passes `base.Creature` at TheInsatiable.cs:125 (Sandpit) and :170 (StrengthPower), both applier=base.Creature; the sim's `PowerCmd.apply(hooks, target, power_cls, amount, applier=None)` (cmds.py:271-277) is called without it at the_insatiable.py:64 and :79. In C# a null applier additionally SKIPS the whole Hook.ModifyPowerAmountGiven pass (PowerCmd.cs:123-126) and changes the key FindExistingInstanceForStacking uses (PowerCmd.cs:78, :112). Same observable today, EXECUTED (`py audit/tools/monster_probes_b06.py applier`): the sim has exactly six listener definitions that can see the argument -- powers.py:1172/1181 (ViciousPower, gated `name != \"vulnerable\" or applier is not self.owner`, powers.py:1167), powers.py:3101/3106 (_PossessPower, gated `applier is self.owner and name == self._stat_id and target.side == \"player\" and delta < 0`, powers.py:3092-3099), relics/ruined_helmet.py:23-38 (gated on `target is self.player`, never on applier) and relics/unsettling_lamp.py:44-53 (gated `applier is not self.player`, unsettling_lamp.py:47). None can distinguish `None` from the applying monster for a power this unit applies. Named trigger: porting any listener that reads `applier` positively (a monster-applier-sensitive relic), or porting PowerInstanceType so stacking is keyed by applier. Third-file citations (relics/*.py) not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}
