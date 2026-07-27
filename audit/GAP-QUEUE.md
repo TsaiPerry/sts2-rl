@@ -56,11 +56,11 @@ transcription of it and can go stale.
 | — labelled LIVE in their own text | 251 |
 | — labelled DORMANT in their own text | 313 |
 | — unlabelled (inherit their mechanism's liveness) | 224 |
-| **distinct mechanisms** | **405** |
+| **distinct mechanisms** | **403** |
 | — with at least one live site | **135** |
-| — dormant at every site | 270 |
+| — dormant at every site | 268 |
 | mechanisms pinned by a `strict=True` xfail | **31** |
-| mechanisms unpinned | 374 |
+| mechanisms unpinned | 372 |
 | `strict=True` xfails in `test/test_hook_order.py` | 32 (all strict) |
 
 Per kind (records / gap entries / mechanisms anchored there / entries labelled live):
@@ -68,7 +68,7 @@ Per kind (records / gap entries / mechanisms anchored there / entries labelled l
 | kind | records | entries | mechanisms | live |
 |---|---|---|---|---|
 | `seam` | 6 | 226 | 92 | 47 |
-| `power` | 138 | 267 | 171 | 53 |
+| `power` | 138 | 267 | 169 | 53 |
 | `card` | 202 | 149 | 95 | 51 |
 | `event` | 65 | 103 | 37 | 78 |
 | `enchantment` | 17 | 43 | 10 | 22 |
@@ -84,9 +84,9 @@ Per seam record, which is how the engine tier was originally reported:
 | `hook_dispatch` | 30 | 11 | 13 |
 | `monster_state_machine` | 16 | 9 | 4 |
 
-**788 entries are not 788 jobs, and the ratio is worse than it looks.** 77
-mechanisms are recorded at more than one site and account for 460 of the 788
-entries; the other 328 mechanisms are one entry each. The largest groups:
+**788 entries are not 788 jobs, and the ratio is worse than it looks.** 78
+mechanisms are recorded at more than one site and account for 463 of the 788
+entries; the other 325 mechanisms are one entry each. The largest groups:
 
 | mechanism | sites | what collapses |
 |---|---|---|
@@ -3164,7 +3164,7 @@ the cross-tier check working exactly as rule 3 intends.
     power tier ("64 of the 258 power gap entries carried neither a LIVE nor a
     dormant token"); across all five kinds it is 28% of the queue. Those entries
     inherit their mechanism's liveness here, which is a guess wherever the
-    mechanism is a singleton — 328 of the 404 mechanisms are. The `live` boolean
+    mechanism is a singleton — 325 of the 403 mechanisms are. The `live` boolean
     the record schema now allows is the fix, and it is not yet populated on a
     single record: `py audit/tools/gap_queue.py json` shows every liveness in this
     queue is derived from prose.
@@ -3209,7 +3209,7 @@ it:
 
 An over-split queue overstates the work; an over-merged one hides a job. The
 tables lean split: anything a record does not explicitly tie to another
-mechanism anchors its own, which is why 328 of the 404 mechanisms are single-site
+mechanism anchors its own, which is why 325 of the 403 mechanisms are single-site
 and land in Tier 3.
 
 Both checks were run clean at the commit that added this line, together with

@@ -62,10 +62,12 @@ Two things to expect from that output rather than be surprised by:
 ```
 audit/
   README.md          you are here
-  GAP-QUEUE.md       every gap, de-duplicated by mechanism, ordered for work
+  GAP-QUEUE.md       every gap in every audited kind, de-duplicated by
+                     mechanism, ordered for work (relic + monster are unaudited)
   records/
     seam/*.json      the 6 engine-seam audit records — the evidence
-    relic/ power/ card/ event/ enchantment/ monster/    empty; one per stream
+    power/ card/ event/ enchantment/                    422 content records
+    relic/ monster/                                     empty; stream never run
   seams/*.md         the 6 seam narration docs — the ordering specs
   tools/             the harness, the status tool, the queue generator, probes
   prompts/           the shared contract + the 8 stream prompts
@@ -90,20 +92,28 @@ dormant.
 | **B** | state divergence — changes a damage/block/HP number, a hand, a pile, a deck entry; the next conformance assert fires |
 | **C** | bookkeeping only — hook order or event identity, no numeric effect on ported content |
 
-**Entries are not jobs.** At the seam tier, 224 entries de-duplicate to 90
-mechanisms. The largest one — the missing `IsEnding`/`IsOverOrEnding` dispatch
-gate — is recorded at 22 sites across three records; the missing
-`AfterModifyingXxx(modifiers)` companion events at 12. Fixing one site of a
-mechanism generally clears all of them, so treating the entries as independent
-overstates the work by roughly 2.5x. Expect the same ratio to hold as content
-records land and the queue grows — re-run `py audit/tools/gap_queue.py counts`
-rather than reusing the figures above. The queue is organised by mechanism, and
+**The queue covers 4 of the 6 content kinds.** `seam`, `power`, `card`, `event`
+and `enchantment` are in it; **`relic` (258 units) and `monster` (109) are not
+audited at all**, so a mechanism that lives only there is missing from the queue
+because nobody looked, not because it was cleared. The queue's header says so
+first, before any number.
+
+**Entries are not jobs.** 788 gap entries across the 428 records de-duplicate to
+403 mechanisms, and 78 of those mechanisms carry 463 of the entries between
+them. The largest — the `AfterSideTurnEnd` slot wiring and the unplayable-card
+cost model — are recorded at 29 sites each; the enchantment-clone gap is
+recorded on **all 17** enchantment records. Fixing one site of a mechanism
+generally clears all of them, so treating the entries as independent overstates
+the work badly, and the overstatement is worse in the content tiers than it was
+at the seam tier. Do not reuse the figures in this paragraph — re-run
+`py audit/tools/gap_queue.py counts`. The queue is organised by mechanism, and
 each one carries a **fix recipe**: sites, impact grade, divergence
 (sim `file:line` vs C# `file:line`), observable, dormancy trigger, pin, which
 sim file changes and roughly how, and the blast radius.
 
-**The pins are the acceptance test.** A third of the seam-tier mechanisms are
-pinned by a `strict=True` xfail in `test/test_hook_order.py`. Strict means the
+**The pins are the acceptance test.** 31 mechanisms — all of them seam-tier — are
+pinned by a `strict=True` xfail in `test/test_hook_order.py`; **no content-tier
+mechanism has a pin yet.** Strict means the
 test *fails* if it unexpectedly passes — so when you fix the gap the pin flips
 from xfail to a failure, and you delete the marker in the same commit. That is
 the fix's proof. `py audit/tools/gap_queue.py pins` lists what is pinned and
@@ -208,7 +218,7 @@ All run from the repo root. None of them judges faithfulness.
 | `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite. `--sim-only` for a unit with no C# counterpart |
 | `py audit/tools/harness.py validate` | completeness + vocabulary check over every record. **Staleness is not validation's job** |
 | `py audit/tools/harness.py rehash <unit>` | re-pins a record's source hashes after a re-audit. **Not a re-audit** — see [Staleness](#staleness) |
-| `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from the records — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json` |
+| `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from every `records/<kind>/` — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json`. Names the unaudited kinds rather than reporting them as 0 gaps |
 | `py audit/tools/gap_queue.py cite-check` | every `file:line` in `GAP-QUEUE.md` resolves to a real line |
 | `py audit/tools/gap_queue.py coverage` | every mechanism and every gap entry is findable in `GAP-QUEUE.md` |
 | `py audit/tools/dormancy_probes.py [probe]` | re-derives every "executed evidence" number `hook_dispatch` states about which classes implement which hook |
