@@ -25,10 +25,9 @@
       "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. Executed: the property's sole reader is Core/Nodes/Combat/NCreature.cs:697, a sprite fade."
     },
     "ShouldDisappearFromDoom": {
-      "maps_to": "(nothing)",
-      "verdict": "gap",
-      "live": false,
-      "issue": "C# overrides ShouldDisappearFromDoom => false, i.e. this creature is NOT removed when DoomPower's kill sweep fires (DoomPower.cs:90 is the property's one and only reader - executed: `grep -rn ShouldDisappearFromDoom --include=*.cs src/` returns 11 lines, 10 of them declarations and this one consumer). The sim models neither the property nor DoomPower. DORMANT: DoomPower is unported - `grep -rni doom --include=*.py sts2_rl/` returns nothing. Concrete trigger that would make it live: porting DoomPower (or any Necrobinder Doom card - BlightStrike.cs, Deathbringer.cs, EndOfDays.cs). SHARED-FINDINGS section 4 names this property as the one not to reflex-waive; this is the checked answer, and it should be the SAME verdict at CeremonialBeast, DecimillipedeSegment, EyeWithTeeth, Parafright, TestSubject, Vantom and WaterfallGiant (rule 3)."
+      "maps_to": "no sim counterpart (presentation; the sim has no Doom)",
+      "verdict": "waiver",
+      "rationale": "SHARED-FINDINGS section 4 named this the one presentation-looking hook not to reflex-waive, and TWO batches answered it differently, which is exactly the gap-detector governing rule 3 describes. RECONCILED 2026-07-27 by the stream lead reading DoomPower.cs end to end; NEITHER original answer was right. (a) There IS exactly one reader -- `grep -rn ShouldDisappearFromDoom --include=*.cs src/` returns 11 lines: the MonsterModel virtual, nine monster overrides, and ONE consumer, DoomPower.cs:90. So the batch-8 claim that every site is a declaration is false. (b) But that reader does NOT gate removal, so the batch-5 claim that the creature 'is NOT removed when DoomPower's kill sweep fires' is false too. DoomPower.cs:90 sits inside `private static async Task PlayVfx`, which early-returns when the creature has no visual node (DoomPower.cs:82-86). Its result feeds exactly two things: StartDoomAnim(nCreature, flag) and a Cmd.Wait(0.25f)/Cmd.Wait(1.5f) timing branch (DoomPower.cs:101-111). StartDoomAnim's shouldDie arm (DoomPower.cs:117-134) is Monster?.OnDieToDoom(), an AnimDisableUi tween, QueueFreeSafely, a Spine 'Hit' trigger, NCombatRoom.RemoveCreatureNode (the NODE, i.e. the view) and the NDoomVfx variant. OnDieToDoom is documented at MonsterModel.cs:485-491 as 'Primarily used set up the creature visuals for the Doom vfx', its base body is empty, and its single override in the game (TorchHeadAmalgam.cs:67-79) hides three light nodes. (c) The death itself is unconditional and OUTSIDE PlayVfx: DoomPower.DoomKill (DoomPower.cs:40-53) is `await PlayVfx(creature); await CreatureCmd.Kill(creature);`. So the property decides whether the sprite vanishes with the doom animation, never whether the creature dies or leaves Enemies -- presentation, `waiver`, matching monster_state_machine N2 and the KinPriest N6 precedent. Same verdict at all nine C# overriders (CeremonialBeast, Crusher, DecimillipedeSegment, EyeWithTeeth, Parafright, Rocket, TestSubject, Vantom, WaterfallGiant) per rule 3. Per rule 7: DoomPower.cs, MonsterModel.cs and TorchHeadAmalgam.cs are cited with line numbers and are NOT hashed by this record."
     },
     "DeathAnimLengthOverride": {
       "maps_to": "(none)",
@@ -83,6 +82,6 @@
       "rationale": "Crusher.cs:178-185 EnlargingStrikeMove is a plain 4-damage attack with no power application; the growth comes from CrabRagePower/Strength elsewhere. kaiser_crab.py:79-80 is the same plain attack. Bug class 24 (a name or docstring that misdescribes the port) checked and clear."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

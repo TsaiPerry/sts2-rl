@@ -171,8 +171,46 @@ override that *looks* mechanical can be entirely a barks line; read it to the
 end before recording a gap). One entry per hook is still required by the
 harness, but the rationale can be one line.
 
-`ShouldDisappearFromDoom` is the one to think about rather than reflex-waive:
-check whether it gates anything mechanical in your unit before waiving.
+`ShouldDisappearFromDoom` was flagged here as the one to think about rather
+than reflex-waive. **ANSWERED 2026-07-27 — `waiver`, presentation, at all nine
+overriding models.**
+
+> This clause did its job as a rule-3 *detector* and the result is worth
+> keeping. Three batches answered it three ways: batch 5 filed a dormant `gap`
+> ("the creature is NOT removed when DoomPower's kill sweep fires"), batch 8
+> filed `faithful` ("`grep` returns ten sites and every one is a declaration —
+> a member the game never reads"), and batches 1/2/3/4/6 waived it. Settling it
+> showed **neither of the first two was right**, which is exactly what rule 3
+> predicts.
+>
+> There **is** exactly one reader — `grep -rn ShouldDisappearFromDoom
+> --include=*.cs src/` returns 11 lines: the `MonsterModel` virtual, nine
+> monster overrides, and `DoomPower.cs:90`. So batch 8's premise is false. But
+> that reader does **not** gate removal, so batch 5's is false too:
+> `DoomPower.cs:90` sits inside `private static async Task PlayVfx`, which
+> early-returns when the creature has no visual node (`:82-86`), and its result
+> feeds only `StartDoomAnim(nCreature, flag)` and a
+> `Cmd.Wait(0.25f)`/`Cmd.Wait(1.5f)` timing branch (`:101-111`).
+> `StartDoomAnim`'s `shouldDie` arm (`:117-134`) is `Monster?.OnDieToDoom()`, an
+> `AnimDisableUi` tween, `QueueFreeSafely`, a Spine "Hit" trigger,
+> `NCombatRoom.RemoveCreatureNode` (the **node**, i.e. the view) and the
+> `NDoomVfx` variant — and `OnDieToDoom` is documented at
+> `MonsterModel.cs:485-491` as "Primarily used set up the creature visuals for
+> the Doom vfx", with an empty base body and one override
+> (`TorchHeadAmalgam.cs:67-79`) that hides three light nodes. **The death itself
+> is unconditional and outside `PlayVfx`**: `DoomPower.DoomKill` (`:40-53`) is
+> `await PlayVfx(creature); await CreatureCmd.Kill(creature);`.
+>
+> So the property decides whether the sprite vanishes with the doom animation,
+> never whether the creature dies or leaves `Enemies`. `crusher`, `rocket` and
+> `test_subject` were amended to `waiver` and their rollups recomputed.
+>
+> **The transferable lesson is about the grep, not about Doom.** Both wrong
+> answers came from counting *matches* instead of reading the one *reader* to
+> its enclosing member — batch 8 undercounted by one and concluded "no reader",
+> batch 5 found the reader and stopped at the line instead of the method. That
+> is PROMPT.md class 20 (a hook dispatched from the wrong *site*) pointed at a
+> property: **resolve the enclosing member, not the line.**
 
 ## 5. Roster mis-resolutions (report only — `harness.py` is not ours)
 
