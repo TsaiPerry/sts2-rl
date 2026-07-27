@@ -33,10 +33,10 @@
   "guards": [
     {
       "what": "the sim identifies the drawn card as `player.hand[-1]` (pillage.py:87) where C# uses the value the single-card Draw overload returns",
-      "verdict": "faithful",
-      "rationale": "Equivalent while draws append to the end of the hand, which `PlayerCombatState._draw` does. It would diverge only if a draw-time hook inserted a card after the drawn one; no ported hook does (the draw hooks add to the DRAW pile or exhaust, not to a hand position). Recorded because it is an inference from list order rather than a returned value."
+      "verdict": "gap",
+      "issue": "C#'s single-card `CardPileCmd.Draw` overload RETURNS the card it drew (Pillage.cs:30) and the type test reads that value; the sim infers the drawn card from list order as `player.hand[-1]` (pillage.py:87). Equivalent only while draws append to the end of the hand and nothing inserts after them. A draw-time hook that put a card into the hand at any position other than the end -- or after the drawn one -- would make the sim test the WRONG CARD's type and so terminate or continue the do/while loop wrongly, changing both the cards drawn and the draw count. DORMANT: no ported hook inserts into the hand during a draw (the ported draw hooks add to the DRAW pile or exhaust, not to a hand position). TRIGGER: any ported `on_card_drawn` / draw-time listener that adds a card to the hand, or any hand insert at a position other than the end -- `CardPilePosition` is already a modelled concept for the draw pile (see card/metamorphosis). Recorded as a gap rather than faithful because the sim reads a different thing than the source does; the outcomes coincide today, which is dormancy, not equivalence."
     }
   ],
-  "verdict": "faithful",
+  "verdict": "gap",
   "audited": "2026-07-26"
 }

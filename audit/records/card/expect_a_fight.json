@@ -33,8 +33,8 @@
   "guards": [
     {
       "what": "the sim skips the gain entirely when there are no Attacks in hand (`if attacks > 0`, expect_a_fight.py:38-39); C# calls GainEnergy(0)",
-      "verdict": "faithful",
-      "rationale": "`PlayerCmd.GainEnergy(0, ...)` adds nothing, and the sim's `EnergyCmd.gain` would run `hooks.modify_energy_gain` on a zero amount (cmds.py:553) -- a modifier could in principle turn 0 into something. No ported `modify_energy_gain` listener adds a flat bonus on a zero gain (they all scale or gate on a positive amount), so the two agree today. Recorded because it is a guard the sim added, not one it copied."
+      "verdict": "gap",
+      "issue": "`PlayerCmd.GainEnergy(0, ...)` (ExpectAFight.cs:36) adds nothing but still runs the engine's gain path; the sim skips the call outright (`if attacks > 0`, expect_a_fight.py:38-39), so `hooks.modify_energy_gain` (cmds.py:553) never sees the zero amount. A modifier could in principle turn 0 into something. DORMANT: no ported `modify_energy_gain` listener adds a flat bonus on a zero gain -- they all scale the incoming amount or gate on a positive one -- so the two agree today. TRIGGER: any ported `modify_energy_gain` listener that returns a flat bonus independent of the incoming amount. This is the energy-side twin of `creature_card_cmds/N5` + `/step31` (`EnergyCmd.gain` lacks C#'s `finalAmount > 0` guard), recorded here because it is Expect A Fight's own code adding the guard, not the machinery's. Recorded as a gap rather than faithful because \"no ported listener does this\" is a dormancy argument, not an equivalence."
     }
   ],
   "verdict": "gap",

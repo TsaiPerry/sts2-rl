@@ -43,8 +43,8 @@
   "guards": [
     {
       "what": "the chosen cards are moved with `CardPileCmd.Add(list, PileType.Hand)` in C# (NeowsFury.cs:39) and by direct list mutation in the sim (neows_fury.py:405-407)",
-      "verdict": "faithful",
-      "rationale": "Same structural point as card/anointed's guard: no pile-transition hook fires in the sim. Dormant for the same reason -- the sim has no `after_card_changed_piles` listener at all -- and the hand-size cap is already enforced by the `count` computation above rather than inside the pile verb."
+      "verdict": "gap",
+      "issue": "The sim pops the chosen cards out of `player.discard_pile` and appends them to `player.hand` in place (neows_fury.py:405-407) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal` (the cap is separately enforced here by the `count` computation in OnPlay, so only the hook is dropped). SAME MECHANISM AND SAME VERDICT AS card/anointed's `CardPileCmd.Add` guard (rule 3) -- this is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding (docs/audit/seams/creature_card_cmds.md:643-666), recorded here because it is Neow's Fury's own code doing the bypass. DORMANT: the sim has no `after_card_changed_piles` listener at all, so nothing observable is dropped yet. TRIGGER: the first ported model overriding `AfterCardChangedPiles`. Was recorded faithful while its own rationale said \"Same structural point as card/anointed's guard\" and card/anointed carries `gap`; the report also files it under the DORMANT-GAP family \"Direct pile mutation instead of a pile verb\" (§5)."
     }
   ],
   "verdict": "gap",

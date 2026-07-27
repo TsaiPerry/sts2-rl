@@ -33,8 +33,8 @@
   "guards": [
     {
       "what": "the sim returns early when nothing got through (`if dealt <= 0: return`, colorless_attacks.py:319-320); C# proceeds whenever the DamageResult is non-null (Omnislice.cs:30-31)",
-      "verdict": "faithful",
-      "rationale": "C# would splash a value of 0, which damages nothing. The observable difference is only whether the splash's `BeforeDamageReceived` / `AfterDamageReceived` hooks fire with a 0 amount on the other enemies; the sim's own `DamageCmd.deal` would also run its pipeline for a 0 amount, so the divergence is the sim skipping it. Dormant: no ported listener acts on a zero-damage instance. Note this guard becomes moot once the OnPlay amount is fixed, because C#'s figure is only 0 when the attack was fully blocked AND dealt no overkill."
+      "verdict": "gap",
+      "issue": "C# proceeds whenever the DamageResult is non-null (Omnislice.cs:30-31) and would splash a value of 0, which damages nothing but still runs the splash through `CreatureCmd.Damage` on every other enemy; the sim returns before the splash loop (`if dealt <= 0: return`, colorless_attacks.py:319-320). The observable difference is the splash's `BeforeDamageReceived` / `AfterDamageReceived` bracket firing with a 0 amount on those enemies -- the sim's own `DamageCmd.deal` would also run its pipeline for a 0 amount, so the divergence is the sim skipping the dispatch entirely. DORMANT: no ported listener acts on a zero-damage instance. TRIGGER: any ported before/after-damage-received listener that fires on a 0 amount (a counter, a \"was attacked this turn\" flag, or a thorns-style reflect that does not gate on `amount > 0`). Note this guard becomes moot once the OnPlay amount above is fixed, because C#'s figure is 0 only when the attack was fully blocked AND dealt no overkill. Recorded as a gap rather than faithful because the entry's own reasoning is a dormancy argument (\"no ported listener acts on...\"), which rule 1 makes a dormant gap."
     }
   ],
   "verdict": "gap",
