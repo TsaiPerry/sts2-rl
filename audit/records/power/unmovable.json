@@ -33,6 +33,31 @@
       "path": "sts2_rl/player.py",
       "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Cards/Entrench.cs",
+      "sha256": "13a44165a21f2ce718442cad06acd796f3c1f69537884dde98340287f2e0d1e1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsLegion.cs",
+      "sha256": "08bc0980dc3b133a256bb39d50881b6888fabb5f47033aaab02b7ccb36381530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Vambrace.cs",
+      "sha256": "d804bb40a837fa90b9b5e734e7dcdd61643cd0328f35a884ce07d97f1dc4a34a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -59,8 +84,9 @@
     },
     {
       "what": "UnmovablePower.cs:27-30 !props.IsCardOrMonsterMove() -> 1m",
-      "verdict": "faithful",
-      "rationale": "The sim gets this from BlockCmd.apply, whose cmds.py:145 gate (is_powered_attack(props) -- Move and not Unpowered) is the only route to the block-multiplier hooks at all. So unpowered block (power/plating, power/toric_toughness, Rage, block potions) is not doubled on either side, which the sim's docstring states (powers.py:1087-1088). NOTE C#'s predicate admits monster-MOVE block as well as card block; that arm is unreachable here because the owner is always the player and a monster move never grants the player block."
+      "verdict": "gap",
+      "live": true,
+      "issue": "RE-VERDICTED 2026-07-26 (relic-tier merge review): `faithful` -> `gap`, LIVE, grade B. The old rationale claimed unpowered block 'is not doubled on either side'. THAT IS FALSE ON THE C# SIDE. ValuePropExtensions.cs:23-26 defines IsCardOrMonsterMove as exactly `props.HasFlag(ValueProp.Move)` -- Move ALONE. It does not exclude Unpowered, so UnmovablePower.cs:27-30 deliberately PERMITS an Unpowered|Move block gain to reach the multiplier, the same looser gating src/Core/Models/Relics/Vambrace.cs:57 and src/Core/Models/Relics/PaelsLegion.cs:134 use (the game ships two PaelsLegion.cs; the relic is the Relics one). The sim's BlockCmd.apply gate (cmds.py:145) is is_powered_attack(props) -- Move AND NOT Unpowered -- so the sim never reaches the listener at all. This is the block-side face of the props hoist owned by audit/records/seam/creature_card_cmds.json G1, whose census of looser-gating listeners omits this power; carried per binding rule 3, not re-argued. LIVE, and reachable with NO relic: Entrench.cs:23 is the game's only `ValueProp.Unpowered | ValueProp.Move` block gain and it carries a cardPlay, `unmovable` is in IRONCLAD_POOL, and `entrench` is granted by the ported Trash Heap event (sts2_rl/events/trash_heap.py:17). EXECUTED: sim Entrench from 10 block with Unmovable 1 yields 20; C# yields 30. Control: a powered Defend doubles correctly in the sim, proving only the Unpowered arm is missing. The sim's own docstring at powers.py:1086-1088 states the false premise verbatim and is what the old verdict was read off (PROMPT.md bug class 12/24). Found by the relic-tier rule-3 review; `py audit/tools/power_slot_probes.py ungated-modifiers` already listed UnmovablePower.cs:21 as UNGATED and no record had run it. The existing pin test/test_hook_order.py::TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers covers the fix. NOTE C#'s predicate also admits monster-MOVE block; that arm stays unreachable here because the owner is always the player. Third-file citations, not hashed here."
     },
     {
       "what": "UnmovablePower.cs:31-34 cardSource.Owner.Creature != base.Owner -> 1m",
