@@ -317,8 +317,80 @@ def aoe_power() -> None:
               f"hp {hp_before} -> {enemy.hp}")
 
 
+# ── touch-of-insanity ─────────────────────────────────────────────────────
+def touch_of_insanity() -> None:
+    """EXECUTED witness for Touch of Insanity's candidate filter.
+
+    `TouchOfInsanity.cs:22` filters the hand with
+    `c.CostsEnergyOrStars(includeGlobalModifiers: false) ||
+     c.CostsEnergyOrStars(includeGlobalModifiers: true)`
+    -- an OR over CostModifiers.Local and CostModifiers.All
+    (CardModel.cs:1578-1595). The sim tests `c.energy_cost > 0`
+    (potions.py:166-169), and `Card.energy_cost` (cards/base.py:222-232) is the
+    LOCAL cost only: no hook-driven global modifier reaches it.
+
+    So the divergence needs a card whose local cost is 0 and whose global cost
+    is above 0 -- i.e. a locally-freed card under a cost-RAISING global
+    modifier. Spiked Gauntlets is one (`modify_card_energy_cost` +1 on Power
+    cards, relics/spiked_gauntlets.py:26-31).
+    """
+    import random
+
+    from sts2_rl.cards import make_card
+    from sts2_rl.combat import CombatState
+    from sts2_rl.relics import ALL_RELICS
+
+    gauntlets = ALL_RELICS.get("spiked_gauntlets")
+    if gauntlets is None:
+        print("INCONCLUSIVE -- spiked_gauntlets is not a registered relic")
+        return
+    power_card = None
+    for cid in ("inflame", "metallicize", "demon_form", "feel_no_pain"):
+        try:
+            c = make_card(cid)
+        except KeyError:
+            continue
+        if c.card_type.name == "POWER":
+            power_card = cid
+            break
+    if power_card is None:
+        print("INCONCLUSIVE -- no ported Power card found to build the witness")
+        return
+
+    cs = CombatState(
+        starting_deck=[make_card("strike") for _ in range(5)],
+        rng=random.Random(0),
+        relics=[gauntlets()],
+    )
+    card = make_card(power_card)
+    card.set_free_this_turn()          # a locally-freed card, e.g. from Power Potion
+    cs.player.hand = [card]
+    local = card.energy_cost
+    withglobal = cs.hooks.modify_energy_cost(card, local) \
+        if hasattr(cs.hooks, "modify_energy_cost") else None
+    if withglobal is None:
+        for name in dir(cs.hooks):
+            if "energy_cost" in name and not name.startswith("_"):
+                withglobal = getattr(cs.hooks, name)(card, local)
+                break
+    sim_candidates = [
+        c for c in cs.player.hand
+        if not getattr(c, "energy_cost_x", False) and c.energy_cost > 0
+    ]
+    print(f"card {power_card!r} (Power), set_free_this_turn, with Spiked "
+          f"Gauntlets held")
+    print(f"  local cost (Card.energy_cost)          = {local}")
+    print(f"  cost with the global modifier applied  = {withglobal}")
+    print(f"  C#  CostsEnergyOrStars(false)={local > 0}  "
+          f"CostsEnergyOrStars(true)={bool(withglobal and withglobal > 0)}  "
+          f"=> offered = {local > 0 or bool(withglobal and withglobal > 0)}")
+    print(f"  sim candidate list = {sim_candidates}  "
+          f"=> offered = {bool(sim_candidates)}")
+
+
 PROBES = {
     "aoe-power": aoe_power,
+    "touch-of-insanity": touch_of_insanity,
     "sweep-attrs": sweep_attrs,
     "sweep-usage": sweep_usage,
     "sweep-onuse": sweep_onuse,
