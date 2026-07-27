@@ -32,7 +32,7 @@
       "issue": "Swift is the third of the three EnchantmentModel.OnPlay ports, and the one hung on the far side of the loop rather than the near side. The mechanism's executed proof lives on the Corrupted record. Reachability of this unit proven two ways: the ported Beautiful Bracelet relic (relics/beautiful_bracelet.py:22-29) and the ported Self Help Book event (events/self_help_book.py:19)."
     },
     {
-      "what": "BR-2 (blast radius): audits/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
+      "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
       "extra": "Swift's draw is the CONTROL for the replay leg: its Status latch means both engines draw exactly once (sim 3, game 3)."

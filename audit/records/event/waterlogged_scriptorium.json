@@ -42,7 +42,7 @@
     },
     {
       "what": "the enchant candidate filter and the Steady effect",
-      "maps_to": "C# filters the DECK pile by `enchantment.CanEnchant(c)` (CardSelectCmd.cs:549); events/waterlogged_scriptorium.py:51 filters `self.run.deck` by SteadyEnchantment.can_enchant. Steady itself is `OnEnchant: Card.AddKeyword(Retain)` (Steady.cs:11-14) against the sim's attach/reset pair (enchantments.py:135-142). Both the base CanEnchant port and the Steady body are already audited by audits/enchantment/steady.json -- cited, not re-verdicted (rule 3).",
+      "maps_to": "C# filters the DECK pile by `enchantment.CanEnchant(c)` (CardSelectCmd.cs:549); events/waterlogged_scriptorium.py:51 filters `self.run.deck` by SteadyEnchantment.can_enchant. Steady itself is `OnEnchant: Card.AddKeyword(Retain)` (Steady.cs:11-14) against the sim's attach/reset pair (enchantments.py:135-142). Both the base CanEnchant port and the Steady body are already audited by audit/records/enchantment/steady.json -- cited, not re-verdicted (rule 3).",
       "verdict": "faithful"
     },
     {

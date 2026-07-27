@@ -21,7 +21,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:3251-3254 on_enemy_side_end",
       "verdict": "faithful",
-      "rationale": "One of the minority of AfterSideTurnEnd overrides the sim puts in the RIGHT slot: AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267) at CombatManager.cs:1256 for the enemy side, and on_enemy_side_end (combat.py:345) is the sim's side-scoped enemy slot, fired once after every enemy has moved -- the same shape audits/power/tainted.json records. Amount: Zapbot.cs:37 applies HighVoltage 2 and monsters/glory/fabricator.py:101-102 applies _HIGH_VOLTAGE; non-ascension values, checked. Third-file citations, not hashed here."
+      "rationale": "One of the minority of AfterSideTurnEnd overrides the sim puts in the RIGHT slot: AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267) at CombatManager.cs:1256 for the enemy side, and on_enemy_side_end (combat.py:345) is the sim's side-scoped enemy slot, fired once after every enemy has moved -- the same shape audit/records/power/tainted.json records. Amount: Zapbot.cs:37 applies HighVoltage 2 and monsters/glory/fabricator.py:101-102 applies _HIGH_VOLTAGE; non-ascension values, checked. Third-file citations, not hashed here."
     }
   },
   "guards": [

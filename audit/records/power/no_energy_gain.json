@@ -25,7 +25,7 @@
     "AfterModifyingEnergyGain": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "NoEnergyGainPower.cs:28-32 is Flash() only. Presentation -- and note the sim genuinely has no AfterModifying* machinery for the energy family, which is the same shape as audits/seam/power_cmd.json's gap G4; nothing observable rides on it here."
+      "rationale": "NoEnergyGainPower.cs:28-32 is Flash() only. Presentation -- and note the sim genuinely has no AfterModifying* machinery for the energy family, which is the same shape as audit/records/seam/power_cmd.json's gap G4; nothing observable rides on it here."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:559-561 on_player_turn_end -> Power._expire",

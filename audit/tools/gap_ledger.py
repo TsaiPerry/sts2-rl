@@ -1,4 +1,4 @@
-"""Emit docs/audit/content/power/gap-ledger.md from the 138 committed records.
+"""Emit audit/content/power/gap-ledger.md from the 138 committed records.
 
 Every line is derived from audit/records/power/*.json -- nothing is hand-entered,
 so re-running this after a record changes regenerates a correct ledger.
@@ -171,10 +171,10 @@ if unc:
 w('## Regenerating')
 w('')
 w('```')
-w('py audit/tools/gap_ledger.py > docs/audit/content/power/gap-ledger.md')
+w('py audit/tools/gap_ledger.py > audit/content/power/gap-ledger.md')
 w('```')
 
-dest = _REPO / 'docs/audit/content/power/gap-ledger.md'
+dest = _REPO / 'audit/content/power/gap-ledger.md'
 dest.parent.mkdir(parents=True, exist_ok=True)
 dest.write_text('\n'.join(L) + '\n', encoding='utf-8')
 print(f'wrote {dest} — {len(L)} lines, {len(gaps)} gap entries')

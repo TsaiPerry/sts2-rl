@@ -38,7 +38,7 @@
     {
       "what": "RetainHandPower.cs:32 PowerCmd.Decrement",
       "verdict": "faithful",
-      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250) -- Decrement, not TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical for a Buff: ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250) -- Decrement, not TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical for a Buff: ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
     },
     {
       "what": "Interaction with the per-card Retain keyword",

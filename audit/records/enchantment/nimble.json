@@ -25,7 +25,7 @@
   },
   "guards": [
     {
-      "what": "BR-6 (blast radius): audits/seam/creature_card_cmds.json guard G1 -- BlockCmd.apply (cmds.py:145-147) skips the whole block-modifier dispatch unless is_powered_attack(props), while Hook.ModifyBlock (Hook.cs:1310-1340) applies the source card's enchantment modifiers unconditionally and FIRST",
+      "what": "BR-6 (blast radius): audit/records/seam/creature_card_cmds.json guard G1 -- BlockCmd.apply (cmds.py:145-147) skips the whole block-modifier dispatch unless is_powered_attack(props), while Hook.ModifyBlock (Hook.cs:1310-1340) applies the source card's enchantment modifiers unconditionally and FIRST",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as creature_card_cmds G1, whose issue text names this exact consequence (\"The same gate also skips the source card's enchantment block modifiers, which C# applies unconditionally and FIRST\") -- rule 3, not re-verdicted. Recorded here because Nimble and Goopy are the two ported EnchantBlockAdditive implementers and so are the whole of that clause's content-side blast radius: an unpowered block gain on a Nimble-enchanted card (Entrench is the ported MOVE|UNPOWERED block card G1 uses as its witness, cards/trash_heap_cards.py:159-179) loses the +2 entirely in the sim."
     },

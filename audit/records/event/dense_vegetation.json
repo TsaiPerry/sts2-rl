@@ -40,7 +40,7 @@
       "verdict": "faithful"
     },
     {
-      "what": "BR-38a (blast radius): audits/seam/turn_structure.json step 38a -- a bare run.heal() skips the Hook.AfterRestSiteHeal + Hook.ModifyRestSiteHealRewards + RewardsCmd.OfferCustom tail that HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113) runs",
+      "what": "BR-38a (blast radius): audit/records/seam/turn_structure.json step 38a -- a bare run.heal() skips the Hook.AfterRestSiteHeal + Hook.ModifyRestSiteHealRewards + RewardsCmd.OfferCustom tail that HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113) runs",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as turn_structure step 38a, which names events/dense_vegetation.py:67 explicitly (rule 3, not re-verdicted). Recorded here with the fact that BOUNDS it: EXECUTED (`py audit/tools/event_probes.py heal`), this is the ONLY event in the sim that heals through the rest-site verb -- the other 10 run.heal() call sites are plain CreatureCmd.Heal equivalents, and CreatureCmd.Heal (CreatureCmd.cs:691-703) dispatches no hooks in C# either, so they are faithful. Dense Vegetation is 100% of step 38a's event-side blast radius."
     },

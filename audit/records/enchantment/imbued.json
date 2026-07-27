@@ -12,7 +12,7 @@
     "ShouldStartAtBottomOfDrawPile": {
       "maps_to": "nothing in the sim. Its only consumer is CombatManager.cs:657-664, the turn-1 pass that moves every such card to the BOTTOM of the draw pile before the opening hand is drawn",
       "verdict": "gap",
-      "issue": "The sim's docstring calls this 'cosmetic and not modeled' (enchantments.py:249); it is not cosmetic -- it changes the draw pile's order for the whole combat and, for Imbued specifically, is what keeps the card OUT of the opening hand so that the AutoPrePlay auto-play is the only way it resolves. The MISSING PASS itself is already recorded as audits/seam/turn_structure.json step 21 / guard G14 (rule 3: not re-verdicted, same verdict); this entry records that Imbued is the only implementer in the game and therefore the whole of G14's blast radius, and that the sim's rationale for skipping it is wrong."
+      "issue": "The sim's docstring calls this 'cosmetic and not modeled' (enchantments.py:249); it is not cosmetic -- it changes the draw pile's order for the whole combat and, for Imbued specifically, is what keeps the card OUT of the opening hand so that the AutoPrePlay auto-play is the only way it resolves. The MISSING PASS itself is already recorded as audit/records/seam/turn_structure.json step 21 / guard G14 (rule 3: not re-verdicted, same verdict); this entry records that Imbued is the only implementer in the game and therefore the whole of G14's blast radius, and that the sim's rationale for skipping it is wrong."
     },
     "ShowAmount": {
       "maps_to": "(nothing)",
@@ -31,17 +31,17 @@
   },
   "guards": [
     {
-      "what": "BR-4 (blast radius): audits/seam/turn_structure.json guard G8 -- the AutoPrePlay phase does not exist, so Imbued's auto-play fires from on_player_turn_started (the sim's AfterSideTurnStart slot) and interleaves with turn-start relics in registration order instead of running strictly after all of them (CombatManager.cs:556-572, 613-619)",
+      "what": "BR-4 (blast radius): audit/records/seam/turn_structure.json guard G8 -- the AutoPrePlay phase does not exist, so Imbued's auto-play fires from on_player_turn_started (the sim's AfterSideTurnStart slot) and interleaves with turn-start relics in registration order instead of running strictly after all of them (CombatManager.cs:556-572, 613-619)",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as turn_structure G8, which names enchantments.py:261-267 explicitly (rule 3, not re-verdicted). Recorded here so this unit's record shows it sits in that radius."
     },
     {
-      "what": "BR-5 (blast radius): audits/seam/turn_structure.json step 21 / guard G14 -- the turn-1 bottom-of-draw-pile pass is missing",
+      "what": "BR-5 (blast radius): audit/records/seam/turn_structure.json step 21 / guard G14 -- the turn-1 bottom-of-draw-pile pass is missing",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as turn_structure step 21 / G14 (rule 3, not re-verdicted). Recorded here with the fact that MAKES it total: Imbued is the ONLY ShouldStartAtBottomOfDrawPile implementer in the whole game source (verified: `grep -rn ShouldStartAtBottomOfDrawPile src` returns EnchantmentModel.cs:125 and Imbued.cs:11 and nothing else), so this unit is 100% of G14's blast radius, and G14's consequence compounds with this record's AfterAutoPrePlayPhaseEntered gap rather than being independent of it."
     },
     {
-      "what": "CROSS-RECORD (rule 3 signal): audits/seam/turn_structure.json guard G12/G14's Pael's Eye leg (quoted in its issue text) uses 'the Imbued card lands in the opening hand and auto-plays' on seeds 0, 4 and 5 as executed evidence",
+      "what": "CROSS-RECORD (rule 3 signal): audit/records/seam/turn_structure.json guard G12/G14's Pael's Eye leg (quoted in its issue text) uses 'the Imbued card lands in the opening hand and auto-plays' on seeds 0, 4 and 5 as executed evidence",
       "verdict": "faithful",
       "maps_to": "consistent with this record: my `py audit/tools/enchantment_probes.py imbued` probe reproduces exactly that -- 7 of the first 20 seeds put the Imbued card in the opening hand. No disagreement; noted so the two records' numbers are visibly the same measurement."
     },

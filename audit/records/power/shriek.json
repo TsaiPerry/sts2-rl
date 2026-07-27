@@ -25,7 +25,7 @@
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audits/seam/power_cmd.json. The sim is single-player."
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audit/records/seam/power_cmd.json. The sim is single-player."
     },
     "AfterDamageReceived": {
       "maps_to": "powers.py:1937-1952 ShriekPower.on_damage_received -> TerrorEel.trigger_terror (monsters/underdocks/terror_eel.py:58-65)",

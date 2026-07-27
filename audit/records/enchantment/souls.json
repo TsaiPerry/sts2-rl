@@ -21,7 +21,7 @@
       "maps_to": "SoulsEnchantment.attach (enchantments.py:209-211) clears card.exhausts, and reset() (214-216) re-asserts the clear at every combat setup (combat.py:131). C# applies it once and permanently through CardCmd.Enchant -> ModifyCard (CardCmd.cs:539-543)."
     },
     {
-      "what": "BR-3 (blast radius): audits/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145); Card.downgrade (cards/base.py:150-165) does not",
+      "what": "BR-3 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145); Card.downgrade (cards/base.py:150-165) does not",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted); Souls IS that record's named witness. CROSS-RECORD NOTE for its owner, executed here (`py audit/tools/enchantment_probes.py souls-reset`): on a Discovery with Souls attached, exhausts is False after attach, True after upgrade()+downgrade() -- as step 52 states -- and False AGAIN after the next combat's Enchantment.reset() (enchantments.py:214-216, called from combat.py:131). The sim's divergence window is therefore bounded by the next combat setup. That keeps step 52 LIVE on its in-combat leg (Dampen, powers.py:3149-3183) but not on the out-of-combat leg its rationale also cites (events/reflections.py:36-41), which self-heals before the card is next played. Recommend step 52's owner narrow the liveness argument to the in-combat downgrade."
     },

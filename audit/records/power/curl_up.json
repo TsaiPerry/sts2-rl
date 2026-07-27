@@ -21,7 +21,7 @@
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer feeds PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audits/seam/power_cmd.json."
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer feeds PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audit/records/seam/power_cmd.json."
     },
     "AfterDamageReceived": {
       "maps_to": "powers.py:299-312 CurlUpPower.on_damage_received",

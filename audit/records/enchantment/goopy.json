@@ -35,7 +35,7 @@
       "issue": "Goopy's AfterCardPlayed leg, executed above. Both sides reachable with ported content: Goopy comes from the ported Pael's Claw relic (relics/paels_claw.py:20-24) and Throwing Axe is a ported Ancient relic. LIVE."
     },
     {
-      "what": "BR-2 (blast radius): audits/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
+      "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
       "extra": "Goopy's Amount++ is one of the three per-replay witnesses."
@@ -46,7 +46,7 @@
       "maps_to": "GoopyEnchantment.attach (enchantments.py:289-291) sets card.exhausts = True, and reset() (293-296) re-asserts it at every combat setup (combat.py:131). C# applies OnEnchant once, permanently, via CardCmd.Enchant -> ModifyCard (CardCmd.cs:539-543, EnchantmentModel.cs:355-364); the sim's re-assert is belt-and-braces and produces the same observable, and additionally heals the downgrade case -- see BR-3."
     },
     {
-      "what": "BR-3 (blast radius): audits/seam/creature_card_cmds.json step 52 -- CardModel.DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145) and the sim's Card.downgrade (cards/base.py:150-165) does not, so a keyword an enchantment removed or added comes back",
+      "what": "BR-3 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- CardModel.DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145) and the sim's Card.downgrade (cards/base.py:150-165) does not, so a keyword an enchantment removed or added comes back",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Goopy is in the blast radius: its Exhaust is a keyword set at attach time. CROSS-RECORD NOTE for that record's owner: step 52's stated witness stops one step early. Executed (`py audit/tools/enchantment_probes.py souls-reset`, the Souls twin of this case): exhausts is False after attach, True after upgrade()+downgrade() -- and False again after the next combat's Enchantment.reset() (enchantments.py:293-296 / 214-216, called from combat.py:131). So the sim's divergence window is bounded by the next combat setup, which matters because the only ported in-combat downgrade is Dampen (powers.py:3149-3183) and the only out-of-combat one is the Reflections event (events/reflections.py:36-41) -- the latter self-heals before the card is ever played again. The finding stands for the in-combat leg; the out-of-combat leg named in step 52's rationale does not reach the player."
     },

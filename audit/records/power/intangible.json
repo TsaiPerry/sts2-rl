@@ -45,7 +45,7 @@
     {
       "what": "IntangiblePower.cs:20-23 `!CombatManager.Instance.IsInProgress` -> unmodified",
       "verdict": "gap",
-      "issue": "The sim has no combat-phase guard on any modifier hook. This is the power-level face of audits/seam/power_cmd.json's structural gap G6 (no IsEnding/CanReceivePowers backstop) and of hook_dispatch's gap G8 (no IsOverOrEnding gate on combat dispatches); per binding rule 3 it carries the same `gap` verdict and is cross-referenced rather than re-argued. Recorded here because Intangible is the only ported power that spells the guard out itself, so a reader comparing the two files sees a real missing line rather than an architectural absence. DORMANT for the same reason hook_dispatch G8 is: everything reachable on that path is combat-scoped state the combat then discards. Third-file citations, not hashed here."
+      "issue": "The sim has no combat-phase guard on any modifier hook. This is the power-level face of audit/records/seam/power_cmd.json's structural gap G6 (no IsEnding/CanReceivePowers backstop) and of hook_dispatch's gap G8 (no IsOverOrEnding gate on combat dispatches); per binding rule 3 it carries the same `gap` verdict and is cross-referenced rather than re-argued. Recorded here because Intangible is the only ported power that spells the guard out itself, so a reader comparing the two files sees a real missing line rather than an architectural absence. DORMANT for the same reason hook_dispatch G8 is: everything reachable on that path is combat-scoped state the combat then discards. Third-file citations, not hashed here."
     },
     {
       "what": "IntangiblePower.cs:24-27 / :48-51 `target != base.Owner`",

@@ -21,7 +21,7 @@
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "PlatingPower.cs:23 returns true, feeding PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audits/seam/power_cmd.json. The sim is single-player."
+      "rationale": "PlatingPower.cs:23 returns true, feeding PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audit/records/seam/power_cmd.json. The sim is single-player."
     },
     "GetScaledAmountForMultiplayer": {
       "maps_to": "no sim counterpart",
@@ -68,7 +68,7 @@
     {
       "what": "PlatingPower.cs:76 vs :80 -- ModifyAmount(-Decrement) for enemies, plain Decrement for players",
       "verdict": "faithful",
-      "rationale": "Two code paths that differ only by the multiplayer Decrement var, which is 1 at one player (PlatingPower.cs:27's CanonicalVars default, and :33 only raises it for enemies by Players.Count == 1). The sim's single _tick (powers.py:1066) is both. See also The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audits/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+      "rationale": "Two code paths that differ only by the multiplayer Decrement var, which is 1 at one player (PlatingPower.cs:27's CanonicalVars default, and :33 only raises it for enemies by Players.Count == 1). The sim's single _tick (powers.py:1066) is both. See also The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
     },
     {
       "what": "The sim ADDS `not self.owner.is_dead` to the enemy block gain",

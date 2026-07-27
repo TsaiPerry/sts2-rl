@@ -26,7 +26,7 @@
     "AfterModifyingCardPlayResultPileOrPosition": {
       "maps_to": "powers.py:2794 the inline `self._tick()`",
       "verdict": "gap",
-      "issue": "C# consumes the stack from this dedicated after-hook (ReboundPower.cs:32-39 -> PowerCmd.Decrement), which Hook.ModifyCardPlayResultPileTypeAndPosition fires over exactly the listeners that changed the value (Hook.cs:1396-1405, one of hook_dispatch step 38's notification lists). The sim folds the tick into its on_card_played move, so the tick happens if and only if the move happened -- which is the right coupling but the wrong mechanism, and it is exactly what breaks under the Nostalgia contention described on the previous entry. Same absent machinery as audits/seam/power_cmd.json's gap G4, one family over."
+      "issue": "C# consumes the stack from this dedicated after-hook (ReboundPower.cs:32-39 -> PowerCmd.Decrement), which Hook.ModifyCardPlayResultPileTypeAndPosition fires over exactly the listeners that changed the value (Hook.cs:1396-1405, one of hook_dispatch step 38's notification lists). The sim folds the tick into its on_card_played move, so the tick happens if and only if the move happened -- which is the right coupling but the wrong mechanism, and it is exactly what breaks under the Nostalgia contention described on the previous entry. Same absent machinery as audit/records/seam/power_cmd.json's gap G4, one family over."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2796-2798 on_player_turn_end -> Power._expire",

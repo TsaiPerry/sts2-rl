@@ -21,7 +21,7 @@
       "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
     },
     {
-      "what": "BR-3 (blast radius): audits/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` and the sim's Card.downgrade rebuilds from _init_vars without it",
+      "what": "BR-3 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- DowngradeInternal re-runs `Enchantment?.ModifyCard()` and the sim's Card.downgrade rebuilds from _init_vars without it",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Steady is in the blast radius alongside Souls and Goopy: Retain is a keyword flag set at attach time, so a downgrade clears it until the next combat's reset(). See the cross-record note on the souls record for the executed bound on that window."
     },

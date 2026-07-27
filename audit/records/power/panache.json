@@ -26,7 +26,7 @@
     "InstanceType": {
       "maps_to": "no sim counterpart",
       "verdict": "gap",
-      "issue": "PanachePower.cs:35 declares PowerInstanceType.Instanced, so every Panache play is an independently-tracked instance with its own CardsLeft counter; the sim keeps one instance per power id (cmds.py:308) and a second play stacks the damage while sharing one counter. This is audits/seam/power_cmd.json's gap G5, which already names PanachePower among the 11 ported InstanceType powers; per binding rule 3 the same verdict, cross-referenced rather than re-argued. Unlike ToricToughness and TheBomb, Panache does NOT document the approximation or hand-roll a workaround. DORMANT: two simultaneous Panaches need two plays of a Rare colourless card in one combat. Named trigger: a second Panache play."
+      "issue": "PanachePower.cs:35 declares PowerInstanceType.Instanced, so every Panache play is an independently-tracked instance with its own CardsLeft counter; the sim keeps one instance per power id (cmds.py:308) and a second play stacks the damage while sharing one counter. This is audit/records/seam/power_cmd.json's gap G5, which already names PanachePower among the 11 ported InstanceType powers; per binding rule 3 the same verdict, cross-referenced rather than re-argued. Unlike ToricToughness and TheBomb, Panache does NOT document the approximation or hand-roll a workaround. DORMANT: two simultaneous Panaches need two plays of a Rare colourless card in one combat. Named trigger: a second Panache play."
     },
     "AfterCardPlayed": {
       "maps_to": "powers.py:3638-3655 PanachePower.on_card_played",

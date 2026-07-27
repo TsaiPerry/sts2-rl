@@ -22,7 +22,7 @@
   "InstanceType": {
    "maps_to": "no sim counterpart",
    "verdict": "gap",
-   "issue": "ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audits/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:37-39, one Merc per encounter), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
+   "issue": "ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audit/records/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:37-39, one Merc per encounter), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
   },
   "Steal() -- public, NOT public override": {
    "maps_to": "powers.py:1655-1665 ThieveryPower.steal",

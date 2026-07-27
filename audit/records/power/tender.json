@@ -53,7 +53,7 @@
     {
       "what": "TenderPower.cs:55-62 fires even when no card was played",
       "verdict": "faithful",
-      "rationale": "C# calls PowerCmd.Apply with CardsPlayedThisTurn == 0; the sim guards `self._cards_played_this_turn == 0 -> return` (powers.py:2119-2120). Equivalent, and this time the equivalence is exact rather than lucky: C# PowerCmd.Apply returns immediately on `amount == 0m` (PowerCmd.cs:103), so a 0-amount application is a documented no-op -- step 6 of audits/seam/power_cmd.json. Third-file citations, not hashed here."
+      "rationale": "C# calls PowerCmd.Apply with CardsPlayedThisTurn == 0; the sim guards `self._cards_played_this_turn == 0 -> return` (powers.py:2119-2120). Equivalent, and this time the equivalence is exact rather than lucky: C# PowerCmd.Apply returns immediately on `amount == 0m` (PowerCmd.cs:103), so a 0-amount application is a documented no-op -- step 6 of audit/records/seam/power_cmd.json. Third-file citations, not hashed here."
     },
     {
       "what": "`silent: true` on all four applications",

@@ -22,7 +22,7 @@
   "InstanceType": {
    "maps_to": "no sim counterpart",
    "verdict": "gap",
-   "issue": "HeistPower.cs:15 PowerInstanceType.Instanced -- the audits/seam/power_cmd.json G5 mechanism, cross-referenced under rule 3. DORMANT here: the only applier is SurprisePower applying one HeistPower to the one Fat Gremlin it spawns (powers.py:1698ff), so two simultaneous instances are unreachable. Eleventh PowerInstanceType unit -- see the note on power/thievery."
+   "issue": "HeistPower.cs:15 PowerInstanceType.Instanced -- the audit/records/seam/power_cmd.json G5 mechanism, cross-referenced under rule 3. DORMANT here: the only applier is SurprisePower applying one HeistPower to the one Fat Gremlin it spawns (powers.py:1698ff), so two simultaneous instances are unreachable. Eleventh PowerInstanceType unit -- see the note on power/thievery."
   },
   "BeforeDeath": {
    "maps_to": "powers.py:1678-1685 HeistPower.on_death",

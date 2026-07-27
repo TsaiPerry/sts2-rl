@@ -33,7 +33,7 @@
     {
       "what": "RavenousPower.cs:32 `CreatureCmd.Stun(base.Owner, StunnedMove)` with no follow-up state id",
       "verdict": "faithful",
-      "rationale": "powers.py:1601 `CreatureCmd.stun(self.hooks, self.owner)`. Unlike FlutterPower's stun (which passes a next-state id and is a live RNG gap -- see audits/power/flutter.json), this one passes only the stunned move, so there is no move re-roll and no RNG stream to get wrong. Worth contrasting: the two stuns in half B look alike and only one is broken."
+      "rationale": "powers.py:1601 `CreatureCmd.stun(self.hooks, self.owner)`. Unlike FlutterPower's stun (which passes a next-state id and is a live RNG gap -- see audit/records/power/flutter.json), this one passes only the stunned move, so there is no move re-roll and no RNG stream to get wrong. Worth contrasting: the two stuns in half B look alike and only one is broken."
     },
     {
       "what": "RavenousPower.cs:26 `!base.Owner.IsDead`",

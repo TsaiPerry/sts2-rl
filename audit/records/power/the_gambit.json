@@ -28,7 +28,7 @@
     {
       "what": "TheGambitPower.cs:20 PowerCmd.Remove(this) BEFORE the kill",
       "verdict": "faithful",
-      "rationale": "powers.py:3828 _expires before CreatureCmd.kill at :3829 -- the same order, and the order matters: removing first is what stops the kill's own damage path from re-entering this hook. The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audits/power/duplication.json and audits/power/flame_barrier.json per binding rule 3."
+      "rationale": "powers.py:3828 _expires before CreatureCmd.kill at :3829 -- the same order, and the order matters: removing first is what stops the kill's own damage path from re-entering this hook. The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement. Observationally identical, same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json per binding rule 3."
     },
     {
       "what": "TheGambitPower.cs:22 CreatureCmd.Kill(base.Owner)",

@@ -38,7 +38,7 @@
     {
       "what": "_expire standing in for PowerCmd.Remove",
       "verdict": "faithful",
-      "rationale": "The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement, so the two are observationally identical. Same treatment as the _expire entries in audits/power/duplication.json and audits/power/flame_barrier.json, per binding rule 3."
+      "rationale": "The sim's _expire (powers.py:86-92) pops the power and unregisters it; C#'s PowerCmd.Remove (PowerCmd.cs:287-295) additionally fires power.AfterRemoved, which this power does not implement, so the two are observationally identical. Same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json, per binding rule 3."
     },
     {
       "what": "Both ported appliers",

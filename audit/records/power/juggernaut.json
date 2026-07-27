@@ -43,7 +43,7 @@
     {
       "what": "power/thorns cites this power as its reachability route",
       "verdict": "faithful",
-      "rationale": "audits/power/thorns.json's props guard names cards/juggernaut.py:38 -> powers.py:791-794 as the ported route to unpowered non-card damage with dealer = the player, which is what makes Thorns's missing IsPoweredAttack gate live. Confirmed from this end: the props really are NON_CARD_UNPOWERED and the dealer really is the player. Rule 3 agreement, recorded so the cross-reference is verifiable from both ends."
+      "rationale": "audit/records/power/thorns.json's props guard names cards/juggernaut.py:38 -> powers.py:791-794 as the ported route to unpowered non-card damage with dealer = the player, which is what makes Thorns's missing IsPoweredAttack gate live. Confirmed from this end: the props really are NON_CARD_UNPOWERED and the dealer really is the player. Rule 3 agreement, recorded so the cross-reference is verifiable from both ends."
     }
   ],
   "verdict": "gap",

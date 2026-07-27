@@ -21,12 +21,12 @@
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audits/seam/power_cmd.json."
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audit/records/seam/power_cmd.json."
     },
     "GetScaledAmountForMultiplayer": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audits/seam/power_cmd.json."
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), waived as step 14 of audit/records/seam/power_cmd.json."
     },
     "AfterAttack": {
       "maps_to": "powers.py:1798-1818 SkittishPower.on_damage_received",

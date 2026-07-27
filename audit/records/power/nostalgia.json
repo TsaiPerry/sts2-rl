@@ -26,14 +26,14 @@
     "AfterModifyingCardPlayResultPileOrPosition": {
       "maps_to": "no sim counterpart",
       "verdict": "faithful",
-      "rationale": "NostalgiaPower.cs:50-58's body is entirely presentation once the owner guard passes -- the only statement the dump retains is the guard and the Task.CompletedTask returns; the filtered lines are a VFX/hover call. Contrast ReboundPower, whose override of the same hook does real work (PowerCmd.Decrement) and is recorded as a gap in audits/power/rebound.json. Nostalgia never consumes a stack: its allowance is enforced entirely by counting history, so Amount is constant for the combat. Waiver-grade content, recorded faithful because the sim's total absence of the hook is the correct port of a presentation-only override."
+      "rationale": "NostalgiaPower.cs:50-58's body is entirely presentation once the owner guard passes -- the only statement the dump retains is the guard and the Task.CompletedTask returns; the filtered lines are a VFX/hover call. Contrast ReboundPower, whose override of the same hook does real work (PowerCmd.Decrement) and is recorded as a gap in audit/records/power/rebound.json. Nostalgia never consumes a stack: its allowance is enforced entirely by counting history, so Amount is constant for the combat. Waiver-grade content, recorded faithful because the sim's total absence of the hook is the correct port of a presentation-only override."
     }
   },
   "guards": [
     {
       "what": "NostalgiaPower.cs:18-21 card.Owner.Creature != base.Owner",
       "verdict": "faithful",
-      "rationale": "Tautology in single-player; the sim omits it. Same treatment as audits/power/rebound.json's identical guard."
+      "rationale": "Tautology in single-player; the sim omits it. Same treatment as audit/records/power/rebound.json's identical guard."
     },
     {
       "what": "NostalgiaPower.cs:22-26 (uint)(type - 1) > 1u -- Attack or Skill only",
@@ -63,12 +63,12 @@
     {
       "what": "NostalgiaPower.cs:47 (PileType.Draw, CardPilePosition.Top)",
       "verdict": "faithful",
-      "rationale": "powers.py:3612 returns 'draw_top' and combat.py:512 appends to draw_pile, whose END is the top by the sim's stated convention (player.py:181). Correct pile AND correct position -- the same pair audits/power/rebound.json checks."
+      "rationale": "powers.py:3612 returns 'draw_top' and combat.py:512 appends to draw_pile, whose END is the top by the sim's stated convention (player.py:181). Correct pile AND correct position -- the same pair audit/records/power/rebound.json checks."
     },
     {
       "what": "Contention with power/corruption and power/rebound on the same chain",
       "verdict": "gap",
-      "issue": "Nostalgia is the one power in this group that uses the RIGHT hook, and that is precisely why it wins the contention the other two lose: hooks.modify_card_play_result_pile is dispatched at combat.py:510, BEFORE on_card_played at :514 where CorruptionPower and ReboundPower reach into the piles instead. So Nostalgia moves the card to the draw pile first and then Corruption's `card in discard_pile` test fails (the Skill is never exhausted) and Rebound's does too (it gets its effect free and keeps its stack). Both are recorded as gaps from their own end in audits/power/corruption.json and audits/power/rebound.json; this entry is the third corner of the same rule-3 triangle, reached independently and agreeing. In C# all three are listeners on ONE ModifyCardPlayResultPileTypeAndPosition chain (Hook.cs:1391-1405) and the LAST writer wins, so which one prevails is hook_dispatch G2's listener-order question, not this record's."
+      "issue": "Nostalgia is the one power in this group that uses the RIGHT hook, and that is precisely why it wins the contention the other two lose: hooks.modify_card_play_result_pile is dispatched at combat.py:510, BEFORE on_card_played at :514 where CorruptionPower and ReboundPower reach into the piles instead. So Nostalgia moves the card to the draw pile first and then Corruption's `card in discard_pile` test fails (the Skill is never exhausted) and Rebound's does too (it gets its effect free and keeps its stack). Both are recorded as gaps from their own end in audit/records/power/corruption.json and audit/records/power/rebound.json; this entry is the third corner of the same rule-3 triangle, reached independently and agreeing. In C# all three are listeners on ONE ModifyCardPlayResultPileTypeAndPosition chain (Hook.cs:1391-1405) and the LAST writer wins, so which one prevails is hook_dispatch G2's listener-order question, not this record's."
     }
   ],
   "verdict": "gap",

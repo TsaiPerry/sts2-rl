@@ -21,7 +21,7 @@
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audits/seam/power_cmd.json. The sim is single-player."
+      "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audit/records/seam/power_cmd.json. The sim is single-player."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:160-171 RegenPower._apply_regen via on_enemy_turn_end / on_player_turn_end",

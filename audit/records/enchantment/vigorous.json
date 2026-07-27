@@ -35,7 +35,7 @@
       "issue": "Vigorous's AfterCardPlayed leg, executed above (28 vs 20). Same mechanism as Goopy's Amount++ and Corrupted's OnPlay: the sim has no per-replay slot, so every enchantment hook that C# fires inside the loop is collapsed to one firing outside it. LIVE."
     },
     {
-      "what": "BR-2 (blast radius): audits/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
+      "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
       "verdict": "gap",
       "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
       "extra": "Vigorous is the highest-magnitude witness of the replay leg: 8 damage."
