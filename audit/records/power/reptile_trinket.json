@@ -83,6 +83,11 @@
       "path": "sts2_rl/combat.py",
       "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Cards/UnplayableReasonExtensions.cs",
+      "sha256": "be54cfae27e025fd11a9e0427d7274810df21ab853248bf8ee1ea7434a4d2836",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -100,6 +105,16 @@
       "maps_to": "powers.py:64-66 Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter (inherited from TemporaryStrengthPower.cs:44 for the temp-strength family, declared locally otherwise). The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+    },
+    "Title (inherited, TemporaryStrengthPower.cs:73-92)": {
+      "maps_to": "no computed counterpart -- the sim hard-codes the display string as a class attribute (powers.py:898)",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION. Title switches on OriginModel and returns that model's own title -- TemporaryStrengthPower.cs:73-92 (a third file, hashed by this record's extra_sources), whose three arms are cardModel.TitleLocString / potionModel.Title / relicModel.Title and whose fallthrough throws InvalidOperationException. This power's OriginModel is ModelDb.Relic<ReptileTrinket>(), so it takes the relicModel.Title arm. It computes no game state: every reader of a PowerModel's Title in the source builds a string -- UnplayableReasonExtensions.cs:39 formats the 'you cannot play this' message, the rest are hover tips, UI nodes and dev-console output -- and nothing compares, sorts or dispatches on it. Waived on the same ground, and against the same lines, as this record's OriginModel entry, which already names 73-92 as one of the two things OriginModel exists to feed. Out of scope per the shared contract's presentation waiver."
+    },
+    "Description (inherited, TemporaryStrengthPower.cs:94)": {
+      "maps_to": "(nothing) -- the sim's Power carries id / name / power_type and no description at all (powers.py:32-46)",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION. One expression that picks between two loc keys on IsPositive (TemporaryStrengthPower.cs:94, a third file hashed by this record's extra_sources): TEMPORARY_STRENGTH_POWER.description here, TEMPORARY_STRENGTH_DOWN.description for the opposite sign. Checked rather than assumed because a Description CAN be load-bearing when it attaches DynamicVars that recompute a displayed number -- this one attaches none, builds a bare LocString and reads no combat state. IsPositive itself is already verdicted, through the Type entry. Out of scope per the shared contract's presentation waiver."
     },
     "BeforeApplied (inherited, TemporaryStrengthPower.cs:146-156)": {
       "maps_to": "powers.py:844-853 TemporaryStrengthPower.__init__",

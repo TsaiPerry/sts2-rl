@@ -63,6 +63,41 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/HoverTips/HoverTip.cs",
+      "sha256": "744865cfa0f5a64cbfa0120af795263b7ec1718d646f88c19b191efa69ec8c0b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Localization/LocManager.cs",
+      "sha256": "e0147eab02af2ec5b9a02097b55d0cb8876a09c90522a19f755390b29884aca3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Localization/LocString.cs",
+      "sha256": "0fa4a7264937562d14a388a5253cec7c46c72ed93e617011137c103aeb2c9358",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EventModel.cs",
+      "sha256": "ca991ec5fea146069498065563bbc4a63ee0786ceaafdeae823df822e955f240",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/EventRoom.cs",
+      "sha256": "1038126138bdc9799ec3f1286bfddef80618dad80083c375d07cf2ae36e0e0f3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -80,6 +115,21 @@
       "maps_to": "(nothing)",
       "verdict": "waiver",
       "rationale": "presentation only: Tanx.cs:27 concatenates BaseOptionPool with the Tri-Boomerang option for the run-history / compendium listing. Its readers in the source are all non-gameplay: AncientEventModel.GenerateInitialOptionsWrapper's DebugOption swap (AncientEventModel.cs:198-202) and the dev console's AncientConsoleCmd (AncientConsoleCmd.cs:41, 71), both dev tooling, plus NRelicCollectionCategory.cs:116, the relic-collection UI screen. GenerateInitialOptions builds its own list and never consults it. NARROWED IN THE REVIEW FIX PASS: the earlier wording called the DebugOption swap its \"only reader\", which is the over-broad negative this stream's own lesson #4 warns about -- `grep -rn AllPossibleOptions src` returns two more readers. Neither moves the verdict. NeowsBones.cs:33 reads `ModelDb.Event<Neow>().AllPossibleOptions`, hard-coded to NEOW's list, so it is not a reader of this unit's -- which is exactly why event/neow records ITS AllPossibleOptions as a real faithful function (events/neow.py:64-72) and every other ancient waives it. NRelicCollectionCategory is a compendium display. So the waiver stands on the presentation clause, now on an accurate reader list. Same mapping the nonupeipe record made (rule 3)."
+    },
+    "LocTable (inherited, AncientEventModel.cs:34)": {
+      "maps_to": "(nothing) -- the sim has no localization layer; events/base.py drives pages by loc KEY, never by text",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION. `=> \"ancients\"` (AncientEventModel.cs:34, a third file hashed by this record's extra_sources) names the localization table every L10NLookup in this event resolves against, overriding EventModel's default. Its only readers are LocManager's table lookup (LocString.cs:85 -> LocManager.cs:294, and LocString.cs:31/198-200 for emptiness and ordering) and HoverTip id construction (HoverTip.cs:41,53,66) -- it selects which text file a string is read from and decides nothing else. The sim stores no event text: its pages and options are keyed by the source's own loc KEYS (events/base.py:11-19), which is the part that is behaviourally load-bearing, and those keys are audited by the AllPossibleOptions entry and the option guards. Out of scope per the shared contract's presentation waiver."
+    },
+    "LayoutType (inherited, AncientEventModel.cs:108)": {
+      "maps_to": "(nothing) -- the sim has no scene or layout concept",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION -- verified rather than assumed, because EventLayoutType is NOT inert for every value. `=> EventLayoutType.Ancient` (AncientEventModel.cs:108, a third file hashed by this record's extra_sources). Every reader in the source was read. Scene/asset selection: LayoutScenePath (EventModel.cs:176-183) picks ancient_event_layout.tscn, GetAssetPaths (EventModel.cs:466-488) adds the background scene, SetNode (EventModel.cs:344) initialises a node only for Custom. The readers that DO change behaviour all test for Combat specifically -- whether the event owns a pre-built CombatState and whether entering the room creates one (EventModel.cs:376, 385, 407, 614, 624-635) and how the room is entered and exited (EventRoom.cs:69, 93) -- and Ancient takes the same branch Default does at every single one. So Ancient vs Default changes which .tscn loads and nothing a replay could observe. Out of scope per the shared contract's presentation waiver."
+    },
+    "InitialDescription (inherited, AncientEventModel.cs:143-153)": {
+      "maps_to": "(nothing) -- the sim stores no page text, only page keys (events/base.py:11-19)",
+      "verdict": "waiver",
+      "rationale": "PRESENTATION -- and read in full rather than waived on the member name, because this one carries a BRANCH. It returns base.InitialDescription (EventModel.cs:68, the INITIAL page's loc entry) unless Hook.ShouldAllowAncient denies, in which case it swaps in the relics/WAX_CHOKER.blockMessage string (AncientEventModel.cs:143-153, a third file hashed by this record's extra_sources). It selects TEXT and nothing else. The BEHAVIOURAL half of the same gate is a different member: GenerateInitialOptionsWrapper (AncientEventModel.cs:193-207) replaces the whole option list with a single PROCEED when the hook denies -- and it is `protected sealed override`, so it is outside this record's enumeration, which follows `public override`. That gate is itself inert in this source: ShouldAllowAncient has NO implementer anywhere. AbstractModel.cs:2167 declares the virtual returning true, and a whole-tree grep for the name returns only that declaration, the dispatcher (Hook.cs:2116-2120) and these two call sites -- the Wax Choker relic whose message it names has no .cs file in this build. So the deny branch is unreachable and the sim's omission of both members drops nothing. Out of scope per the shared contract's presentation waiver."
     }
   },
   "guards": [
