@@ -183,21 +183,32 @@ def kind() -> None:
         print(f"    {unit_id}")
 
 
-_CTOR = re.compile(r"def __init__\(self.*?(?=\n    [@a-zA-Z]|\nclass |\Z)", re.S)
+# DEFECT FIXED 2026-07-27, found by batch 2 while auditing its own units and
+# never by reviewing this file (PROMPT.md v6 item 1, third instance). The
+# original pattern was `def __init__\(self`, which cannot match a WRAPPED
+# signature — `def __init__(\n        self, ...)`. `ctor-order` therefore
+# under-reported by 11 (35 sites where the true count is 46), and
+# SHARED-FINDINGS §2 shipped the wrong population. A sweep that under-reports
+# silently CLEARS units, which is the direction nothing downstream re-checks.
+# `_ctor_body` now also reports how many classes it could not find an
+# `__init__` for at all, so a future regex failure is visible rather than mute.
+_CTOR = re.compile(r"def __init__\(\s*self.*?(?=\n    [@a-zA-Z]|\nclass |\Z)", re.S)
 
 
 def ctor_order() -> None:
     """Starting powers applied in __init__ vs the game's AfterAddedToRoom."""
     from sts2_rl.monsters.state_machine import MachineMonster
     units = _units()
-    sites = []
+    sites, no_ctor, unreadable = [], [], []
     for unit_id, cls in sorted(units.items()):
         try:
             src = inspect.getsource(cls)
         except OSError:
+            unreadable.append(unit_id)
             continue
         m = _CTOR.search(src)
         if not m:
+            no_ctor.append(unit_id)
             continue
         body = m.group(0)
         effects = re.findall(r"(PowerCmd\.apply|BlockCmd\.apply|CreatureCmd\.\w+)", body)
@@ -216,6 +227,11 @@ def ctor_order() -> None:
               f"{','.join(eff)}{tag}")
     print(f"  of those, {len(no_hook)} have no C# AfterAddedToRoom override "
           f"(the port chose the constructor for something the game does elsewhere)")
+    print(f"  COVERAGE (so a regex failure is visible, not mute): "
+          f"{len(units)} roster units, {len(no_ctor)} with no __init__ matched, "
+          f"{len(unreadable)} whose source could not be read")
+    if no_ctor:
+        print(f"    no __init__ matched: {', '.join(no_ctor)}")
     print("""
   WHAT IS LIVE AT THAT MOMENT (read from sts2_rl/combat.py, CombatState.__init__):
     registered BEFORE create_monsters (combat.py:134):

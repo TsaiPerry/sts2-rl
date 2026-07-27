@@ -70,8 +70,31 @@ the report under the headline list.
 
 ## 2. Starting powers applied from `__init__` instead of an add-to-room dispatch
 
-**35 sim monsters** apply a power (or block) from `Monster.__init__`
-(`py audit/tools/monster_probes.py ctor-order` prints the list). The game
+**46 sim monsters** apply a power (or block) from `Monster.__init__`
+(`py audit/tools/monster_probes.py ctor-order` prints the list).
+
+> **CORRECTED 2026-07-27 — this section shipped the number 35 and it was wrong.**
+> Batch 2 found the defect while auditing its own units, not by reviewing the
+> tool: `ctor-order`'s `_CTOR` regex was `def __init__\(self`, which cannot
+> match a **wrapped** signature (`def __init__(\n        self, ...)`), so the
+> sweep under-reported by 11. This is the third instance of PROMPT.md v6 item 1
+> and the first caused by a signature-shape assumption; an under-reporting
+> sweep **silently clears** units, the direction nothing downstream re-checks.
+> The regex is fixed and `ctor-order` now prints its own coverage (109 roster
+> units, 28 with no `__init__` matched, 0 unreadable) so a future regex failure
+> is visible rather than mute. The eleven units the old sweep hid are
+> `axebot, chomper, corpse_slug, decimillipede_segment, exoskeleton, inklet,
+> kin_follower, phantasmal_gardener, punch_construct, scroll_of_biting,
+> wriggler`. **A batch that cleared any of those of the constructor-order shape
+> on the strength of this section's list must re-check it.**
+>
+> The fix also exposed a site the old regex hid entirely: **`wriggler` calls
+> `CreatureCmd.Stun` — not `PowerCmd.apply` — from `__init__`, and its C# model
+> has no `AfterAddedToRoom` override at all**, so clause (a) below (which is
+> about power/block listeners) does not even address it. It is one of only two
+> such units, with `__battle_friend`.
+
+The game
 applies these from `MonsterModel.AfterAddedToRoom`, awaited by
 `CombatManager.AfterCreatureAdded` (`CombatManager.cs:860-867`) inside
 `StartCombatInternal` (`CombatManager.cs:394-398`) — i.e. after every creature
