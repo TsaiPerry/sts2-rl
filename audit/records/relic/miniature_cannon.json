@@ -8,6 +8,68 @@
     "path": "sts2_rl\\relics\\miniature_cannon.py",
     "sha256": "feb3bdebc5fb0b00dc1cd4724cbf0b805f6e89f2551a1e23ef1cd204079508bb"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Localization/DynamicVars/DamageVar.cs",
+      "sha256": "4ded263fb8a8713adc416b723902c85e26298b39c950922461122eb96285d3e9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Thrash.cs",
+      "sha256": "87ecdaf33740eb5791b9e7401ac19b0f6daf2ceeb6a6f8dd009f6da376f244cc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/blood_wall.py",
+      "sha256": "2ef9b0a19764b528dbf351c65d38af81f48aa4bc9fb303dcec6237dd1d174dbe",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/bloodletting.py",
+      "sha256": "63b74523b3fab1dd116a591579c896b55354cf7f5994c01b0019d08634171558",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/hemokinesis.py",
+      "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/offering.py",
+      "sha256": "a65394e8ceb35c3380c37fb169951e957507379cf734c601b50ee6ec3b5ff652",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/thrash.py",
+      "sha256": "6ffb7671ded4a4f5e00a8786ac110c677e02eef9139983e4effafceec8e3bdb5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/previews.py",
+      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (miniature_cannon.py:18)",

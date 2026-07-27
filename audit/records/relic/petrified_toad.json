@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\petrified_toad.py",
     "sha256": "653f11ba3db88edecd3993d4d779c1eff0db0112cb061a66cfd48c55177d71f8"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PotionCmd.cs",
+      "sha256": "101e099dcbfe8ef4622e79aee327ad2d6a46e4329ce06a52ddb3ec7fca89979b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/sozu.py",
+      "sha256": "424b9ec780ad43005cd0db2910d30076b3eb6b9a2b2afb5279002779fb2c2a30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (petrified_toad.py:16), matching PetrifiedToad.cs:12",

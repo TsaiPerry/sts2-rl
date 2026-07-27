@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\tuning_fork.py",
     "sha256": "d862087f7f6935a941bad58e6c5aade03e2ce531bbd1aa0783e732523872a224"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tanx.py",
+      "sha256": "da7e5f6b2b2811e2b211e0fc6f0af420d903bef871435d06e2871844e6f1a054",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (tuning_fork.py:20)",

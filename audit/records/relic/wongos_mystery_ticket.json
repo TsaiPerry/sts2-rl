@@ -8,6 +8,133 @@
     "path": "sts2_rl\\relics\\wongos_mystery_ticket.py",
     "sha256": "07c8b5f673135fecf9c15596ac7f8985a542fef6307448acd923822ddd1f67f3"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EventModel.cs",
+      "sha256": "ca991ec5fea146069498065563bbc4a63ee0786ceaafdeae823df822e955f240",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/Midas.cs",
+      "sha256": "ac46143a95ecd64b01e5c86d2621ceffbab47df4ee3ec704d953f39454c4308e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/Vintage.cs",
+      "sha256": "e732c55292183ad7a0495808b97a2621110b1168aafeea52f534f30b4cc94f02",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Driftwood.cs",
+      "sha256": "898c11b70a4d2c3fb89257a751d5d92e0abb87c13cfac6b92af59c7a12d30cd5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Combat/NCombatUi.cs",
+      "sha256": "94685bc5e87a0d1988e89e0d1ae24b3034c83b0b480fdc93dd6327c29beac7a6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/CardReward.cs",
+      "sha256": "937a512def94d408efa9f06849658fde845918be76a144fb832b30335c03523d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/welcome_to_wongos.py",
+      "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/black_star.py",
+      "sha256": "827347f3ab55418fcbd2d482eaef272e2c1d3635cf607c6936ac7456fb5221dd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/driftwood.py",
+      "sha256": "f1414c00ce2deab22b5f204d53850d56d38ab2bce3e2346e49dbd33358badc64",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fishing_rod.py",
+      "sha256": "ae3a7caf55d4b59f67ad2dd7c25f2808e55a122807cc70baecb934cfbe674da6",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/lava_rock.py",
+      "sha256": "416e64377c7676aa70c94a6199ac9458b880de0fa2f46551dca2d17bf3628e42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_wing.py",
+      "sha256": "6ebcf3b54cc79d720b2869c72565daae501c78764d99531bbba464a6805556ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/sword_of_stone.py",
+      "sha256": "b4dca93d4aed173769499a42575f7417a50baac84be4c11d63f8a9177481898d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (wongos_mystery_ticket.py:18), matching WongosMysteryTicket.cs:24",

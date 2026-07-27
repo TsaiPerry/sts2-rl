@@ -8,6 +8,58 @@
     "path": "sts2_rl\\relics\\ghost_seed.py",
     "sha256": "1e8315023ffbf3a3cfc01bfa71ba949863bb6c176a5ed7b683cf6ae365c883d4"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EventModel.cs",
+      "sha256": "ca991ec5fea146069498065563bbc4a63ee0786ceaafdeae823df822e955f240",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/knights.py",
+      "sha256": "a8e6338a1079a8084d37fd82252dca99a64c7647e4755b0aa5b1cfc959f7cefc",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/music_box.py",
+      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (ghost_seed.py:16)",

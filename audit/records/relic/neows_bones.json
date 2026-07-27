@@ -8,6 +8,48 @@
     "path": "sts2_rl\\relics\\neows_bones.py",
     "sha256": "f88e908e6a135e9fe825a4539a650580fd9a9f6c7ab39aca9456bd37c0608961"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardPools/CurseCardPool.cs",
+      "sha256": "88d4ec635a79b86980e7d8f273b19e3c04ab7b00157ff98c898ac8aeed5034a6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Neow.cs",
+      "sha256": "d09d70ee85cc45fca204d1825d6e7298e0d8a62324101fc542f998fab6a53b2f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Random/Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/arcane_scroll.py",
+      "sha256": "3afa80690159476fb2ecab61ef2d75db7b1ad05a2355ea241ce1107ccd7f1a3a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (neows_bones.py:13)",

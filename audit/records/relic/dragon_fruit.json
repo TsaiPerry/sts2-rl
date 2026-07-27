@@ -8,6 +8,28 @@
     "path": "sts2_rl\\relics\\dragon_fruit.py",
     "sha256": "77051f1860e876ea7786c53e4e042eec456a423171671258e9ef1e0020ff1bdf"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (dragon_fruit.py:11)",

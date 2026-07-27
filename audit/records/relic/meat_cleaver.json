@@ -8,6 +8,23 @@
     "path": "sts2_rl\\relics\\meat_cleaver.py",
     "sha256": "da4f53e39d0511166273bf58ef4e8a358cdbf714716cb77959e9e294ca94ad3a"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/RestSite/CookRestSiteOption.cs",
+      "sha256": "edc45ceebe6efe2b7556ccf04d05dcfbaf8b69babff753576b6ca2592e0c4bf3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (meat_cleaver.py:14)",

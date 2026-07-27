@@ -8,6 +8,128 @@
     "path": "sts2_rl\\relics\\toxic_egg.py",
     "sha256": "59e7bb9098485e8e0427dd8e1b66fb07a24d8ec054ce963d377513792270db74"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Helpers/Models/EggRelicHelper.cs",
+      "sha256": "31070f6972195dea1da18fc87b45a47b2c3e71385873a0c89807d2fd34dd530d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/Draft.cs",
+      "sha256": "7d9ce5beda999bec9e8245504c20a2f13bb9020b48d54700bc2bb9e6e6ffcbe4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/SealedDeck.cs",
+      "sha256": "b19e18a5227209b7f00eefe801755957afcde9df3f85dbd1b260db4184540d68",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ArcaneScroll.cs",
+      "sha256": "2c4ed3e98daa57d0d689bd0f4af253f2c5c09697190b9f0d6f2d1f3e946c19ba",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/FrozenEgg.cs",
+      "sha256": "09fdd62baaf545bfb544722d07a921db4cf406726cf327e636db96706efb7ceb",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/HeftyTablet.cs",
+      "sha256": "80f6caa9dd2738a9dd51878ee6f5c817642e8359c907dc2d8e5e811f9bec0d1d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LastingCandy.cs",
+      "sha256": "66b57fa6350bd39c568093feeeb220d2be09e01826d43ea3b16f8e00e3dbb530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MoltenEgg.cs",
+      "sha256": "b706622e797a32ba54e62bc05f71c67d7ace9f29254ba5111f49dbf14ac04571",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationFlags.cs",
+      "sha256": "1e43d3793d138f8ede4db48e429d03ef515105f547ee8ced0dd3438cd613bc11",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationOptions.cs",
+      "sha256": "5b63615ad2ef4d4bab8f2b4ce2ca80b555a755df955e2c6ff5a1911d7e8d3b35",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/_eggs.py",
+      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/glitter.py",
+      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/silken_tress.py",
+      "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/silver_crucible.py",
+      "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/shop.py",
+      "sha256": "46be0947df84e57ec4bc1ad757ac589a8e70dab2f294e837bcf443187193d3bd",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE, inherited from EggRelic (_eggs.py:28)",

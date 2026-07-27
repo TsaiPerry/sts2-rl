@@ -8,6 +8,28 @@
     "path": "sts2_rl\\relics\\touch_of_orobas.py",
     "sha256": "06e266d3d240b157532c4f15ccdf8ab3e625f8d81b098f68dce9d105646e0a7d"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/RelicCmd.cs",
+      "sha256": "7da9c58b87b37e212a85f1541883d0e627d081c561d6b833ed2e1f89e69c3e51",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/orobas.py",
+      "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (touch_of_orobas.py:15)",

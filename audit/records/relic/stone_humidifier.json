@@ -8,6 +8,28 @@
     "path": "sts2_rl\\relics\\stone_humidifier.py",
     "sha256": "b28c0d2f96b74197f4d6bf5b01ffe962b1a4d503f8d24503299706f54fc9e7a2"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/RestSite/HealRestSiteOption.cs",
+      "sha256": "167debfa61b18e90a2db5912eb07b04577610af95427c5800cc2ed7e3b8fcbef",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/RestSite/MendRestSiteOption.cs",
+      "sha256": "81f2904e673800234ff093fb9f4d14afc3bdf40d7fe4861fb3bc0885b82b4659",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (stone_humidifier.py:12)",

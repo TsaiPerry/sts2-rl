@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\biiig_hug.py",
     "sha256": "66d3ae58953be95479e12d670714d4f9777ee41d6b67068359085e3f25701ece"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (biiig_hug.py:19)",

@@ -8,6 +8,23 @@
     "path": "sts2_rl\\relics\\radiant_pearl.py",
     "sha256": "d6b9506665213746abeea37dc321dffe71c2470090efa4c7954e28e36111dbad"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/orobas.py",
+      "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (radiant_pearl.py:18)",

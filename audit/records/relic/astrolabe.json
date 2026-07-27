@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\astrolabe.py",
     "sha256": "3d81571fbd58e9427aad66ed84f8517df0aa5cdda9c46c76b0157539aaae3abd"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (astrolabe.py:14)",

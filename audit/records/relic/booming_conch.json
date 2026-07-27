@@ -8,6 +8,18 @@
     "path": "sts2_rl\\relics\\booming_conch.py",
     "sha256": "bfca57a42cfaf1a3dc5e70049be99405a561fbf5d8eaa069746080a31bc961b7"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (booming_conch.py:13)",

@@ -8,6 +8,78 @@
     "path": "sts2_rl\\relics\\stone_cracker.py",
     "sha256": "34dc4ca39a9b337c1034b43535732f42cc0d474374d549a6e17ee7016c4459f3"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/TeaOfDiscourtesy.cs",
+      "sha256": "92715bb91a8888fb73935de43ce91631dfb10dd9d7100a4d366f1a68e0414e8a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fragrant_mushroom.py",
+      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/tea_of_discourtesy.py",
+      "sha256": "36488c84b798b632e9d0a19646487f2c99920aadfd11fb254ab44c77388efd10",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (stone_cracker.py:13)",

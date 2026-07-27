@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\black_star.py",
     "sha256": "827347f3ab55418fcbd2d482eaef272e2c1d3635cf607c6936ac7456fb5221dd"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (black_star.py:13)",

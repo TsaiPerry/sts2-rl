@@ -8,6 +8,63 @@
     "path": "sts2_rl\\relics\\molten_egg.py",
     "sha256": "79166517ac3a47cba97ce5270675ce5a487c3b396fde70e54e5bc6f296322ce8"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Helpers/Models/EggRelicHelper.cs",
+      "sha256": "31070f6972195dea1da18fc87b45a47b2c3e71385873a0c89807d2fd34dd530d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationOptions.cs",
+      "sha256": "5b63615ad2ef4d4bab8f2b4ce2ca80b555a755df955e2c6ff5a1911d7e8d3b35",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/_eggs.py",
+      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE, inherited from EggRelic (relics/_eggs.py:28) rather than declared in molten_egg.py",

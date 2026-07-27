@@ -8,6 +8,48 @@
     "path": "sts2_rl\\relics\\burning_sticks.py",
     "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/beautiful_bracelet.py",
+      "sha256": "c160601a69de39d5cbcba5d6c4945dae49b1f604c1187e0225966017721fe4a7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/music_box.py",
+      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_growth.py",
+      "sha256": "1e9597d2278c55d09e942119f2df1df00f57c56d5cab173f2f52bc232d6d2871",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (burning_sticks.py:18)",

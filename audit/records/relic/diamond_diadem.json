@@ -8,6 +8,33 @@
     "path": "sts2_rl\\relics\\diamond_diadem.py",
     "sha256": "bbf7d768cc0b4033712c0f1652bfad73a5583b759a502e0b1b0e8343bb273f70"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/nonupeipe.py",
+      "sha256": "8ecd4c4afbb545903025c44f0b845dba8dd94bb1a0f2a0423572073ff06b03e9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ShowCounter": {
       "maps_to": "no counterpart",

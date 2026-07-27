@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\kaleidoscope.py",
     "sha256": "43f37aab77d54df4db2b19033f5f48ee882ad82a1e5faf3b3fff443f8cf5ea2d"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (kaleidoscope.py:16)",

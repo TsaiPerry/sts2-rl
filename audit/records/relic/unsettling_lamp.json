@@ -8,6 +8,98 @@
     "path": "sts2_rl\\relics\\unsettling_lamp.py",
     "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Malaise.cs",
+      "sha256": "2b16aba0028875a57f8ec3f8c1aaf1128b401578aba99e5643a910abd34b278e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Resonance.cs",
+      "sha256": "0dbc2a91f2542941626d276680b87604e97052c02054ff2e76d3934f48448184",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ArtifactPower.cs",
+      "sha256": "7fbccd6288412f8f5c5d183596f98c5117210bc4fe0da15634fbacdb5d0c4a8e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/IllusionPower.cs",
+      "sha256": "7461c923281077a0f9acf3647dc08ec0ff75ed04e1098406f6dc8b6fbb6fb31d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SleightOfFleshPower.cs",
+      "sha256": "ea4314854bc90d490a339cbe7f1039593f418d2c09b6222f3f71e3f1d52c0b79",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/TemporaryStrengthPower.cs",
+      "sha256": "c6b426e4bb0b195133970959fa5c0441ba7c5166bf21feeb3318df1e614aa637",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/cascade.py",
+      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/ruined_helmet.py",
+      "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/throwing_axe.py",
+      "sha256": "3ca1723abe8e39501df9c51b8a1f096dca7ee94990538b7947eb8cf9aae1ebc3",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE (unsettling_lamp.py:21)",

@@ -8,6 +8,18 @@
     "path": "sts2_rl\\relics\\bread.py",
     "sha256": "f12afdef614c0691c469458be556b32d9c9560731d60ef6f6d9c1a49514df844"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (bread.py:16)",

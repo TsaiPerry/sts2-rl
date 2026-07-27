@@ -8,6 +8,48 @@
     "path": "sts2_rl\\relics\\byrdpip.py",
     "sha256": "f570cc0f916a346ec663a871fb14e0ea752c678349c886ccf77b955c6e04d2d2"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardTransformation.cs",
+      "sha256": "949790460f8a3c0ab82f5b09e010af9328fc2eb18b62b906e555656bb2222c6b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/ByrdSwoop.cs",
+      "sha256": "c520fa1d2e87f75a1f62f0a3f553d7d6e604caa4a34fae79fd02fcd80e96cbf9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Byrdpip.cs",
+      "sha256": "6f2d1a4dd741aa2cdfdd238a19bb0268e97e340da7de1a90e68c402a3a0884e0",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "AddsPet": {
       "maps_to": "adds_pet = True (byrdpip.py:21)",

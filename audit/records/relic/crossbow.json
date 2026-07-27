@@ -8,6 +8,53 @@
     "path": "sts2_rl\\relics\\crossbow.py",
     "sha256": "51d9453ef84e5350051683f0875c6b3aa49646f738ef816340faf115b160c52b"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tanx.py",
+      "sha256": "da7e5f6b2b2811e2b211e0fc6f0af420d903bef871435d06e2871844e6f1a054",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/vakuu.py",
+      "sha256": "8342368cf750f853a60f1d6bfa1c46170dd100c96139132dccabe5568e2337e5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/whispering_earring.py",
+      "sha256": "c5da5382027d294d41d34e8ce137f99417a349dc7d9ae29ef8bd66682a3b715e",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (crossbow.py:19)",

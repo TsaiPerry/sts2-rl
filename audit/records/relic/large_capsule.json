@@ -8,6 +8,28 @@
     "path": "sts2_rl\\relics\\large_capsule.py",
     "sha256": "7eefbfc2a38d6f54ca8c742c7bdebf3d1d96b47d8ed6d581e85921169bb52d42"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/TestSupport/TestMode.cs",
+      "sha256": "609e8f466e2d5b0f9b4d4d94492c0ba0db60420f8ff06e339cf0d408651d12e9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (large_capsule.py:13)",

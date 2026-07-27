@@ -8,6 +8,33 @@
     "path": "sts2_rl\\relics\\paels_claw.py",
     "sha256": "e8e6cf3cf436f0e3c8c4ee678989d571a30d79d8b83992ee590d320fdfd1ef41"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Enchantments/Goopy.cs",
+      "sha256": "9ccd44649456f46e414df96031ce6ecef348f59b48144657db5624cd0d59f711",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Pael.cs",
+      "sha256": "35411063dc0bb8f3333285347e0116d6c79fdbac1bb2e3c97512ec5a96e3fb6d",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (paels_claw.py:14)",

@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\tanxs_whistle.py",
     "sha256": "08073e1c4fa0ed3e40e53becd0ac67e362467cce65cd3f76462bcee36498b9bf"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Whistle.cs",
+      "sha256": "9d4789f39294339d179056089ea7fc492b747aa2bcdbcdf4703731c2ad658aaa",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Storybook.cs",
+      "sha256": "64a98b32fcc5e7ad02d40145e4975e770b7b4ba20cf6d56dcb5668b6a4ed1236",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (tanxs_whistle.py:12)",

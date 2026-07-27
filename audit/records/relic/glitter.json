@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\glitter.py",
     "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/_eggs.py",
+      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (glitter.py:14)",

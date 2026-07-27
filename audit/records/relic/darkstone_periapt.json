@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\darkstone_periapt.py",
     "sha256": "8382cec7373c160b00390dc5e45df3c904948aebe6eef710e9a63b84baaff8ad"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (darkstone_periapt.py:16)",

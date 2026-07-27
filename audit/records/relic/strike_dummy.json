@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\strike_dummy.py",
     "sha256": "47e5483cf8e97bfdef196227bc8c04e985c678bb7153172fb746a324d24cc113"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fake_strike_dummy.py",
+      "sha256": "4eeb32a93171856dd92e73d129e7aa0167dd926b2c47a177bdc4634c1d579ae9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/miniature_cannon.py",
+      "sha256": "feb3bdebc5fb0b00dc1cd4724cbf0b805f6e89f2551a1e23ef1cd204079508bb",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.COMMON (strike_dummy.py:19)",

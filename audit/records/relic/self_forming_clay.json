@@ -8,6 +8,58 @@
     "path": "sts2_rl\\relics\\self_forming_clay.py",
     "sha256": "7f49e386c7b08794e1142c87a392a6c9da390297da086bf046dece09526bc58d"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SelfFormingClayPower.cs",
+      "sha256": "0ca726387dcf1fe713df8c29f55c06764767c3b886e274efcf68fffd61a1d431",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/RoyalPoison.cs",
+      "sha256": "ddbb27b4723f3646672d78d24807eab8da79bfa7b3ce9210bcb3a282f3ca2161",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/hemokinesis.py",
+      "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/spiny_toad.py",
+      "sha256": "56194dc18e5e87f815b9d8a7326f863f5f3762d17245e4f696b3fe62618fd060",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/toadpole.py",
+      "sha256": "b76431f98d263b23e9563d0f6c0f257dadab69a5de83ecc55661391625c1ebd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (self_forming_clay.py:21)",

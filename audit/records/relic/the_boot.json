@@ -8,6 +8,133 @@
     "path": "sts2_rl\\relics\\the_boot.py",
     "sha256": "e208c4539f697911e05cc4e54f440e0b5976a35ecca55d0843dd89617248c809"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/BufferPower.cs",
+      "sha256": "bf95bf58bf220b5e5dfe112a32834d857be8f9ce44c0ebbebb69a6caef805231",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/IntangiblePower.cs",
+      "sha256": "40c86b71a68a50769c41b78fae9e46af0a2305ebf31d1239d541b25963416759",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SlipperyPower.cs",
+      "sha256": "f9d568f0b566404d1dee89e8e2a3a93fda5f2b7ee02993a3acf12333d5aef51f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeatingRemnant.cs",
+      "sha256": "bfa2bfaa040c6af14af6b6f3845b8542b5f93317fd52c139e642de2f0a54fab3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BoundPhylactery.cs",
+      "sha256": "4a24382fc0e8faf7def8fbf42623b29c65a77dc153dc29aec5a820e49916086d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PenNib.cs",
+      "sha256": "c2ca39be064bf9504c5d9bf9f0931fbe7158db6b176b303d098d9ee2cf422cde",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PhylacteryUnbound.cs",
+      "sha256": "91045600aefa8224485024d5d7654b835f6f612f93f068926472defcd564afa6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/TouchOfOrobas.cs",
+      "sha256": "383244ea3be8742267dbe023d6cbc59f19fcc2cbd062bec34acd04d9a965bc7c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/TungstenRod.cs",
+      "sha256": "b79fe26e7bcaeb914ac93cd7bc3be2706a2b8c2525d49e342ec6f76d23502b08",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_attacks.py",
+      "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/__init__.py",
+      "sha256": "c170436e0540caaebac2e6703e83d385e003d7ea79a8dc6010b46e4d58908e87",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/inklets.py",
+      "sha256": "4bdaa50a52958c75573522e4d4030efb04604f26632f8b93eb26cb61fad3f35d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/vantom.py",
+      "sha256": "4625cf2ecfe867b457ab29c54bbff582fc73914554c872acd49818cf3015a146",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/soul_fysh.py",
+      "sha256": "4c072f390bc091b4197a1699ce769ae2fa5f78d5b8fa00718d14226dcca6c87c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (the_boot.py:23)",

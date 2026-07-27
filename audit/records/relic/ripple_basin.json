@@ -8,6 +8,38 @@
     "path": "sts2_rl\\relics\\ripple_basin.py",
     "sha256": "da7a5483e434c950c29ac4741d6832fca472baee64db8925821e442d0d838ee9"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orichalcum.cs",
+      "sha256": "26ea7db10392ce478bef226d3b112f7b17575177d3d839ce176c135f031c06f8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PaelsEye.cs",
+      "sha256": "0ff4149872257b8969c808d66f1e293c0aa33980f41be77618f2802d59b02d3e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/orichalcum.py",
+      "sha256": "5797b6afca188cd66619524d8ea170a678e96a2dfd831ce913462ff6dfce7a8c",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (ripple_basin.py:21)",

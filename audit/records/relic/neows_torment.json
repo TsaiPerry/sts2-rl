@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\neows_torment.py",
     "sha256": "2b781bcd68a2277158776dad20703407c915feca048c7e7a4868cba19b2fe859"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (neows_torment.py:12)",

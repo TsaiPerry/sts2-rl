@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\bellows.py",
     "sha256": "e2665d5252640b049e9c6d4261d4fcc519be8fcffff900d2bcaf8b1352b5a9d0"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE (bellows.py:17)",

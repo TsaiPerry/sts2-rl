@@ -8,6 +8,43 @@
     "path": "sts2_rl\\relics\\delicate_frond.py",
     "sha256": "0cf7d5688b9436ff83a8bc91e362bad5f702521d412e7b0d3d142ddd8d62be21"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PotionCmd.cs",
+      "sha256": "101e099dcbfe8ef4622e79aee327ad2d6a46e4329ce06a52ddb3ec7fca89979b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeltBuckle.cs",
+      "sha256": "1e72315fdaf11e92a555144fa8b255f3735bde2aaf590f92f6ece0288cab2831",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/darv.py",
+      "sha256": "0f61517f657199a624cbc18d1d704f9cecdae6e016f457a52fbf99483f4dd207",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/nonupeipe.py",
+      "sha256": "8ecd4c4afbb545903025c44f0b845dba8dd94bb1a0f2a0423572073ff06b03e9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (delicate_frond.py:14)",

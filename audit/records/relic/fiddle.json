@@ -8,6 +8,103 @@
     "path": "sts2_rl\\relics\\fiddle.py",
     "sha256": "860b198228cbf072ca3d1c7eb46094e9eee8de35e0fd74f98b25600493fbca63"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/MindRotPower.cs",
+      "sha256": "3676390da138fd28e1f6289419ffd57b0fa4e0e96f7509f0354f11dc855849a1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/knowledge_curses.py",
+      "sha256": "d29aca1c34977dec78a38306040848d832018f4f0144e0703b77eb663e8ae57a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/bag_of_preparation.py",
+      "sha256": "7a4e14905fb9d88586ed4d4adb78ad771d5b89561480975b26ae7b73ed60a211",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/big_mushroom.py",
+      "sha256": "d2cc32319de1f178d350da05fb8d26bd6a693b5ae3ff17955780103936e78d6e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/booming_conch.py",
+      "sha256": "bfca57a42cfaf1a3dc5e70049be99405a561fbf5d8eaa069746080a31bc961b7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/centennial_puzzle.py",
+      "sha256": "fa3de18b57282f95eb03dadd6d706ebffa9e7371f06e502acdbd5dbd8dbe3a10",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/demon_tongue.py",
+      "sha256": "1940c74aeadbe2fffc8c3b510bb1f3e6a5c26b0d44ce9a85575deff5ac45cb11",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/gremlin_horn.py",
+      "sha256": "d056b799eb6625767ab63dd52b23d6bd9984624bb3de91a87406c4fdbf1b74d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_blood.py",
+      "sha256": "7c7b8066d0a06f90a2b3c566041923216f76c5cfd74a024d706ca8412df5f3e3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pendulum.py",
+      "sha256": "5a670586fcbb78defc9f2a4a6182bc08458a325abdba78756ca7caa6eceba141",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pocketwatch.py",
+      "sha256": "18d433f6e5305405c30200dcad9b38fc469a09614fb45324e9825b2762aa6c55",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pollinous_core.py",
+      "sha256": "e122b2f7a15f2b8dda7c91ecd7ab54ea1d7e5dfccfeaae832ba74c8459570b17",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/snecko_eye.py",
+      "sha256": "0e086508c8286fbe0843a1abb5bd12d970c50413aa7b394de08b75019049d884",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/unceasing_top.py",
+      "sha256": "fc9e1f4b5772a120a7d84674b3975f750ecd25e8a05ff1c6d0be956b69df50c3",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (fiddle.py:19)",

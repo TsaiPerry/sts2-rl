@@ -8,6 +8,23 @@
     "path": "sts2_rl\\relics\\cursed_pearl.py",
     "sha256": "a4d88e353db689e4d44d895d1364b61e19f40df9e359f5076d29919f5512a750"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/greed.py",
+      "sha256": "032a46d6b934246f2551b23d2a1b4723bef44406420de44d5fbe2cb62ec77959",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (cursed_pearl.py:12)",

@@ -8,6 +8,58 @@
     "path": "sts2_rl\\relics\\dream_catcher.py",
     "sha256": "141dbc25ea89fffa0ad2bc118e1fda19ac29406d7331b76c6ff75b90c4af6e95"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/RestSite/HealRestSiteOption.cs",
+      "sha256": "167debfa61b18e90a2db5912eb07b04577610af95427c5800cc2ed7e3b8fcbef",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/TinyMailbox.cs",
+      "sha256": "1a182ac3e18b3eecb44a826274b4bfa83e3bef5fc49d3d1745546edcd281d285",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationOptions.cs",
+      "sha256": "5b63615ad2ef4d4bab8f2b4ce2ca80b555a755df955e2c6ff5a1911d7e8d3b35",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/dense_vegetation.py",
+      "sha256": "7e27f63c6f33dce521f958257f0e09446b61e531316661b95aaa821896fffac4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (dream_catcher.py:20)",

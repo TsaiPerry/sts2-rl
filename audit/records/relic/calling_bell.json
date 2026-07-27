@@ -8,6 +8,28 @@
     "path": "sts2_rl\\relics\\calling_bell.py",
     "sha256": "00c527eb6a05992380bf9c6e6b14c8e9f8eee9b25faa3bbf569afeaaae614b59"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/TestSupport/TestMode.cs",
+      "sha256": "609e8f466e2d5b0f9b4d4d94492c0ba0db60420f8ff06e339cf0d408651d12e9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (calling_bell.py:18)",

@@ -8,6 +8,83 @@
     "path": "sts2_rl\\relics\\sword_of_jade.py",
     "sha256": "ed085f35e4fd4185061cefb4bcc871df0be63cc4340531d2e0d9e4e165e697f6"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/RelicCmd.cs",
+      "sha256": "7da9c58b87b37e212a85f1541883d0e627d081c561d6b833ed2e1f89e69c3e51",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SwordOfStone.cs",
+      "sha256": "11452dd2cd6b4d9abbde417cbd02bf12f33af28c271482fab5c6216866ecfec5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/EventRoom.cs",
+      "sha256": "1038126138bdc9799ec3f1286bfddef80618dad80083c375d07cf2ae36e0e0f3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/MerchantRoom.cs",
+      "sha256": "25f2da261216087d13df0299fb11e95acd3fcd1224be0afe6cdc6f58022e7cf1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/RestSiteRoom.cs",
+      "sha256": "2724e3a214e09825df9ea136b0275f8f068174b95a65cbb8731b3e24f0e32960",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/TreasureRoom.cs",
+      "sha256": "0b65d84f86c990e94c35f5f01c748a92355bed824ce4cb6af7a76b698d139e4a",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/ruined_helmet.py",
+      "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/sword_of_stone.py",
+      "sha256": "b4dca93d4aed173769499a42575f7417a50baac84be4c11d63f8a9177481898d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/unsettling_lamp.py",
+      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (sword_of_jade.py:19)",

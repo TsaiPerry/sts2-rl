@@ -8,6 +8,18 @@
     "path": "sts2_rl\\relics\\fishing_rod.py",
     "sha256": "ae3a7caf55d4b59f67ad2dd7c25f2808e55a122807cc70baecb934cfbe674da6"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (fishing_rod.py:13)",

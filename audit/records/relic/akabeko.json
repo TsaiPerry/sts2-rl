@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\akabeko.py",
     "sha256": "1355cec3d4874b7fb8cc0eea2cd9622b8bfefc8bcfbf8b87814967c829873ec6"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (akabeko.py:16)",

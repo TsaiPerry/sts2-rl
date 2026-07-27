@@ -8,6 +8,18 @@
     "path": "sts2_rl\\relics\\belt_buckle.py",
     "sha256": "6ded9da9910f07db43c3554b5bc11ce71183f48ce6ff8286449da10fefaaf806"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Relics/PaelsEye.cs",
+      "sha256": "0ff4149872257b8969c808d66f1e293c0aa33980f41be77618f2802d59b02d3e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (belt_buckle.py:16)",

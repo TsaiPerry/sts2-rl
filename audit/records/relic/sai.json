@@ -8,6 +8,23 @@
     "path": "sts2_rl\\relics\\sai.py",
     "sha256": "ef7e1a202bbc1af427c4ad92e4428956fa000b98216ad55ed05a7e6062729cb3"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/tanx.py",
+      "sha256": "da7e5f6b2b2811e2b211e0fc6f0af420d903bef871435d06e2871844e6f1a054",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (sai.py:19)",

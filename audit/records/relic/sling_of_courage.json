@@ -8,6 +8,43 @@
     "path": "sts2_rl\\relics\\sling_of_courage.py",
     "sha256": "786503fadda73740462e02762aad824db486572ef17830c98647d44125dceb9a"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Rooms/CombatRoom.cs",
+      "sha256": "7d9a37d01976b922e5286bcca96f3b6816ceff1d6a6a8d175798d748ff4b6d02",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/girya.py",
+      "sha256": "c21cb8eeff00d24c0bda72db56f8185326d951b5f80827011dd2bc22718b2d2f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/pantograph.py",
+      "sha256": "f231266489bc6fdc754f30ec1fba4295eb78eeaa40a77c966ba6eb18fe6c4346",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (sling_of_courage.py:16)",

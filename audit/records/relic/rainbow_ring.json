@@ -8,6 +8,18 @@
     "path": "sts2_rl\\relics\\rainbow_ring.py",
     "sha256": "1ae7d861d2452ee7df794abbe7bd79bf3ba6edc0977af16973731b0f06a5e41b"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Relics/BrilliantScarf.cs",
+      "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE (rainbow_ring.py:20)",

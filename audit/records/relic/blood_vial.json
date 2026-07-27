@@ -8,6 +8,13 @@
     "path": "sts2_rl\\relics\\blood_vial.py",
     "sha256": "98cfc1671777d422e98845f62073c981393019a2ddd196a9352fa5a6b5ab50f9"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.COMMON (blood_vial.py:16)",

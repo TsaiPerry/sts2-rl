@@ -8,6 +8,93 @@
     "path": "sts2_rl\\relics\\tungsten_rod.py",
     "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/AbyssalBaths.cs",
+      "sha256": "0ae1cb161845adea747b933add5924b0b8e134f2a007c0cc9f0adf3a843de0a3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/BufferPower.cs",
+      "sha256": "bf95bf58bf220b5e5dfe112a32834d857be8f9ce44c0ebbebb69a6caef805231",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/IntangiblePower.cs",
+      "sha256": "40c86b71a68a50769c41b78fae9e46af0a2305ebf31d1239d541b25963416759",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SlipperyPower.cs",
+      "sha256": "f9d568f0b566404d1dee89e8e2a3a93fda5f2b7ee02993a3acf12333d5aef51f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeatingRemnant.cs",
+      "sha256": "bfa2bfaa040c6af14af6b6f3845b8542b5f93317fd52c139e642de2f0a54fab3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/TheBoot.cs",
+      "sha256": "8576e133831f8964d485db7266957cc63e041aab4a397667350b4dae20f1aec6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/beating_remnant.py",
+      "sha256": "33dd62d3739e30b693cf92848eb2ce814dfe4310324074884ec277bc8f76c8f8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/the_boot.py",
+      "sha256": "e208c4539f697911e05cc4e54f440e0b5976a35ecca55d0843dd89617248c809",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE (tungsten_rod.py:24)",
