@@ -48,6 +48,36 @@
       "path": "test/test_hive.py",
       "sha256": "29a90e9b992c8bf4892da4666d11dc716e0a5bc25af507b6bfb80d6b8b0266a0",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeltBuckle.cs",
+      "sha256": "1e72315fdaf11e92a555144fa8b255f3735bde2aaf590f92f6ece0288cab2831",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ReptileTrinket.cs",
+      "sha256": "73dfefc29119cc91bab25f406d8ab6b40611067b812b0629354106efd740c241",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -71,9 +101,10 @@
       "rationale": "SurroundedPower.cs:74-80 flips facing on any TARGETED card play by the owner's player, damaging or not; powers.py:2573-2578 does the same on `target is not None`, and its comment correctly argues `cardPlay.Card.Owner == base.Owner.Player` is a single-player tautology (Surrounded only ever lands on the player). test/test_hive.py:957-983 pins the targeted-Skill case."
     },
     "BeforePotionUsed": {
-      "maps_to": "powers.py:2580-2582 on_potion_used",
-      "verdict": "faithful",
-      "rationale": "SurroundedPower.cs:82-88 flips facing on a targeted potion use by the owner's player; the sim implements the hook. Potions are out of scope by contract for *reachability* but the hook itself is ported and correct, so this is faithful rather than a waiver. The one dropped clause is `CombatManager.Instance.IsInProgress`, which is hook_dispatch gap G8's territory (no IsOverOrEnding gate on combat dispatches) and is not re-verdicted here."
+      "maps_to": "powers.py:2580-2582 on_potion_used -- but that is the sim's AfterPotionUsed slot (hooks.py:566-571, combat.py:610), NOT BeforePotionUsed, which the sim never dispatches",
+      "verdict": "gap",
+      "live": true,
+      "issue": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from faithful. The old rationale read 'Potions are out of scope by contract for *reachability* but the hook itself is ported and correct'. The clause it leaned on has been DELETED on Perry's instruction (\"don't ignore potions anymore\") -- and re-deriving the hook without it shows the second half was wrong too. THE HOOK IS NOT PORTED. WRONG SLOT (PROMPT.md bug classes 11 and 22). C# has TWO distinct potion-use hooks and PotionModel.OnUseWrapper fires them on either side of the effect: src/Core/Models/PotionModel.cs:293 RemoveBeforeUse, :297 `Hook.BeforePotionUsed(...)`, :325 `OnUse(...)`, :338 `Hook.AfterPotionUsed(...)`. An executed grep of src/ for both names returns exactly three model implementers: SurroundedPower.cs:82 is the ONLY BeforePotionUsed, while BeltBuckle.cs:81 and ReptileTrinket.cs:22 are AfterPotionUsed. The sim has ONE hook. sts2_rl/hooks.py:566-571 declares `on_potion_used` and its own docstring says 'Fires after a potion's effect resolves (mirrors AfterPotionUsed)', and sts2_rl/combat.py:604-610 dispatches it AFTER `potion.use(ctx, target)`. Belt Buckle and Reptile Trinket sit in the right slot; SurroundedPower's port (sts2_rl/powers.py:2580-2582) was hung on the same method and therefore runs one phase LATE. There is no dispatch of BeforePotionUsed anywhere in the sim (grep: `before_potion_used` returns nothing). OBSERVABLE, and it is a damage number. The facing flip and the potion's effect commute only while the potion does not change the board. It does whenever the potion kills its target: C# flips on the LIVE target, then the death fires AfterDeath which re-faces on the survivors; the sim runs the death re-face FIRST and then flips on the corpse, which is a different final facing, and facing is worth a 1.5x multiplier (SurroundedPower.cs:46-72, sts2_rl/powers.py:2552-2565). EXECUTED (heredoc probe, reproducible): CombatState(rng=Random(0), encounter=KAISER_CRAB_BOSS) with the Crusher dropped to 1 HP and a Fire Potion in slot 0; `cs.use_potion(0, target_idx=0)` leaves facing='left'. C# reaches 'right' -- BeforePotionUsed flips right->left on the still-alive Crusher (BackAttackLeft), the potion then kills it, and AfterDeath re-faces on the remaining hittable enemy, the Rocket (BackAttackRight), flipping left->right. The sim's on_death runs first and cannot flip (facing is still 'right' and _update_direction's right-arm needs BackAttackLeft), then on_potion_used flips right->left on the dead Crusher. The multiplier the Rocket then gets against the player is 1.5 in the sim and 1.0 in the game, and driving the Rocket's 18-damage Precision Beam through DamageCmd.deal on the resulting states takes the player from 80 HP to 44 (sim) versus 80 to 56 (game) -- 12 HP on one hit. LIVE (binding rule 6, both sides ported): the Kaiser Crab boss is the ported encounter at sts2_rl/monsters/hive/kaiser_crab.py:159-162 and its Rocket arm applies this very power at sts2_rl/monsters/hive/kaiser_crab.py:112-114; Fire Potion is registered by @register_potion, is targeted (sts2_rl/potions.py:59), and is Common in the generation pool (sts2_rl/potion_pools.py:50). Five other pooled potions are targeted too (weak_potion, vulnerable_potion, beetle_juice, powdered_demise). The one clause not re-verdicted here remains `CombatManager.Instance.IsInProgress` (SurroundedPower.cs:84), which is hook_dispatch gap G8's territory. FIX SHAPE: split the sim's single dispatch into before_potion_used (before `potion.use`, sts2_rl/combat.py:609) and on_potion_used (after, :610), and move SurroundedPower onto the former; Belt Buckle and Reptile Trinket stay put. RULE 7: src/Core/Models/PotionModel.cs, src/Core/Models/Relics/BeltBuckle.cs, src/Core/Models/Relics/ReptileTrinket.cs, sts2_rl/hooks.py, sts2_rl/potions.py, sts2_rl/potion_pools.py and sts2_rl/monsters/hive/kaiser_crab.py are cited here."
     },
     "AfterDeath": {
       "maps_to": "powers.py:2584-2594 on_death",

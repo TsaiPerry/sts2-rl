@@ -311,7 +311,27 @@ unit. A checklist entry that never fired is noise the next 700 units pay for.
 
 ## Scope
 
-Potions: out of scope entirely. Ascension values: out of scope. Characters
-other than Ironclad: `waiver` with rationale. Multiplayer-only params
-(PlayerChoiceContext etc.): note in `maps_to` mapping, not a divergence by
-themselves.
+**Potions: IN SCOPE (changed 2026-07-26 by Perry — "don't ignore potions
+anymore").** This line used to read "Potions: out of scope entirely" and it is
+deleted, not narrowed. `potion` is now an ordinary audit kind — 51 sim units,
+`audit/records/potion/`, `py audit/tools/harness.py roster potion` — and it is
+**unaudited**, like `monster`. **A potion may never be the reason for a
+`waiver` again.** "The applier is a potion" is a dormancy argument at best, and
+usually not even that: the potion is probably ported (51 classes registered, 48
+in the reward pool, and the belt is asserted slot-by-slot by the conformance
+runner).
+
+Why this is a bug class and not just a policy change: an *exclusion* is
+invisible to every tool in this pipeline — `audit_status` cannot report it,
+`gap_queue` cannot count it, `validate` cannot reject a verdict leaning on it.
+While the clause stood, ten entries across the `card` and `power` tiers waived
+real behaviour on it (including the whole of `card/alchemize`) while the
+`relic` tier filed 45 potion-mechanic gaps, 27 LIVE — one mechanism, two
+answers, caused by this sheet. Re-deriving the ten produced **five LIVE gaps**,
+three of which nobody had ever looked at, plus one entry that was `faithful` on
+a claim about the sim that was outright false. Six came back `faithful`, so the
+clause was not hiding a disaster — but it was hiding these.
+
+Ascension values: out of scope. Characters other than Ironclad: `waiver` with
+rationale. Multiplayer-only params (PlayerChoiceContext etc.): note in
+`maps_to` mapping, not a divergence by themselves.

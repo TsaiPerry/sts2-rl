@@ -33,6 +33,16 @@
       "path": "sts2_rl/valueprops.py",
       "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -48,7 +58,8 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:4052-4065 DemisePower._fire via on_player_turn_end / on_enemy_side_end",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. Same damage-in-the-wrong-slot consequence as power/constrict's. The enemy leg (powers.py:4063-4065) is correct. DORMANT for reachability: the only ported Demise source is the Powdered Demise potion, and potions are out of scope by the shared contract's global-scope rule, so no in-scope content applies it. Named trigger: any non-potion Demise source."
+      "live": true,
+      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. Same damage-in-the-wrong-slot consequence as power/constrict's. The enemy leg (powers.py:4063-4065) is correct. LIVENESS RE-DERIVED 2026-07-26 (potion-scope re-verdict pass): **DORMANT -> LIVE.** The old text read 'DORMANT for reachability: the only ported Demise source is the Powdered Demise potion, and potions are out of scope by the shared contract's global-scope rule, so no in-scope content applies it. Named trigger: any non-potion Demise source.' That clause has been DELETED on Perry's instruction (\"don't ignore potions anymore\") and the named trigger has therefore already fired -- the trigger is not a hypothetical non-potion source, it is the potion itself. Powdered Demise is PORTED (sts2_rl/potions.py:869-877, id 'powdered_demise', applying DemisePower 9) and it is in the generation pool at sts2_rl/potion_pools.py:57 as uncommon, so the applier is ordinary reachable Ironclad content. Both sides of the scenario are constructible in one run: the potion applies the power, and StampedePower's turn-end auto-play (powers.py:1025-1041) shares the dispatch this entry says is the wrong slot. This is exactly the failure the deleted clause was hiding -- a real gap parked as dormant on a scope statement rather than on a fact about the content."
     }
   },
   "guards": [

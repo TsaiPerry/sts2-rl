@@ -48,6 +48,16 @@
       "path": "sts2_rl/potions.py",
       "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Potions/Clarity.cs",
+      "sha256": "1b0dfabd142d9fd5d73a008e1cdfe22a1986f6911930019c80b33219a1f68d9b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -88,9 +98,9 @@
       "rationale": "Examined and INERT for Clarity specifically, unlike its two slot-mates power/prep_time and power/rolling_boulder, whose Mayhem guards carry executed live witnesses. Clarity's only effect is on ModifyHandDraw, which the game and the sim have both already run by the time either reaches this slot (CombatManager.cs:654 / player.py:171), so whether the tick lands before or after a Mayhem auto-play changes nothing this turn, and the amount reaching next turn is the same either way (a stack applied by an auto-play is not in the dispatcher's listener snapshot -- hooks.py:61 -- so it is not ticked in the turn it lands, on either side). Named trigger: any future reader of Clarity's Amount from another turn-start listener."
     },
     {
-      "what": "The applier is a potion, and the potion KIND has no audit tier",
-      "verdict": "waiver",
-      "rationale": "NARROWED 2026-07-26 (review fix pass). The old rationale said \"what is waived is only the REACHABILITY of its one applier\". That was wrong twice over: it is logically incompatible with this record tagging any hook LIVE (LIVE is itself a reachability claim), and it is stale -- Clarity is ported and POOL-REGISTERED, so the power is reachable in the sim today whether or not the potion tier is ever written. What is genuinely out of scope, and all this waiver now claims, is the potion UNIT's own record: potions are a deferred kind by Perry's deferral (the shared audit contract's Global scope section) and there is no audit/records/potion/ tier for Clarity to live in, so nothing here judges the potion's own fidelity (cost, targeting, belt behaviour). REACHABILITY IS ESTABLISHED, not waived: the sim ports the potion at potions.py:759-777, @register_potion puts it in ALL_POTIONS, and it is in the generation pool at potion_pools.py:44 (uncommon). The POWER is audited in full above and every liveness label on this record stands on its own evidence. Same correction at all seven power records carrying this guard (power/buffer, power/clarity, power/flex_potion, power/gigantification, power/radiance, power/shackling_potion, power/speed_potion) so the mechanism keeps one verdict at every site per binding rule 3."
+      "what": "N: the power's sole applier is Clarity Extract -- a PORTED potion, not a scope boundary (Clarity.cs:29-35 vs sts2_rl/potions.py:758-778)",
+      "verdict": "faithful",
+      "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL, INCLUDING ITS INTERNAL ORDER. src/Core/Models/Potions/Clarity.cs:23-27 declares two vars, new PowerVar<ClarityPower>(3m) and new CardsVar(1), with no AscensionHelper.GetValueIfAscension in the file, so 3 and 1 are the pinned non-ascension values; sts2_rl/potions.py:769-770 pins CARDS = 1 and CLARITY = 3. The ORDER is load-bearing and correct: Clarity.cs:33 draws FIRST and Clarity.cs:34 applies the power SECOND, so the immediate card is not itself boosted by the power that was just applied -- sts2_rl/potions.py:775-778 keeps that order (DrawCmd.draw then PowerCmd.apply). Reversing it would draw one extra card on turn 1. APPLIER: C#'s fourth argument to PowerCmd.Apply is `base.Owner.Creature` (src/Core/Commands/PowerCmd.cs:101 declares that parameter as `Creature? applier`), matching the sim's `applier=ctx.player`. TargetType.AnyPlayer (Clarity.cs:21) and AssertValidForTargetedPotion (Clarity.cs:31) are the multiplayer target-validity path, waived as multiplayer; NCombatRoom.PlaySplashVfx (Clarity.cs:32) is presentation. REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): @register_potion puts it in ALL_POTIONS and it is in the generation pool at sts2_rl/potion_pools.py:44 (uncommon); the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:625-631). WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/clarity` has no record yet because the whole potion kind is unaudited. Nothing in this record depends on it."
     }
   ],
   "verdict": "gap",

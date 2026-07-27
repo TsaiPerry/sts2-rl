@@ -48,6 +48,11 @@
       "path": "sts2_rl/potions.py",
       "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -68,7 +73,8 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:160-171 RegenPower._apply_regen via on_enemy_turn_end / on_player_turn_end",
       "verdict": "gap",
-      "issue": "Both legs are in the wrong slot and the IsDead guard is missing. RegenPower.cs:20-28 is `if (participants.Contains(Owner) && !Owner.IsDead) { Heal(Amount); Decrement; }` on AfterSideTurnEnd. (a) The ENEMY leg uses the per-creature on_enemy_turn_end (powers.py:165-167) instead of the side-scoped on_enemy_side_end -- see the dedicated guard entry. (b) The PLAYER leg uses on_player_turn_end (powers.py:169-171), which is Hook.BeforeTurnEnd (combat.py:654), one slot before the sim's real AfterTurnEnd equivalent after_player_turn_end (combat.py:665); the game heals AFTER the turn-end card effects and the hand flush, the sim before them. (c) `!Owner.IsDead` is absent from _apply_regen (powers.py:160-163): CreatureCmd.heal does return 0 for a dead target (cmds.py:160-161) so no HP moves, but `self._tick()` still runs and still fires on_power_amount_changed, so a dead-but-retained owner burns a Regen stack the game would keep. ALL DORMANT, for one shared reason: the only ported Regen source in the sim is a potion (potions.py:613), and potions are out of scope by the shared contract's global-scope rule, so no in-scope content puts Regen on anybody. Named trigger: any non-potion Regen source -- at which point (b) becomes live immediately (the heal races the flush) and (a) becomes live with two or more enemies. Third-file citations, not hashed here."
+      "live": true,
+      "issue": "Both legs are in the wrong slot and the IsDead guard is missing. RegenPower.cs:20-28 is `if (participants.Contains(Owner) && !Owner.IsDead) { Heal(Amount); Decrement; }` on AfterSideTurnEnd. (a) The ENEMY leg uses the per-creature on_enemy_turn_end (powers.py:165-167) instead of the side-scoped on_enemy_side_end -- see the dedicated guard entry. (b) The PLAYER leg uses on_player_turn_end (powers.py:169-171), which is Hook.BeforeTurnEnd (combat.py:654), one slot before the sim's real AfterTurnEnd equivalent after_player_turn_end (combat.py:665); the game heals AFTER the turn-end card effects and the hand flush, the sim before them. (c) `!Owner.IsDead` is absent from _apply_regen (powers.py:160-163): CreatureCmd.heal does return 0 for a dead target (cmds.py:160-161) so no HP moves, but `self._tick()` still runs and still fires on_power_amount_changed, so a dead-but-retained owner burns a Regen stack the game would keep. LIVENESS RE-DERIVED 2026-07-26 (potion-scope re-verdict pass): **DORMANT -> LIVE.** The old text read 'ALL DORMANT, for one shared reason: the only ported Regen source in the sim is a potion (potions.py:613), and potions are out of scope by the shared contract's global-scope rule, so no in-scope content puts Regen on anybody. Named trigger: any non-potion Regen source -- at which point (b) becomes live immediately (the heal races the flush) and (a) becomes live with two or more enemies.' The clause has been DELETED on Perry's instruction (\"don't ignore potions anymore\"), so the named trigger has already fired: the trigger is the potion. Regen Potion is PORTED (sts2_rl/potions.py:605-615, id 'regen_potion', REGEN = 5) and is in the generation pool at sts2_rl/potion_pools.py:58 as uncommon -- note it is in NOT_GENERATED_IN_COMBAT (potion_pools.py:76), which bars in-COMBAT generation only, not the reward pool, so it is ordinary reachable Ironclad content. Therefore (b) is LIVE now -- the heal races the hand flush on every use -- and (a) is LIVE in any fight with two or more enemies. (c)'s dead-owner stack burn stays the narrower case. Third-file citations, not hashed here."
     }
   },
   "guards": [

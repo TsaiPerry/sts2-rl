@@ -38,6 +38,16 @@
       "path": "sts2_rl/potions.py",
       "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Potions/GigantificationPotion.cs",
+      "sha256": "8bdc58a35c79edf462f4723a953a7c31a7d57c2d250c3a899255ffba038ebf00",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -83,9 +93,9 @@
       "rationale": "C# relies on the command comparison alone; powers.py:3986 relies on the card comparison alone. Equivalent -- neither can match another creature's attack, because the latch was only ever set for the owner's own card."
     },
     {
-      "what": "The applier is a potion, and the potion KIND has no audit tier",
-      "verdict": "waiver",
-      "rationale": "NARROWED 2026-07-26 (review fix pass). The old rationale said \"what is waived is only the REACHABILITY of its one applier\". That was wrong twice over: it is logically incompatible with this record tagging any hook LIVE (LIVE is itself a reachability claim), and it is stale -- Gigantification Potion is ported and POOL-REGISTERED, so the power is reachable in the sim today whether or not the potion tier is ever written. What is genuinely out of scope, and all this waiver now claims, is the potion UNIT's own record: potions are a deferred kind by Perry's deferral (the shared audit contract's Global scope section) and there is no audit/records/potion/ tier for Gigantification Potion to live in, so nothing here judges the potion's own fidelity (cost, targeting, belt behaviour). REACHABILITY IS ESTABLISHED, not waived: the sim ports the potion at potions.py:802-819, @register_potion puts it in ALL_POTIONS, and it is in the generation pool at potion_pools.py:53 (rare). The POWER is audited in full above and every liveness label on this record stands on its own evidence. Same correction at all seven power records carrying this guard (power/buffer, power/clarity, power/flex_potion, power/gigantification, power/radiance, power/shackling_potion, power/speed_potion) so the mechanism keeps one verdict at every site per binding rule 3."
+      "what": "N: the power's sole applier is Gigantification Potion -- a PORTED potion, not a scope boundary (GigantificationPotion.cs:25-30 vs sts2_rl/potions.py:801-822)",
+      "verdict": "faithful",
+      "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL. src/Core/Models/Potions/GigantificationPotion.cs:23 declares CanonicalVars = new PowerVar<GigantificationPower>(1m) with no AscensionHelper.GetValueIfAscension in the file, so 1 is the pinned non-ascension amount, and GigantificationPotion.cs:29 is `PowerCmd.Apply<GigantificationPower>(choiceContext, target, DynamicVars[\"GigantificationPower\"].BaseValue, base.Owner.Creature, null)`. sts2_rl/potions.py:811 pins STACKS = 1 and sts2_rl/potions.py:816-822 applies GigantificationPower with that amount and `applier=ctx.player`, which is C#'s `base.Owner.Creature` (parameter `Creature? applier`, src/Core/Commands/PowerCmd.cs:101); cardSource is null on both sides. The stack count matters here because the power is a next-attack-triples counter, so a 2 would triple two attacks. TargetType.AnyPlayer (GigantificationPotion.cs:21) and AssertValidForTargetedPotion (GigantificationPotion.cs:27) are the multiplayer target-validity path, waived as multiplayer; NCombatRoom.PlaySplashVfx (GigantificationPotion.cs:28) is presentation. REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): @register_potion puts it in ALL_POTIONS and it is in the generation pool at sts2_rl/potion_pools.py:53 (rare); the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:625-631). WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/gigantification_potion` has no record yet because the whole potion kind is unaudited. Nothing in this record depends on it."
     }
   ],
   "verdict": "gap",
