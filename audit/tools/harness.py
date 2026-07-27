@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib
 import inspect
@@ -55,23 +56,124 @@ GAME_MODEL_DIRS = {
 
 # `public override <type> <Name>(  |  => ...  |  { ...` — one-regex scan of
 # the decompiled output, which is uniform. Captures the member name whether
-# it is a method or an expression-bodied property.
+# it is a method or an expression-bodied property. The type character class
+# includes `()` so a parenthesised tuple return — `Task<(PileType, int)>`,
+# `(decimal, bool)` — is matched; without it those hooks were silently
+# skipped, and the enumeration cannot be trusted if it can miss a member.
+# The quantifier is non-greedy, so `void Foo(` still parses as type `void`.
 _OVERRIDE_RE = re.compile(
     r"^\s*public\s+override\s+(?:sealed\s+)?(?:async\s+)?"
-    r"[\w<>,.?\[\] ]+?\s(\w+)\s*(?:\(|=>|\{|$)",
+    r"[\w<>,.?\[\]() ]+?\s(\w+)\s*(?:\(|=>|\{|$)",
     re.M,
 )
 
+# `public sealed class Foo : Bar, IBaz` -> ("Foo", "Bar, IBaz").
+_CLASS_DECL_RE = re.compile(
+    r"^\s*(?:\[[^\]]*\]\s*)*"
+    r"(?:public|internal|private|protected)?\s*"
+    r"(?:abstract\s+|sealed\s+|static\s+|partial\s+|unsafe\s+)*"
+    r"(?:class|record)\s+(\w+)\s*(?:<[^>]*>)?\s*:\s*([^\{\r\n]+)",
+    re.M,
+)
 
-def list_overrides(cs_text: str) -> list[str]:
-    """Names of every `public override` member, in declaration order."""
-    seen: set[str] = set()
-    out: list[str] = []
-    for name in _OVERRIDE_RE.findall(cs_text):
-        if name not in seen:
-            seen.add(name)
-            out.append(name)
-    return out
+# Base classes whose members are the *framework*, not the unit. Every power
+# derives from PowerModel, so enumerating PowerModel's own overrides into all
+# 134 power records would add the same noise 134 times — and that layer is
+# already audited, once, by the seam tier (hook_dispatch hashes
+# AbstractModel.cs and the model files). Base-class following stops here.
+MODEL_ROOT_CLASSES = frozenset({
+    "AbstractModel", "AfflictionModel", "BadgeModel", "CardModel",
+    "CreatureModel", "EnchantmentModel", "EventModel", "ModifierModel",
+    "MonsterModel", "OrbModel", "PotionModel", "PowerModel", "RelicModel",
+})
+
+
+def _declared_overrides(cs_text: str) -> list[str]:
+    """Names of every `public override` member declared in this text."""
+    return list(dict.fromkeys(_OVERRIDE_RE.findall(cs_text)))
+
+
+def _base_class_name(cs_text: str) -> str | None:
+    """The immediate base CLASS of the first type declared in `cs_text`.
+
+    C# puts the base class first in the base list, so only the first entry can
+    be one. Returns None when the type has no base class (interfaces only) or
+    when the base is a framework root."""
+    m = _CLASS_DECL_RE.search(cs_text)
+    if not m:
+        return None
+    first = m.group(2).split(",")[0]
+    name = re.sub(r"<.*", "", first).strip()
+    if not name or name in MODEL_ROOT_CLASSES:
+        return None
+    if len(name) > 1 and name[0] == "I" and name[1].isupper():
+        return None  # interface, so the type has no base class at all
+    return name
+
+
+@functools.lru_cache(maxsize=8)
+def _cs_index(game_root: str) -> dict[str, tuple[str, ...]]:
+    """stem -> every .cs file with that stem, under the game root."""
+    idx: dict[str, list[str]] = {}
+    for p in Path(game_root).rglob("*.cs"):
+        idx.setdefault(p.stem, []).append(str(p))
+    return {k: tuple(v) for k, v in idx.items()}
+
+
+def find_class_file(name: str, game_root: Path | None = None) -> Path | None:
+    """Locate the .cs file declaring `name`. The base of a one-line subclass
+    routinely lives in a different file (and a different directory), so this
+    searches the whole game tree rather than the unit's own model dir."""
+    root = game_root or DEFAULT_GAME_ROOT
+    decl = re.compile(rf"\b(?:class|record)\s+{re.escape(name)}\b")
+    for cand in _cs_index(str(root)).get(name, ()):
+        p = Path(cand)
+        if decl.search(p.read_text(encoding="utf-8-sig", errors="replace")):
+            return p
+    return None
+
+
+def split_overrides(cs_text: str, game_root: Path | None = None,
+                    source_path: Path | None = None) -> tuple[list[str], list[str]]:
+    """(declared here, inherited from the immediate base), in declaration order.
+
+    A `.cs` file that declares only `OriginModel` while its base declares the
+    real behaviour used to enumerate as one hook, so `validate` confirmed a
+    verdict for that one and never noticed the other seven. One level of base
+    is enough for the shapes this source uses; `game_root` is required to
+    resolve it because the base normally lives in another file."""
+    declared = _declared_overrides(cs_text)
+    if game_root is None:
+        return declared, []
+    base = _base_class_name(cs_text)
+    if not base:
+        return declared, []
+    bp = find_class_file(base, game_root)
+    if bp is None or (source_path and bp.resolve() == Path(source_path).resolve()):
+        return declared, []
+    inherited = [n for n in _declared_overrides(
+        bp.read_text(encoding="utf-8-sig", errors="replace"))
+        if n not in declared]
+    return declared, inherited
+
+
+def list_overrides(cs_text: str, game_root: Path | None = None,
+                   source_path: Path | None = None) -> list[str]:
+    """Every `public override` member the unit really has, in declaration
+    order: the ones it declares, then the ones it inherits from its immediate
+    base. Pass `game_root` to get the inherited half."""
+    declared, inherited = split_overrides(cs_text, game_root, source_path)
+    return declared + inherited
+
+
+def hook_key(key: str) -> str:
+    """A record's hook key, reduced to the member name it starts with.
+
+    Records annotate keys with provenance — `"Type (inherited,
+    TemporaryStrengthPower.cs:32-42)"` — so enumeration is matched against the
+    leading identifier rather than the whole string."""
+    m = re.match(r"\s*([A-Za-z_]\w*)", key or "")
+    return m.group(1) if m else (key or "").strip()
 
 
 def file_sha256(path: Path) -> str:
@@ -637,8 +739,9 @@ def skeleton(unit: str, game_root: Path | None = None,
                            "sha256": file_sha256(_REPO / row["sim_path"])},
             "hooks": {
                 name: {"maps_to": "", "verdict": ""}
-                for name in list_overrides(gp.read_text(encoding="utf-8-sig",
-                                                        errors="replace"))
+                for name in list_overrides(
+                    gp.read_text(encoding="utf-8-sig", errors="replace"),
+                    game_root=root, source_path=gp)
             },
             "guards": [],
             "verdict": "",
@@ -696,7 +799,27 @@ def _check_entry(where: str, entry: dict, errs: list[str]) -> None:
         errs.append(f"{where}: verdict 'gap' requires a non-empty issue")
 
 
-def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
+def enumeration_gaps(record: dict, game_root: Path | None = None) -> list[str]:
+    """`public override` members the unit INHERITS that the record gives no
+    verdict for. Reported separately from validate_record's errors because the
+    422 records predating base-class following were written against an
+    enumeration that could not see these; promoting them to errors in one step
+    would red-line the whole ledger. `validate --strict-inherited` does that
+    promotion once the records have caught up."""
+    root = game_root or DEFAULT_GAME_ROOT
+    if record.get("sim_only") or (record.get("unit", "").split("/", 1)[0] == "seam"):
+        return []
+    gp = root / (record.get("game_source") or {}).get("path", "")
+    if not gp.is_file():
+        return []
+    _, inherited = split_overrides(
+        gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp)
+    have = {hook_key(k) for k in (record.get("hooks") or {})}
+    return [n for n in inherited if n not in have]
+
+
+def validate_record(record: dict, game_root: Path | None = None,
+                    strict_inherited: bool = False) -> list[str]:
     """Completeness/vocabulary validation. Returns error strings; [] = valid.
     Staleness (hash drift) is audit_status.py's job, not validation's."""
     root = game_root or DEFAULT_GAME_ROOT
@@ -735,9 +858,12 @@ def validate_record(record: dict, game_root: Path | None = None) -> list[str]:
             hooks = {}
         gp = root / (record.get("game_source") or {}).get("path", "")
         if gp.is_file():
-            required = set(list_overrides(
-                gp.read_text(encoding="utf-8-sig", errors="replace")))
-            missing = required - set(hooks)
+            have = {hook_key(k) for k in hooks}
+            declared, inherited = split_overrides(
+                gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp)
+            missing = [n for n in declared if n not in have]
+            if strict_inherited:
+                missing += [n for n in inherited if n not in have]
             if missing:
                 errs.append(
                     f"hooks missing verdicts for overrides: {sorted(missing)}")
@@ -853,6 +979,9 @@ def main(argv: list[str] | None = None) -> int:
     ap_skel.add_argument("unit", help="e.g. relic/unsettling_lamp or seam/power_cmd")
     ap_val = sub.add_parser("validate", help="validate audit records")
     ap_val.add_argument("paths", nargs="*", help="record files (default: all)")
+    ap_val.add_argument(
+        "--strict-inherited", action="store_true",
+        help="treat un-audited INHERITED overrides as errors, not warnings")
     ap_re = sub.add_parser(
         "rehash",
         help="re-pin a record's source hashes — NOT a re-audit, see the banner")
@@ -881,13 +1010,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "validate":
         paths = ([Path(p) for p in args.paths]
                  or sorted(DEFAULT_AUDITS_DIR.rglob("*.json")))
-        bad = 0
+        bad = warned = 0
         for p in paths:
-            errs = validate_record(json.loads(p.read_text(encoding="utf-8")))
+            record = json.loads(p.read_text(encoding="utf-8"))
+            errs = validate_record(
+                record, strict_inherited=args.strict_inherited)
             for e in errs:
                 print(f"{p}: {e}")
             bad += bool(errs)
-        print(f"{len(paths)} record(s), {bad} invalid")
+            if not args.strict_inherited:
+                gaps = enumeration_gaps(record)
+                if gaps:
+                    print(f"{p}: WARN inherited overrides with no verdict: "
+                          f"{sorted(gaps)}")
+                    warned += 1
+        print(f"{len(paths)} record(s), {bad} invalid"
+              + (f", {warned} with un-audited inherited overrides "
+                 f"(re-run with --strict-inherited)" if warned else ""))
         return 1 if bad else 0
     if args.cmd == "rehash":
         print(REHASH_WARNING, file=sys.stderr)

@@ -153,6 +153,23 @@ The same mechanism gets **one** verdict at every site, including across records.
 In the seam tier this worked as a gap *detector*: two records disagreed about
 one mechanism, and settling the conflict showed neither was right.
 
+### What counts as "a `public override` the C# file declares"
+
+The enumeration follows the unit's **immediate base class**, which normally
+lives in another file: `FlexPotionPower.cs` declares one member and inherits
+seven from `TemporaryStrengthPower`, so the record owes eight verdicts, not one.
+Following stops at the framework roots (`PowerModel`, `CardModel`, …) — that
+layer is audited once by the seam tier, not 422 times.
+
+A hook key is matched on the identifier it starts with, so a record may annotate
+one with provenance: `"Type (inherited, TemporaryStrengthPower.cs:32-42)"`.
+
+Un-audited **inherited** overrides are a `WARN` from `validate`, not an error,
+because the records written before base-class following existed could not see
+them; `validate --strict-inherited` promotes them to errors and is what the
+ledger should be held to once those records catch up. Un-audited **declared**
+overrides are an error, as they always were.
+
 ---
 
 ## The tools

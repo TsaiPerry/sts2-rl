@@ -49,6 +49,162 @@ class TestListOverrides:
         assert "Helper" not in harness.list_overrides(FIXTURE_CS)
 
 
+FIXTURE_BASE_CS = """\
+namespace MegaCrit.Sts2.Core.Models.Powers;
+
+public abstract class FixtureBasePower : PowerModel, ITemporaryPower
+{
+    public override PowerType Type => PowerType.Buff;
+
+    public override LocString Title => new LocString("x");
+
+    public abstract AbstractModel OriginModel { get; }
+
+    protected virtual bool IsPositive => true;
+
+    public override async Task BeforeApplied(Creature target, decimal amount)
+    {
+        await Task.CompletedTask;
+    }
+}
+"""
+
+FIXTURE_SUBCLASS_CS = """\
+namespace MegaCrit.Sts2.Core.Models.Powers;
+
+public class FixtureSubPower : FixtureBasePower
+{
+    public override AbstractModel OriginModel => ModelDb.Potion<FlexPotion>();
+}
+"""
+
+FIXTURE_TUPLE_CS = """\
+public sealed class FixtureTuple : PowerModel
+{
+    public override (PileType, int) ModifyCardPlayResultPileTypeAndPosition(CardModel card, PileType pile, int position)
+    {
+        return (pile, position);
+    }
+
+    public override Task<(bool, decimal)> ResolveThing(Creature target)
+    {
+        return Task.FromResult((true, 0m));
+    }
+
+    public override void PlainVoid(Creature target) { }
+}
+"""
+
+
+class TestOverrideEnumeration:
+    """Two confirmed blind spots in the enumeration: a return type the regex
+    could not parse, and behaviour declared by the base class."""
+
+    def test_tuple_return_types_are_enumerated(self):
+        assert harness.list_overrides(FIXTURE_TUPLE_CS) == [
+            "ModifyCardPlayResultPileTypeAndPosition",
+            "ResolveThing",
+            "PlainVoid",
+        ]
+
+    def _game_root(self, tmp_path):
+        d = tmp_path / "src/Core/Models/Powers"
+        d.mkdir(parents=True)
+        (d / "FixtureBasePower.cs").write_text(FIXTURE_BASE_CS, encoding="utf-8")
+        (d / "FixtureSubPower.cs").write_text(FIXTURE_SUBCLASS_CS, encoding="utf-8")
+        harness._cs_index.cache_clear()
+        return tmp_path, d / "FixtureSubPower.cs"
+
+    def test_base_class_overrides_are_enumerated(self, tmp_path):
+        root, sub = self._game_root(tmp_path)
+        text = sub.read_text(encoding="utf-8")
+        assert harness.list_overrides(text) == ["OriginModel"]  # text-only
+        assert harness.list_overrides(text, game_root=root, source_path=sub) == [
+            "OriginModel", "Type", "Title", "BeforeApplied",
+        ]
+
+    def test_split_separates_declared_from_inherited(self, tmp_path):
+        root, sub = self._game_root(tmp_path)
+        declared, inherited = harness.split_overrides(
+            sub.read_text(encoding="utf-8"), root, sub)
+        assert declared == ["OriginModel"]
+        assert inherited == ["Type", "Title", "BeforeApplied"]
+
+    def test_base_may_live_in_another_file(self, tmp_path):
+        root, sub = self._game_root(tmp_path)
+        found = harness.find_class_file("FixtureBasePower", root)
+        assert found is not None and found.name == "FixtureBasePower.cs"
+        assert found != sub
+
+    def test_framework_roots_are_not_followed(self, tmp_path):
+        """PowerModel & co are the seam tier's scope; following them would add
+        the same framework members to all 422 content records."""
+        root, _ = self._game_root(tmp_path)
+        base = root / "src/Core/Models/Powers/FixtureBasePower.cs"
+        _, inherited = harness.split_overrides(
+            base.read_text(encoding="utf-8"), root, base)
+        assert inherited == []
+        assert harness._base_class_name(FIXTURE_BASE_CS) is None
+
+    def test_interface_only_base_list_is_not_followed(self):
+        assert harness._base_class_name(
+            "public class Foo : IBar\n{\n}\n") is None
+
+    def test_validate_warns_on_un_audited_inherited_override(self, tmp_path):
+        root, sub = self._game_root(tmp_path)
+        rec = {
+            "unit": "power/fixture_sub",
+            "game_source": {
+                "path": "src/Core/Models/Powers/FixtureSubPower.cs",
+                "sha256": harness.file_sha256(sub)},
+            "sim_source": {"path": "sts2_rl/powers.py", "sha256": "0" * 64},
+            "hooks": {"OriginModel": {"maps_to": "origin", "verdict": "faithful"}},
+            "guards": [],
+            "verdict": "faithful",
+            "audited": "2026-07-26",
+        }
+        assert harness.validate_record(rec, game_root=root) == []
+        assert harness.enumeration_gaps(rec, game_root=root) == [
+            "Type", "Title", "BeforeApplied"]
+        errs = harness.validate_record(rec, game_root=root,
+                                       strict_inherited=True)
+        assert any("BeforeApplied" in e for e in errs)
+
+    def test_declared_override_is_still_a_hard_error(self, tmp_path):
+        root, sub = self._game_root(tmp_path)
+        rec = {
+            "unit": "power/fixture_sub",
+            "game_source": {
+                "path": "src/Core/Models/Powers/FixtureSubPower.cs",
+                "sha256": harness.file_sha256(sub)},
+            "sim_source": {"path": "sts2_rl/powers.py", "sha256": "0" * 64},
+            "hooks": {},
+            "guards": [],
+            "verdict": "faithful",
+            "audited": "2026-07-26",
+        }
+        errs = harness.validate_record(rec, game_root=root)
+        assert any("OriginModel" in e for e in errs)
+
+    def test_skeleton_enumerates_inherited_hooks(self, tmp_path, monkeypatch):
+        root, _ = self._game_root(tmp_path)
+        monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: [{
+            "unit": "power/fixture_sub",
+            "sim_path": "sts2_rl/powers.py",
+            "game_path": "src/Core/Models/Powers/FixtureSubPower.cs",
+            "game_exists": True,
+        }])
+        out = harness.skeleton("power/fixture_sub", game_root=root,
+                               audits_dir=tmp_path / "records")
+        rec = json.loads(out.read_text(encoding="utf-8"))
+        assert list(rec["hooks"]) == [
+            "OriginModel", "Type", "Title", "BeforeApplied"]
+
+    def test_hook_key_reads_the_leading_identifier(self):
+        assert harness.hook_key("Type (inherited, Base.cs:32-42)") == "Type"
+        assert harness.hook_key("BeforeApplied") == "BeforeApplied"
+
+
 class TestHashing:
     def test_sha256_normalizes_line_endings(self, tmp_path):
         a = tmp_path / "a.cs"
