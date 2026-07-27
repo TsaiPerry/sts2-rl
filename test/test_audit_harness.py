@@ -369,6 +369,47 @@ class TestValidateRecord:
         assert any("steps" in e for e in errs)
 
 
+class TestGapLiveness:
+    """`live` turns a LIVE/dormant prose token into data. Optional: gap
+    entries written before it existed stay valid."""
+
+    def _gap_rec(self, tmp_path, **extra):
+        rec = _valid_record(harness, tmp_path)
+        rec["guards"] = [dict({"what": "g", "verdict": "gap",
+                               "issue": "not modeled"}, **extra)]
+        rec["verdict"] = "gap"
+        return rec
+
+    def test_gap_without_the_key_still_validates(self, tmp_path):
+        rec = self._gap_rec(tmp_path)
+        assert harness.validate_record(rec, game_root=tmp_path) == []
+
+    def test_live_true_and_false_accepted(self, tmp_path):
+        for value in (True, False):
+            rec = self._gap_rec(tmp_path, live=value)
+            assert harness.validate_record(rec, game_root=tmp_path) == []
+
+    def test_non_boolean_live_rejected(self, tmp_path):
+        rec = self._gap_rec(tmp_path, live="LIVE")
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("'live' must be true or false" in e for e in errs)
+
+    def test_live_on_a_non_gap_entry_rejected(self, tmp_path):
+        """Silently ignoring it would be worse: the record would look
+        annotated and never be counted."""
+        rec = _valid_record(harness, tmp_path)
+        rec["hooks"]["Rarity"]["live"] = True
+        errs = harness.validate_record(rec, game_root=tmp_path)
+        assert any("only means something on a 'gap'" in e for e in errs)
+
+    def test_record_entries_covers_all_three_sections(self):
+        rec = {"hooks": {"A": {"verdict": "gap"}},
+               "steps": [{"verdict": "faithful"}],
+               "guards": [{"verdict": "waiver"}]}
+        assert len(harness.record_entries(rec)) == 3
+        assert harness.record_entries({}) == []
+
+
 class TestExtraSources:
     """The optional `extra_sources` list: the files a content record's
     verdicts cite beyond the unit's own two. Optional by design — the 422

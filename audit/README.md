@@ -141,6 +141,13 @@ Two halves, and you generally want both:
 and the record must name the concrete unported thing that would make it live.
 Dormancy describes today's content, not the divergence's shape.
 
+State that as **data**, not only as prose: a `gap` entry may carry
+`"live": true` or `"live": false` beside its `issue`. The key is optional and
+only legal on a gap, and `audit_status.py`'s `live` column counts the records
+carrying at least one `live: true` entry. Absence means *not stated* — 64 of
+the 258 power gap entries carried neither a `LIVE` nor a `dormant` token
+anywhere, and nothing could tell them apart from the dormant ones.
+
 ### Rollup rule
 
 Precedence low→high is exactly the order above. A record's `verdict` must equal

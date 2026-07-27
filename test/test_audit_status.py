@@ -162,6 +162,32 @@ def test_gap_counted(tmp_path, monkeypatch):
     assert out["relic"]["gaps"] == 1
 
 
+def test_live_column_counts_records_with_a_live_gap(tmp_path, monkeypatch):
+    audits = _setup(tmp_path)
+    monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())
+    rec = _make_record(tmp_path)
+    rec["guards"] = [{"what": "g", "verdict": "gap", "issue": "x"}]
+    rec["verdict"] = "gap"
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["gaps"] == 1
+    assert out["relic"]["live"] == 0     # liveness not stated
+
+    rec["guards"][0]["live"] = False
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["live"] == 0     # stated dormant
+
+    rec["guards"][0]["live"] = True
+    _write(audits, rec)
+    out = audit_status.collect(kinds=("relic",), game_root=tmp_path,
+                               audits_dir=audits)
+    assert out["relic"]["gaps"] == 1
+    assert out["relic"]["live"] == 1
+
+
 def test_malformed_json_is_invalid(tmp_path, monkeypatch):
     audits = _setup(tmp_path)
     monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: _fixture_rows())

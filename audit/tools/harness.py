@@ -788,6 +788,14 @@ def _check_extra_sources(record: dict, errs: list[str]) -> None:
                 f"{SOURCE_SIDES}")
 
 
+def record_entries(record: dict) -> list[dict]:
+    """Every verdict-bearing entry in a record: hooks, steps and guards."""
+    out = list((record.get("hooks") or {}).values())
+    out += list(record.get("steps") or [])
+    out += list(record.get("guards") or [])
+    return [e for e in out if isinstance(e, dict)]
+
+
 def _check_entry(where: str, entry: dict, errs: list[str]) -> None:
     v = entry.get("verdict", "")
     if v not in VERDICTS:
@@ -797,6 +805,15 @@ def _check_entry(where: str, entry: dict, errs: list[str]) -> None:
         errs.append(f"{where}: verdict {v!r} requires a non-empty rationale")
     if v == "gap" and not entry.get("issue"):
         errs.append(f"{where}: verdict 'gap' requires a non-empty issue")
+    # Optional `live` — liveness as data instead of a LIVE/dormant token buried
+    # in prose, which a third of the power tier's gap entries simply omitted.
+    if "live" in entry:
+        if not isinstance(entry["live"], bool):
+            errs.append(f"{where}: 'live' must be true or false, "
+                        f"got {entry['live']!r}")
+        elif v != "gap":
+            errs.append(f"{where}: 'live' only means something on a 'gap' "
+                        f"entry, not {v!r}")
 
 
 def enumeration_gaps(record: dict, game_root: Path | None = None) -> list[str]:
