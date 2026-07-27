@@ -211,6 +211,29 @@ Two things make it worth a checklist line rather than a footnote:
 
 ## Refutation pass on `content-relic-sweeps.md`'s confirmed-carriers table
 
-Spare capacity went to trying to **refute** the boldest LIVE claims in sweep A's
-CONFIRMED table rather than to more depth on two already-deep records. Results
-are in the section below.
+A two-unit batch has spare capacity, and the highest-value use of it is **not**
+more depth on two already-deep records — it is attacking findings nothing
+downstream re-checks. So the four boldest LIVE rows of sweep A's CONFIRMED table
+were re-derived from the C# and re-executed with **independently written** probes
+(`b18-refute-*`), each trying to make the claim fail. None of these units belongs
+to batch 18 and **no record of theirs was edited.**
+
+**Result: 4 re-tested, 0 refuted, 0 overstated.** Each unit's own record already
+names the observable the probe reproduces.
+
+| Claim (source) | Re-tested outcome |
+|---|---|
+| `red_skull` — "combat 2 at full HP opens **Strength −3**" (batch 13) | **Reproduces, both branches.** Carried instance, hp 30/80 → `[('strength', 3)]`; same instance at 80/80 in combat 2 → `[('strength', -3)]`, `_applied` False; a fresh instance there → `[]`. And the *other* branch, which the published sweep row is actually showing: still at 30/80 in combat 2, carried → `[]` vs fresh → `[('strength', 3)]`, i.e. the relic silently grants nothing. `red_skull.json` G1 already states both as (a) and (b) — accurate as written. |
+| `ruined_helmet` — "Strength 4 then 2 across two combats" (batch 13) | **Reproduces exactly.** Combat 1: first +2 → 4, second +2 → 6 (matching C#). Combat 2 same instance: first +2 → **2** where C# gives 4; fresh instance there → 4. |
+| `permafrost` — "block 0 carried vs 7 fresh" (batch 12) | **Reproduces, and persists.** Carried instance: combat 1 → 7 Block, combat 2 → 0, combat 3 → 0; fresh instance in combat 2 → 7. Consistent with the record's "first combat of a run only". |
+| `diamond_diadem` — "stale 3 read at combat-2 turn 1" (batch 4, turn-END-only reset) | **Reproduces, and so does the second fact it depends on.** (a) 3 cards played, kill the last enemy mid-turn, then `end_turn()`: `phase=COMBAT_OVER`, `is_over=True`, counter **still 3** — the turn-end reset really is skipped by the winning turn. (b) combat 2 turn 1 opens at counter 3, and a spy relic sitting after the diadem in the turn-end pass sees `(none)` where the fresh instance's pass sees `diamond_diadem` — the grant is denied. |
+
+**Method note worth keeping** (it cost the pass one wrong reading before it was
+caught): `DiamondDiademPower` is removed once the *enemy* side's turn ends, and
+`CombatState.end_turn` runs the whole enemy turn — so sampling
+`player.powers` after `end_turn()` returns shows the power gone **even when it was
+granted**, and the first version of the probe therefore reported "fresh instance
+also got nothing", which would have looked like a refutation. The fix is a spy
+`Relic` placed *after* the unit in the relic list, observing the same turn-end
+pass one dispatch later. Any future probe for an until-end-of-enemy-turn power
+needs the same trick; sampling after the fact silently reports absence.

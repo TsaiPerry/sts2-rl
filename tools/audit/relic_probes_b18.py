@@ -46,6 +46,23 @@ Probes:
   b18-cookie-undo   no `undo_after_obtained`: the 4 upgrades survive a
                     conformance-runner relic swap (operational, per PROMPT.md
                     v6 item 3 this is NOT a fidelity gap).
+
+REFUTATION PASS (spare capacity; nothing to do with the two batch-18 units).
+`.superpowers/sdd/content-relic-sweeps.md`'s CONFIRMED table asserts LIVE
+carried-state gaps for ten relics. A sweep may escalate a candidate but never
+clear one, and the same applies to a batch's own conclusion -- so the four
+boldest claims were re-derived from the C# and re-executed here with
+independently built probes, trying to REFUTE each. **None of the four was
+refuted, and none was overstated** -- each unit's own record already names the
+observable these probes reproduce, including both of red_skull's two branches.
+Records for those units belong to batches 4/12/13 and were NOT edited.
+
+  b18-refute-redskull   red_skull (batch 13) -- and the second observable the
+                        published row does not show
+  b18-refute-helmet     ruined_helmet (batch 13)
+  b18-refute-permafrost permafrost (batch 12)
+  b18-refute-diadem     diamond_diadem (batch 4) -- the turn-END-only reset,
+                        including the winning-turn skip it depends on
 """
 from __future__ import annotations
 
@@ -421,6 +438,211 @@ def probe_b18_cookie_undo() -> None:
           f"{type(cookie).undo_after_obtained is make_relic('yummy_cookie').__class__.__mro__[-2].undo_after_obtained}")
 
 
+# ══ REFUTATION PASS ═══════════════════════════════════════════════════════
+# Four independent attempts to REFUTE the boldest LIVE rows of sweep A's
+# CONFIRMED table. Each probe re-derives the claim from the C# first, then
+# executes it. These units belong to other batches; no record of theirs is
+# edited here.
+
+def _powers(cs) -> list[tuple[str, int]]:
+    return sorted((pid, p.amount) for pid, p in cs.player.powers.items())
+
+
+def probe_b18_refute_redskull() -> None:
+    """red_skull: 'combat 2 at full HP opens Strength -3' (batch 13).
+
+    C#: RedSkull.AfterCombatEnd sets `StrengthApplied = false`
+    (RedSkull.cs:52-57) and the entry point is AfterRoomEntered
+    (RedSkull.cs:44-50). relics/red_skull.py writes `_applied` only in
+    `_update` (red_skull.py:30-35), so nothing clears it between combats and
+    the instance lives on RunState.relics.
+
+    Attempt to refute: (a) does the negative apply actually land, or is
+    Strength clamped at 0 so the observable disappears?  (b) is there a reader
+    that shadows the stale flag first, the way pocketwatch's turn-1 guard does?
+    """
+    from sts2_rl import CombatState
+    from sts2_rl.relics import make_relic
+
+    # (a) full-HP combat 2 with a carried instance
+    carried = make_relic("red_skull")
+    cs1 = CombatState(rng=random.Random(0), relics=[carried],
+                      max_hp=80, current_hp=30)          # below 50%
+    print(f"    combat 1 (hp 30/80): powers={_powers(cs1)} "
+          f"_applied={carried._applied}")
+    cs2 = CombatState(rng=random.Random(1), relics=[carried],
+                      max_hp=80, current_hp=80)          # healed to full
+    print(f"    combat 2 (hp 80/80, SAME instance): powers={_powers(cs2)} "
+          f"_applied={carried._applied}")
+    fresh = make_relic("red_skull")
+    cs3 = CombatState(rng=random.Random(1), relics=[fresh],
+                      max_hp=80, current_hp=80)
+    print(f"    combat 2 (hp 80/80, fresh instance): powers={_powers(cs3)}")
+
+    # (b) the OTHER stale-flag branch nobody published: still below the
+    #     threshold in combat 2, so `below and _applied` matches no branch and
+    #     the relic grants nothing at all.
+    carried2 = make_relic("red_skull")
+    csa = CombatState(rng=random.Random(0), relics=[carried2],
+                      max_hp=80, current_hp=30)
+    csb = CombatState(rng=random.Random(1), relics=[carried2],
+                      max_hp=80, current_hp=30)
+    fresh2 = make_relic("red_skull")
+    csc = CombatState(rng=random.Random(1), relics=[fresh2],
+                      max_hp=80, current_hp=30)
+    print(f"    still-low combat 2: carried powers={_powers(csb)} vs fresh "
+          f"powers={_powers(csc)}  (combat 1 was {_powers(csa)})")
+    print("    C# gives +3 Strength in EVERY combat entered below 50% HP.")
+
+
+def probe_b18_refute_helmet() -> None:
+    """ruined_helmet: 'Strength 4 then 2 across two combats' (batch 13).
+
+    C#: RuinedHelmet.AfterCombatEnd sets `UsedThisCombat = false`
+    (RuinedHelmet.cs:62-66); relics/ruined_helmet.py writes `_used` only in
+    modify_power_amount (ruined_helmet.py:37) and never clears it.
+
+    Attempt to refute: is the doubling perhaps re-armed by some other path --
+    or is `_used` maybe never set in combat 1 at all, which would make the
+    published row an artefact of the sweep's stimulus rather than the relic?
+    """
+    from sts2_rl import CombatState
+    from sts2_rl.cmds import PowerCmd
+    from sts2_rl.powers import StrengthPower
+    from sts2_rl.relics import make_relic
+
+    def gain_two(cs):
+        PowerCmd.apply(cs.hooks, cs.player, StrengthPower, 2)
+        return cs.player.powers["strength"].amount
+
+    carried = make_relic("ruined_helmet")
+    cs1 = CombatState(rng=random.Random(0), relics=[carried])
+    got1 = gain_two(cs1)
+    again = gain_two(cs1)
+    cs2 = CombatState(rng=random.Random(1), relics=[carried])
+    got2 = gain_two(cs2)
+    fresh = make_relic("ruined_helmet")
+    cs3 = CombatState(rng=random.Random(1), relics=[fresh])
+    got3 = gain_two(cs3)
+    print(f"    combat 1: first +2 -> Strength {got1} (C#: 4), second +2 -> "
+          f"{again} (C#: 6)  _used={carried._used}")
+    print(f"    combat 2 SAME instance: first +2 -> Strength {got2} "
+          f"(C#: 4)   fresh instance: {got3}")
+
+
+def probe_b18_refute_permafrost() -> None:
+    """permafrost: 'block 0 carried vs 7 fresh' (batch 12).
+
+    C#: Permafrost.AfterRoomEntered sets `ActivatedThisCombat = false`
+    (Permafrost.cs:35-43) -- a hook sweep A's C#-side census originally did not
+    look at, which is how this relic once sat in the 'C# resets: NONE' bucket.
+    relics/permafrost.py never clears `_activated`.
+
+    Attempt to refute: is `_activated` perhaps not set in combat 1 unless a
+    Power card is played -- i.e. is the gap conditional on a card type an
+    Ironclad deck may not carry?
+    """
+    from sts2_rl import CombatState
+    from sts2_rl.cards import make_card
+    from sts2_rl.relics import make_relic
+
+    def play_power(cs):
+        cs.player.hand.clear()
+        cs.player.energy = 30
+        cs.player.hand.append(make_card("inflame"))
+        b0 = cs.player.block
+        cs.play_card(0, 0)
+        return b0, cs.player.block
+
+    carried = make_relic("permafrost")
+    for n, seed in ((1, 0), (2, 1), (3, 2)):
+        cs = CombatState(rng=random.Random(seed), relics=[carried])
+        b0, b1 = play_power(cs)
+        print(f"    combat {n} (carried): block {b0} -> {b1}  "
+              f"_activated={carried._activated}")
+    fresh = make_relic("permafrost")
+    cs = CombatState(rng=random.Random(1), relics=[fresh])
+    b0, b1 = play_power(cs)
+    print(f"    combat 2 (fresh):   block {b0} -> {b1}")
+    print("    Ironclad Power cards in the pool that reach this: inflame, "
+          "demon_form, feel_no_pain, ... -- a Power is not exotic content.")
+
+
+def probe_b18_refute_diadem() -> None:
+    """diamond_diadem: the turn-END-only reset carries into combat 2 (batch 4).
+
+    C#: DiamondDiadem resets CardsPlayedThisTurn in BOTH BeforeSideTurnEnd
+    (DiamondDiadem.cs:56-67) and AfterCombatEnd (DiamondDiadem.cs:78-84);
+    relics/diamond_diadem.py keeps only the turn-end half
+    (diamond_diadem.py:39). The claim depends on a second fact: the turn that
+    WINS the fight never runs the turn-end pass, because CombatState.end_turn
+    opens with `if self.phase != Phase.PLAYER_TURN: return`.
+
+    Attempt to refute BOTH halves: (a) does the winning turn really skip the
+    reset, or does _end_combat run the turn-end hooks anyway?  (b) with a stale
+    count, is the turn-1 grant really denied, or does something zero the
+    counter at turn start first?
+    """
+    from sts2_rl import CombatState
+    from sts2_rl.cards import make_card
+    from sts2_rl.relics import make_relic
+
+    carried = make_relic("diamond_diadem")
+    cs1 = CombatState(rng=random.Random(0), relics=[carried])
+    cs1.player.hand.clear()
+    cs1.player.energy = 30
+    for _ in range(3):
+        cs1.player.hand.append(make_card("defend"))
+    for _ in range(3):
+        cs1.play_card(0)
+    print(f"    combat 1, 3 cards played: counter="
+          f"{carried.cards_played_this_turn}")
+    # win the fight during the player's own turn
+    for enemy in list(cs1.enemies):
+        enemy.hp = 0                    # is_dead is a read-only property
+    cs1._end_combat(player_won=True)
+    cs1.end_turn()                      # the pass a real driver would attempt
+    print(f"    after winning mid-turn and calling end_turn: counter="
+          f"{carried.cards_played_this_turn} phase={cs1.phase.name} "
+          f"is_over={cs1.is_over}  (a) the reset is SKIPPED if this is 3")
+
+    # DiamondDiademPower is removed once the ENEMY side's turn ends, and
+    # CombatState.end_turn runs the whole enemy turn -- so sampling
+    # player.powers after end_turn() returns always shows it gone. A spy relic
+    # placed AFTER the diadem in the relic list observes the same turn-end pass
+    # one step later, which is where the grant is visible.
+    from sts2_rl.relics.base import Relic, RelicRarity
+
+    class _Spy(Relic):
+        id, name, rarity = "_spy", "spy", RelicRarity.COMMON
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.seen: list[str] = []
+
+        def on_player_turn_end(self, player) -> None:
+            self.seen.append(
+                "diamond_diadem" if "diamond_diadem" in player.powers
+                else "(none)")
+
+    def turn1_grant(relic):
+        spy = _Spy()
+        cs = CombatState(rng=random.Random(1), relics=[relic, spy])
+        opened = relic.cards_played_this_turn
+        cs.end_turn()
+        return opened, spy.seen
+
+    opened, seen = turn1_grant(carried)
+    print(f"    combat 2 turn 1 (carried) opens with counter={opened} -> "
+          f"turn-end pass saw player power: {seen}")
+    fresh = make_relic("diamond_diadem")
+    opened_f, seen_f = turn1_grant(fresh)
+    print(f"    combat 2 turn 1 (fresh)   opens with counter={opened_f} -> "
+          f"turn-end pass saw player power: {seen_f}")
+    print("    (b) C# grants it in both cases (its own AfterCombatEnd zeroed "
+          "the counter), so a carried '(none)' is the divergence.")
+
+
 PROBES = {
     "b18-pool": probe_b18_pool,
     "b18-ticket": probe_b18_ticket,
@@ -430,6 +652,10 @@ PROBES = {
     "b18-ticket-bag": probe_b18_ticket_bag,
     "b18-cookie": probe_b18_cookie,
     "b18-cookie-undo": probe_b18_cookie_undo,
+    "b18-refute-redskull": probe_b18_refute_redskull,
+    "b18-refute-helmet": probe_b18_refute_helmet,
+    "b18-refute-permafrost": probe_b18_refute_permafrost,
+    "b18-refute-diadem": probe_b18_refute_diadem,
 }
 
 
