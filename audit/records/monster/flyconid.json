@@ -1,0 +1,84 @@
+{
+  "unit": "monster/flyconid",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Flyconid.cs",
+    "sha256": "01cd9bd548558e78d657441ee0c366b1c083e6679afdcf5b2787730d6db5558c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\flyconid.py",
+    "sha256": "f3eb737052a284fa03d9cff4edf7c5cb7de9736076c2b579a27f8eee4fab1c30"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "Flyconid.min_hp = 47 (flyconid.py:34)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Flyconid.cs:20 (ToughEnemies, 51, 47) -> 47."
+    },
+    "MaxInitialHp": {
+      "maps_to": "Flyconid.max_hp = 49 (flyconid.py:35)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Flyconid.cs:22 (ToughEnemies, 53, 49) -> 49."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "__init__'s INITIAL pick (flyconid.py:41-44) + telegraph_next_move's RAND roll (flyconid.py:71-84), both through weighted_branch_pick (state_machine.py:47-59)",
+      "verdict": "faithful",
+      "rationale": "THE bug class of this stream, and this port reads it correctly -- it is one of the two monsters the original weight-vs-cooldown fix repaired. Flyconid.cs:39-43 uses AddBranch overload #8 (`int cooldown, MoveRepeatType`) three times and overload #10 twice, so every integer is a COOLDOWN and every weight defaults to 1f: RAND = [V_SPORES cd 3, FRAIL_SPORES cd 2, SMASH cd 0], all CannotRepeat, in that ADD ORDER; INITIAL = [FRAIL_SPORES cd 2, SMASH], both CannotRepeat, weight 1. flyconid.py:26-27 encodes exactly that (_MOVES in add order, _COOLDOWN 3/2/0) and rolls over the full three-item vector every transition so the draw count cannot drift. Executed (`py audit/tools/monster_probes_b01.py branch`, seeds b01-b05, 40 turns each, reference machine built on the sim's own MonsterMoveStateMachine with the C# parameters): the emitted sequences agree turn for turn up to the point the REFERENCE MACHINERY raises -- see the deadlock guard."
+    }
+  },
+  "guards": [
+    {
+      "what": "REACHABLE all-zero branch vector: after the log tail [V_SPORES, FRAIL_SPORES, SMASH] every RAND branch weighs 0, which is monster_state_machine G7 arm (b)'s input",
+      "verdict": "faithful",
+      "rationale": "The PORT is faithful here and that is the finding. Executed (`py audit/tools/monster_probes_b01.py deadlock`): the state is reached on all five probe seeds (turn 3-23; e.g. seed b03 turn 3) and the tail is always [V_SPORES, FRAIL_SPORES, SMASH] -- V_SPORES is inside its cooldown 3, FRAIL_SPORES inside its cooldown 2, and SMASH is the last move so CannotRepeat zeroes it. C# RandomBranchState.GetNextState then does max = 0, ONE rng.NextFloat(0) draw, `0 - 0 <= 0` on the FIRST branch, and returns branch 0 = V_SPORES. The port's weighted_branch_pick does the identical thing: same single draw (observed: 1 draw consumed) and the same first item, 'V_SPORES'. Same observable, same stream position. CROSS-RECORD SIGNAL, reported not re-verdicted: monster_state_machine G7b is labelled DORMANT on a zero-weight fuzz of 82 MACHINES, and Flyconid is hand-rolled so that fuzz never covered it. Its dormancy therefore rests on Flyconid not being a MachineMonster; the sim machinery raises RuntimeError('No valid branch in RandomBranchState RAND') on this input (state_machine.py:182-183), observed in the same probe. Porting Flyconid onto MachineMonster -- the codebase's stated preferred convention -- would crash the run on ported act-1 content."
+    },
+    {
+      "what": "Cooldown semantics: the port's window `self._log[-cd:] if cd > 0 else self._log[-1:]` (flyconid.py:79-81) vs C#'s cooldown early-return PLUS the CannotRepeat arm",
+      "verdict": "faithful",
+      "rationale": "C# computes `allowed * GetWeight()` where CannotRepeat blocks iff the LAST logged move is this state, and then a separate cooldown check early-returns 0 iff the state is in the last `cooldown` IsMove entries (RandomBranchState.cs:142-165; monster_state_machine steps 19-20). For V_SPORES (cd 3) and FRAIL_SPORES (cd 2) the last-1 window is a subset of the cooldown window, so the cooldown subsumes CannotRepeat and the port's single `m in window` test is equivalent; for SMASH (cd 0) C# skips the cooldown entirely and the port falls back to `self._log[-1:]`, which is CannotRepeat exactly. Short logs behave the same on both sides (Python's negative slice and LINQ TakeLast both clamp)."
+    },
+    {
+      "what": "WHEN the port appends to its log (flyconid.py:68, at perform time) vs C# (at roll time, MonsterMoveStateMachine.cs:76-79)",
+      "verdict": "faithful",
+      "rationale": "Different instant, identical content at the only moment that matters. C#'s StateLog at a roll holds every previously-rolled move including the one just performed; the port's _log at telegraph_next_move holds every performed move including the one just performed. Executed by the sequence diff above -- a one-entry offset would desynchronise the cooldown windows and show up within three turns, and does not."
+    },
+    {
+      "what": "The INITIAL RandomBranchState is the machine's initial state, so the game rolls once at AfterCreatureAdded; the port rolls in __init__ (flyconid.py:42-44)",
+      "verdict": "faithful",
+      "rationale": "monster_state_machine step 28: a machine whose initial state is a BRANCH starts with an EMPTY StateLog (branches are not loggable), and step 30's sticky rule does not fire because the initial state is not a move -- so the game really does draw once before the first turn. Both sides therefore consume exactly one MonsterAi float at creation, and both evaluate FRAIL_SPORES' cooldown 2 against an empty log (weight 1). Confirmed by the draw counts in the executed diff and by the pre-existing pin test/test_monster_branch_audit.py::TestPreviouslyFixedBugClassRegression::test_flyconid_draws_every_turn (verified present by grep)."
+    },
+    {
+      "what": "Move numerics: VulnerablePower 2, FrailSpores 8 damage + FrailPower 2, Smash 11",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Flyconid.cs:24 (DeadlyEnemies, 12, 11) -> 11 = _SMASH_DMG; :26 (9, 8) -> 8 = _FRAIL_SPORES_DMG; VulnerableSporesMove applies VulnerablePower 2m (:60) and FrailSporesMove applies FrailPower 2m after its damage (:69-74) -- the port matches both amounts and the damage-then-debuff order (flyconid.py:15-18, 59-67). The `TestMode.IsOff` arms (:54-57, :65-68) set a spore vfx type only."
+    },
+    {
+      "what": "FlyconidEncounter picks the medium slime with a NextItem over [LeafSlimeM, TwigSlimeM] and puts the Flyconid in slot 1 (flyconid.py:87-100)",
+      "verdict": "faithful",
+      "rationale": "Encounter/slot generation is claimed by no seam (monster_state_machine boundary hole 4), so it is recorded here rather than skipped. The port names the C# source (FlyconidNormal.GenerateMonsters) in its own comment and uses the parity selection stream when one is supplied. Reachability for rule 6: Flyconid is in the ported overgrowth NORMAL pool under key 'flyconid' AND is the second slot of key 'snapping_jaxfruit' via the _flyconid factory (snapping_jaxfruit.py:35-42) -- executed, `py audit/tools/monster_probes_b01.py reach`, which also shows why a naive monster_classes scan misses both."
+    },
+    {
+      "what": "Ascension gating on the HP pair, SmashDamage and SporeDamage",
+      "verdict": "waiver",
+      "rationale": "Out of scope; non-ascension branch compared (N4)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\overgrowth\\snapping_jaxfruit.py",
+      "sha256": "484416c4c857d3d8746e481aba663adb4f89ba76fce2b2cc59e34ad1159be594",
+      "side": "sim"
+    }
+  ]
+}

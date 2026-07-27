@@ -1,0 +1,104 @@
+{
+  "unit": "monster/wriggler",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Wriggler.cs",
+    "sha256": "05285e4ac115443c4980cf5d7ac86efeaa32b8b255954760db58a6fc441f5062"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\phrog_parasite.py",
+    "sha256": "7ebe9be9efd967714cf1c145086821bb4302ab901471dda224fc1b5bdb7eba37"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "Wriggler.min_hp = 17 (phrog_parasite.py:19)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Wriggler.cs:30 (ToughEnemies, 18, 17) -> 17."
+    },
+    "MaxInitialHp": {
+      "maps_to": "Wriggler.max_hp = 21 (phrog_parasite.py:20)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Wriggler.cs:32 (ToughEnemies, 22, 21) -> 21."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "the __init__ slot branch and stunned flag (phrog_parasite.py:33-35) + the take_turn alternation (phrog_parasite.py:49-60)",
+      "verdict": "faithful",
+      "rationale": "CORRECTION to SHARED-FINDINGS section 0, same as nibbit: Wriggler.cs:57 builds a ConditionalBranchState, not a RandomBranchState, so it draws nothing (ConditionalBranchState.cs:44-54) and no distribution argument is owed. Graph: SPAWNED_MOVE (a no-op with StunIntent, Wriggler.cs:73-76) -> INIT_MOVE; INIT_MOVE picks NASTY_BITE for SlotName wriggler1/wriggler3 and WRIGGLE for wriggler2/wriggler4 (:58-61); then NASTY_BITE <-> WRIGGLE forever (:63-64). Initial state is SPAWNED_MOVE if StartStunned else INIT_MOVE (:69). The port maps the slot rule to `slot % 2 == 1` and resolves it in the constructor. Executed (`py audit/tools/monster_probes_b01.py chain`, slots 1-4, 20 turns): sequences identical and 0 MonsterAi draws on both sides for every slot."
+    }
+  },
+  "guards": [
+    {
+      "what": "The StartStunned arm: C# performs a real SPAWNED_MOVE node for one turn; the sim sets `self.stunned = start_stunned` (phrog_parasite.py:33) and lets the combat loop skip the turn",
+      "verdict": "faithful",
+      "rationale": "Same observable, established by reading both loops rather than assumed. C#: the machine's initial state is SPAWNED_MOVE, a MoveState, so monster_state_machine step 30's sticky rule makes the AfterCreatureAdded roll a no-op with no draw; the creature telegraphs StunIntent, performs `return Task.CompletedTask`, and the NEXT roll walks SPAWNED_MOVE -> INIT_MOVE -> the slot move. Sim: `combat.py:313-329` skips take_turn and clears the flag, current_intent returns Intent(MoveType.STUN) (phrog_parasite.py:39-40), and _move_key already holds the slot move. Both give: turn 1 a stun intent and no action, turn 2 the slot move, zero MonsterAi draws throughout. Note this is NOT monster_state_machine G4/G5's subject -- no CreatureCmd.stun is involved on either side, the deferral is the graph's own SPAWNED_MOVE node, and Wriggler has no RandomBranchState whose weights a log entry could move."
+    },
+    {
+      "what": "INTRA-MOVE ORDER INVERSION in WRIGGLE: C# adds the Infection card FIRST and applies StrengthPower 2 SECOND (Wriggler.cs:99-100); the port applies Strength first and adds the card second (phrog_parasite.py:56-59)",
+      "verdict": "faithful",
+      "rationale": "The only intra-move order inversion in this batch, so it was executed rather than eyeballed. `py audit/tools/monster_probes_b01.py order` runs one WRIGGLE turn twice from the same seed -- shipped order and the C# order -- and diffs 12 observable keys (player HP, block and powers; all four card piles by id and position; the monster's HP, block and powers; the MonsterAi and Shuffle stream counters): differences NONE. The two effects touch disjoint state and neither dispatch reads the other's: add_to_discard appends and fires on_card_entered_combat (cmds.py:464-472), whose ported listeners afflict the card, while PowerCmd.apply fires modify_power_amount / on_power_applied, whose ported listeners (relics/ruined_helmet.py, relics/unsettling_lamp.py) gate on the player. BOUND OF THE EVIDENCE, stated per rule 5: the probe runs with no relics and no player powers, so it proves independence of the two commands, not of every possible future listener. Concrete trigger that would make the order matter: any on_card_entered_combat listener that reads the applier's Strength, or any modify_power_amount listener that reads a pile count."
+    },
+    {
+      "what": "Move numerics: BiteDamage 6, WriggleMove adds 1 Infection and applies StrengthPower 2",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Wriggler.cs:34 (DeadlyEnemies, 7, 6) -> 6, hardcoded as 6 at phrog_parasite.py:42 and :52; `_wriggleStrength` is a plain const 2 (:26) applied at :100 and mirrored at phrog_parasite.py:56; the Infection add is count 1 into PileType.Discard (:99) and the port adds one InfectionCard to the discard (:59). Recorded as a latent maintenance risk rather than a defect: the port spells 6 and 2 as literals inside take_turn instead of module constants, unlike every sibling in this batch."
+    },
+    {
+      "what": "WRIGGLE telegraphs BuffIntent + StatusIntent(1) (Wriggler.cs:55)",
+      "verdict": "faithful",
+      "rationale": "Mapped to Intent(BUFF, buffs=[(StrengthPower, 2)], also=(STATUS_CARD,)) (phrog_parasite.py:44-47) -- the primary/secondary collapse, with the buff amount carried and the status count dropped (boundary hole 2, as on eye_with_teeth)."
+    },
+    {
+      "what": "SlotName vs the port's integer `slot`",
+      "verdict": "faithful",
+      "rationale": "C# compares `Creature.SlotName` against the four literal strings; the sim has no slot-name concept and passes an int. Equivalent over the only producer: InfestedPower.cs:32 builds the names as \"wriggler\" + (i + 1) via PhrogParasiteElite.GetWrigglerSlotName, and powers.py:1420 passes slot=i + 1, so odd/even matches wriggler1/3 vs wriggler2/4 exactly. PhrogParasiteElite.cs:17 declares exactly five slots, so no fifth Wriggler exists to fall off the end of the conditional (which would THROW in C#: ConditionalBranchState.cs:53)."
+    },
+    {
+      "what": "ShouldShowMoveInBestiary hides NASTY_BITE_MOVE and SPAWNED_MOVE (Wriggler.cs:103-110)",
+      "verdict": "waiver",
+      "rationale": "Bestiary presentation; the sim has no Bestiary (N5)."
+    },
+    {
+      "what": "Ascension gating on the HP pair and BiteDamage",
+      "verdict": "waiver",
+      "rationale": "Out of scope; non-ascension branch compared (N4)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Powers\\InfestedPower.cs",
+      "sha256": "226e053d2c81f6012a22b8743aae2224502956d5829da8a58aa9ae5df08c48d6",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Encounters\\PhrogParasiteElite.cs",
+      "sha256": "82dd5a6cec15778c9539a8c9402b308556c0b9bc05a47d9c2929b8e8677bb63b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    }
+  ]
+}
