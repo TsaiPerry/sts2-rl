@@ -8,6 +8,23 @@
     "path": "sts2_rl\\events\\tea_master.py",
     "sha256": "583c57ecdbc13cf70a127f0312b5d4515962a95fa0a25a8a9fc3755d787ef3bb"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "TeaMaster.is_allowed (events/tea_master.py:31-33) `run.act_index < 2 and run.gold >= 150`, matching TeaMaster.cs:34-41's `if (CurrentActIndex < 2) return Players.All(p => p.Gold >= 150); return false;` -- the act clause short-circuits first in both, and the 150 is the EmberTeaCost constant (TeaMaster.cs:23), i.e. the gate demands the price of the most expensive purchase. Quantifier collapses -- see the multiplayer guard.",

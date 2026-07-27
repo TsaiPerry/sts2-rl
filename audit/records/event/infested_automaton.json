@@ -8,6 +8,33 @@
     "path": "sts2_rl\\events\\infested_automaton.py",
     "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/brain_leech.py",
+      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {},
   "guards": [
     {

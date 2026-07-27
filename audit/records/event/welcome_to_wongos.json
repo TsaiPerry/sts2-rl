@@ -8,6 +8,63 @@
     "path": "sts2_rl\\events\\welcome_to_wongos.py",
     "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/Orobas.cs",
+      "sha256": "eeb3c17628455969b8b77c28240c2954adf0d5d8b4a15898fa701ab411742d61",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Random/Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/wongos_mystery_ticket.py",
+      "sha256": "07c8b5f673135fecf9c15596ac7f8985a542fef6307448acd923822ddd1f67f3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "WelcomeToWongos.is_allowed (events/welcome_to_wongos.py:40-42) `run.act_index == 1 and run.gold >= 100`, matching WelcomeToWongos.cs:68-75 `CurrentActIndex == 1 && Players.All(p => p.Gold >= 100)`; the gate's 100 is the BargainBinCost DynamicVar's base value, which the sim reuses as _BARGAIN_BIN_COST. Multiplayer quantifier waived separately.",

@@ -8,6 +8,53 @@
     "path": "sts2_rl\\events\\ranwid_the_elder.py",
     "sha256": "d0e4f2982b6cbb00c6d50700886cf5dfae728319278d8eb1784f8ede398f9b2f"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PotionCmd.cs",
+      "sha256": "101e099dcbfe8ef4622e79aee327ad2d6a46e4329ce06a52ddb3ec7fca89979b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeltBuckle.cs",
+      "sha256": "1e72315fdaf11e92a555144fa8b255f3735bde2aaf590f92f6ece0288cab2831",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Potions/NPotionPopup.cs",
+      "sha256": "e282ab29ff2f82d84715f74df2ec03b0690e92787d9d4e5b3fe3039cbe55d9ac",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "RanwidTheElder.is_allowed (events/ranwid_the_elder.py:31-38) is the four source clauses in the source's order (RanwidTheElder.cs:51-70): `run.act_index != 0` for the early `CurrentActIndex == 0 -> false`; `any(r.is_tradable for r in run.relics)` for `!GetValidRelics(p).Any()` (GetValidRelics is `Relics.Where(r => r.IsTradable)`, RanwidTheElder.cs:72-75 -- the same filter relic_trader uses, and Relic.is_tradable (relics/base.py:125-135) is that record's clause-for-clause port of RelicModel.IsTradable); `run.gold >= 100`; and `len(run.held_potions) > 0` for `!p.Potions.Any()`, where run.held_potions is Player.cs's null-filtered Potions (run.py:501-507). Quantifiers collapse -- see the multiplayer guard.",

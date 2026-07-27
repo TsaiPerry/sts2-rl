@@ -8,6 +8,23 @@
     "path": "sts2_rl\\cards\\howl_from_beyond.py",
     "sha256": "3b489bebe90570b2054bcebc8a28f67a9832a4d8d4a762e5e7bf90b1160856f1"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "AfterAutoPostPlayPhaseEntered": {
       "maps_to": "HowlFromBeyondCard.on_player_turn_end (howl_from_beyond.py:85-90)",

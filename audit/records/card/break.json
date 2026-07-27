@@ -8,6 +8,38 @@
     "path": "sts2_rl\\cards\\break_card.py",
     "sha256": "17d27793cddfba582e51a3fc796afbcc3f7e15596fc5a5f69fad8243e3ad2f31"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (break_card.py:19-23) + _init_vars (25-28)",

@@ -8,6 +8,23 @@
     "path": "sts2_rl\\cards\\colorless_skills.py",
     "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (colorless_skills.py:128-132) + _init_vars (134-136)",

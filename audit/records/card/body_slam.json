@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\body_slam.py",
     "sha256": "24e4a82404b31c53a85b51a6db508d0673f39b36aa93b5eab7c681be1088c8ef"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Localization/DynamicVars/CalculatedVar.cs",
+      "sha256": "871a069181106d274f9086b7535788beb9380ac66b1bb318172b455ebb7c6331",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (body_slam.py:21-25) + _init_vars (27-28)",

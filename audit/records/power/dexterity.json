@@ -8,6 +8,53 @@
     "path": "sts2_rl\\powers.py",
     "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Malaise.cs",
+      "sha256": "2b16aba0028875a57f8ec3f8c1aaf1128b401578aba99e5643a910abd34b278e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Resonance.cs",
+      "sha256": "0dbc2a91f2542941626d276680b87604e97052c02054ff2e76d3934f48448184",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/ValueProps/ValuePropExtensions.cs",
+      "sha256": "8523069eae07bb95035ede3cb1010c639034fe99d6962bd25524e34d9a200fd3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/the_lost_and_forgotten.py",
+      "sha256": "3a48359cec493d954570f09d23a5943f5065c942f6d064397dc6ce97b1c678f1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/lagavulin_matriarch.py",
+      "sha256": "f827be87be0028436a888d358e883c0b67ce850dc4b96c03fefa9c15fe251aa9",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Type": {
       "maps_to": "powers.py:126 `power_type = PowerType.BUFF`",

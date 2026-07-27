@@ -8,6 +8,18 @@
     "path": "sts2_rl\\cards\\pillage.py",
     "sha256": "0cf55f5722322d0537bfee7e4dba2a86ce2da8eb187a6f530d8e1b50d11f3088"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (pillage.py:65-69) + _init_vars (71-73)",

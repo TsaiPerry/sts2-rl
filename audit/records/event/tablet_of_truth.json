@@ -8,6 +8,43 @@
     "path": "sts2_rl\\events\\tablet_of_truth.py",
     "sha256": "f0b1a22f3b1424b8aacb53242c41cab526b9842c2bdac79f7485162f6b30218e"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/tungsten_rod.py",
+      "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {},
   "guards": [
     {

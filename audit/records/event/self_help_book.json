@@ -8,6 +8,18 @@
     "path": "sts2_rl\\events\\self_help_book.py",
     "sha256": "19718722e260e9a3e96f1aa74d6acf5ea4970ea20b9fdcd2795b6afcecb217fd"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    }
+  ],
   "hooks": {},
   "guards": [
     {

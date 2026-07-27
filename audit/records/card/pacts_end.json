@@ -8,6 +8,33 @@
     "path": "sts2_rl\\cards\\pacts_end.py",
     "sha256": "cd2494ef8e81910674a4e9b32e92fb7b24ce50215497a3f6b80b88f3173aa88e"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (pacts_end.py:102-106) + _init_vars (108-111)",

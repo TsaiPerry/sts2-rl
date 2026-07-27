@@ -8,6 +8,58 @@
     "path": "sts2_rl\\events\\tezcatara.py",
     "sha256": "fe83c36275e02c36d3807758f33658fab29bc39bf010c1e2941fe947f458d6f4"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/DevConsole/ConsoleCommands/AncientConsoleCmd.cs",
+      "sha256": "8a42f286595e684919682777d7f39150bc9a6dfc1a404e04dca62300b61c6d0c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AncientEventModel.cs",
+      "sha256": "1c805375395bf04b49ee0e056de4dc717d96c649b718a9d87338052cb0855091",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/RelicCollection/NRelicCollectionCategory.cs",
+      "sha256": "3171d45189b145848ef4345e499a8351ce2cba9639399e72e3dc5f65161944b2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/ancient.py",
+      "sha256": "e446b8fe5b1ae1f8bd690b49dca771e7af98ab375ced1900545f196186a338ac",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "AnyCharacterDialogueBlacklist": {
       "maps_to": "(nothing)",

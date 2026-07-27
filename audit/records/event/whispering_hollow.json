@@ -8,6 +8,73 @@
     "path": "sts2_rl\\events\\whispering_hollow.py",
     "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Gold/GoldLossType.cs",
+      "sha256": "875df980a3f0bac1accda6a69f0e07dcd833674187656f8305bca88a9b938d7a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/PotionReward.cs",
+      "sha256": "0e10a1901cfac2046ac1750e593df89f5341e6a4fb76c17e4d847c8b36297819",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "WhisperingHollow.is_allowed (events/whispering_hollow.py:34-36) `run.gold >= 44`, matching WhisperingHollow.cs:31-34 `Players.All(p => p.Gold >= 44)`. The source hardcodes 44 (= the GoldVar base 35 plus the maximum +9 variance) and the sim names it _MIN_GOLD with that derivation in the comment (events/whispering_hollow.py:13). Multiplayer quantifier waived separately.",

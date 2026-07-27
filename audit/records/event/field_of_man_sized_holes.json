@@ -8,6 +8,23 @@
     "path": "sts2_rl\\events\\field_of_man_sized_holes.py",
     "sha256": "3badd5235196630946dac2251d51ccc969356aaa4f1905535f12a83e9b4e25b7"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "FieldOfManSizedHoles.is_allowed (events/field_of_man_sized_holes.py:29-31) `any(PerfectFitEnchantment.can_enchant(c) for c in run.deck)`, matching FieldOfManSizedHoles.cs:30-33's `Deck.Cards.Any(ModelDb.Enchantment<PerfectFit>().CanEnchant)`. Perfect Fit adds no restriction of its own, so this is the base CanEnchant, audited under enchantment/perfect_fit. Quantifier collapses -- see the multiplayer guard.",

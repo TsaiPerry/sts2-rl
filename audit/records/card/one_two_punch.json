@@ -8,6 +8,18 @@
     "path": "sts2_rl\\cards\\one_two_punch.py",
     "sha256": "4b52bb7a8218b4bd44065e5b1fa5a6fa27863d9d19877b0c4ff0297216fb580b"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (one_two_punch.py:64-68) + _init_vars (70-72)",

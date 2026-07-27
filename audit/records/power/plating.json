@@ -8,6 +8,103 @@
     "path": "sts2_rl\\powers.py",
     "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/NoBlockPower.cs",
+      "sha256": "72c475f498ed9559ceac3bff15a2caeb10a0d738d1f4a7c50444aa8d48b7e419",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/UnmovablePower.cs",
+      "sha256": "b267db119bf6d000e1ccc146584cc1d648566a82a4ac7ef34bc2dd53ff5306a6",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_powers.py",
+      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/stone_armor.py",
+      "sha256": "f40ce2bacb7822297c174ea3c4d5d370c7a9ecb1ddc1c1b5f7cde27efb55fc30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/frog_knight.py",
+      "sha256": "46c2955ee2dce16b57b7adfedbedde8e8b45623ce82aa4ceb81b209cd58dad19",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/flail_knight.py",
+      "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/slumbering_beetle.py",
+      "sha256": "e30a1fa656232c5772290c730657ec3bd4d1b00d72b1fa9aba15f290242b6dc3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/slithering_strangler.py",
+      "sha256": "966738a2e28b66f6ac06d4d3b72b7e7521180ab3daa659fb3cf49056c3b3d98b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/lagavulin_matriarch.py",
+      "sha256": "f827be87be0028436a888d358e883c0b67ce850dc4b96c03fefa9c15fe251aa9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/sewer_clam.py",
+      "sha256": "27f5f7ea740f0d937117ea30e3c62794c8166ea9f3f1a2f14615836a3538f236",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/gorget.py",
+      "sha256": "954fa94fb849502652b517ef8ddb633c2cad627508065c6f9a6cf916f63a3f4c",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Type": {
       "maps_to": "powers.py:1052 power_type = PowerType.BUFF",

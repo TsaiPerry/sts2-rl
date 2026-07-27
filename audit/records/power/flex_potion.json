@@ -1,85 +1,147 @@
 {
- "unit": "power/flex_potion",
- "game_source": {
-  "path": "src\\Core\\Models\\Powers\\FlexPotionPower.cs",
-  "sha256": "97c133d55e521321f80ba4f02c638bf30350f5402794c7883be663ad1a4cd416"
- },
- "sim_source": {
-  "path": "sts2_rl\\powers.py",
-  "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
- },
- "hooks": {
-  "OriginModel": {
-   "maps_to": "no sim counterpart; powers.py:902-908 name literal",
-   "verdict": "waiver",
-   "rationale": "Pure identity/presentation: OriginModel is switched on only to pick Title (TemporaryStrengthPower.cs:73-92) and the Description loc key, and the sim hard-codes name instead. Nothing reads it behaviourally -- already established for this family on power/setup_strike, whose whole-source grep found the single non-Powers hit to be the ITemporaryPower.cs:9 declaration itself. Waiver: presentation."
+  "unit": "power/flex_potion",
+  "game_source": {
+    "path": "src\\Core\\Models\\Powers\\FlexPotionPower.cs",
+    "sha256": "97c133d55e521321f80ba4f02c638bf30350f5402794c7883be663ad1a4cd416"
   },
-  "Type (inherited, TemporaryStrengthPower.cs:32-42)": {
-   "maps_to": "powers.py:902-908 power_type = PowerType.BUFF",
-   "verdict": "faithful",
-   "rationale": "IsPositive is the base default true, so C#'s Type is Buff (TemporaryStrengthPower.cs:32-42) and the sim's static attribute agrees. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+  "sim_source": {
+    "path": "sts2_rl\\powers.py",
+    "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
   },
-  "StackType (inherited, TemporaryStrengthPower.cs:44)": {
-   "maps_to": "powers.py:64-66 Power.on_stack",
-   "verdict": "faithful",
-   "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Misery.cs",
+      "sha256": "272f52915d18bc3e274c26a1040198b2f0c6ca5bf377037897a165cb1c45e305",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ITemporaryPower.cs",
+      "sha256": "f46b5ab6626174049aeb94155d650e1430a2ef9c7a5804fcca3b2e57ffd2d36f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/TemporaryStrengthPower.cs",
+      "sha256": "c6b426e4bb0b195133970959fa5c0441ba7c5166bf21feeb3318df1e614aa637",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "OriginModel": {
+      "maps_to": "no sim counterpart; powers.py:902-908 name literal",
+      "verdict": "waiver",
+      "rationale": "Pure identity/presentation: OriginModel is switched on only to pick Title (TemporaryStrengthPower.cs:73-92) and the Description loc key, and the sim hard-codes name instead. Nothing reads it behaviourally -- already established for this family on power/setup_strike, whose whole-source grep found the single non-Powers hit to be the ITemporaryPower.cs:9 declaration itself. Waiver: presentation."
+    },
+    "Type (inherited, TemporaryStrengthPower.cs:32-42)": {
+      "maps_to": "powers.py:902-908 power_type = PowerType.BUFF",
+      "verdict": "faithful",
+      "rationale": "IsPositive is the base default true, so C#'s Type is Buff (TemporaryStrengthPower.cs:32-42) and the sim's static attribute agrees. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    "StackType (inherited, TemporaryStrengthPower.cs:44)": {
+      "maps_to": "powers.py:64-66 Power.on_stack",
+      "verdict": "faithful",
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    "BeforeApplied (inherited, TemporaryStrengthPower.cs:146-156)": {
+      "maps_to": "powers.py:844-853 TemporaryStrengthPower.__init__",
+      "verdict": "faithful",
+      "rationale": "The sim applies the inner StrengthPower from __init__, which PowerCmd.apply runs at cmds.py:324 -- before the wrapper is placed on the creature (cmds.py:325) and registered (cmds.py:326), which is C#'s ordering (BeforeApplied is step 15 of audit/records/seam/power_cmd.json, ApplyInternal step 17). Settled in full on power/setup_strike, including the Artifact-blocked leg that lands on power_cmd's step-6 zero-amount finding. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    "AfterPowerAmountChanged (inherited, TemporaryStrengthPower.cs:158-171)": {
+      "maps_to": "powers.py:855-858 TemporaryStrengthPower.on_stack",
+      "verdict": "faithful",
+      "rationale": "The re-stack leg. C# guards !(amount == base.Amount) && power == this to stop the first application double-applying; the sim needs no such guard because the two cases are separate methods (__init__ at cmds.py:324 vs on_stack at cmds.py:311), and it keeps C#'s internal order. Settled on power/setup_strike. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    "AfterSideTurnEnd (inherited, TemporaryStrengthPower.cs:173-181)": {
+      "maps_to": "powers.py:866-872 on_player_turn_end / on_enemy_side_end -> _revert",
+      "verdict": "gap",
+      "issue": "SLOT, and LIVE. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and the flush (combat.py:661-662); the correct slot, after_player_turn_end (combat.py:665), exists and is unused. The mechanism was EXECUTED on power/setup_strike (StampedePower 1 + a temp-strength power: ending the turn deals 6 or 8 depending on registration order where the game always deals 8), and this unit shares that code path verbatim. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    }
   },
-  "BeforeApplied (inherited, TemporaryStrengthPower.cs:146-156)": {
-   "maps_to": "powers.py:844-853 TemporaryStrengthPower.__init__",
-   "verdict": "faithful",
-   "rationale": "The sim applies the inner StrengthPower from __init__, which PowerCmd.apply runs at cmds.py:324 -- before the wrapper is placed on the creature (cmds.py:325) and registered (cmds.py:326), which is C#'s ordering (BeforeApplied is step 15 of audit/records/seam/power_cmd.json, ApplyInternal step 17). Settled in full on power/setup_strike, including the Artifact-blocked leg that lands on power_cmd's step-6 zero-amount finding. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  "AfterPowerAmountChanged (inherited, TemporaryStrengthPower.cs:158-171)": {
-   "maps_to": "powers.py:855-858 TemporaryStrengthPower.on_stack",
-   "verdict": "faithful",
-   "rationale": "The re-stack leg. C# guards !(amount == base.Amount) && power == this to stop the first application double-applying; the sim needs no such guard because the two cases are separate methods (__init__ at cmds.py:324 vs on_stack at cmds.py:311), and it keeps C#'s internal order. Settled on power/setup_strike. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  "AfterSideTurnEnd (inherited, TemporaryStrengthPower.cs:173-181)": {
-   "maps_to": "powers.py:866-872 on_player_turn_end / on_enemy_side_end -> _revert",
-   "verdict": "gap",
-   "issue": "SLOT, and LIVE. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and the flush (combat.py:661-662); the correct slot, after_player_turn_end (combat.py:665), exists and is unused. The mechanism was EXECUTED on power/setup_strike (StampedePower 1 + a temp-strength power: ending the turn deals 6 or 8 depending on registration order where the game always deals 8), and this unit shares that code path verbatim. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  }
- },
- "guards": [
-  {
-   "what": "TemporaryStrengthPower.cs:178-179 Remove-then-Apply ordering",
-   "verdict": "deliberate-divergence",
-   "rationale": "C# removes the wrapper and THEN applies the restoring Strength; the sim's _revert applies first and _expires after, so the wrapper is still a listener in the sim and already gone in the game. No ported listener observes it -- settled on power/setup_strike. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  {
-   "what": "TemporaryStrengthPower.cs:154,:168,:179 explicit applier arguments",
-   "verdict": "deliberate-divergence",
-   "rationale": "MISSING applier= (the recurring shape). C# passes an explicit applier on every inner application; the sim passes none. Recorded at the seam as audit/records/seam/power_cmd.json note N2, which settled the BeforeApplied leg by execution as observationally equivalent. Same verdict here per rule 3. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  {
-   "what": "TemporaryStrengthPower.cs:179 the revert applies a NEGATIVE StrengthPower (sign-aware typing)",
-   "verdict": "faithful",
-   "rationale": "SIGN-AWARE TYPING on the revert, examined as another candidate route to audit/records/seam/power_cmd.json G1 and DORMANT. The revert is a negative StrengthPower with applier == target == the owner, which GetTypeForAmount classifies Debuff via arm 1 (PowerModel.cs:460-471) where the sim's static power_type says Buff. All three consumers were traced on power/setup_strike and none fires: no player-side Artifact source exists, Unsettling Lamp's latch needs cardSource != null and this call passes null, and PowerCmd.cs:144 reads the STATIC power.Type. Confirmation, not contradiction. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  {
-   "what": "TemporaryStrengthPower.cs:141-144 IgnoreNextInstance",
-   "verdict": "gap",
-   "issue": "ITemporaryPower.IgnoreNextInstance / _shouldIgnoreNextInstance has NO sim counterpart. Its one caller is Misery.cs:59-61, which copies an enemy's debuffs and must not re-apply the wrapper's internal stat power. DORMANT: Misery is unported (grep -rn misery sts2_rl/ --include=*.py is empty). Named trigger: porting Misery. Dormant gap, not a waiver, per binding rule 1. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  {
-   "what": "ITemporaryPower as a marker interface",
-   "verdict": "gap",
-   "issue": "The marker itself is absent from the sim -- no is_temporary attribute, no InternallyAppliedPower, no should_power_be_removed_on_death among hooks.py's dispatchers. C# has five readers; Rend, Sleight of Flesh and Misery are unported, but IllusionPower IS ported (powers.py:1560ff) and owns the ShouldPowerBeRemovedOnDeath port. DORMANT for this record and flagged rather than re-verdicted, exactly as on power/setup_strike. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  {
-   "what": "TemporaryStrengthPower.cs:175 participants.Contains(base.Owner), plus the is_dead test the sim adds",
-   "verdict": "faithful",
-   "rationale": "The sim ADDS if not self.owner.is_dead before restoring the Strength where C#'s only guard is participants.Contains(base.Owner). Harmless: a creature that died has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), and PowerCmd.Apply's CanReceivePowers guard (PowerCmd.cs:73-76) would refuse the application anyway. NOTE: half B's report-b section 3 names this substituted guard (is_dead standing in for participants.Contains) as a recurring shape; this is the benign instance of it. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
-  },
-  {
-   "what": "The applier is a potion, and the potion KIND has no audit tier",
-   "verdict": "waiver",
-   "rationale": "NARROWED 2026-07-26 (review fix pass). The old rationale said \"what is waived is only the REACHABILITY of its one applier\". That was wrong twice over: it is logically incompatible with this record tagging any hook LIVE (LIVE is itself a reachability claim), and it is stale -- Flex Potion is ported and POOL-REGISTERED, so the power is reachable in the sim today whether or not the potion tier is ever written. What is genuinely out of scope, and all this waiver now claims, is the potion UNIT's own record: potions are a deferred kind by Perry's deferral (the shared audit contract's Global scope section) and there is no audit/records/potion/ tier for Flex Potion to live in, so nothing here judges the potion's own fidelity (cost, targeting, belt behaviour). REACHABILITY IS ESTABLISHED, not waived: the sim ports the potion at potions.py:108-124, @register_potion puts it in ALL_POTIONS, and it is in the generation pool at potion_pools.py:50 (common). The POWER is audited in full above and every liveness label on this record stands on its own evidence. Same correction at all seven power records carrying this guard (power/buffer, power/clarity, power/flex_potion, power/gigantification, power/radiance, power/shackling_potion, power/speed_potion) so the mechanism keeps one verdict at every site per binding rule 3."
-  }
- ],
- "verdict": "gap",
- "audited": "2026-07-26",
- "notes": [
-  "HARNESS, not a verdict (moved out of `guards` 2026-07-26 in the review fix pass): harness.py's list_overrides enumerated ONE hook for this unit -- OriginModel, the only member the .cs file itself declares -- where the unit needs six, because it did not follow the C# base class. The five inherited hooks in this record's `hooks` section were added by hand; validation accepts extra keys. This is defect 2b of the stream report's section 8, found by half A on six TemporaryStrengthPower subclasses and reproducing on both previously unauditable potion powers. It used to be recorded as a guard verdicted `waiver`, which was wrong: a tooling defect is not a scope exclusion, and binding rule 1 reserves `waiver` for genuinely out-of-scope material (multiplayer / presentation / ascension / other characters). It is a note about the audit apparatus, not a sim-vs-game finding, so it carries no verdict and does not enter this record's rollup."
- ]
+  "guards": [
+    {
+      "what": "TemporaryStrengthPower.cs:178-179 Remove-then-Apply ordering",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# removes the wrapper and THEN applies the restoring Strength; the sim's _revert applies first and _expires after, so the wrapper is still a listener in the sim and already gone in the game. No ported listener observes it -- settled on power/setup_strike. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:154,:168,:179 explicit applier arguments",
+      "verdict": "deliberate-divergence",
+      "rationale": "MISSING applier= (the recurring shape). C# passes an explicit applier on every inner application; the sim passes none. Recorded at the seam as audit/records/seam/power_cmd.json note N2, which settled the BeforeApplied leg by execution as observationally equivalent. Same verdict here per rule 3. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:179 the revert applies a NEGATIVE StrengthPower (sign-aware typing)",
+      "verdict": "faithful",
+      "rationale": "SIGN-AWARE TYPING on the revert, examined as another candidate route to audit/records/seam/power_cmd.json G1 and DORMANT. The revert is a negative StrengthPower with applier == target == the owner, which GetTypeForAmount classifies Debuff via arm 1 (PowerModel.cs:460-471) where the sim's static power_type says Buff. All three consumers were traced on power/setup_strike and none fires: no player-side Artifact source exists, Unsettling Lamp's latch needs cardSource != null and this call passes null, and PowerCmd.cs:144 reads the STATIC power.Type. Confirmation, not contradiction. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:141-144 IgnoreNextInstance",
+      "verdict": "gap",
+      "issue": "ITemporaryPower.IgnoreNextInstance / _shouldIgnoreNextInstance has NO sim counterpart. Its one caller is Misery.cs:59-61, which copies an enemy's debuffs and must not re-apply the wrapper's internal stat power. DORMANT: Misery is unported (grep -rn misery sts2_rl/ --include=*.py is empty). Named trigger: porting Misery. Dormant gap, not a waiver, per binding rule 1. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    {
+      "what": "ITemporaryPower as a marker interface",
+      "verdict": "gap",
+      "issue": "The marker itself is absent from the sim -- no is_temporary attribute, no InternallyAppliedPower, no should_power_be_removed_on_death among hooks.py's dispatchers. C# has five readers; Rend, Sleight of Flesh and Misery are unported, but IllusionPower IS ported (powers.py:1560ff) and owns the ShouldPowerBeRemovedOnDeath port. DORMANT for this record and flagged rather than re-verdicted, exactly as on power/setup_strike. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    {
+      "what": "TemporaryStrengthPower.cs:175 participants.Contains(base.Owner), plus the is_dead test the sim adds",
+      "verdict": "faithful",
+      "rationale": "The sim ADDS if not self.owner.is_dead before restoring the Strength where C#'s only guard is participants.Contains(base.Owner). Harmless: a creature that died has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), and PowerCmd.Apply's CanReceivePowers guard (PowerCmd.cs:73-76) would refuse the application anyway. NOTE: half B's report-b section 3 names this substituted guard (is_dead standing in for participants.Contains) as a recurring shape; this is the benign instance of it. Same mechanism as the audited siblings power/setup_strike, power/mangle, power/reptile_trinket and power/shackling_potion; one verdict per mechanism under binding rule 3, so this record cross-references rather than re-argues. Third-file citations (TemporaryStrengthPower.cs), not hashed by this record."
+    },
+    {
+      "what": "The applier is a potion, and the potion KIND has no audit tier",
+      "verdict": "waiver",
+      "rationale": "NARROWED 2026-07-26 (review fix pass). The old rationale said \"what is waived is only the REACHABILITY of its one applier\". That was wrong twice over: it is logically incompatible with this record tagging any hook LIVE (LIVE is itself a reachability claim), and it is stale -- Flex Potion is ported and POOL-REGISTERED, so the power is reachable in the sim today whether or not the potion tier is ever written. What is genuinely out of scope, and all this waiver now claims, is the potion UNIT's own record: potions are a deferred kind by Perry's deferral (the shared audit contract's Global scope section) and there is no audit/records/potion/ tier for Flex Potion to live in, so nothing here judges the potion's own fidelity (cost, targeting, belt behaviour). REACHABILITY IS ESTABLISHED, not waived: the sim ports the potion at potions.py:108-124, @register_potion puts it in ALL_POTIONS, and it is in the generation pool at potion_pools.py:50 (common). The POWER is audited in full above and every liveness label on this record stands on its own evidence. Same correction at all seven power records carrying this guard (power/buffer, power/clarity, power/flex_potion, power/gigantification, power/radiance, power/shackling_potion, power/speed_potion) so the mechanism keeps one verdict at every site per binding rule 3."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26",
+  "notes": [
+    "HARNESS, not a verdict (moved out of `guards` 2026-07-26 in the review fix pass): harness.py's list_overrides enumerated ONE hook for this unit -- OriginModel, the only member the .cs file itself declares -- where the unit needs six, because it did not follow the C# base class. The five inherited hooks in this record's `hooks` section were added by hand; validation accepts extra keys. This is defect 2b of the stream report's section 8, found by half A on six TemporaryStrengthPower subclasses and reproducing on both previously unauditable potion powers. It used to be recorded as a guard verdicted `waiver`, which was wrong: a tooling defect is not a scope exclusion, and binding rule 1 reserves `waiver` for genuinely out-of-scope material (multiplayer / presentation / ascension / other characters). It is a note about the audit apparatus, not a sim-vs-game finding, so it carries no verdict and does not enter this record's rollup."
+  ]
 }

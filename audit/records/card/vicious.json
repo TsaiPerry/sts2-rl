@@ -8,6 +8,18 @@
     "path": "sts2_rl\\cards\\vicious.py",
     "sha256": "731e976860a0e2b55059a3a5f6fdfa1934780fff41107a3a80b72319d1f36871"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Powers/ViciousPower.cs",
+      "sha256": "612363fd7b9401ed1970cfa473b6ae843b9afbc898ef24b63cb1f4c10356ecf8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (vicious.py:101-105) + _init_vars (107-109)",

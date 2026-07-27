@@ -8,6 +8,18 @@
     "path": "sts2_rl\\cards\\hemokinesis.py",
     "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (hemokinesis.py:20-24) + _init_vars (26-29)",

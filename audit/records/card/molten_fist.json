@@ -8,6 +8,18 @@
     "path": "sts2_rl\\cards\\molten_fist.py",
     "sha256": "7d6ae25219d97ead330cdc274c32fc6d5b0d08c133aff5e366363550b5289447"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanonicalKeywords": {
       "maps_to": "MoltenFistCard.exhausts = True (molten_fist.py:332)",

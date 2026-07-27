@@ -8,6 +8,53 @@
     "path": "sts2_rl\\cards\\beckon.py",
     "sha256": "1e2645b251a2a0808d24bf62d199e81d32a0365056967f799d7dded60961ea11"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/thrash.py",
+      "sha256": "6ffb7671ded4a4f5e00a8786ac110c677e02eef9139983e4effafceec8e3bdb5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/previews.py",
+      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/the_boot.py",
+      "sha256": "e208c4539f697911e05cc4e54f440e0b5976a35ecca55d0843dd89617248c809",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "MaxUpgradeLevel": {
       "maps_to": "BeckonCard.max_upgrade_level = 0 (beckon.py:25)",

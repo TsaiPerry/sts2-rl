@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\dominate.py",
     "sha256": "728278a6a43dd3aa6c480f1c8c391e21e81f8f548f24f209f7a19e75f6851144"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "CanonicalKeywords": {
       "maps_to": "DominateCard.exhausts = True (dominate.py:27)",

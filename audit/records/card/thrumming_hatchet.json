@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\colorless_attacks.py",
     "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Cards/Bolas.cs",
+      "sha256": "e3b324c5d32d6f69356e70d28a8c4a5525338c7b8efa3c48dcd90a9950a84789",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "BeforeHandDraw": {
       "maps_to": "ThrummingHatchetCard.on_player_turn_start -> _return_to_hand_if_played_last_turn (colorless_attacks.py:479-480, 514-536)",

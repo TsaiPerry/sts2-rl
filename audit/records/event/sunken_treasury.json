@@ -8,6 +8,18 @@
     "path": "sts2_rl\\events\\sunken_treasury.py",
     "sha256": "fd05dd495b677a3cf95e951a314f2a31092d4bbb346ace43b4d1e392f24a8dcb"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CalculateVars": {
       "maps_to": "SunkenTreasury.calculate_vars (events/sunken_treasury.py:29-31) reproduces SunkenTreasury.cs:33-37 in shape AND in ORDER: `SmallChestGold += NextInt(16) - 8` then `LargeChestGold += NextInt(61) - 30`, mapped to `randrange(16) - 8` and `randrange(61) - 30`. randrange(n) is NextInt(n)'s exclusive-upper single-argument form, so the ranges are [-8, 7] and [-30, 30]. Order matters because the two draws come off one stream, and it is preserved. Only the stream diverges (EV-3). Note the small chest's spread is deliberately ASYMMETRIC in the source (-8..+7 around 60) and the sim copies the asymmetry rather than 'fixing' it to +/-8.",

@@ -8,6 +8,23 @@
     "path": "sts2_rl\\events\\orobas.py",
     "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/ancient.py",
+      "sha256": "e446b8fe5b1ae1f8bd690b49dca771e7af98ab375ced1900545f196186a338ac",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ButtonColor": {
       "maps_to": "(nothing)",

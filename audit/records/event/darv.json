@@ -8,6 +8,13 @@
     "path": "sts2_rl\\events\\darv.py",
     "sha256": "0f61517f657199a624cbc18d1d704f9cecdae6e016f457a52fbf99483f4dd207"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/ancient.py",
+      "sha256": "e446b8fe5b1ae1f8bd690b49dca771e7af98ab375ced1900545f196186a338ac",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ButtonColor": {
       "maps_to": "(nothing)",

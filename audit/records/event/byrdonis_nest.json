@@ -8,6 +8,13 @@
     "path": "sts2_rl\\events\\byrdonis_nest.py",
     "sha256": "473830e27e9bee955d9d537269c58475029270aad9355c538f929579bffbd80f"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "ByrdonisNest.is_allowed (events/byrdonis_nest.py:28-32) reproduces Player.HasEventPet (Player.cs:244-251) exactly, both clauses and in the same precedence: `Relics.Any(r => r.AddsPet)` -> `any(getattr(relic, 'adds_pet', False) ...)`, else `Deck.Cards.Any(c is ByrdonisEgg)` -> `any(card.id == 'byrdonis_egg' ...)`. The Players.All quantifier collapses -- see the multiplayer guard.",

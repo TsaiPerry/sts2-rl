@@ -8,6 +8,118 @@
     "path": "sts2_rl\\enchantments.py",
     "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Anger.cs",
+      "sha256": "a257b4fa27cf13a9a7b9b8d1b3ebb82cac1b6c1f6f6b21da1198f8edd8690aa4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/DualWield.cs",
+      "sha256": "9477b1abf5642c96590d44e9f791e391dcfb8a4465ac40cb22510507f465ca6f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/JugglingPower.cs",
+      "sha256": "ceb563698f5ba534edee10f779f2713d4d772dbe791fc9590ad3fe1f7d38fc44",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BurningSticks.cs",
+      "sha256": "7c01f7308ea8d12a84161c069c669dbdadc18fb48ef5f551a5d9adcfbe3e8cf9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MusicBox.cs",
+      "sha256": "0dbade89edc069b750d2c1c41ad9597f036d1897cd9cfb9b0dbb22988da4550b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/anger.py",
+      "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/trash_heap_cards.py",
+      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/reflections.py",
+      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/self_help_book.py",
+      "sha256": "19718722e260e9a3e96f1aa74d6acf5ea4970ea20b9fdcd2795b6afcecb217fd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/trash_heap.py",
+      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/beautiful_bracelet.py",
+      "sha256": "c160601a69de39d5cbcba5d6c4945dae49b1f604c1187e0225966017721fe4a7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/bing_bong.py",
+      "sha256": "16432616467aff2cbd30eb4ca54ab0dfdd663256bcf3e3c63b714d6e423695c8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/burning_sticks.py",
+      "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/music_box.py",
+      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_growth.py",
+      "sha256": "1e9597d2278c55d09e942119f2df1df00f57c56d5cab173f2f52bc232d6d2871",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "HasExtraCardText": {
       "maps_to": "(nothing)",

@@ -8,6 +8,33 @@
     "path": "sts2_rl\\events\\morphic_grove.py",
     "sha256": "ce535850554ab449755eae4274e742dcb077e5424734e14dcf5d628e9a58c049"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/CardSelection/CardSelectorPrefs.cs",
+      "sha256": "be907ced510772bbac02fd30e7553a360e426c4868c4436224d454d0f8177086",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsShared": {
       "maps_to": "MorphicGrove.cs:20 `IsShared => true`; the sim carries shared membership as registry position (events/__init__.py) and this unit is in the 18-id pool.",

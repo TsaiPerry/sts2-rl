@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\corruption.py",
     "sha256": "d69ac35dbabb4d4a52a28a7969388b35849ad54e3dc9a408a0a676ff3dd028a1"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (corruption.py:20-24) + _init_vars (26-27)",

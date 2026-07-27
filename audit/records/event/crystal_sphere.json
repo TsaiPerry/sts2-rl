@@ -8,6 +8,13 @@
     "path": "sts2_rl\\events\\crystal_sphere.py",
     "sha256": "9cc995057bd92ced914d27f31edfeed71c7416f2594357731e249e95d88cb679"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsDeterministic": {
       "maps_to": "CrystalSphere.cs:34 `IsDeterministic => false` marks the event as consuming RNG at CalculateVars time. The sim has no IsDeterministic surface; the property's only consumer is the event-selection machinery, and this unit's CalculateVars is unreachable behind is_allowed (see below), so the flag has nothing to gate.",

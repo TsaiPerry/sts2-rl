@@ -8,6 +8,38 @@
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
     "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_rng_tripwire.py",
+      "sha256": "f6bed2b1db59d7bab3be63259896987637e4f92d665c830fd7ed6fac0a80eba7",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "VisualCardPool": {
       "maps_to": "no counterpart",

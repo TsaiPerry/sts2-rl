@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\stampede.py",
     "sha256": "93dc487d8ffdaee6da147e8e5973ce3320af7c730019ff805075c6d2c7589647"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (stampede.py:55-59) + _init_vars (61-62)",

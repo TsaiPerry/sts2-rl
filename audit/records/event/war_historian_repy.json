@@ -8,6 +8,53 @@
     "path": "sts2_rl\\events\\war_historian_repy.py",
     "sha256": "3d0273c48e42e3a7dd6202808ced621fa1f2b675734b523d3cab21a4b5c5313f"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Cards/LanternKey.cs",
+      "sha256": "062853fba0b815dc9cbc7dea1fc4bc2517c743c1aca520c32fb821cdfc19a6cf",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/CrystalSphere.cs",
+      "sha256": "eb7331c7fdbd2d5dbd439450dfdbbe692fd83aa4b725012d1cf239e6d64fd2df",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Vfx/Backgrounds/NQueenRepyBgVfx.cs",
+      "sha256": "89aa8448221c6c697cdf44e81091e0626764cf904be15da15c4248bc76680b11",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/ExtraRunFields.cs",
+      "sha256": "3e60872fbc6d371eb7110194f86907e61f2ae8e2b834dba2f5be1bee2a0b0fcb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/__init__.py",
+      "sha256": "c170436e0540caaebac2e6703e83d385e003d7ea79a8dc6010b46e4d58908e87",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_lantern_key.py",
+      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/golden_compass.py",
+      "sha256": "90ca1a9fe31935161ebde5e9ac4032f9c63bb8c159adc292eaac554a36fa6f3f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsShared": {
       "maps_to": "WarHistorianRepy.cs:16 `IsShared => true`; the sim carries shared membership as registry position (events/__init__.py:117-137, which names this unit in the 18-id SHARED_EVENTS tuple) rather than a per-event flag.",

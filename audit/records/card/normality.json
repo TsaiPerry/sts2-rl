@@ -8,6 +8,48 @@
     "path": "sts2_rl\\cards\\normality.py",
     "sha256": "6bfcaf8a10c6983ab40533412922c46b612606e6fc28ed37bcd239e74f763936"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Localization/DynamicVars/CalculatedVar.cs",
+      "sha256": "871a069181106d274f9086b7535788beb9380ac66b1bb318172b455ebb7c6331",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "MaxUpgradeLevel": {
       "maps_to": "NormalityCard.max_upgrade_level = 0 (normality.py:436)",

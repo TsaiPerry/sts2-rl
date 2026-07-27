@@ -8,6 +8,28 @@
     "path": "sts2_rl\\events\\endless_conveyor.py",
     "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/brain_leech.py",
+      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "EndlessConveyor.is_allowed (events/endless_conveyor.py:44-46) `run.gold >= 120`, matching EndlessConveyor.cs:94-97. Quantifier collapses -- see the multiplayer guard.",

@@ -8,6 +8,38 @@
     "path": "sts2_rl\\events\\pael.py",
     "sha256": "b44cc9f4d65cd83d22c38a23dfbb238a20f3efc978f8e15870e3102ce26da348"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/ancient.py",
+      "sha256": "e446b8fe5b1ae1f8bd690b49dca771e7af98ab375ced1900545f196186a338ac",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_claw.py",
+      "sha256": "e8e6cf3cf436f0e3c8c4ee678989d571a30d79d8b83992ee590d320fdfd1ef41",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_tooth.py",
+      "sha256": "9dc8b2f331329ddeabcdabf270b0d70e1e11f8139f64231def71c1bb0302b1e4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ButtonColor": {
       "maps_to": "(nothing)",

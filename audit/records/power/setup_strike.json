@@ -8,6 +8,83 @@
     "path": "sts2_rl\\powers.py",
     "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Badges/DebufferModel.cs",
+      "sha256": "e4b2dfd15b6acd9d75651a5063a2a4fbdb60d649d94ba5a8cda1f47f92a11f51",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Misery.cs",
+      "sha256": "272f52915d18bc3e274c26a1040198b2f0c6ca5bf377037897a165cb1c45e305",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Cards/Rend.cs",
+      "sha256": "72d0fdcbadb22fff15a727b7bae2dbc9b4b0c89ea3cde48f648d9fbade3e64eb",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ITemporaryPower.cs",
+      "sha256": "f46b5ab6626174049aeb94155d650e1430a2ef9c7a5804fcca3b2e57ffd2d36f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/IllusionPower.cs",
+      "sha256": "7461c923281077a0f9acf3647dc08ec0ff75ed04e1098406f6dc8b6fbb6fb31d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SleightOfFleshPower.cs",
+      "sha256": "ea4314854bc90d490a339cbe7f1039593f418d2c09b6222f3f71e3f1d52c0b79",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/TemporaryStrengthPower.cs",
+      "sha256": "c6b426e4bb0b195133970959fa5c0441ba7c5166bf21feeb3318df1e614aa637",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/UnsettlingLamp.cs",
+      "sha256": "f4d772296f344ba05eedcc2131f60435a9bd4afe1166bab435e13bce517cf9b3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "OriginModel": {
       "maps_to": "no sim counterpart; powers.py:875 name literal",

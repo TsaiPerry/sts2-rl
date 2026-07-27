@@ -8,6 +8,23 @@
     "path": "sts2_rl\\cards\\colorless_attacks.py",
     "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardPile.cs",
+      "sha256": "8aa6ed9f80eabbb282950baf2b67a2ca02a6dd5e95308a7cf9dd2da0d3535c6e",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/brand.py",
+      "sha256": "961213836047f408c905c811d7a23de67a16bc1d572605bec6828dce80007d1c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/burning_pact.py",
+      "sha256": "6acd2700a43b1bd9a6f752ced0c16c7ed0c1cf3cbe95242394217243c8df6395",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "BeforeHandDraw": {
       "maps_to": "BolasCard.on_player_turn_start -> _return_to_hand_if_played_last_turn (colorless_attacks.py:47-48, 514-536)",

@@ -8,6 +8,18 @@
     "path": "sts2_rl\\events\\luminous_choir.py",
     "sha256": "9557165adc13e687e127d4483d225b5b4a459f88b930c1b465f6e4f46ea50c03"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "LuminousChoir.is_allowed (events/luminous_choir.py:34-36) `run.gold >= 149 and run.has_available_relics()`, matching LuminousChoir.cs:23-26. A subtle detail is handled correctly: IsAllowed reads `base.DynamicVars.Gold.BaseValue`, which at eligibility time is still the CANONICAL 149 because CalculateVars has not run yet -- so the gate is against 149, not against the discounted price. The sim uses the literal _BASE_GOLD (149) rather than self.gold_cost, which is exactly that. `p.RelicGrabBag.HasAvailableRelics(runState)` maps to run.has_available_relics (run.py:555-557). Quantifier collapses -- see the multiplayer guard.",

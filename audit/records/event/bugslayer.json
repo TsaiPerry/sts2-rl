@@ -8,6 +8,13 @@
     "path": "sts2_rl\\events\\bugslayer.py",
     "sha256": "f0bf0f5fc885a5c409bad1a55240ed63abcc955edd604bde455accd35a5d4865"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {},
   "guards": [
     {

@@ -8,6 +8,48 @@
     "path": "sts2_rl\\cards\\guilty.py",
     "sha256": "a87722dddbc7f440f1e1cf76669a4f83bc78963878506ae11a8c251b480ed4d4"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mummified_hand.py",
+      "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "MaxUpgradeLevel": {
       "maps_to": "GuiltyCard.max_upgrade_level = 0 (guilty.py:30)",

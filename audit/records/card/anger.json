@@ -8,6 +8,43 @@
     "path": "sts2_rl\\cards\\anger.py",
     "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/grave_of_the_forgotten.py",
+      "sha256": "e57a52a9d23e4e9409d249128dfcc4d38b857771f117f70630f31ea07473e9d7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/self_help_book.py",
+      "sha256": "19718722e260e9a3e96f1aa74d6acf5ea4970ea20b9fdcd2795b6afcecb217fd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/spiraling_whirlpool.py",
+      "sha256": "41a9efc1e1580159647fbdf2e2bbf8057d0c9a4543eb4843d6a1d74419959ee7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs on AngerCard (anger.py:20-24) + _init_vars (26-28)",

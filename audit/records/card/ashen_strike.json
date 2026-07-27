@@ -8,6 +8,28 @@
     "path": "sts2_rl\\cards\\ashen_strike.py",
     "sha256": "dd512a193944505bb3646e765bad16d92ca64a9f0e0a2b26dc1b67d2ebd26330"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Localization/DynamicVars/CalculatedVar.cs",
+      "sha256": "871a069181106d274f9086b7535788beb9380ac66b1bb318172b455ebb7c6331",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (ashen_strike.py:21-26) + _init_vars (28-31)",

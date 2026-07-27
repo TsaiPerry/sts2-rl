@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\cinder.py",
     "sha256": "39b4b54258952436186a012ad3f213f1bee5c03913ea5c1bb1dbfb033d7ce0fd"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (cinder.py:20-24) + _init_vars (26-28)",

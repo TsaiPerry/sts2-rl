@@ -8,6 +8,28 @@
     "path": "sts2_rl\\events\\hungry_for_mushrooms.py",
     "sha256": "a4e4d128eec5f074343ab46cd4d3c7edd50ce072a2aaa619ebbe9bc43243e9b6"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Relics/BigMushroom.cs",
+      "sha256": "164ccada42443b186a3b79cb8ebe3543704d19696aa7b19b75fa5cc07a47fddc",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/big_mushroom.py",
+      "sha256": "d2cc32319de1f178d350da05fb8d26bd6a693b5ae3ff17955780103936e78d6e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/fragrant_mushroom.py",
+      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {},
   "guards": [
     {

@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\slimed.py",
     "sha256": "e74f448e425d27c500272b62f588ffbc574d21d6a796cc6ad30d2bf482212765"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "MaxUpgradeLevel": {
       "maps_to": "SlimedCard.max_upgrade_level = 0 (slimed.py:191)",

@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\dismantle.py",
     "sha256": "0927b636f881c4494129073f699229c7c330bb44cef4c8536ad6916e608ed7c7"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (dismantle.py:20-24) + _init_vars (26-28)",

@@ -8,6 +8,28 @@
     "path": "sts2_rl\\cards\\thunderclap.py",
     "sha256": "6f0648608f7b31572768f647ae0214c7b6dabb534f4650ca8026fcc53061c284"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (thunderclap.py:92-97) + _init_vars (99-102)",
@@ -34,7 +56,7 @@
     {
       "what": "the sim `continue`s rather than breaking when an enemy is gone in the damage pass, and re-checks `ctx.player.is_dead` between the passes (thunderclap.py:111-115)",
       "verdict": "gap",
-      "issue": "Two behaviours are bundled here and only one is the source's. C#'s AttackCommand does skip non-alive targets by re-deriving `validTargets` (AttackCommand.cs:544-546) and does bail on `Attacker.IsDead` (540-543), so the `continue` in the damage pass is faithful. THE MID-CARD `is_dead` RETURN IS NOT: it additionally skips the whole Vulnerable pass (thunderclap.py:113-115), which Thunderclap.cs does not do -- C# would still await the multi-target `PowerCmd.Apply` on a dying player's turn, firing its apply bracket on every hittable enemy. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. TRIGGER: a ported listener that acts after the player's death. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand, card/hemokinesis, card/offering -- all five carry `gap`, and the report files thunderclap inside that same family (§3.5 family 1)."
+      "issue": "Two behaviours are bundled here and only one is the source's. C#'s AttackCommand does skip non-alive targets by re-deriving `validTargets` (AttackCommand.cs:544-546) and does bail on `Attacker.IsDead` (540-543), so the `continue` in the damage pass is faithful. THE MID-CARD `is_dead` RETURN IS NOT: it additionally skips the whole Vulnerable pass (thunderclap.py:113-115), which Thunderclap.cs does not do -- C# would still await the multi-target `PowerCmd.Apply` on a dying player's turn, firing its apply bracket on every hittable enemy. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. TRIGGER: a ported listener that acts after the player's death. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand, card/hemokinesis, card/offering -- all five carry `gap`, and the report files thunderclap inside that same family (\u00a73.5 family 1)."
     }
   ],
   "verdict": "gap",

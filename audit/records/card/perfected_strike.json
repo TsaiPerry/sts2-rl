@@ -8,6 +8,23 @@
     "path": "sts2_rl\\cards\\perfected_strike.py",
     "sha256": "437c644afc402dde1bd57e12e9faabe10569472c053f02f3a3dffca325c00ed9"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Localization/DynamicVars/CalculatedVar.cs",
+      "sha256": "871a069181106d274f9086b7535788beb9380ac66b1bb318172b455ebb7c6331",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (perfected_strike.py:22-27) + _init_vars (29-32)",

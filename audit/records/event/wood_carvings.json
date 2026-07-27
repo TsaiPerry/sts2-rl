@@ -8,6 +8,23 @@
     "path": "sts2_rl\\events\\wood_carvings.py",
     "sha256": "82a83e9d2967853471e63b02d30b56a9aa87af98373eb27fb3163c89dddc3f15"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Enchantments/Slither.cs",
+      "sha256": "f696fb9ac48cc864dba7100ab8c2d25dcc0142eaca212190b82de6132f805452",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "WoodCarvings.is_allowed (events/wood_carvings.py:30-34) `any(c.rarity == BASIC and not c.eternal for c in run.deck)`, matching WoodCarvings.cs:36-39 `Players.All(p => CardPile.Get(Deck, p).Cards.Any(c => c != null && c.Rarity == CardRarity.Basic && c.IsRemovable))`. IsRemovable is 'everything except Eternal' (run.py:360-362), so `not c.eternal` is the same clause. Multiplayer quantifier waived separately.",

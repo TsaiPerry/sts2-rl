@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
     "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "VisualCardPool": {
       "maps_to": "no counterpart; the sim has no card-pool artwork concept",

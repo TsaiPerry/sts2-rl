@@ -8,6 +8,23 @@
     "path": "sts2_rl\\events\\grave_of_the_forgotten.py",
     "sha256": "e57a52a9d23e4e9409d249128dfcc4d38b857771f117f70630f31ea07473e9d7"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "GraveOfTheForgotten.is_allowed (events/grave_of_the_forgotten.py:32-34) delegates to _has_enchantable, which is `any(SoulsEnchantment.can_enchant(c) for c in run.deck)` -- the same predicate HasEnchantableCards uses (GraveOfTheForgotten.cs:73-77). Souls' extra restriction (the card must carry Exhaust) is audited under enchantment/souls. Quantifier collapses -- see the multiplayer guard.",

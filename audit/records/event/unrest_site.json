@@ -8,6 +8,43 @@
     "path": "sts2_rl\\events\\unrest_site.py",
     "sha256": "e70c4bbb254a09ae0930b1954a5f7365e5242f5f2a932459525990e7206d887f"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Events/EventOption.cs",
+      "sha256": "02a8c24eb58efdb08f14b8801a598400c4bd590b675faf9b947413096562118c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/tungsten_rod.py",
+      "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "events/unrest_site.py:30 `run.hp <= run.max_hp * 0.70` -- binary float, where UnrestSite.cs:26-29 is `(decimal)p.Creature.CurrentHp <= (decimal)p.Creature.MaxHp * 0.70m`, exact base-10 decimal",

@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\defend.py",
     "sha256": "5ecb528348c1a44dad9d20f9cd3bac3abdd1f285a7e7a64dd5e0306022919697"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "GainsBlock": {
       "maps_to": "DefendCard.gains_block = True (defend.py:14)",

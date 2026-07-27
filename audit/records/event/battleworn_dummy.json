@@ -8,6 +8,18 @@
     "path": "sts2_rl\\events\\battleworn_dummy.py",
     "sha256": "850d27050c4f39057ffb93a9124e5d0fd307db16f1a8320abc19c8a1109c2f42"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsShared": {
       "maps_to": "BattlewornDummy.cs:28 `IsShared => true`. The sim carries the shared pool as a registry list rather than a per-event flag; the unit is in the 18-id shared pool the SP2 event-shuffle parity depends on (events/__init__.py).",

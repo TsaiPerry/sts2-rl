@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\not_yet.py",
     "sha256": "d1ee47fe1cc2df829374871317af7fc4f667e4e1fcee8e6ebffe0683c650b446"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanBeGeneratedInCombat": {
       "maps_to": "NotYetCard.can_be_generated_in_combat = False (not_yet.py:481)",

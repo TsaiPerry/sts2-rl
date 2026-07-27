@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\bully.py",
     "sha256": "a5f956f10c2dae4c526846c9a7bd2152585d814b7a4c3757bc2dca8418470095"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Localization/DynamicVars/CalculatedVar.cs",
+      "sha256": "871a069181106d274f9086b7535788beb9380ac66b1bb318172b455ebb7c6331",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (bully.py:21-25) + _init_vars (27-30)",

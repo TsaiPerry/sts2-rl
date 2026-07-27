@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\colorless_skills.py",
     "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "GainsBlock": {
       "maps_to": "EquilibriumCard.gains_block = True (colorless_skills.py:238)",

@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\twin_strike.py",
     "sha256": "8bf84867991ffcc5fdc9527b76bce72274b23a693278b13e82ab69d631094387"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (twin_strike.py:268-273) + _init_vars (275-278)",

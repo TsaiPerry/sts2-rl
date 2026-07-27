@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\forgotten_ritual.py",
     "sha256": "4c1e098752842dda85b98c49572149015812799f45cea0b43a83df7297c06020"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanonicalKeywords": {
       "maps_to": "ForgottenRitualCard.exhausts = True (forgotten_ritual.py:109)",

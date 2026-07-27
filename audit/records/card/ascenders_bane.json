@@ -8,6 +8,63 @@
     "path": "sts2_rl\\cards\\ascenders_bane.py",
     "sha256": "3900e893c3ab5dcf69bf14829cc272d80a127991640e5cf09744e26a44e14bdd"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/previews.py",
+      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mummified_hand.py",
+      "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/the_boot.py",
+      "sha256": "e208c4539f697911e05cc4e54f440e0b5976a35ecca55d0843dd89617248c809",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanBeGeneratedByModifiers": {
       "maps_to": "AscendersBaneCard.can_be_generated_by_modifiers = False (ascenders_bane.py:30)",

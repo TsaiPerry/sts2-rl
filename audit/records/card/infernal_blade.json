@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\infernal_blade.py",
     "sha256": "37ff6079bd824334debd034331858e9b884ddbfc2eb0adf0e45bec24427deb61"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanonicalKeywords": {
       "maps_to": "InfernalBladeCard.exhausts = True (infernal_blade.py:191)",

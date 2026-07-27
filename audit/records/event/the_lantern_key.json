@@ -8,6 +8,58 @@
     "path": "sts2_rl\\events\\the_lantern_key.py",
     "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Encounters/MysteriousKnightEventEncounter.cs",
+      "sha256": "1a52b0b1b121fe2033471bb2d4d93941ac0dee5f2bb2dae8b7a5eadde2c6d07a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EventModel.cs",
+      "sha256": "ca991ec5fea146069498065563bbc4a63ee0786ceaafdeae823df822e955f240",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/PunchOff.cs",
+      "sha256": "efb9357b4754fcb0e416a19b308ab859ee304e9b0ae882d8fa46e568cd7957b8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/TheArchitect.cs",
+      "sha256": "3ba94853f86839ee7dd48d1810fd98d0a9b4ace232a628419ab18b947fa9178c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rooms/EventRoom.cs",
+      "sha256": "1038126138bdc9799ec3f1286bfddef80618dad80083c375d07cf2ae36e0e0f3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/event_cards.py",
+      "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "LayoutType": {
       "maps_to": "events/the_lantern_key.py has no analogue",

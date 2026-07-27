@@ -8,6 +8,83 @@
     "path": "sts2_rl\\powers.py",
     "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/EyeWithTeeth.cs",
+      "sha256": "72f0a276381a9eb594a3486f66059e771187ba0529cb94075028331c23279c81",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Parafright.cs",
+      "sha256": "cf2ec86e1cab489f4c064be88254a4dae45455de2ffebb6c75b6c069ef5b6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/WaterfallGiant.cs",
+      "sha256": "526a68e24ae441923a3dbfa3175e95900d23e035630a220608ea6356a108afaa",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/AdaptablePower.cs",
+      "sha256": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SteamEruptionPower.cs",
+      "sha256": "84f1f3ed19556c3101079b793c7d7f6e0227a477c25103c686e0a3b6042ba7a0",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/feed.py",
+      "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/the_obscura.py",
+      "sha256": "8ffc0b4fdb22396d575ec4c72534b1c7812a85f2e220e75661b888346d578029",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/fogmog.py",
+      "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/waterfall_giant.py",
+      "sha256": "7a56cdc2b7100662f13350de2c6f3738989bb9b2501903c2a72ebebaf81de08c",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Type": {
       "maps_to": "powers.py:1551 `power_type = PowerType.BUFF`",

@@ -8,6 +8,18 @@
     "path": "sts2_rl\\events\\lost_wisp.py",
     "sha256": "b823be6835ae4bf5b073869148c2342d095e746bd9dc3ac39cdc6357c32ad92f"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CalculateVars": {
       "maps_to": "LostWisp.calculate_vars (events/lost_wisp.py:27-28) `_BASE_GOLD + self.rng.randint(-15, 15)` maps `Gold.BaseValue += base.Rng.NextInt(-15, 16)` (LostWisp.cs:42-45). The bound conversion is right: NextInt's upper bound is exclusive, so [-15, 16) is randint(-15, 15) inclusive -- 31 outcomes either way, and the sim's comment records the conversion. Only the stream diverges (EV-3).",

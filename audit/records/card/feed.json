@@ -8,6 +8,48 @@
     "path": "sts2_rl\\cards\\feed.py",
     "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/MinionPower.cs",
+      "sha256": "10ed71ca328a4cc2325a7424ea67df54ca93e73562f22ca7dcb3964962c05537",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/ReattachPower.cs",
+      "sha256": "7d8b21db9c6908f0e87c1a4c803cdca54066ba628df5f9ee2e066fa71bf0e652",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/fabricator.py",
+      "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/queen.py",
+      "sha256": "aa3e8fec081e81e448f6885eb0cf1af86a36eb1e27c705a1ae1b2f33d1aa1ad8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/ovicopter.py",
+      "sha256": "79189b0410ab49908dad8328810cb95e4beed347b0d1025dac48c2befb12e0c5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanBeGeneratedInCombat": {
       "maps_to": "FeedCard.can_be_generated_in_combat = False (feed.py:30)",

@@ -8,6 +8,33 @@
     "path": "sts2_rl\\events\\tinker_time.py",
     "sha256": "9332376f529f4a18d2804beeb4dc0559521d2f5e0ebd61bf2694ff78b268a6f8"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Extensions/IEnumerableExtensions.cs",
+      "sha256": "d6062ab2a496c6d21aba6bdd48937a1097858f46197f2c17f2cbac7177b494a5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/mad_science.py",
+      "sha256": "be89a57eaadb928be99c364ad5df77b5d1b29c24892981699abfb53cb1e420dc",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {},
   "guards": [
     {

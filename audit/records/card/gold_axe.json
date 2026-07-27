@@ -8,6 +8,18 @@
     "path": "sts2_rl\\cards\\colorless_attacks.py",
     "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Localization/DynamicVars/CalculatedVar.cs",
+      "sha256": "871a069181106d274f9086b7535788beb9380ac66b1bb318172b455ebb7c6331",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (colorless_attacks.py:150-154) + _init_vars (156-158)",

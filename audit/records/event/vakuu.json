@@ -8,6 +8,103 @@
     "path": "sts2_rl\\events\\vakuu.py",
     "sha256": "8342368cf750f853a60f1d6bfa1c46170dd100c96139132dccabe5568e2337e5"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/DevConsole/ConsoleCommands/AncientConsoleCmd.cs",
+      "sha256": "8a42f286595e684919682777d7f39150bc9a6dfc1a404e04dca62300b61c6d0c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Ancients/AncientDialogueSet.cs",
+      "sha256": "a814d04915135cd5e31ff64909d638818eac0de170a646ce6d8310fc3b2cd6c5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Events/EventOption.cs",
+      "sha256": "02a8c24eb58efdb08f14b8801a598400c4bd590b675faf9b947413096562118c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AncientEventModel.cs",
+      "sha256": "1c805375395bf04b49ee0e056de4dc717d96c649b718a9d87338052cb0855091",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/WelcomeToWongos.cs",
+      "sha256": "5a1f3c051a170105fe8445321aa7aa0f88e17312de91253e52f041104dd2299e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/DistinguishedCape.cs",
+      "sha256": "e95c2a94df54d4e0cd7a133e3ecedc807a51935c63302c375d63f208d73168e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/RelicCollection/NRelicCollectionCategory.cs",
+      "sha256": "3171d45189b145848ef4345e499a8351ce2cba9639399e72e3dc5f65161944b2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/ancient.py",
+      "sha256": "e446b8fe5b1ae1f8bd690b49dca771e7af98ab375ced1900545f196186a338ac",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/nonupeipe.py",
+      "sha256": "8ecd4c4afbb545903025c44f0b845dba8dd94bb1a0f2a0423572073ff06b03e9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/distinguished_cape.py",
+      "sha256": "34e73e730c6e4273eaaab3ab77631e3ad2c158ecaa435fa2294b9927e911e82e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/tungsten_rod.py",
+      "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ButtonColor": {
       "maps_to": "(nothing)",

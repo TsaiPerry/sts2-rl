@@ -8,6 +8,28 @@
     "path": "sts2_rl\\cards\\feel_no_pain_card.py",
     "sha256": "dd07317bd59ddc9173d2cae3c7ddb4e978aaffcf1daceab6f4060a4e9dde18bf"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_ironclad_cards.py",
+      "sha256": "659c3f886b44deb640d77248d0c9b7da40d92e37cd19722b8592a3d389f38d06",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_shared_enchantments.py",
+      "sha256": "8cd33315c1985186b30561d56c13fb547cf3f68a87f11df8f655a28f78ceaa14",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (feel_no_pain_card.py:19-23) + _init_vars (25-27)",

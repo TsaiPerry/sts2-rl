@@ -8,6 +8,23 @@
     "path": "sts2_rl\\events\\symbiote.py",
     "sha256": "daaf188ec9417d2628e75b104aec39089db1ac3489db9388cec5799d643203d3"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "Symbiote.is_allowed (events/symbiote.py:28-30) `run.act_index > 0`, matching Symbiote.cs:31-34 exactly. No multiplayer quantifier on this one.",

@@ -8,6 +8,53 @@
     "path": "sts2_rl\\events\\relic_trader.py",
     "sha256": "abfda521b0b2ee7b4a8d8f2c7a832d7221efc653f64af4bcbbe4ed3070a7abbb"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/RelicCmd.cs",
+      "sha256": "7da9c58b87b37e212a85f1541883d0e627d081c561d6b833ed2e1f89e69c3e51",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Relics/RelicRarity.cs",
+      "sha256": "4b0999f52a79d8708ce131d375c71e04da9fe5a429e20502e804d451ec121562",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ModelId.cs",
+      "sha256": "820a9d4cf2b46d013108109c60e30dd6dbeaff554fd4680162197c55083fe15d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "RelicTrader.is_allowed (events/relic_trader.py:29-34) `run.act_index != 0 and sum(1 for r in run.relics if r.is_tradable) >= 5`, matching RelicTrader.cs:98-105's early `CurrentActIndex == 0 -> false` followed by `GetValidRelics(p).Count() >= 5`. GetValidRelics is `Relics.Where(r => r.IsTradable)` (RelicTrader.cs:107-110) and Relic.is_tradable (relics/base.py:125-135) is a clause-for-clause port of RelicModel.IsTradable (RelicModel.cs:176-207): not IsUsedUp, no HasUponPickupEffect, not melted, no SpawnsPets, and rarity not in {Starter, Event, Ancient} -- the source spells the last as `rarity == Starter || (uint)(rarity - 6) <= 1u`, and RelicRarity.cs:5-12 makes 6/7 Event/Ancient. Quantifier collapses -- see the multiplayer guard.",

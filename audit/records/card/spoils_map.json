@@ -8,6 +8,38 @@
     "path": "sts2_rl\\cards\\spoils_map.py",
     "sha256": "cd4880769f90dd631b9b39102faa291f5b600e1f2763ee77b05706b4289c184c"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Map/SpoilsActMap.cs",
+      "sha256": "20d4f57a56cd8814d1b057695f824a1076c8c3afe74910adfa09923fc17555d2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "MaxUpgradeLevel": {
       "maps_to": "SpoilsMapCard.max_upgrade_level = 0 (spoils_map.py:75)",

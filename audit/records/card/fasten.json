@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\colorless_powers.py",
     "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Powers/FastenPower.cs",
+      "sha256": "a7d67c5fa1269971bec979bd63e6c0100c1482f636c641741d512edcfa7cd6ac",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (colorless_powers.py:131-135) + _init_vars (137-139)",

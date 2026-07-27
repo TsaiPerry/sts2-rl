@@ -8,6 +8,13 @@
     "path": "sts2_rl\\events\\amalgamator.py",
     "sha256": "923b2309b268ec4bfd6ca9fc9715ac2fffd487575dc2a8aa7eb6630a8d967ae4"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "Amalgamator.is_allowed (events/amalgamator.py:32-36): >= 2 valid Strikes AND >= 2 valid Defends, matching Amalgamator.cs:27-30. The `runState.Players.All(...)` quantifier collapses to the one player -- see the multiplayer guard.",

@@ -8,6 +8,43 @@
     "path": "sts2_rl\\events\\potion_courier.py",
     "sha256": "8cd18b6a03397127ffffee5343b3c60f0896c7f641742e7580886ef4b5135276"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/SharedPotionPool.cs",
+      "sha256": "2e2d2d53b81772047dc6fd22e6f55d69a2792ac8d22fffd46977eb508b8b6c52",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "IsAllowed": {
       "maps_to": "PotionCourier.is_allowed (events/potion_courier.py:35-37) `run.act_index > 0`, matching PotionCourier.cs:31-34's `runState.CurrentActIndex > 0` exactly. No multiplayer quantifier on this one and no other clause.",

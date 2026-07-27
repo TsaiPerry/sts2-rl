@@ -8,6 +8,28 @@
     "path": "sts2_rl\\cards\\knowledge_curses.py",
     "sha256": "d29aca1c34977dec78a38306040848d832018f4f0144e0703b77eb663e8ae57a"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/infested_automaton.py",
+      "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "CanBeGeneratedInCombat": {
       "maps_to": "NOT PORTED -- the shared `_ChoosableCurse` base sets `can_be_generated_by_modifiers = False` instead (knowledge_curses.py:26)",

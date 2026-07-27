@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\rupture_card.py",
     "sha256": "e5b654e1413d618b88f94f6cbfb4375fef22b95d7b867d91dc0ebf2a41e19636"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "ctor": {
       "maps_to": "class attrs (rupture_card.py:240-244) + _init_vars (246-248)",

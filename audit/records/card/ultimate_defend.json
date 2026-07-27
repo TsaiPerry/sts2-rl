@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\event_cards.py",
     "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
   },
+  "extra_sources": [
+    {
+      "path": "sts2_rl/enchantments.py",
+      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "GainsBlock": {
       "maps_to": "UltimateDefendCard.gains_block = True (event_cards.py:189)",

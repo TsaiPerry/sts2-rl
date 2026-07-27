@@ -8,6 +8,13 @@
     "path": "sts2_rl\\cards\\true_grit.py",
     "sha256": "9536814bdecafe56c0def793fe2342d4daf0ff237ea15f54e4a139d8f1aaf6a6"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    }
+  ],
   "hooks": {
     "GainsBlock": {
       "maps_to": "TrueGritCard.gains_block = True (true_grit.py:218)",

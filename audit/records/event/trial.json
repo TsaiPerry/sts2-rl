@@ -8,6 +8,133 @@
     "path": "sts2_rl\\events\\trial.py",
     "sha256": "3d435d5a33c144a8a91f5771516376a0257b059a7c083db920f1dc399e4f5568"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/CardSelection/CardSelectorPrefs.cs",
+      "sha256": "be907ced510772bbac02fd30e7553a360e426c4868c4436224d454d0f8177086",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Events/EventOption.cs",
+      "sha256": "02a8c24eb58efdb08f14b8801a598400c4bd590b675faf9b947413096562118c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/DenseVegetation.cs",
+      "sha256": "07bfcb3131b1f4cf006fd8d6e1ba2d76aa4cd4385ff60d55015ca59a0764d9f0",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/MorphicGrove.cs",
+      "sha256": "1a1f37cdab4f130ca7556226417414612fa6e547d95f653341a5d8b8cb8553a4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/CommonUi/NAbandonRunConfirmPopup.cs",
+      "sha256": "21779cc6f8a555d7ab6ee0fb6338833fbdfcd40fd17d58252694df6e237623c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Random/Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/aroma_of_chaos.py",
+      "sha256": "65eed9d483c599eab68132983c68b8823a0d01a74ad268296abe6ef2cd801fd2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/brain_leech.py",
+      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/byrdonis_nest.py",
+      "sha256": "473830e27e9bee955d9d537269c58475029270aad9355c538f929579bffbd80f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/endless_conveyor.py",
+      "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/morphic_grove.py",
+      "sha256": "ce535850554ab449755eae4274e742dcb077e5424734e14dcf5d628e9a58c049",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/symbiote.py",
+      "sha256": "daaf188ec9417d2628e75b104aec39089db1ac3489db9388cec5799d643203d3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_lantern_key.py",
+      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_legends_were_true.py",
+      "sha256": "f86d70924caa9fc588f54dcdbad9e363f9795a709a9c8f8e6debad92bce9ad5c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/whispering_hollow.py",
+      "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/wood_carvings.py",
+      "sha256": "82a83e9d2967853471e63b02d30b56a9aa87af98373eb27fb3163c89dddc3f15",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/astrolabe.py",
+      "sha256": "3d81571fbd58e9427aad66ed84f8517df0aa5cdda9c46c76b0157539aaae3abd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/new_leaf.py",
+      "sha256": "a0bb19d5ce5928c2f010e4a0f806c7a137a7c810aba5e1ef6ac9f8332177a923",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "GetAssetPaths": {
       "maps_to": "(nothing)",

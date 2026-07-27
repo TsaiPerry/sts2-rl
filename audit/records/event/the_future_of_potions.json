@@ -8,6 +8,143 @@
     "path": "sts2_rl\\events\\the_future_of_potions.py",
     "sha256": "b3933f588170b2f12485c023786d09a100bb69039622a28ad02dcf342d21351a"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/BrainLeech.cs",
+      "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/BigGameHunter.cs",
+      "sha256": "d2d7d433a09cf8a178ca49328876d9cfd90c0bcc7069c69fea51f41259f97aa5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Modifiers/CharacterCards.cs",
+      "sha256": "925acb5d39116b9627a609c01576a67a67a0db9f67a3e73004c9941e5d4a3340",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/DingyRug.cs",
+      "sha256": "82580893e449c598235fbbac664bf082782678f4f257506d94f95a4e9a20fb01",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/FresnelLens.cs",
+      "sha256": "05b7cf19010bdf4beffc4d45a3d374ef160a89f8d8a98739de2609c597880b34",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Glitter.cs",
+      "sha256": "e2394bb75b61ac2ab906a4031f28e3127ecea186d6c932847c4de6b5c5001acb",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MoltenEgg.cs",
+      "sha256": "b706622e797a32ba54e62bc05f71c67d7ace9f29254ba5111f49dbf14ac04571",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PrismaticGem.cs",
+      "sha256": "c247a9dae925e6cac3e4e3743470f60e8eec35e09ab605b73a6a0a4f58723196",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SilkenTress.cs",
+      "sha256": "f045974dee1b42bf18fb678bd11b4f60b529f3d272866dfad3c266884d099139",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SilverCrucible.cs",
+      "sha256": "f7495185bb9bedb4a90257a61520f36130af70a01374a2a4c5950febd767aaee",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/WingCharm.cs",
+      "sha256": "a1d90342e86af4edc76c48d513683d1561b72a141ccbaf8dd45504ea39942ef2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Potions/NPotionPopup.cs",
+      "sha256": "e282ab29ff2f82d84715f74df2ec03b0690e92787d9d4e5b3fe3039cbe55d9ac",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/CardReward.cs",
+      "sha256": "937a512def94d408efa9f06849658fde845918be76a144fb832b30335c03523d",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationOptions.cs",
+      "sha256": "5b63615ad2ef4d4bab8f2b4ce2ca80b555a755df955e2c6ff5a1911d7e8d3b35",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/base.py",
+      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/_eggs.py",
+      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/glitter.py",
+      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/silken_tress.py",
+      "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/silver_crucible.py",
+      "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "GameInfoOptions": {
       "maps_to": "(nothing)",
