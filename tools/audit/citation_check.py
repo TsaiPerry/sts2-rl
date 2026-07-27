@@ -91,13 +91,32 @@ def _resolve(path: str, hashed: set[str]) -> tuple[Path | None, str, bool]:
         if cand.is_file():
             return cand, label, False
     name = norm.rsplit("/", 1)[-1]
-    # (a) the record's own hashed sources
-    for rel in hashed:
-        if rel.rsplit("/", 1)[-1] == name:
-            for root, label in ((_REPO, "sim"), (DEFAULT_GAME_ROOT, "game")):
-                cand = root / rel
-                if cand.is_file():
-                    return cand, label, False
+    # (a) the record's own hashed sources.
+    #
+    # Iterate SORTED and collect EVERY match. `hashed` is a set, so returning
+    # the first hit made this whole gate nondeterministic: a record hashing both
+    # `monsters/base.py` and `cards/base.py` resolved a bare `base.py:269`
+    # against whichever the set happened to yield first, and the reported
+    # OUT-OF-RANGE count flipped between 0 and 3 on byte-identical records
+    # purely with PYTHONHASHSEED. Every "OUT-OF-RANGE 0" this gate printed
+    # before this fix was true only of the seed that ran. Found by batch 17.
+    #
+    # More than one match is genuine ambiguity and must be reported as such,
+    # not silently resolved -- the same mistake the (b) branch below already
+    # got right.
+    hits = [rel for rel in sorted(hashed)
+            if rel.rsplit("/", 1)[-1] == name]
+    found = []
+    for rel in hits:
+        for root, label in ((_REPO, "sim"), (DEFAULT_GAME_ROOT, "game")):
+            cand = root / rel
+            if cand.is_file():
+                found.append((cand, label))
+                break
+    if len(found) == 1:
+        return found[0][0], found[0][1], False
+    if len(found) > 1:
+        return found[0][0], found[0][1], True
     # (b) fall back to a tree search, and SAY SO when it is ambiguous
     roots = ((_REPO / "sts2_rl", "sim"), (_REPO / "tools", "sim"),
              (_REPO / "test", "sim"), (DEFAULT_GAME_ROOT / "src", "game"))
