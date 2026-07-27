@@ -54,7 +54,7 @@ for n in 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18; do
   git merge --no-ff "audit-relic-b$n" -m "audit(relic): merge batch $n"
 done
 py tools/audit/harness.py validate               # 258 records, 0 invalid
-py tools/audit/citation_check.py audits/relic    # MISSING 0, OUT-OF-RANGE 0
+py tools/audit/citation_check.py audits         # MISSING 0, OUT-OF-RANGE 0 (relic AND seam)
 py tools/audit_status.py --kind relic            # audited 258, unaudited 0
 py -m pytest test/ -q                            # 2476 passed / 31 xfailed
 ```
@@ -85,6 +85,13 @@ and fails on paths that do not exist and line numbers past end-of-file — the
 mechanical half of binding rules 7 and 8, which exist because agents have
 invented both. It found a wrong line number in a committed batch-2 record on
 its first run.
+
+**Run it over `audits/`, not `audits/relic/`.** The seam tree went unchecked for
+the whole run and had 1 missing path and 6 line numbers past end-of-file when it
+was finally checked — in the records that are the *authority* every batch is told
+to cite and match, one of which I had introduced myself while patching a seam
+guard. Batch 15 found it by quoting a seam citation verbatim and watching the
+check fail. A gate you point at only part of the tree is a gate with a hole in it.
 
 It does **not** judge whether a citation is apt, or whether a verdict is right.
 Those still need a reader. Spot-check each batch's LIVE gaps against the
