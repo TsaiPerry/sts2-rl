@@ -1,0 +1,258 @@
+{
+  "unit": "monster/test_subject",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\TestSubject.cs",
+    "sha256": "b7e6e24a3633e53c5e272001d4ea0f973122e7d69e20370e76da872301c8b675"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\test_subject.py",
+    "sha256": "ee82a7b8118e90eceac29b7e899cd29ec2efb9a4337aebe6f44e38e725150ba1"
+  },
+  "hooks": {
+    "Title": {
+      "maps_to": "test_subject.py:51 `name = \"Test Subject\"` (+ conformance/combat_driver.py:155 _name_matches)",
+      "verdict": "waiver",
+      "rationale": "TestSubject.cs:67-75 appends a `Count` var equal to `SaveManager.Instance.Progress.TestSubjectKills + 8` to the localised title, i.e. the displayed '#C71'. EXECUTED census of the counter (`grep -rn TestSubjectKills src/`): five sites, and the ONLY gameplay reader is this Title line -- the others are the increment at TestSubject.cs:169, the run-field declaration and copy (ExtraRunFields.cs:22,35,45), the profile roll-up at ProgressSaveManager.cs:227 and the serializer table. So the counter is a PROFILE-LIFETIME display number with no mechanical reader, exactly as the sim's own docstring (test_subject.py:44-49) records, and the conformance driver resolves the recorded suffix by identity (`_name_matches`, verified present at conformance/combat_driver.py:155). Waiver: presentation plus profile-save persistence, both out of scope. Third-file citations, not hashed here."
+    },
+    "MinInitialHp": {
+      "maps_to": "test_subject.py:52 `min_hp = _FIRST_FORM_HP` (= 100, :18)",
+      "verdict": "faithful",
+      "rationale": "RESOLVED BY HAND -- this is the one unit `py audit/tools/monster_probes.py hp` could not settle (it prints `INCONCLUSIVE test_subject unparsed: min='FirstFormHp' max='MinInitialHp'`). The indirection is TestSubject.cs:77 `MinInitialHp => FirstFormHp` -> TestSubject.cs:81 `FirstFormHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 111, 100)`. I read the NON-ASCENSION branch, which is the LAST argument (PROMPT.md v5) = 100. Sim 100. The other two form HPs come from the same helper and the same branch: SecondFormHp (212, 200) = 200 = _SECOND_FORM_HP, ThirdFormHp (313, 300) = 300 = _THIRD_FORM_HP."
+    },
+    "MaxInitialHp": {
+      "maps_to": "test_subject.py:53 `max_hp = _FIRST_FORM_HP`",
+      "verdict": "faithful",
+      "rationale": "TestSubject.cs:79 `=> MinInitialHp` = 100. Degenerate range, so Monster.__init__'s randint draws 100 for any seed."
+    },
+    "DeathSfx": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "TestSubject.cs:105-119 swaps the death sound for a 'knock out' sound while the creature still has AdaptablePower -- i.e. it is the audio tell for a phase transition rather than a real death. Sound only; presentation."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "DamageSfxType.Armor. Presentation."
+    },
+    "ShouldDisappearFromDoom": {
+      "maps_to": "no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "NOT reflex-waived (SHARED-FINDINGS section 4 names this as the one to think about). TestSubject.cs:164 `=> Respawns >= 2`, i.e. only the final form may be removed by Doom. EXECUTED: `grep -rn ShouldDisappearFromDoom src/` returns TEN sites and every one of them is a DECLARATION -- the MonsterModel virtual (MonsterModel.cs:171) plus nine monster overrides. There is no reader anywhere in the decompiled source, and a separate sweep for Doom consumers (`grep -rn 'DoomPower|IsDoomed' src/`) finds DoomPower used by Necrobinder cards and achievements, none of which consults this property. A member the game never reads has no behaviour for the sim to be unfaithful to, so the sim's silence is `faithful` (the v6 PROMPT.md item-3 shape), not a waiver and not a dormant gap. Third-file citations, not hashed here."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "test_subject.py:55-62 __init__ -> PowerCmd.apply(AdaptablePower, 1) then PowerCmd.apply(EnragePower, 2)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from `__init__` (test_subject.py:59-62). The game applies it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded inside StartCombatInternal, i.e. after every creature is on the board and before Hook.BeforeCombatStart; the sim runs it at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three clauses: (a) listener set -- the four ported listeners on the reachable hooks (relics/ruined_helmet.py, relics/unsettling_lamp.py, relics/vambrace.py, relics/paels_legion.py) all gate on the player or on a non-null card and a monster's starting power is self-applied with no card; (b) HP-roll inversion -- of the 35 constructor-applied power classes only IllusionPower mentions max_hp, and only inside revive() (powers.py:1581); (c) roll ordering -- EXECUTED, `py audit/tools/monster_probes.py roll-order` prints `test_subject  sticky-no-op   initial=BITE_MOVE (MoveState)`, so monster_state_machine step 30's early return fires and the constructor's first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and powers.py are cited by name here and are NOT all hashed by this record. Order and amounts match TestSubject.cs:174-181 exactly (Adaptable 1m then Enrage EnrageAmount = GetValueIfAscension(DeadlyEnemies, 3, 2) = 2). The two Creature.PowerApplied / PowerRemoved subscriptions on the same lines are covered by their own guard entry below."
+    },
+    "BeforeRemovedFromRoom": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "TestSubject.cs:183-187 unsubscribes AfterPowerApplied / AfterPowerRemoved. Both handlers are pure SetColor calls (see the guard below), so the teardown is presentation too."
+    },
+    "AfterDeath": {
+      "maps_to": "no sim counterpart -- and none is needed",
+      "verdict": "waiver",
+      "rationale": "ONE OF THE 11 UNCLAIMED C# HOOK OVERRIDES handed to the content tier by monster_state_machine boundary hole 5, and READ TO THE END before verdicting (the KinPriest N6 lesson, which this repeats almost exactly). TestSubject.cs:223-236 is four statements: two early returns (`creature != base.Creature`, and `base.Creature.HasPower<AdaptablePower>()` -- so it does NOT run on the two phase-transition deaths, only on the final one), then `SetColor(Colors.White)` and `NRunMusicController.Instance?.UpdateMusicParameter(\"test_subject_progress\", 5f)`. SetColor (TestSubject.cs:343-346) resolves to `NCombatRoom.Instance?.GetCreatureNode(...)?.GetSpecialNode<CanvasGroup>(\"%CanvasGroup\")?.SetSelfModulate(color)` -- a Godot canvas modulate. So the ENTIRE override is a colour reset plus a music parameter: presentation, with zero mechanical behaviour for the sim to be missing. This is a `waiver` on the MECHANICAL question only; hook_dispatch's G5 (the sim has no MonsterModel listener category at all, dormant, monsters/base.py:78-81) is NOT re-verdicted here. Note the contrast with AdaptablePower.AfterDeath (AdaptablePower.cs:32-39), which IS mechanical -- that one is the power tier's and is carried in this record's TriggerDeadState entry."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "TestSubject.cs:348-416, 19 AnimStates and 17 AddAnyState transitions keyed on Respawns. Presentation."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "test_subject.py:67-113 build_machine",
+      "verdict": "faithful",
+      "rationale": "Node for node against TestSubject.cs:189-221, and this is the batch's largest graph. Eight states: RESPAWN_MOVE (MustPerformOnceBeforeTransitioning, HealIntent + BuffIntent) -> REVIVE_BRANCH; BITE_MOVE <-> SKULL_BASH_MOVE (a two-cycle); MULTI_CLAW_MOVE -> itself; PHASE3_LACERATE_MOVE -> BIG_POUNCE -> BURNING_GROWL_MOVE -> PHASE3_LACERATE_MOVE (a three-cycle); REVIVE_BRANCH is a ConditionalBranchState with AddState(MULTI_CLAW, () => Respawns < 2) then AddState(LACERATE, () => Respawns >= 2); initial state BITE_MOVE. EXECUTED (`py audit/tools/monster_probes_b08.py graphs`): the sim prints exactly that, including `COND REVIVE_BRANCH order=['MULTI_CLAW_MOVE', 'PHASE3_LACERATE_MOVE']`. THERE IS NO RandomBranchState IN THIS MONSTER, so bug class 6 / G1 cannot apply: the only dispatcher is a ConditionalBranchState, whose AddState takes no integers at all (ConditionalBranchState.cs:10-23). Damage numbers, all non-ascension: Bite (22, 20) = 20; SkullBash (16, 14) = 14 + Vulnerable 1m; MultiClaw (11, 10) = 10 with BaseMultiClawCount 3; Phase3Lacerate (11, 10) = 10 x literal 3; BigPounce literal 45; BurningGrowl burn count (5, 3) = 3 and strength (3, 2) = 2. Every one matches test_subject.py:22-31."
+    },
+    "TriggerDeadState": {
+      "maps_to": "test_subject.py:115-119 trigger_dead_state (called from powers.py:3369 AdaptablePower.should_die)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "BUG CLASS 21, DEATH IS NOT REMOVAL, LIVE -- and this is the monster-side half of a mechanism already verdicted at audit/records/power/adaptable.json (hook AfterDeath, `gap`, LIVE). Same verdict carried per governing rule 3; NOT re-derived, and the power record's Gremlin Horn witness is the canonical statement. What the monster side adds. THE GAME: a killing blow on any of the three forms runs KillWithoutCheckingWinCondition (CreatureCmd.cs:489-559) -- LoseHpInternal to 0, Hook.BeforeDeath, then Hook.ShouldDie, which AdaptablePower does NOT implement (AdaptablePower.cs has no ShouldDie), so the DEATH STANDS. InvokeDiedEvent fires (CreatureCmd.cs:507); shouldRemoveFromCombat is computed from Hook.ShouldCreatureBeRemovedFromCombatAfterDeath (:508) and AdaptablePower returns false for its owner (AdaptablePower.cs:58-65), so the corpse is NOT removed from Enemies (:523-531); Hook.AfterDeath is dispatched with `wasRemovalPrevented: false` (:519) -- note the parameter is misnamed, it is FALSE on the real-death branch and TRUE only on the ShouldDie-prevented branch (:566) -- and it reaches EVERY hook listener; and RemoveAllPowersAfterDeath (:533, Creature.cs:668-671) strips the corpse's powers. THE SIM: AdaptablePower is ported onto `should_die` (powers.py:3365-3370), so DamageCmd.deal takes the death-PREVENTION arm (cmds.py:106-113), floors the boss at 1 HP and never fires hooks.on_death. EXECUTED (`py audit/tools/monster_probes_b08.py adaptable-death`, a real TEST_SUBJECT_BOSS combat with a ported Gremlin Horn attached): after a lethal 500 the sim reports `hp=1 is_dead=False retained_after_death=False`, `on_death fires so far: []`, and `Gremlin Horn payout: energy 3->3, hand 5->5`. Driven to the end of the fight, `on_death fired 1 time(s)` where the game dispatches Hook.AfterDeath THREE times (once per form; the third is a plain death because RESPAWN_MOVE removed AdaptablePower at respawn 2). GremlinHorn.cs:24-32 has no wasRemovalPrevented guard -- its only test is the side test -- so the game pays +1 Energy and +1 card on each of the three and the sim pays on one. LIVE ON BOTH SIDES (rule 6): Gremlin Horn is a ported obtainable Uncommon relic (relics/gremlin_horn.py, `'gremlin_horn' in relics.base._RELIC_CLASSES` -> True, printed by the probe) and the Test Subject is a ported Glory boss (rooms.py:196 boss_keys, monsters/glory/__init__.py:78). The extra energy and the extra DRAW are not cosmetic: the draw perturbs the piles for the rest of the fight and the RNG stream for the rest of the run under conformance replay. SEPARATELY, WITHIN THIS METHOD: TestSubject.cs:166-172 does four things and the sim ports one. (1) `NRunMusicController...UpdateMusicParameter` -- presentation. (2) `base.CombatState.RunState.ExtraFields.TestSubjectKills++` -- NOT ported, and correctly so: see this record's Title entry, the counter's only reader is the display string. (3) `CreatureCmd.TriggerAnim(..., \"DeadTrigger\")` -- presentation. (4) `SetMoveImmediate(DeadState, forceTransition: true)` -- ported faithfully as `machine.force_current_state(self._dead_state)` plus `self._current_move = self._dead_state` (test_subject.py:118-119), which is precisely what MonsterModel.cs:420-432 does (`NextMove = state` AND `MoveStateMachine.ForceCurrentState(state)`), and `forceTransition: true` bypasses the `NextMove.CanTransitionAway` guard at MonsterModel.cs:422 -- the guard whose absence is monster_state_machine G5 clause b, which is therefore INERT at this site because the one ported caller passes force. G5 is not re-verdicted."
+    }
+  },
+  "guards": [
+    {
+      "what": "RespawnMove / Revive(): CreatureCmd.SetMaxHp + CreatureCmd.Heal vs the sim's raw _revive assignment",
+      "verdict": "gap",
+      "live": true,
+      "issue": "Carried from the same mechanism as the TriggerDeadState entry (rule 3), recorded separately because it is a distinct observable that survives any fix that only re-slots the AfterDeath body. C# Revive (TestSubject.cs:335-341) is `CreatureCmd.SetMaxHp(creature, 200)` then `CreatureCmd.Heal(creature, 200)` on a creature sitting at CurrentHp 0. SetMaxHp (CreatureCmd.cs:839-849) writes MaxHp and clamps CurrentHp down to it, then kills the creature if MaxHp <= 0; Heal (CreatureCmd.cs:691-754) runs HealInternal, which -- because the creature was dead and is now alive -- fires Creature.Revived (Creature.cs:477-486), and then dispatches Hook.AfterCurrentHpChanged with the FULL amount (CreatureCmd.cs:750-753). The sim's `_revive` (test_subject.py:121-125) raw-assigns max_hp and hp and fires `hooks.on_hp_changed(self, delta)` where `delta = form_hp - self.hp`. EXECUTED (`py audit/tools/monster_probes_b08.py respawn-hp`): the sim reports `hp after the vetoed death: 1` and `on_hp_changed deltas during RESPAWN_MOVE: [199]`, where the game's AfterCurrentHpChanged carries +200 -- an off-by-one that is a DIRECT consequence of cmds.py:112 flooring the prevented death at 1 HP instead of leaving the corpse at 0. Both sides end at 200/200, so the HP itself reconverges; the delta and the Revived event do not. Also folded in: the raw assignment skips SetMaxHp's `MaxHp <= 0 -> Kill` clamp (creature_card_cmds step 26's shape). DORMANT for that clause alone -- _SECOND_FORM_HP and _THIRD_FORM_HP are literals 200 and 300 (test_subject.py:19-20) and nothing scales them, so the clamp is never approached; the LIVE half is the delta and the missing death."
+    },
+    {
+      "what": "The powers the corpse should have lost: Creature.RemoveAllPowersAfterDeath",
+      "verdict": "gap",
+      "live": true,
+      "issue": "SAME MECHANISM AS audit/records/seam/creature_card_cmds.json STEP 8b (`gap`, LIVE), carried per rule 3 and NOT re-derived -- recorded here because the Test Subject is where it bites hardest. CreatureCmd.cs:533 calls Creature.RemoveAllPowersAfterDeath, which (Creature.cs:668-671) strips every power whose ShouldPowerBeRemovedAfterOwnerDeath() is true, and the PowerModel DEFAULT is TRUE (PowerModel.cs:637-640). Only AdaptablePower (AdaptablePower.cs:67-70) and PainfulStabsPower (PainfulStabsPower.cs:24-27) opt out -- and PainfulStabs opting out is the source's own proof that the strip really happens, since otherwise RespawnMove's explicit `PowerCmd.Remove<PainfulStabsPower>` at TestSubject.cs:276 would be dead code. So in the game each form starts CLEAN: no Enrage, no accumulated Strength, no player-applied Vulnerable/Weak. The sim never removes powers on death anywhere (`grep -rn 'remove_all_powers|powers.clear()' sts2_rl/` -> no hits), and here it never even reaches a death. EXECUTED (`py audit/tools/monster_probes_b08.py adaptable-death`): the sim's phase-2 body carries `['adaptable', 'enrage', 'painful_stabs']` and its phase-3 body carries `['enrage', 'nemesis']`, i.e. Enrage 2 survives all three forms and keeps converting every Skill the player plays into permanent Strength on a boss the game resets twice. LIVE: Enrage is applied by the boss itself at combat start and Skills are ordinary Ironclad content."
+    },
+    {
+      "what": "MustPerformOnceBeforeTransitioning on RESPAWN_MOVE (TestSubject.cs:192-195) -- monster_state_machine G5's named trigger, now actually ported onto MachineMonster",
+      "verdict": "faithful",
+      "rationale": "G5's dormancy argument names TestSubject as one of four monsters whose port onto MachineMonster would be a concrete trigger. It IS ported onto MachineMonster (test_subject.py:34), so this record checks the port's own handling rather than inheriting the dormancy. The sim carries the flag (`must_perform_once_before_transitioning=True`, test_subject.py:71) and MoveState.can_transition_away returns _performed_at_least_once when it is set (state_machine.py:124-127), matching MoveState.cs:27-37; perform sets the flag BEFORE calling the delegate (state_machine.py:129-131 vs MoveState.cs:55-60) and on_exit_state resets it (state_machine.py:133-134 vs MoveState.cs:62-65). EXECUTED (`py audit/tools/monster_probes_b08.py must-perform-once`): after trigger_dead_state the machine reports current=RESPAWN_MOVE, can_transition_away=False, and `telegraph_next_move: RESPAWN_MOVE -> RESPAWN_MOVE` (the sticky rule of MonsterMoveStateMachine.cs:60-63 / state_machine.py:262-266 holds, so the pinned respawn cannot be rolled away before it is performed); after performing it the machine lands on MULTI_CLAW_MOVE with respawns=1 and `_performed_at_least_once` is back to False. G5's OTHER clause -- the silently dropped `next_move_key` for a MachineMonster (cmds.py:216-217) -- stays inert here because no ported caller stuns the Test Subject; G5 is not re-verdicted."
+    },
+    {
+      "what": "REVIVE_BRANCH: ConditionalBranchState add order and the Respawns thresholds",
+      "verdict": "faithful",
+      "rationale": "ConditionalBranchState.GetNextState returns the FIRST branch whose Evaluate() > 0 and throws if none match (ConditionalBranchState.cs:44-54); state_machine.py:228-232 is identical including the raise. C# adds (MULTI_CLAW, Respawns < 2) then (LACERATE, Respawns >= 2) (TestSubject.cs:210-211) and the sim adds them in that same order (test_subject.py:106-107), so the order is preserved even though the two predicates happen to be mutually exclusive. Sequencing: RespawnMove increments Respawns FIRST (TestSubject.cs:256 / test_subject.py:128), and the branch is only evaluated on the roll AFTER the move is performed, so death 1 -> Respawns 1 -> MULTI_CLAW and death 2 -> Respawns 2 -> LACERATE. EXECUTED in `adaptable-death`: `next=MULTI_CLAW_MOVE` after the first respawn and `next=PHASE3_LACERATE_MOVE` after the second."
+    },
+    {
+      "what": "RespawnMove's per-form power edits and their order (TestSubject.cs:265-278)",
+      "verdict": "faithful",
+      "rationale": "C#: GetPower<AdaptablePower>()?.DoRevive() first, then case 1 -> Revive(SecondFormHp) then Apply<PainfulStabsPower>(1m); case 2 -> Revive(ThirdFormHp), Apply<NemesisPower>(1m), Remove<AdaptablePower>, Remove<PainfulStabsPower>. test_subject.py:131-141 does the same six operations in the same order, with the same amounts, and guards the do_revive with an isinstance check. `switch (Respawns)` has no default arm, so a hypothetical third respawn would revive nothing; the sim's if/elif chain has the same shape."
+    },
+    {
+      "what": "ExtraMultiClawCount: MULTI_CLAW grows by one hit per use, and the intent must be lazy",
+      "verdict": "faithful",
+      "rationale": "MultiClawTotalCount = BaseMultiClawCount(3) + ExtraMultiClawCount (TestSubject.cs:162), the counter is incremented AFTER the attack resolves (TestSubject.cs:306), and the intent is built with a lambda `() => MultiClawTotalCount` (TestSubject.cs:198) so the telegraph shows the CURRENT count. test_subject.py:64-65, :152-154 and the `lambda: Intent(...)` at :82-84 reproduce all three, and MoveState.intent evaluates the callable on read (state_machine.py:119-121). The counter is never reset on either side, so the growth persists across the phase-2 -> phase-3 transition on both."
+    },
+    {
+      "what": "BURNING_GROWL_MOVE: StatusIntent(BurningGrowlBurnCount) loses its count in the sim's intent vocabulary",
+      "verdict": "gap",
+      "live": false,
+      "issue": "TestSubject.cs:201 telegraphs `new StatusIntent(BurningGrowlBurnCount)` -- the intent carries the NUMBER 3, which the game's intent panel displays. The sim's Intent dataclass (monsters/base.py:36-59) has fields for damage and hits and for a buff list, but nothing a status count can live in, so test_subject.py:96 degrades it to a bare `Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,))`. The EFFECT is right -- _growl adds exactly _GROWL_BURN = 3 Burns to the discard (test_subject.py:166-167) against CardPileCmd.AddToCombatAndPreview<Burn>(..., PileType.Discard, 3, ...) (TestSubject.cs:331) -- it is only the telegraph that is lossy. DORMANT, executed: every sim consumer of current_intent reads flags or the attack numbers and none reads a status count -- full_env.py:571-572 sets a single STATUS_CARD flag bit, env.py:121/:159 and previews.py:98/:120 read damage and hits only, and the conformance driver matches on move identity. Named trigger that would make it live: any consumer that reads a status-intent count -- an observation feature for 'how many statuses are incoming', or a replay assertion on the intent panel text. This is monster_state_machine boundary item 2 (the AbstractIntent -> Intent mapping is in no seam's scope) landing on a concrete unit. Third-file citations, not hashed here."
+    },
+    {
+      "what": "AfterPowerApplied / AfterPowerRemoved (TestSubject.cs:238-252) -- the IntanglePower colour tell",
+      "verdict": "waiver",
+      "rationale": "Both handlers test `power is IntangiblePower` and then call SetColor, which is a Godot canvas modulate (TestSubject.cs:343-346). Presentation only. NemesisPower is what grants the Intangible in phase 3, and that power has its own record (audit/records/power/nemesis.json); this entry covers only the monster's colour reaction to it."
+    },
+    {
+      "what": "Creature.ScaleHpForMultiplayer in Revive (TestSubject.cs:338)",
+      "verdict": "waiver",
+      "rationale": "Waiver, multiplayer-only and out of scope everywhere -- and it is provably an identity in single-player: Creature.cs:744-750 returns `hp` unchanged when `playerCount <= 1`. The sim passes the raw form HP, which is the same value."
+    },
+    {
+      "what": "The 500-damage multi-hit attacks through _execute_attack vs AttackCommand's hit loop",
+      "verdict": "faithful",
+      "rationale": "monsters/base.py:107-118 `_execute_attack` fires before_attack, loops `hits` times through DamageCmd.deal and breaks when the player or the attacker is dead; then after_attack. C#'s AttackCommand.Execute (AttackCommand.cs:528-546) has the same two loop guards -- `if (Attacker.IsDead) break;` and an empty alive-target list -- and the sim's single target IS the player, so the two loops agree hit for hit. The one asymmetry is C#'s PRE-loop `if (Attacker.IsDead) return this;` (AttackCommand.cs:528-531), which also skips Hook.BeforeAttack; the sim has no such pre-guard. Unreachable for this unit and EXECUTED rather than asserted (rule 5): a sim monster can only take a turn while dead if `retained_after_death` is set (combat.py:292, :306), that flag is written only where hooks.should_remove_from_combat_after_death returns False (cmds.py:102-104, :200-202), and `grep -rn 'def should_remove_from_combat_after_death' sts2_rl/` returns exactly two sites -- the hook itself (hooks.py:603) and ReattachPower (powers.py:2338), which this monster never holds."
+    },
+    {
+      "what": "ShouldShowMoveInBestiary (TestSubject.cs:418-425)",
+      "verdict": "waiver",
+      "rationale": "Hides BITE_MOVE, SKULL_BASH_MOVE and PHASE3_LACERATE_MOVE from the Bestiary. Presentation; no sim Bestiary (monster_state_machine N5)."
+    },
+    {
+      "what": "Encounter and pool reachability",
+      "verdict": "faithful",
+      "rationale": "TestSubjectBoss.cs generates one TestSubject with a null slot, RoomType.Boss; TEST_SUBJECT_BOSS (test_subject.py:171-174) is the same, registered as Glory's boss key `test_subject` (monsters/glory/__init__.py:78, rooms.py:196). Both sides reachable, which is what makes this record's two LIVE gaps live."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/Builders/AttackCommand.cs",
+      "sha256": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PowerModel.cs",
+      "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/AdaptablePower.cs",
+      "sha256": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/PainfulStabsPower.cs",
+      "sha256": "831faebcd0e3abddd1d9970cef5ccb5968e8c6f82c5c8531ab4f37ab7d2d71a9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/GremlinHorn.cs",
+      "sha256": "a132a06a66a9e90ee324e2a2316cbfb4f324705e0fef8e3c07561ce73b605ae6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/ConditionalBranchState.cs",
+      "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+      "sha256": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MoveState.cs",
+      "sha256": "6e3b275ec182774006eb6e1451bc4d835c76ea033fb0a6c73a31d1224473007e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Encounters/TestSubjectBoss.cs",
+      "sha256": "2b79aee0c4e2dc5af23b39aecddd9c808c0954c26347d6080366fc54fad96c4f",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/monsters/state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/gremlin_horn.py",
+      "sha256": "d056b799eb6625767ab63dd52b23d6bd9984624bb3de91a87406c4fdbf1b74d9",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/glory/__init__.py",
+      "sha256": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+      "side": "sim"
+    }
+  ]
+}
