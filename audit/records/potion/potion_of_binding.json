@@ -8,25 +8,176 @@
     "path": "sts2_rl\\potions.py",
     "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/History/Entries/PotionUsedEntry.cs",
+      "sha256": "0caaac65c5a7490a2cbe506bc14320fe9745ef8b29e5b3d2a94d768ababea030",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PowerCmd.cs",
+      "sha256": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SurroundedPower.cs",
+      "sha256": "e45d9c106a130f991f1c56ca620de9cf97f57096e1b5c400fc7d86acf0227971",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/cascade.py",
+      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/the_obscura.py",
+      "sha256": "8ffc0b4fdb22396d575ec4c72534b1c7812a85f2e220e75661b888346d578029",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/fogmog.py",
+      "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "Potion.rarity = 'uncommon' (potions.py:740), read by shop.MerchantPotionEntry pricing and by potion_pools.POTION_POOL's rarity bucket (potion_pools.py:38-65)",
+      "verdict": "faithful",
+      "rationale": "EXECUTED, not asserted: `py audit/tools/potion_probes.py sweep-attrs` extracts PotionRarity from every C# model and diffs it against the sim class attribute over all 51 units and reports 0 mismatches. Rarity is observable in the sim (it sets the shop price and the reward-roll bucket), so this is a behavioural verdict rather than a field copy."
     },
     "Usage": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "no explicit attribute; the sim's only potion-use entry point is CombatState.use_potion (combat.py:583-616), which cannot be reached outside a combat",
+      "verdict": "faithful",
+      "rationale": "PotionUsage.CombatOnly means the game's Use button is live only during a fight. The sim reaches that by construction: `py audit/tools/potion_probes.py sweep-usage` finds exactly one `def use_potion` in sts2_rl/, on CombatState, and the conformance driver only dispatches the recording's UsePotion command inside a live fight (conformance/combat_driver.py:16,263-289). The absence of a `usage` attribute is therefore not a dropped guard for this unit -- but it IS a real gap for the four AnyTime potions, which is where the divergence is filed (blood_potion, entropic_brew, foul_potion, fruit_juice)."
     },
     "TargetType": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "no attribute -- `targeted` stays False and the potion's own `use` iterates the enemies (potions.py:744-755)",
+      "verdict": "faithful",
+      "rationale": "TargetType.AllEnemies passes no single target: PotionModel.IsValidTarget returns `!TargetType.IsSingleTarget()` for a null target (PotionModel.cs:256-263), so the potion resolves over the whole side. The sim models that by leaving `targeted` False (so use_potion passes target=None, combat.py:608) and letting the potion walk ctx.enemies itself. The set walked is verdicted separately in the guards, because `CombatState.HittableEnemies` (CombatState.cs:142) is `Enemies.Where(IsHittable)` and the sim uses `not is_gone`."
     },
     "ExtraHoverTips": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "no counterpart; the sim has no hover-tip surface",
+      "verdict": "waiver",
+      "rationale": "ExtraHoverTips / HoverTipFactory / PotionModel.HoverTip are the potion tooltip's keyword lines. Waived under the shared contract's presentation exclusion, not under any unreachability claim."
+    },
+    "CanonicalVars (protected override, PotionOfBinding.cs:25-29)": {
+      "maps_to": "WEAK = 1 and VULNERABLE = 1 (potions.py:741-742)",
+      "verdict": "faithful",
+      "rationale": "`new PowerVar<VulnerablePower>(1m)` and `new PowerVar<WeakPower>(1m)`. Both are 1 -- which is what hides the source's own crosswise read (see N1). No ascension branch."
+    },
+    "OnUse (protected override, PotionOfBinding.cs:37-46)": {
+      "maps_to": "PotionOfBinding.use (potions.py:744-755)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "Rollup of guard G(AoE-power) per binding rule 4. The two applications, their amounts, their order (Weak first, then Vulnerable -- PotionOfBinding.cs:44-45 vs potions.py:748-755) and the single evaluation of the target list all match. What diverges is WHICH enemies are in that list."
     }
   },
-  "guards": [],
-  "verdict": "",
-  "audited": ""
+  "guards": [
+    {
+      "what": "G(AoE-power) (LIVE): the sim applies the power to an enemy the game's HittableEnemies excludes, because neither the filter nor PowerCmd.apply carries a ShouldAllowHitting term",
+      "verdict": "gap",
+      "live": true,
+      "issue": "MECHANISM: the C# walks `CombatState.HittableEnemies` (CombatState.cs:142) = `Enemies.Where(e => e.IsHittable)`, and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299); on top of that PowerCmd.Apply itself refuses `!target.CanReceivePowers` (PowerCmd.cs:103), which is the same ShouldAllowHitting predicate (Creature.cs:308-322). The sim's filter is `[e for e in ctx.enemies if not e.is_gone]` -- `is_dead or escaped` (creatures.py:44-46), with no ShouldAllowHitting term -- and cmds.py:270-332's PowerCmd.apply has no CanReceivePowers guard at any point. This is the SAME mechanism as audit/records/seam/power_cmd.json guard G6, so this entry matches its `gap` verdict per binding rule 3; what this record contributes is the concrete witness G6 says it lacks ('no concrete broken interaction is demonstrated'). REACHABILITY (LIVE, EXECUTED -- `py audit/tools/potion_probes.py aoe-power`): IllusionPower's ported should_allow_hitting returns False for its owner while `is_reviving` (powers.py:1566-1575), and the reviving creature sits at 1 HP -- so it is NOT is_gone and the sim's filter keeps it. The Illusion carrier is a SUMMONED minion, not the summoner: Eye with Teeth (monsters/overgrowth/fogmog.py:24-35) applies Illusion to itself in its constructor and Fogmog summons it as its opening move (fogmog.py:74, :95); Parafright and The Obscura are the Hive twin (monsters/hive/the_obscura.py:28-39). The probe builds that creature mid-revival and prints: should_allow_hitting False, C# HittableEnemies empty, sim filter keeps 1 -- and Potion of Binding lands `{'weak': 1, 'vulnerable': 1}` while Shackling Potion lands `{'strength': -7, 'shackling_potion': 7}`, where the game applies nothing at all. Both sides ported and both monsters reachable in the acts where these potions are in the pool. NOTE the contrast the same probe prints for the DAMAGE AoE potions (explosive_ampoule, foul_potion): Explosive Ampoule changes nothing on that creature (hp 1 -> 1, no powers) because DamageCmd.deal applies should_allow_hitting itself (cmds.py:51-52). It is specifically the POWER path that has no backstop."
+    },
+    {
+      "what": "N1: the source reads the two DynamicVars CROSSWISE and the port does not reproduce the swap",
+      "verdict": "faithful",
+      "rationale": "PotionOfBinding.cs:44 applies WeakPower with `DynamicVars[\"VulnerablePower\"].IntValue` and :45 applies VulnerablePower with `DynamicVars[\"WeakPower\"].IntValue` -- the vars are swapped relative to the powers. Both are 1 (PotionOfBinding.cs:27-28), so the swap is unobservable in the shipping game, and potions.py:741-742 defines WEAK = 1 and VULNERABLE = 1 and uses each with its own power. Verdicted faithful rather than deliberate-divergence because the observable is identical and there is no way to construct a difference without editing the source constants. Recorded so a future source change to either var is a known trap: the port would then be right about intent and wrong about behaviour."
+    },
+    {
+      "what": "N2: the target list is taken ONCE, before either power is applied",
+      "verdict": "faithful",
+      "rationale": "PotionOfBinding.cs:39 assigns `targets` and both Apply calls reuse it; potions.py:747 builds `targets` once and both loops reuse it. This matters because applying Weak could in principle kill nothing but could change hittability -- and because the C# LIST overload of PowerCmd.Apply iterates the snapshot rather than re-querying. Both sides therefore apply Vulnerable to an enemy that Weak somehow removed, rather than silently skipping it."
+    },
+    {
+      "what": "N3: the two powers are applied in two full PASSES, not per-enemy pairs",
+      "verdict": "faithful",
+      "rationale": "C# calls `PowerCmd.Apply<WeakPower>(ctx, targets, ...)` for the whole list, then `Apply<VulnerablePower>` for the whole list (PotionOfBinding.cs:44-45). potions.py:748-755 is two separate `for enemy in targets` loops in the same order, not one loop applying both. The distinction is observable to any on_power_applied listener that counts (Weak, Weak, Vuln, Vuln vs Weak, Vuln, Weak, Vuln for two enemies), so it is verdicted rather than assumed -- and the port has it right."
+    },
+    {
+      "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+    },
+    {
+      "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",
+      "verdict": "gap",
+      "live": false,
+      "issue": "CombatManager.cs:889's `!IsExecutingCardOrPotionEffect(player)` is what stops a nested effect from triggering the empty-hand check early, and PotionModel.cs:324-331 is what puts a potion inside that bracket. The sim has no counterpart anywhere. DORMANT for the same reason audit/records/relic/unceasing_top.json G2 is dormant -- the ported cards that auto-play another card mid-resolution (cards/cascade.py:58, cards/colorless_skills.py:117) do not touch the draw pile between the inner and outer ends -- but recorded separately because the OUTER frame here is a potion, so a fix that brackets only card plays would leave this half open. What would make it live: any ported potion or card that empties the hand and then moves the draw pile from inside a nested auto-play."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
 }

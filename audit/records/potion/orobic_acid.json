@@ -8,21 +8,136 @@
     "path": "sts2_rl\\potions.py",
     "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/History/Entries/PotionUsedEntry.cs",
+      "sha256": "0caaac65c5a7490a2cbe506bc14320fe9745ef8b29e5b3d2a94d768ababea030",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SurroundedPower.cs",
+      "sha256": "e45d9c106a130f991f1c56ca620de9cf97f57096e1b5c400fc7d86acf0227971",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/cascade.py",
+      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
   "hooks": {
     "Rarity": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "Potion.rarity = 'rare' (potions.py:1155), read by shop.MerchantPotionEntry pricing and by potion_pools.POTION_POOL's rarity bucket (potion_pools.py:38-65)",
+      "verdict": "faithful",
+      "rationale": "EXECUTED, not asserted: `py audit/tools/potion_probes.py sweep-attrs` extracts PotionRarity from every C# model and diffs it against the sim class attribute over all 51 units and reports 0 mismatches. Rarity is observable in the sim (it sets the shop price and the reward-roll bucket), so this is a behavioural verdict rather than a field copy."
     },
     "Usage": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "no explicit attribute; the sim's only potion-use entry point is CombatState.use_potion (combat.py:583-616), which cannot be reached outside a combat",
+      "verdict": "faithful",
+      "rationale": "PotionUsage.CombatOnly means the game's Use button is live only during a fight. The sim reaches that by construction: `py audit/tools/potion_probes.py sweep-usage` finds exactly one `def use_potion` in sts2_rl/, on CombatState, and the conformance driver only dispatches the recording's UsePotion command inside a live fight (conformance/combat_driver.py:16,263-289). The absence of a `usage` attribute is therefore not a dropped guard for this unit -- but it IS a real gap for the four AnyTime potions, which is where the divergence is filed (blood_potion, entropic_brew, foul_potion, fruit_juice)."
     },
     "TargetType": {
-      "maps_to": "",
-      "verdict": ""
+      "maps_to": "no attribute -- `targeted` stays False, so CombatState.use_potion passes target=None (combat.py:608) and the potion applies to ctx.player (potions.py:1157-1172)",
+      "verdict": "faithful",
+      "rationale": "TargetType.Self in a single-player run always resolves to the owner: PotionModel.EnqueueManualUse defaults `target` to `Owner.Creature` when it is a valid target (PotionModel.cs:240-243) and IsValidTarget's Self/AnyPlayer arms accept exactly that creature (PotionModel.cs:280-287). The multiplayer half -- AnyPlayer letting you throw the potion at an ally, and CanThrowAtAlly (PotionModel.cs:381-388) gating it on `RunState.Players.Count > 1` -- is out of scope by the shared contract and noted in maps_to rather than verdicted as a divergence."
+    },
+    "OnUse (protected override, OrobicAcid.cs:21-38)": {
+      "maps_to": "OrobicAcid.use (potions.py:1157-1172)",
+      "verdict": "gap",
+      "live": false,
+      "issue": "Rollup of guard N2 per binding rule 4. The draw structure is right and is the important half (N1): THREE separate GetDistinctForCombat calls of count 1 -- Attack, then Skill, then Power (OrobicAcid.cs:24-32) -- each a full shuffle of its filtered pool on Rng.CombatCardGeneration, which the sim reproduces with three get_distinct_for_combat_parity calls in the same order (potions.py:1165-1169). What is wrong is only the shared FilterForCombat port missing its Event-rarity clause (N2), which is dormant. Note this potion has NO choose-a-card screen, so the LIVE screen gap that the attack/skill/power/colorless family carries does not apply here -- PROMPT.md bug class 29, a sibling that differs on purpose."
     }
   },
-  "guards": [],
-  "verdict": "",
-  "audited": ""
+  "guards": [
+    {
+      "what": "N1: three count-1 draws, not one count-3 draw -- the draw COUNT on the stream is what a replay would notice",
+      "verdict": "faithful",
+      "rationale": "GetDistinctForCombat is `FilterForCombat(cards).TakeRandom(count, rng)` and TakeRandom is an UnstableShuffle of the whole filtered list followed by Take(n) (CardFactory.cs:119-129), so THREE calls of count 1 consume three whole shuffles of three differently-filtered lists -- not three picks out of one shuffle. potions.py:1165-1169 loops the three CardTypes and calls get_distinct_for_combat_parity(crng.card_gen, 1, card_type) each time (cards/pool.py:182-204), which shuffles the per-type id list through the GameRandomAdapter once per call. Same number of NextInt draws, same stream, same order (Attack, Skill, Power). Getting this wrong would be a grade-A stream desync rather than a state divergence, which is why it is verdicted explicitly rather than folded into the OnUse entry."
+    },
+    {
+      "what": "N2 (dormant): CardFactory.FilterForCombat drops three rarities and cards/pool.py's pool_card_ids drops only two",
+      "verdict": "gap",
+      "live": false,
+      "issue": "FilterForCombat is `c.CanBeGeneratedInCombat && c.Rarity != Basic && c.Rarity != Ancient && c.Rarity != Event` then `.Distinct()` (CardFactory.cs:159-162). cards/pool.py:108-117 checks BASIC and ANCIENT and can_be_generated_in_combat, with no EVENT clause. DORMANT, executed: neither pool this potion reaches contains a card with a rarity outside Common/Uncommon/Rare/Basic/Ancient -- IRONCLAD_POOL 85 ids -> 78 after the filter, COLORLESS_POOL 53 -> 50, EVENT bucket empty in both. What would make it live: porting any Event-rarity card into either pool, which would both offer it and change the length of the list the UnstableShuffle runs over. Same mechanism as the entry on potion/attack_potion, potion/skill_potion, potion/power_potion and potion/colorless_potion. CROSS-STREAM: pool.py belongs to the card tier; reported, not fixed."
+    },
+    {
+      "what": "N3: `SetToFreeThisTurn` on all three, THEN AddGeneratedCardsToCombat -- the sim interleaves",
+      "verdict": "faithful",
+      "rationale": "OrobicAcid.cs:33-37 sets every card free in one loop and then adds the whole list; potions.py:1170-1172 sets free and adds one card at a time. The end state is identical (three free cards in hand, in Attack/Skill/Power order) and the difference is only what a mid-dispatch listener would see -- a card-added listener firing for card 1 could observe cards 2 and 3 not yet free in C#, and already free in the sim. Recorded rather than skipped because interleaving a set-up step into an add loop is the shape that produced real defects elsewhere in this project (PROMPT.md bug class 9), but nothing here reads another card's cost during an add, so there is no observable and no gap."
+    },
+    {
+      "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+    },
+    {
+      "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",
+      "verdict": "gap",
+      "live": false,
+      "issue": "CombatManager.cs:889's `!IsExecutingCardOrPotionEffect(player)` is what stops a nested effect from triggering the empty-hand check early, and PotionModel.cs:324-331 is what puts a potion inside that bracket. The sim has no counterpart anywhere. DORMANT for the same reason audit/records/relic/unceasing_top.json G2 is dormant -- the ported cards that auto-play another card mid-resolution (cards/cascade.py:58, cards/colorless_skills.py:117) do not touch the draw pile between the inner and outer ends -- but recorded separately because the OUTER frame here is a potion, so a fix that brackets only card plays would leave this half open. What would make it live: any ported potion or card that empties the hand and then moves the draw pile from inside a nested auto-play."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
 }

@@ -258,7 +258,67 @@ def sweep_vars() -> None:
             print(f"{'':26} !! ascension branch present -- take the LAST arg")
 
 
+# ── aoe-power ─────────────────────────────────────────────────────────────
+def aoe_power() -> None:
+    """EXECUTED witness for the AoE-POWER target-set gap.
+
+    `CombatState.HittableEnemies` is `Enemies.Where(IsHittable)` and IsHittable
+    consults `Hook.ShouldAllowHitting`; the sim's AoE potions filter on
+    `not is_gone` and `PowerCmd.apply` has no `CanReceivePowers` guard
+    (audit/records/seam/power_cmd.json G6). A creature mid-Illusion-revival is
+    the concrete case: alive at 1 HP, so `not is_gone`, but refused by
+    should_allow_hitting.
+
+    Prints the sim's post-use enemy powers next to the C# target list the same
+    state would produce. Does not clear anything: the DAMAGE potions are shown
+    alongside precisely because they are the arm where the sim's own
+    DamageCmd.deal applies the predicate and the gap does not bite.
+    """
+    import random
+
+    from sts2_rl.cards import make_card
+    from sts2_rl.combat import CombatState
+    from sts2_rl.monsters import Encounter
+    from sts2_rl.monsters.overgrowth.fogmog import EyeWithTeeth
+    from sts2_rl.potions import (
+        ExplosiveAmpoule, PotionOfBinding, ShacklingPotion,
+    )
+
+    # EyeWithTeeth is the Illusion carrier -- Fogmog SUMMONS it
+    # (monsters/overgrowth/fogmog.py:95); Parafright is the Hive twin.
+    for potion_cls in (PotionOfBinding, ShacklingPotion, ExplosiveAmpoule):
+        cs = CombatState(
+            starting_deck=[make_card("strike") for _ in range(5)],
+            rng=random.Random(0),
+            encounter=Encounter("probe_illusion", [EyeWithTeeth]),
+        )
+        enemy = cs.enemies[0]
+        illusion = enemy.powers.get("illusion")
+        if illusion is None:
+            print(f"{potion_cls.__name__}: INCONCLUSIVE -- no illusion power on "
+                  f"{enemy}; the monster's setup changed")
+            continue
+        # The state the C# calls un-hittable: alive, mid-revival.
+        enemy.hp = 1
+        illusion.is_reviving = True
+        hittable_cs = cs.hooks.should_allow_hitting(enemy)
+        sim_targets = [e for e in cs.enemies if not e.is_gone]
+        before = dict(
+            (pid, p.amount) for pid, p in enemy.powers.items())
+        hp_before = enemy.hp
+        potion_cls().use(cs._ctx())
+        after = dict((pid, p.amount) for pid, p in enemy.powers.items())
+        landed = {k: v for k, v in after.items() if before.get(k) != v}
+        print(f"{potion_cls.__name__}:")
+        print(f"  should_allow_hitting(enemy) = {hittable_cs}  "
+              f"=> C# HittableEnemies = []  |  sim filter kept "
+              f"{len(sim_targets)} enemy(ies)")
+        print(f"  sim powers changed by the use: {landed or '{}'}   "
+              f"hp {hp_before} -> {enemy.hp}")
+
+
 PROBES = {
+    "aoe-power": aoe_power,
     "sweep-attrs": sweep_attrs,
     "sweep-usage": sweep_usage,
     "sweep-onuse": sweep_onuse,
