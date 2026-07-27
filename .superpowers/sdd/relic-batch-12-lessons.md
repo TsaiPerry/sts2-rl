@@ -4,18 +4,18 @@
 `c:\Users\Perry\Desktop\sts2-rl-relic-b12`) · **Units:** the roster's
 `pen_nib` … `preserved_fog` run (15).
 
-`py tools/audit/harness.py validate` → **141 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **MISSING 0, OUT-OF-RANGE 0,
+`py audit/tools/harness.py validate` → **141 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **MISSING 0, OUT-OF-RANGE 0,
 AMBIGUOUS 0** over 1663 citations.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 136 · invalid 0 ·
 stale 0 · gaps 106 · unaudited 122`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged; no engine
 code was touched (`git status` shows only the 15 records and
-`tools/audit/relic_probes_b12.py`).
+`audit/tools/relic_probes_b12.py`).
 
 All reachability evidence is reproducible from
-`tools/audit/relic_probes_b12.py` (14 probes, own module per the concurrency
-contract; `tools/audit/relic_probes.py` was read and re-used, never edited).
+`audit/tools/relic_probes_b12.py` (14 probes, own module per the concurrency
+contract; `audit/tools/relic_probes.py` was read and re-used, never edited).
 
 ---
 
@@ -161,7 +161,7 @@ false one.
 
 `sweep-reset` builds its “C# resets” column by brace-matching only
 `BeforeCombatStart` / `AfterCombatEnd` / `AfterCombatVictory` /
-`AfterCombatDefeat` (`tools/audit/relic_probes.py:735-737`). For a `CombatRoom`,
+`AfterCombatDefeat` (`audit/tools/relic_probes.py:735-737`). For a `CombatRoom`,
 `AfterRoomEntered` is *also* a combat-boundary hook: `CombatRoom.cs:197-231`
 dispatches it once the encounter's creatures are on the board and strictly
 before `Hook.BeforeCombatStart` (`CombatManager.cs:403`). So the sweep printed
@@ -177,7 +177,7 @@ assignment at all — decent evidence the state is per-run on both sides”. It 
 not: `Permafrost.cs:41` assigns `ActivatedThisCombat = false` there, and the
 relic is a LIVE `belt_buckle`-shape gap.
 
-`py tools/audit/relic_probes_b12.py b12-roomreset` rescans all **298** C# relic
+`py audit/tools/relic_probes_b12.py b12-roomreset` rescans all **298** C# relic
 files and finds **11** that assign inside `AfterRoomEntered`:
 
 ```
@@ -219,7 +219,7 @@ files contains an ascension branch), sweep B (`planisphere` is correctly in the
 17-relic cluster), sweep C (`planisphere`, `potion_belt`, `prayer_wheel` all
 confirmed as false premises), sweep D (the `pomander` over-report correction is
 right — the candidate list carries the `is_upgradable` filter), or any
-`audits/seam/**` record. No roster mis-resolution: all 15 resolved to a real C#
+`audit/records/seam/**` record. No roster mis-resolution: all 15 resolved to a real C#
 file first try, `name_overrides.json` needs nothing.
 
 ---

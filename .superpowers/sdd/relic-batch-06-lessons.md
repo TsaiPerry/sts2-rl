@@ -1,14 +1,14 @@
 # Relic content audit — batch 6 lessons and report
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b06` (based on `audit-relic` @ `4542c32f`)
-**Probes:** `py tools/audit/relic_probes_b06.py` (9 probes, committed, re-runnable)
+**Probes:** `py audit/tools/relic_probes_b06.py` (9 probes, committed, re-runnable)
 **Gates:** `harness.py validate` → 66 records, **0 invalid** ·
-`citation_check.py audits/relic` → 707 citations, **MISSING 0, OUT-OF-RANGE 0** ·
+`citation_check.py audit/records/relic` → 707 citations, **MISSING 0, OUT-OF-RANGE 0** ·
 `audit_status.py --kind relic` → total 258 · audited **61** · invalid 0 · stale 0 ·
 gaps 43 · unaudited 197 · `pytest test/ -q` → **2476 passed, 31 xfailed** (unchanged)
 
 No engine code was touched. `git status` shows only the 15 records, this file and
-`tools/audit/relic_probes_b06.py`.
+`audit/tools/relic_probes_b06.py`.
 
 ---
 
@@ -243,7 +243,7 @@ with the **same** verdict, cited, not re-derived: `AfterPreventingDraw`
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to a real C# file on the first `skeleton` call,
-and `py tools/audit/relic_probes_b06.py b06-pool` confirms all 15 are registered
+and `py audit/tools/relic_probes_b06.py b06-pool` confirms all 15 are registered
 and obtainable — 5 from the transcribed grab bag (`frozen_egg`, `gambling_chip`,
 `game_piece`, `girya` Rare; `ghost_seed`, `gnarled_hammer` Shop; `fresnel_lens`
 Event) and the rest from ported events/shrines (Vakuu, Neow, Grave of the
@@ -281,7 +281,7 @@ are also named inline in the entry that leans on them). Counts range from 3
   Sharp and Glam were read in full and their `can_enchant` bodies compared against
   `EnchantmentModel.CanEnchant`; one narrowing was found (the sim refuses an
   Unplayable card in ANY pile where C# only refuses one in the Deck pile) and is
-  **recorded but not verdicted** (`glitter` N3) because `audits/enchantment/**`
+  **recorded but not verdicted** (`glitter` N3) because `audit/records/enchantment/**`
   belongs to the event+enchantment stream and is not on this branch.
 - **`gambling_chip`'s `CardPileCmd.Add` chain was read but the sim's combat-pile
   hook surface was not exhaustively censused** — the dormancy argument rests on

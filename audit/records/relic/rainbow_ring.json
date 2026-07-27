@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE (rainbow_ring.py:20)",
       "verdict": "faithful",
-      "rationale": "Matches RainbowRing.cs:27. In the transcribed shared grab bag as Rare (relic_pools.py:122), executed by `py tools/audit/relic_probes_b13.py pool`."
+      "rationale": "Matches RainbowRing.cs:27. In the transcribed shared grab bag as Rare (relic_pools.py:122), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "CanonicalVars": {
       "maps_to": "the literals 1 and 1 (rainbow_ring.py:45-46)",
@@ -22,7 +22,7 @@
     "BeforeSideTurnStart": {
       "maps_to": "on_player_turn_start (rainbow_ring.py:29-30)",
       "verdict": "deliberate-divergence",
-      "rationale": "RainbowRing.cs:94-105 zeroes all four counters at turn_structure step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed at step 19, after the block clear and the energy reset (`py tools/audit/relic_probes.py turn-order`). Only a counter RESET happens here and the first READER is on_card_played, which cannot run before the play phase opens at step 28, so the four values are 0 at every moment either codebase can observe them. Same reasoning and same verdict as relic/brilliant_scarf's BeforeSideTurnStart (batch 2) and relic/beating_remnant's (batch 1) -- one verdict per mechanism, binding rule 3. Recorded as a divergence rather than faithful because the slot genuinely differs and an effect placed in that window would expose it. The `participants.Contains(Owner.Creature)` guard (RainbowRing.cs:96-99) is structurally satisfied: on_player_turn_start fires for the player side only."
+      "rationale": "RainbowRing.cs:94-105 zeroes all four counters at turn_structure step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed at step 19, after the block clear and the energy reset (`py audit/tools/relic_probes.py turn-order`). Only a counter RESET happens here and the first READER is on_card_played, which cannot run before the play phase opens at step 28, so the four values are 0 at every moment either codebase can observe them. Same reasoning and same verdict as relic/brilliant_scarf's BeforeSideTurnStart (batch 2) and relic/beating_remnant's (batch 1) -- one verdict per mechanism, binding rule 3. Recorded as a divergence rather than faithful because the slot genuinely differs and an effect placed in that window would expose it. The `participants.Contains(Owner.Creature)` guard (RainbowRing.cs:96-99) is structurally satisfied: on_player_turn_start fires for the player side only."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (rainbow_ring.py:32-46)",
@@ -32,7 +32,7 @@
     "AfterCombatEnd": {
       "maps_to": "no counterpart; on_player_turn_start (rainbow_ring.py:29-30) is the only reset",
       "verdict": "deliberate-divergence",
-      "rationale": "RainbowRing.cs:124-131 zeroes the same four counters at combat end as well as at turn start; the sim keeps only the turn-start half. TRACED TO THE FIRST READER as PROMPT.md bug class 13 requires, and EXECUTED (`py tools/audit/relic_probes_b13.py rainbow-ring`): the instance leaves combat 1 with _attack=_skill=_power=_activated=True, and combat 2's own construction runs player.start_turn() -> on_player_turn_start, which reports all four back to False before any card can be played. `py tools/audit/relic_probes.py sweep-reset` files this relic in the 'RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- genuinely safe)' bucket, and that classification is confirmed here rather than inherited. Contrast relic/red_skull and relic/ruined_helmet in this same batch, whose dropped AfterCombatEnd resets have NO turn-start clear to fall back on and are live gaps."
+      "rationale": "RainbowRing.cs:124-131 zeroes the same four counters at combat end as well as at turn start; the sim keeps only the turn-start half. TRACED TO THE FIRST READER as PROMPT.md bug class 13 requires, and EXECUTED (`py audit/tools/relic_probes_b13.py rainbow-ring`): the instance leaves combat 1 with _attack=_skill=_power=_activated=True, and combat 2's own construction runs player.start_turn() -> on_player_turn_start, which reports all four back to False before any card can be played. `py audit/tools/relic_probes.py sweep-reset` files this relic in the 'RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- genuinely safe)' bucket, and that classification is confirmed here rather than inherited. Contrast relic/red_skull and relic/ruined_helmet in this same batch, whose dropped AfterCombatEnd resets have NO turn-start clear to fall back on and are live gaps."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -54,7 +54,7 @@
     {
       "what": "N2: C# counts INTS per card type; the sim uses three booleans",
       "verdict": "faithful",
-      "rationale": "RainbowRing.cs:111-113 adds 1 or 0 per type and line 114 tests `> 0` on all three; the sim sets three booleans and tests their conjunction (rainbow_ring.py:35-41). Equivalent for every reachable state, and the counters are unreadable from outside (they are private with AssertMutable setters, RainbowRing.cs:41-78). One structural difference is worth naming: C# adds to all three counters on every play while the sim's if/elif assigns exactly one, but since only the >0 tests are ever read they agree. EXECUTED (`py tools/audit/relic_probes_b13.py rainbow-ring`): Attack+Skill+Power in one turn gives Strength 1 / Dexterity 1, and a second full set in the same turn changes nothing."
+      "rationale": "RainbowRing.cs:111-113 adds 1 or 0 per type and line 114 tests `> 0` on all three; the sim sets three booleans and tests their conjunction (rainbow_ring.py:35-41). Equivalent for every reachable state, and the counters are unreadable from outside (they are private with AssertMutable setters, RainbowRing.cs:41-78). One structural difference is worth naming: C# adds to all three counters on every play while the sim's if/elif assigns exactly one, but since only the >0 tests are ever read they agree. EXECUTED (`py audit/tools/relic_probes_b13.py rainbow-ring`): Attack+Skill+Power in one turn gives Strength 1 / Dexterity 1, and a second full set in the same turn changes nothing."
     },
     {
       "what": "N3: `CombatManager.Instance.IsInProgress` and `cardPlay.Card.Owner == base.Owner` (RainbowRing.cs:109)",

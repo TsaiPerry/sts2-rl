@@ -1,13 +1,13 @@
 """Execution probes for relic audit batch 9 (lost_coffer .. mr_struggles).
 
-Companion to `tools/audit/relic_probes.py` (batches 1-3 + the pool-wide
+Companion to `audit/tools/relic_probes.py` (batches 1-3 + the pool-wide
 sweeps), which stays READ-ONLY to this batch per the concurrency contract.
-Every reachability claim an `audits/relic/*.json` record from batch 9 makes is
+Every reachability claim an `audit/records/relic/*.json` record from batch 9 makes is
 produced here so a later auditor re-derives the number instead of trusting a
 throwaway script (binding rules 5 and 6).
 
-  py tools/audit/relic_probes_b09.py              # every probe
-  py tools/audit/relic_probes_b09.py b09-pool     # one probe
+  py audit/tools/relic_probes_b09.py              # every probe
+  py audit/tools/relic_probes_b09.py b09-pool     # one probe
 
 Probes:
   b09-pool         obtainability of the 15 units + massive_scroll's UNreachability
@@ -272,7 +272,7 @@ def probe_wisp_replay() -> None:
     and fires Hook.AfterCardPlayed INSIDE it, so a card played twice triggers
     Lost Wisp twice (8 + 8). The sim runs the whole play-count loop and calls
     hooks.on_card_played ONCE afterwards (combat.py:514). Same mechanism as
-    unsettling_lamp G1 / audits/seam/hook_dispatch.json G4.
+    unsettling_lamp G1 / audit/records/seam/hook_dispatch.json G4.
     """
     from sts2_rl import CombatState
     from sts2_rl.cards import CardType, make_card
@@ -307,7 +307,7 @@ def probe_struggles() -> None:
 
     Both relics deal turn-start AoE from on_player_turn_started. C# runs
     CheckWinCondition right after the player's turn setup
-    (CombatManager.cs:573 -- audits/seam/turn_structure.json step 27, gap
+    (CombatManager.cs:573 -- audit/records/seam/turn_structure.json step 27, gap
     G13), so a lethal turn-start tick ends the fight there. The sim has no
     such check in two windows: the turn-1 construction path (combat.py:208-209)
     and the EXTRA-TURN path (combat.py:648-652). mercury_hourglass.py:29 calls
@@ -574,7 +574,7 @@ def probe_simple() -> None:
     print("                     Both sets share one flat pass in relic order "
           "(hooks.py:285-295), so a step-22 relic can run AFTER a step-23 "
           "relic.\n"
-          "                     Same mechanism as audits/seam/turn_structure "
+          "                     Same mechanism as audit/records/seam/turn_structure "
           "step 23 / guard G12 (LIVE on the turn-END side, Orichalcum x Cloak "
           "Clasp).")
     # LIVE demonstration of the turn-START half: GamblingChip is step 22

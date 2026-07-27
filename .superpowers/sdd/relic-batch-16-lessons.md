@@ -2,15 +2,15 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b16` · **Commit:** `80b796c4`
 **Units:** 15 (`tea_of_discourtesy` … `unceasing_top`)
-**Probes:** `tools/audit/relic_probes_b16.py` (14 probes, committed, re-runnable)
+**Probes:** `audit/tools/relic_probes_b16.py` (14 probes, committed, re-runnable)
 
-`py tools/audit/harness.py validate` → **216 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **2667 citations, MISSING 0,
+`py audit/tools/harness.py validate` → **216 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **2667 citations, MISSING 0,
 OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 211 · invalid 0 ·
 stale 0 · gaps 161 · unaudited 47`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged. No engine
-code touched (`git status` showed only `audits/relic/` and the new probe module).
+code touched (`git status` showed only `audit/records/relic/` and the new probe module).
 
 ---
 
@@ -41,7 +41,7 @@ fifteen units needed execution to settle.
 
 ## LIVE gaps, each with its executed evidence
 
-All evidence from `py tools/audit/relic_probes_b16.py <probe>`.
+All evidence from `py audit/tools/relic_probes_b16.py <probe>`.
 
 1. **`toasty_mittens` G1 — the +1 Strength per turn is not implemented at all.**
    `ToastyMittens.cs:50` applies `PowerCmd.Apply<StrengthPower>(…, 1, …)` on
@@ -167,7 +167,7 @@ and was not edited.
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to a real C# file on the first try;
-`tools/audit/name_overrides.json` needs no additions. Obtainability confirmed
+`audit/tools/name_overrides.json` needs no additions. Obtainability confirmed
 for all 15 (`relic_probes_b16.py pool`): 8 from the transcribed grab bag, 7 from
 ported events/shrines (Tea Master, Trash Heap, Tanx ×2, Tezcatara ×2, Orobas).
 

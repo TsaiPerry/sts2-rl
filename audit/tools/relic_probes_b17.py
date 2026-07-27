@@ -5,14 +5,14 @@ very_hot_cocoa, vexing_puzzlebox, war_hammer, war_paint, whetstone,
 whispering_earring, white_beast_statue, white_star, wing_charm, winged_boots,
 wongo_customer_appreciation_badge.
 
-Companion to `tools/audit/relic_probes.py` (the shared module, read-only to
+Companion to `audit/tools/relic_probes.py` (the shared module, read-only to
 this batch per the concurrency contract). Every reachability claim in
-`audits/relic/<unit>.json` for these fifteen units is produced here, so a later
+`audit/records/relic/<unit>.json` for these fifteen units is produced here, so a later
 auditor re-derives the number instead of trusting a throwaway script — binding
 rules 5 and 6.
 
-  py tools/audit/relic_probes_b17.py              # every probe
-  py tools/audit/relic_probes_b17.py teaset       # one probe
+  py audit/tools/relic_probes_b17.py              # every probe
+  py audit/tools/relic_probes_b17.py teaset       # one probe
 
 Probes:
   pool           obtainability of all 15 batch-17 relics (rule 6)
@@ -128,10 +128,10 @@ def probe_vambrace() -> None:
 
     (a) sweep A CONFIRMED: `_used` is never reset, and C# assigns at BOTH
         BeforeCombatStart (Vambrace.cs:47-53) and AfterCombatEnd (:107-113).
-    (b) audits/seam/creature_card_cmds.json G1: BlockCmd.apply gates the whole
+    (b) audit/records/seam/creature_card_cmds.json G1: BlockCmd.apply gates the whole
         block-modifier dispatch on is_powered_attack, and Vambrace's C# gate is
         the looser IsCardOrMonsterMove().
-    (c) audits/seam/creature_card_cmds.json G2: C# latches TriggeringCard in
+    (c) audit/records/seam/creature_card_cmds.json G2: C# latches TriggeringCard in
         AfterModifyingBlockAmount but only sets BlockGainedThisCombat in
         AfterCardPlayed, so EVERY block gain of one card play is doubled.
     """
@@ -338,8 +338,8 @@ def probe_earring_order() -> None:
     passes (Hook.cs:928-955) entered strictly after steps 22-24. So the free
     0-cost card is ALWAYS in hand before the Earring's loop starts. The sim
     fires both from on_player_turn_started in one pass, so the answer depends
-    on the order of run.relics. Same mechanism as audits/seam/turn_structure
-    guard G8 and audits/relic/crossbow.json G1.
+    on the order of run.relics. Same mechanism as audit/records/seam/turn_structure
+    guard G8 and audit/records/relic/crossbow.json G1.
     """
     from sts2_rl import CombatState
     from sts2_rl.relics import make_relic

@@ -5,13 +5,13 @@ happy_flower, hefty_tablet, horn_cleat, ice_cream, intimidating_helmet,
 iron_club, jeweled_mask, jewelry_box, joss_paper, juzu_bracelet, kaleidoscope.
 
 Per the concurrency contract this batch owns its OWN probe module; the shared
-`tools/audit/relic_probes.py` is read-only here (re-use it for `turn-order`
+`audit/tools/relic_probes.py` is read-only here (re-use it for `turn-order`
 and the pool-wide sweeps). Binding rules 5 and 6: never justify `faithful`
 with an unreachability claim you have not EXECUTED, and never label a gap LIVE
 without proving both sides reachable with ported content.
 
-  py tools/audit/relic_probes_b07.py            # every probe
-  py tools/audit/relic_probes_b07.py club-count # one probe
+  py audit/tools/relic_probes_b07.py            # every probe
+  py audit/tools/relic_probes_b07.py club-count # one probe
 
 Probes:
   pool            obtainability of batch 7's 15 relics
@@ -353,7 +353,7 @@ def probe_mask_turn1() -> None:
     """jeweled_mask: BeforeHandDraw on TurnNumber <= 1 pulls a random Power
     from the draw pile into the hand and frees it. The sim's
     on_player_turn_start sits in exactly the BeforeHandDraw slot (executed:
-    `py tools/audit/relic_probes.py turn-order`)."""
+    `py audit/tools/relic_probes.py turn-order`)."""
     from sts2_rl import CombatState
     from sts2_rl.cards import CardType, make_card
     from sts2_rl.relics import make_relic

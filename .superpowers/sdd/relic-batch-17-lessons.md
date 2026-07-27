@@ -1,9 +1,9 @@
 # Relic content audit — batch 17 lessons
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b17` (based on `audit-relic` @ 3a300d94)
-**Units:** 15 · **Records written:** 15, 0 invalid · **Probes:** 15, in `tools/audit/relic_probes_b17.py`
+**Units:** 15 · **Records written:** 15, 0 invalid · **Probes:** 15, in `audit/tools/relic_probes_b17.py`
 **Suite:** `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged (no engine edits)
-**Citations:** `py tools/audit/citation_check.py audits/relic` → 211 records, 2614 citations, **MISSING 0, OUT-OF-RANGE 0**
+**Citations:** `py audit/tools/citation_check.py audit/records/relic` → 211 records, 2614 citations, **MISSING 0, OUT-OF-RANGE 0**
 
 ---
 
@@ -45,7 +45,7 @@
    Vambrace's own C# gate is the looser `IsCardOrMonsterMove()`
    (`ValuePropExtensions.cs:23-26`). *Executed:* a powered Defend doubles 5 → 10,
    an UNPOWERED card gain of 5 stays **5** (C#: 10). Entrench is the ported
-   witness. Same mechanism as `audits/seam/creature_card_cmds.json` G1 — cited,
+   witness. Same mechanism as `audit/records/seam/creature_card_cmds.json` G1 — cited,
    matched, not re-derived.
 
 3. **`vambrace` G3 — only the FIRST block gain of a card play is doubled.**
@@ -156,7 +156,7 @@ the **same** verdict, cited, not re-derived:
   (which cites `relics/vambrace.py:36-40` as its primary sim evidence; pinned test
   `test_vambrace_doubles_every_block_gain_of_one_card_play` verified present).
 - The missing AutoPrePlay phase → `gap`, matching `turn_structure` **G8** and
-  `audits/relic/crossbow.json` **G1**; a second ported pair added.
+  `audit/records/relic/crossbow.json` **G1**; a second ported pair added.
 - `IsBeforeAct3TreasureChest` → `gap`, matching `amethyst_aubergine` and
   `lasting_candy`; two more of the 17-relic cluster recorded.
 - The frozen constructor parameter → `gap`, matching
@@ -179,7 +179,7 @@ random option where `glitter` enchants all and `silken_tress` is one-shot.
 
 ## Faults found in shared tooling and seam records — reported, not edited
 
-**1. `tools/audit/citation_check.py` IS NONDETERMINISTIC. It can report
+**1. `audit/tools/citation_check.py` IS NONDETERMINISTIC. It can report
 OUT-OF-RANGE 0 on one run and 1 on the next, over byte-identical records — and it
 mis-resolves a correct citation to a same-basename file in a different
 directory.** This is the batch's most consequential tooling finding, because the
@@ -192,7 +192,7 @@ hashed sources and then via `rglob`. `_hashed_paths` returns a **set**, so when 
 record hashes two files with the same basename the `for rel in hashed` loop
 returns whichever comes first in set-iteration order — and the branch sets
 `ambiguous=False`, so the AMBIGUOUS escape hatch built for exactly this case never
-fires. `audits/seam/turn_structure.json` hashes BOTH `sts2_rl/monsters/base.py`
+fires. `audit/records/seam/turn_structure.json` hashes BOTH `sts2_rl/monsters/base.py`
 (148 lines) and `sts2_rl/cards/base.py` (312 lines), so a citation of
 `cards/base.py:269` resolves to the monster file and is reported past EOF.
 
@@ -235,13 +235,13 @@ which clamps all six and rewords the false positive — batch 15 reported the sa
 thing first, by the same method. Recorded here as a duplicate confirmation, and
 because it is the second independent arrival at the same defect: **quoting a seam
 record's citation verbatim into your own record is a cheap way to test the seam
-tree**, and it worked twice. `audits/seam/**` is read-only to this batch; nothing
+tree**, and it worked twice. `audit/records/seam/**` is read-only to this batch; nothing
 was edited.
 
 **3. Sweep A re-run against the brief's paraphrase (per the coordinator's
 mid-flight correction): the CURRENT output agrees with the brief on all three
 pre-diagnoses, and with my own independent execution.**
-`py tools/audit/relic_probes.py sweep-reset` and `sweep-reset-exec`, re-run
+`py audit/tools/relic_probes.py sweep-reset` and `sweep-reset-exec`, re-run
 2026-07-26 after all seven fixes:
 
 - `venerable_tea_set` → static bucket **FROZEN CONSTRUCTOR STATE (2)**,
@@ -347,8 +347,8 @@ with two turn-start relics should assume they contend and check.
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to a real C# file on the first try (`py
-tools/audit/harness.py roster relic` → 258 sim units, 0 unmatched), and
-`tools/audit/name_overrides.json` needs no additions. Obtainability confirmed by
+audit/tools/harness.py roster relic` → 258 sim units, 0 unmatched), and
+`audit/tools/name_overrides.json` needs no additions. Obtainability confirmed by
 execution for 14 of 15 (`relic_probes_b17.py pool`): 9 from the transcribed grab
 bag, `velvet_choker`/`war_hammer`/`whispering_earring` from the ported Darv/Tanx/
 Vakuu shrines, `very_hot_cocoa` additionally from Tezcatara, `winged_boots` from
@@ -374,7 +374,7 @@ execution and is the batch's only `faithful` unit.
   claimed.
 - **Star costs** (`SetStarCostThisTurn`, `ShouldPayExcessEnergyCostWithStars`)
   waived as an unmodelled currency, on the same basis as
-  `audits/relic/brilliant_scarf.json`'s `TryModifyStarCost`.
+  `audit/records/relic/brilliant_scarf.json`'s `TryModifyStarCost`.
 - Ascension values, multiplayer paths and relic-UI presentation waived per the
   shared contract throughout.
 

@@ -2,10 +2,10 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b15` (worktree
 `c:\Users\Perry\Desktop\sts2-rl-relic-b15`) · based on `audit-relic` @ `3a300d94`
-**Probes:** `tools/audit/relic_probes_b15.py` (9 probes, committed, re-runnable)
+**Probes:** `audit/tools/relic_probes_b15.py` (9 probes, committed, re-runnable)
 
-`py tools/audit/harness.py validate` → **216 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **211 records, 2632 citations,
+`py audit/tools/harness.py validate` → **216 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **211 records, 2632 citations,
 MISSING 0, OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 211 · invalid 0 ·
 stale 0 · gaps 160 · unaudited 47`.
@@ -79,7 +79,7 @@ chain — driven end to end by `b15-swords`.
    57/87 → 57/80; exact only from 80/80.** The runner really calls it
    (`conformance/runner.py:461, 694`, grepped per rule 8).
 4. **`sturdy_clamp` G1/G2 — cited and matched from
-   `audits/seam/turn_structure.json` G1 and G2, both LIVE there.** G1: the sim
+   `audit/records/seam/turn_structure.json` G1 and G2, both LIVE there.** G1: the sim
    fires `on_block_cleared` only when the clear happened, so holding Sturdy
    Clamp silently switches off Horn Cleat and Captain's Wheel. G2: the cap has
    no preventer test. **Re-executed (`b15-clamp`, driving `player.start_turn()`
@@ -88,7 +88,7 @@ chain — driven end to end by `b15-swords`.
    full 30 survives; a sentinel records `should_clear_block` and NO
    `on_block_cleared`.**
 5. **`spiked_gauntlets` G1 — cited and matched from
-   `audits/seam/hook_dispatch.json` G2, which names this relic as its executed
+   `audit/records/seam/hook_dispatch.json` G2, which names this relic as its executed
    witness** (Curious ×2 + Spiked Gauntlets on a 1-cost Power: game 1, sim 0).
    Re-confirmed at the source for this batch: `CuriousPower.cs:27-31` clamps its
    own result and `Hook.ModifyEnergyCostInCombat` (`Hook.cs:1573-1589`) clamps
@@ -127,22 +127,22 @@ surface it.
 ## Things I found wrong in shared tooling or seam records
 ### (reported, not edited — those files are read-only to this batch)
 
-1. **`audits/seam/hook_dispatch.json` G2 cites `relics/spiked_gauntlets.py:26-32`
+1. **`audit/records/seam/hook_dispatch.json` G2 cites `relics/spiked_gauntlets.py:26-32`
    and the file has 31 lines.** `citation_check.py` caught it the moment I quoted
    the seam text verbatim into `spiked_gauntlets.json` (OUT-OF-RANGE 1). My
    record now says `:26-31` with the discrepancy noted inline. The seam record
    itself still carries the stale range — one line, cosmetic, but it is exactly
    the class of defect `citation_check` exists to catch, and it currently sits
-   inside a record the checker does not scan (`citation_check audits/relic`
+   inside a record the checker does not scan (`citation_check audit/records/relic`
    reads 211 relic records; the seam records are a separate tree). **Suggest
-   running `citation_check` over `audits/seam` too.**
+   running `citation_check` over `audit/records/seam` too.**
 
 2. **The batch-15 brief's pre-diagnosis for `sword_of_stone` reproduces sweep
    A's already-fixed defect 3.** The brief says "Sweep A candidate
    (`elites_defeated`; C# resets at `AfterCombatVictory`)". `AfterCombatVictory`
    does not reset the field — it INCREMENTS it (`SwordOfStone.cs:44`) — and the
    field is `[SavedProperty]`, i.e. per-run by design. The **fixed** sweep gets
-   this right: re-running `py tools/audit/relic_probes.py sweep-reset` prints
+   this right: re-running `py audit/tools/relic_probes.py sweep-reset` prints
    `C# resets: NONE (may be per-run by design)` for this relic. So the sweep is
    sound here and the *brief* is stale, carrying the pre-rewrite wording. Worth
    fixing in the remaining batch prompts (b16–b18) before they mislead someone
@@ -157,7 +157,7 @@ surface it.
    because it is the one place a sweep's *clearance* was checked and was right.
 
 4. **No unit in this batch was mis-resolved by the roster** and
-   `tools/audit/name_overrides.json` needs no additions. All 15 PascalCase C#
+   `audit/tools/name_overrides.json` needs no additions. All 15 PascalCase C#
    files matched on the first try, including `TanxsWhistle.cs`.
 
 ---

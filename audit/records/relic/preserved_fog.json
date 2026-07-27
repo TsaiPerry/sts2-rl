@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (preserved_fog.py:13), matching PreservedFog.cs:14",
       "verdict": "faithful",
-      "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Vakuu shrine -- `py tools/audit/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/vakuu.py']."
+      "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Vakuu shrine -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/vakuu.py']."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (preserved_fog.py:17-22), dispatched by RunState.add_relic (run.py:552)",
@@ -24,7 +24,7 @@
     {
       "what": "G1 (LIVE): the same missing `Hook.BeforeCardRemoved` dispatch as relic/precise_scissors, over three cards",
       "verdict": "gap",
-      "issue": "PreservedFog.cs:24 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61. preserved_fog.py:21 calls `run.deck.remove(card)` DIRECTLY -- one step further from the source than its siblings, which at least go through RunState.remove_cards -- and the sim has no before_card_removed hook at all (`grep -rn 'before_card_removed' sts2_rl/` returns zero hits). Same mechanism, same verdict, same executed evidence as audits/relic/precise_scissors.json guard G1 (binding rule 3, not re-derived): removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py tools/audit/relic_probes_b12.py b12-cardremoved`). NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
+      "issue": "PreservedFog.cs:24 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61. preserved_fog.py:21 calls `run.deck.remove(card)` DIRECTLY -- one step further from the source than its siblings, which at least go through RunState.remove_cards -- and the sim has no before_card_removed hook at all (`grep -rn 'before_card_removed' sts2_rl/` returns zero hits). Same mechanism, same verdict, same executed evidence as audit/records/relic/precise_scissors.json guard G1 (binding rule 3, not re-derived): removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py audit/tools/relic_probes_b12.py b12-cardremoved`). NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
     },
     {
       "what": "N1: `run.deck.remove(card)` (preserved_fog.py:21) instead of `run.remove_cards(chosen)`, which the two sibling relics use",
@@ -34,7 +34,7 @@
     {
       "what": "N2: `CardPileCmd.AddCurseToDeck<Folly>(base.Owner)` (PreservedFog.cs:26) vs `run.add_card(make_card('folly'))` (preserved_fog.py:22)",
       "verdict": "faithful",
-      "rationale": "Same mechanism and same verdict as audits/relic/calling_bell.json guard N1, which settled AddCurseToDeck for the identical shape (binding rule 3): the C# helper asserts the card is a Curse, creates it on the run and routes it through `Add(card, PileType.Deck)`, and RunState.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models. EXECUTED (py tools/audit/relic_probes_b12.py b12-cutters): with a spy relic attached, after_card_added_to_deck fires for ['folly'] and the curse is in the deck. The Folly card is ported (make_card('folly') resolves). ORDER: removals first, curse second, on both sides -- load-bearing because a curse entering the deck can trigger a relic that reacts to it (Darkstone Periapt's +6 Max HP on a gained Curse) and the removals must already have happened. NOTE per binding rule 7: CardPileCmd.cs, run.py and calling_bell.json are not hashed here."
+      "rationale": "Same mechanism and same verdict as audit/records/relic/calling_bell.json guard N1, which settled AddCurseToDeck for the identical shape (binding rule 3): the C# helper asserts the card is a Curse, creates it on the run and routes it through `Add(card, PileType.Deck)`, and RunState.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models. EXECUTED (py audit/tools/relic_probes_b12.py b12-cutters): with a spy relic attached, after_card_added_to_deck fires for ['folly'] and the curse is in the deck. The Folly card is ported (make_card('folly') resolves). ORDER: removals first, curse second, on both sides -- load-bearing because a curse entering the deck can trigger a relic that reacts to it (Darkstone Periapt's +6 Max HP on a gained Curse) and the removals must already have happened. NOTE per binding rule 7: CardPileCmd.cs, run.py and calling_bell.json are not hashed here."
     },
     {
       "what": "N3: PreservedFog.cs declares NO HasUponPickupEffect override, and the port declares no has_upon_pickup_effect either",

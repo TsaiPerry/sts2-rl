@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (radiant_pearl.py:18)",
       "verdict": "faithful",
-      "rationale": "Matches RadiantPearl.cs:17. Obtainable via the ported Orobas shrine's second option pool (events/orobas.py:21), executed by `py tools/audit/relic_probes_b13.py pool`."
+      "rationale": "Matches RadiantPearl.cs:17. Obtainable via the ported Orobas shrine's second option pool (events/orobas.py:21), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "CanonicalVars": {
       "maps_to": "CARDS = 1 (radiant_pearl.py:20)",
@@ -22,7 +22,7 @@
     "BeforeHandDraw": {
       "maps_to": "on_player_turn_start (radiant_pearl.py:22-29) -- the sim's PRE-DRAW turn-start slot",
       "verdict": "faithful",
-      "rationale": "audits/seam/turn_structure.json step 19 verdicts `Hook.BeforeHandDraw -> on_player_turn_start` FAITHFUL and says so from execution ('the sequence pin records on_energy_reset -> on_player_turn_start -> modify_hand_draw'). Re-executed here: `py tools/audit/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so the Luminesce really is added BEFORE the draw, as C# requires. `py tools/audit/relic_probes_b13.py radiant-pearl` shows the turn-1 hand as ['luminesce','defend','defend','strike','strike','strike'] -- 6 cards, the added card plus a full 5-card draw, which is C#'s outcome too. This is the one relic in the batch whose hook slot is right; contrast relic/red_mask in the same batch, which sits two slots later. NOTE per binding rule 7: turn_structure.json and player.py are not hashed here."
+      "rationale": "audit/records/seam/turn_structure.json step 19 verdicts `Hook.BeforeHandDraw -> on_player_turn_start` FAITHFUL and says so from execution ('the sequence pin records on_energy_reset -> on_player_turn_start -> modify_hand_draw'). Re-executed here: `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so the Luminesce really is added BEFORE the draw, as C# requires. `py audit/tools/relic_probes_b13.py radiant-pearl` shows the turn-1 hand as ['luminesce','defend','defend','strike','strike','strike'] -- 6 cards, the added card plus a full 5-card draw, which is C#'s outcome too. This is the one relic in the batch whose hook slot is right; contrast relic/red_mask in the same batch, which sits two slots later. NOTE per binding rule 7: turn_structure.json and player.py are not hashed here."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",

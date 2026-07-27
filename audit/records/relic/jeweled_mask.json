@@ -16,7 +16,7 @@
     "BeforeHandDraw": {
       "maps_to": "on_player_turn_start (jeweled_mask.py:20-34)",
       "verdict": "faithful",
-      "rationale": "JeweledMask.cs:17-31 fires on Hook.BeforeHandDraw -- turn_structure spec step 19, between AfterEnergyReset and ModifyHandDraw -- and the sim's on_player_turn_start is executed-confirmed to sit in exactly that slot: `py tools/audit/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started. This is the one place where relics/base.py:11's docstring mapping (`BeforeSideTurnStart (player) -> on_player_turn_start`) is wrong in a way that would have mattered, and PROMPT.md bug class 11 says not to verdict off it; the executed order is what this entry rests on. Body matches clause for clause: turn <= 1, the draw pile filtered to CardType.Power, a bail on an empty list, one Rng.CombatCardSelection.NextItem pick, SetToFreeThisTurn, and a move to the hand. EXECUTED (py tools/audit/relic_probes_b07.py mask-turn1): with a 10-card deck holding Inflame and Demon Form, turn 1 opens with a 6-card hand containing Inflame at cost 0 (the control opens with 5 and no free Power), and turn 2 does not fire again. Rule 7: relics/base.py and sts2_rl/player.py are not hashed by this record."
+      "rationale": "JeweledMask.cs:17-31 fires on Hook.BeforeHandDraw -- turn_structure spec step 19, between AfterEnergyReset and ModifyHandDraw -- and the sim's on_player_turn_start is executed-confirmed to sit in exactly that slot: `py audit/tools/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started. This is the one place where relics/base.py:11's docstring mapping (`BeforeSideTurnStart (player) -> on_player_turn_start`) is wrong in a way that would have mattered, and PROMPT.md bug class 11 says not to verdict off it; the executed order is what this entry rests on. Body matches clause for clause: turn <= 1, the draw pile filtered to CardType.Power, a bail on an empty list, one Rng.CombatCardSelection.NextItem pick, SetToFreeThisTurn, and a move to the hand. EXECUTED (py audit/tools/relic_probes_b07.py mask-turn1): with a 10-card deck holding Inflame and Demon Form, turn 1 opens with a 6-card hand containing Inflame at cost 0 (the control opens with 5 and no free Power), and turn 2 does not fire again. Rule 7: relics/base.py and sts2_rl/player.py are not hashed by this record."
     }
   },
   "guards": [
@@ -48,7 +48,7 @@
     {
       "what": "N6: `player == base.Owner` (JeweledMask.cs:19) and the PlayerChoiceContext parameter",
       "verdict": "waiver",
-      "rationale": "One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audits/seam/hook_dispatch.json guard N1, matched per binding rule 3."
+      "rationale": "One local player, so `player != base.Owner` / `card.Owner == base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audit/records/seam/hook_dispatch.json guard N1, matched per binding rule 3."
     },
     {
       "what": "N7: Flash() (JeweledMask.cs:26); the file declares NO CanonicalVars and no hover tips",

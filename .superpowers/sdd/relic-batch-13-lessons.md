@@ -2,10 +2,10 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b13` (based on `audit-relic` @ `0cad15d3`)
 **Units:** the 15 relics from `prismatic_gem` to `ruined_helmet`
-**Probes:** `tools/audit/relic_probes_b13.py` (16 probes, all re-runnable; `py tools/audit/relic_probes_b13.py`)
+**Probes:** `audit/tools/relic_probes_b13.py` (16 probes, all re-runnable; `py audit/tools/relic_probes_b13.py`)
 
-`py tools/audit/harness.py validate` → **141 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **1618 citations, MISSING 0, OUT-OF-RANGE 0**.
+`py audit/tools/harness.py validate` → **141 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **1618 citations, MISSING 0, OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 136 · invalid 0 · stale 0 · gaps 105 · unaudited 122`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged; no engine file was touched (`git status` shows only the 15 records, the probe module and this report).
 
@@ -122,7 +122,7 @@ bucket. Two of the three are LIVE gaps.**
 
 `probe_sweep_reset_exec`'s driver builds a bare `CombatState` at full HP, calls
 `end_turn()` three times, and plays no cards
-(`tools/audit/relic_probes.py:811-891`). Any field whose write is gated on a
+(`audit/tools/relic_probes.py:811-891`). Any field whose write is gated on a
 stimulus that driver never produces is identical on both instances, so the diff
 is empty and the relic is filed as agreeing. Executed
 (`relic_probes_b13.py sweep-exec-blind`):
@@ -162,7 +162,7 @@ meant to persist) and on `ripple_basin` (the C# `AfterCombatEnd` body is only
 
 ## Other things found wrong in the shared tooling and seam records
 
-**1. `audits/seam/turn_structure.json` step 9's dormancy rationale does not
+**1. `audit/records/seam/turn_structure.json` step 9's dormancy rationale does not
 cover its own named listener.** It says of `Hook.BeforeSideTurnStart`: *"DORMANT
 for the player side: every ported one is a per-turn counter reset or latch that
 does not read block or energy"* — and then lists **Red Mask** among the ported
@@ -288,7 +288,7 @@ verdict conflict.
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to a real C# file on the first try and
-`tools/audit/name_overrides.json` needs no additions. Obtainability proved by
+`audit/tools/name_overrides.json` needs no additions. Obtainability proved by
 execution for all 15 (`relic_probes_b13.py pool`): 11 via the transcribed grab
 bag (`punch_dagger`, `rainbow_ring`, `razor_tooth`, `red_mask`, `regal_pillow`,
 `reptile_trinket`, `ringing_triangle`, `ripple_basin`, `royal_stamp` shared;

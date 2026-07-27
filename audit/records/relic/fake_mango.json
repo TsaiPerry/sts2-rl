@@ -26,7 +26,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (fake_mango.py:19-20)",
       "verdict": "faithful",
-      "rationale": "FakeMango.cs:19-22 calls CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue) with MaxHpVar(3m) (line 17) and no AscensionHelper branch in the file, so 3 is the pinned non-ascension value and matches MAX_HP = 3 (fake_mango.py:17). The load-bearing detail is that GainMaxHp is NOT just a max-HP bump: CreatureCmd.cs:786-799 calls SetMaxHp, captures the actual delta it returned, and then `await Heal(creature, num)` -- so the relic also restores 3 current HP. run.gain_max_hp (run.py:311-314) does exactly that pair, and its own docstring cites it. EXECUTED (py tools/audit/relic_probes_b05.py mango-hp): a run at 40/80 becomes 43/83. Rule 7: CreatureCmd.cs and run.py are unhashed here."
+      "rationale": "FakeMango.cs:19-22 calls CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue) with MaxHpVar(3m) (line 17) and no AscensionHelper branch in the file, so 3 is the pinned non-ascension value and matches MAX_HP = 3 (fake_mango.py:17). The load-bearing detail is that GainMaxHp is NOT just a max-HP bump: CreatureCmd.cs:786-799 calls SetMaxHp, captures the actual delta it returned, and then `await Heal(creature, num)` -- so the relic also restores 3 current HP. run.gain_max_hp (run.py:311-314) does exactly that pair, and its own docstring cites it. EXECUTED (py audit/tools/relic_probes_b05.py mango-hp): a run at 40/80 becomes 43/83. Rule 7: CreatureCmd.cs and run.py are unhashed here."
     }
   },
   "guards": [

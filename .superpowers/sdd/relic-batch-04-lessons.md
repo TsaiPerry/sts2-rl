@@ -2,10 +2,10 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b04` (based on `audit-relic` @ `4542c32f`)
 **Units:** `crossbow` … `ectoplasm` (15)
-**Probes:** `py tools/audit/relic_probes_b04.py` (13 probes, committed, re-runnable)
+**Probes:** `py audit/tools/relic_probes_b04.py` (13 probes, committed, re-runnable)
 
-`py tools/audit/harness.py validate` → **66 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → 511 citations, **MISSING 0,
+`py audit/tools/harness.py validate` → **66 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → 511 citations, **MISSING 0,
 OUT-OF-RANGE 0, AMBIGUOUS 0** (one bad citation of mine — `cmds.py:604-611` on a
 554-line file — was caught by the gate and corrected to `cmds.py:110-113`; the
 gate earns its keep).
@@ -145,7 +145,7 @@ for the card identity because the candidate set has exactly one member.
 
 ## Cross-record disagreement (binding rule 3)
 
-**One, and it matters.** `audits/seam/turn_structure.json` guard **G8** (the
+**One, and it matters.** `audit/records/seam/turn_structure.json` guard **G8** (the
 missing `AutoPrePlay`/`AutoPostPlay` phases) is LIVE on the AutoPostPlay side and
 calls the **AutoPrePlay side DORMANT**, on this stated basis:
 
@@ -184,7 +184,7 @@ registered, and all 15 are obtainable with ported content (`b04-pool`):
 `demon_tongue` (Rare), `dingy_rug`, `dollys_mirror`, `dragon_fruit` (Shop) from
 the transcribed grab bag; the other eleven from ported events/shrines (Tanx,
 Neow, Trash Heap ×2, Doll Room, Nonupeipe ×2, Vakuu, Orobas, Darv ×2).
-`tools/audit/name_overrides.json` needs no additions.
+`audit/tools/name_overrides.json` needs no additions.
 
 ---
 
@@ -272,7 +272,7 @@ units the way sweeps A–E did. It is a **superset** of class 16's RNG-stream ha
 the divergence is not only the stream but the *distribution* (`delicate_frond`
 turns a 10% Rare roll into 33%), which no stream fix would repair.
 
-I did not write it: `tools/audit/relic_probes.py` is read-only to this batch and
+I did not write it: `audit/tools/relic_probes.py` is read-only to this batch and
 a batch-local sweep would duplicate work five other concurrent batches might
 also do. Recommended as sweep **F** for the relic stream owner after the merge.
 

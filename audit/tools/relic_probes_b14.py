@@ -4,12 +4,12 @@ Batch 14's units: runic_pyramid, sai, sand_castle, screaming_flagon,
 scroll_boxes, sea_glass, seal_of_gold, self_forming_clay, sere_talon, shovel,
 shuriken, signet_ring, silken_tress, silver_crucible, sling_of_courage.
 
-Own module per the batch-14 concurrency contract (`tools/audit/relic_probes.py`
+Own module per the batch-14 concurrency contract (`audit/tools/relic_probes.py`
 is read-only to this batch); the shared module is still the reference for
 `turn-order` and the pool-wide sweeps and is re-used, not re-implemented.
 
-  py tools/audit/relic_probes_b14.py                  # every probe
-  py tools/audit/relic_probes_b14.py sand-castle      # one probe
+  py audit/tools/relic_probes_b14.py                  # every probe
+  py audit/tools/relic_probes_b14.py sand-castle      # one probe
 
 Probes:
   pool             obtainability of batch 14's 15 relics (binding rule 6)
@@ -695,7 +695,7 @@ def probe_sai_seal_slot() -> None:
     which the game runs as a complete pass AFTER every AfterPlayerTurnStart
     listener (step 22) and then re-runs as AfterSideTurnStartLate. The sim has
     a single `on_player_turn_started` walk in relic-registration order --
-    audits/seam/turn_structure.json guard G12, LIVE.
+    audit/records/seam/turn_structure.json guard G12, LIVE.
     """
     from sts2_rl import CombatState
     from sts2_rl.relics import make_relic
@@ -884,7 +884,7 @@ def probe_sea_glass() -> None:
 def probe_pyramid() -> None:
     """runic_pyramid: should_flush_hand, and the seam's named witness.
 
-    audits/seam/turn_structure.json guard G4 already verdicts this mechanism a
+    audit/records/seam/turn_structure.json guard G4 already verdicts this mechanism a
     LIVE gap and names relics/runic_pyramid.py:16-17 as one of its two ported
     witnesses (the other is Ringing Triangle). Binding rule 3: cite and match,
     do not re-derive. This probe only confirms the port's own behaviour.

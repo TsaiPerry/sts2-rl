@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (the_abacus.py:18)",
       "verdict": "faithful",
-      "rationale": "TheAbacus.cs:15. Executed: Shop rarity in the transcribed grab bag (relic_pools.py:140 'RELIC.THE_ABACUS'), `py tools/audit/relic_probes_b16.py pool`."
+      "rationale": "TheAbacus.cs:15. Executed: Shop rarity in the transcribed grab bag (relic_pools.py:140 'RELIC.THE_ABACUS'), `py audit/tools/relic_probes_b16.py pool`."
     },
     "AfterShuffle": {
       "maps_to": "on_shuffle (the_abacus.py:22-25)",
@@ -34,7 +34,7 @@
     {
       "what": "N3 (EXECUTED -- settles the trigger set, which is the only interesting question this relic has): which shuffles fire AfterShuffle",
       "verdict": "faithful",
-      "rationale": "Hook.AfterShuffle has exactly ONE dispatch site in the whole game -- CardPileCmd.cs:917, at the bottom of CardPileCmd.Shuffle -- so it fires from the explicit Shuffle command and from ShuffleIfNecessary (CardPileCmd.cs:972-981, which calls Shuffle only when the draw pile is empty and the discard pile is not), and NOT from the combat-start randomise, which is a different call path (CardPile.RandomizeOrderInternal). The sim's on_shuffle has exactly three call sites: player.py:218 (reshuffle_discard_into_draw = the ShuffleIfNecessary path), player.py:239 (shuffle_draw_and_discard = the explicit Shuffle) and cards/havoc.py:42 (Havoc's inline ShuffleIfNecessary, whose C# counterpart also routes through Shuffle). The sets match. EXECUTED (`py tools/audit/relic_probes_b16.py abacus-shuffle`): 0 block at combat start with the relic attached, 6 block after a ShuffleIfNecessary reshuffle -- exactly the C# numbers. Rule 7: player.py, cards/havoc.py and CardPileCmd.cs are not hashed by this record."
+      "rationale": "Hook.AfterShuffle has exactly ONE dispatch site in the whole game -- CardPileCmd.cs:917, at the bottom of CardPileCmd.Shuffle -- so it fires from the explicit Shuffle command and from ShuffleIfNecessary (CardPileCmd.cs:972-981, which calls Shuffle only when the draw pile is empty and the discard pile is not), and NOT from the combat-start randomise, which is a different call path (CardPile.RandomizeOrderInternal). The sim's on_shuffle has exactly three call sites: player.py:218 (reshuffle_discard_into_draw = the ShuffleIfNecessary path), player.py:239 (shuffle_draw_and_discard = the explicit Shuffle) and cards/havoc.py:42 (Havoc's inline ShuffleIfNecessary, whose C# counterpart also routes through Shuffle). The sets match. EXECUTED (`py audit/tools/relic_probes_b16.py abacus-shuffle`): 0 block at combat start with the relic attached, 6 block after a ShuffleIfNecessary reshuffle -- exactly the C# numbers. Rule 7: player.py, cards/havoc.py and CardPileCmd.cs are not hashed by this record."
     },
     {
       "what": "N4: C# skips the AfterShuffle dispatch entirely when the combat is over or ending; the sim's on_shuffle has no is_over gate",

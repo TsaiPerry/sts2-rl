@@ -5,15 +5,15 @@ spiked_gauntlets, stone_calendar, stone_cracker, stone_humidifier, storybook,
 strawberry, strike_dummy, sturdy_clamp, sword_of_jade, sword_of_stone,
 tanxs_whistle.
 
-Own module per the batch-15 concurrency contract: `tools/audit/relic_probes.py`
+Own module per the batch-15 concurrency contract: `audit/tools/relic_probes.py`
 is read-only to this batch (re-use it read-only —
-`py tools/audit/relic_probes.py turn-order` is the executed hook-order
+`py audit/tools/relic_probes.py turn-order` is the executed hook-order
 reference). Binding rules 5 and 6: never justify `faithful` with an
 unreachability claim you have not EXECUTED, and never label a gap LIVE without
 proving both sides reachable with ported content.
 
-  py tools/audit/relic_probes_b15.py                 # every probe
-  py tools/audit/relic_probes_b15.py b15-cracker     # one probe
+  py audit/tools/relic_probes_b15.py                 # every probe
+  py audit/tools/relic_probes_b15.py b15-cracker     # one probe
 
 Probes:
   b15-pool          obtainability of the 15 units (rule 6, both sides)
@@ -22,7 +22,7 @@ Probes:
   b15-rouge         sparkling_rouge -- AfterBlockCleared vs the post-draw slot,
                     plus the census of readers in the skipped window
   b15-clamp         sturdy_clamp -- preventer identity + cap timing
-                    (reproduces audits/seam/turn_structure.json G1/G2)
+                    (reproduces audit/records/seam/turn_structure.json G1/G2)
   b15-sozu          sozu -- +1 max energy, and the in-combat procure path that
                     bypasses ShouldProcurePotion (LIVE)
   b15-strawberry    strawberry -- undo_after_obtained clamps instead of
@@ -280,7 +280,7 @@ def probe_rouge() -> None:
 
 # ── b15-clamp ─────────────────────────────────────────────────────────────
 def probe_clamp() -> None:
-    """sturdy_clamp: reproduce audits/seam/turn_structure.json G1 and G2."""
+    """sturdy_clamp: reproduce audit/records/seam/turn_structure.json G1 and G2."""
     from sts2_rl.combat import CombatState
     from sts2_rl.cmds import PowerCmd
     from sts2_rl.powers import BarricadePower

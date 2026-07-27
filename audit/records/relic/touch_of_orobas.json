@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (touch_of_orobas.py:15)",
       "verdict": "faithful",
-      "rationale": "TouchOfOrobas.cs:27. Granted by the ported Orobas shrine (events/orobas.py:72). Executed: `py tools/audit/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
+      "rationale": "TouchOfOrobas.cs:27. Granted by the ported Orobas shrine (events/orobas.py:72). Executed: `py audit/tools/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (touch_of_orobas.py:20-32), invoked by RunState.add_relic (run.py:552)",
@@ -24,7 +24,7 @@
     {
       "what": "N1 (EXECUTED): RelicCmd.Replace's index preservation and the AfterObtained call on the replacement",
       "verdict": "faithful",
-      "rationale": "RelicCmd.Replace (RelicCmd.cs:74-82) records `player.Relics.IndexOf(original)`, calls Remove(original), then `Obtain(replace, player, indexOfOriginal)` -- so the refinement occupies the starter's slot, which matters because the relic list order is the hook-listener order (CombatState.cs:428-435) and Burning Blood is index 0 (audits/seam/hook_dispatch.json's meat_on_the_bone finding turns on exactly that). touch_of_orobas.py:31 does `run.relics[run.relics.index(starter)] = upgraded`, preserving the index, and :32 calls `upgraded.after_obtained(run)`, which is Obtain's `await relic.AfterObtained()` (RelicCmd.cs:53). EXECUTED (`py tools/audit/relic_probes_b16.py orobas-replace`): relics go from ['burning_blood'] to ['black_blood', 'touch_of_orobas'] -- Black Blood at index 0, exactly where Burning Blood was. Rule 7: RelicCmd.cs, run.py and audits/seam/hook_dispatch.json are not hashed here."
+      "rationale": "RelicCmd.Replace (RelicCmd.cs:74-82) records `player.Relics.IndexOf(original)`, calls Remove(original), then `Obtain(replace, player, indexOfOriginal)` -- so the refinement occupies the starter's slot, which matters because the relic list order is the hook-listener order (CombatState.cs:428-435) and Burning Blood is index 0 (audit/records/seam/hook_dispatch.json's meat_on_the_bone finding turns on exactly that). touch_of_orobas.py:31 does `run.relics[run.relics.index(starter)] = upgraded`, preserving the index, and :32 calls `upgraded.after_obtained(run)`, which is Obtain's `await relic.AfterObtained()` (RelicCmd.cs:53). EXECUTED (`py audit/tools/relic_probes_b16.py orobas-replace`): relics go from ['burning_blood'] to ['black_blood', 'touch_of_orobas'] -- Black Blood at index 0, exactly where Burning Blood was. Rule 7: RelicCmd.cs, run.py and audit/records/seam/hook_dispatch.json are not hashed here."
     },
     {
       "what": "G1 (DORMANT): RelicCmd.Obtain strips the obtained relic from both grab bags (`player.RelicGrabBag.Remove(relic)` and `runState.SharedRelicGrabBag.Remove(relic)`, RelicCmd.cs:41-45) and stamps `FloorAddedToDeck`; the port's direct list assignment does neither",
@@ -34,7 +34,7 @@
     {
       "what": "N2: `RelicCmd.Remove(original)` awaits `original.AfterRemoved()` (RelicCmd.cs:61-66); the sim's Relic base declares no after_removed and the port calls nothing",
       "verdict": "waiver",
-      "rationale": "UNREACHABLE BECAUSE THE HOOK HAS NO IMPLEMENTER IN THE C# SOURCE ITSELF, not because it is unported content: `grep -rn 'AfterRemoved' 'src/Core/Models/Relics/'` returns ZERO matches -- not one of the 298 relic models overrides it. EXECUTED: `hasattr(Relic, 'after_removed')` is False. So Burning Blood cannot be doing anything on removal in the game either, and the sim's omission provably cannot change an outcome. Same basis and same verdict as audits/relic/unsettling_lamp.json N1 (power.IsVisible) and audits/relic/calling_bell.json G4 (Hook.ShouldAddToDeck) -- a gate that is dead code in C# is a waiver, not a dormant gap (binding rule 3). Rule 7: relics/base.py and the two cited records are not hashed here."
+      "rationale": "UNREACHABLE BECAUSE THE HOOK HAS NO IMPLEMENTER IN THE C# SOURCE ITSELF, not because it is unported content: `grep -rn 'AfterRemoved' 'src/Core/Models/Relics/'` returns ZERO matches -- not one of the 298 relic models overrides it. EXECUTED: `hasattr(Relic, 'after_removed')` is False. So Burning Blood cannot be doing anything on removal in the game either, and the sim's omission provably cannot change an outcome. Same basis and same verdict as audit/records/relic/unsettling_lamp.json N1 (power.IsVisible) and audit/records/relic/calling_bell.json G4 (Hook.ShouldAddToDeck) -- a gate that is dead code in C# is a waiver, not a dormant gap (binding rule 3). Rule 7: relics/base.py and the two cited records are not hashed here."
     },
     {
       "what": "N3: `StarterRelic ?? base.Owner.Relics.First(r => r.Rarity == Starter).Id` and the two [SavedProperty] members (TouchOfOrobas.cs:53-99, 154-158)",

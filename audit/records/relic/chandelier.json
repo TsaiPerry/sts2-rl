@@ -16,7 +16,7 @@
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (chandelier.py:18-21)",
       "verdict": "faithful",
-      "rationale": "Chandelier.cs:23-34 gains EnergyVar(3).BaseValue when the owner is among the participants and PlayerCombatState.TurnNumber == 3; chandelier.py:19-21 is the same branch with the same constant. Same slot argument as the sibling relic/candelabra, executed via `py tools/audit/relic_probes.py turn-order`: on_player_turn_started is the post-draw slot that audits/seam/turn_structure.json step 23 assigns to AfterSideTurnStart, i.e. after the energy reset at step 17, so the +3 survives."
+      "rationale": "Chandelier.cs:23-34 gains EnergyVar(3).BaseValue when the owner is among the participants and PlayerCombatState.TurnNumber == 3; chandelier.py:19-21 is the same branch with the same constant. Same slot argument as the sibling relic/candelabra, executed via `py audit/tools/relic_probes.py turn-order`: on_player_turn_started is the post-draw slot that audit/records/seam/turn_structure.json step 23 assigns to AfterSideTurnStart, i.e. after the energy reset at step 17, so the +3 survives."
     }
   },
   "guards": [
@@ -28,7 +28,7 @@
     {
       "what": "N2: `TurnNumber == 3` vs `self.turn == 3` (chandelier.py:19)",
       "verdict": "faithful",
-      "rationale": "Same mechanism and same verdict as relic/candelabra N2 and relic/captains_wheel N2 (binding rule 3): audits/seam/turn_structure.json's extra-turn step establishes that self.turn models PlayerCombatState.TurnNumber, and lists the ported turn-number readers it checked."
+      "rationale": "Same mechanism and same verdict as relic/candelabra N2 and relic/captains_wheel N2 (binding rule 3): audit/records/seam/turn_structure.json's extra-turn step establishes that self.turn models PlayerCombatState.TurnNumber, and lists the ported turn-number readers it checked."
     },
     {
       "what": "N3: `PlayerCmd.GainEnergy` vs `EnergyCmd.gain` (chandelier.py:21)",

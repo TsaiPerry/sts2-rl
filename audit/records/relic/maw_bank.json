@@ -26,7 +26,7 @@
     "AfterRoomEntered": {
       "maps_to": "after_room_entered (maw_bank.py:32-34), dispatched once per map-point entry from RunState.enter_point (run.py:980-983)",
       "verdict": "faithful",
-      "rationale": "MawBank.cs:43-50 grants GoldVar(12) when `RunState.BaseRoom == room && !HasItemBeenBought`. Both clauses check out -- the flag clause is mirrored at maw_bank.py:33 and the BaseRoom clause is guard N1's subject. EXECUTED (py tools/audit/relic_probes_b09.py b09-maw-bank): three room entries give +12 each (99 -> 111 -> 123 -> 135), and a fourth after a purchase gives nothing."
+      "rationale": "MawBank.cs:43-50 grants GoldVar(12) when `RunState.BaseRoom == room && !HasItemBeenBought`. Both clauses check out -- the flag clause is mirrored at maw_bank.py:33 and the BaseRoom clause is guard N1's subject. EXECUTED (py audit/tools/relic_probes_b09.py b09-maw-bank): three room entries give +12 each (99 -> 111 -> 123 -> 135), and a fourth after a purchase gives nothing."
     },
     "AfterItemPurchased": {
       "maps_to": "after_item_purchased (maw_bank.py:36-39), dispatched from MerchantEntry.purchase (shop.py:194)",
@@ -43,7 +43,7 @@
     {
       "what": "N2: `HasItemBeenBought` is a [SavedProperty] carrying RUN-level state (MawBank.cs:25-41); the sim keeps it as an instance field set in __init__ (maw_bank.py:24-26) and never resets it",
       "verdict": "faithful",
-      "rationale": "PROMPT.md bug class 13 and sweep A's whole subject is a mid-combat field the sim fails to reset. Traced deliberately and this is the OPPOSITE case: the flag is meant to persist for the whole run on both sides -- C# marks it [SavedProperty] so it survives a save/load, and MawBank has no BeforeCombatStart or AfterCombatEnd override at all, so there is no C# reset for the sim to have dropped. Sim relic instances live on RunState.relics, which is exactly the lifetime required. maw_bank appears in NO sweep-A bucket (`py tools/audit/relic_probes.py sweep-reset`), consistent with that reading."
+      "rationale": "PROMPT.md bug class 13 and sweep A's whole subject is a mid-combat field the sim fails to reset. Traced deliberately and this is the OPPOSITE case: the flag is meant to persist for the whole run on both sides -- C# marks it [SavedProperty] so it survives a save/load, and MawBank has no BeforeCombatStart or AfterCombatEnd override at all, so there is no C# reset for the sim to have dropped. Sim relic instances live on RunState.relics, which is exactly the lifetime required. maw_bank appears in NO sweep-A bucket (`py audit/tools/relic_probes.py sweep-reset`), consistent with that reading."
     },
     {
       "what": "N3: `GoldVar(12)` (MawBank.cs:19) read as `.BaseValue` (line 48) vs GOLD_PER_ROOM = 12 (maw_bank.py:22)",

@@ -2,10 +2,10 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b08` (based on `audit-relic` @ 4542c32f)
 **Units:** the roster's `kifuda` … `lords_parasol` run (15)
-**Probes:** `py tools/audit/relic_probes_b08.py` (16 probes, committed, re-runnable)
+**Probes:** `py audit/tools/relic_probes_b08.py` (16 probes, committed, re-runnable)
 
-`py tools/audit/harness.py validate` → **66 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **561 citations, MISSING 0, OUT-OF-RANGE 0**.
+`py audit/tools/harness.py validate` → **66 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **561 citations, MISSING 0, OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 61 · invalid 0 · stale 0 · gaps 44 · unaudited 197`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged; no engine code was touched.
 
@@ -40,12 +40,12 @@ against `CardFactory` line by line.
 
 ## LIVE gaps, with executed evidence
 
-Fifteen. Every one is `py tools/audit/relic_probes_b08.py <probe>`.
+Fifteen. Every one is `py audit/tools/relic_probes_b08.py <probe>`.
 
 1. **`lizard_tail` G2 — the relic silently fails on three ported death paths, and one of them ends the run.** `b08-lizard`: `CreatureCmd.kill` (cmds.py:192-207) calls `should_die` with no preventer, never fires `after_preventing_death` and fires no `on_damage_received`, so the port's deferred heal never lands: kill at 40/80 leaves **hp=1** with `_used=True, _heal_pending=True` (C#: hp 40), and one further point of damage then leaves the player **hp=0, dead**. Worse, `cards/breakthrough.py:49` calls `hooks.should_die(p)` after a hand-rolled self-HP-loss with **no HP floor at all**: Breakthrough (an `IRONCLAD_POOL` card) played at 1 HP with Lizard Tail held ends at `hp=0, is_dead=True, phase=combat_over`, Tail spent, where C# prevents the death and heals to 40. Ported triggers: `SandpitPower` (The Insatiable), `TheGambitPower` (`the_gambit`, in `COLORLESS_POOL`), Breakthrough.
 2. **`lizard_tail` G1 — the heal is one HP too high, every time.** `b08-lizard`: at max_hp 80 a lethal hit ends at **hp=41** where C# gives 40 (81 → 41 vs 40; at 1 the cap masks it). C# heals from `CurrentHp == 0`; the sim's `DamageCmd.deal` floors a prevented death at 1 (cmds.py:109-113) and the port heals *by* 50% on top. The sibling `potions.py:1256` (Fairy in a Bottle) compensates explicitly — so this is a defect, not a house style.
 3. **`lizard_tail` G3 — the charge is spent inside the predicate.** C# spends `WasUsed` in `AfterPreventingDeath`; the port sets `_used` inside `should_die`, so any caller using `should_die` as a pure query burns the relic (executed above via Breakthrough).
-4. **`lizard_tail` G4 — Lizard Tail is spent while Fairy in a Bottle is held.** `b08-lizard`: listener order `['LizardTail','FairyInABottle']`, a lethal hit spends the **Tail** and leaves the fairy in the belt at hp=41; C#'s `Hook.ShouldDie` runs the whole early pass (FairyInABottle, the game's only non-mock `ShouldDie`) before the late pass (LizardTail, the game's only `ShouldDieLate`), so the Fairy is always spent first and heals to 24. **This contradicts `audits/seam/damage_pipeline.json` guard N4** — see the disagreement section.
+4. **`lizard_tail` G4 — Lizard Tail is spent while Fairy in a Bottle is held.** `b08-lizard`: listener order `['LizardTail','FairyInABottle']`, a lethal hit spends the **Tail** and leaves the fairy in the belt at hp=41; C#'s `Hook.ShouldDie` runs the whole early pass (FairyInABottle, the game's only non-mock `ShouldDie`) before the late pass (LizardTail, the game's only `ShouldDieLate`), so the Fairy is always spent first and heals to 24. **This contradicts `audit/records/seam/damage_pipeline.json` guard N4** — see the disagreement section.
 5. **`lords_parasol` G1 — the free card removal is never taken, and the port's docstring says the game does not take it.** `b08-parasol`: entering a stocked merchant with the relic buys 7 cards, 4 relics and 3 potions for 0 gold and leaves `removal_used=False`; `LordsParasol.cs:102-107` buys `inventory.CardRemovalEntry` last with `ignoreCost: true, cancelable: false`. The deck ends at 17 where the game leaves 16 — every merchant room, every visit. Nothing needs building: `shop.py:343-353`'s `_buy` is complete and `purchase(ignore_cost=True)` already zeroes the cost.
 6. **`lasting_candy` G1 — the every-other-combat Power card option is missing.** `b08-candy`: the second combat's MONSTER card reward is `['battle_trance','twin_strike','expect_a_fight']` with and without the relic; the game adds a fourth, always-Power option. The stub's premise ("a card-reward modifier that runs between combats") is false — `rewards.py:299-301` dispatches `modify_card_reward_options` over `run.relics`, and the same probe shows `silver_crucible` using it today. Second observable: the added card costs a rarity roll, an item pick and an upgrade roll on the Rewards stream that the sim never consumes.
 7. **`lasting_candy` G2 — the `TotalFloor < 41` cluster is SEVENTEEN, not sixteen.** `b08-isallowed` (see the sweep correction below). Executed: `hasattr(Relic, 'is_allowed')` is False and at `total_floor=60` a bag containing `lasting_candy` still yields it, where `RelicGrabBag.RemoveDisallowedRelicsFromDeques` has removed it.
@@ -100,7 +100,7 @@ The cause is mechanical and worth carrying forward: `sweep-isallowed`'s regex is
 public override bool (IsAllowed|IsAllowedAtNeow)\([^)]*\)\s*\{\s*(?:return\s+)?([^\n;]*)
 ```
 
-— it captures only the **first statement** of the body. `py tools/audit/relic_probes_b08.py b08-isallowed`
+— it captures only the **first statement** of the body. `py audit/tools/relic_probes_b08.py b08-isallowed`
 brace-matches the whole body instead and prints 17 hits, with `lasting_candy`
 flagged `<-- MULTI-CLAUSE` and the other 16 bare `return`s. It is the pool's
 **only** multi-clause `IsAllowed`, so no other bucketing changes — the finding is
@@ -117,7 +117,7 @@ about the method, not a backlog of hidden units.
 
 ## Cross-record disagreement (binding rule 3)
 
-**`audits/seam/damage_pipeline.json` guard N4 calls the `ShouldDie` /
+**`audit/records/seam/damage_pipeline.json` guard N4 calls the `ShouldDie` /
 `ShouldDieLate` two-phase collapse "currently inert". It is not inert.**
 
 N4's reasoning is sound for three of the sim's four `should_die` implementers —
@@ -131,7 +131,7 @@ fairy first, because the early pass is the fairy's and the late pass is the
 Tail's, and those are the game's only two non-mock overrides of the pair.
 
 Recorded as `lizard_tail` G4 (LIVE) and reported here per the ownership contract;
-`audits/seam/damage_pipeline.json` is not mine to edit. The seam's own rule-3
+`audit/records/seam/damage_pipeline.json` is not mine to edit. The seam's own rule-3
 note applies — the disagreement *was* hiding a live gap.
 
 Two fix-ordering constraints also surfaced, of the kind batch 1 recorded for
@@ -147,7 +147,7 @@ Two fix-ordering constraints also surfaced, of the kind batch 1 recorded for
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to a real C# file on the first try and
-`tools/audit/name_overrides.json` needs no additions. Obtainability confirmed for
+`audit/tools/name_overrides.json` needs no additions. Obtainability confirmed for
 all 15 (`b08-pool`): 8 via the transcribed grab bag (`kifuda` Shop, `kunai` Rare,
 `kusarigama` Uncommon, `lantern` Common, `lasting_candy` Uncommon, `lava_lamp`
 Shop, `lees_waffle` Shop, `letter_opener` Uncommon, `lizard_tail` Rare), and the

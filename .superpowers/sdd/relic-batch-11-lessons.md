@@ -4,11 +4,11 @@
 based on `audit-relic` @ `0cad15d3`)
 **Batch:** the Pael shrine cluster (`paels_blood` … `paels_wing`) plus
 `pandoras_box`, `pantograph`, `paper_phrog`, `parrying_shield`, `pear`.
-**Probes:** `tools/audit/relic_probes_b11.py` (15 probes, all re-runnable;
-`py tools/audit/relic_probes_b11.py` runs them all).
+**Probes:** `audit/tools/relic_probes_b11.py` (15 probes, all re-runnable;
+`py audit/tools/relic_probes_b11.py` runs them all).
 
-`py tools/audit/harness.py validate` → **141 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **136 records, 1653 citations,
+`py audit/tools/harness.py validate` → **141 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **136 records, 1653 citations,
 MISSING 0, OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 136 · invalid 0 ·
 stale 0 · gaps 101 · unaudited 122`.
@@ -41,7 +41,7 @@ code was touched.
 by execution for all 15 (`relic_probes_b11.py pool`): 10 Pael-shrine Ancients,
 `pandoras_box` from the Darv shrine, and 4 Uncommons in the transcribed grab bag.
 **No roster mis-resolution** — all 15 matched a C# file on the first try and
-`tools/audit/name_overrides.json` needs no additions.
+`audit/tools/name_overrides.json` needs no additions.
 
 ---
 
@@ -176,7 +176,7 @@ two things, one of them a **false clear** rather than an over- or under-report.
 
 **This is a false clear, the same dangerous direction as batch 8's
 `IsAllowed` under-report.** The driver
-(`tools/audit/relic_probes.py`, `probe_sweep_reset_exec`) builds a
+(`audit/tools/relic_probes.py`, `probe_sweep_reset_exec`) builds a
 `CombatState` and calls `end_turn()` up to three times. It never calls
 `play_card`. Any candidate whose fields are only reachable through
 `modify_*`/`on_card_played` therefore settles identically on the carried and the
@@ -194,7 +194,7 @@ paels_legion  ['_affected_card', 'cooldown']
 
 `on_player_turn_start` only **decrements**, so with no card play the cooldown
 never leaves 0. Reproduced side by side as
-`py tools/audit/relic_probes_b11.py legion-sweep`:
+`py audit/tools/relic_probes_b11.py legion-sweep`:
 
 ```
 sweep driver (end_turn x3, no card play): cooldown=0 _affected_card=None  -> looks clean
@@ -242,7 +242,7 @@ row settled rather than leaving it as work.
   brief.** It is audited here. Batch 13 should skip it (or reconcile with this
   record) rather than write a second one.
 
-**Nothing was found wrong in `audits/seam/**`.** One cross-record interaction was
+**Nothing was found wrong in `audit/records/seam/**`.** One cross-record interaction was
 checked and is consistent rather than conflicting: `bag_of_marbles` G2 and
 `parrying_shield` G1 are the same mechanism with the same `gap` verdict, and the
 live/dormant labels differ only because the two relics fire in different turn

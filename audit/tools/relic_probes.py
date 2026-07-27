@@ -1,15 +1,15 @@
 """Reproducible execution probes for the relic content audits.
 
-Companion to `tools/audit/dormancy_probes.py` (which serves the seam tier).
-Every claim an `audits/relic/*.json` record makes about *reachability* — "this
+Companion to `audit/tools/dormancy_probes.py` (which serves the seam tier).
+Every claim an `audit/records/relic/*.json` record makes about *reachability* — "this
 gap is live", "this waiver's trigger cannot occur" — is produced here, so a
 later auditor re-derives the number instead of trusting a throwaway script.
 Binding rules 5 and 6 of the shared audit contract: never justify `faithful`
 with an unreachability claim you have not EXECUTED, and never label a gap LIVE
 without proving both sides reachable with ported content.
 
-  py tools/audit/relic_probes.py                  # every probe
-  py tools/audit/relic_probes.py lamp-replay      # one probe
+  py audit/tools/relic_probes.py                  # every probe
+  py audit/tools/relic_probes.py lamp-replay      # one probe
 
 Probes (batch 1 = the Tier 1 pilot):
   pool             obtainability of the pilot batch's 16 relics
@@ -138,7 +138,7 @@ def probe_turn_order() -> None:
     cs.end_turn()
     for line in seen:
         print("  " + line)
-    print("\n  C# order (audits/seam/turn_structure.json steps 9-23):")
+    print("\n  C# order (audit/records/seam/turn_structure.json steps 9-23):")
     print("    BeforeSideTurnStart -> ClearBlock -> AfterBlockCleared -> "
           "energy -> AfterEnergyReset")
     print("    -> BeforeHandDraw -> ModifyHandDraw -> Draw "
@@ -225,7 +225,7 @@ def probe_lamp_self_debuff() -> None:
 def probe_lamp_temporary() -> None:
     """The ported ITemporaryPower counterparts and their applier handling.
 
-    audits/seam/power_cmd.json guard N2 verified by execution that the sim's
+    audit/records/seam/power_cmd.json guard N2 verified by execution that the sim's
     TemporaryStrengthPower / TemporaryDexterityPower reach C#'s
     HasDoubledTemporaryPowerSource outcome by omitting `applier` on the
     internal application. That argument only covers the Lamp if it holds for
@@ -233,7 +233,7 @@ def probe_lamp_temporary() -> None:
     """
     from sts2_rl import powers as sim_powers
 
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
 
     print("  C# Powers/*.cs mentioning ITemporaryPower:")
     for path in sorted((DEFAULT_GAME_ROOT / "src/Core/Models/Powers").glob("*.cs")):
@@ -444,12 +444,12 @@ _RUN_HOOK_MAP = {
 
 
 def _relic_roster() -> list[dict]:
-    from tools.audit.harness import roster
+    from audit.tools.harness import roster
     return roster("relic")
 
 
 def _cs_overrides(game_path: str) -> list[str]:
-    from tools.audit.harness import DEFAULT_GAME_ROOT, list_overrides
+    from audit.tools.harness import DEFAULT_GAME_ROOT, list_overrides
     p = DEFAULT_GAME_ROOT / game_path
     if not p.is_file():
         return []
@@ -722,7 +722,7 @@ def probe_sweep_reset() -> None:
     """
     from sts2_rl.relics import ALL_RELICS
 
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
 
     rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
     hits, shadowed, frozen, clean, stateless = [], [], [], [], 0
@@ -1097,7 +1097,7 @@ def probe_sweep_isallowed() -> None:
           f"{hasattr(relic_base.Relic, 'is_allowed_at_neow')}")
 
     rows = {r["unit"].split("/", 1)[1]: r for r in _relic_roster()}
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
 
     n_allowed, n_neow = [], []
     for rid in sorted(ALL_RELICS):
@@ -1358,7 +1358,7 @@ def probe_sweep_clone() -> None:
 
     import sts2_rl.cards  # noqa: F401  (registration)
     from sts2_rl.cards import make_card
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
 
     cs_hits: list[tuple[str, int, str]] = []
     for path in sorted((DEFAULT_GAME_ROOT / "src/Core/Models").rglob("*.cs")):

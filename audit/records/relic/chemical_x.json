@@ -21,7 +21,7 @@
     "ModifyXValue": {
       "maps_to": "modify_x_value (chemical_x.py:19-20)",
       "verdict": "faithful",
-      "rationale": "ChemicalX.cs:31-38 returns `originalValue + DynamicVars['Increase'].IntValue` (2) for the owner's cards; chemical_x.py:20 returns `value + 2`. EXECUTED (`py tools/audit/relic_probes.py batch3`): with 3 energy, playing Cascade gives `energy 3 -> 0, captured_x=5`, i.e. X is raised to 5 while the energy actually spent stays 3 -- the relic's whole point. The sim consults the hook at both X capture sites, the normal play (combat.py:406) and the auto-play (combat.py:549), matching the game's single ResolveEnergyXValue capture."
+      "rationale": "ChemicalX.cs:31-38 returns `originalValue + DynamicVars['Increase'].IntValue` (2) for the owner's cards; chemical_x.py:20 returns `value + 2`. EXECUTED (`py audit/tools/relic_probes.py batch3`): with 3 energy, playing Cascade gives `energy 3 -> 0, captured_x=5`, i.e. X is raised to 5 while the energy actually spent stays 3 -- the relic's whole point. The sim consults the hook at both X capture sites, the normal play (combat.py:406) and the auto-play (combat.py:549), matching the game's single ResolveEnergyXValue capture."
     }
   },
   "guards": [
@@ -38,7 +38,7 @@
     {
       "what": "N3: the star-cost half -- `cardPlay.Card.HasStarCostX` (ChemicalX.cs:23) and, through it, ModifyXValue applying to a star X as well as an energy X",
       "verdict": "waiver",
-      "rationale": "Star cost is the second, parallel cost currency and the sim models no star-cost concept anywhere. Same waiver, same reasoning and the same revisit condition as audits/relic/brilliant_scarf.json's TryModifyStarCost: the whole SYSTEM is out of the sim's scope, not merely this relic's use of it, and no ported card carries a star cost. If star costs are ever ported this must be revisited, because C#'s ModifyXValue is currency-agnostic and would raise both."
+      "rationale": "Star cost is the second, parallel cost currency and the sim models no star-cost concept anywhere. Same waiver, same reasoning and the same revisit condition as audit/records/relic/brilliant_scarf.json's TryModifyStarCost: the whole SYSTEM is out of the sim's scope, not merely this relic's use of it, and no ported card carries a star cost. If star costs are ever ported this must be revisited, because C#'s ModifyXValue is currency-agnostic and would raise both."
     },
     {
       "what": "N4: the sim's aggregator clamps the result with `max(0, value)` (hooks.py:261); Hook.ModifyXValue does not (Hook.cs:2071-2079)",
@@ -48,7 +48,7 @@
     {
       "what": "N5: the sim has X-cost cards for the relic to modify",
       "verdict": "faithful",
-      "rationale": "Binding rule 5 forbids resting on an unexecuted reachability claim in either direction. EXECUTED (`py tools/audit/relic_probes.py batch3`): the ported X-cost cards are ['cascade', 'volley', 'whirlwind'], and Chemical X is Shop rarity in the transcribed grab bag (`batch3-pool`), so the relic and its trigger are both live content. The rollup below is a waiver only because every divergence found is presentation, multiplayer or the absent star-cost currency -- not because the relic is unreachable."
+      "rationale": "Binding rule 5 forbids resting on an unexecuted reachability claim in either direction. EXECUTED (`py audit/tools/relic_probes.py batch3`): the ported X-cost cards are ['cascade', 'volley', 'whirlwind'], and Chemical X is Shop rarity in the transcribed grab bag (`batch3-pool`), so the relic and its trigger are both live content. The rollup below is a waiver only because every divergence found is presentation, multiplayer or the absent star-cost currency -- not because the relic is unreachable."
     }
   ],
   "verdict": "waiver",

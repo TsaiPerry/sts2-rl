@@ -33,7 +33,7 @@
     {
       "what": "N3: `CardPileCmd.AddCurseToDeck<Greed>` asserts the card is a Curse and routes through Add(card, PileType.Deck) (CursedPearl.cs:21)",
       "verdict": "faithful",
-      "rationale": "The ported curse satisfies the assertion: cards/greed.py:22-29 is CardType.CURSE, CardRarity.CURSE, is_playable=False, eternal=True, max_upgrade_level=0 and can_be_generated_by_modifiers=False, which is the full declaration set of Greed.cs. Hook.ShouldAddToDeck, consulted by CardPileCmd.Add, has no sim counterpart and is WAIVED at every site -- audits/relic/calling_bell.json guard G4 established by grep that the game source contains zero overrides of it, so it is dead code in C# too rather than unported content; same verdict here per binding rule 3."
+      "rationale": "The ported curse satisfies the assertion: cards/greed.py:22-29 is CardType.CURSE, CardRarity.CURSE, is_playable=False, eternal=True, max_upgrade_level=0 and can_be_generated_by_modifiers=False, which is the full declaration set of Greed.cs. Hook.ShouldAddToDeck, consulted by CardPileCmd.Add, has no sim counterpart and is WAIVED at every site -- audit/records/relic/calling_bell.json guard G4 established by grep that the game source contains zero overrides of it, so it is dead code in C# too rather than unported content; same verdict here per binding rule 3."
     },
     {
       "what": "N4: ExtraHoverTips (HoverTipFactory.FromCardWithCardHoverTips<Greed>, CursedPearl.cs:15) and the GoldVar canonical var (line 17)",

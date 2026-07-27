@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (prismatic_gem.py:20)",
       "verdict": "faithful",
-      "rationale": "Matches PrismaticGem.cs:13. Ancient rarity is not in the transcribed grab bag; obtainability is via the ported Orobas shrine (events/orobas.py:58), executed by `py tools/audit/relic_probes_b13.py pool`."
+      "rationale": "Matches PrismaticGem.cs:13. Ancient rarity is not in the transcribed grab bag; obtainability is via the ported Orobas shrine (events/orobas.py:58), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "CanonicalVars": {
       "maps_to": "the literal 1 in modify_max_energy (prismatic_gem.py:23)",
@@ -22,7 +22,7 @@
     "ModifyMaxEnergy": {
       "maps_to": "modify_max_energy (prismatic_gem.py:22-23), dispatched by player.start_turn's energy step (player.py:163)",
       "verdict": "faithful",
-      "rationale": "PrismaticGem.cs:19-26 returns `amount + 1` for its own owner. EXECUTED (`py tools/audit/relic_probes_b13.py prismatic-gem`): without the relic modify_max_energy(3) -> 3 and turn-1 energy 3; with it -> 4 and turn-1 energy 4. The `player != base.Owner` guard (PrismaticGem.cs:21-24) is structurally satisfied -- the sim has exactly one player and hooks.modify_max_energy passes it. See guard N1 for the hook-ORDER caveat the seam record already owns."
+      "rationale": "PrismaticGem.cs:19-26 returns `amount + 1` for its own owner. EXECUTED (`py audit/tools/relic_probes_b13.py prismatic-gem`): without the relic modify_max_energy(3) -> 3 and turn-1 energy 3; with it -> 4 and turn-1 energy 4. The `player != base.Owner` guard (PrismaticGem.cs:21-24) is structurally satisfied -- the sim has exactly one player and hooks.modify_max_energy passes it. See guard N1 for the hook-ORDER caveat the seam record already owns."
     },
     "ModifyCardRewardCreationOptions": {
       "maps_to": "no counterpart; `Relic` declares no modify_card_reward_creation_options at all (executed: hasattr(Relic, 'modify_card_reward_creation_options') is False)",
@@ -44,7 +44,7 @@
     {
       "what": "N1: modify_max_energy is evaluated BEFORE should_reset_energy in the sim and inside the chosen branch in C#",
       "verdict": "gap",
-      "issue": "This is audits/seam/turn_structure.json step 17's finding, not a new one: `player.py:163-167` calls modify_max_energy first and should_reset_energy second, where CombatManager.cs:641-649 evaluates ShouldPlayerResetEnergy first and only then reads MaxEnergy inside the branch it picked. One verdict per mechanism (binding rule 3): the seam records it as a DORMANT gap because both sim dispatchers are pure aggregations and no ported should_reset_energy or modify_max_energy implementation mutates state. Prismatic Gem is one of those pure implementations (a bare `amount + 1`), so it neither creates nor worsens the exposure; recorded here so the relic's faithful verdict is not read as a claim that the surrounding order is right. NOTE per binding rule 7: turn_structure.json and player.py are not hashed by this record."
+      "issue": "This is audit/records/seam/turn_structure.json step 17's finding, not a new one: `player.py:163-167` calls modify_max_energy first and should_reset_energy second, where CombatManager.cs:641-649 evaluates ShouldPlayerResetEnergy first and only then reads MaxEnergy inside the branch it picked. One verdict per mechanism (binding rule 3): the seam records it as a DORMANT gap because both sim dispatchers are pure aggregations and no ported should_reset_energy or modify_max_energy implementation mutates state. Prismatic Gem is one of those pure implementations (a bare `amount + 1`), so it neither creates nor worsens the exposure; recorded here so the relic's faithful verdict is not read as a claim that the surrounding order is right. NOTE per binding rule 7: turn_structure.json and player.py are not hashed by this record."
     }
   ],
   "verdict": "gap",

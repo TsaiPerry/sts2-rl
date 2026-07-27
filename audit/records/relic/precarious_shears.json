@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (precarious_shears.py:12), matching PrecariousShears.cs:14",
       "verdict": "faithful",
-      "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Neow event -- `py tools/audit/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/neow.py']."
+      "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Neow event -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/neow.py']."
     },
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (precarious_shears.py:13), read by Relic.is_tradable (relics/base.py:132)",
@@ -29,7 +29,7 @@
     {
       "what": "G1 (LIVE): the same missing `Hook.BeforeCardRemoved` dispatch as relic/precise_scissors, at twice the exposure (two cards instead of one)",
       "verdict": "gap",
-      "issue": "PrecariousShears.cs:28 calls `await CardPileCmd.RemoveFromDeck(item)` inside the selection loop, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61; precarious_shears.py:19 calls run.remove_cards(chosen), a bare `deck.remove` loop (run.py:356-358), and `grep -rn 'before_card_removed' sts2_rl/` returns zero hits. Same mechanism, same verdict, and the same executed evidence as audits/relic/precise_scissors.json guard G1 -- one verdict per mechanism, binding rule 3, so it is not re-derived here: removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py tools/audit/relic_probes_b12.py b12-cardremoved`: in_deck=False, marker present, gold 99 -> 699). This relic removes TWO cards per pickup, so it is the widest single exposure of the three in this batch. NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
+      "issue": "PrecariousShears.cs:28 calls `await CardPileCmd.RemoveFromDeck(item)` inside the selection loop, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61; precarious_shears.py:19 calls run.remove_cards(chosen), a bare `deck.remove` loop (run.py:356-358), and `grep -rn 'before_card_removed' sts2_rl/` returns zero hits. Same mechanism, same verdict, and the same executed evidence as audit/records/relic/precise_scissors.json guard G1 -- one verdict per mechanism, binding rule 3, so it is not re-derived here: removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py audit/tools/relic_probes_b12.py b12-cardremoved`: in_deck=False, marker present, gold 99 -> 699). This relic removes TWO cards per pickup, so it is the widest single exposure of the three in this batch. NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
     },
     {
       "what": "N1: `CreatureCmd.Damage(ctx, Owner.Creature, DamageVar(16m, ValueProp.Unpowered), null, null)` (PrecariousShears.cs:30) vs `run.lose_hp(16)` (precarious_shears.py:20)",
@@ -49,7 +49,7 @@
     {
       "what": "N4: `ThrowingPlayerChoiceContext`, the RemoveSelectionPrompt LocString and the removal tween",
       "verdict": "waiver",
-      "rationale": "ThrowingPlayerChoiceContext is multiplayer plumbing -- audits/seam/hook_dispatch.json guard N1 waives PlayerChoiceContext as such and this entry matches that verdict per binding rule 3 -- and the prompt text plus the card-fly-away animation are presentation. The sim has neither. Waived under the shared contract's multiplayer and presentation exclusions, not under an unreachability claim. NOTE per binding rule 7: hook_dispatch.json is not hashed here."
+      "rationale": "ThrowingPlayerChoiceContext is multiplayer plumbing -- audit/records/seam/hook_dispatch.json guard N1 waives PlayerChoiceContext as such and this entry matches that verdict per binding rule 3 -- and the prompt text plus the card-fly-away animation are presentation. The sim has neither. Waived under the shared contract's multiplayer and presentation exclusions, not under an unreachability claim. NOTE per binding rule 7: hook_dispatch.json is not hashed here."
     }
   ],
   "verdict": "gap",

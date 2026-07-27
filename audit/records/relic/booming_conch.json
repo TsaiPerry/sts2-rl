@@ -16,7 +16,7 @@
     "ModifyHandDraw": {
       "maps_to": "modify_hand_draw (booming_conch.py:26-29)",
       "verdict": "faithful",
-      "rationale": "BoomingConch.cs:15-31 adds CardsVar(2).IntValue on the owner's turn 1 in an Elite room; the sim's _in_elite_first_turn (booming_conch.py:17-24) checks `combat.room_type == RoomType.ELITE and self.turn <= 1` and adds CARDS = 2. Same dispatcher and turn position as relic/bag_of_preparation and relic/big_mushroom (player.py:171 = turn_structure step 20). The C# room read is `player.RunState.CurrentRoom` and the sim's is the combat's own room_type -- the same room while a combat is in progress. Executed (py tools/audit/relic_probes.py batch2): an Elite turn-1 hand is 7 (base 5 + 2)."
+      "rationale": "BoomingConch.cs:15-31 adds CardsVar(2).IntValue on the owner's turn 1 in an Elite room; the sim's _in_elite_first_turn (booming_conch.py:17-24) checks `combat.room_type == RoomType.ELITE and self.turn <= 1` and adds CARDS = 2. Same dispatcher and turn position as relic/bag_of_preparation and relic/big_mushroom (player.py:171 = turn_structure step 20). The C# room read is `player.RunState.CurrentRoom` and the sim's is the combat's own room_type -- the same room while a combat is in progress. Executed (py audit/tools/relic_probes.py batch2): an Elite turn-1 hand is 7 (base 5 + 2)."
     },
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_start (booming_conch.py:31-34)",

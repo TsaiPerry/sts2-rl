@@ -33,7 +33,7 @@
     {
       "what": "N1: C# truncates `(int)Math.Min(CurrentHp + amount, MaxHp)` (Creature.cs:488-491, reached via HealInternal at :477-486 from CreatureCmd.Heal at :691); the sim truncates the amount first and then caps (fake_lees_waffle.py:21 + run.heal, run.py:288-292)",
       "verdict": "faithful",
-      "rationale": "SETTLED BY EXECUTION, not by argument, because this is precisely the kind of decimal-vs-int claim PROMPT.md warns about and 10% of an odd Max HP is genuinely fractional. `py tools/audit/relic_probes_b05.py waffle-round` walks max_hp 1..399 against EVERY current-HP value in range (about 80,000 pairs), computing C#'s decimal path with Python's `decimal` and the sim's int path side by side: 0 mismatches. The reason is structural -- current HP is always an integer, so truncating (hp + a) equals hp + trunc(a) for a >= 0 -- and both sides clamp to Max HP, but the range was executed rather than trusted. Rule 7: Creature.cs, CreatureCmd.cs and run.py are unhashed here."
+      "rationale": "SETTLED BY EXECUTION, not by argument, because this is precisely the kind of decimal-vs-int claim PROMPT.md warns about and 10% of an odd Max HP is genuinely fractional. `py audit/tools/relic_probes_b05.py waffle-round` walks max_hp 1..399 against EVERY current-HP value in range (about 80,000 pairs), computing C#'s decimal path with Python's `decimal` and the sim's int path side by side: 0 mismatches. The reason is structural -- current HP is always an integer, so truncating (hp + a) equals hp + trunc(a) for a >= 0 -- and both sides clamp to Max HP, but the range was executed rather than trusted. Rule 7: Creature.cs, CreatureCmd.cs and run.py are unhashed here."
     },
     {
       "what": "N2: the heal uses Heal.BaseValue where the relic's twin fake_mango uses MaxHp.BaseValue -- and this relic does NOT raise Max HP",
@@ -43,7 +43,7 @@
     {
       "what": "N3: CreatureCmd.Heal's `if (CombatManager.Instance.IsEnding && !creature.IsPlayer) return;` early bail and the MapPointHistoryEntry.HpHealed bookkeeping (CreatureCmd.cs:691-750)",
       "verdict": "waiver",
-      "rationale": "The bail cannot fire for a player (its own condition excludes them) and this is an out-of-combat pickup in any case. HpHealed is the run's statistics history -- meta-progression bookkeeping, waived under the same run-configuration/meta-progression head as audits/seam/hook_dispatch.json's N4, not under an unreachability claim. Rule 7: CreatureCmd.cs is unhashed here."
+      "rationale": "The bail cannot fire for a player (its own condition excludes them) and this is an out-of-combat pickup in any case. HpHealed is the run's statistics history -- meta-progression bookkeeping, waived under the same run-configuration/meta-progression head as audit/records/seam/hook_dispatch.json's N4, not under an unreachability claim. Rule 7: CreatureCmd.cs is unhashed here."
     },
     {
       "what": "N4: FakeLeesWaffle.cs declares no undo path, and the sim's Relic.undo_after_obtained default is a no-op (relics/base.py:142-151)",

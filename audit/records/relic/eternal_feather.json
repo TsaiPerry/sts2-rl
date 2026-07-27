@@ -12,12 +12,12 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (eternal_feather.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches EternalFeather.cs:16, and it is load-bearing for obtainability: executed (py tools/audit/relic_probes_b05.py b05-pool) the relic is in the transcribed grab bag at Uncommon rarity, so the whole record's reachability rests on the rarity being right."
+      "rationale": "Matches EternalFeather.cs:16, and it is load-bearing for obtainability: executed (py audit/tools/relic_probes_b05.py b05-pool) the relic is in the transcribed grab bag at Uncommon rarity, so the whole record's reachability rests on the rarity being right."
     },
     "AfterRoomEntered": {
       "maps_to": "after_room_entered (eternal_feather.py:19-25), dispatched by run.py:982-983",
       "verdict": "faithful",
-      "rationale": "EternalFeather.cs:24-37: on `room is RestSiteRoom`, heal Heal.BaseValue (HealVar(3m), line 21) times floor(deck size / Cards.IntValue) (CardsVar(5), line 20) -- integer division on line 29 because Cards.Count and IntValue are both int, then a decimal multiply on line 30 that is therefore exact. eternal_feather.py:19-25 computes `len(run.deck) // 5` and heals `3 * groups`, with the same RoomType.REST_SITE filter, and C#'s hook site (RestSiteRoom.cs:37, inside EnterInternal before any option is chosen) matches the sim's dispatch point (run.py:982-983, 'before its contents resolve'). Executed (py tools/audit/relic_probes_b05.py cage-feather): a 10-card deck at 30 HP heals to 36 = 3 * (10 // 5), and a MONSTER room heals nothing. The sim's `if groups:` guard (eternal_feather.py:24) is a no-op shortcut -- CreatureCmd.Heal(0) and run.heal(0) both do nothing. Rule 7: RestSiteRoom.cs and run.py are unhashed here."
+      "rationale": "EternalFeather.cs:24-37: on `room is RestSiteRoom`, heal Heal.BaseValue (HealVar(3m), line 21) times floor(deck size / Cards.IntValue) (CardsVar(5), line 20) -- integer division on line 29 because Cards.Count and IntValue are both int, then a decimal multiply on line 30 that is therefore exact. eternal_feather.py:19-25 computes `len(run.deck) // 5` and heals `3 * groups`, with the same RoomType.REST_SITE filter, and C#'s hook site (RestSiteRoom.cs:37, inside EnterInternal before any option is chosen) matches the sim's dispatch point (run.py:982-983, 'before its contents resolve'). Executed (py audit/tools/relic_probes_b05.py cage-feather): a 10-card deck at 30 HP heals to 36 = 3 * (10 // 5), and a MONSTER room heals nothing. The sim's `if groups:` guard (eternal_feather.py:24) is a no-op shortcut -- CreatureCmd.Heal(0) and run.heal(0) both do nothing. Rule 7: RestSiteRoom.cs and run.py are unhashed here."
     }
   },
   "guards": [

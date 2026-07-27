@@ -2,15 +2,15 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b18` (based on `audit-relic` @ 3a300d94)
 **Units:** 2 — the roster's tail.
-**Probes:** `tools/audit/relic_probes_b18.py` (8 probes, re-runnable, no engine code touched)
+**Probes:** `audit/tools/relic_probes_b18.py` (8 probes, re-runnable, no engine code touched)
 
 | Unit | Rollup | Hooks | Guards | LIVE | Dormant |
 |---|---|---|---|---|---|
 | `wongos_mystery_ticket` | **gap** | 7 | 14 | 1 | 2 |
 | `yummy_cookie` | waiver | 3 | 9 | 0 | 0 |
 
-`py tools/audit/harness.py validate` → 203 records, **0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → 2503 citations, **MISSING 0,
+`py audit/tools/harness.py validate` → 203 records, **0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → 2503 citations, **MISSING 0,
 OUT-OF-RANGE 0** (one out-of-range was caught and fixed before commit:
 `events/tezcatara.py:49` in a 48-line file).
 `py tools/audit_status.py --kind relic` → `total 258 · audited 198 · invalid 0 ·
@@ -41,7 +41,7 @@ Both codebases special-case the run's last boss, at **different depths**:
   other win: `NCombatUi.OnCombatWon → ShowRewards → OfferRoomEndRewards`
   (`NCombatUi.cs:180-226`), gated only on `Encounter.ShouldGiveRewards`.
 
-**Executed evidence** (`py tools/audit/relic_probes_b18.py b18-ticket-final`),
+**Executed evidence** (`py audit/tools/relic_probes_b18.py b18-ticket-final`),
 same relic state (5 combats finished) on a BOSS screen:
 
 ```
@@ -62,7 +62,7 @@ last act's boss lands here.
 `black_star` (Elite only), `lava_rock` (act 0 only), `driftwood` and
 `paels_wing` (both gate on `rewards.cards`, empty on that screen).
 
-**Not a cross-record disagreement.** `audits/relic/lava_rock.json` guard N7
+**Not a cross-record disagreement.** `audit/records/relic/lava_rock.json` guard N7
 already noticed the structure and correctly called it harmless *at its own site*
 ("it means a future act-3 reward relic would never see the hook"). Batch 18 is
 that relic arriving. Rule 3 is satisfied: one mechanism, one verdict, and the
@@ -189,8 +189,8 @@ Two things make it worth a checklist line rather than a footnote:
   class-14 candidate filter (`pomander` N1 / `fishing_rod` N2) and
   `CardCmd.Upgrade`'s history bookkeeping (`neows_talisman` N3 → waiver).
 - **No roster mis-resolution.** Both units resolved to a real C# file on the
-  first `skeleton` call; `tools/audit/name_overrides.json` needs no addition.
-- **Nothing wrong found in `PROMPT.md` v6 or in `audits/seam/**`.** v6's item 3
+  first `skeleton` call; `audit/tools/name_overrides.json` needs no addition.
+- **Nothing wrong found in `PROMPT.md` v6 or in `audit/records/seam/**`.** v6's item 3
   (`undo_after_obtained` absence = faithful) applied cleanly to `yummy_cookie` N8
   and its "distinct mechanism, still a gap" carve-out correctly does not apply
   (there is no implementer here to clamp).

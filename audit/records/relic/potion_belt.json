@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.COMMON (potion_belt.py:13), matching PotionBelt.cs:13",
       "verdict": "faithful",
-      "rationale": "Obtainable: Common in the transcribed shared grab bag (py tools/audit/relic_probes_b12.py b12-pool reports bag=Common)."
+      "rationale": "Obtainable: Common in the transcribed shared grab bag (py audit/tools/relic_probes_b12.py b12-pool reports bag=Common)."
     },
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (potion_belt.py:14), read by Relic.is_tradable (relics/base.py:132)",
@@ -22,7 +22,7 @@
     "AfterObtained": {
       "maps_to": "no counterpart. `Relic.after_obtained(run)` exists (relics/base.py:138-141) and RunState.add_relic dispatches it (run.py:552); potion_belt.py implements nothing",
       "verdict": "waiver",
-      "rationale": "Rollup of guard N1 per binding rule 4. PotionBelt.cs:19-22 is a single `PlayerCmd.GainMaxPotionCount(2, Owner)` and the port drops it, so the sim's belt stays at 3 slots where the game's grows to 5 -- EXECUTED (py tools/audit/relic_probes_b12.py b12-potionbelt): max_potions 3 -> 3 with the relic, against 3 -> 4 for phial_holster and 3 -> 7 for alchemical_coffer, both of which call the helper this relic needs. Waived, not filed as a gap, because the divergent observable is potion-belt CAPACITY and nothing else, and the shared contract puts potions out of scope everywhere ('potions (deferred by Perry)'). Same mechanism and same verdict as relic/alchemical_coffer's AfterObtained and relic/phial_holster N1, both of which waived GainMaxPotionCount on that basis (binding rule 3). See guard N1 for the stub-premise finding and N2 for the exact re-audit instruction."
+      "rationale": "Rollup of guard N1 per binding rule 4. PotionBelt.cs:19-22 is a single `PlayerCmd.GainMaxPotionCount(2, Owner)` and the port drops it, so the sim's belt stays at 3 slots where the game's grows to 5 -- EXECUTED (py audit/tools/relic_probes_b12.py b12-potionbelt): max_potions 3 -> 3 with the relic, against 3 -> 4 for phial_holster and 3 -> 7 for alchemical_coffer, both of which call the helper this relic needs. Waived, not filed as a gap, because the divergent observable is potion-belt CAPACITY and nothing else, and the shared contract puts potions out of scope everywhere ('potions (deferred by Perry)'). Same mechanism and same verdict as relic/alchemical_coffer's AfterObtained and relic/phial_holster N1, both of which waived GainMaxPotionCount on that basis (binding rule 3). See guard N1 for the stub-premise finding and N2 for the exact re-audit instruction."
     }
   },
   "guards": [

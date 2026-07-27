@@ -5,13 +5,13 @@ neows_talisman, neows_torment, new_leaf, nunchaku, nutritious_oyster,
 nutritious_soup, oddly_smooth_stone, old_coin, orichalcum, ornamental_fan,
 orrery.
 
-Own module per the concurrency contract (`tools/audit/relic_probes.py` is
+Own module per the concurrency contract (`audit/tools/relic_probes.py` is
 read-only to this batch). Binding rules 5 and 6: never justify `faithful` with
 an unreachability claim you have not EXECUTED, and never label a gap LIVE
 without proving both sides reachable with ported content.
 
-  py tools/audit/relic_probes_b10.py                 # every probe
-  py tools/audit/relic_probes_b10.py mummified-hand  # one probe
+  py audit/tools/relic_probes_b10.py                 # every probe
+  py audit/tools/relic_probes_b10.py mummified-hand  # one probe
 """
 from __future__ import annotations
 
@@ -661,7 +661,7 @@ def probe_old_coin() -> None:
 
 # ── orichalcum ────────────────────────────────────────────────────────────
 def probe_orichalcum() -> None:
-    """Orichalcum is the NAMED WITNESS of audits/seam/turn_structure.json G12.
+    """Orichalcum is the NAMED WITNESS of audit/records/seam/turn_structure.json G12.
 
     C# is deliberately two-phase: BeforeSideTurnEndVeryEarly snapshots
     `Block > 0` into ShouldTrigger (Orichalcum.cs:44-56) and BeforeSideTurnEnd

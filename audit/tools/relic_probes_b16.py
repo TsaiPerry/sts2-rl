@@ -1,15 +1,15 @@
 """Reproducible execution probes for relic audit batch 16.
 
 Batch 16's own probe module (the concurrency contract gives each parallel batch
-its own file; `tools/audit/relic_probes.py` is read-only here and is still the
+its own file; `audit/tools/relic_probes.py` is read-only here and is still the
 place to get the shared sweeps and the executed `turn-order` reference).
 
 Binding rules 5 and 6: never justify `faithful` with an unreachability claim
 you have not EXECUTED, and never label a gap LIVE without proving both sides
 reachable with ported content.
 
-  py tools/audit/relic_probes_b16.py              # every probe
-  py tools/audit/relic_probes_b16.py boot-order   # one probe
+  py audit/tools/relic_probes_b16.py              # every probe
+  py audit/tools/relic_probes_b16.py boot-order   # one probe
 
 Probes:
   pool            obtainability of batch 16's 15 relics
@@ -361,7 +361,7 @@ def probe_axe_tuning() -> None:
           "on iteration 0, then 0 -> 1 on iteration 1. Block total is 17 both "
           "ways, but the counter ends at 1 in the game and 0 in the sim, so "
           "every later Tuning Fork trigger in the run is one Skill late. This "
-          "is audits/seam/hook_dispatch.json G4 at this relic's own site.")
+          "is audit/records/seam/hook_dispatch.json G4 at this relic's own site.")
 
 
 # ── toolbox ──────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ units) has NOT been started; the prioritisation recommendation is at the end.
 
 ## Units audited (16)
 
-The roster's first 15 relics alphabetically (`py tools/audit/harness.py roster
+The roster's first 15 relics alphabetically (`py audit/tools/harness.py roster
 relic` → 258 sim units, 0 unmatched) plus `relic/unsettling_lamp`, swapped in
 per the brief because it is the design document's worked example.
 
@@ -34,11 +34,11 @@ per the brief because it is the design document's worked example.
 | `akabeko` | waiver | 2 | 3 |
 | `alchemical_coffer` | waiver | 3 | 2 |
 
-`py tools/audit/harness.py validate` → **21 records, 0 invalid**.
+`py audit/tools/harness.py validate` → **21 records, 0 invalid**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 16 · invalid 0 ·
 stale 0 · gaps 11 · unaudited 242`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged; audits added
-no executable code (`git status` showed only `audits/relic/` and the new probe
+no executable code (`git status` showed only `audit/records/relic/` and the new probe
 script).
 
 ---
@@ -50,7 +50,7 @@ hook-level (6 live / 4 dormant), plus 6 hook entries that are pure rollups of
 their guards per binding rule 4.** Eleven of the 16 units roll up to `gap`.
 
 Reachability evidence for every LIVE label comes from
-`tools/audit/relic_probes.py` (committed, 8 probes, re-runnable) — binding rule
+`audit/tools/relic_probes.py` (committed, 8 probes, re-runnable) — binding rule
 6 requires proving both sides reachable with ported content, and rule 5 forbids
 resting a verdict on an unexecuted unreachability claim.
 
@@ -192,7 +192,7 @@ stream, not a disagreement.
 
 **None.** `roster relic` reports 258 sim units, **0 unmatched**, 40 unported C#
 files. All 16 pilot units resolved to a real C# file on the first try, and
-`tools/audit/name_overrides.json` needed no additions. Obtainability confirmed
+`audit/tools/name_overrides.json` needed no additions. Obtainability confirmed
 for all 16 (`relic_probes.py pool`): 9 via the transcribed grab bag, 6 via
 ported events/shrines (Orobas ×2, Neow, Darv, Nonupeipe, Hungry for Mushrooms),
 `anchor` additionally via Calling Bell.
@@ -217,7 +217,7 @@ the two time/token rows as order-of-magnitude planning inputs.
 | Gap rate | **11 / 16 units (69%)** roll up to `gap` |
 | Gap entries | 25 — **11 live**, 14 dormant |
 | **Units needing EXECUTION to settle** | **8 of 16 (50%)** |
-| Probes written | 8, in `tools/audit/relic_probes.py` (committed) |
+| Probes written | 8, in `audit/tools/relic_probes.py` (committed) |
 
 **Which units needed execution.** `belt_buckle`, `unsettling_lamp`,
 `amethyst_aubergine`, `big_mushroom`, `astrolabe` (5 units where a probe *found*
@@ -320,7 +320,7 @@ are the natural place to parallelise widest.
   `anchor`'s port is changed, or Anchor silently stops granting block on turn 1.
 
 **5. Budget for execution.** Half the units needed a probe to settle. Every
-future batch should expect to write or extend `tools/audit/relic_probes.py`;
+future batch should expect to write or extend `audit/tools/relic_probes.py`;
 that is the mechanism that turned three would-be `faithful` verdicts into live
 gaps, and it is the pipeline's main defence against the design's own stated
 residual risk ("a wrong 'faithful' verdict is the residual risk the harness

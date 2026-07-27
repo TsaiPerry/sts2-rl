@@ -16,7 +16,7 @@
     "ShouldDisableRemainingRestSiteOptions": {
       "maps_to": "should_disable_remaining_rest_site_options (miniature_tent.py:17-18), aggregated by RunState.should_disable_remaining_rest_site_options (run.py:1075-1082) and consumed by the rest-site loop (driver.py:530-531)",
       "verdict": "faithful",
-      "rationale": "MiniatureTent.cs:10-18 returns false for its owner (after a Flash) and true for anyone else; the port returns False unconditionally, which is the same thing in single-player. The AGGREGATION matches exactly and non-trivially -- Hook.cs:2254-2264 returns false as soon as ANY listener returns false and true otherwise, which is `all(...)`, and run.py:1079-1082 is `all(relic.should_disable_remaining_rest_site_options(self) for relic in self.relics)`. EXECUTED (py tools/audit/relic_probes_b09.py b09-simple): True without the relic, False with it. The listener SET is guard G1's subject."
+      "rationale": "MiniatureTent.cs:10-18 returns false for its owner (after a Flash) and true for anyone else; the port returns False unconditionally, which is the same thing in single-player. The AGGREGATION matches exactly and non-trivially -- Hook.cs:2254-2264 returns false as soon as ANY listener returns false and true otherwise, which is `all(...)`, and run.py:1079-1082 is `all(relic.should_disable_remaining_rest_site_options(self) for relic in self.relics)`. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): True without the relic, False with it. The listener SET is guard G1's subject."
     }
   },
   "guards": [

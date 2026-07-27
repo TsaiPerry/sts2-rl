@@ -1,9 +1,9 @@
 # Relic content audit — batch 14 lessons
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b14` (from `audit-relic` @ `3a300d94`)
-**Probes:** `tools/audit/relic_probes_b14.py` (18 probes, all executed)
+**Probes:** `audit/tools/relic_probes_b14.py` (18 probes, all executed)
 **Checks:** `harness.py validate` → 216 records, 0 invalid ·
-`citation_check.py audits/relic` → 2661 citations, MISSING 0, OUT-OF-RANGE 0 ·
+`citation_check.py audit/records/relic` → 2661 citations, MISSING 0, OUT-OF-RANGE 0 ·
 `audit_status.py --kind relic` → 211 audited, 0 invalid, 0 stale ·
 `pytest test/ -q` → **2476 passed, 31 xfailed** (baseline, unchanged)
 
@@ -85,7 +85,7 @@
    20 either way. The two triggers *co-occur by construction* — Pael's Eye fires when you end
    a turn having played no cards, which is the likeliest way to end it with an empty hand.
 
-8. **`runic_pyramid` G1 — cited, not re-derived.** `audits/seam/turn_structure.json` G4
+8. **`runic_pyramid` G1 — cited, not re-derived.** `audit/records/seam/turn_structure.json` G4
    already names `relics/runic_pyramid.py:16-17` as a ported witness and labels the mechanism
    LIVE (Joss Paper's deferred Ethereal credit stranded, next hand 5 vs 6). Confirmed the
    port's own half by execution (`pyramid`): hand 5→10 with the relic, `should_flush` False.
@@ -132,7 +132,7 @@ def on_player_turn_started(self, player):
 
 That is a **consume-then-clear**, not a clear-then-read. The stale value is *spent* on the
 first turn of combat 2 before it is zeroed. Executed:
-`py tools/audit/relic_probes_b14.py clay-carry` → carried instance opens combat 2 with
+`py audit/tools/relic_probes_b14.py clay-carry` → carried instance opens combat 2 with
 `block=3`, fresh instance with `block=0`.
 
 The other 12 units in that bucket were not re-checked by this batch, and the same shape can
@@ -227,7 +227,7 @@ and copying `brilliant_scarf` G1 would have filed a false gap.
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to the right C# file on the first try; `roster relic` still
-reports 258 sim units, 0 unmatched. `tools/audit/name_overrides.json` needs no additions.
+reports 258 sim units, 0 unmatched. `audit/tools/name_overrides.json` needs no additions.
 Obtainability confirmed for all 15 by execution (`relic_probes_b14.py pool`): 5 from the
 transcribed grab bag (`screaming_flagon` Shop, `self_forming_clay` Uncommon, `shovel` Rare,
 `shuriken` Rare, `sling_of_courage` Shop) and 10 from ported events (Darv, Tanx, Orobas ×2,

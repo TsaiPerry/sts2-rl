@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (throwing_axe.py:21)",
       "verdict": "faithful",
-      "rationale": "ThrowingAxe.cs:12. Granted by the ported Tanx shrine (events/tanx.py:13). Executed: `py tools/audit/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
+      "rationale": "ThrowingAxe.cs:12. Granted by the ported Tanx shrine (events/tanx.py:13). Executed: `py audit/tools/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
     },
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (throwing_axe.py:27-28)",
@@ -49,12 +49,12 @@
     {
       "what": "N3: the reset trace required by PROMPT.md bug class 13 -- C# resets at AfterRoomEntered AND AfterCombatEnd, the sim only at on_combat_start",
       "verdict": "faithful",
-      "rationale": "TRACE: the only reader of used_this_combat is modify_card_play_count, which is reached only from a card play (N2). on_combat_start runs at combat.py:208, the last statement of CombatState.__init__, i.e. before the first player turn and therefore before any card can be played -- executed reference `py tools/audit/relic_probes.py turn-order` prints on_combat_start ahead of on_block_cleared(turn=1). So the flag is False at every moment a reader can see it, and this relic is the `art_of_war` shape rather than the `belt_buckle` shape. `py tools/audit/relic_probes.py sweep-reset` does not list throwing_axe at all, which agrees. Recorded because sweep A defect 6 (AfterRoomEntered omitted from the C#-side census) means an earlier sweep would have printed 'C# resets: NONE' for exactly this relic; the reset is real and the port does honour it."
+      "rationale": "TRACE: the only reader of used_this_combat is modify_card_play_count, which is reached only from a card play (N2). on_combat_start runs at combat.py:208, the last statement of CombatState.__init__, i.e. before the first player turn and therefore before any card can be played -- executed reference `py audit/tools/relic_probes.py turn-order` prints on_combat_start ahead of on_block_cleared(turn=1). So the flag is False at every moment a reader can see it, and this relic is the `art_of_war` shape rather than the `belt_buckle` shape. `py audit/tools/relic_probes.py sweep-reset` does not list throwing_axe at all, which agrees. Recorded because sweep A defect 6 (AfterRoomEntered omitted from the C#-side census) means an earlier sweep would have printed 'C# resets: NONE' for exactly this relic; the reset is real and the port does honour it."
     },
     {
       "what": "N4 (CROSS-RECORD, binding rule 3): this relic is the executed replay source three other records rely on",
       "verdict": "faithful",
-      "rationale": "audits/seam/hook_dispatch.json G4 (the per-Replay CardPlay loop: CardModel.cs:1904-1965 builds a fresh CardPlay per iteration and fires Hook.BeforeCardPlayed/AfterCardPlayed INSIDE the loop, where the sim fires each once per play) names relics/throwing_axe.py as its ported witness, and audits/relic/unsettling_lamp.json G1 uses Throwing Axe + Bash to produce 8 Vulnerable against the game's 6. This batch adds a third site: audits/relic/tuning_fork.json G1, executed as `py tools/audit/relic_probes_b16.py axe-tuning`. The Axe's own port is NOT the defect at any of those sites -- it correctly returns count + 1 and the sim correctly plays the card that many times -- so this entry is `faithful` and points at the three records that own the observables. Rule 7: audits/seam/hook_dispatch.json, audits/relic/unsettling_lamp.json and audits/relic/tuning_fork.json are not hashed here."
+      "rationale": "audit/records/seam/hook_dispatch.json G4 (the per-Replay CardPlay loop: CardModel.cs:1904-1965 builds a fresh CardPlay per iteration and fires Hook.BeforeCardPlayed/AfterCardPlayed INSIDE the loop, where the sim fires each once per play) names relics/throwing_axe.py as its ported witness, and audit/records/relic/unsettling_lamp.json G1 uses Throwing Axe + Bash to produce 8 Vulnerable against the game's 6. This batch adds a third site: audit/records/relic/tuning_fork.json G1, executed as `py audit/tools/relic_probes_b16.py axe-tuning`. The Axe's own port is NOT the defect at any of those sites -- it correctly returns count + 1 and the sim correctly plays the card that many times -- so this entry is `faithful` and points at the three records that own the observables. Rule 7: audit/records/seam/hook_dispatch.json, audit/records/relic/unsettling_lamp.json and audit/records/relic/tuning_fork.json are not hashed here."
     },
     {
       "what": "N5: Flash() and `base.Status = RelicStatus.Active/Normal` (ThrowingAxe.cs:34, 54-55, 62)",

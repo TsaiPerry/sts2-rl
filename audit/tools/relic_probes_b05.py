@@ -1,16 +1,16 @@
 """Execution probes for relic audit batch 5 (the 15 `e*`/`fake_*`/`festive_*`
-relics). Companion to `tools/audit/relic_probes.py`, which this module does NOT
+relics). Companion to `audit/tools/relic_probes.py`, which this module does NOT
 modify (batches 4-8 run in parallel worktrees and share that file read-only).
 
 Batch 5 is the only batch with no pre-diagnosed units, so every reachability
-claim in `audits/relic/{electric_shrymp,ember_tea,empty_cage,eternal_feather,
+claim in `audit/records/relic/{electric_shrymp,ember_tea,empty_cage,eternal_feather,
 fake_*,festive_popper}.json` is produced here rather than argued. Binding rules
 5 and 6 of the shared audit contract: never justify `faithful` with an
 unreachability claim you have not EXECUTED, and never label a gap LIVE without
 proving both sides reachable with ported content.
 
-  py tools/audit/relic_probes_b05.py                # every probe
-  py tools/audit/relic_probes_b05.py b05-pool       # one probe
+  py audit/tools/relic_probes_b05.py                # every probe
+  py audit/tools/relic_probes_b05.py b05-pool       # one probe
 
 Probes:
   b05-pool          obtainability of all 15 batch-5 relics
@@ -154,7 +154,7 @@ def probe_orichalcum_order() -> None:
     BeforeSideTurnEndVeryEarly (a complete listener pass that runs before the
     plain one) so no later turn-end listener can suppress the Block; the sim
     reads player.block inline from the single on_player_turn_end slot.
-    audits/seam/turn_structure.json G12 names Fake Orichalcum as the same
+    audit/records/seam/turn_structure.json G12 names Fake Orichalcum as the same
     shape as Orichalcum and this executes it for the fake.
     """
     from sts2_rl import CombatState
@@ -408,7 +408,7 @@ def probe_shrymp_imbued() -> None:
 
     # Imbued.ShouldStartAtBottomOfDrawPile is unmodelled by the sim's
     # enchantment port (enchantments.py:249 calls it "cosmetic"), which is
-    # audits/seam/turn_structure.json G14. Electric Shrymp is the only ported
+    # audit/records/seam/turn_structure.json G14. Electric Shrymp is the only ported
     # grantor of Imbued, so it is that gap's reachability witness.
     from sts2_rl.enchantments import make_enchantment
 
@@ -578,7 +578,7 @@ def probe_snecko_confused() -> None:
 def probe_anchor_window() -> None:
     """fake_anchor: the sim grants its Block from the turn-1 block-clear event.
 
-    Same port shape as relic/anchor (audits/relic/anchor.json, hook
+    Same port shape as relic/anchor (audit/records/relic/anchor.json, hook
     BeforeCombatStart = deliberate-divergence, guard N3 = dormant gap for the
     ordering window). Executed here for the fake's own numbers.
     """

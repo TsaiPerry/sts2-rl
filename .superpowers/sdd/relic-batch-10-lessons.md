@@ -1,9 +1,9 @@
 # Relic audit batch 10 — lessons and findings
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b10` (worktree `sts2-rl-relic-b10`)
-**Probes:** `py tools/audit/relic_probes_b10.py [name]` — 14 probes, all re-runnable
+**Probes:** `py audit/tools/relic_probes_b10.py [name]` — 14 probes, all re-runnable
 **Validation:** `harness.py validate` 136 records / 0 invalid / 0 stale ·
-`citation_check.py audits/relic` MISSING 0, OUT-OF-RANGE 0 ·
+`citation_check.py audit/records/relic` MISSING 0, OUT-OF-RANGE 0 ·
 `audit_status.py --kind relic` total 258 / audited 136 / gaps 106 ·
 `py -m pytest test/ -q` **2476 passed, 31 xfailed** (baseline, unchanged)
 
@@ -261,7 +261,7 @@ so its offset never washes out, which makes it the worst instance found so far
 ## Roster mis-resolutions
 
 **None.** All 15 units resolved to a real C# file from the skeleton on the first
-try; `tools/audit/name_overrides.json` needs no additions. Obtainability proved
+try; `audit/tools/name_overrides.json` needs no additions. Obtainability proved
 for all 15 (`relic_probes_b10.py pool`): 6 via the transcribed grab bag
 (`mummified_hand` Rare, `mystic_lighter` Shop, `nunchaku` Uncommon,
 `oddly_smooth_stone` Common, `old_coin` Rare, `orichalcum` Uncommon,

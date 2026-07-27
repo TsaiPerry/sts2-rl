@@ -1,7 +1,7 @@
 # Relic content audits — batch 5 of 18
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b05` (based on `audit-relic` @ `4542c32f`)
-**Probes:** `tools/audit/relic_probes_b05.py` (14 probes, committed, re-runnable)
+**Probes:** `audit/tools/relic_probes_b05.py` (14 probes, committed, re-runnable)
 **Companions:** [`content-relic-report.md`](content-relic-report.md) (the pilot),
 [`content-relic-sweeps.md`](content-relic-sweeps.md) (the five pool-wide sweeps)
 
@@ -37,7 +37,7 @@ pool-wide shape (see "New shapes" below).
 3 deliberate-divergence / 25 gap**.
 
 Gate results: `harness.py validate` → **66 records, 0 invalid**;
-`citation_check.py audits/relic` → **496 citations, MISSING 0, OUT-OF-RANGE 0**;
+`citation_check.py audit/records/relic` → **496 citations, MISSING 0, OUT-OF-RANGE 0**;
 `audit_status.py --kind relic` → **audited 61, invalid 0, stale 0**;
 `pytest test/ -q` → **2476 passed, 31 xfailed** (unchanged — audits add no code,
 and `git status` showed only the 15 records plus the new probe module).
@@ -224,7 +224,7 @@ a disagreement:
 
 **None.** `harness.py roster relic` reports 258 sim units, 0 unmatched, and all
 15 units resolved to a real C# file on the first try.
-`tools/audit/name_overrides.json` needs no additions.
+`audit/tools/name_overrides.json` needs no additions.
 
 ---
 

@@ -5,9 +5,9 @@ Batch 12 covers the roster's `pen_nib` … `preserved_fog` run:
   philosophers_stone planisphere pocketwatch pollinous_core pomander
   potion_belt prayer_wheel precarious_shears precise_scissors preserved_fog
 
-Own module per the batch-12 concurrency contract (`tools/audit/relic_probes.py`
+Own module per the batch-12 concurrency contract (`audit/tools/relic_probes.py`
 is READ-ONLY to this batch — re-use it, do not edit it; in particular
-`py tools/audit/relic_probes.py turn-order` is the executed hook-order
+`py audit/tools/relic_probes.py turn-order` is the executed hook-order
 reference these records cite for their turn-hook mappings, and
 `sweep-reset` / `sweep-reset-exec` are the pool-wide inputs the
 `pendulum` / `pocketwatch` / `pollinous_core` / `permafrost` / `pen_nib`
@@ -15,11 +15,11 @@ records confirm).
 
 Binding rules 5 and 6: never justify `faithful` with an unreachability claim
 you have not EXECUTED, and never label a gap LIVE without proving both sides
-reachable with ported content. Everything an `audits/relic/*.json` record from
+reachable with ported content. Everything an `audit/records/relic/*.json` record from
 this batch asserts about reachability is produced here.
 
-  py tools/audit/relic_probes_b12.py               # every probe
-  py tools/audit/relic_probes_b12.py b12-pool      # one probe
+  py audit/tools/relic_probes_b12.py               # every probe
+  py audit/tools/relic_probes_b12.py b12-pool      # one probe
 
 Probes:
   b12-pool          obtainability of batch 12's 15 relics (rule 6, first half)
@@ -597,7 +597,7 @@ def probe_b12_toad() -> None:
 
     Sozu is ported (relics/sozu.py:26 returns False from
     should_procure_potion) and Belt Buckle's AfterPotionProcured is already
-    recorded LIVE in audits/relic/belt_buckle.json, so both triggers exist.
+    recorded LIVE in audit/records/relic/belt_buckle.json, so both triggers exist.
     """
     from sts2_rl import CombatState
     from sts2_rl.relics import make_relic

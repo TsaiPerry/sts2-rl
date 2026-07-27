@@ -21,7 +21,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (jewelry_box.py:15-18) -> run.add_card(make_card('apotheosis')) (run.py:341-354)",
       "verdict": "faithful",
-      "rationale": "JewelryBox.cs:19-23 creates an Apotheosis on the run and adds it to PileType.Deck. run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and appends at the END of the deck, which is the position CardCmd.cs:437 pins for out-of-combat additions. EXECUTED (py tools/audit/relic_probes_b07.py box-apotheosis): deck 10 -> 11 with 'apotheosis' as the last entry. The card is ported (cards/apotheosis.py, an Ancient 2-cost Skill). Rule 7: run.py and cards/apotheosis.py are not hashed by this record."
+      "rationale": "JewelryBox.cs:19-23 creates an Apotheosis on the run and adds it to PileType.Deck. run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and appends at the END of the deck, which is the position CardCmd.cs:437 pins for out-of-combat additions. EXECUTED (py audit/tools/relic_probes_b07.py box-apotheosis): deck 10 -> 11 with 'apotheosis' as the last entry. The card is ported (cards/apotheosis.py, an Ancient 2-cost Skill). Rule 7: run.py and cards/apotheosis.py are not hashed by this record."
     }
   },
   "guards": [

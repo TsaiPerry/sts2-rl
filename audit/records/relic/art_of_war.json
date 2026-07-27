@@ -21,12 +21,12 @@
     "AfterSideTurnEnd": {
       "maps_to": "on_player_turn_end (art_of_war.py:33-35)",
       "verdict": "faithful",
-      "rationale": "ArtOfWar.cs:78-87 rolls ThisTurn into LastTurn and clears ThisTurn at the end of the owner's own side turn (`participants.Contains(Owner.Creature)`); the sim's on_player_turn_end fires only for the player's turn end, so the participants filter is structurally satisfied. Both then read the flag at the NEXT turn's energy reset, so the player-turn-end/enemy-turn-end distinction audits/seam/turn_structure.json step 39 draws does not reach this relic's observable."
+      "rationale": "ArtOfWar.cs:78-87 rolls ThisTurn into LastTurn and clears ThisTurn at the end of the owner's own side turn (`participants.Contains(Owner.Creature)`); the sim's on_player_turn_end fires only for the player's turn end, so the participants filter is structurally satisfied. Both then read the flag at the NEXT turn's energy reset, so the player-turn-end/enemy-turn-end distinction audit/records/seam/turn_structure.json step 39 draws does not reach this relic's observable."
     },
     "AfterEnergyReset": {
       "maps_to": "on_energy_reset (art_of_war.py:37-44)",
       "verdict": "faithful",
-      "rationale": "ArtOfWar.cs:89-106: for the owner, from TurnNumber > 1 on, grant EnergyVar(1).BaseValue energy when no Attack was played last turn, then clear both flags. art_of_war.py:38-44 is a line-for-line match including the unconditional double clear, and turn numbering is executed-verified (py tools/audit/relic_probes.py turn-order: the sim's self.turn is 1 on the first turn, so `self.turn <= 1` and `TurnNumber > 1` partition the same way). The sim's on_energy_reset is fired at player.py:168, immediately after the energy assignment and before the hand draw, which is where turn_structure step 18 puts Hook.AfterEnergyReset. Amount 1 matches EnergyVar(1) (ArtOfWar.cs:25) with no ascension branch."
+      "rationale": "ArtOfWar.cs:89-106: for the owner, from TurnNumber > 1 on, grant EnergyVar(1).BaseValue energy when no Attack was played last turn, then clear both flags. art_of_war.py:38-44 is a line-for-line match including the unconditional double clear, and turn numbering is executed-verified (py audit/tools/relic_probes.py turn-order: the sim's self.turn is 1 on the first turn, so `self.turn <= 1` and `TurnNumber > 1` partition the same way). The sim's on_energy_reset is fired at player.py:168, immediately after the energy assignment and before the hand draw, which is where turn_structure step 18 puts Hook.AfterEnergyReset. Amount 1 matches EnergyVar(1) (ArtOfWar.cs:25) with no ascension branch."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart; the sim's flags are per-instance and never reset outside the turn cycle (art_of_war.py:23-24, 43-44)",

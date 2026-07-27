@@ -1,4 +1,4 @@
-# Relic content audit — batch 6 of 18
+# Relic content audit — batch 14 of 18
 
 **Generated 2026-07-26.** One of 15 parallel batch prompts. Copy everything
 below the line into a fresh Claude Code session.
@@ -8,17 +8,17 @@ contract below):
 
 ```bash
 cd /c/Users/Perry/Desktop/sts2-rl
-git worktree add /c/Users/Perry/Desktop/sts2-rl-relic-b06 -b audit-relic-b06 audit-relic
+git worktree add /c/Users/Perry/Desktop/sts2-rl-relic-b14 -b audit-relic-b14 audit-relic
 ```
 
 ---
 
-You are executing **batch 6** of the relic content audits in an
+You are executing **batch 14** of the relic content audits in an
 established source-to-sim audit pipeline. Batches 1–3 are complete and
 committed (46 of 258 relics, 51 records, 0 invalid); you are repeating a proven
 procedure, not inventing one.
 
-WORKTREE (all work here): `c:\Users\Perry\Desktop\sts2-rl-relic-b06` (branch `audit-relic-b06`)
+WORKTREE (all work here): `c:\Users\Perry\Desktop\sts2-rl-relic-b14` (branch `audit-relic-b14`)
 GAME SOURCE (**READ-ONLY**): `c:\Users\Perry\Desktop\Slay the Spire 2`
 
 ## Read these first, in this order — do not skip any
@@ -26,8 +26,8 @@ GAME SOURCE (**READ-ONLY**): `c:\Users\Perry\Desktop\Slay the Spire 2`
 1. `docs/superpowers/prompts/_shared-audit-contract.md` — your binding
    contract: operational rules, the EIGHT BINDING VERDICT RULES, file
    ownership, the per-unit procedure. Follow it exactly.
-2. `tools/audit/PROMPT.md` (**v4**) — the versioned instruction sheet and the
-   18-item bug-class checklist. Check EVERY class against EVERY unit.
+2. `audit/tools/PROMPT.md` (**v6**) — the versioned instruction sheet and the
+   29-item bug-class checklist. Check EVERY class against EVERY unit.
 3. `.superpowers/sdd/content-relic-sweeps.md` — five pool-wide sweeps already
    ran across all 258 relics. **Units in your batch that they diagnosed are
    listed below; read their sweep section before auditing them so you confirm
@@ -35,44 +35,74 @@ GAME SOURCE (**READ-ONLY**): `c:\Users\Perry\Desktop\Slay the Spire 2`
 4. `.superpowers/sdd/content-relic-report.md` — the batch-1 report (depth
    calibration, cost data, the live/dormant discipline).
 5. Skim these records to calibrate depth and style — they are the standard your
-   work is measured against: `audits/relic/unsettling_lamp.json` (the deepest),
-   `audits/relic/belt_buckle.json`, `audits/relic/brilliant_scarf.json`,
-   `audits/relic/calling_bell.json`.
+   work is measured against: `audit/records/relic/unsettling_lamp.json` (the deepest),
+   `audit/records/relic/belt_buckle.json`, `audit/records/relic/brilliant_scarf.json`,
+   `audit/records/relic/calling_bell.json`.
 
 ## Your batch (15 units)
 
-- `fiddle`
-- `fishing_rod`
-- `forgotten_soul`
-- `fragrant_mushroom`
-- `fresnel_lens`
-- `frozen_egg`
-- `fur_coat`
-- `gambling_chip`
-- `game_piece`
-- `ghost_seed`
-- `girya`
-- `glass_eye`
-- `glitter`
-- `gnarled_hammer`
-- `golden_compass`
+- `runic_pyramid`
+- `sai`
+- `sand_castle`
+- `screaming_flagon`
+- `scroll_boxes`
+- `sea_glass`
+- `seal_of_gold`
+- `self_forming_clay`
+- `sere_talon`
+- `shovel`
+- `shuriken`
+- `signet_ring`
+- `silken_tress`
+- `silver_crucible`
+- `sling_of_courage`
 
 ## Pre-diagnosed units — CONFIRM these, do not rediscover
 
 The pool-wide sweeps already reached these findings and recorded the evidence. Your job is to settle each one properly in its record (live vs dormant, with executed evidence), citing the sweep — not to re-derive it from scratch.
 
-- **`fiddle`** — `audits/seam/hook_dispatch.json` step 35: the sole `AfterPreventingDraw` implementer, presentation-only body.
-- **`fishing_rod`** — Sweep A candidate (`combats_seen`; C# resets at `AfterCombatEnd`).
-- **`fresnel_lens`** — Sweep C stub: `TryModifyCardRewardOptionsLate` and `ModifyMerchantCardCreationResults` BOTH have live dispatch sites. 'The sim has no enchantments' is FALSE (`enchantments.py`; `relic/beautiful_bracelet` attaches Swift).
-- **`frozen_egg`** — Sweep B: `IsAllowed` = `IsBeforeAct3TreasureChest`, unmodelled (16-relic cluster).
-- **`fur_coat`** — Sweep A candidate (never-reset `_armed`/`act_index`/`marked_coords`; C# resets at `BeforeCombatStart`). Settle by execution.
-- **`girya`** — Sweep B: `IsAllowed` = `IsBeforeAct3TreasureChest`, unmodelled (16-relic cluster).
-- **`gnarled_hammer`** — Sweep C stub: `AfterObtained` dispatched; 'no enchantments in the sim' is FALSE.
+- **`runic_pyramid`** — Named witness in `audit/records/seam/turn_structure.json` (ported `ShouldFlush`, gap G4). Cite and match; do not re-derive.
+- **`scroll_boxes`** — Sweep B: overrides `IsAllowedAtNeow` (`CanGenerateBundles`) and the sim leaves `is_allowed_at_neow=True` — the sweep flagged this as a MISMATCH needing a per-unit verdict.
+- **`sea_glass`** — Sweep C stub: `AfterObtained` dispatched.
+- **`shovel`** — Sweep B: `IsAllowed` unmodelled (16-relic cluster).
+- **`silver_crucible`** — Sweep B verified CLEAN (`Players.Count == 1`, always allowed single-player).
+
+## Sweeps A and B were REWRITTEN on 2026-07-26 — read the corrections
+
+Batches 4-8 each faulted the pool-wide sweeps they were told to trust, and all
+of the faults were real. Both sweeps are fixed and re-run; the corrected
+findings are in `.superpowers/sdd/content-relic-sweeps.md`. What changed:
+
+- **Sweep A** pooled turn-END resets with turn-START resets and never tested the
+  safety claim on either; counted `x = x + 1` as a reset; printed a **census of
+  C# overrides** as if it were a census of resets (so it credited relics with
+  resets they do not perform); and could not see a field written only in
+  `__init__` from a parameter nothing passes. Its "safe" bucket is now 13 units,
+  not 21, and 7 relics are confirmed carrying state, not 3.
+- **Sweep B** read only the FIRST LINE of each `IsAllowed` body, so multi-clause
+  bodies lost every gate after the first. The `IsBeforeAct3TreasureChest`
+  cluster is **17 relics, not 16**.
+
+**The lesson, which applies to your batch:** a sweep's output is evidence, not
+authority. If a bucket label makes a safety claim ("safe only if the reset runs
+before any reader"), that claim was probably never executed — execute it or move
+the unit out of the bucket. Report anything you find wrong in your lessons file;
+four of the five previous batches found something.
+
+**A FIFTH sweep-A defect was found on 2026-07-26 by batch 13, after the other
+four were fixed:** `sweep-reset-exec` applied no stimulus, so any field gated on a
+trigger the driver never produced read identical on both instances and was filed as
+"agrees with a fresh instance" — **overriding the static bucket's correct warning**.
+It false-cleared `red_skull` (whose combat 2 opens with Strength **-3**),
+`ruined_helmet` and `pumpkin_candle`. The driver now applies stimulus AND reports
+`INCONCLUSIVE` when combat 1 latched nothing. Treat an `INCONCLUSIVE` unit as
+unaudited, never as clean — and note the pattern: **a false clear is worse than a
+false hit, because nothing downstream re-checks it.**
 
 ## Procedure per unit
 
 ```
-py tools/audit/harness.py skeleton relic/<id>
+py audit/tools/harness.py skeleton relic/<id>
 ```
 Then: read the C# model **in full** → read `sts2_rl/relics/<id>.py` **in full**
 → fill a verdict for every enumerated hook, plus a `guards` entry per
@@ -97,7 +127,7 @@ deliberate-divergence < gap`, `audited` = today's date `YYYY-MM-DD`.
   content triggers this" and "the sim has no such system" are **dormant gaps**,
   not waivers.
 - **Rule 3**: the same mechanism gets ONE verdict at every site, including
-  across records. If an `audits/seam/*.json` record already verdicted a
+  across records. If an `audit/records/seam/*.json` record already verdicted a
   mechanism, cite it and match it — do not re-derive.
 - **Rule 7**: the record hashes only the unit's own two files. If a rationale
   leans on any third file, say so explicitly in the rationale.
@@ -109,28 +139,28 @@ Up to 15 batches run at once against sibling worktrees of one repo and merge
 afterwards. Merges stay trivial only while nobody edits a shared file.
 
 **You may create/edit ONLY:**
-- `audits/relic/<your 15 unit ids>.json`
-- `tools/audit/relic_probes_b06.py` — **your own** probe module (see below)
-- `.superpowers/sdd/relic-batch-06-lessons.md` — your report
+- `audit/records/relic/<your 15 unit ids>.json`
+- `audit/tools/relic_probes_b14.py` — **your own** probe module (see below)
+- `.superpowers/sdd/relic-batch-14-lessons.md` — your report
 
 **You may NOT touch, for any reason:**
-- `tools/audit/relic_probes.py`, `tools/audit/PROMPT.md`,
+- `audit/tools/relic_probes.py`, `audit/tools/PROMPT.md`,
   `.superpowers/sdd/content-relic-sweeps.md`,
   `.superpowers/sdd/content-relic-report.md` — every batch so far edited these
   and that is exactly what would conflict. They are **read-only** to you.
-- `sts2_rl/**` (engine), `tools/audit/harness.py`, `audits/seam/**`,
+- `sts2_rl/**` (engine), `audit/tools/harness.py`, `audit/records/seam/**`,
   `docs/audit/**`, `.superpowers/sdd/progress.md`, any other batch's records.
 
 **Your probe module.** Copy the import preamble from
-`tools/audit/relic_probes.py`, then define your batch's probes in
-`tools/audit/relic_probes_b06.py` with its own `main()`; run it as
-`py tools/audit/relic_probes_b06.py`. Do NOT register anything in the
+`audit/tools/relic_probes.py`, then define your batch's probes in
+`audit/tools/relic_probes_b14.py` with its own `main()`; run it as
+`py audit/tools/relic_probes_b14.py`. Do NOT register anything in the
 shared module. Re-USING the shared module read-only is encouraged —
-`py tools/audit/relic_probes.py turn-order` is the executed hook-order
+`py audit/tools/relic_probes.py turn-order` is the executed hook-order
 reference and you should not verdict a hook mapping without it.
 
 **Lessons instead of PROMPT.md edits.** If a new bug class or a pool-wide
-shape surfaces, write it to `.superpowers/sdd/relic-batch-06-lessons.md`
+shape surfaces, write it to `.superpowers/sdd/relic-batch-14-lessons.md`
 with the unit that exhibited it and the evidence. The relic stream owner folds
 the lessons files into `PROMPT.md` after the batches merge. Do not bump the
 version header yourself. If nothing surfaced, say so — do not pad.
@@ -141,7 +171,7 @@ version header yourself. If nothing surfaced, say so — do not pad.
   do not fix them. Baseline is **2476 passed / 31 xfailed**; if `py -m pytest
   test/ -q` differs you made an accidental edit — revert it.
 - The game source is READ-ONLY.
-- Commit on `audit-relic-b06` only. **Never push. Never touch `main` or
+- Commit on `audit-relic-b14` only. **Never push. Never touch `main` or
   `audit-relic`.**
 - Run every command in the FOREGROUND with a generous timeout (600000 ms). Do
   not start background jobs — they cannot notify you and you will stall.
@@ -151,8 +181,8 @@ version header yourself. If nothing surfaced, say so — do not pad.
 
 ## Finish
 
-1. `py tools/audit/harness.py validate` → 0 invalid
-2. `py tools/audit/citation_check.py audits/relic` → **MISSING 0,
+1. `py audit/tools/harness.py validate` → 0 invalid
+2. `py audit/tools/citation_check.py audit/records/relic` → **MISSING 0,
    OUT-OF-RANGE 0**. This is the mechanical enforcement of binding rules 7
    and 8: it resolves every `file.py:123` / `File.cs:45-67` you cite and
    checks the path exists and the line number is real. It already caught a
@@ -163,13 +193,13 @@ version header yourself. If nothing surfaced, say so — do not pad.
    rationale that leans on them.)
 3. `py tools/audit_status.py --kind relic` → your 15 units audited
 4. `py -m pytest test/ -q` → unchanged (2476 passed / 31 xfailed)
-5. `git add audits/relic tools/audit/relic_probes_b06.py .superpowers/sdd/relic-batch-06-lessons.md`
+5. `git add audit/records/relic audit/tools/relic_probes_b14.py .superpowers/sdd/relic-batch-14-lessons.md`
    then commit, naming the units, the gap count, and each LIVE gap with its
    one-line executed evidence.
 
 ## Report
 
-Write `.superpowers/sdd/relic-batch-06-lessons.md` containing: the 15
+Write `.superpowers/sdd/relic-batch-14-lessons.md` containing: the 15
 units with rollup verdicts; every LIVE gap with its executed evidence; every
 dormant gap with the concrete unported thing that would make it live; any
 cross-record disagreement under rule 3; any unit the roster mis-resolved (and

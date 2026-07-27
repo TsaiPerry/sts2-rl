@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (tri_boomerang.py:14)",
       "verdict": "faithful",
-      "rationale": "TriBoomerang.cs:17. Granted by the ported Tanx shrine (events/tanx.py:31). Executed: `py tools/audit/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
+      "rationale": "TriBoomerang.cs:17. Granted by the ported Tanx shrine (events/tanx.py:31). Executed: `py audit/tools/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (tri_boomerang.py:20-27), invoked by RunState.add_relic (run.py:552)",

@@ -21,7 +21,7 @@
     "HasUponPickupEffect": {
       "maps_to": "no counterpart -- byrdpip.py does not set has_upon_pickup_effect",
       "verdict": "gap",
-      "issue": "Byrdpip.cs:24 declares `HasUponPickupEffect => true` and the sim's Relic base has the exact field for it (relics/base.py:96), which fourteen other ports set. Byrdpip leaves it at the False default. DORMANT (executed -- `py tools/audit/relic_probes.py batch3`): the flag's only sim consumer is Relic.is_tradable (relics/base.py:132), and EVENT rarity already excludes the relic there, so the probe reports `has_upon_pickup_effect=False spawns_pets=False adds_pet=True is_tradable=False` -- the right answer by the wrong route. Goes live the moment anything else reads the flag, e.g. a port of the shop's HasUponPickupEffect handling."
+      "issue": "Byrdpip.cs:24 declares `HasUponPickupEffect => true` and the sim's Relic base has the exact field for it (relics/base.py:96), which fourteen other ports set. Byrdpip leaves it at the False default. DORMANT (executed -- `py audit/tools/relic_probes.py batch3`): the flag's only sim consumer is Relic.is_tradable (relics/base.py:132), and EVENT rarity already excludes the relic there, so the probe reports `has_upon_pickup_effect=False spawns_pets=False adds_pet=True is_tradable=False` -- the right answer by the wrong route. Goes live the moment anything else reads the flag, e.g. a port of the shop's HasUponPickupEffect handling."
     },
     "SpawnsPets": {
       "maps_to": "no counterpart -- byrdpip.py does not set spawns_pets",

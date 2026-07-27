@@ -1,13 +1,13 @@
 """Reproducible execution probes for relic audit BATCH 4 (crossbow … ectoplasm).
 
-Batch-local companion to `tools/audit/relic_probes.py` (shared, read-only to
+Batch-local companion to `audit/tools/relic_probes.py` (shared, read-only to
 this batch per the concurrency contract). Every reachability claim an
-`audits/relic/*.json` record from batch 4 makes — "this gap is live", "this
+`audit/records/relic/*.json` record from batch 4 makes — "this gap is live", "this
 value never occurs" — is produced here so a later auditor re-derives the number
 instead of trusting a throwaway script. Binding rules 5 and 6.
 
-  py tools/audit/relic_probes_b04.py            # every probe
-  py tools/audit/relic_probes_b04.py b04-pool   # one probe
+  py audit/tools/relic_probes_b04.py            # every probe
+  py audit/tools/relic_probes_b04.py b04-pool   # one probe
 
 Probes:
   b04-pool        obtainability of batch 4's 15 relics (rule 6, first half)
@@ -556,7 +556,7 @@ def probe_ectoplasm() -> None:
 
 # ── dotw ──────────────────────────────────────────────────────────────────
 def probe_dotw() -> None:
-    """Daughter of the Wind x a Replay source (audits/seam/hook_dispatch G4).
+    """Daughter of the Wind x a Replay source (audit/records/seam/hook_dispatch G4).
 
     C# fires Hook.AfterCardPlayed once per CardPlay, i.e. once per Replay
     iteration (CardModel.cs:1904-1965); the sim fires on_card_played once per

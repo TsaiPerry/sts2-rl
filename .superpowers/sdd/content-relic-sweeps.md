@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic`
 **Companion to:** [`content-relic-report.md`](content-relic-report.md) (the Tier 1 pilot)
-**Reproduce:** `py tools/audit/relic_probes.py sweep-reset` · `sweep-reset-exec` ·
+**Reproduce:** `py audit/tools/relic_probes.py sweep-reset` · `sweep-reset-exec` ·
 `sweep-isallowed` · `sweep-stubs` · `sweep-stub-premises` · `sweep-upgrade` ·
 `sweep-clone`
 
@@ -423,9 +423,9 @@ Ancient) or the `Imbued` enchantment.
 **This crosses streams.** Two of the five sites belong to the card and power
 streams, and the C# side includes `Anger.cs`, `AdaptiveStrike.cs`,
 `HeirloomHammer.cs`, `Undeath.cs`, `NightmarePower.cs` and `JugglingPower.cs`.
-The probe is in `tools/audit/relic_probes.py` (relic stream owns the file), but
+The probe is in `audit/tools/relic_probes.py` (relic stream owns the file), but
 the card and power streams should re-run it rather than rediscover the shape —
-`py tools/audit/relic_probes.py sweep-clone`.
+`py audit/tools/relic_probes.py sweep-clone`.
 
 **The fix is one helper**, not five: a `Card.clone()` on `cards/base.py` that
 copies upgrade level, enchantment, affliction and cost modifiers, and five call

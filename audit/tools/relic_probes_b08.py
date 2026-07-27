@@ -5,18 +5,18 @@ Batch 8 covers the roster's `kifuda` … `lords_parasol` run:
   lava_rock lead_paperweight leafy_poultice lees_waffle letter_opener
   lizard_tail looming_fruit lords_parasol
 
-Own module per the batch-8 concurrency contract (`tools/audit/relic_probes.py`
+Own module per the batch-8 concurrency contract (`audit/tools/relic_probes.py`
 is READ-ONLY to this batch — re-use it, do not edit it; in particular
-`py tools/audit/relic_probes.py turn-order` is the executed hook-order
+`py audit/tools/relic_probes.py turn-order` is the executed hook-order
 reference these records cite for their turn-hook mappings).
 
 Binding rules 5 and 6: never justify `faithful` with an unreachability claim
 you have not EXECUTED, and never label a gap LIVE without proving both sides
-reachable with ported content. Everything an `audits/relic/*.json` record from
+reachable with ported content. Everything an `audit/records/relic/*.json` record from
 this batch asserts about reachability is produced here.
 
-  py tools/audit/relic_probes_b08.py               # every probe
-  py tools/audit/relic_probes_b08.py b08-pool      # one probe
+  py audit/tools/relic_probes_b08.py               # every probe
+  py audit/tools/relic_probes_b08.py b08-pool      # one probe
 
 Probes:
   b08-pool          obtainability of batch 8's 15 relics (rule 6, first half)
@@ -137,7 +137,7 @@ def probe_b08_replay() -> None:
 def probe_b08_turn_reset() -> None:
     """Kunai / Letter Opener: the dropped combat-boundary reset is shadowed.
 
-    `py tools/audit/relic_probes.py sweep-reset` puts both in the "reset at a
+    `py audit/tools/relic_probes.py sweep-reset` puts both in the "reset at a
     TURN boundary only" bucket (art_of_war shape) -- Kunai's C# clears
     AttacksPlayedThisTurn in AfterCombatEnd and Letter Opener's in BOTH
     BeforeCombatStart and AfterCombatEnd, while the sim clears each only at
@@ -177,7 +177,7 @@ def probe_b08_kusarigama() -> None:
     """Kusarigama's reset sits in the sim's BeforeTurnEnd slot, not AfterTurnEnd.
 
     Kusarigama.cs:94-103 resets AttacksPlayedThisTurn in **AfterSideTurnEnd**,
-    which audits/seam/turn_structure.json step 64 places AFTER the hand flush
+    which audit/records/seam/turn_structure.json step 64 places AFTER the hand flush
     -- and step 47 puts the auto-POST-play phase (Hook.
     AfterAutoPostPlayPhaseEntered) BEFORE it. So in C# the reset always runs
     after any turn-end auto-play. kusarigama.py:32-33 uses
@@ -223,7 +223,7 @@ def probe_b08_lantern() -> None:
 
     Lantern.cs:21-28 is AfterSideTurnStart (turn_structure step 23, POST-draw)
     gated on TurnNumber <= 1; lantern.py:18-21 is on_player_turn_started, which
-    `py tools/audit/relic_probes.py turn-order` shows is the sim's post-draw
+    `py audit/tools/relic_probes.py turn-order` shows is the sim's post-draw
     slot. Both therefore land after the energy RESET (step 17/18), which is
     what makes the gain survive.
     """
@@ -335,7 +335,7 @@ def probe_b08_isallowed() -> None:
     so the cluster membership is settled mechanically.
     """
     from sts2_rl.relics import ALL_RELICS
-    from tools.audit.harness import DEFAULT_GAME_ROOT, roster
+    from audit.tools.harness import DEFAULT_GAME_ROOT, roster
 
     rows = {r["unit"].split("/", 1)[1]: r for r in roster("relic")}
     act3, other, neow = [], [], []
@@ -524,7 +524,7 @@ def probe_b08_poultice() -> None:
           "search.")
 
     # The deck-add hooks CardCmd.Transform runs and run.transform_card does not
-    # (= audits/seam/creature_card_cmds.json G3, LIVE).
+    # (= audit/records/seam/creature_card_cmds.json G3, LIVE).
     from sts2_rl.cards import make_card
     for egg in ("frozen_egg", "toxic_egg", "molten_egg"):
         run2 = _run()

@@ -48,7 +48,7 @@
     {
       "what": "N3: the ORDER -- card reward first, potion second (LostCoffer.cs:20-21), and both offered on ONE screen",
       "verdict": "faithful",
-      "rationale": "lost_coffer.py:22-24 keeps the same order. Checked because Hook.ShouldProcurePotion (Sozu) gates the potion and modify_card_being_added_to_deck (the egg relics) gates the card, and neither reads the other's result, so the sequential resolution reaches the same state as the game's single screen. EXECUTED (py tools/audit/relic_probes_b09.py b09-simple): deck 10 -> 11, potions 0 -> 1."
+      "rationale": "lost_coffer.py:22-24 keeps the same order. Checked because Hook.ShouldProcurePotion (Sozu) gates the potion and modify_card_being_added_to_deck (the egg relics) gates the card, and neither reads the other's result, so the sequential resolution reaches the same state as the game's single screen. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): deck 10 -> 11, potions 0 -> 1."
     }
   ],
   "verdict": "gap",

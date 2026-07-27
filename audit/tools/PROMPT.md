@@ -120,12 +120,12 @@ checks completeness. Read BOTH files fully before writing any verdict.
 11. **The sim's own mapping docstrings are evidence, not truth.** The hook
     table in `sts2_rl/relics/base.py:10-18` says `BeforeSideTurnStart (player)
     → on_player_turn_start`. It is WRONG: executed order (`py
-    tools/audit/relic_probes.py turn-order`) is `on_block_cleared →
+    audit/tools/relic_probes.py turn-order`) is `on_block_cleared →
     on_energy_reset → on_player_turn_start → modify_hand_draw →
     on_player_turn_started`, so `on_player_turn_start` sits at
     `turn_structure` step ~18, not step 9. Two relics in the pilot inherited
     the confusion. **Never verdict a hook mapping off a docstring — print the
-    real order and diff it against `audits/seam/turn_structure.json`'s steps.**
+    real order and diff it against `audit/records/seam/turn_structure.json`'s steps.**
 12. **A port that does nothing usually justifies itself with a claim about the
     sim — check the claim.** Two pilot units were no-op stubs resting on
     premises that are false today: Amethyst Aubergine's "the sim has no gold"
@@ -181,7 +181,7 @@ checks completeness. Read BOTH files fully before writing any verdict.
     afflicted, cost-modified Defend clones to `enchantment=None`,
     `affliction=None`, `energy_cost` back to 1). It is reachable inside one
     combat with no second relic, because five ported enemy powers afflict
-    cards in hand. Pool-wide list: `py tools/audit/relic_probes.py
+    cards in hand. Pool-wide list: `py audit/tools/relic_probes.py
     sweep-clone`; it spans relics, cards (Dual Wield) and powers, so the card
     and power streams should re-run it rather than rediscover it.
 18. **`TestMode.IsOn` branches are not the shipping behaviour.** Several
@@ -285,7 +285,7 @@ mistake repeats across dozens of ports, and finding it fifteen units at a time
 wastes the budget. Before a kind's second batch, run one cheap scan per shape
 over the whole roster and let the batches confirm rather than discover.
 
-`tools/audit/relic_probes.py` has the relic versions and is the template —
+`audit/tools/relic_probes.py` has the relic versions and is the template —
 `sweep-reset` / `sweep-reset-exec` (class 13), `sweep-isallowed` (class 16),
 `sweep-stubs` / `sweep-stub-premises` (class 12), `sweep-upgrade` (class 14),
 `sweep-clone` (class 17); findings in

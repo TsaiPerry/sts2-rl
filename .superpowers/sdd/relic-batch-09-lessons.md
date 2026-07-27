@@ -2,10 +2,10 @@
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b09` (based on `audit-relic` @ `0cad15d3`)
 **Units:** the 15 relics from `lost_coffer` to `mr_struggles`
-**Probes:** `tools/audit/relic_probes_b09.py` (11 probes, committed, re-runnable)
+**Probes:** `audit/tools/relic_probes_b09.py` (11 probes, committed, re-runnable)
 
-`py tools/audit/harness.py validate` → **141 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **MISSING 0, OUT-OF-RANGE 0**.
+`py audit/tools/harness.py validate` → **141 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **MISSING 0, OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 136 · invalid 0 ·
 stale 0 · gaps 108 · unaudited 122`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged; no engine code
@@ -170,7 +170,7 @@ consistent with sweep C's headline.
 
 ### Shape 1 — C#'s two-pass hook dispatch is collapsed at **three** hook pairs, not one
 
-`audits/seam/turn_structure.json` guard **G12** records this for the Late/VeryEarly
+`audit/records/seam/turn_structure.json` guard **G12** records this for the Late/VeryEarly
 **sub-phases of one hook**. This batch found the same machinery biting at two
 places G12 does not cover, and both are *different C# hooks* rather than
 sub-phases — a much wider blast radius:
@@ -326,5 +326,5 @@ silently keeps consulting a stale independent flag.
   `PlayerRng.Rewards`-vs-shared-rng stream half, which is a real bug-class-16
   instance the moment potions come into scope.
 - No unit was mis-resolved by the roster: all 15 matched a real C# file on the
-  first `skeleton` call, and **`tools/audit/name_overrides.json` needs no
+  first `skeleton` call, and **`audit/tools/name_overrides.json` needs no
   additions**.

@@ -16,12 +16,12 @@
     "ModifyMaxEnergy": {
       "maps_to": "modify_max_energy (blessed_antler.py:23-24)",
       "verdict": "faithful",
-      "rationale": "BlessedAntler.cs:24-31 adds EnergyVar(1).IntValue to the owner's max energy; the sim adds ENERGY = 1. The sim's modify_max_energy is consulted at player.py:163, which is audits/seam/turn_structure.json step 17's Hook.ModifyMaxEnergy -- the same point in the turn, before the reset/add decision."
+      "rationale": "BlessedAntler.cs:24-31 adds EnergyVar(1).IntValue to the owner's max energy; the sim adds ENERGY = 1. The sim's modify_max_energy is consulted at player.py:163, which is audit/records/seam/turn_structure.json step 17's Hook.ModifyMaxEnergy -- the same point in the turn, before the reset/add decision."
     },
     "BeforeHandDraw": {
       "maps_to": "on_player_turn_start (blessed_antler.py:26-33)",
       "verdict": "faithful",
-      "rationale": "THE MAPPING IS CORRECT HERE, and the executed order is why. py tools/audit/relic_probes.py turn-order shows the sim fires on_energy_reset -> on_player_turn_start -> modify_hand_draw; audits/seam/turn_structure.json puts AfterEnergyReset at step 18, BeforeHandDraw at 19 and ModifyHandDraw at 20. So the sim's on_player_turn_start IS the BeforeHandDraw slot -- which is what relics/base.py:11's mapping table gets wrong when it labels the same method 'BeforeSideTurnStart' (that is step 9, five steps earlier; see PROMPT.md bug class 11). This relic needs the pre-draw position: three Dazed must be in the draw pile BEFORE the turn-1 hand is drawn, or they cannot be drawn into the opening hand. `TurnNumber == 1` matches `self.turn != 1: return`, and 3 matches CardsVar(3)."
+      "rationale": "THE MAPPING IS CORRECT HERE, and the executed order is why. py audit/tools/relic_probes.py turn-order shows the sim fires on_energy_reset -> on_player_turn_start -> modify_hand_draw; audit/records/seam/turn_structure.json puts AfterEnergyReset at step 18, BeforeHandDraw at 19 and ModifyHandDraw at 20. So the sim's on_player_turn_start IS the BeforeHandDraw slot -- which is what relics/base.py:11's mapping table gets wrong when it labels the same method 'BeforeSideTurnStart' (that is step 9, five steps earlier; see PROMPT.md bug class 11). This relic needs the pre-draw position: three Dazed must be in the draw pile BEFORE the turn-1 hand is drawn, or they cannot be drawn into the opening hand. `TurnNumber == 1` matches `self.turn != 1: return`, and 3 matches CardsVar(3)."
     }
   },
   "guards": [

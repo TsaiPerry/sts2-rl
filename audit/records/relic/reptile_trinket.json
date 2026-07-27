@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (reptile_trinket.py:19)",
       "verdict": "faithful",
-      "rationale": "Matches ReptileTrinket.cs:16. In the transcribed shared grab bag as Uncommon (relic_pools.py:126), executed by `py tools/audit/relic_probes_b13.py pool`."
+      "rationale": "Matches ReptileTrinket.cs:16. In the transcribed shared grab bag as Uncommon (relic_pools.py:126), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "CanonicalVars": {
       "maps_to": "STRENGTH = 3 (reptile_trinket.py:21)",
@@ -22,7 +22,7 @@
     "AfterPotionUsed": {
       "maps_to": "on_potion_used (reptile_trinket.py:23-29), dispatched from CombatState.use_potion (combat.py:610)",
       "verdict": "faithful",
-      "rationale": "ReptileTrinket.cs:22-29 applies `ReptileTrinketPower` with amount 3, target and applier both the owner's creature, cardSource null; reptile_trinket.py:26-29 does the same with `applier=self.player`. The power is ported and matches the source's inheritance: ReptileTrinketPower.cs:5 is `: TemporaryStrengthPower` with only an OriginModel override (presentation), and powers.py's ReptileTrinketPower is likewise a bare TemporaryStrengthPower subclass with power_type BUFF. EXECUTED (`py tools/audit/relic_probes_b13.py reptile-trinket`): one use gives [('reptile_trinket', 3), ('strength', 3)], a second stacks to 6/6, and the turn end reverts both to nothing -- which is what TemporaryStrengthPower means. SCOPE NOTE: the shared contract defers potions, but the relic's own behaviour is a Strength grant, so it is audited rather than skipped; the potion is only the trigger, the same disposition batch 1 recorded for relic/belt_buckle's potion hooks."
+      "rationale": "ReptileTrinket.cs:22-29 applies `ReptileTrinketPower` with amount 3, target and applier both the owner's creature, cardSource null; reptile_trinket.py:26-29 does the same with `applier=self.player`. The power is ported and matches the source's inheritance: ReptileTrinketPower.cs:5 is `: TemporaryStrengthPower` with only an OriginModel override (presentation), and powers.py's ReptileTrinketPower is likewise a bare TemporaryStrengthPower subclass with power_type BUFF. EXECUTED (`py audit/tools/relic_probes_b13.py reptile-trinket`): one use gives [('reptile_trinket', 3), ('strength', 3)], a second stacks to 6/6, and the turn end reverts both to nothing -- which is what TemporaryStrengthPower means. SCOPE NOTE: the shared contract defers potions, but the relic's own behaviour is a Strength grant, so it is audited rather than skipped; the potion is only the trigger, the same disposition batch 1 recorded for relic/belt_buckle's potion hooks."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -39,12 +39,12 @@
     {
       "what": "N2: the relic grants ReptileTrinketPower, a temporary-Strength WRAPPER, not StrengthPower directly -- and that is what makes it safe against two other relics",
       "verdict": "faithful",
-      "rationale": "Recorded because the wrapper is where PROMPT.md bug class 5 (temporary-power double-dip) lives. The sim's TemporaryStrengthPower applies its internal StrengthPower with NO applier argument, which is the mechanism audits/seam/power_cmd.json guard N2 verdicts deliberate-divergence: relic/unsettling_lamp's doubling requires `applier is self.player` and therefore skips the internal power for free, reproducing C#'s explicit HasDoubledTemporaryPowerSource guard by a different route. relic/ruined_helmet in this same batch is the other exposure and it does NOT have an applier clause -- so it doubles the internal StrengthPower on both sides, once. Executed evidence for the internal application landing at all is the [('reptile_trinket', 3), ('strength', 3)] pair above. One verdict per mechanism (binding rule 3): the double-dip equivalence is power_cmd N2's, cited here rather than re-derived. NOTE per binding rule 7: powers.py and power_cmd.json are not hashed by this record."
+      "rationale": "Recorded because the wrapper is where PROMPT.md bug class 5 (temporary-power double-dip) lives. The sim's TemporaryStrengthPower applies its internal StrengthPower with NO applier argument, which is the mechanism audit/records/seam/power_cmd.json guard N2 verdicts deliberate-divergence: relic/unsettling_lamp's doubling requires `applier is self.player` and therefore skips the internal power for free, reproducing C#'s explicit HasDoubledTemporaryPowerSource guard by a different route. relic/ruined_helmet in this same batch is the other exposure and it does NOT have an applier clause -- so it doubles the internal StrengthPower on both sides, once. Executed evidence for the internal application landing at all is the [('reptile_trinket', 3), ('strength', 3)] pair above. One verdict per mechanism (binding rule 3): the double-dip equivalence is power_cmd N2's, cited here rather than re-derived. NOTE per binding rule 7: powers.py and power_cmd.json are not hashed by this record."
     },
     {
       "what": "N3: nothing in either implementation limits the relic to once per turn or once per combat",
       "verdict": "faithful",
-      "rationale": "ReptileTrinket.cs has no state field and no reset hook of any kind, so `py tools/audit/relic_probes.py sweep-reset` correctly files reptile_trinket in the 'relics holding no state at all' bucket and PROMPT.md bug class 13 has nothing to bite. The port likewise holds no state. Executed: two potion uses in one turn stack to 6, on both sides. Recorded so the absence reads as a source property rather than a dropped guard."
+      "rationale": "ReptileTrinket.cs has no state field and no reset hook of any kind, so `py audit/tools/relic_probes.py sweep-reset` correctly files reptile_trinket in the 'relics holding no state at all' bucket and PROMPT.md bug class 13 has nothing to bite. The port likewise holds no state. Executed: two potion uses in one turn stack to 6, on both sides. Recorded so the absence reads as a source property rather than a dropped guard."
     },
     {
       "what": "N4: `new ThrowingPlayerChoiceContext()` (ReptileTrinket.cs:27)",

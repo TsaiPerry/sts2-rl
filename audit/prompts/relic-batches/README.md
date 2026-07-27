@@ -10,8 +10,8 @@ remaining **212** units. Each is self-contained: copy everything below its
 Batches 1–3 each touched three files beyond their own records:
 
 ```
-tools/audit/relic_probes.py                  batch 1, 2, 3
-tools/audit/PROMPT.md                        batch 1, 3
+audit/tools/relic_probes.py                  batch 1, 2, 3
+audit/tools/PROMPT.md                        batch 1, 3
 .superpowers/sdd/content-relic-sweeps.md     batch 2, 3
 ```
 
@@ -21,8 +21,8 @@ give each batch its own writable substitutes:
 
 | Shared file (now read-only) | Per-batch substitute |
 |---|---|
-| `tools/audit/relic_probes.py` | `tools/audit/relic_probes_bNN.py` |
-| `tools/audit/PROMPT.md` | `.superpowers/sdd/relic-batch-NN-lessons.md` |
+| `audit/tools/relic_probes.py` | `audit/tools/relic_probes_bNN.py` |
+| `audit/tools/PROMPT.md` | `.superpowers/sdd/relic-batch-NN-lessons.md` |
 | `.superpowers/sdd/content-relic-sweeps.md` | same lessons file |
 
 With that, every batch writes only files no other batch touches, and the merge
@@ -53,8 +53,8 @@ cd /c/Users/Perry/Desktop/sts2-rl-relic          # the audit-relic worktree
 for n in 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18; do
   git merge --no-ff "audit-relic-b$n" -m "audit(relic): merge batch $n"
 done
-py tools/audit/harness.py validate               # 258 records, 0 invalid
-py tools/audit/citation_check.py audits         # MISSING 0, OUT-OF-RANGE 0 (relic AND seam)
+py audit/tools/harness.py validate               # 258 records, 0 invalid
+py audit/tools/citation_check.py audits         # MISSING 0, OUT-OF-RANGE 0 (relic AND seam)
 py tools/audit_status.py --kind relic            # audited 258, unaudited 0
 py -m pytest test/ -q                            # 2476 passed / 31 xfailed
 ```
@@ -65,7 +65,7 @@ contract — check what it touched before resolving.
 ## After the merge — the fold-in step
 
 1. Read every `.superpowers/sdd/relic-batch-NN-lessons.md`.
-2. Fold genuinely new bug classes into `tools/audit/PROMPT.md` and bump the
+2. Fold genuinely new bug classes into `audit/tools/PROMPT.md` and bump the
    version header **once**. Only classes a unit actually exhibited; a checklist
    entry that never fired is noise the other four content streams pay for.
 3. If several batches independently hit the same shape, that is a **new
@@ -79,14 +79,14 @@ contract — check what it touched before resolving.
 
 ## Verification gate
 
-`tools/audit/citation_check.py` is what makes 15 unsupervised batches
+`audit/tools/citation_check.py` is what makes 15 unsupervised batches
 reviewable. It resolves every `file.py:123` / `File.cs:45-67` a record cites
 and fails on paths that do not exist and line numbers past end-of-file — the
 mechanical half of binding rules 7 and 8, which exist because agents have
 invented both. It found a wrong line number in a committed batch-2 record on
 its first run.
 
-**Run it over `audits/`, not `audits/relic/`.** The seam tree went unchecked for
+**Run it over `audit/records/`, not `audit/records/relic/`.** The seam tree went unchecked for
 the whole run and had 1 missing path and 6 line numbers past end-of-file when it
 was finally checked — in the records that are the *authority* every batch is told
 to cite and match, one of which I had introduced myself while patching a seam

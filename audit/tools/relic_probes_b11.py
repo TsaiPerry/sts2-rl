@@ -4,20 +4,20 @@ Batch 11 units: paels_blood, paels_claw, paels_eye, paels_flesh, paels_growth,
 paels_horn, paels_legion, paels_tears, paels_tooth, paels_wing, pandoras_box,
 pantograph, paper_phrog, parrying_shield, pear.
 
-Companion to `tools/audit/relic_probes.py` (the shared, batch-1-owned module).
+Companion to `audit/tools/relic_probes.py` (the shared, batch-1-owned module).
 Per the batch-11 concurrency contract this file is the batch's OWN probe module
 so parallel batches do not conflict on the shared one; nothing here is
 registered there. Re-use of the shared module is read-only:
 
-  py tools/audit/relic_probes.py turn-order          # executed hook order
-  py tools/audit/relic_probes.py sweep-reset-exec    # class-13 sweep
+  py audit/tools/relic_probes.py turn-order          # executed hook order
+  py audit/tools/relic_probes.py sweep-reset-exec    # class-13 sweep
 
 Binding rules 5 and 6 of the shared audit contract: never justify `faithful`
 with an unreachability claim you have not EXECUTED, and never label a gap LIVE
 without proving BOTH sides reachable with ported content.
 
-  py tools/audit/relic_probes_b11.py                 # every probe
-  py tools/audit/relic_probes_b11.py legion-reset    # one probe
+  py audit/tools/relic_probes_b11.py                 # every probe
+  py audit/tools/relic_probes_b11.py legion-reset    # one probe
 
 Probes:
   pool             where each of batch 11's 15 relics can come from
@@ -445,7 +445,7 @@ def probe_shield_hittable() -> None:
     `!IsDead && Hook.ShouldAllowHitting(...)`. `Relic.living_enemies()`
     (relics/base.py:294-297) filters on `not e.is_gone` ONLY.
 
-    This is the SAME mechanism audits/relic/bag_of_marbles.json labels G2, and
+    This is the SAME mechanism audit/records/relic/bag_of_marbles.json labels G2, and
     it carries the same `gap` verdict (binding rule 3). What differs is the
     reachability: bag_of_marbles fires only during turn-1 setup, where nothing
     can be mid-revival, so its record labels it DORMANT. Parrying Shield fires

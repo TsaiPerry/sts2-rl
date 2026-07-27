@@ -7,7 +7,7 @@ test class that does not exist", and three consecutive seam tasks shipped
 hand-sweeping each record. That does not scale to fifteen parallel content
 batches, so this does it mechanically.
 
-For every `audits/**/*.json`, extract every source citation in the record's
+For every `audit/records/**/*.json`, extract every source citation in the record's
 free text -- `some/path.py:123`, `SomeFile.cs:45-67`, bare `Foo.cs` -- resolve
 it against the sim repo and the game root, and report:
 
@@ -20,9 +20,9 @@ it against the sim repo and the game root, and report:
 It never judges whether a citation is *apt*; only whether it is real. A green
 run means nobody invented a path or a line number.
 
-  py tools/audit/citation_check.py                 # every record
-  py tools/audit/citation_check.py audits/relic    # one kind
-  py tools/audit/citation_check.py --strict        # UNHASHED also fails
+  py audit/tools/citation_check.py                 # every record
+  py audit/tools/citation_check.py audit/records/relic    # one kind
+  py audit/tools/citation_check.py --strict        # UNHASHED also fails
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from tools.audit.harness import DEFAULT_AUDITS_DIR, DEFAULT_GAME_ROOT  # noqa: E402
+from audit.tools.harness import DEFAULT_AUDITS_DIR, DEFAULT_GAME_ROOT  # noqa: E402
 
 # `path/to/File.cs:12`, `sts2_rl/relics/x.py:3-9`, or a bare `File.cs`.
 # The path part allows the separators the records actually use (both slashes).
@@ -50,7 +50,7 @@ _CITE = re.compile(
 # and its pins. Documented in docs/audit/seams/hook_dispatch.md's fix-pass
 # section -- hashing the harness would make every record stale whenever any
 # source list changes, and a broken pin fails loudly on its own.
-_NEVER_HASHED = ("tools/audit/", "test/")
+_NEVER_HASHED = ("audit/tools/", "test/")
 
 
 def _iter_text(record: dict):
@@ -118,7 +118,14 @@ def _resolve(path: str, hashed: set[str]) -> tuple[Path | None, str, bool]:
     if len(found) > 1:
         return found[0][0], found[0][1], True
     # (b) fall back to a tree search, and SAY SO when it is ambiguous
-    roots = ((_REPO / "sts2_rl", "sim"), (_REPO / "tools", "sim"),
+    #
+    # `audit/tools` is where the probes live since the audits/ -> audit/records/
+    # restructure; `tools` is kept because the pre-restructure records cite bare
+    # probe basenames that used to resolve under it. Dropping `tools` from this
+    # list without adding `audit/tools` is exactly what turned 26 correct relic
+    # citations into MISSING when the relic tier was merged.
+    roots = ((_REPO / "sts2_rl", "sim"), (_REPO / "audit" / "tools", "sim"),
+             (_REPO / "tools", "sim"),
              (_REPO / "test", "sim"), (DEFAULT_GAME_ROOT / "src", "game"))
     for root, label in roots:
         if not root.is_dir():

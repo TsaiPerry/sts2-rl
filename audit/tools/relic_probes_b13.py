@@ -4,12 +4,12 @@ Batch 13's units: prismatic_gem, pumpkin_candle, punch_dagger, radiant_pearl,
 rainbow_ring, razor_tooth, red_mask, red_skull, regal_pillow, reptile_trinket,
 ringing_triangle, ripple_basin, royal_poison, royal_stamp, ruined_helmet.
 
-Own module per the batch-13 concurrency contract (`tools/audit/relic_probes.py`
+Own module per the batch-13 concurrency contract (`audit/tools/relic_probes.py`
 is read-only to this batch); the shared module is still the reference for
 `turn-order` and the pool-wide sweeps and should be re-used, not re-implemented.
 
-  py tools/audit/relic_probes_b13.py                 # every probe
-  py tools/audit/relic_probes_b13.py red-skull       # one probe
+  py audit/tools/relic_probes_b13.py                 # every probe
+  py audit/tools/relic_probes_b13.py red-skull       # one probe
 
 Probes:
   pool             obtainability of batch 13's 15 relics

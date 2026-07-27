@@ -4,11 +4,11 @@ Batch 6 units: fiddle, fishing_rod, forgotten_soul, fragrant_mushroom,
 fresnel_lens, frozen_egg, fur_coat, gambling_chip, game_piece, ghost_seed,
 girya, glass_eye, glitter, gnarled_hammer, golden_compass.
 
-Companion to `tools/audit/relic_probes.py`, which stays READ-ONLY to this
+Companion to `audit/tools/relic_probes.py`, which stays READ-ONLY to this
 batch per the concurrency contract (up to five batches run in sibling
 worktrees and merge afterwards; every batch that edited the shared module is
 exactly what would conflict). Re-use it read-only —
-`py tools/audit/relic_probes.py turn-order` is the executed hook-order
+`py audit/tools/relic_probes.py turn-order` is the executed hook-order
 reference and `sweep-reset` / `sweep-reset-exec` / `sweep-isallowed` /
 `sweep-stubs` produced the pre-diagnosed units this batch confirms.
 
@@ -16,8 +16,8 @@ Binding rules 5 and 6 of the shared audit contract: never justify `faithful`
 with an unreachability claim you have not EXECUTED, and never label a gap LIVE
 without proving BOTH sides reachable with ported content.
 
-  py tools/audit/relic_probes_b06.py                # every probe
-  py tools/audit/relic_probes_b06.py fiddle-draw    # one probe
+  py audit/tools/relic_probes_b06.py                # every probe
+  py audit/tools/relic_probes_b06.py fiddle-draw    # one probe
 
 Probes:
   b06-pool        obtainability of batch 6's 15 relics (rule 6, first half)
@@ -182,8 +182,8 @@ def probe_piece_replay() -> None:
     C# and once per PLAY in the sim, so a replayed Power card draws 1 instead
     of 2.
 
-    Mechanism recorded at audits/seam/hook_dispatch.json G4 and at
-    audits/relic/unsettling_lamp.json G1 (CardModel.cs:1904-1963 builds a fresh
+    Mechanism recorded at audit/records/seam/hook_dispatch.json G4 and at
+    audit/records/relic/unsettling_lamp.json G1 (CardModel.cs:1904-1963 builds a fresh
     CardPlay inside `for (int i = 0; i < playCount; i++)` and fires the hook at
     line 1961 INSIDE the loop; combat.py:514 calls hooks.on_card_played once
     after the whole loop). Same mechanism, same verdict -- binding rule 3.

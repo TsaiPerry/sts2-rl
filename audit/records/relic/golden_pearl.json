@@ -21,7 +21,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (golden_pearl.py:16-17) -> run.gain_gold(150) (run.py:325-333), dispatched by RunState.add_relic",
       "verdict": "faithful",
-      "rationale": "GoldenPearl.cs:17-20 calls PlayerCmd.GainGold(DynamicVars.Gold.BaseValue, Owner) and PlayerCmd.cs:141-169 is Hook.ModifyGoldGained -> AfterModifyingGoldGained -> `if (!(amount > 0)) return` -> `player.Gold += (int)amount` -> Hook.AfterGoldGained. run.gain_gold reproduces the modifier chain, the positivity gate and the truncation in the same order. EXECUTED (py tools/audit/relic_probes_b07.py pearl-gold): gold 99 -> 249. The two omitted legs are verdicted at guards N2 and N3. Rule 7: PlayerCmd.cs and run.py are not hashed by this record."
+      "rationale": "GoldenPearl.cs:17-20 calls PlayerCmd.GainGold(DynamicVars.Gold.BaseValue, Owner) and PlayerCmd.cs:141-169 is Hook.ModifyGoldGained -> AfterModifyingGoldGained -> `if (!(amount > 0)) return` -> `player.Gold += (int)amount` -> Hook.AfterGoldGained. run.gain_gold reproduces the modifier chain, the positivity gate and the truncation in the same order. EXECUTED (py audit/tools/relic_probes_b07.py pearl-gold): gold 99 -> 249. The two omitted legs are verdicted at guards N2 and N3. Rule 7: PlayerCmd.cs and run.py are not hashed by this record."
     }
   },
   "guards": [

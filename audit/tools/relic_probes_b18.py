@@ -4,21 +4,21 @@ Batch 18 is the roster's tail: two units.
 
   wongos_mystery_ticket  yummy_cookie
 
-Own module per the batch-18 concurrency contract (`tools/audit/relic_probes.py`
+Own module per the batch-18 concurrency contract (`audit/tools/relic_probes.py`
 is READ-ONLY to this batch -- re-use it, do not edit it; in particular
-`py tools/audit/relic_probes.py sweep-reset` / `sweep-reset-exec` /
+`py audit/tools/relic_probes.py sweep-reset` / `sweep-reset-exec` /
 `sweep-upgrade` are the pool-wide inputs these records confirm or refute, and
-`py tools/audit/relic_probes.py turn-order` is the executed hook-order
+`py audit/tools/relic_probes.py turn-order` is the executed hook-order
 reference -- neither batch-18 unit implements a turn-structure hook, so no
 record here leans on it).
 
 Binding rules 5 and 6: never justify `faithful` with an unreachability claim
 you have not EXECUTED, and never label a gap LIVE without proving both sides
-reachable with ported content. Everything an `audits/relic/*.json` record from
+reachable with ported content. Everything an `audit/records/relic/*.json` record from
 this batch asserts about reachability is produced here.
 
-  py tools/audit/relic_probes_b18.py                  # every probe
-  py tools/audit/relic_probes_b18.py b18-pool         # one probe
+  py audit/tools/relic_probes_b18.py                  # every probe
+  py audit/tools/relic_probes_b18.py b18-pool         # one probe
 
 Probes:
   b18-pool          obtainability of both units (rule 6, first half)
@@ -239,7 +239,7 @@ def probe_b18_ticket_rng() -> None:
     then populates the newly-added rewards (RewardsSet.cs:131-146). The sim
     rolls gold / potion / cards before the hook loop and pulls inside the hook
     (rewards.py:453-500). Same relative order -- the ticket's draws come last
-    either way. (Same finding as audits/relic/lava_rock.json guard N3.)
+    either way. (Same finding as audit/records/relic/lava_rock.json guard N3.)
     """
     from sts2_rl.rooms import RoomType
 

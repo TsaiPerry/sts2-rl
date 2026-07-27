@@ -12,7 +12,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (pumpkin_candle.py:19)",
       "verdict": "faithful",
-      "rationale": "Matches PumpkinCandle.cs:22. Obtainable via the ported Tezcatara shrine (events/tezcatara.py:19), executed by `py tools/audit/relic_probes_b13.py pool`."
+      "rationale": "Matches PumpkinCandle.cs:22. Obtainable via the ported Tezcatara shrine (events/tezcatara.py:19), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "ShowCounter": {
       "maps_to": "no counterpart",
@@ -32,7 +32,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (pumpkin_candle.py:27-28) -> rekindle(), dispatched by RunState.add_relic",
       "verdict": "faithful",
-      "rationale": "PumpkinCandle.cs:52-56 calls Rekindle(); the port does the same. EXECUTED (`py tools/audit/relic_probes_b13.py pumpkin-candle`): `run.add_relic('pumpkin_candle')` leaves kindle_count == 5, matching `KindleCount += 5` (PumpkinCandle.cs:89). Contrast batch 1's relic/big_mushroom, whose after_obtained is missing entirely -- the dispatch site exists and this relic uses it."
+      "rationale": "PumpkinCandle.cs:52-56 calls Rekindle(); the port does the same. EXECUTED (`py audit/tools/relic_probes_b13.py pumpkin-candle`): `run.add_relic('pumpkin_candle')` leaves kindle_count == 5, matching `KindleCount += 5` (PumpkinCandle.cs:89). Contrast batch 1's relic/big_mushroom, whose after_obtained is missing entirely -- the dispatch site exists and this relic uses it."
     },
     "ModifyMaxEnergy": {
       "maps_to": "modify_max_energy (pumpkin_candle.py:33-36)",
@@ -42,7 +42,7 @@
     "AfterCombatEnd": {
       "maps_to": "after_combat_end (pumpkin_candle.py:38-39), dispatched by RunState.finish_combat (run.py:1206-1208)",
       "verdict": "faithful",
-      "rationale": "PumpkinCandle.cs:71-75 is `KindleCount = Math.Max(KindleCount - 1, 0)`; pumpkin_candle.py:39 is `max(0, self.kindle_count - 1)`. EXECUTED end to end: 5 -> 4 -> 3 -> 2 -> 1 -> 0 -> 0 over seven combats, with the energy bonus dropping on combat 6. The sim dispatches this from finish_combat AFTER the HP/potion sync rather than inside the combat-end path, and gates it on `room_type is not None and not self.is_dead` (run.py:1206); C# fires Hook.AfterCombatEnd on victory only (audits/seam/turn_structure.json guard G10 -- a LOSS fires no hook at all), so the gate agrees. The ordering against the HP sync is unobservable for a counter nothing else reads. NOTE per binding rule 7: run.py and turn_structure.json are not hashed here."
+      "rationale": "PumpkinCandle.cs:71-75 is `KindleCount = Math.Max(KindleCount - 1, 0)`; pumpkin_candle.py:39 is `max(0, self.kindle_count - 1)`. EXECUTED end to end: 5 -> 4 -> 3 -> 2 -> 1 -> 0 -> 0 over seven combats, with the energy bonus dropping on combat 6. The sim dispatches this from finish_combat AFTER the HP/potion sync rather than inside the combat-end path, and gates it on `room_type is not None and not self.is_dead` (run.py:1206); C# fires Hook.AfterCombatEnd on victory only (audit/records/seam/turn_structure.json guard G10 -- a LOSS fires no hook at all), so the gate agrees. The ordering against the HP sync is unobservable for a counter nothing else reads. NOTE per binding rule 7: run.py and turn_structure.json are not hashed here."
     },
     "TryModifyRestSiteOptions": {
       "maps_to": "modify_rest_site_options (pumpkin_candle.py:41-42), dispatched by RunState.rest_site_options (run.py:1062-1073)",
@@ -54,7 +54,7 @@
     {
       "what": "N1: `kindle_count` is a sweep-A candidate -- it is written during the run and no combat-boundary hook re-assigns it -- but it is per-run state on BOTH sides",
       "verdict": "faithful",
-      "rationale": "PROMPT.md bug class 13 requires tracing to the first READER of the field, which is modify_max_energy at the next combat's turn-1 energy step. The stale value is exactly the value the game keeps: [SavedProperty] KindleCount (PumpkinCandle.cs:34-35) survives saves, and C#'s only AfterCombatEnd assignment is a DECREMENT, not a reset (`py tools/audit/relic_probes.py sweep-reset` prints `C# resets: {'AfterCombatEnd': ['KindleCount = Math.Max(KindleCount - 1, 0)']}` for this relic -- the corrected column, which prints real assignments rather than an override census). So the sweep's static hit is a candidate that resolves to faithful, the same way batch 5's fake_happy_flower N1 did. WHAT THE EXECUTED ARM MISSED, reported in .superpowers/sdd/relic-batch-13-lessons.md: `sweep-reset-exec` files this relic under 'agree with a fresh instance', which is a FALSE CLEAR rather than agreement -- its driver builds a bare CombatState, so after_obtained and after_combat_end (both RUN hooks) never fire and kindle_count is 0 on both instances. Shown by `py tools/audit/relic_probes_b13.py sweep-exec-blind`."
+      "rationale": "PROMPT.md bug class 13 requires tracing to the first READER of the field, which is modify_max_energy at the next combat's turn-1 energy step. The stale value is exactly the value the game keeps: [SavedProperty] KindleCount (PumpkinCandle.cs:34-35) survives saves, and C#'s only AfterCombatEnd assignment is a DECREMENT, not a reset (`py audit/tools/relic_probes.py sweep-reset` prints `C# resets: {'AfterCombatEnd': ['KindleCount = Math.Max(KindleCount - 1, 0)']}` for this relic -- the corrected column, which prints real assignments rather than an override census). So the sweep's static hit is a candidate that resolves to faithful, the same way batch 5's fake_happy_flower N1 did. WHAT THE EXECUTED ARM MISSED, reported in .superpowers/sdd/relic-batch-13-lessons.md: `sweep-reset-exec` files this relic under 'agree with a fresh instance', which is a FALSE CLEAR rather than agreement -- its driver builds a bare CombatState, so after_obtained and after_combat_end (both RUN hooks) never fire and kindle_count is 0 on both instances. Shown by `py audit/tools/relic_probes_b13.py sweep-exec-blind`."
     },
     {
       "what": "N2: Rekindle() uses the literal 5 (PumpkinCandle.cs:89) while `const int kindleAmount = 5` (:18) and `new DynamicVar('CombatCount', 5m)` (:30) also exist",

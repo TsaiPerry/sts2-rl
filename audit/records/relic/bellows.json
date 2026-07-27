@@ -16,7 +16,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (bellows.py:19-23)",
       "verdict": "faithful",
-      "rationale": "Bellows.cs:15-28 upgrades every card in the owner's hand on turn 1. audits/seam/turn_structure.json step 22 fires Hook.AfterPlayerTurnStart immediately after CardPileCmd.Draw, and the sim's on_player_turn_started is the post-draw slot at player.py:186 (executed: py tools/audit/relic_probes.py turn-order shows modify_hand_draw then on_player_turn_started with hand=5), so the hand this relic upgrades is the fully-drawn turn-1 hand on both sides -- the ordering detail the whole relic depends on. `player != base.Owner` is the multiplayer filter; `TurnNumber > 1 -> return` matches `self.turn <= 1`. PileType.Hand.GetPile(Owner).Cards maps to player.hand."
+      "rationale": "Bellows.cs:15-28 upgrades every card in the owner's hand on turn 1. audit/records/seam/turn_structure.json step 22 fires Hook.AfterPlayerTurnStart immediately after CardPileCmd.Draw, and the sim's on_player_turn_started is the post-draw slot at player.py:186 (executed: py audit/tools/relic_probes.py turn-order shows modify_hand_draw then on_player_turn_started with hand=5), so the hand this relic upgrades is the fully-drawn turn-1 hand on both sides -- the ordering detail the whole relic depends on. `player != base.Owner` is the multiplayer filter; `TurnNumber > 1 -> return` matches `self.turn <= 1`. PileType.Hand.GetPile(Owner).Cards maps to player.hand."
     }
   },
   "guards": [

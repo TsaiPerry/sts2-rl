@@ -23,7 +23,7 @@
     {
       "what": "G1 (LIVE): C#'s AfterBlockCleared is a separate UNCONDITIONAL loop; the sim fires on_block_cleared only inside the `if should_clear_block(...)` arm",
       "verdict": "gap",
-      "issue": "This is audits/seam/turn_structure.json guard G1 (step 14) at the site that record already names, and one verdict per mechanism (binding rule 3) means it is cited rather than re-derived. C# runs two separate loops over the same participants -- AfterTurnStart/ClearBlock (CombatManager.cs:492-499), then `Hook.AfterBlockCleared` for EVERY participant (500-507) -- so the event fires for a creature with no block, for a creature whose clear a ShouldClearBlock listener prevented, and for a player on turn 1 whose AfterTurnStart returned early. player.py:157-159 fuses them. LIVE, and the seam's own executed numbers are this relic's: '[captains_wheel] reaches turn 3 with 18 block, [sturdy_clamp, captains_wheel] with 0' -- C# gives 18 in both cases. The preventers are ported content (BarricadePower via the Ironclad Rare card cards/barricade_card.py, and relic/sturdy_clamp), Captain's Wheel is Rare in the transcribed grab bag (confirmed by `py tools/audit/relic_probes.py batch3-pool`), and turn 3 is reached in most fights. The seam owns the machinery; this record owns the relic's observable. Pinned there by test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented."
+      "issue": "This is audit/records/seam/turn_structure.json guard G1 (step 14) at the site that record already names, and one verdict per mechanism (binding rule 3) means it is cited rather than re-derived. C# runs two separate loops over the same participants -- AfterTurnStart/ClearBlock (CombatManager.cs:492-499), then `Hook.AfterBlockCleared` for EVERY participant (500-507) -- so the event fires for a creature with no block, for a creature whose clear a ShouldClearBlock listener prevented, and for a player on turn 1 whose AfterTurnStart returned early. player.py:157-159 fuses them. LIVE, and the seam's own executed numbers are this relic's: '[captains_wheel] reaches turn 3 with 18 block, [sturdy_clamp, captains_wheel] with 0' -- C# gives 18 in both cases. The preventers are ported content (BarricadePower via the Ironclad Rare card cards/barricade_card.py, and relic/sturdy_clamp), Captain's Wheel is Rare in the transcribed grab bag (confirmed by `py audit/tools/relic_probes.py batch3-pool`), and turn 3 is reached in most fights. The seam owns the machinery; this record owns the relic's observable. Pinned there by test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented."
     },
     {
       "what": "N1: `creature == base.Owner.Creature` (CaptainsWheel.cs:22) vs `target is self.player` (captains_wheel.py:20)",
@@ -33,7 +33,7 @@
     {
       "what": "N2: `base.Owner.PlayerCombatState.TurnNumber == 3` vs `self.turn == 3` (captains_wheel.py:20)",
       "verdict": "faithful",
-      "rationale": "audits/seam/turn_structure.json's extra-turn step names Captain's Wheel by name as one of the ported TurnNumber readers that self.turn correctly models. Cited, not re-derived (binding rule 3)."
+      "rationale": "audit/records/seam/turn_structure.json's extra-turn step names Captain's Wheel by name as one of the ported TurnNumber readers that self.turn correctly models. Cited, not re-derived (binding rule 3)."
     },
     {
       "what": "N3: `BlockVar(18m, ValueProp.Unpowered)` passed whole to CreatureCmd.GainBlock (CaptainsWheel.cs:16, 25) vs `BlockCmd.apply(..., 18, props=ValueProp.UNPOWERED)` (captains_wheel.py:22)",
@@ -43,7 +43,7 @@
     {
       "what": "N4: the sim's on_block_cleared slot vs C#'s step 14",
       "verdict": "faithful",
-      "rationale": "Executed (`py tools/audit/relic_probes.py turn-order`): on_block_cleared fires first in the turn, before on_energy_reset and before the draw, matching step 14's position between ClearBlock (12) and the energy reset (17). So the 18 Block is present for the whole of turn 3, including anything that reads player block during turn setup -- the slot that relic/anchor's N3 records as WRONG in the sim is a different hook, not this one."
+      "rationale": "Executed (`py audit/tools/relic_probes.py turn-order`): on_block_cleared fires first in the turn, before on_energy_reset and before the draw, matching step 14's position between ClearBlock (12) and the energy reset (17). So the 18 Block is present for the whole of turn 3, including anything that reads player block during turn setup -- the slot that relic/anchor's N3 records as WRONG in the sim is a different hook, not this one."
     },
     {
       "what": "N5: Flash() and ExtraHoverTips (CaptainsWheel.cs:18, 24)",

@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "2a2a19232f250c609e8c46fdcd629d81ea2b68646958060cebc2e2bb7b529a30",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
       "side": "sim"
     },
     {

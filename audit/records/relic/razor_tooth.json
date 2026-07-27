@@ -12,12 +12,12 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.RARE (razor_tooth.py:19)",
       "verdict": "faithful",
-      "rationale": "Matches RazorTooth.cs:11. In the transcribed shared grab bag as Rare (relic_pools.py:123), executed by `py tools/audit/relic_probes_b13.py pool`."
+      "rationale": "Matches RazorTooth.cs:11. In the transcribed shared grab bag as Rare (relic_pools.py:123), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (razor_tooth.py:21-23)",
       "verdict": "faithful",
-      "rationale": "RazorTooth.cs:13-30 runs four checks in order -- card owner, card type, IsUpgradable, then CardCmd.Upgrade -- and razor_tooth.py:22 runs the same three conditions before card.upgrade(). Each is verdicted at its own guard (N1-N4); no divergence was found at any of them, so this hook rolls up faithful per binding rule 4. EXECUTED (`py tools/audit/relic_probes_b13.py razor-tooth`): a Strike played once comes out at upgrade_level 1 and a second play leaves it at 1 (max_upgrade_level 1), a Dazed and a Burn stay at 0, and the run deck after finish_combat is still [('bash',0),('defend',0),('strike',0)]."
+      "rationale": "RazorTooth.cs:13-30 runs four checks in order -- card owner, card type, IsUpgradable, then CardCmd.Upgrade -- and razor_tooth.py:22 runs the same three conditions before card.upgrade(). Each is verdicted at its own guard (N1-N4); no divergence was found at any of them, so this hook rolls up faithful per binding rule 4. EXECUTED (`py audit/tools/relic_probes_b13.py razor-tooth`): a Strike played once comes out at upgrade_level 1 and a second play leaves it at 1 (max_upgrade_level 1), a Dazed and a Burn stay at 0, and the run deck after finish_combat is still [('bash',0),('defend',0),('strike',0)]."
     }
   },
   "guards": [
@@ -29,7 +29,7 @@
     {
       "what": "N2 (PROMPT.md bug class 14): `if (!cardPlay.Card.IsUpgradable) return;` (RazorTooth.cs:24-27) IS mirrored -- razor_tooth.py:22 checks card.is_upgradable",
       "verdict": "faithful",
-      "rationale": "The sim's Card.upgrade() (cards/base.py) is a bare `upgrade_level += 1` with no guard of its own, so every caller must supply one; sweep D found 7 of 23 relic call sites that do not, and two of those (astrolabe, bone_tea) are recorded live gaps. This relic is NOT one of them -- `py tools/audit/relic_probes.py sweep-upgrade` does not list razor_tooth.py, and the guard is executed above: Dazed and Burn (max_upgrade_level 0, the Curse/Status population) come out of on_card_played at upgrade_level 0. Checked rather than assumed, because the relic upgrades a card the player just played and Status cards ARE playable (Burn is not, but Dazed reaches the hand and Slimed is playable)."
+      "rationale": "The sim's Card.upgrade() (cards/base.py) is a bare `upgrade_level += 1` with no guard of its own, so every caller must supply one; sweep D found 7 of 23 relic call sites that do not, and two of those (astrolabe, bone_tea) are recorded live gaps. This relic is NOT one of them -- `py audit/tools/relic_probes.py sweep-upgrade` does not list razor_tooth.py, and the guard is executed above: Dazed and Burn (max_upgrade_level 0, the Curse/Status population) come out of on_card_played at upgrade_level 0. Checked rather than assumed, because the relic upgrades a card the player just played and Status cards ARE playable (Burn is not, but Dazed reaches the hand and Slimed is playable)."
     },
     {
       "what": "N3: 'for the rest of the combat' -- the upgrade must not reach the run deck",
@@ -44,7 +44,7 @@
     {
       "what": "N5: the relic has no state and no reset hooks at all",
       "verdict": "faithful",
-      "rationale": "RazorTooth.cs overrides exactly Rarity and AfterCardPlayed -- no BeforeCombatStart, no AfterCombatEnd, no counter -- so PROMPT.md bug class 13 (a dropped per-combat reset) has nothing to bite here, and `py tools/audit/relic_probes.py sweep-reset` puts razor_tooth in the 'relics holding no state at all' bucket. Recorded so the absence is visibly a source property rather than an omission in the port."
+      "rationale": "RazorTooth.cs overrides exactly Rarity and AfterCardPlayed -- no BeforeCombatStart, no AfterCombatEnd, no counter -- so PROMPT.md bug class 13 (a dropped per-combat reset) has nothing to bite here, and `py audit/tools/relic_probes.py sweep-reset` puts razor_tooth in the 'relics holding no state at all' bucket. Recorded so the absence is visibly a source property rather than an omission in the port."
     }
   ],
   "verdict": "faithful",

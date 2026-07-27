@@ -1,10 +1,10 @@
 # Relic content audits — batch 7 lessons
 
 **Date:** 2026-07-26 · **Branch:** `audit-relic-b07` (based on `audit-relic` @ 4542c32f)
-**Units:** 15 · **Probes:** 18, in `tools/audit/relic_probes_b07.py` (this batch's own module; the shared `tools/audit/relic_probes.py` was used read-only for `turn-order`, `sweep-reset` and `sweep-isallowed`)
+**Units:** 15 · **Probes:** 18, in `audit/tools/relic_probes_b07.py` (this batch's own module; the shared `audit/tools/relic_probes.py` was used read-only for `turn-order`, `sweep-reset` and `sweep-isallowed`)
 
-`py tools/audit/harness.py validate` → **66 records, 0 invalid**.
-`py tools/audit/citation_check.py audits/relic` → **MISSING 0, OUT-OF-RANGE 0**.
+`py audit/tools/harness.py validate` → **66 records, 0 invalid**.
+`py audit/tools/citation_check.py audit/records/relic` → **MISSING 0, OUT-OF-RANGE 0**.
 `py tools/audit_status.py --kind relic` → `total 258 · audited 61 · invalid 0 · stale 0 · gaps 43 · unaudited 197`.
 `py -m pytest test/ -q` → **2476 passed, 31 xfailed** — unchanged; no engine code was touched.
 
@@ -59,7 +59,7 @@
 | `golden_pearl` N2 | `Hook.AfterGoldGained` has no sim hook at all (`grep` → 0 hits) | porting any `AfterGoldGained` implementer — needs a new base-class hook first (Sweep C's tail list) |
 | `happy_flower` N3 | `AfterModifyingEnergyGain` companion event and the `finalAmount > 0` gate missing from `EnergyCmd.gain` | any `AfterModifyingEnergyGain` implementer, or a `modify_energy_gain` listener that can drive the amount negative |
 | `ice_cream` N2 | `modify_max_energy` is folded BEFORE `should_reset_energy`; C# branches first (= `turn_structure` step 17) | the first side-effecting `should_reset_energy` or `modify_max_energy` implementation — Ice Cream is the only ported reason the else-branch is ever taken |
-| `gorget` N4 | `PlatingPower` decays at the sim's pre-draw slot, C#'s at `AfterSideTurnStart` (post-draw) | any turn-start effect between the two slots that scales off a Plating stack. **Belongs to the power stream**; recorded at Gorget's site because Gorget is the only ported player-side Plating source and `audits/power/` does not exist |
+| `gorget` N4 | `PlatingPower` decays at the sim's pre-draw slot, C#'s at `AfterSideTurnStart` (post-draw) | any turn-start effect between the two slots that scales off a Plating stack. **Belongs to the power stream**; recorded at Gorget's site because Gorget is the only ported player-side Plating source and `audit/records/power/` does not exist |
 | `gremlin_horn` G2 | death resolves inside the sim's damage pipeline, before the dealer's post-damage event (= `damage_pipeline` step 18 / G6 / N2) | porting any `AfterDamageGiven` implementer that reads the player's energy or hand |
 | `hand_drill` G1 | C# runs every `AfterBlockBroken` listener before `AfterDamageGiven`; the sim puts both on `on_block_broken` and lets registration order decide | a second `AfterBlockBroken` implementer (today: only `BurrowedPower.cs:24`, whole-source), or an ENEMY carrying Artifact so the order decides which debuff is negated |
 | `hand_drill` G2 | the `dealer?.PetOwner == base.Owner` arm is dropped; the sim has no pet concept (`grep pet_owner\|PetOwner` → 0 hits) | porting a pet — `relics/base.py:91-92` carries an `adds_pet` flag for Pael's Legion with no creature behind it |
@@ -87,7 +87,7 @@ Each fired on a real unit in this batch. Two of them want a mechanical sweep bef
 
 ### Class C (NEW, **cross-stream, high blast radius**) — death prevention modelled with `should_die` where the game only vetoes REMOVAL, so `AfterDeath` never fires
 
-**Unit: `gremlin_horn`.** `IllusionPower`, `SteamEruptionPower` and `AdaptablePower` override `ShouldCreatureBeRemovedFromCombatAfterDeath` and `AfterDeath`; a whole-source `grep -rln ShouldDie src/Core/Models/` finds only `FairyInABottle`, `LizardTail` and two Mocks. In the game those creatures **really die** — HP 0, `AfterDeath` fires, they simply stay in the Enemies list and revive. The three sim ports return `should_die = False` instead, so the creature never dies and **every** `on_death` listener misses it. Compounding it, C# fires `AfterDeath` on a genuinely prevented death too (`CreatureCmd.cs:566`), which the sim never does. This is the memory note "death does not mean removal" applied to the wrong hook, it is reachable from a normal act-1 encounter, and it belongs to the power stream plus `cmds.py` — `audits/power/` does not exist yet, so no record owns it. `damage_pipeline`'s N4 and G4 do **not** cover it.
+**Unit: `gremlin_horn`.** `IllusionPower`, `SteamEruptionPower` and `AdaptablePower` override `ShouldCreatureBeRemovedFromCombatAfterDeath` and `AfterDeath`; a whole-source `grep -rln ShouldDie src/Core/Models/` finds only `FairyInABottle`, `LizardTail` and two Mocks. In the game those creatures **really die** — HP 0, `AfterDeath` fires, they simply stay in the Enemies list and revive. The three sim ports return `should_die = False` instead, so the creature never dies and **every** `on_death` listener misses it. Compounding it, C# fires `AfterDeath` on a genuinely prevented death too (`CreatureCmd.cs:566`), which the sim never does. This is the memory note "death does not mean removal" applied to the wrong hook, it is reachable from a normal act-1 encounter, and it belongs to the power stream plus `cmds.py` — `audit/records/power/` does not exist yet, so no record owns it. `damage_pipeline`'s N4 and G4 do **not** cover it.
 
 ### Class D (NEW, **wants a sweep**) — the reward path using the combat-generation card pool
 
@@ -115,11 +115,11 @@ Three **factual refinements** to existing records, none of which changes a verdi
 
 ## Roster mis-resolutions
 
-**None.** All 15 units resolved to a real C# file on the first `harness.py skeleton` call, and `tools/audit/name_overrides.json` needs no additions. Obtainability confirmed for all 15 by execution (`relic_probes_b07.py pool`): **8** via the transcribed grab bag (`gorget` Common, `gremlin_horn` Uncommon, `happy_flower` Common, `horn_cleat` Uncommon, `ice_cream` Rare, `intimidating_helmet` Rare, `joss_paper` Uncommon, `juzu_bracelet` Common) and **7** via ported events (Neow ×3 for `golden_pearl` / `hefty_tablet` / `kaleidoscope`, Trash Heap for `hand_drill`, Tanx for `iron_club`, Vakuu for `jeweled_mask`, Nonupeipe for `jewelry_box`); `gremlin_horn` additionally via Calling Bell.
+**None.** All 15 units resolved to a real C# file on the first `harness.py skeleton` call, and `audit/tools/name_overrides.json` needs no additions. Obtainability confirmed for all 15 by execution (`relic_probes_b07.py pool`): **8** via the transcribed grab bag (`gorget` Common, `gremlin_horn` Uncommon, `happy_flower` Common, `horn_cleat` Uncommon, `ice_cream` Rare, `intimidating_helmet` Rare, `joss_paper` Uncommon, `juzu_bracelet` Common) and **7** via ported events (Neow ×3 for `golden_pearl` / `hefty_tablet` / `kaleidoscope`, Trash Heap for `hand_drill`, Tanx for `iron_club`, Vakuu for `jeweled_mask`, Nonupeipe for `jewelry_box`); `gremlin_horn` additionally via Calling Bell.
 
 ## Left unverified / out of scope
 
 - **`hand_drill` G1's Artifact leg.** Whether any ported ENEMY can carry Artifact was not settled — the record therefore rests G1's dormancy on the `BurrowedPower` census (one whole-source `AfterBlockBroken` override) and names the enemy-Artifact question as an open trigger rather than claiming it impossible.
-- **Class A's sweep was not written.** It belongs in `tools/audit/relic_probes.py`, which the concurrency contract makes read-only to this batch. Same for class B's and class D's greps.
-- **`gorget` N4, `jeweled_mask` N3 and `gremlin_horn` G1 are not this stream's to fix** — they live in `sts2_rl/powers.py`, `sts2_rl/cards/base.py` and `sts2_rl/cmds.py`. They are recorded at the relic sites where they become observable because no `audits/power/` or `audits/card/` record exists yet to own them.
+- **Class A's sweep was not written.** It belongs in `audit/tools/relic_probes.py`, which the concurrency contract makes read-only to this batch. Same for class B's and class D's greps.
+- **`gorget` N4, `jeweled_mask` N3 and `gremlin_horn` G1 are not this stream's to fix** — they live in `sts2_rl/powers.py`, `sts2_rl/cards/base.py` and `sts2_rl/cmds.py`. They are recorded at the relic sites where they become observable because no `audit/records/power/` or `audit/records/card/` record exists yet to own them.
 - **Potions** were not reached by any unit in this batch, so the contract's potion deferral never bound.
