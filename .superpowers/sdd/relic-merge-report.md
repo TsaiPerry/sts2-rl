@@ -273,18 +273,9 @@ main...audit-pipeline         no sts2_rl/ files
 
 ## 8. Open questions I could not settle
 
-1. **The potion scope clause — the one judgment call I made for you.**
-   `_shared-audit-contract.md:110` says "Out of scope everywhere: potions
-   (deferred by Perry)". That records *your* decision, so I did not rewrite it.
-   But the tier was internally inconsistent either way: **5 waiver entries cited
-   that clause while 45 entries in the same tier file potion mechanics as gaps,
-   27 of them LIVE**, and rule 3 forces one answer. I ruled that the clause means
-   *potion is not an audited **kind*** (there is no `potion` roster kind) rather
-   than *potion-affecting behaviour of an audited relic is invisible* — which is
-   consistent with the 45, with potions being ported (51 classes), and with the
-   potion belt being conformance-asserted. **If you meant the stronger reading,
-   the 45 entries are wrong rather than the 5, and this needs reverting in the
-   other direction.**
+1. ~~**The potion scope clause.**~~ **SETTLED 2026-07-26 — Perry: "don't ignore
+   potions anymore."** See §9 below; the clause is deleted and `potion` is now
+   the seventh kind.
 2. **The `waiver` vs `faithful` vocabulary for dead C# members**, at **53 sites
    across the power and seam tiers** (49 `power/*`, 1 `seam/power_cmd`). Where a
    C# member is dead in the source itself, `PROMPT.md` v6 item 3 — written by the
@@ -313,3 +304,84 @@ main...audit-pipeline         no sts2_rl/ files
 6. **The 181-stale / 4-stale question is still yours** and I did not touch it.
    `audit_status` shows `power` stale = 4, consistent with 177 already rehashed.
    I rehashed nothing.
+
+---
+
+## 9. Follow-on — potions are in scope (2026-07-26)
+
+Perry settled open question 1 and open question "revert the cross-tier commit":
+**"don't ignore potions anymore"** and **do not revert `29f1e631`**. Both
+applied. Commits `c8577ff3` and `09bcd235`.
+
+### The clause is deleted, not narrowed
+
+`_shared-audit-contract.md` said "Out of scope everywhere: potions (deferred by
+Perry)". `potion` is now an ordinary audit kind and is **unaudited**, exactly
+like `monster`:
+
+| | |
+|---|---|
+| `harness.py roster potion` | **51 sim units, 0 unmatched**, 13 unported C# files |
+| `audit_status` | potion 51 total / 0 audited / **51 unaudited** |
+| name overrides needed | 1 (`potion/glowwater` → `GlowwaterPotion.cs`) |
+| suite | 2522 → **2523** (the parametrised roster test now runs for potion) |
+
+Also: `audit/records/potion/.gitkeep`, `gap_queue.py` names it beside `monster`,
+the interface-contract test's pinned kind set is updated, and there is a stream
+prompt at `audit/prompts/2026-07-26-content-potion.md`.
+
+### Why "excluded" was strictly worse than "unaudited"
+
+**An exclusion is invisible to every tool in this pipeline.** `audit_status`
+cannot report it, `gap_queue` cannot count it, `validate` cannot reject a
+verdict that leans on it. That is not a philosophical point — it is what let the
+clause do damage in *both* directions for the whole audit:
+
+- **It manufactured a rule-3 break.** Ten entries in the `card` and `power`
+  tiers waived real behaviour on it while the `relic` tier filed 45
+  potion-mechanic gaps, 27 LIVE. One mechanism, two answers, caused by the
+  contract itself.
+- **It protected a false claim.** `damage_pipeline` N4 waived the two-phase
+  `ShouldDie` ordering because Fairy in a Bottle was "out of scope". The potion
+  is ported at `sts2_rl/potions.py:1242` with a real `should_die`.
+
+### What re-deriving the 11 affected records found
+
+**Five LIVE gaps, three never looked at by anyone** (queue entries 59–63):
+
+| entry | before → after | evidence |
+|---|---|---|
+| `card/alchemize/OnPlay` | waiver → **gap LIVE** | the whole card was waived; rule-3 break against `relic/sozu` G1, which *names Alchemize* |
+| `card/alchemize` G1 | — → **gap LIVE** | combat-side procure skips `ShouldProcurePotion`; executed, Sozu owner still gets the potion |
+| `card/alchemize` G2 | — → **gap LIVE** | no `AfterPotionProcured`; executed, Belt Buckle keeps 2 Dexterity where C# drops to 0 |
+| `power/shackling_potion` | waiver → **gap LIVE** | targets `not is_gone` vs `HittableEnemies`; live only because `PowerCmd.apply` lacks the backstop `DamageCmd.deal` has. Executed: sim 3 targets, game 2 |
+| `power/surrounded/BeforePotionUsed` | **faithful** → **gap LIVE** | **new mechanism.** C# has two potion hooks, the sim has one that mirrors the *After* one. Executed: 80→44 HP vs 80→56 |
+
+**Two more, from my own follow-up sweep** rather than the re-verdict pass —
+already `gap`, but their *dormancy* rested on the clause. `power/demise` and
+`power/regen` both said "the only ported source is a potion" and named their
+trigger as "any non-potion source". **The trigger had already fired**: Powdered
+Demise and Regen Potion are both ported *and* in the generation pool. Both
+DORMANT → **LIVE**.
+
+**Six came back `faithful`** (`buffer`, `clarity`, `flex_potion`,
+`gigantification`, `radiance`, `speed_potion`) — checked, not assumed. The
+clause was not hiding a disaster; it was hiding the seven above.
+`power/radiance`'s rollup moves `waiver` → `faithful`.
+
+`audit/tools/PROMPT.md`'s own copy of the clause ("Potions: out of scope
+entirely") was still binding on every future auditor and is replaced.
+
+### Still open after this
+
+- **`sts2_rl/player.py:112-115`** — the engine docstring cites the deleted
+  clause as its justification for skipping the gate ("unchanged by this fix,
+  out of scope"). It is the only thing making queue entry 60 look intentional.
+  Engine file; **gap-fix stream's job**, untouched here.
+- **The potion tier itself is unaudited** — 51 units, prompt written, nobody has
+  run it. Three things in it are structurally unlike the other kinds and the
+  prompt says so: all 51 classes live in one `sts2_rl/potions.py` (so one edit
+  stales all 51 records at once), slot identity is replay-visible, and the
+  potion *powers* already have `power/*` records that must be cited rather than
+  re-verdicted.
+- Open questions 2–6 from §8 are unchanged.
