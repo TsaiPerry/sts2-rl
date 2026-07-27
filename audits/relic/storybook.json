@@ -1,0 +1,52 @@
+{
+  "unit": "relic/storybook",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Storybook.cs",
+    "sha256": "64a98b32fcc5e7ad02d40145e4975e770b7b4ba20cf6d56dcb5668b6a4ed1236"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\storybook.py",
+    "sha256": "441589c3f981e59402c714e22705f815f016d32976abcdda6dbd3973b27ceb01"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (storybook.py:12)",
+      "verdict": "faithful",
+      "rationale": "Storybook.cs:13 is RelicRarity.Ancient. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Tezcatara shrine (events/tezcatara.py)."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (storybook.py:14-17) -> run.add_card(make_card('brightest_flame')) (run.py:341-354)",
+      "verdict": "faithful",
+      "rationale": "Rollup of guards N1-N4 per binding rule 4 -- every one of them is faithful, so this hook is too. Storybook.cs:17-21 creates a BrightestFlame on the run and adds it to PileType.Deck; the port does the same with the ported card."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `CardPileCmd.Add(card, PileType.Deck)` (Storybook.cs:20) vs `run.add_card` (run.py:341-354) -- the INSERTION POSITION and the two deck hooks",
+      "verdict": "faithful",
+      "rationale": "Checked against PROMPT.md bug class 8 (append position), which relic/arcane_scroll left as an open question. CardPileCmd.Add reaches CardPile.AddInternal with the default `index = -1`, whose else-arm is `_cards.Add(card)` -- an APPEND at the end of the deck (CardPile.cs:83-97). run.add_card appends too (run.py:349). It also dispatches the same two hooks in the same order: Hook.ModifyCardBeingAddedToDeck before the append (run.py:345-348) and the AfterCardChangedPiles-for-deck analogue after it (run.py:352-353), matching CardPileCmd's deck arm at CardPileCmd.cs:379-396. EXECUTED (py tools/audit/relic_probes_b15.py b15-misc): after add_relic('storybook') the deck tail is ['brightest_flame']. Rule 7: run.py, CardPileCmd.cs and CardPile.cs are not hashed here."
+    },
+    {
+      "what": "N2: `Hook.ShouldAddToDeck` is consulted by CardPileCmd's deck arm (CardPileCmd.cs:384) and the sim has no such hook",
+      "verdict": "waiver",
+      "rationale": "Cited and matched from relic/calling_bell guard G4, which reached the same finding by execution (binding rule 3, one verdict per mechanism): `grep -rn should_add_to_deck sts2_rl/ --include=*.py` returns ZERO hits, and on the C# side `grep -rn 'ShouldAddToDeck' src/Core/` outside Hook.cs and AbstractModel.cs returns exactly one line -- the dispatch site itself -- so there is not a single override in the game and the hook is dead code in C# too, not unported content. Rule 7: CardPileCmd.cs and Hook.cs are not hashed here."
+    },
+    {
+      "what": "N3: `base.Owner.RunState.CreateCard<BrightestFlame>(base.Owner)` (Storybook.cs:19) vs make_card('brightest_flame') -- is the ported card the right one?",
+      "verdict": "faithful",
+      "rationale": "BrightestFlame.cs:23-25 is `base(0, CardType.Skill, CardRarity.Ancient, TargetType.Self)` with CanonicalVars MaxHpVar(1), EnergyVar(2), CardsVar(2) and one upgrade level (OnUpgrade bumps Energy and Cards by 1). EXECUTED: make_card('brightest_flame') is CardType.SKILL, energy_cost 0, max_upgrade_level 1, eternal False -- so the cost, type and upgrade ceiling all match, and the card joins the deck at upgrade level 0 as CreateCard does. The card's own OnPlay fidelity is the CARD stream's unit, not this record's, and cards/brightest_flame is not hashed here (rule 7)."
+    },
+    {
+      "what": "N4: no undo_after_obtained, and no HasUponPickupEffect declaration",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. The deck edit is not run state 'outside run.relics' of the max-HP kind, but it IS unrecoverable on a conformance relic swap, so the same operational caveat as relic/small_capsule N2 applies (a discarded Storybook leaves a Brightest Flame in the deck, which conformance/runner.py:618's (id, upgrade_level) deck comparison would report). Separately: Storybook.cs declares no HasUponPickupEffect override, so the port's default False (relics/base.py:96) is correct -- and it is moot for IsTradable because Ancient rarity already excludes it (relics/base.py:132-136)."
+    },
+    {
+      "what": "N5: `CardCmd.PreviewCardPileAdd(..., 2f)` (Storybook.cs:20) and ExtraHoverTips (Storybook.cs:15)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

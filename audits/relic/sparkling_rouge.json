@@ -1,0 +1,52 @@
+{
+  "unit": "relic/sparkling_rouge",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SparklingRouge.cs",
+    "sha256": "4ff8a99dd8c9982f47dc8e1b84f61441636b853c97b96e45101c04817be81e64"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\sparkling_rouge.py",
+    "sha256": "53c9b67935b66c99ef5831a3b452ec8f4cebd41209e226bdfe72a32d16e1ef96"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (sparkling_rouge.py:17)",
+      "verdict": "faithful",
+      "rationale": "SparklingRouge.cs:15 is RelicRarity.Uncommon. EXECUTED (b15-pool): Uncommon in the transcribed grab bag, so it is obtainable from any relic reward -- no event needed. Uncommon also makes it tradable on both sides (relics/base.py:132-136; no HasUponPickupEffect, no pets, not used up)."
+    },
+    "AfterBlockCleared": {
+      "maps_to": "on_player_turn_started (sparkling_rouge.py:19-24) -- the POST-DRAW turn-start slot, not the sim's on_block_cleared",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The effect, the amounts and the turn number all match; the hook SLOT does not."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): C#'s AfterBlockCleared is turn_structure step ~10; the port uses on_player_turn_started, step ~23 -- and the sim's on_block_cleared, the correct slot, is used by BOTH of this relic's C# hook-siblings",
+      "verdict": "gap",
+      "issue": "MECHANISM: SparklingRouge.cs:29-37 applies 1 Strength and 1 Dexterity from Hook.AfterBlockCleared, which CombatManager.cs:500-507 runs as its own complete pass immediately after the block clear -- BEFORE the energy reset, before ModifyHandDraw, before the hand draw and its AfterCardDrawn hooks, and before every AfterPlayerTurnStart/AfterSideTurnStart listener. sparkling_rouge.py:19 puts it on on_player_turn_started, which the EXECUTED order (py tools/audit/relic_probes.py turn-order) places last: on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started. This is PROMPT.md bug class 11, and the unusually strong evidence that it is a port error rather than a modelling choice is PROMPT.md bug class 29's converse: the game has exactly THREE AfterBlockCleared relics (executed grep over src/Core/Models/Relics: CaptainsWheel.cs, HornCleat.cs, SparklingRouge.cs) and the other two are ported onto the sim's on_block_cleared with the identical `target is self.player and self.turn == N` shape (relics/captains_wheel.py:19-22 turn 3, relics/horn_cleat.py:19-22 turn 2). So the right slot exists, is in use, and this one relic alone does not use it. A second consequence follows from the collapse: because the buff now lands INSIDE the post-draw pass instead of before it, which listeners see it depends on registration order -- EXECUTED (py tools/audit/relic_probes_b15.py b15-rouge): a sentinel relic registered BEFORE Sparkling Rouge reports str=None/dex=None at turn-3 on_player_turn_started, and the same sentinel registered AFTER it reports Strength(1)/Dexterity(1); in C# every turn-start listener sees the buff. REACHABILITY (DORMANT, and the census is executed, not asserted): nothing ported READS the player's Strength or Dexterity between the two slots. The b15-rouge probe walks every sim on_energy_reset / on_player_turn_start / modify_hand_draw / on_card_drawn / on_player_turn_started body and reports NONE that reads Strength/Dexterity or deals POWERED damage -- the only two that mention Strength (powers.py:226 DemonForm, relics/brimstone.py:19) GRANT it, and the four turn-start damage relics (festive_popper.py:21, mercury_hourglass.py:22, mr_struggles.py:22, royal_poison.py:25) all pass DamageProps.NON_CARD_UNPOWERED, which cmds.py:56 excludes from modify_damage_additive. The nearest miss is deliberate and worth naming: Captain's Wheel also fires on TURN 3, but its block is BlockVar(..., ValueProp.Unpowered) on both sides, so Dexterity cannot reach it (cmds.py:145's is_powered_attack gate). What makes it live: porting any turn-start effect that reads Strength or Dexterity, or that gains POWERED block/damage at turn start -- e.g. a player-side Plating, or an intent preview that scales with the player's Strength. Recorded as a gap rather than relic/brilliant_scarf's deliberate-divergence because what moves here is a real power APPLICATION across the draw, not a counter reset in a window where nothing can happen."
+    },
+    {
+      "what": "N1: `creature == base.Owner.Creature` (SparklingRouge.cs:31) vs the sim firing on_player_turn_started only for the player",
+      "verdict": "faithful",
+      "rationale": "C# needs the check because AfterBlockCleared fires once per creature starting a turn, including every enemy. HookSystem.on_player_turn_started is dispatched only from PlayerCombatState.start_turn (player.py:186), so the sim's slot is player-only by construction. (The sibling ports keep an explicit `target is self.player` because on_block_cleared IS fired for enemies too -- combat.py's enemy arm -- which is why the same guard is load-bearing there and free here.)"
+    },
+    {
+      "what": "N2: `PlayerCombatState.TurnNumber == 3` (SparklingRouge.cs:31) vs `self.turn == 3` (sparkling_rouge.py:20), read at two different points in the turn",
+      "verdict": "faithful",
+      "rationale": "EXECUTED (b15-rouge): the sim's combat.turn reads the SAME value at on_block_cleared and at on_player_turn_started within one turn (the probe prints t2/t3 labels from both slots), so moving the read does not change which turn fires. The relic therefore triggers on turn 3 on both sides; only the within-turn position differs (G1)."
+    },
+    {
+      "what": "N3: PowerVar<StrengthPower>(1m) and PowerVar<DexterityPower>(1m) read as BaseValue (SparklingRouge.cs:17-21, 34-35), the ORDER of the two applications, and the applier",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in SparklingRouge.cs, so both BaseValues are the pinned non-ascension 1 and sparkling_rouge.py:23-24's literal 1s are correct. Order matches too (Strength then Dexterity), which is checked deliberately because relic/ruined_helmet doubles the FIRST Strength gain of a combat and a swapped order would not change that here (Dexterity is not Strength). C# passes applier = Owner.Creature on both calls (SparklingRouge.cs:34-35) and so does the port (`applier=player`), which matters for relic/unsettling_lamp: its doubling needs `applier is self.player and target is not self.player` (unsettling_lamp.py:47) and the target here IS the player, so neither side doubles."
+    },
+    {
+      "what": "N4: Flash() (SparklingRouge.cs:33), CanonicalVars and ExtraHoverTips (SparklingRouge.cs:17-27)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
