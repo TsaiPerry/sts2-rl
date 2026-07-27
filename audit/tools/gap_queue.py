@@ -211,10 +211,11 @@ _FAMILIES = [
      r"prevention branch's HP contract|non-damage kill path: CreatureCmd\.kill|"
      r"Same unused-hook finding as AdaptablePower",
      "power/_death_prevention_branch"),
-    # "No sim counterpart.  C# reads this through Hook.ShouldStopCombatFromEnding
-    #  at CombatManager.cs:196, i.e. inside the win check"
+    # "ENGINE-LEVEL HOME (added 2026-07-26): this mechanism now also carries
+    #  `gap` at audit/records/seam/creature_card_cmds.json step 8c, which owns
+    #  the missing hook surface itself; same verdict at every site per rule 3."
     ("power", r"^ShouldStopCombatFromEnding$", None, None,
-     "power/_should_stop_combat_from_ending"),
+     "creature_card_cmds/step8c"),
     # "LIVE, and it upgrades a seam gap that was recorded as un-demonstrated.
     #  C#'s PowerCmd.Apply<T> refuses to apply anything to a creature
     #  `CanReceivePowers == false` ... The same override exists on IllusionPower
@@ -264,6 +265,10 @@ _FAMILY_OVERRIDE = {
     # "RE-VERDICTED 2026-07-26 ... see the Gremlin Horn witness on
     # power/adaptable's AfterDeath entry, which applies verbatim here"
     "power/steam_eruption/AfterDeath": "power/_death_prevention_branch",
+    # creature_card_cmds step 8b: "CROSS-REFERENCED BY (rule 3, one verdict per
+    # mechanism at every site): ... and power/illusion, which owns the
+    # Hook.ShouldPowerBeRemovedOnDeath half of the predicate."
+    "power/illusion/ShouldPowerBeRemovedOnDeath": "creature_card_cmds/step8b",
 }
 
 # Entries whose FIRST guard reference is not the finding the entry is about.
