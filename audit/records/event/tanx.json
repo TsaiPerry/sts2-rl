@@ -22,7 +22,7 @@
     "AllPossibleOptions": {
       "maps_to": "(nothing)",
       "verdict": "waiver",
-      "rationale": "presentation only: Tanx.cs:27 concatenates BaseOptionPool with the Tri-Boomerang option for the run-history / compendium listing. Its only reader in the source is AncientEventModel.GenerateInitialOptionsWrapper's DebugOption swap (AncientEventModel.cs:198-202), which is dev tooling -- GenerateInitialOptions builds its own list. Same mapping the nonupeipe record made (rule 3)."
+      "rationale": "presentation only: Tanx.cs:27 concatenates BaseOptionPool with the Tri-Boomerang option for the run-history / compendium listing. Its readers in the source are all non-gameplay: AncientEventModel.GenerateInitialOptionsWrapper's DebugOption swap (AncientEventModel.cs:198-202) and the dev console's AncientConsoleCmd (AncientConsoleCmd.cs:41, 71), both dev tooling, plus NRelicCollectionCategory.cs:116, the relic-collection UI screen. GenerateInitialOptions builds its own list and never consults it. NARROWED IN THE REVIEW FIX PASS: the earlier wording called the DebugOption swap its \"only reader\", which is the over-broad negative this stream's own lesson #4 warns about -- `grep -rn AllPossibleOptions src` returns two more readers. Neither moves the verdict. NeowsBones.cs:33 reads `ModelDb.Event<Neow>().AllPossibleOptions`, hard-coded to NEOW's list, so it is not a reader of this unit's -- which is exactly why event/neow records ITS AllPossibleOptions as a real faithful function (events/neow.py:64-72) and every other ancient waives it. NRelicCollectionCategory is a compendium display. So the waiver stands on the presentation clause, now on an accurate reader list. Same mapping the nonupeipe record made (rule 3)."
     }
   },
   "guards": [
