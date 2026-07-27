@@ -1,0 +1,87 @@
+{
+  "unit": "monster/seapunk",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Seapunk.cs",
+    "sha256": "467862334a8d110f9da24cb5fb7bdab933b56b8c93f24ef609037f15bff582b0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\seapunk.py",
+    "sha256": "0fcaa8b12589c4ebcc21f0b5e52b9f57b6f841aa582bdc2d0f4ada25e1bb4b18"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (seapunk.py:25)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (seapunk.py:26)",
+      "verdict": "faithful"
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Fur is a hit sound."
+    },
+    "HurtSfx": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: an FMOD path."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "nothing - Seapunk.__init__ (seapunk.py:28-29) only calls super()",
+      "verdict": "faithful",
+      "rationale": "Seapunk.cs:46-49 overrides AfterAddedToRoom with a body of exactly `await base.AfterAddedToRoom();` - it adds nothing. The sim's constructor likewise only supplies the rng default. SHARED-FINDINGS section 2's constructor-applied-power divergence therefore does NOT arise for this unit, and copying that section's deliberate-divergence here would have been a false positive. This is the one AfterAddedToRoom in the batch that is genuinely faithful."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (seapunk.py:31-50)",
+      "verdict": "faithful",
+      "rationale": "Seapunk.cs:51-64: SEA_KICK_MOVE -> SPINNING_KICK_MOVE -> BUBBLE_BURP_MOVE -> SEA_KICK_MOVE, initial SEA_KICK_MOVE, no branch state. Sim seapunk.py:45-50 is identical, executed (monster_probes_b03.py graphs: SEA_KICK_MOVE attack 11x1, SPINNING_KICK_MOVE attack 2x4, BUBBLE_BURP_MOVE buff/defend, initial SEA_KICK_MOVE). Intents: SingleAttackIntent(11), MultiAttackIntent(2,4), BuffIntent+DefendIntent. PROMPT.md class 6 cannot apply."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "Seapunk.cs:28-40, LAST argument: MinInitialHp 44, MaxInitialHp 46, SeaKickDamage 11, SpinningKickDamage 2 (plain), SpinningKickRepeat 4 (plain), BubbleBlock 7, BubbleStr 1. Sim seapunk.py:14-18, 25-26 carries all seven."
+    },
+    {
+      "what": "BUBBLE_BURP: block first, then Strength",
+      "verdict": "faithful",
+      "rationale": "Seapunk.cs:88-89 gains block and THEN applies StrengthPower 1; seapunk.py:61-62 does the same. Order is checkable rather than obvious because a block modifier keyed to Strength would read a different value if the two were swapped."
+    },
+    {
+      "what": "The Seapunk fights' composition and enemy order",
+      "verdict": "faithful",
+      "rationale": "SeapunkNormal.GenerateMonsters emits (CalcifiedCultist, null) then (Seapunk, null) (SeapunkNormal.cs:22-26) - the cultist FIRST - and the sim's SEAPUNK_NORMAL is [CalcifiedCultist, Seapunk] (seapunk.py:67-70). SeapunkWeak is the Seapunk alone on both sides. Neither encounter overrides Slots, so no slot sort applies."
+    },
+    {
+      "what": "The port carries no `name` class attribute",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: Every other unit in this batch pins `name` (e.g. 'Fossil Stalker'); Seapunk does not. The conformance driver falls back to the class name (combat_driver.py:37-45, `getattr(monster, 'name', None) or type(monster).__name__`), which yields 'Seapunk' - the same single word the game displays - so no replay diverges today. Display-name only, and a tooling note rather than a fidelity finding, but flagged because the memory of this project records two multi-word names (Spiny Toad, Tough Egg) that DID break conformance for exactly this reason."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10: Seapunk.cs holds no field at all. Class 12 (a port that does nothing, justified by a claim about the sim): the empty AfterAddedToRoom is the SOURCE's, verified by reading the C# body, not by trusting the port. Class 21: neither kills nor is retained."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Encounters\\SeapunkNormal.cs",
+      "sha256": "154b09253e63de6ad0e125281263515366418c2caa899e53f2a3e3eb488c5477",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\conformance\\combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    }
+  ]
+}

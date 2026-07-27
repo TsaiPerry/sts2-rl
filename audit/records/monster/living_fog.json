@@ -1,0 +1,125 @@
+{
+  "unit": "monster/living_fog",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\LivingFog.cs",
+    "sha256": "c9c145a93ac4c2e473ba28f37a091f6515bcebcdd5b6786c2073cd27884db0d1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\living_fog.py",
+    "sha256": "330d0b8087d6cd0ada73d33d30c5c2a83ad9c80eee6a84c7a44ac5a3c9c28217"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (living_fog.py:55)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (living_fog.py:56)",
+      "verdict": "faithful",
+      "rationale": "LivingFog.cs:34 MaxInitialHp => MinInitialHp => 80."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.Magic is a hit sound."
+    },
+    "ShouldFadeAfterDeath": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: false keeps the corpse sprite on screen; grepped for a mechanical reader and found none. It is not the removal veto - that is ShouldCreatureBeRemovedFromCombatAfterDeath, which LivingFog does not implement."
+    },
+    "DeathSfx": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: an FMOD path."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (living_fog.py:61-78)",
+      "verdict": "faithful",
+      "rationale": "LivingFog.cs:61-74: ADVANCED_GAS_MOVE -> BLOAT_MOVE -> SUPER_GAS_BLAST_MOVE -> BLOAT_MOVE, initial ADVANCED_GAS_MOVE, no branch state of either kind. Sim living_fog.py:75-78 is identical, executed (monster_probes_b03.py graphs: ADVANCED_GAS_MOVE attack/card_debuff 8x1 -> BLOAT_MOVE attack/summon 5x1 -> SUPER_GAS_BLAST_MOVE attack 8x1 -> BLOAT_MOVE, initial ADVANCED_GAS_MOVE). Intents: SingleAttackIntent(8)+CardDebuffIntent, SingleAttackIntent(5)+SummonIntent, SingleAttackIntent(8). PROMPT.md class 6 cannot apply - there is no AddBranch call in this model."
+    }
+  },
+  "guards": [
+    {
+      "what": "BLOAT places the spawned Gas Bomb in the wrong enemy-list position",
+      "verdict": "gap",
+      "live": true,
+      "issue": "LivingFog's BLOAT spawn lands in the WRONG PLACE in the enemy list, so the Gas Bomb and the Living Fog take their turns in the opposite order to the game and occupy swapped enemy indices. The game spawns the bomb into a NAMED encounter slot: LivingFog.cs:91 asks Encounter.GetNextSlot(CombatState), which (EncounterModel.cs:245-248) returns the first entry of LivingFogNormal.Slots = [bomb1, bomb2, bomb3, bomb4, bomb5, livingFog] (LivingFogNormal.cs:18) that no live enemy occupies - 'bomb1' - and passes it to CreatureCmd.Add<GasBomb>(CombatState, slot) (LivingFog.cs:95). CombatManager.AddCreature then re-sorts the whole enemy list whenever the new creature has a SlotName (CombatManager.cs:846-851 -> CombatState.SortEnemiesBySlotName, CombatState.cs:495-501, which sorts by Slots.IndexOf(SlotName)). bomb1 is index 0 and livingFog is index 5, so the game's Enemies becomes [GasBomb, LivingFog]. The sim has no slot concept for this encounter: living_fog.py:94 calls CreatureCmd.add(hooks, GasBomb(...)) with the default index=None, which APPENDS (cmds.py:262-265), giving [LivingFog, GasBomb]. Two observables follow. (1) ENEMY TURN ORDER: the game iterates _state.Enemies.ToList() (CombatManager.cs:1072) and the sim iterates list(self.enemies) (combat.py:286), so from the turn after BLOAT the game resolves the bomb's 8-damage DEATH_BLOW BEFORE the Living Fog's move and the sim resolves it AFTER - a different order of damage instances, of on_damage_received listeners and of the bomb's own death inside one enemy phase. (2) ENEMY INDEX: the bomb is index 0 in the game and index 1 in the sim, which the conformance replay compares POSITIONALLY (combat_driver.py:184-191 zips the recorded EnemyState list against the live one), so a recorded Living Fog fight reports an 'enemies' Divergence. Note the sim's `index=` parameter EXISTS and is used elsewhere for exactly this mechanism (cmds.py:243-245 documents it as the Ovicopter egg-slot rule), so the fix is to pass it, not to add machinery.",
+      "rationale": "EXECUTED, `py audit/tools/monster_probes_b03.py slot-order`, a real CombatState driven through ADVANCED_GAS then BLOAT: 'SIM enemies after BLOAT : [LivingFog, GasBomb]' / 'GAME enemies after BLOAT : [GasBomb, LivingFog] (slot sort over [bomb1..bomb5, livingFog])'; 'sim next enemy turn acts in order: [LivingFog, GasBomb]' vs 'game next enemy turn acts in order: [GasBomb, LivingFog]'; 'sim index of the Gas Bomb: 1' vs 'game index of the Gas Bomb: 0'. LIVE under rule 6, both sides proved reachable on ported content: 'living_fog' is in the Underdocks normal-encounter pool (rooms.py:135), the encounter is LIVING_FOG_NORMAL (living_fog.py:101-104), and the code path is taken on the second Living Fog turn of every such fight - BLOAT_MOVE is a fixed link in a branchless chain, so it CANNOT be skipped, and the free-slot test passes on turn 2 because no bomb exists yet. Nothing unported is required."
+    },
+    {
+      "what": "The free-slot test itself (how many bombs may be alive)",
+      "verdict": "faithful",
+      "rationale": "Separate from the ordering gap and correct. GetNextSlot returns string.Empty only when every entry of Slots is occupied by a creature still in CombatState.Enemies (EncounterModel.cs:245-248), and the fog permanently holds 'livingFog', so the real cap is five LIVE bombs. living_fog.py:88-93 counts `isinstance(e, GasBomb) and not e.is_gone` and gates on `< 5` (_BOMB_SLOTS = 5, :18), which is the same predicate: an exploded bomb is removed from Enemies in the game (it vetoes neither ShouldDie nor ShouldCreatureBeRemovedFromCombatAfterDeath) and is is_gone in the sim, so both sides free the slot at the same moment. BloatAmount is a field initialised to 1 and written nowhere (LivingFog.cs:22,44-55), matching _BLOAT_SPAWNS = 1."
+    },
+    {
+      "what": "BLOAT spawns before it attacks",
+      "verdict": "faithful",
+      "rationale": "LivingFog.cs:89-101 runs the spawn loop and THEN the 5-damage attack; living_fog.py:88-95 does the same. Observable: a Thorns-style reaction to the attack would see the bomb already present."
+    },
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "LivingFog.cs:32-40, LAST argument: MinInitialHp 80 (MaxInitialHp = MinInitialHp), AdvancedGasDamage 8, BloatDamage 5, SuperGasBlastDamage 8; plus Smoggy 1 (:82) and BloatAmount 1 (:22). Sim living_fog.py:13-18, 55-56."
+    },
+    {
+      "what": "ADVANCED_GAS applies Smoggy after the damage",
+      "verdict": "faithful",
+      "rationale": "LivingFog.cs:78-82 attacks then applies SmoggyPower 1 to `targets`; living_fog.py:80-84 attacks then applies it to ctx.player. Same order, same amount; the targets-vs-player difference is multiplayer-only."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10: BloatAmount is the only field and never changes. Class 20 (a hook dispatched from the wrong SITE) is the class this unit's gap is closest to and the reason the spawn was traced through CreatureCmd.Add's ENCLOSING call rather than just read locally - which is how the SortEnemiesBySlotName call at CombatManager.cs:850 was found. Class 21: answered in monster/gas_bomb."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Encounters\\LivingFogNormal.cs",
+      "sha256": "7668bd09c733559b5f7b2eb999849869fe786094c7bbc47f215b91e0af5d89e7",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\conformance\\combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    }
+  ]
+}

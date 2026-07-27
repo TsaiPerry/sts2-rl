@@ -1,0 +1,79 @@
+{
+  "unit": "monster/myte",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Myte.cs",
+    "sha256": "d81dab3bef140723affcee2a0dc15ebf429c2b2ae8355dfb6684358b67b1ae1e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\myte.py",
+    "sha256": "bc6ef4c204d408d2df040defecd1139441a2dc87b165c3b6c0f5456016f2190f"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "Myte.min_hp = 61 (myte.py:30)",
+      "verdict": "faithful",
+      "rationale": "Myte.cs:34 (ToughEnemies, 64, 61) -> 61."
+    },
+    "MaxInitialHp": {
+      "maps_to": "Myte.max_hp = 67 (myte.py:31)",
+      "verdict": "faithful",
+      "rationale": "Myte.cs:36 (ToughEnemies, 69, 67) -> 67."
+    },
+    "DeathSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "Myte.build_machine (myte.py:42-57)",
+      "verdict": "faithful",
+      "rationale": "C# (Myte.cs:46-62): TOXIC -> BITE -> SUCK -> TOXIC, plus a ConditionalBranchState 'INIT_MOVE' with AddState(TOXIC, SlotName == 'first') then AddState(SUCK, SlotName == 'second'); initialState = the conditional branch. myte.py:51-57 reproduces the ring, both conditional branches in the same order and the same initial state. Note the Myte has NO 'third' arm, so a Myte in any other slot would hit ConditionalBranchState.GetNextState's throw (seam step 26) on both sides - and MytesNormal.cs:14 declares exactly two slots."
+    }
+  },
+  "guards": [
+    {
+      "what": "C# leaves INIT_MOVE out of the registered state list; the sim registers it",
+      "verdict": "faithful",
+      "rationale": "Myte.cs:58-61 adds only TOXIC, BITE and SUCK to `list` and then passes conditionalBranchState as the initialState, so INIT_MOVE is never handed to MonsterMoveStateMachine's RegisterStates loop (MonsterMoveStateMachine.cs:22-25). myte.py:57 passes [toxic, bite, suck, init]. Harmless on both sides: registration is only consulted to resolve an id RETURNED by a GetNextState (MonsterMoveStateMachine.cs:64-75, seam step 23/31), and nothing returns 'INIT_MOVE' - the initial state is held by reference, and a branch never appears in StateLog (ShouldAppearInLogs is false, seam step 6), so the one-entry initial log (seam step 28) is empty on both sides too. This is the sim being MORE permissive, not differently behaved."
+    },
+    {
+      "what": "slot names and the two-Myte encounter",
+      "verdict": "faithful",
+      "rationale": "MytesNormal.cs:14 Slots = [first, second] and :33-38 generates two Mytes in that order; MytesEncounter.create_monsters (myte.py:81-82) returns [Myte(slot='first'), Myte(slot='second')]. The C# predicate reads Creature.SlotName, the sim reads self.slot set by the same encounter."
+    },
+    {
+      "what": "ToxicMove's TestMode fork",
+      "verdict": "faithful",
+      "rationale": "Bug class 18 checked. Myte.cs:66-74's `if (TestMode.IsOff)` arm is the SHIPPING arm and it contains only NMyteVfx.SetTarget - a vfx aim. There is no alternate mechanical arm to have ported the wrong half of."
+    },
+    {
+      "what": "TOXIC puts its cards in the HAND, not the discard",
+      "verdict": "faithful",
+      "rationale": "Myte.cs:77 CardPileCmd.AddToCombatAndPreview<Toxic>(targets, PileType.Hand, 2, null); myte.py:62-63 loops twice over CardPileCmd.add_to_hand. Worth its own entry because the batch's other status-card move (Chomper's SCREECH) targets PileType.Discard, and the two ports correctly differ."
+    },
+    {
+      "what": "move numerics",
+      "verdict": "faithful",
+      "rationale": "BiteDamage (DeadlyEnemies, 15, 13) -> 13; SuckDamage (DeadlyEnemies, 6, 4) -> 4; SuckStrength (DeadlyEnemies, 3, 2) -> 2; _toxicCount = 2 (Myte.cs:24, 38-42). Sim _BITE_DMG=13, _SUCK_DMG=4, _SUCK_STR=2, _TOXIC_COUNT=2. SuckMove damages then applies Strength to itself; myte.py:68-72 keeps the order."
+    },
+    {
+      "what": "no AfterAddedToRoom",
+      "verdict": "faithful",
+      "rationale": "Myte.cs overrides no AfterAddedToRoom and the sim's Myte.__init__ applies no power (myte.py:33-40 only stores the slot), so SHARED-FINDINGS section 2 does not apply to this unit at all."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Encounters\\MytesNormal.cs",
+      "sha256": "a692069de3319666bc1703ffa7260ac5bf7019aacfdc727b54a747cb30cd7594",
+      "side": "game"
+    }
+  ]
+}

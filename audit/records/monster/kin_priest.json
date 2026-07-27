@@ -1,0 +1,128 @@
+{
+  "unit": "monster/kin_priest",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\KinPriest.cs",
+    "sha256": "c1c696b0d31d17faf018edff4daebb9e63afa93afd5cdd32a180938ab2b476b9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\the_kin.py",
+    "sha256": "fa84560a3875e11397cd94b9df007dca8df3ccf2b046d621de166630d3da3ff1"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
+      "sha256": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "HurtSfx": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: KinPriest.cs:50."
+    },
+    "DeathSfx": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: KinPriest.cs:52."
+    },
+    "MinInitialHp": {
+      "maps_to": "the_kin.py:70-71 min_hp = 190",
+      "verdict": "faithful",
+      "note": "KinPriest.cs:54 non-ascension = 190. The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). `py audit/tools/monster_probes.py hp` compares this pair pool-wide with 0 mismatches; re-read by hand here."
+    },
+    "MaxInitialHp": {
+      "maps_to": "the_kin.py:70-71 max_hp = 190",
+      "verdict": "faithful",
+      "note": "KinPriest.cs:56 (`MaxInitialHp => MinInitialHp`, a fixed-HP boss) non-ascension = 190. "
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: KinPriest.cs:66."
+    },
+    "AfterDeath": {
+      "maps_to": "no sim counterpart (the sim has no MonsterModel listener category - hook_dispatch G5, dormant, monsters/base.py:78-81 - and nothing is open-coded for this one)",
+      "verdict": "waiver",
+      "rationale": "This override is monster_state_machine guard N6 and is NOT this record's to re-verdict (rule 3, SHARED-FINDINGS section 6). Verdict copied, not re-derived: waiver, presentation. Cross-checked only for a conflict and none exists - reading KinPriest.cs:81-108 to the end, every arm ends in either NRunMusicController.UpdateMusicParameter or AllFollowerDeathResponse (:197-200), whose whole body is a TalkCmd barks line. hook_dispatch G5 is likewise not re-verdicted here."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: KinPriest.cs:176-195."
+    },
+    "GenerateMoveStateMachine (protected; not in the skeleton)": {
+      "maps_to": "the_kin.py:75 _move_key / :77-82 _TRANSITIONS / :84-110",
+      "verdict": "faithful",
+      "note": "KinPriest.cs:111-127 - ORB_OF_FRAILTY -> ORB_OF_WEAKNESS -> BEAM -> RITUAL -> ORB_OF_FRAILTY, initial ORB_OF_FRAILTY (:126). A pure four-node chain: no branch, no MonsterAi draw. The port's _TRANSITIONS is the same cycle. Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count. kin_priest: MATCH, 0 draws."
+    }
+  },
+  "guards": [
+    {
+      "what": "OrbOfFrailtyDamage / OrbOfWeaknessDamage / BeamDamage x _beamRepeat / RitualStrength (KinPriest.cs:58,60,62,64 and :44 - GetValueIfAscension(DeadlyEnemies, 9, 8), (9, 8), (3, 3), (3, 2); repeat const 3) vs the_kin.py:19-23 (8 / 8 / 3 x 3 / 2)",
+      "verdict": "faithful",
+      "note": "The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). RitualStrength is the trap here: ascension 3, non-ascension 2, and the port's 2 is correct."
+    },
+    {
+      "what": "Per-move side effects: FrailPower 1m and WeakPower 1m to `targets` AFTER the attack (KinPriest.cs:136,146), StrengthPower to base.Creature for RITUAL (:173)",
+      "verdict": "faithful",
+      "note": "The port applies each debuff to ctx.player after _execute_attack (the_kin.py:98-104) and the Ritual buff to `self` (:109). Both amounts are 1m literals with no ascension branch."
+    },
+    {
+      "what": "SpeechUsed / the RITUAL barks line (KinPriest.cs:46,68-79,166-170)",
+      "verdict": "waiver",
+      "rationale": "Read to the end before deciding (the N6 lesson): SpeechUsed's only effect is to fire TalkCmd once. Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all."
+    },
+    {
+      "what": "Intent list: both ORB moves carry SingleAttackIntent(8) AND DebuffIntent, BEAM MultiAttackIntent(3,3), RITUAL BuffIntent (KinPriest.cs:114-117)",
+      "verdict": "faithful",
+      "note": "The port models the ORB secondaries as `also=(MoveType.DEBUFF,)` (the_kin.py:87,89) - the same shape vantom and vine_shambler DROP, which is why those two carry a gap and this one does not. Executed: `monster_probes_b02.py intents` agrees on all four moves."
+    },
+    {
+      "what": "Hand-rolled port: identical move sequence?",
+      "verdict": "faithful",
+      "note": "Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count."
+    },
+    {
+      "what": "Bug class 6 / SHARED-FINDINGS section 1 (the AddBranch weight-vs-cooldown misread that made monster_state_machine G1 live): checked explicitly and NOT present here. KinPriest.cs has no RandomBranchState.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "KinPriest has NO AfterAddedToRoom override, and the port applies no starting power",
+      "verdict": "faithful",
+      "note": "Checked because its encounter partner KinFollower does (MinionPower) and PROMPT.md class 29 warns against copying a sibling's answer."
+    },
+    {
+      "what": "Move-state id rename (C# ORB_OF_FRAILTY_MOVE etc. vs sim ORB_FRAILTY etc.)",
+      "verdict": "faithful",
+      "note": "SHARED-FINDINGS section 3 (MoveState ids differ between the two sides). The one cross-file reader of a sim move id is CreatureCmd.stun's next_move_key (cmds.py:216-217), which assigns straight into `target._move_key`. Executed: the only ported caller that passes a next_move_key at all is sts2_rl/monsters/overgrowth/ceremonial_beast.py:45 (next_move_key=\"BEAST_CRY\", its own id), so no cross-file reference reaches this unit's ids and the rename is unobservable."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned) - does THIS unit make it live?",
+      "verdict": "faithful",
+      "note": "No. Neither side writes max HP after construction."
+    },
+    {
+      "what": "Death != removal: AfterDeath fires for a KinFollower's death AND for the priest's own (KinPriest.cs:83,104)",
+      "verdict": "faithful",
+      "note": "Neither arm vetoes a death or a removal; the priest reads GetTeammatesOf and IsAlive purely to decide whether to speak. No ShouldDie, no revive."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27"
+}

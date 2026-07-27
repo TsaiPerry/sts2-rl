@@ -1,0 +1,79 @@
+{
+ "unit": "monster/stabbot",
+ "game_source": {
+  "path": "src\\Core\\Models\\Monsters\\Stabbot.cs",
+  "sha256": "f610107eccc16d343595edb17d18a340bb84ef26125a54fee063d113168bab99"
+ },
+ "sim_source": {
+  "path": "sts2_rl\\monsters\\glory\\fabricator.py",
+  "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15"
+ },
+ "hooks": {
+  "MinInitialHp": {
+   "maps_to": "min_hp = 18 (fabricator.py:73)",
+   "verdict": "faithful",
+   "rationale": "Stabbot.cs:21 GetValueIfAscension(ToughEnemies, 19, 18) -> non-ascension 18."
+  },
+  "MaxInitialHp": {
+   "maps_to": "max_hp = 23 (fabricator.py:74)",
+   "verdict": "faithful",
+   "rationale": "Stabbot.cs:23 GetValueIfAscension(ToughEnemies, 24, 23) -> non-ascension 23."
+  },
+  "TakeDamageSfxType": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+  },
+  "AfterAddedToRoom": {
+   "maps_to": "(no sim analogue)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The whole override body is `if (TestMode.IsOff) { FabricatorNormal.SetBotFallPosition(NCombatRoom.Instance.GetCreatureNode(Creature)); }` -- SetBotFallPosition (FabricatorNormal.cs:60-68) writes a Node2D's Position so the bot drops in from the right height. Read to the END before deciding, per the KinPriest N6 precedent: there is no mechanical statement in it at all. The sim has no override and needs none."
+  },
+  "GenerateMoveStateMachine": {
+   "maps_to": "Stabbot.build_machine (fabricator.py:76-82)",
+   "verdict": "faithful",
+   "rationale": "Stabbot.cs:40-47 is one self-looping MoveState('STAB_MOVE', StabMove, new SingleAttackIntent(11), new DebuffIntent()); fabricator.py:76-82 is identical, with the two C# intents collapsed to Intent(ATTACK, damage=11, also=(DEBUFF,)). No branch state on either side."
+  }
+ },
+ "guards": [
+  {
+   "what": "StabMove damage, debuff and ORDER (Stabbot.cs:49-55 vs fabricator.py:84-88)",
+   "verdict": "faithful",
+   "rationale": "StabDamage = GetValueIfAscension(DeadlyEnemies, 12, 11) -> 11 = _STAB_DMG (fabricator.py:23); one hit on both sides; then FrailPower 1 on the targets, matching _STAB_FRAIL = 1 (:24). Attack-then-debuff order matches, which matters because Frail is a Debuff and so is Artifact-interceptable (cmds.py:299-306): applying it after the damage means an Artifact stack the attack could not have removed is still there to eat it, on both sides."
+  },
+  {
+   "what": "`applier` omitted on the Frail application (fabricator.py:88) where C# passes base.Creature (Stabbot.cs:54)",
+   "verdict": "deliberate-divergence",
+   "rationale": "PowerCmd.apply's applier defaults to None (cmds.py:271-277) and the port does not pass one. Same observable, established by execution rather than assumed: the only four places in the sim where `applier` changes an outcome are relics/unsettling_lamp.py:47 (`applier is not self.player`), powers.py:195 (RitualPower, `applier is not None and applier.side != owner.side`), powers.py:1167 (ViciousPower, `applier is not self.owner`) and powers.py:3094 (`applier is self.owner`). For a monster-applied debuff landing on the PLAYER, None and the Stabbot give the same answer at all four: the Lamp's guard fails either way (the applier is never the player), and Ritual/Vicious/the stat-stealer are not held by the player in any Glory fight and key on the OWNER, not on a monster. Concrete trigger that would make it a gap: any ported listener that branches on `applier is None`, or a power stored on the player whose behaviour depends on which enemy applied it. Same mechanism and same verdict wherever a batch-7 unit self-buffs or debuffs without an applier."
+  },
+  {
+   "what": "Rule 29 -- Stabbot vs its siblings",
+   "verdict": "faithful",
+   "rationale": "Stabbot is the only bot whose single move both attacks AND debuffs, and unlike Zapbot it has no constructor power despite sharing Zapbot's exact HP band and its GameActions.Multiplayer import. Read independently."
+  }
+ ],
+ "verdict": "deliberate-divergence",
+ "audited": "2026-07-27",
+ "extra_sources": [
+  {
+   "path": "src\\Core\\Models\\Encounters\\FabricatorNormal.cs",
+   "sha256": "fa62a116ba3cc8338da0e81b67a72b8016bffb73af57c6f907cd517d68a0ba7a",
+   "side": "game"
+  },
+  {
+   "path": "sts2_rl\\cmds.py",
+   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\rooms.py",
+   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\powers.py",
+   "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+   "side": "sim"
+  }
+ ]
+}

@@ -1,0 +1,126 @@
+{
+ "unit": "monster/scroll_of_biting",
+ "game_source": {
+  "path": "src\\Core\\Models\\Monsters\\ScrollOfBiting.cs",
+  "sha256": "36138c02e24b461e6145e591ba695baa9cdd52fa5debf13fbfe45416616c3d26"
+ },
+ "sim_source": {
+  "path": "sts2_rl\\monsters\\glory\\scroll_of_biting.py",
+  "sha256": "65d113d84eacd2672a6477241102b9c9f525341da74de95a91c8b573465a7a65"
+ },
+ "hooks": {
+  "MinInitialHp": {
+   "maps_to": "min_hp = 30 (scroll_of_biting.py:35)",
+   "verdict": "faithful",
+   "rationale": "ScrollOfBiting.cs:37 GetValueIfAscension(ToughEnemies, 33, 30) -> non-ascension 30."
+  },
+  "MaxInitialHp": {
+   "maps_to": "max_hp = 37 (scroll_of_biting.py:36)",
+   "verdict": "faithful",
+   "rationale": "ScrollOfBiting.cs:39 GetValueIfAscension(ToughEnemies, 39, 37) -> non-ascension 37. This is one of only two units in the batch with a real HP RANGE, so the Niche unique-HP roll has something to do."
+  },
+  "TakeDamageSfxType": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Magic."
+  },
+  "HasDeathSfx": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Its only readers are NCreature.cs:606 and a run-history screen."
+  },
+  "DeathSfx": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+  },
+  "SetupSkins": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. ScrollOfBiting.cs:64-71 picks one of two spine skins. It does draw an Rng -- `Rng.Chaotic.NextItem(_skinOptions)` -- which is why it is worth naming rather than reflex-waiving, but Chaotic is the game's explicitly non-deterministic presentation stream and is not one of the twelve RunRngSet streams the sim models (combat_rng.py's _PARITY_STREAMS), so no ported draw sequence is displaced."
+  },
+  "AfterAddedToRoom": {
+   "maps_to": "ScrollOfBiting.__init__ -> PowerCmd.apply(hooks, self, PaperCutsPower, 2) (scroll_of_biting.py:38-49)",
+   "verdict": "deliberate-divergence",
+   "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (scroll_of_biting.py:38-49). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: ScrollOfBiting.cs:73-77 applies PaperCutsPower 2m to itself and nothing else; _PAPER_CUTS = 2 (scroll_of_biting.py:23). One ordering detail the shared finding does not cover and that this port gets right: the sim assigns self._starter_move_idx BEFORE calling super().__init__() (scroll_of_biting.py:45-46) because build_machine reads it to choose the initial state -- had it been assigned after, as FrogKnight assigns its flag, construction would raise. The starting power is still applied after super().__init__(), i.e. after the sticky opening roll."
+  },
+  "GenerateAnimator": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. ScrollOfBiting.cs:128-147 builds the CreatureAnimator; its AddBranch(\"Hit\", ...) calls are CreatureAnimator.AddBranch(string, ...), the overload family monster_state_machine's 61-site AddBranch census explicitly subtracts, so no state-machine integer is involved."
+  },
+  "GenerateMoveStateMachine": {
+   "maps_to": "ScrollOfBiting.build_machine (scroll_of_biting.py:51-68)",
+   "verdict": "gap",
+   "issue": "monster_state_machine G1 (LIVE) at this unit's site -- recorded here at the unit level with the seam's verdict and NOT re-verdicted (governing rule 3). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and is NEVER a weight (seam seed fact 1, the 10-overload table at monster_state_machine.md step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts WEIGHT there. AT THIS UNIT: ScrollOfBiting.cs:90 is `randomBranchState.AddBranch(moveState2, 2)` -- overload #9 (`int maxRepeats`, RandomBranchState.cs:105), so the branch holds weight 1, MoveRepeatType.CanRepeatXTimes and maxTimes 2. scroll_of_biting.py:65 is `branch.add_branch(chew, weight=2.0)`, i.e. weight 2 with the CAN_REPEAT_FOREVER default and no repeat limit. Re-verified this session with `py audit/tools/state_machine_probes.py mismatch`, whose current output names sts2_rl/monsters/glory/scroll_of_biting.py <- ScrollOfBiting.cs:89-90 among its 5 misreads and prints `CHEW C#(w=1.0 CAN_REPEAT_X_TIMES max=2 cd=0) sim:65(w=2.0 CAN_REPEAT_FOREVER max=0 cd=0)`; the seam's description of this site is accurate as written. Observable, from the seam's executed `distribution` run (100000 rolls, seed 7): sim CHEW 59.9% / CHOMP 20.0% / MORE_TEETH 20.0% versus the game's 42.9% / 28.6% / 28.6%. LIVE: ScrollOfBiting is exported from a ported encounter module (monsters/glory/__init__.py:35) and both 'scrolls_of_biting_weak' and 'scrolls_of_biting_normal' are in Glory's weak/normal keys (rooms.py:186, :190). This unit is ALSO the vehicle for monster_state_machine G4's executed liveness route (the Whistle-into-Glory stun), which is the SEAM's finding, is settled there, and is NOT re-verdicted here -- the seam's own 2x2 table shows the two gaps are independent and neither closes the other. EVERYTHING ELSE IN THE GRAPH IS FAITHFUL and was checked node by node against ScrollOfBiting.cs:79-101: three MoveStates with matching ids (CHOMP / CHEW / MORE_TEETH), one RandomBranchState (C# id 'rand', sim id 'rand'), the chain CHOMP -> MORE_TEETH -> CHEW -> branch (:86-88 vs scroll_of_biting.py:61-63), branch ADD ORDER CHOMP then CHEW on both (:89-90 vs :64-65) -- observable, since ties resolve toward the earlier branch -- and the FIRST branch's arguments read CORRECTLY (`AddBranch(moveState, MoveRepeatType.CannotRepeat)` = overload #10, weight 1 / CannotRepeat, ported as repeat_type=CANNOT_REPEAT). The three-way initial-state switch matches: `(StarterMoveIdx % 3) switch { 0 => CHOMP, 1 => CHEW, _ => MORE_TEETH }` (:95-100) vs `{0: chomp, 1: chew}.get(self._starter_move_idx % 3, more_teeth)` (:67). Intents match: SingleAttackIntent(14) -> ATTACK 14; MultiAttackIntent(5, 2) -> ATTACK damage=5 hits=2; BuffIntent -> BUFF (the sim additionally fills Intent.buffs with (StrengthPower, 2), extra information the C# BuffIntent does not carry -- BuffIntent.cs has no fields at all -- and no C# behaviour depends on its absence).",
+   "live": true
+  }
+ },
+ "guards": [
+  {
+   "what": "_ScrollsEncounter.create_monsters draws the starter-move index from the SHARED combat rng (scroll_of_biting.py:96-101); the game draws it from a per-encounter deterministic Rng",
+   "verdict": "gap",
+   "issue": "ScrollsOfBitingWeak.cs:24 and ScrollsOfBitingNormal.cs:26 are `base.Rng.NextInt(3)`, where EncounterModel._rng is constructed as `new Rng((uint)((int)runState.Rng.Seed + runState.TotalFloor + StringHelper.GetDeterministicHashCode(Id.Entry)))` (EncounterModel.cs:258-263) -- a per-encounter stream keyed to the run seed, the floor and the encounter id. The sim's _ScrollsEncounter.create_monsters calls `rng.randint(0, 2)` on the rng combat.py:134-135 hands it, which is the shared combat random.Random (`self._rng`); the sim has no per-encounter Rng concept anywhere (executed: `grep -rn 'def create_monsters' sts2_rl/` finds 20 overrides and none takes an encounter-seeded stream). Two observables diverge: WHICH scroll opens on which move -- executed (`py audit/tools/monster_probes_b07.py scroll-rng`), seed 0 gives starter idxs [1, 2, 0, 2] i.e. opening moves ['CHEW', 'MORE_TEETH', 'CHOMP', 'MORE_TEETH'], seed 1 gives ['CHOMP', 'CHEW', 'MORE_TEETH', 'MORE_TEETH'] -- and one extra shared-stream draw that the game never takes from any stream the sim models. Note this is NOT the AddBranch bug and not monster_state_machine G6: it is encounter/monster generation, which the seam's boundary item 4 records as claimed by NO seam. LIVE (rule 6): both encounters are in Glory's ported pools (rooms.py:186 weak_keys, :190 normal_keys), the code path runs unconditionally every time either encounter starts, and the divergence exists in legacy AND parity mode because the game's source stream is not the shared one in either. The STAGGER ITSELF is faithful: C# sets idx2 = (r+1)%3, idx3 = (r+2)%3 and, in the normal fight, idx4 = 2 (ScrollsOfBitingNormal.cs:24-27); the sim builds [(base+i)%3 for i in range(min(count, 3))] then appends a literal 2 when count == 4 (scroll_of_biting.py:97-100). Only the source of `r` differs.",
+   "live": true
+  },
+  {
+   "what": "Move numerics",
+   "verdict": "faithful",
+   "rationale": "ChompDamage GetValueIfAscension(DeadlyEnemies, 16, 14) -> 14 = _CHOMP_DMG; ChewDamage (..., 6, 5) -> 5 with WithHitCount(2) (and `_chewRepeat = 2` at ScrollOfBiting.cs:23 agrees) = _CHEW_DMG 5 x _CHEW_HITS 2; MoreTeeth applies StrengthPower 2m to itself (and `_buffAmt = 2` at :25 agrees) = _MORE_TEETH_STR 2. All match scroll_of_biting.py:19-23. Checked against the C# rather than against the port's own docstring, per PROMPT.md class 19."
+  },
+  {
+   "what": "StarterMoveIdx is a settable model property in C# (ScrollOfBiting.cs:51-62) and a constructor keyword in the sim (scroll_of_biting.py:38-46)",
+   "verdict": "faithful",
+   "rationale": "C# mutates the model after ToMutable() and before the machine is generated; the sim passes it to __init__ and reads it inside build_machine. Both reach GenerateMoveStateMachine/build_machine with the value already set, and both reduce it mod 3, so the resulting initial state is identical for the same index. The AssertMutable() setter guard is a model-lifecycle assertion with no sim analogue and no observable."
+  }
+ ],
+ "verdict": "gap",
+ "audited": "2026-07-27",
+ "extra_sources": [
+  {
+   "path": "src\\Core\\Models\\Encounters\\ScrollsOfBitingWeak.cs",
+   "sha256": "fc0972a52008d577df97e1c32942d8e2b0beb1e8d2977b73e19caa2630a2b8f3",
+   "side": "game"
+  },
+  {
+   "path": "src\\Core\\Models\\Encounters\\ScrollsOfBitingNormal.cs",
+   "sha256": "a6b35af7e55980d1b6886fe48fbb92dd8b7fd7ca27f70c4766a0025add70b9d6",
+   "side": "game"
+  },
+  {
+   "path": "src\\Core\\Models\\EncounterModel.cs",
+   "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+   "side": "game"
+  },
+  {
+   "path": "src\\Core\\Nodes\\Combat\\NCreature.cs",
+   "sha256": "905d28a4ca154006d145cf33e967d34c945770eb5c29462ff28160419e52de11",
+   "side": "game"
+  },
+  {
+   "path": "sts2_rl\\monsters\\state_machine.py",
+   "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\combat.py",
+   "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\combat_rng.py",
+   "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\cmds.py",
+   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\rooms.py",
+   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+   "side": "sim"
+  }
+ ]
+}

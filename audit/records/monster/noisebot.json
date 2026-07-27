@@ -1,0 +1,84 @@
+{
+ "unit": "monster/noisebot",
+ "game_source": {
+  "path": "src\\Core\\Models\\Monsters\\Noisebot.cs",
+  "sha256": "82168937713cdada6ce64dcd0c3b066377ce80271b2f8b02a72e79a65f08cff1"
+ },
+ "sim_source": {
+  "path": "sts2_rl\\monsters\\glory\\fabricator.py",
+  "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15"
+ },
+ "hooks": {
+  "MinInitialHp": {
+   "maps_to": "min_hp = 18 (fabricator.py:55)",
+   "verdict": "faithful",
+   "rationale": "Noisebot.cs:25 GetValueIfAscension(ToughEnemies, 19, 18) -> non-ascension 18."
+  },
+  "MaxInitialHp": {
+   "maps_to": "max_hp = 23 (fabricator.py:56)",
+   "verdict": "faithful",
+   "rationale": "Noisebot.cs:27 GetValueIfAscension(ToughEnemies, 24, 23) -> non-ascension 23."
+  },
+  "TakeDamageSfxType": {
+   "maps_to": "(dropped)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+  },
+  "AfterAddedToRoom": {
+   "maps_to": "(no sim analogue)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The whole override body is `if (TestMode.IsOff) { FabricatorNormal.SetBotFallPosition(NCombatRoom.Instance.GetCreatureNode(Creature)); }` -- SetBotFallPosition (FabricatorNormal.cs:60-68) writes a Node2D's Position so the bot drops in from the right height. Read to the END before deciding, per the KinPriest N6 precedent: there is no mechanical statement in it at all. The sim has no override and needs none."
+  },
+  "GenerateMoveStateMachine": {
+   "maps_to": "Noisebot.build_machine (fabricator.py:58-61)",
+   "verdict": "faithful",
+   "rationale": "Noisebot.cs:42-49 is one self-looping MoveState('NOISE_MOVE', NoiseMove, new StatusIntent(2)); fabricator.py:58-61 is identical with Intent(MoveType.STATUS_CARD). No branch state on either side."
+  }
+ },
+ "guards": [
+  {
+   "what": "NoiseMove pile targets and ORDER (Noisebot.cs:51-71 vs fabricator.py:63-67)",
+   "verdict": "faithful",
+   "rationale": "C# adds Dazed #1 to PileType.Discard (statusCards[0], Noisebot.cs:61) and Dazed #2 to PileType.Draw at CardPilePosition.Random (:64), in that order. The sim calls add_to_discard then add_to_draw (fabricator.py:66-67), same order, so the one random insertion happens at the same point in the sequence. The random slot is the part that could silently drift and does not: CardPileCmd.add_to_draw draws it from the SHUFFLE stream in parity mode (`crng.shuffle.randrange(count + 1)`, cmds.py:490-496) and converts the game index to the sim's reversed pile orientation, exactly mirroring CardPileCmd.cs:514. `target.Player ?? target.PetOwner` (:57) resolves to the one player in Ironclad-only scope, which is ctx.player."
+  },
+  {
+   "what": "StatusIntent(2)'s CardCount is dropped by the sim's Intent (Noisebot.cs:45 vs fabricator.py:59)",
+   "verdict": "waiver",
+   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The sim's Intent dataclass (monsters/base.py:36-59) carries move_type / damage / hits / buffs / also and has no status-card count. Executed: StatusIntent.CardCount (StatusIntent.cs:20) is read only by GetIntentLabel and GetIntentDescription in the same file, both of which do nothing but `LocString.Add(\"CardCount\", CardCount)` for the intent tooltip; `grep -rn CardCount src/` returns no other consumer of this property. On the sim side no consumer of Intent reads a status count either -- the only readers are env.py:167 and full_env.py:571, both `intent.has(MoveType.STATUS_CARD)` booleans. The number of cards actually added is correct on both sides (2). monster_state_machine boundary item 2 leaves the intent vocabulary unaudited; this entry settles the one clause this unit exposes."
+  },
+  {
+   "what": "Rule 29 -- Noisebot vs its siblings",
+   "verdict": "faithful",
+   "rationale": "Noisebot is the only bot with no attack and no constructor power; its HP band 18/23 matches Stabbot and Zapbot but not Guardbot, and its AfterAddedToRoom is the synchronous visual-only form (contrast Zapbot's async one). Read independently, not inherited."
+  }
+ ],
+ "verdict": "waiver",
+ "audited": "2026-07-27",
+ "extra_sources": [
+  {
+   "path": "src\\Core\\Models\\Encounters\\FabricatorNormal.cs",
+   "sha256": "fa62a116ba3cc8338da0e81b67a72b8016bffb73af57c6f907cd517d68a0ba7a",
+   "side": "game"
+  },
+  {
+   "path": "src\\Core\\MonsterMoves\\Intents\\StatusIntent.cs",
+   "sha256": "3b9bf8b0cade87ff11671285cc5e656cd353506ce8c5a69e0963e0e1a9944d77",
+   "side": "game"
+  },
+  {
+   "path": "sts2_rl\\cmds.py",
+   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\monsters\\base.py",
+   "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+   "side": "sim"
+  },
+  {
+   "path": "sts2_rl\\rooms.py",
+   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+   "side": "sim"
+  }
+ ]
+}

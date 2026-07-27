@@ -126,8 +126,46 @@ py audit/tools/citation_check.py audit/records/potion
 py audit/tools/backfill_sources.py --kind potion    # pin every file you cited
 ```
 
+Before your final commit also run `py audit/tools/harness.py validate
+--strict-inherited`. `list_overrides` follows `: BaseClass` now, so it surfaces
+hooks a unit inherits rather than declares. That check found 16 under-audited
+records in other tiers. Most inherited hooks are presentation and waive
+legitimately, but **read each in the C# before waiving** — `InitialDescription`
+carried real branching in the event tier.
+
 Batch the work (the relic tier ran 258 units in 18 batches) and **commit in
 stages** — several agents on this project have died at usage limits.
+
+## Record liveness as data, not only as prose
+
+A `gap` entry may carry `"live": true` or `"live": false` beside its `issue`,
+and `audit_status.py` has a `live` column that counts it. The field is new and
+**almost nothing populates it** — 386 gap entries across the project state no
+liveness at all, which is why the column still reads near zero. Populate it on
+every gap you file. Absence means *not stated*, not *dormant*.
+
+## Add pins — this tier is the best place to start
+
+**No content mechanism in this project has an acceptance test.** All 31
+`strict=True` xfails in `test/test_hook_order.py` are seam-tier. A seam fix
+proves itself by flipping a pin from xfail to failure; a content fix currently
+cannot prove itself at all.
+
+Potions are the best tier to break that, because the relic stream already filed
+45 potion-mechanic gaps of which **27 are LIVE** — concrete, reachable
+divergences with known witnesses, which is exactly what a pin needs.
+
+For each LIVE gap you file where the divergence is expressible as a test, add a
+`strict=True` xfail to `test/test_hook_order.py` whose `reason` names the sim
+`file:line`, the C# `file:line`, live-or-dormant, and the observable effect.
+Match the style already in that file, and follow its `fresh()` idiom. Then
+**force-run it** (`py -m pytest test/test_hook_order.py -q --runxfail`) and
+confirm it fails at the assertion its reason describes rather than erroring —
+an xfail that fails for the wrong reason is worse than no pin, because it reads
+as coverage. Confirm none XPASSes on a normal run.
+
+You do not need a pin for every gap. Prioritise the grade-A ones (stream
+desync) and anything with an executed witness already in hand.
 
 ## Rules that have cost this project real defects
 
