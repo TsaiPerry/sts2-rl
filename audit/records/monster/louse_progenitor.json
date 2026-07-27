@@ -1,0 +1,67 @@
+{
+  "unit": "monster/louse_progenitor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\LouseProgenitor.cs",
+    "sha256": "b22709c84fabae54eb5b71c4acde195eb4412f9a12e1c6bb5383405b99d2e99f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\louse_progenitor.py",
+    "sha256": "cec3386fb7ecf3d49dbbd2184110f19bd5451ac645d663e125609d99abfb40d5"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "LouseProgenitor.min_hp = 134 (louse_progenitor.py:27)",
+      "verdict": "faithful",
+      "rationale": "LouseProgenitor.cs:38 (ToughEnemies, 138, 134) -> 134."
+    },
+    "MaxInitialHp": {
+      "maps_to": "LouseProgenitor.max_hp = 136 (louse_progenitor.py:28)",
+      "verdict": "faithful",
+      "rationale": "LouseProgenitor.cs:40 (ToughEnemies, 141, 136) -> 136. Unlike most of this batch the two differ, so the HP is a genuine roll on both sides."
+    },
+    "DeathSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. This is the one animator in the batch built from AnimState.AddBranch rather than AddAnyState (LouseProgenitor.cs:135-153) - a CreatureAnimator method that merely shares a name with RandomBranchState.AddBranch and has nothing to do with move selection (the seam's census excludes it explicitly)."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "LouseProgenitor.__init__ -> PowerCmd.apply(CurlUpPower, 14)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (louse_progenitor.py:32-34). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amount matches: LouseProgenitor.cs:70 applies CurlUpPower CurlBlock = GetValueIfAscension(ToughEnemies, 18, 14) -> 14."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "LouseProgenitor.build_machine (louse_progenitor.py:36-51)",
+      "verdict": "faithful",
+      "rationale": "Three-node fixed cycle, no branch state. C# (LouseProgenitor.cs:73-85): WEB_CANNON -> CURL_AND_GROW -> POUNCE -> WEB_CANNON, registered [CURL, WEB, POUNCE], initialState = WEB_CANNON. The sim wires the same ring, the same registration order (louse_progenitor.py:51 passes [curl, web, pounce]) and the same initial state. WEB carries SingleAttackIntent + DebuffIntent -> also=(DEBUFF,), CURL carries DefendIntent + BuffIntent -> Intent(DEFEND, also=(BUFF,))."
+    }
+  },
+  "guards": [
+    {
+      "what": "the Curled flag and the uncurl step at the head of WEB and POUNCE",
+      "verdict": "faithful",
+      "rationale": "LouseProgenitor.cs:89-94 and :113-118 both open with `if (Curled)` -> play the uncurl sfx, TriggerAnim('Uncurl'), Curled = false; CurlAndGrowMove sets Curled = true at :108. Executed by reading every reader of Curled: the only ones are those two anim blocks and the animator's curled_loop / die_curled states (:129-142). The flag gates no damage, block, power or transition, so the sim's omission loses nothing mechanical."
+    },
+    {
+      "what": "CurlBlock is used for BOTH the starting CurlUp amount and the CURL move's block",
+      "verdict": "faithful",
+      "rationale": "LouseProgenitor.cs:70 and :106 both pass CurlBlock (14 non-ascension); the sim uses the single constant _CURL_BLOCK = 14 at both sites (louse_progenitor.py:34, 62). The C# const _growStrength = 5 at :36 is unused - the literal 5m at :107 is what applies - and the sim's _GROW_STR = 5 matches the literal."
+    },
+    {
+      "what": "move numerics and in-move order",
+      "verdict": "faithful",
+      "rationale": "WebDamage (DeadlyEnemies, 10, 9) -> 9 then FrailPower 2m to the targets; PounceDamage (DeadlyEnemies, 16, 14) -> 14; CURL gains block THEN applies Strength 5 (LouseProgenitor.cs:95-108). louse_progenitor.py:53-66 keeps the damage-then-debuff and block-then-buff orders. Block uses ValueProp.Move on both sides."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27"
+}

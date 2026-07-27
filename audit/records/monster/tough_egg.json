@@ -1,0 +1,111 @@
+{
+  "unit": "monster/tough_egg",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\ToughEgg.cs",
+    "sha256": "ae6a9bdee867a02ef41bb82d6300ace690f8adeef6fba3ce793d1530cf345abb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\ovicopter.py",
+    "sha256": "79189b0410ab49908dad8328810cb95e4beed347b0d1025dac48c2befb12e0c5"
+  },
+  "hooks": {
+    "Title": {
+      "maps_to": "ToughEgg.name property (ovicopter.py:39-43)",
+      "verdict": "faithful",
+      "rationale": "ToughEgg.cs:40-50 returns the TOUGH_EGG localisation key until _hatched and HATCHLING.name after; the sim's name property returns 'Hatchling' if self.is_hatched else 'Tough Egg'. This is load-bearing rather than cosmetic: the conformance runner matches recorded enemy names."
+    },
+    "MinInitialHp": {
+      "maps_to": "ToughEgg.min_hp = 14 (ovicopter.py:33)",
+      "verdict": "faithful",
+      "rationale": "ToughEgg.cs:52 (ToughEnemies, 15, 14) -> 14."
+    },
+    "MaxInitialHp": {
+      "maps_to": "ToughEgg.max_hp = 18 (ovicopter.py:34)",
+      "verdict": "faithful",
+      "rationale": "ToughEgg.cs:54 (ToughEnemies, 19, 18) -> 18."
+    },
+    "DeathSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. ToughEgg.cs:62-72 switches the sound on _hatched."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "SetupSkins": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. ToughEgg.cs:115-121 picks one of two Spine skins with base.Rng.NextItem(_eggOptions). It consumes a draw, but from MonsterModel.Rng, which MonsterModel.cs:95-115 documents as the per-creature 'nice to have synced between players' stream set only by CombatState.CreateCreature - not RunRng and not the MonsterAi or Niche parity streams - so no parity-relevant sequence moves."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "ToughEgg.__init__ -> PowerCmd.apply(HatchPower, 1 or 2) (ovicopter.py:45-54)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (ovicopter.py:48-54). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. The amount rule is reproduced exactly: ToughEgg.cs:133 uses `(CombatState.CurrentSide != CombatSide.Enemy) ? 1 : 2`, and ovicopter.py:53 uses `2 if combat.current_side == 'enemy' else 1`. An egg laid during the enemy phase therefore shows a 2-turn countdown on both sides, because its own turn has already passed this round. The `if combat is not None` guard is a no-op in a real combat (the rocket-ctor probe shows hooks.combat is already set at monster-construction time). Note the sim's egg is constructed BEFORE CreatureCmd.add (ovicopter.py:136 then :150) where the game applies HatchPower during Add - the relative order against MinionPower is preserved either way."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "ToughEgg.build_machine (ovicopter.py:56-63)",
+      "verdict": "faithful",
+      "rationale": "C# (ToughEgg.cs:143-153): HATCH_MOVE.FollowUpState = NIBBLE_MOVE, NIBBLE_MOVE.FollowUpState = NIBBLE_MOVE (a self-loop), registered [HATCH, NIBBLE], initialState = HATCH; AfterHatchedState is set to NIBBLE. ovicopter.py:57-63 is the same two-node graph with the same self-loop, order and initial state. The self-loop is why a hatched egg NIBBLEs every turn forever without any branch or roll."
+    }
+  },
+  "guards": [
+    {
+      "what": "HatchMove's raw SetMaxAndCurrentHp - creature_card_cmds step 26 through Ovicopter",
+      "verdict": "gap",
+      "live": false,
+      "issue": "The seam's step 26 hands the content tier the question of whether the raw max_hp/hp assignment at ovicopter.py:81-82 (standing in for CreatureCmd.SetMaxAndCurrentHp, CreatureCmd.cs:856-860) becomes LIVE through Ovicopter. EXECUTED ANSWER: NO, it stays dormant, and one of the seam's three named clauses does not even apply at this site. (a) The clamp - SetMaxHp does SetMaxHpInternal(Math.Max(0m, amount)) (CreatureCmd.cs:839-848); the amount here is the hatchling HP roll, and `py audit/tools/monster_probes_b05.py ovicopter-hp` runs 2000 hatches and reports min=19 max=22, never negative, so Math.Max never bites. (b) The MaxHp <= 0 -> Kill arm at CreatureCmd.cs:844-847 and the IsDead -> Kill arm at :775-778 need a non-positive roll; the same 2000-hatch run asserts max_hp > 0 and hp > 0 on every iteration. (c) AfterCurrentHpChanged - the seam's wording says the sim site skips it, and at THIS site it does not: ovicopter.py:83 calls ctx.hooks.on_hp_changed(self, delta), and the probe shows it firing with ('ToughEgg', 7). C# fires Hook.AfterCurrentHpChanged only when the value actually changed (CreatureCmd.cs:767-774); the same run asserts delta != 0 on every iteration, because an egg (14-18 HP, less if damaged) can never already be at a hatchling roll (19-22). Recorded as a gap rather than faithful because the site genuinely bypasses the command and would silently inherit all three defects the moment the roll range or a caller changed. Reporting only - the seam's own entry is not re-verdicted, and the wording correction about clause (c) goes in the batch report."
+    },
+    {
+      "what": "the hatchling HP roll's exclusive upper bound",
+      "verdict": "gap",
+      "live": true,
+      "issue": "ToughEgg.cs:172 rolls base.RunRng.Niche.NextInt(HatchlingMinHp, HatchlingMaxHp) = NextInt(19, 22), and Rng.cs:95-109 documents and implements the second argument as maxEXCLUSIVE (`1 higher than the maximum allowed number`), so the game's hatchling has 19, 20 or 21 HP - never 22. ovicopter.py:74-79 gets this right on the parity branch (next_int_range(19, 22)) and WRONG on the legacy branch, where self._rng.randint(19, 22) is inclusive and can return 22. Executed: `py audit/tools/monster_probes_b05.py ovicopter-hp` runs 2000 legacy hatches and reports max=22. LIVE: legacy is the default and the RL path (CombatRng is only parity when a rng_set is passed, combat.py:95; RunState leaves rng_set None without a string seed, run.py:140-144), and the ovicopter encounter is in the Hive normal pool (rooms.py:162, executed by the `reach` probe). Observable: a hatchling that takes one more hit to kill than it can in the game, roughly one hatchling in four. Rng.cs is in extra_sources; rule 7: leans on sts2_rl/combat.py, sts2_rl/run.py and sts2_rl/rooms.py, unhashed."
+    },
+    {
+      "what": "HatchMove strips every power except Minion, then rolls HP",
+      "verdict": "faithful",
+      "rationale": "ToughEgg.cs:155-167: IsHatched = true, remove HatchPower, _hatched = true, then remove every power that is not a MinionPower, then Hatch(). ovicopter.py:65-70 sets is_hatched then removes every power id except 'minion' (which subsumes the explicit HatchPower removal), then rolls. Same end state and same order relative to the HP roll. Keeping Minion is what preserves the egg's minion status through the hatch on both sides."
+    },
+    {
+      "what": "the already-hatched spawn path (AfterAddedToRoom's else arm)",
+      "verdict": "faithful",
+      "rationale": "ToughEgg.cs:136-140 hatches immediately and forces the machine to AfterHatchedState when IsHatched is already true at add time; the sim has no equivalent. Executed C#-side reachability: `grep -rn IsHatched --include=*.cs src/` returns 7 lines, and the ONLY assignment is ToughEgg.cs:157 inside HatchMove - which can only run on a creature that is already in the room. Every egg reaches AfterAddedToRoom with IsHatched == false (Ovicopter.cs:90 adds a fresh ToughEgg), so the arm is dead in the shipped game too and there is no source behaviour for the sim to be unfaithful to."
+    },
+    {
+      "what": "NibbleMove damage",
+      "verdict": "faithful",
+      "rationale": "NibbleDamage = GetValueIfAscension(DeadlyEnemies, 5, 4) -> 4 (ToughEgg.cs:60); sim _NIBBLE_DMG = 4 (ovicopter.py:26)."
+    },
+    {
+      "what": "ScaleHpForMultiplayer around the hatch roll",
+      "verdict": "waiver",
+      "rationale": "ToughEgg.cs:172 wraps the roll in Creature.ScaleHpForMultiplayer(..., Players.Count, CurrentActIndex). Multiplayer scaling is out of scope by the contract's global-scope clause, and in single player the factor is identity - the act-index argument is the game's own act scaling, which the sim applies through its parity HP path rather than here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Monsters\\Ovicopter.cs",
+      "sha256": "5330caeabee0173a804b332cfa823702292279a06136a8c1d0c5c5171a1987be",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Commands\\CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Random\\Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    }
+  ]
+}

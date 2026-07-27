@@ -1,0 +1,88 @@
+{
+  "unit": "monster/crusher",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Crusher.cs",
+    "sha256": "0a13fd0f53e6660990457d555507d64a1a43300532cbb2198122c46b7fe5de9b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\kaiser_crab.py",
+    "sha256": "450a8fdc792bfab4bbcdb7bf007f28ce3cadb00001d5b4889795d73e4f67eff3"
+  },
+  "hooks": {
+    "DeathSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "AssetPaths": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. Its only consumers are the asset preloader (Core/Assets/AssetSets.cs) - a Godot scene path for the death vfx."
+    },
+    "ShouldFadeAfterDeath": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. Executed: the property's sole reader is Core/Nodes/Combat/NCreature.cs:697, a sprite fade."
+    },
+    "ShouldDisappearFromDoom": {
+      "maps_to": "(nothing)",
+      "verdict": "gap",
+      "live": false,
+      "issue": "C# overrides ShouldDisappearFromDoom => false, i.e. this creature is NOT removed when DoomPower's kill sweep fires (DoomPower.cs:90 is the property's one and only reader - executed: `grep -rn ShouldDisappearFromDoom --include=*.cs src/` returns 11 lines, 10 of them declarations and this one consumer). The sim models neither the property nor DoomPower. DORMANT: DoomPower is unported - `grep -rni doom --include=*.py sts2_rl/` returns nothing. Concrete trigger that would make it live: porting DoomPower (or any Necrobinder Doom card - BlightStrike.cs, Deathbringer.cs, EndOfDays.cs). SHARED-FINDINGS section 4 names this property as the one not to reflex-waive; this is the checked answer, and it should be the SAME verdict at CeremonialBeast, DecimillipedeSegment, EyeWithTeeth, Parafright, TestSubject, Vantom and WaterfallGiant (rule 3)."
+    },
+    "DeathAnimLengthOverride": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader. Executed: read only by NCombatUi.cs:209-211 and NCreature.cs:620 to lengthen a death animation."
+    },
+    "MinInitialHp": {
+      "maps_to": "Crusher.min_hp = 209 (kaiser_crab.py:39)",
+      "verdict": "faithful",
+      "rationale": "The two arms differ: Crusher.cs:77 (ToughEnemies, 219, 209) -> 209, Rocket.cs:57 (ToughEnemies, 209, 199) -> 199. Rule 29 - read both, do not copy the sibling's number."
+    },
+    "MaxInitialHp": {
+      "maps_to": "Crusher.max_hp = 209 (kaiser_crab.py:40)",
+      "verdict": "faithful",
+      "rationale": "Crusher.cs:79 MaxInitialHp => MinInitialHp -> 209."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "Crusher.__init__ -> PowerCmd.apply(BackAttackLeftPower, 1) then PowerCmd.apply(CrabRagePower, 1) (kaiser_crab.py:44-47)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (kaiser_crab.py:44-47). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amounts and order match Crusher.cs:117-118 (BackAttackLeftPower 1m, then CrabRagePower 1m, both self-applied). The trailing Background.SetVisible(true) at :119 is presentation. Unlike its sibling Rocket, Crusher applies NOTHING to the player, so section 2's shared clauses apply unmodified here."
+    },
+    "AfterCurrentHpChanged": {
+      "maps_to": "(no sim counterpart - and none needed)",
+      "verdict": "waiver",
+      "rationale": "One of monster_state_machine boundary hole 5's eleven unclaimed C# hook overrides. Read to the end (the KinPriest N6 lesson): after the guard `creature != base.Creature || delta >= 0m` the ENTIRE body is `Background.PlayHurtAnim(NKaiserCrabBossBackground.ArmSide.Left)` and a return (Crusher.cs:122-130) - a wince animation on the boss backdrop. It moves no HP, block, power or move state. Presentation, per SHARED-FINDINGS section 4. The sim has no MonsterModel listener category at all (hook_dispatch G5, dormant, monsters/base.py:78-81) and this record does not re-verdict that; the point here is that there is no mechanical behaviour for it to have lost."
+    },
+    "BeforeDeath": {
+      "maps_to": "(no sim counterpart - and none needed)",
+      "verdict": "waiver",
+      "rationale": "The second of Crusher's two unclaimed overrides. Read to the end: guard `creature != base.Creature`, then NAudioManager.PlayOneShot(DeathSfx), Background.PlayArmDeathAnim(ArmSide.Left), and a two-arm branch on CombatManager.Instance.IsOverOrEnding that either plays the body death animation and sets the music parameter 'kaiser_crab_progress' to 5f, or sets it to 2f (Crusher.cs:132-150). Sound, animation and an FMOD parameter - nothing mechanical. Note for rule 29: this is NOT a copy of Rocket's verdict; Rocket's BeforeDeath is the same SHAPE but a different body (ArmSide.Right and 1f instead of 2f in the else arm), and both were read separately. Both come out presentation, and the difference between them is itself only a music parameter."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "Crusher.build_machine (kaiser_crab.py:49-74)",
+      "verdict": "faithful",
+      "rationale": "Five-node fixed cycle, no branch state and no RNG at all. C# (Crusher.cs:93-112): THRASH -> ENLARGING_STRIKE -> BUG_STING -> ADAPT -> GUARDED_STRIKE -> THRASH, registered in that order, initialState = THRASH. The sim wires the identical ring, registration order and initial state, and maps BUG_STING's MultiAttackIntent + DebuffIntent to also=(DEBUFF,) and GUARDED_STRIKE's SingleAttackIntent + DefendIntent to also=(DEFEND,)."
+    }
+  },
+  "guards": [
+    {
+      "what": "move numerics",
+      "verdict": "faithful",
+      "rationale": "ThrashDamage (DeadlyEnemies, 14, 12) -> 12; EnlargingStrikeDamage (DeadlyEnemies, 4, 4) -> 4; BugStingDamage (DeadlyEnemies, 7, 6) -> 6 with BugStingTimes = 2 (a literal); AdaptStrengthGain (DeadlyEnemies, 3, 2) -> 2; GuardedStrikeDamage (DeadlyEnemies, 14, 12) -> 12 plus a literal 18m block (Crusher.cs:81-91, 194). Sim constants at kaiser_crab.py:16-24 are 12/4/6/2/2/12/18."
+    },
+    {
+      "what": "BugSting applies Weak 2 then Frail 2, to the targets, after the damage",
+      "verdict": "faithful",
+      "rationale": "Crusher.cs:164-168: attack, then WeakPower 2m to `targets`, then FrailPower 2m to `targets`, applier = the Crusher. kaiser_crab.py:82-87 keeps the order, the targets and the applier. Order matters because both debuffs pass through the same Artifact interception in sequence."
+    },
+    {
+      "what": "ENLARGING_STRIKE's name promises growth the move does not deliver",
+      "verdict": "faithful",
+      "rationale": "Crusher.cs:178-185 EnlargingStrikeMove is a plain 4-damage attack with no power application; the growth comes from CrabRagePower/Strength elsewhere. kaiser_crab.py:79-80 is the same plain attack. Bug class 24 (a name or docstring that misdescribes the port) checked and clear."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}

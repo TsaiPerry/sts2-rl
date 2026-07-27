@@ -1,0 +1,68 @@
+{
+  "unit": "monster/hunter_killer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\HunterKiller.cs",
+    "sha256": "1b103ca2a522c7a3616f9711926ee3102d23aff10e56dda862f1fc1d564d0f0b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\hunter_killer.py",
+    "sha256": "e74016ea793bee33083c86934fdf3977c0a642f5f574a7f8694b5738e2a312e5"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "HunterKiller.min_hp = 121 (hunter_killer.py:31)",
+      "verdict": "faithful",
+      "rationale": "HunterKiller.cs:23 (ToughEnemies, 126, 121) -> 121."
+    },
+    "MaxInitialHp": {
+      "maps_to": "HunterKiller.max_hp = 121 (hunter_killer.py:32)",
+      "verdict": "faithful",
+      "rationale": "HunterKiller.cs:25 MaxInitialHp => MinInitialHp -> 121."
+    },
+    "TakeDamageSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "DeathSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "HunterKiller.build_machine (hunter_killer.py:34-49)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "HunterKiller.cs:43 AddBranch(PUNCTURE_MOVE, 2) is overload #9 (`int maxRepeats`): maxRepeats = 2, weight 1f, repeatType CanRepeatXTimes. hunter_killer.py:45 writes add_branch(puncture, 2.0), i.e. weight 2.0 and CAN_REPEAT_FOREVER. Same bug class as monster_state_machine G1 (the seam owns G1 itself; this entry is the unit-level consequence and does not re-verdict it). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and NEVER a weight (seam seed fact 1 / step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts weight there. Observable: sim BITE 25.1% / PUNCTURE 74.9% vs game 40.0% / 60.0% (seam `distribution`, 100000 rolls, seed 7), plus the loss of the 'never three PUNCTUREs in a row' cap and a different MonsterAi draw sequence. Re-executed: `py audit/tools/state_machine_probes.py mismatch` prints PUNCTURE C#(w=1.0 CAN_REPEAT_X_TIMES max=2 cd=0) vs sim:45 (w=2.0 CAN_REPEAT_FOREVER max=0 cd=0) - the seam's description of hive/hunter_killer.py:45 is accurate. LIVE: `hunter_killer` is a Hive normal-pool encounter (rooms.py:162), executed by `py audit/tools/monster_probes_b05.py reach`."
+    }
+  },
+  "guards": [
+    {
+      "what": "AddBranch(BITE, MoveRepeatType.CannotRepeat) - the branch read correctly",
+      "verdict": "faithful",
+      "rationale": "HunterKiller.cs:42 is overload #10 -> weight 1f, CannotRepeat; hunter_killer.py:44 add_branch(bite, 1.0, MoveRepeatType.CANNOT_REPEAT) matches."
+    },
+    {
+      "what": "branch add order, registration order and initial state",
+      "verdict": "faithful",
+      "rationale": "C# adds BITE then PUNCTURE (HunterKiller.cs:42-43); the sim adds them in the same order (hunter_killer.py:44-45). Registration [GOOP, BITE, PUNCTURE, RAND] and initialState = TENDERIZING_GOOP_MOVE match (HunterKiller.cs:44-48 vs hunter_killer.py:49). All three moves route back to RAND on both sides."
+    },
+    {
+      "what": "GoopMove applies Tender to the TARGETS, not to itself",
+      "verdict": "faithful",
+      "rationale": "HunterKiller.cs:55 PowerCmd.Apply<TenderPower>(..., targets, 1m, base.Creature, null) - target = the players, applier = the monster. hunter_killer.py:54 PowerCmd.apply(ctx.hooks, ctx.player, TenderPower, 1, applier=self) keeps both roles."
+    },
+    {
+      "what": "move numerics",
+      "verdict": "faithful",
+      "rationale": "BiteDamage (DeadlyEnemies, 19, 17) -> 17; PunctureDamage (DeadlyEnemies, 8, 7) -> 7 with WithHitCount(3) (HunterKiller.cs:27-29, 68). Sim _BITE_DMG=17, _PUNCTURE_DMG=7, _PUNCTURE_HITS=3. The private const _punctureRepeat = 3 at :21 is unused - the literal 3 is used at :40 and :68 - so there is nothing to port from it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}
