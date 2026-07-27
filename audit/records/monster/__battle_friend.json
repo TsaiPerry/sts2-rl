@@ -1,0 +1,100 @@
+{
+  "unit": "monster/__battle_friend",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\BattleFriendV1.cs",
+    "sha256": "e675c87e4cd530af1d66cf498ce9a8bf4082d1de096b9d14ab7968f9d2522349"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\battle_friend.py",
+    "sha256": "521cd32dc29456e0d4baf9fd3fd0501641cc443806482e446fb3750bf86f83a4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/Monsters/BattleFriendV2.cs",
+      "sha256": "c2b1a8e116844e1f7ec9ef4d31f6c940188deb86a83615ad6465a07bae584a03",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/BattleFriendV3.cs",
+      "sha256": "7cecc92e35eb5f694fcea2f11480e257a8d8ada28c453b642d9b862797b0f218",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/__init__.py",
+      "sha256": "c170436e0540caaebac2e6703e83d385e003d7ea79a8dc6010b46e4d58908e87",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "not on this class -- battle_friend.py:43/51/59, one per subclass",
+      "verdict": "faithful",
+      "rationale": "`_BattleFriend` deliberately declares NO min_hp/max_hp; the three C# files are the only place the numbers exist (75 / 150 / 300) and each sim subclass carries its own pair. Verdicted in monster/battle_friend_v1, _v2 and _v3; recorded here so the base's silence is visible rather than looking like an omission. This also settles one of the seven `hp`-sweep INCONCLUSIVE rows from SHARED-FINDINGS section 0."
+    },
+    "MaxInitialHp": {
+      "maps_to": "not on this class -- battle_friend.py:44/52/60, one per subclass",
+      "verdict": "faithful",
+      "rationale": "See MinInitialHp. Min == Max on all three, so no roll."
+    },
+    "SetupSkins": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "The one member that genuinely differs between the three C# files (skin \"v1\"/\"v2\"/\"v3\"), and the sim has no skin concept. Presentation."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "battle_friend.py:25-29 _BattleFriend.__init__",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2's shared verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (battle_friend.py:25-29, `PowerCmd.apply(hooks, self, BattlewornDummyTimeLimitPower, 3)`). Same observable today on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40 and relics/paels_legion.py:36-43, and all four gate on `target is self.player` / `applier is self.player` / `card is not None`, which a self-applied cardless starting power cannot satisfy; (b) HP-roll inversion -- only IllusionPower mentions max_hp and only inside revive() (powers.py:1581); (c) roll ordering -- `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op. Rule 7: that rationale cites four relic files and powers.py which this record does NOT hash. Concrete trigger that would make it a gap: any relic/potion/power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Escalation check per SHARED-FINDINGS section 2: self-applied, reads nothing from hooks.combat -- shared verdict fits. Note the applier is NULL on BOTH sides here (BattleFriendV1/2/3.cs:35 passes null; battle_friend.py:29 omits it), so this is the one unit family in the batch with no applier divergence. **CORRECTION TO A TOOL, REPORTED NOT FIXED:** `py audit/tools/monster_probes.py ctor-order` flags `__battle_friend` as 'C# model has NO AfterAddedToRoom override'. That is an artifact of the roster mis-resolution (SHARED-FINDINGS section 5) -- the probe resolves `__battle_friend` to a nonexistent BattleFriend.cs and therefore finds no overrides at all. All three real C# files DO override AfterAddedToRoom, at BattleFriendV1.cs:33-36, BattleFriendV2.cs:33-36 and BattleFriendV3.cs:33-36, each applying BattlewornDummyTimeLimitPower 3m. Section 2's shared verdict therefore applies unchanged and no escalation is needed."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4)."
+    },
+    "GenerateMoveStateMachine (protected; added by hand -- the skeleton only enumerates `public override` members)": {
+      "maps_to": "battle_friend.py:31-36 _BattleFriend.build_machine",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against BattleFriendV1.cs:26-31. ONE MoveState, `MoveState(\"NOTHING_MOVE\", _ => Task.CompletedTask)` -- an empty delegate and no intents -- whose FollowUpState is itself, registered as the single-element list and used as the initial state. The sim's shared base builds exactly that (battle_friend.py:31-36: `nothing.follow_up = nothing`, `MonsterMoveStateMachine([nothing], nothing)`, perform delegate `lambda ctx: None`). The dummy never acts on either side; the fight is a timer. No branch state on either side (EXECUTED, `py audit/tools/monster_probes_b06.py branch-args`). The machine is byte-identical in all three C# files, which is exactly why the sim hoists it here."
+    }
+  },
+  "guards": [
+    {
+      "what": "HOW THIS RECORD RESOLVES ITS MISSING C# COUNTERPART, and the name_overrides entry it needs",
+      "verdict": "deliberate-divergence",
+      "rationale": "`py audit/tools/harness.py roster monster` reports `UNMATCHED monster/__battle_friend -> expected src\\Core\\Models\\Monsters\\BattleFriend.cs`: the sim's leading-underscore intermediate base (battle_friend.py:16-36) has no C# class of that name, and the real files are BattleFriendV1.cs / V2.cs / V3.cs. This record chooses the CONCRETE FILE option over the `sim_only` option, and the reason is a fidelity one rather than a convenience one: a `sim_only` record must carry a rationale naming why there is no C# counterpart, and that claim would be FALSE here. `_BattleFriend` is not a sim invention -- it is the exact common part of three real C# classes. Its two members, `__init__`'s BattlewornDummyTimeLimitPower 3 and `build_machine`'s single self-looping NOTHING_MOVE, are byte-identical at BattleFriendV1.cs:26-36, BattleFriendV2.cs:26-36 and BattleFriendV3.cs:26-36. Declaring it sim-only would leave the shared machine and the shared starting power audited against no source at all. Pointing it at V1 (with V2 and V3 hashed as extra_sources so a divergence between the three cannot go stale) audits every shared line against real C#, and the three per-variant members that DO differ -- MinInitialHp, MaxInitialHp, SetupSkins -- are each verdicted in the subclass records that own them. **RECOMMENDED `audit/tools/name_overrides.json` ENTRY (relic stream owns that file; not applied here):** `\"monster/__battle_friend\": \"src/Core/Models/Monsters/BattleFriendV1.cs\"`. That single line makes `harness.py roster monster` resolve, makes `harness.py skeleton monster/__battle_friend` generate the same five hooks this record fills by hand, and fixes the false 'C# model has NO AfterAddedToRoom override' flag that `monster_probes.py ctor-order` currently prints for this unit. The sibling row, `monster/__cultist`, is another batch's to resolve."
+    },
+    {
+      "what": "NOTHING_MOVE carries no intents in C#",
+      "verdict": "gap",
+      "issue": "BattleFriendV1/2/3.cs:28 constructs the MoveState with NO intents at all -- the `AbstractIntent[] intents` params array is empty, so the dummy telegraphs nothing. The sim substitutes `Intent(MoveType.UNKNOWN)` (battle_friend.py:32-34). Same mechanism as the StatusIntent-count loss on the_insatiable and aeonglass: the sim's Intent (monsters/base.py:36-59) collapses a C# AbstractIntent[] and cannot express 'no intent'. monster_state_machine's scope boundary item 2 records the whole mapping as audited by no seam. NOT LIVE: nothing in the sim distinguishes UNKNOWN from absent (there is no empty Intent), so no ported consumer can observe it. Named trigger: an observation or replay consumer that renders the intent list, or any content gating on `MonsterModel.IntendsToAttack` (MonsterModel.cs:241-245), which reads the intent list and has no sim counterpart.",
+      "live": false
+    },
+    {
+      "what": "The base applies the starting power, so all three variants get it",
+      "verdict": "faithful",
+      "rationale": "battle_friend.py:25-29 runs for every subclass, matching the fact that each of the three C# files overrides AfterAddedToRoom identically. No subclass overrides or suppresses it."
+    },
+    {
+      "what": "Reachability",
+      "verdict": "faithful",
+      "rationale": "The Battleworn Dummy event is ported: `battleworn_dummy` is the first entry in GLORY_EVENTS (events/__init__.py:100-108) and the three difficulty settings export BATTLEWORN_DUMMY_SETTING_1/2/3 (battle_friend.py:67-78, re-exported at events/__init__.py:166). `should_give_rewards=False` mirrors the encounter's own ShouldGiveRewards. Both sides reachable with ported content."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}
