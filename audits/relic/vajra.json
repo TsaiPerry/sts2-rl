@@ -1,0 +1,57 @@
+{
+  "unit": "relic/vajra",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Vajra.cs",
+    "sha256": "a55eba805b932ba1e2eb2e77ce71104a1bdde3fec4299285c7ef788120557148"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\vajra.py",
+    "sha256": "ba707faee2d4381bcd842b2fa80c83df1d899e307bc67b504b3eb614030e8788"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (vajra.py:12)",
+      "verdict": "faithful",
+      "rationale": "Vajra.cs:15. Common in the transcribed grab bag (py tools/audit/relic_probes_b17.py pool -> bag=Common), so it is obtainable from any Common pull."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "on_combat_start (vajra.py:14-17), i.e. Hook.BeforeCombatStart",
+      "verdict": "deliberate-divergence",
+      "rationale": "Vajra.cs:21-28 applies StrengthPower(1) from AfterRoomEntered when `room is CombatRoom`; the port applies it from on_combat_start. The EFFECT is identical (see guard N1 for the executed value) but the PHASE differs, and it differs by more than a hook slot: for a CombatRoom the game fires Hook.AfterRoomEntered at CombatRoom.cs:228, immediately after SetUpCombat and BEFORE CombatManager.AfterCombatRoomLoaded -> StartCombatInternal (CombatManager.cs:380-403), which is where AfterCreatureAdded, every enemy's first Monster.RollMove and only then Hook.BeforeCombatStart happen. So in the game the +1 Strength is on the player before the first intents are rolled; in the sim it lands at turn_structure step 3, after the monsters have already telegraphed (turn_structure step 2 / guard G9). Recorded as a divergence rather than faithful because the window genuinely exists and an effect placed in it would expose the difference -- the same treatment audits/relic/brilliant_scarf.json gives its BeforeSideTurnStart entry. See guard G1 for why it is not filed as a live gap. Rule 7: CombatRoom.cs, CombatManager.cs and audits/seam/turn_structure.json are NOT hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): nothing observes the player's Strength in the window between C#'s AfterRoomEntered and the sim's on_combat_start, so the phase difference has no observable today",
+      "verdict": "gap",
+      "issue": "MECHANISM: as above -- one full combat-setup phase separates the two positions, and it contains AfterCreatureAdded plus every enemy's opening RollMove. TWO readers could expose it and neither exists in ported content. (a) A monster whose move selection reads the PLAYER's Strength: executed census (py tools/audit/relic_probes_b17.py vajra) finds only three ported monster modules that mention strength at all -- sts2_rl/monsters/fuzzy_wurm_crawler.py, sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py and sts2_rl/monsters/glory/aeonglass.py -- and all three read or grant their OWN Strength (fuzzy_wurm_crawler.py:36-40 builds a self-buff intent, aeonglass.py:37, 85-87 tracks its own escalation). (b) A ported on_combat_start listener that reads player Strength: the six other relics that touch Strength at combat start all WRITE it and none reads it (ember_tea.py:28-33, philosophers_stone.py:28-32, red_skull.py:42-43 reads HP not Strength, sling_of_courage.py:20-28, sword_of_jade.py:22-29). The sim's registration-order dependence is real and executed: with a spy relic registered before Vajra the spy reads Strength 0 from on_combat_start, registered after it reads 1, where C# reads 1 either way because Vajra's hook belongs to an earlier phase. DORMANT; what would make it live is either porting a monster whose intent selection reads the player's Strength, or porting any BeforeCombatStart listener that does (Red Skull's C# sibling shape -- a combat-start reader -- is the obvious candidate). Filed as a gap and not a waiver because 'no ported content triggers this' is today's content, not the divergence's shape (binding rule 1). Rule 7: the six sts2_rl/relics/*.py and three sts2_rl/monsters/*.py files named here are NOT hashed by this record."
+    },
+    {
+      "what": "N1: PowerVar<StrengthPower>(1m) (Vajra.cs:17) read as `Strength.BaseValue` at the call site (:26) vs the sim's literal 1 (vajra.py:17)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in Vajra.cs, so 1 is the pinned non-ascension value. EXECUTED (py tools/audit/relic_probes_b17.py vajra): turn 1 opens with Strength = 1, matching C#."
+    },
+    {
+      "what": "N2: C# passes applier = target = base.Owner.Creature and cardSource = null (Vajra.cs:26); the sim passes applier=self.player, target=self.player, no card (vajra.py:17)",
+      "verdict": "faithful",
+      "rationale": "Both sides name the player as applier and as target, and neither passes a card source. Checked deliberately because relic/unsettling_lamp's doubling requires `applier is self.player AND target is not self.player` (audits/relic/unsettling_lamp.json guard G3): a self-targeted Strength buff can never satisfy the second half, so no Lamp interaction exists on either side. The `new ThrowingPlayerChoiceContext()` argument is the multiplayer choice plumbing -- noted in the mapping, not a divergence (shared contract, Scope)."
+    },
+    {
+      "what": "N3: `room is CombatRoom` is the only guard, and it decides HOW OFTEN the relic fires",
+      "verdict": "faithful",
+      "rationale": "C# fires once per CombatRoom entry; the sim fires once per CombatState construction, and the sim builds exactly one CombatState per combat room (run.py:1123 create_combat is called per resolved encounter). A map point with more than one room enters CombatRoom again in the game and gets a second application, which the sim reproduces by building a second CombatState. Recorded because the sim ALSO has a real after_room_entered hook (sts2_rl/relics/base.py:194-195, dispatched at run.py:983) that this port could have used -- and deliberately should not, because at that moment no CombatState exists to hold the power. That is what makes the AfterRoomEntered entry a divergence rather than a missing hook. Rule 7: sts2_rl/relics/base.py and run.py are NOT hashed here."
+    },
+    {
+      "what": "N4: Flash(), CanonicalVars and ExtraHoverTips (Vajra.cs:17, 19, 25)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / CanonicalVars / ExtraHoverTips are presentation only -- the relic bar's glow and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N5: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- Vajra's pickup mutates nothing outside run.relics (its whole effect is per-combat)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

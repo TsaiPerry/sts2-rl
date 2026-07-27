@@ -1,0 +1,62 @@
+{
+  "unit": "relic/white_beast_statue",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\WhiteBeastStatue.cs",
+    "sha256": "3007ded1a11f5287f780cc4b53b61e924b4166bc9ca83e1af371bfb5dc25a704"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\white_beast_statue.py",
+    "sha256": "35dea0d97a2b85eb0e8d5eca5fba5f3b70083a2558dc1ee22711ab9c0b6da6e4"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (white_beast_statue.py:13)",
+      "verdict": "faithful",
+      "rationale": "WhiteBeastStatue.cs:10. Rare in the transcribed grab bag (py tools/audit/relic_probes_b17.py pool -> bag=Rare), so it is obtainable from any Rare pull."
+    },
+    "IsAllowed": {
+      "maps_to": "NO COUNTERPART -- sts2_rl.relics.base.Relic declares no `is_allowed` member at all (executed: hasattr(Relic, 'is_allowed') is False)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4. WhiteBeastStatue.cs:12-15 returns RelicModel.IsBeforeAct3TreasureChest(runState), which in single-player is `runState.TotalFloor < 41` (RelicModel.cs:452-456); the sim has no pool-eligibility concept and keeps the relic pullable for the whole run."
+    },
+    "ShouldForcePotionReward": {
+      "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (white_beast_statue.py has no methods at all), although Relic.should_force_potion_reward is a real base hook (sts2_rl/relics/base.py:164-166) dispatched at rewards.py:447-451",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. WhiteBeastStatue.cs:17-27 returns true for the owner on any combat room, forcing a potion into that room's reward screen; the port forces nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the potion is never forced, and the premise behind the stub is false -- should_force_potion_reward IS dispatched and the sim's potion roll already accepts a `force` argument",
+      "verdict": "gap",
+      "issue": "MECHANISM: white_beast_statue.py declares only id/name/rarity and its docstring justifies that with 'an out-of-combat reward modifier, so this is a no-op stub'. PROMPT.md bug class 12 applied: the premise is false in two independent ways. (a) The hook is dispatched -- rewards.py:447-451 computes `force = any(relic.should_force_potion_reward(run, room_type) for relic in run.relics)` on every combat reward screen. (b) The downstream machinery is already built for it -- PotionRewardOdds.roll takes `force: bool` and short-circuits the threshold test with `hit = force or ...` while still applying the pity step (rewards.py:200-206), which is what C# does too. So the only missing piece is this relic's four-line method. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b17.py rewardstubs): over 20 seeds a MONSTER reward screen carries a potion 8/20 times WITH the relic and 8/20 times WITHOUT it; C# gives 20/20 with it. Both sides ported: Rare in the transcribed grab bag, and the combat reward screen is a first-class sim object that rolls and returns potions. Note the divergence is not only 'fewer potions': because the forced hit consumes a pity step, every subsequent potion roll in the run is shifted as well, so this changes reward composition for the whole run, and on the parity path the Rewards stream position too. SCOPE NOTE: the shared contract defers potions, but the divergent observable here is the CONTENTS of a reward screen (and the pity/stream state behind it), which is reward-composition machinery the audit does cover -- exactly the reasoning audits/relic/belt_buckle.json applies to its AfterPotionProcured entry, where the potion is only the trigger. Rule 7: rewards.py, sts2_rl/relics/base.py, .superpowers/sdd/content-relic-sweeps.md and audits/relic/belt_buckle.json are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): the IsAllowed floor gate is entirely unmodelled, so the relic stays offerable past floor 41",
+      "verdict": "gap",
+      "issue": "MECHANISM: RelicModel.IsAllowed is virtual and defaults to true (RelicModel.cs:434-437); this relic overrides it with IsBeforeAct3TreasureChest, `TotalFloor < 41` in single-player (RelicModel.cs:452-456). The sim's Relic base has no `is_allowed` member and relic_pools.py:186 populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b17.py isallowed): `hasattr(Relic, 'is_allowed')` is False; at `run.total_floor = 60` the grab bag still contains white_beast_statue and white_star, and pulling Rare relics at that floor yields white_beast_statue after 13 pulls. Both sides ported: the sim already tracks RunState.total_floor (it is incremented at run.py:976 and event gates read it), so nothing is missing but the member and the filter. RULE 3: this is the SAME mechanism as audits/relic/amethyst_aubergine.json's IsAllowed entry (batch 1, LIVE) and audits/relic/lasting_candy.json's floor clause (batch 8, executed at total_floor=60), and .superpowers/sdd/content-relic-sweeps.md sweep B lists this unit in the 17-relic IsBeforeAct3TreasureChest cluster -- corrected from 16 by batch 8. Same verdict, cited not re-derived. A wrong pull also shifts every subsequent pull, so it is not a one-relic error. FIX-ORDERING CONSTRAINT (PROMPT.md v6 binding item 2): RelicModel.IsAllowedAtNeow DEFAULTS to IsAllowed(player.RunState) (RelicModel.cs:443-446) while the sim models `is_allowed_at_neow` as an independent class flag (sts2_rl/relics/base.py:159), so whoever adds `is_allowed` must make is_allowed_at_neow delegate to it or Neow keeps reading a stale True. Harmless for THIS relic in practice (Neow is floor 0, where the gate is satisfied anyway) but not for the cluster. Rule 7: RelicModel.cs, sts2_rl/relics/base.py, relic_pools.py, run.py, audits/relic/amethyst_aubergine.json, audits/relic/lasting_candy.json and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    {
+      "what": "N1: `!roomType.IsCombatRoom()` (WhiteBeastStatue.cs:23) -- which room types the force applies to",
+      "verdict": "gap",
+      "issue": "Recorded so a fix uses the right predicate rather than 'monster rooms'. RoomTypeExtensions.IsCombatRoom is `(uint)(room - 1) <= 2u` (RoomTypeExtensions.cs:5-12), i.e. the three room-type enum values immediately after the first one -- Monster, Elite and Boss. So the relic forces a potion on ELITE and BOSS screens too, not just normal fights, and the sim's own ROOM_RARITY_ODDS table covers exactly those three keys (rewards.py:92-96), so the fix has the room types it needs. Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: RoomTypeExtensions.cs and rewards.py are NOT hashed here."
+    },
+    {
+      "what": "N2: `player != base.Owner` (WhiteBeastStatue.cs:19)",
+      "verdict": "waiver",
+      "rationale": "A multiplayer ownership check: in the game each player has their own relic bar and their own reward screen, so the relic must not force a potion for someone else. The sim has exactly one player and rewards.py:447-451 dispatches over `run.relics`, which are that player's relics by construction. Waived as multiplayer-only under the shared contract's exclusion, not under an unreachability claim about content."
+    },
+    {
+      "what": "N3: the SECOND dispatch pass -- Hook.ShouldForcePotionReward is a single-pass OR-fold (Hook.cs:2472-2480)",
+      "verdict": "faithful",
+      "rationale": "Checked because PROMPT.md bug class 25 makes multi-pass C# dispatchers an ordering guarantee and the two neighbouring reward hooks in this batch (TryModifyRewards, TryModifyCardRewardOptions) ARE two-pass. This one is not: Hook.cs:2472-2480 is a single `foreach` accumulating `flag = flag || item.ShouldForcePotionReward(...)`, which is exactly the sim's `any(...)` at rewards.py:447-451. Order cannot matter for an OR-fold of pure predicates. Rule 7: Hook.cs and rewards.py are NOT hashed here."
+    },
+    {
+      "what": "N4: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's pickup mutates nothing outside run.relics, now or after a fix (its whole effect is a per-screen predicate)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

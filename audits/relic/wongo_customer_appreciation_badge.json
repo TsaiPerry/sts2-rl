@@ -1,0 +1,37 @@
+{
+  "unit": "relic/wongo_customer_appreciation_badge",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\WongoCustomerAppreciationBadge.cs",
+    "sha256": "65ae690a4d9a5f92bf315b86d90e2c4d61c7eb315717a56c6820bc852ce62cad"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\wongo_customer_appreciation_badge.py",
+    "sha256": "e1a010ec11e9c90f72471b3d6f1a4ef56ee2b665665326fe74ea603f387b3dd8"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (wongo_customer_appreciation_badge.py:19)",
+      "verdict": "faithful",
+      "rationale": "WongoCustomerAppreciationBadge.cs:7 -- and that single line is the ENTIRE C# model (the file is 8 lines: usings, namespace, class, one Rarity override). EXECUTED (py tools/audit/relic_probes_b17.py wongo): the port's own members are exactly ['id','name','rarity'], so it drops nothing; rarity EVENT gives merchant_cost 999999999 (never shop-stocked) and is_tradable False via the Starter/Event/Ancient exclusion in Relic.is_tradable (sts2_rl/relics/base.py:126-136), both of which match RelicModel's tables. This is one of the two genuinely complete behaviourless ports .superpowers/sdd/content-relic-sweeps.md sweep C counts ('2 stubs drop no behavioural hook at all'). Rule 7: sts2_rl/relics/base.py and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the port's docstring claims the relic is 'unreachable within one run of the sim' -- the claim is EXECUTED here rather than accepted (binding rule 5)",
+      "verdict": "faithful",
+      "rationale": "Three independent checks, all executed (py tools/audit/relic_probes_b17.py wongo). (a) NOT in the pool: the relic is absent from the transcribed grab bag (`in the transcribed grab bag: False`) -- Event rarity is not bag-pullable. (b) NO grant site: the only reference to the id anywhere under sts2_rl/ outside its own module is sts2_rl/vocab.json:743, the observation vocabulary; no add_relic, no event, no reward path names it. (c) THE POINTS CANNOT BE EARNED: the badge's only C# grant site is WelcomeToWongos.CheckObtainWongoBadge (WelcomeToWongos.cs:111-131), which fires `RelicCmd.Obtain<WongoCustomerAppreciationBadge>` when `SaveManager.Progress.WongoPoints % 2000 + pointsEarned >= 2000`; the ported event awards at most 32 + 16 + 8 = 56 points in one run (sts2_rl/events/welcome_to_wongos.py:63 writes them to run.wongo_points, whose per-option table the probe prints), and the sim models no cross-run save, so the modulus term is always 0 and 56 < 2000. ONE CORRECTION to the port's own wording, recorded so nobody re-derives it wrongly: the threshold is not '2000 LIFETIME points' but 'crossing a multiple of 2000', because of the `% 2000` -- so in the real game a player at 1992 lifetime points earns the badge from a single 8-point Mystery Box, and the badge can be obtained more than once per profile. The port's CONCLUSION still holds, but only because the sim starts every run at 0, not because 56 is small. (d) One further path checked and ruled out: the badge IS listed in the game's EventRelicPool (EventRelicPool.cs:151), which would matter if anything pulled a random Event-rarity relic -- a grep of the game source shows EventRelicPool is referenced only by its own file and by ModelDb's registry (ModelDb.cs:247), never as a draw source, so it is a registry and not a pool. Rule 7: sts2_rl/events/welcome_to_wongos.py, sts2_rl/vocab.json, WelcomeToWongos.cs, EventRelicPool.cs and ModelDb.cs are NOT hashed by this record."
+    },
+    {
+      "what": "N2: bug-class sweep -- what a 1-line C# model could still have got wrong",
+      "verdict": "faithful",
+      "rationale": "Every PROMPT.md class was checked against this unit rather than skipped because the file is short, since a relic with no hooks can still diverge in its DECLARATIVE members. Confirmed absent from the C#: HasUponPickupEffect (so the sim's default False is right), SpawnsPets, AddsPet, IsAllowedInShops, IsAllowedAtNeow, IsAllowed, IsUsedUp, MerchantCost, ShowCounter, CanonicalVars, ExtraHoverTips -- WongoCustomerAppreciationBadge.cs overrides none of them, and the sim's port likewise sets none, so every base default agrees on both sides. Class 18 (TestMode.IsOn) does not apply: there is no branch. Class 13 does not apply: there is no state. Class 16's RNG half does not apply: nothing draws. The relic is a trophy, and the port is a correct trophy."
+    },
+    {
+      "what": "N3: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence at all here -- the relic has no pickup effect to unwind, and no sim path grants it."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}
