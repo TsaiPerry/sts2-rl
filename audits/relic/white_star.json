@@ -1,0 +1,67 @@
+{
+  "unit": "relic/white_star",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\WhiteStar.cs",
+    "sha256": "bca994fd23df8836f549b35fa2d2c2a6039c0a3def7786e223019025c88ab5df"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\white_star.py",
+    "sha256": "4d526c02407bfd7cea2b623d2778868e2d1d6cdb285b1c5f77f02ed7360e7166"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (white_star.py:13)",
+      "verdict": "faithful",
+      "rationale": "WhiteStar.cs:12. Rare in the transcribed grab bag (py tools/audit/relic_probes_b17.py pool -> bag=Rare), so it is obtainable from any Rare pull."
+    },
+    "IsAllowed": {
+      "maps_to": "NO COUNTERPART -- sts2_rl.relics.base.Relic declares no `is_allowed` member at all (executed: hasattr(Relic, 'is_allowed') is False)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4. WhiteStar.cs:14-17 returns RelicModel.IsBeforeAct3TreasureChest(runState) = `TotalFloor < 41` in single-player (RelicModel.cs:452-456); the sim keeps the relic pullable for the whole run."
+    },
+    "TryModifyRewards": {
+      "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (white_star.py has no methods at all), although Relic.modify_combat_rewards is a real base hook (sts2_rl/relics/base.py:168-170) dispatched at rewards.py:498-500",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. WhiteStar.cs:19-31 appends `new CardReward(CardCreationOptions.ForRoom(Owner, RoomType.Boss), 3, player)` to every ELITE room's reward list -- a second, Boss-tier three-card choice on top of the elite's normal one. The port appends nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the extra Boss-tier card reward is never added, and the premise behind the stub is false -- modify_combat_rewards IS dispatched and a sibling relic already uses it at the same gate",
+      "verdict": "gap",
+      "issue": "MECHANISM: white_star.py declares only id/name/rarity and its docstring justifies that with 'an out-of-combat reward modifier, so this is a no-op stub'. PROMPT.md bug class 12 applied: the premise is false. rewards.py:498-500 runs `relic.modify_combat_rewards(run, rewards)` over every run relic at the end of generate_combat_rewards, and its own comment names Lava Rock as the ported user. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b17.py rewardstubs): an ELITE screen yields `cards=3 special_cards=0` both with and without the relic, where C# yields the elite's 3 PLUS a Boss-tier 3. The CONTROL in the same probe is decisive and is a SIBLING BY NAME: relic/black_star implements the SAME C# hook at the SAME `RoomType.Elite` gate (BlackStar.cs, ported at sts2_rl/relics/black_star.py:15-23) and its extra reward DOES appear -- relics ['chandelier','book_of_five_rings'] instead of ['chandelier']. So the pipeline is proven live by a relic one letter away in the pool. Both sides ported: Rare in the grab bag, elites are a ported room type, and rewards.CombatRewards already models multiple card offers (`cards` for the pick-one group and `special_cards` for independent take-or-skip offers, rewards.py:376-384) -- though note for whoever fixes it that C# adds a second full CardReward, i.e. a second pick-one-of-3 group, which is neither of those two fields exactly. PROMPT.md bug class 29 checked, not assumed: black_star and white_star are NOT the same relic with a swapped payload -- one adds a RelicReward and the other a Boss-tier CardReward -- and this record is reached on white_star's own merits. Rule 7: rewards.py, sts2_rl/relics/base.py, sts2_rl/relics/black_star.py, BlackStar.cs and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): the IsAllowed floor gate is entirely unmodelled, so the relic stays offerable past floor 41",
+      "verdict": "gap",
+      "issue": "MECHANISM and REACHABILITY are the same as audits/relic/white_beast_statue.json guard G2 in this same batch, and the same verdict is reached per binding rule 3 -- one mechanism, one verdict at every site. EXECUTED (py tools/audit/relic_probes_b17.py isallowed): `hasattr(Relic, 'is_allowed')` is False; at `run.total_floor = 60` the grab bag still contains white_star, and 13 Rare pulls at that floor surface one of the pair. This unit is one of the 17 relics in .superpowers/sdd/content-relic-sweeps.md sweep B's IsBeforeAct3TreasureChest cluster (corrected from 16 by batch 8), first verdicted at audits/relic/amethyst_aubergine.json. FIX-ORDERING CONSTRAINT (PROMPT.md v6 binding item 2): RelicModel.IsAllowedAtNeow defaults to IsAllowed(player.RunState) (RelicModel.cs:443-446) and the sim models is_allowed_at_neow as an independent flag (sts2_rl/relics/base.py:159), so the fix must make the Neow flag delegate. Rule 7: RelicModel.cs, sts2_rl/relics/base.py, audits/relic/white_beast_statue.json, audits/relic/amethyst_aubergine.json and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    {
+      "what": "N1: `CardCreationOptions.ForRoom(base.Owner, RoomType.Boss)` and the count 3 (WhiteStar.cs:29) -- the extra reward's rarity odds",
+      "verdict": "gap",
+      "issue": "Recorded so a fix uses the right odds rather than the elite's. ForRoom(RoomType.Boss) selects CardRarityOddsType.BossEncounter (CardCreationOptions.cs:122-129), and the sim has that table already: rewards.py:86 maps RarityOddsType.BOSS to (1.0, 0.0, 0.0), i.e. all-Rare, and ROOM_RARITY_ODDS[RoomType.BOSS] resolves to it (rewards.py:92-96). So the missing effect is 'three RARE cards', not three elite-tier cards -- a materially bigger reward than the stub's absence suggests. The count 3 is a literal in the C# constructor call with no CanonicalVars and no AscensionHelper branch anywhere in WhiteStar.cs, so it is the pinned non-ascension value. Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: CardCreationOptions.cs and rewards.py are NOT hashed here."
+    },
+    {
+      "what": "N2: `room == null || room.RoomType != RoomType.Elite` (WhiteStar.cs:25) vs the sim's available gate",
+      "verdict": "faithful",
+      "rationale": "The room-type gate has a direct sim counterpart -- CombatRewards carries `room_type` (rewards.py:373) and the ported sibling black_star tests exactly `rewards.room_type != RoomType.ELITE` (sts2_rl/relics/black_star.py:18-19) -- so a fix has the gate it needs and nothing about the guard itself diverges. The `room == null` arm is the game's out-of-combat reward screens (events, chests), which reach Hook.ModifyRewards with a null room; the sim's generate_combat_rewards is only ever called with a real room type, so the null case cannot occur. Rule 7: rewards.py and sts2_rl/relics/black_star.py are NOT hashed here."
+    },
+    {
+      "what": "N3: `player != base.Owner` (WhiteStar.cs:21)",
+      "verdict": "waiver",
+      "rationale": "A multiplayer ownership check -- each player has their own reward screen. The sim has one player and rewards.py:498-500 dispatches over that player's `run.relics`. Waived as multiplayer-only under the shared contract's exclusion, not under an unreachability claim about content."
+    },
+    {
+      "what": "N4: Hook.ModifyRewards runs TWO full passes -- TryModifyRewards then TryModifyRewardsLate (Hook.cs:1981-1999) -- and the sim's modify_combat_rewards is one pass",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 25: a two-pass C# dispatcher is an ordering guarantee that the sim's single duck-typed loop destroys, and the two passes are two different hook NAMES here rather than an X/XLate method pair on one relic, so grepping for 'Late' on this relic alone would miss it. White Star implements the PLAIN pass; the ported relic/driftwood implements TryModifyRewardsLate (Driftwood.cs:14, sts2_rl/relics/driftwood.py:17-19, which sets rewards.can_reroll when there are cards), so C# guarantees White Star's extra CardReward exists before Driftwood decides whether a card reward is rerollable, while the sim's answer depends on the order of run.relics. DORMANT TODAY, for a reason that is entirely about this port: White Star adds nothing, so it cannot contend with anything -- the ordering becomes observable the moment G1 is fixed. That makes this a fix-ordering constraint as much as a gap: a G1 fix must also decide whether the new reward is rerollable, which in C# it is not (Driftwood's own gate reads the reward list it was given). Rule 7: Hook.cs, Driftwood.cs and sts2_rl/relics/driftwood.py are NOT hashed by this record."
+    },
+    {
+      "what": "N5: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's pickup mutates nothing outside run.relics, now or after a fix."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

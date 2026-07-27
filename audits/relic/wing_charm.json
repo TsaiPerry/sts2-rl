@@ -1,0 +1,62 @@
+{
+  "unit": "relic/wing_charm",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\WingCharm.cs",
+    "sha256": "a1d90342e86af4edc76c48d513683d1561b72a141ccbaf8dd45504ea39942ef2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\wing_charm.py",
+    "sha256": "840dcf71b4a8080b2e84580d5ff3c9e9b25b77c500a5738e7ce1615f94c2642d"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (wing_charm.py:13)",
+      "verdict": "faithful",
+      "rationale": "WingCharm.cs:18. Shop rarity in the transcribed grab bag (py tools/audit/relic_probes_b17.py pool -> bag=Shop), and Relic.is_allowed_in_shops defaults True (sts2_rl/relics/base.py:90), so it is buyable. Merchant price 200 via the rarity table (sts2_rl/relics/base.py:54-62), no override in the C#."
+    },
+    "TryModifyCardRewardOptionsLate": {
+      "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (wing_charm.py has no methods at all), although Relic.modify_card_reward_options is a real base hook (sts2_rl/relics/base.py:172-176) dispatched at rewards.py:297-301",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, N1 and N2 per binding rule 4. WingCharm.cs:24-45 picks one Swift-enchantable option from the card reward with Rng.Niche, clones it, enchants the clone with Swift(1) and substitutes it. The port does nothing."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): no card reward option is ever Swift-enchanted, and BOTH halves of the stub's premise are false",
+      "verdict": "gap",
+      "issue": "MECHANISM: wing_charm.py declares only id/name/rarity and its docstring justifies that with 'the sim has no enchantments or card rewards, so this is a no-op stub'. PROMPT.md bug class 12 applied, and the premise is false twice over. (a) The sim HAS enchantments: enchantments.py defines 19 of them including SwiftEnchantment (enchantments.py:341-357), and the ported relic/beautiful_bracelet attaches Swift through it. (b) The sim HAS card rewards and the exact hook: rewards.create_reward_cards runs `relic.modify_card_reward_options(run, cards)` over every run relic (rewards.py:297-301). .superpowers/sdd/content-relic-sweeps.md sweep C lists this unit under BOTH the 'no enchantments' and the 'out-of-combat reward modifier' premise families and reports a LIVE dispatch site for each. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b17.py rewardstubs): a MONSTER card reward comes out as [('setup_strike', None), ('bludgeon', None), ('true_grit', None)] both with and without the relic; the same probe reports `SwiftEnchantment ported: 'swift'` and `can_enchant(strike)=True`. The CONTROL is decisive: relic/glitter implements the SAME C# hook -- TryModifyCardRewardOptionsLate (Glitter.cs) -- and its port at sts2_rl/relics/glitter.py:16-21 turns the same three options into [('setup_strike','glam'), ('bludgeon','glam'), ('true_grit','glam')]. So the pipeline is not merely present but already used by a ported relic to enchant card reward options, which is precisely what this relic must do. Both sides ported: Shop rarity (buyable in every act), card rewards on every combat. Observable in RL play (a free draw-3 on a rewarded card) and in the deck the conformance runner compares. PROMPT.md bug class 29 checked, not assumed: glitter enchants EVERY eligible option and is not one-shot, silken_tress enchants every option once, and wing_charm enchants exactly ONE at random -- three deliberately different relics on one hook, so glitter's implementation is a template for the pipeline, not for the behaviour. Rule 7: enchantments.py, rewards.py, sts2_rl/relics/base.py, sts2_rl/relics/glitter.py, sts2_rl/relics/beautiful_bracelet.py, Glitter.cs and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    {
+      "what": "N1 (LIVE for RNG parity, dormant for RL): `base.Owner.RunState.Rng.Niche.NextItem(list)` (WingCharm.cs:36) names an explicit stream and the stub consumes none",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 16's second half, and the same mechanism this batch records at relic/war_hammer N2, relic/war_paint N1 and relic/whetstone N1 -- one verdict per mechanism (binding rule 3). NextItem always draws, so every card reward in a run holding Wing Charm shifts the Niche stream in the game and not in the sim. Distinct from G1: enchanting the FIRST eligible option would close G1 and leave this open. Note this relic is the one place in the batch where the RNG choice is not a shuffle but a single NextItem, so a fix must draw exactly once per reward screen and only when the eligible list is non-empty (WingCharm.cs:32-35 returns before the draw when nothing can hold Swift). Rule 7: audits/relic/war_hammer.json, audits/relic/war_paint.json and audits/relic/whetstone.json are NOT hashed by this record."
+    },
+    {
+      "what": "N2 (DORMANT while the port is empty, LIVE the moment G1 is fixed): `base.Owner.RunState.CloneCard(...)` is a full model clone and the sim has no clone helper",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 17. WingCharm.cs:41 clones the chosen option and enchants the CLONE, then substitutes it via `cardCreationResult.ModifyCard(card, this)` (:43) rather than mutating the original -- so a fix that follows the C# literally needs a clone, and CardModel.CreateClone carries the card's upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers (CardModel.cs:2168-2179). The sim has NO clone helper at all: .superpowers/sdd/content-relic-sweeps.md sweep E enumerates five sim sites that rebuild from the id and lose everything but the upgrade level, with relic/burning_sticks G3 as the LIVE recorded instance. DORMANT AT THIS SITE TODAY for the plain reason that the port clones nothing because it does nothing -- and, usefully, the shape shows a fix need not clone at all: the sibling glitter attaches the enchantment to the option in place (sts2_rl/relics/glitter.py:19-21) and reaches the same observable, because a reward option is a freshly created card with no prior state to preserve. Recorded so the fix does not import the shallow-rebuild defect while copying the C#. Rule 7: CardModel.cs, sts2_rl/relics/glitter.py, audits/relic/burning_sticks.json and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    {
+      "what": "N3: `canonicalSwift.CanEnchant(r.Card)` filter and the empty-list early return (WingCharm.cs:30-35)",
+      "verdict": "gap",
+      "issue": "Recorded so a fix keeps the filter and its ordering consequences. The sim has the predicate -- Enchantment.can_enchant is a classmethod that SwiftEnchantment inherits (enchantments.py:341-357), and glitter calls `GlamEnchantment.can_enchant(card)` per option (sts2_rl/relics/glitter.py:20) -- so nothing is missing. The load-bearing detail is that the filter runs BEFORE the Rng.Niche draw, so an all-ineligible reward consumes no draw (see N1). Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: enchantments.py and sts2_rl/relics/glitter.py are NOT hashed here."
+    },
+    {
+      "what": "N4: the hook is the LATE pass of a two-pass dispatcher -- Hook.TryModifyCardRewardOptions runs TryModifyCardRewardOptions then TryModifyCardRewardOptionsLate (Hook.cs:1445-1468) -- and the sim's modify_card_reward_options is one pass",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 25. C# guarantees that every plain-pass modifier has finished before any Late modifier runs; the sim's single `for relic in list(run.relics)` loop (rewards.py:297-301) makes that registration-order luck. The census matters here: an executed grep of the game source finds exactly ONE plain-pass implementer, LastingCandy (LastingCandy.cs), and NINE Late implementers -- FresnelLens, FrozenEgg, Glitter, LavaLamp, MoltenEgg, SilkenTress, SilverCrucible, ToxicEgg and WingCharm. So the ordering that C# protects is 'Lasting Candy's Power-card substitution happens before anything enchants or upgrades the options'. DORMANT twice over today: wing_charm does nothing, and sts2_rl/relics/lasting_candy.py is ALSO a behaviourless stub (batch 8 audited it), so there is currently no plain-pass sim listener for a Late one to run ahead of. Fixing either one alone leaves it dormant; fixing both without adding the pass structure makes it live. Rule 7: Hook.cs, rewards.py, LastingCandy.cs, sts2_rl/relics/lasting_candy.py and audits/relic/lasting_candy.json are NOT hashed by this record."
+    },
+    {
+      "what": "N5: `player != base.Owner` (WingCharm.cs:26), DynamicVar('SwiftAmount', 1m) and ExtraHoverTips (WingCharm.cs:20, 22)",
+      "verdict": "waiver",
+      "rationale": "The owner check is a multiplayer ownership guard -- each player has their own card reward -- and the sim has one player whose relics rewards.py:297-301 iterates. DynamicVar/ExtraHoverTips are presentation (hover text). Both waived under the shared contract's multiplayer and presentation exclusions, not under an unreachability claim. The VALUE 1 is not waived: there is no AscensionHelper branch anywhere in WingCharm.cs, so a fix must use Swift amount 1 -- worth stating because the ported relic/beautiful_bracelet grants Swift with amount 3, so the family does not share the number (PROMPT.md bug class 29)."
+    },
+    {
+      "what": "N6: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's pickup mutates nothing outside run.relics, now or after a fix (its effect is per-reward-screen)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

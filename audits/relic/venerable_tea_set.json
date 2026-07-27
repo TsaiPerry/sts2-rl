@@ -1,0 +1,62 @@
+{
+  "unit": "relic/venerable_tea_set",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\VenerableTeaSet.cs",
+    "sha256": "f7c950036fcd45178fe5fc5f41bb92a6b4e0af35625bd01696ec26af35c515f6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\venerable_tea_set.py",
+    "sha256": "3e00583428beb56b0aee34d4a01149ae26c88c1d468cc4f61a5e28e01804df9a"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (venerable_tea_set.py:19)",
+      "verdict": "faithful",
+      "rationale": "VenerableTeaSet.cs:17. Confirmed in the transcribed grab bag as Common (py tools/audit/relic_probes_b17.py pool -> bag=Common), so the relic is obtainable from any Common pull."
+    },
+    "GainEnergyInNextCombat": {
+      "maps_to": "self._pending, a plain bool set only from the constructor parameter `rested` (venerable_tea_set.py:23-25)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The C# property is a [SavedProperty] whose change-guarded setter flips base.Status (VenerableTeaSet.cs:23-39); the persistence it needs -- survive the rest site, the map walk and the next combat's setup -- is provided in the sim by the relic instance living on RunState.relics, so the STORAGE is fine. What is missing is any writer."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "NO COUNTERPART -- the port defines no after_room_entered at all (executed: `'after_room_entered' in VenerableTeaSet.__dict__` is False)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4, and the whole of this record's finding. VenerableTeaSet.cs:41-49 latches GainEnergyInNextCombat = true whenever a RestSiteRoom is entered. Note what the C# latch is actually keyed on: room ENTRY, not the Rest action -- RestSiteRoom.EnterInternal fires Hook.AfterRoomEntered before any option is offered (RestSiteRoom.cs:25-39), so in the game merely walking into a campfire and smithing (or leaving) arms the relic. The sim's constructor parameter is named `rested` and its docstring says 'a combat that follows a Rest', which is a second, smaller divergence in the same place: even if something DID pass the argument, the correct predicate is 'entered a rest site', not 'took the heal'. Rule 7: RestSiteRoom.cs is NOT hashed by this record."
+    },
+    "AfterEnergyReset": {
+      "maps_to": "on_energy_reset (venerable_tea_set.py:27-32)",
+      "verdict": "faithful",
+      "rationale": "VenerableTeaSet.cs:51-59 gains Energy.BaseValue and then clears the flag; venerable_tea_set.py:29-32 does the same two steps in the same order with ENERGY = 2. The hook slot matches: turn_structure step 18 is `await Hook.AfterEnergyReset(state, player)` immediately after the energy assignment (CombatManager.cs:650), and the sim's on_energy_reset sits in exactly that slot (player.py:163-168; executed order from `py tools/audit/relic_probes.py turn-order` is on_block_cleared -> on_energy_reset -> on_player_turn_start). Because the flag is cleared on first use, both sides fire on turn 1 only even though the hook runs every turn. EXECUTED with the flag forced true (py tools/audit/relic_probes_b17.py teaset): turn-1 energy 5 instead of 3, i.e. the 2 lands correctly. The `base.Owner == player` clause is structurally satisfied (one player). Same verdict and same basis as relic/fake_venerable_tea_set's AfterEnergyReset entry, per binding rule 3. Rule 7: CombatManager.cs, player.py and audits/relic/fake_venerable_tea_set.json are NOT hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): FROZEN CONSTRUCTOR STATE -- nothing in the sim ever sets `_pending`, so the relic does nothing in any run that picks it up",
+      "verdict": "gap",
+      "issue": "MECHANISM: the port's entire trigger is `self._pending = rested`, a constructor default (venerable_tea_set.py:23-25). RunState.add_relic builds relics through `make_relic(id)`, which is `_RELIC_CLASSES[relic_id]()` with no arguments (sts2_rl/relics/base.py:73-74, called from run.py:546-552), so `_pending` is False for the whole run and the spend half at venerable_tea_set.py:29 can never run. The sim is NOT missing the pipeline the port needs: Relic.after_room_entered is a real base hook (sts2_rl/relics/base.py:194-195) and run.py:983 dispatches it to every relic on entering EVERY room with the room type in hand -- and sts2_rl/relics/eternal_feather.py:19-22 is a ported relic that uses exactly that hook with exactly the RoomType.REST_SITE test this relic needs. PROMPT.md bug class 12 applied: the premise behind the constructor-injection design ('whether you rested is out-of-combat state, injected via the constructor') is false today. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b17.py teaset): make_relic('venerable_tea_set') gives _pending=False; the class has no after_room_entered override; the next combat's turn-1 energy is 3 where C# gives 5; forcing _pending=True gives 5, which isolates the defect to the missing latch. Both sides ported: Common in the transcribed grab bag (probe `pool`), rest sites are a ported room type that dispatches after_room_entered, and every act has them. RULE 3 -- this is the SAME mechanism audits/relic/fake_venerable_tea_set.json guard G1 already verdicted `gap` and proved LIVE by execution (batch 5, turn-1 energy 3 vs 4 there because the knock-off's EnergyVar is 1); this record confirms it at the real relic's site with its own execution rather than re-deriving it, and reaches the same verdict. That record's guard G2 named this unit as pre-populated work for batch 17 and issued no verdict for it; this is that verdict. The fix is one method copied from sts2_rl/relics/eternal_feather.py:19-22. Rule 7: sts2_rl/relics/base.py, run.py, sts2_rl/relics/eternal_feather.py, sts2_rl/relics/fake_venerable_tea_set.py and audits/relic/fake_venerable_tea_set.json are NOT hashed by this record."
+    },
+    {
+      "what": "N1: EnergyVar(2) (VenerableTeaSet.cs:19) read as `Energy.BaseValue` at the single call site (:56) vs the sim's ENERGY = 2 (venerable_tea_set.py:21)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 2 is the pinned non-ascension value. Checked against the knock-off sibling deliberately: FakeVenerableTeaSet is EnergyVar(1) and its port pins 1, so the pair is not a copy-paste of one number (PROMPT.md bug class 29 -- siblings may differ on purpose)."
+    },
+    {
+      "what": "N2: PlayerCmd.GainEnergy's four guards (PlayerCmd.cs:29-43) -- `amount <= 0`, `!CombatManager.IsEnding`, Hook.AfterModifyingEnergyGain, and `finalAmount > 0` -- against the sim's EnergyCmd.gain (cmds.py:545-554), which has none of them",
+      "verdict": "faithful",
+      "rationale": "Traced rather than assumed. (a) `amount <= 0`: the argument is the pinned constant 2, so the guard cannot fire. (b) `finalAmount > 0`: the sim instead does `player.energy += amount` unconditionally, which is a no-op at 0 -- and the only ported modify_energy_gain listener is NoEnergyGainPower (powers.py:554-558), which returns exactly 0, so both sides leave the energy unchanged. (c) Hook.AfterModifyingEnergyGain has exactly ONE override in the whole game source (NoEnergyGainPower.cs:28) and its body is presentation; the sim has no such hook, which is a seam-level omission not observable here. (d) `!IsEnding` belongs to the combat-over-window guard family that audits/seam/creature_card_cmds.json guard G14 already verdicts as a DORMANT family for one structural reason -- the sim never runs content with the phase already flipped -- and this site is an energy reset during turn setup, which cannot occur inside that window. Rule 7: PlayerCmd.cs, cmds.py, powers.py, NoEnergyGainPower.cs and audits/seam/creature_card_cmds.json are NOT hashed by this record."
+    },
+    {
+      "what": "N3: [SavedProperty], the `if (_gainEnergyInNextCombat != value)` change guard, base.Status Active/Normal, Flash(), CanonicalVars and ExtraHoverTips (VenerableTeaSet.cs:19-21, 23-39, 55)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips are presentation only -- the relic bar's glow, counter and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. [SavedProperty] is save serialization; the sim's relic instance persists on RunState.relics for the whole run, which is the persistence the flag needs."
+    },
+    {
+      "what": "N4: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart (nothing in the game un-picks a relic), so a port lacking it is not diverging from the source, which is the only question this audit asks. No operational consequence here either -- this relic's pickup mutates nothing outside run.relics, so a conformance-runner swap needs no unwind. Rule 7: sts2_rl/relics/base.py:143-150 is not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
