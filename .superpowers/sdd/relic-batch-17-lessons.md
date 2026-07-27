@@ -122,7 +122,7 @@
     `twin_strike` on seeds 0/3 and `bash` on seeds 1/2/4, `card_selector=None`
     throughout. Two observables: wrong card, and shared-RNG draws C# never makes.
 
-Plus three **RNG-parity-live / RL-dormant** gaps sharing one mechanism
+Plus four **RNG-parity-live / RL-dormant** gaps sharing one mechanism
 (bug class 16, named stream never consumed, StableShuffle/NextItem always draws):
 `war_hammer` N2, `war_paint` N1, `whetstone` N1, `wing_charm` N1.
 
