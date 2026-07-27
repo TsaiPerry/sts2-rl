@@ -1,0 +1,119 @@
+{
+  "unit": "monster/bowlbug_rock",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\BowlbugRock.cs",
+    "sha256": "00baecb5bfb0aa0d52a78c64a771ad9b6a8406fc64845fdc39266559419dd1c1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\bowlbugs.py",
+    "sha256": "f4776ff765a05a9c96c27b1e7ec2614f59709dac7ccefa42109dc089f357c0ba"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# BowlbugRock.cs:32,34 non-ascension branch = 45 (AscensionHelper.GetValueIfAscension puts the non-ascension value LAST); sim min_hp = 45. Confirmed by `monster_probes.py hp` (102/109 compared, 0 mismatches)."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# BowlbugRock.cs:32,34 non-ascension branch = 48; sim max_hp = 48."
+    },
+    "DeathSfx": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "SetupSkins": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateBestiaryMoveList": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "BowlbugRock.__init__ (bowlbugs.py:42-47)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance: the sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect is applied from __init__ (bowlbugs.py:42-47). The game runs it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:393-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); the concrete trigger that would make it a gap is a relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and sts2_rl/powers.py that section 2's clause (a)/(b) argument cites are NOT hashed by this record. Here the effect is PowerCmd.Apply<ImbalancedPower>(Creature, 1m, Creature) (BowlbugRock.cs:63-67) -> PowerCmd.apply(hooks, self, ImbalancedPower, 1). Self-applied, no card, literal amount. Note the sim sets `self.is_off_balance = False` BEFORE super().__init__ (bowlbugs.py:43) because build_machine's conditional branch reads it, matching C#'s field initialiser (BowlbugRock.cs:26)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (bowlbugs.py:49-60)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node identical to BowlbugRock.cs:69-82: HEADBUTT_MOVE -> ConditionalBranchState 'POST_HEADBUTT', DIZZY_MOVE -> HEADBUTT_MOVE, initial HEADBUTT_MOVE. Branch add order matches and is observable (first true condition wins, ConditionalBranchState.cs:44-54): `AddState(DIZZY, () => IsOffBalance)` then `AddState(HEADBUTT, () => !IsOffBalance)` vs add_state(dizzy, ...) then add_state(headbutt, ...) (bowlbugs.py:56-57). Executed (monster_probes_b04.py graphs)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the dizzy turn is delivered by the DIZZY_MOVE state instead of by CreatureCmd.Stun's synthetic STUNNED move",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# reaches the lost turn twice over: ImbalancedPower.AfterDamageGiven sets `bowlbugRock.IsOffBalance = true` when the owner's attack WasFullyBlocked (ImbalancedPower.cs:18-33), and then HeadbuttMove itself, still executing, does `if (IsOffBalance) await Stun()` -> CreatureCmd.Stun(Creature, DizzyMove) (BowlbugRock.cs:84-101). That installs MoveState(\"STUNNED\", DizzyMove, StunIntent) with MustPerformOnce and FollowUpStateId defaulted to StateLog.Last() = HEADBUTT_MOVE (Creature.cs:530-543), so the rock spends one turn running DizzyMove (which clears IsOffBalance) and then headbutts again -- which means C#'s own POST_HEADBUTT -> DIZZY_MOVE arm is unreachable, a dead conditional arm in the shipped game. The sim drops the Stun call entirely (its _headbutt, bowlbugs.py:62-63, only attacks) and reaches the same lost turn through the POST_HEADBUTT conditional, with _dizzy clearing the flag (bowlbugs.py:65-66). Executed (monster_probes_b04.py rock-stun): a fully blocked headbutt leaves is_off_balance True and telegraphs DIZZY_MOVE; the next enemy side performs DIZZY, deals nothing, clears the flag and telegraphs HEADBUTT_MOVE -- the same turn-by-turn observable as the game, with the same StunIntent shown in between. The only residual difference is the StateLog, where C# ends with a duplicated HEADBUTT_MOVE and the sim with a DIZZY_MOVE entry; that is monster_state_machine G4's mechanism and it cannot bite here, because BowlbugRock has no RandomBranchState for the log to feed. G4 is not re-verdicted."
+    },
+    {
+      "what": "HEADBUTT damage",
+      "verdict": "faithful",
+      "rationale": "BowlbugRock.cs:36 HeadbuttDamage non-ascension = 15; sim _HEADBUTT_DMG = 15 (bowlbugs.py:24). It is a `public static` property in C# (read by BowlbugsWeak's preview) -- an accessibility detail with no behavioural content."
+    },
+    {
+      "what": "ImbalancedPower is routed through the sim's on_damage_received rather than a dealer-side hook",
+      "verdict": "faithful",
+      "rationale": "Recorded as a cross-tier observation, not a verdict on the power (rule 3: ImbalancedPower is the power tier's unit). C#'s trigger is AfterDamageGiven, which the killing-blow guard does NOT suppress; the sim's ImbalancedPower listens on `on_damage_received` (powers.py:2053-2072), which cmds.py:118-119 skips when the target died on that hit. For THIS monster the difference is unreachable by construction: the trigger requires WasFullyBlocked / amount == 0, and a fully blocked hit costs the target no HP, so it can never be the killing blow. Flagged to the power stream in the batch report."
+    },
+    {
+      "what": "no RandomBranchState -- AddBranch bug class not applicable",
+      "verdict": "faithful",
+      "rationale": "Executed (monster_probes_b04.py branches): bowlbug_rock has only a ConditionalBranchState, which never draws. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
+      "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Commands\\CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\ImbalancedPower.cs",
+      "sha256": "7620e27c03d07e67845d2bad487c2ca1d5338ae3c861239287ca17d4eb0b1043",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ]
+}
