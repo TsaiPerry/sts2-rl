@@ -1,0 +1,32 @@
+{
+  "unit": "potion/mazaleths_gift",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\MazalethsGift.cs",
+    "sha256": "d422c35de5c3afc21a3917081fb6565490e933401856af8ac0bfff68e384266b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "ExtraHoverTips": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

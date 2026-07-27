@@ -1,0 +1,36 @@
+{
+  "unit": "potion/regen_potion",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\RegenPotion.cs",
+    "sha256": "0adeee5f2055e46ed5a38b3be6ff5b8bfbe91e7a902505a00ebbe31aaa8529c6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "CanBeGeneratedInCombat": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "ExtraHoverTips": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

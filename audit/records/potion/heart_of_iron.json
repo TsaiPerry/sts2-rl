@@ -1,0 +1,32 @@
+{
+  "unit": "potion/heart_of_iron",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\HeartOfIron.cs",
+    "sha256": "12c271642fcf66b45431263962d631c92893af9ebd4a446708c3d662840d404b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "ExtraHoverTips": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

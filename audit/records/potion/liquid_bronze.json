@@ -1,0 +1,32 @@
+{
+  "unit": "potion/liquid_bronze",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\LiquidBronze.cs",
+    "sha256": "ca947b1b31789b7fd9d84aa9e0d6a3fd8486ac083b3b3fc160f7aef39d597758"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "ExtraHoverTips": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

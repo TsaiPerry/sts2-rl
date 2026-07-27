@@ -1,0 +1,28 @@
+{
+  "unit": "potion/droplet_of_precognition",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\DropletOfPrecognition.cs",
+    "sha256": "d93ba54b8180d2cd1f49c0f7751b6ff44ce9c4536e63cec6c6838ef3c113bf77"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

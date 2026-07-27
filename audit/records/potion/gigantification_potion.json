@@ -1,0 +1,28 @@
+{
+  "unit": "potion/gigantification_potion",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\GigantificationPotion.cs",
+    "sha256": "8bdc58a35c79edf462f4723a953a7c31a7d57c2d250c3a899255ffba038ebf00"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}
