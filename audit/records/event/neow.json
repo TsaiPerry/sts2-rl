@@ -1,0 +1,96 @@
+{
+  "unit": "event/neow",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Neow.cs",
+    "sha256": "d09d70ee85cc45fca204d1825d6e7298e0d8a62324101fc542f998fab6a53b2f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\neow.py",
+    "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1"
+  },
+  "hooks": {
+    "AmbientBgm": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "InitialDescription": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Neow.cs:21-26 swaps the description LocString when the run has modifiers. It selects text, nothing else -- and the modifier branch it keys on is itself unported (see the MODIFIERS guard, which carries that verdict)."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "events/neow.py:64-72 `neow_relic_pool`. Unlike the other ancients' AllPossibleOptions this one is NOT presentation: Neow's Bones draws its two relics from it, so the sim implements it as a real function -- curses + positives + all six coin-flip relics, filtered by is_allowed_at_neow. Same membership as Neow.cs:27-38 (CurseOptions + PositiveOptions + the six singleton option properties).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "the two fixed pools: PositiveOptions' 14 relics (Neow.cs:39-54) and CurseOptions' 8 (Neow.cs:61-70)",
+      "maps_to": "events/neow.py:37-48 POSITIVE_RELICS (14 ids) and CURSE_RELICS (8 ids), both in source order -- which matters, because the positives list is the input to the UnstableShuffle. Membership checked one for one.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the curse roll and its IsAllowedAtNeow filter (Neow.cs:80-85): RemoveAll(!IsAllowedAtNeow) FIRST, then NextItem over what is left",
+      "maps_to": "events/neow.py:87-88 filters CURSE_RELICS by is_allowed_at_neow and then draws next_item. Filter-before-draw order preserved, which decides both which curse can appear AND how many outcomes the draw has.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the four mutual-exclusion prunings (Neow.cs:87-94): Cursed Pearl removes Golden Pearl, Hefty Tablet removes Arcane Scroll, Leafy Poultice removes New Leaf, Precarious Shears removes Precise Scissors",
+      "maps_to": "events/neow.py:56-61 _CURSE_EXCLUDES maps exactly those four pairs, applied at events/neow.py:93-95. The other four curses prune nothing, as in the source.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three coin-flip pairs and the Large Capsule skip (Neow.cs:95-107): the Lava Rock / Small Capsule pair is added ONLY when the curse is not Large Capsule; then Nutritious Oyster / Stone Humidifier; then Neow's Talisman / Pomander -- each a NextBool where TRUE picks the first",
+      "maps_to": "events/neow.py:96-99 in the same order with the same skip and the same true-picks-first polarity (`_PAIR[0 if coin() else 1]`). The ORDER is load-bearing: three NextBool draws come off one stream, and the skip removes one of them, so a Large Capsule curse shifts every later draw -- reproduced.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the SECOND IsAllowedAtNeow sweep (Neow.cs:108-111), applied to the positives AFTER the coin-flip additions",
+      "maps_to": "events/neow.py:100-102 re-filters the assembled positives list, so a coin-flip relic that fails the gate is dropped too. Both sweeps present, in the right places.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the final assembly (Neow.cs:112-115): UnstableShuffle(positives).Take(2), then APPEND the curse -- so the curse is always the third option",
+      "maps_to": "events/neow.py:103-107: shuffle, `positives[:2] + [curse]`. Shape and position both preserved. UnstableShuffle is a bare Fisher-Yates, which `shuffle` is -- no EV-5 here.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit is one of the six with a parity RNG branch, so EV-3 does NOT apply",
+      "maps_to": "events/neow.py:86-91 uses self.event_rng for next_item / next_bool / shuffle when a string-seeded run supplies it, falling back to the shared rng only in legacy mode.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the RUN MODIFIERS branch is not ported. Neow.cs:116-129 is a whole second mode: when RunState.Modifiers is non-empty the relic offer is REPLACED by one option per modifier that returns a GenerateNeowOption delegate, presented one at a time through OnModifierOptionSelected, which chains to the next modifier's option until the last one finishes the event",
+      "verdict": "gap",
+      "issue": "events/neow.py:22-23 documents the omission. Under rule 1 an unported branch is a gap, not a waiver. DORMANT, and the concrete unported thing is named: ModifierModel itself -- the sim has no port of it at all (`grep -rn 'Modifier' sts2_rl/*.py` finds only cost-modifier and damage-modifier uses, no run-modifier type), so RunState.Modifiers is permanently empty and Neow always takes the first branch. Porting any run modifier makes this live, and it would also activate the InitialDescription swap waived above."
+    },
+    {
+      "what": "the NeowEpoch unlock gate",
+      "maps_to": "events/neow.py:20-22 records that the game puts a Monster room at the start node until NeowEpoch is unlocked, and that the sim treats everything as unlocked. That is the same fully-unlocked convention the card and potion pools already use (rewards.py:259-267), so it is consistent rather than a per-unit divergence.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(), the between-acts heal every Ancient does. Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so this is NOT in turn_structure step 38a's radius.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() -- an option whose choice obtains the relic and finishes the event",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

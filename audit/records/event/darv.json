@@ -1,0 +1,62 @@
+{
+  "unit": "event/darv",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Darv.cs",
+    "sha256": "bfc5e4a66ff035aa553b3132a57b515aa76f793f67fe2b2ed2586c7483e47c81"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\darv.py",
+    "sha256": "0f61517f657199a624cbc18d1d704f9cecdae6e016f457a52fbf99483f4dd207"
+  },
+  "hooks": {
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Darv.cs:73-74 flattens every relic in _validRelicSets plus Dusty Tome for the run-history / compendium listing. It is not consulted when the options are generated (GenerateInitialOptions builds its own list) and has no game-state reader."
+    }
+  },
+  "guards": [
+    {
+      "what": "_validRelicSets (Darv.cs:48-67): 7 unconditional single-relic sets (Astrolabe, Black Star, Calling Bell, Empty Cage, Pandora's Box, Runic Pyramid, Snecko Eye), one act-2 pair (Ectoplasm | Sozu) and one act-3 pair (Philosopher's Stone | Velvet Choker)",
+      "maps_to": "events/darv.py:27-37 _RELIC_SETS in source order with the same act filters (act_index 1 and 2). All nine sets and all eleven relics present, in the source's order -- which matters because the order is the input to the UnstableShuffle.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (Darv.cs:167-188): one base.Rng.NextItem per passing set, UnstableShuffle the picks, then a NextBool -- true takes the first 2 and appends Dusty Tome, false takes the first 3",
+      "maps_to": "events/darv.py:51-64 (the parity branch) reproduces all four steps on self.event_rng in order: next_item per set (single-relic sets still burn a draw, matching NextItem on a 1-element array), shuffle, next_bool, then the 2+Tome / 3 split. This unit is one of the six that DOES have a parity branch, so EV-3 does not apply to it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DustyTome.SetupForPlayer before the option is offered (Darv.cs:176-181)",
+      "maps_to": "events/darv.py:75-86 _dusty_tome_option: make_relic('dusty_tome') then tome.setup_for_player(run), so the Ancient card it will grant is fixed when the option appears -- the same pre-roll the source does.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Pandora's Box's set filter `!Modifiers.Any(m => m.ClearsPlayerDeck)` (Darv.cs:54)",
+      "maps_to": "events/darv.py:17-18 records the filter as always-true and _RELIC_SETS:32 gives Pandora's Box no filter. EXECUTED rather than assumed is not needed here: the sim has no ModifierModel port at all (`grep -rn ClearsPlayerDeck sts2_rl` is empty), so no ported modifier can clear the deck and the filter is the identity. Recorded so a future modifier port is caught.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited",
+      "maps_to": "events/ancient.py:24-32 heals max_hp - hp on begin(), the shared between-acts heal. Plain CreatureCmd.Heal on the C# side, no hooks.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DefineDialogues (Darv.cs:76-165) -- the six per-character dialogue tables and their SFX event paths",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,56 @@
+{
+  "unit": "event/wellspring",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Wellspring.cs",
+    "sha256": "64627bd5c9bf2a842e21ba09f31fdd2d7f1e6fa38dbf6bebf5237e2b3ede8a18"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\wellspring.py",
+    "sha256": "ae14d334d1ee68f6dbf31763a80dc691926ea0e526f3edcfa8fe8cd138f3fc5b"
+  },
+  "hooks": {},
+  "guards": [
+    {
+      "what": "no IsAllowed and no CalculateVars override (Wellspring.cs declares neither), so the event is always eligible and rolls nothing at entry",
+      "maps_to": "events/wellspring.py declares neither, inheriting Event.is_allowed's `return True` and the base no-op calculate_vars (events/base.py:103-110).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "CanonicalVars DynamicVar('BatheCurses', 1) (Wellspring.cs:19)",
+      "maps_to": "events/wellspring.py:6 _BATHE_CURSES = 1, and the Bathe handler loops over it exactly as AddGuilty(BatheCurses.IntValue) does (Wellspring.cs:48, :52-55).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (Wellspring.cs:21-28): two always-available options, BOTTLE then BATHE",
+      "maps_to": "events/wellspring.py:21-25, same order, no locks on either side.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Bathe (Wellspring.cs:44-50): FromDeckForRemoval(prefs count 1) -> CardPileCmd.RemoveFromDeck(cards) -> AddGuilty(1), in that order",
+      "maps_to": "events/wellspring.py:33-38: select_cards('remove', run.removable_cards(), 1) -> remove_cards -> add_card(make_card('guilty')). removable_cards (run.py:360-362) is CardModel.IsRemovable, which is what CardSelectCmd's removal screen enforces, and 'guilty' IS ported. CardPileCmd.AddCursesToDeck (CardPileCmd.cs:1042-1055) routes each curse through the ordinary CardPileCmd.Add(card, PileType.Deck), so run.add_card -- which runs Hook.ModifyCardBeingAddedToDeck (run.py:341-354) -- is the matching verb, and the curse-type assertion at :1047-1050 is satisfied. This is an ADD, so creature_card_cmds G3 (which is about transforms) does not apply.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-9: Bottle (Wellspring.cs:30-42) -- events/wellspring.py:30 calls run.random_potion() (run.py:513-520), a single `self.rng.choice` on the SHARED run rng over every potion class flagged in_reward_pool. C# here is a BARE `base.Owner.PlayerRng.Rewards.NextItem(items)` over `Character.PotionPool.GetUnlockedPotions(UnlockState).Concat(SharedPotionPool.GetUnlockedPotions(UnlockState))` (Wellspring.cs:32-33), wrapped in the two-argument PotionReward ctor (PotionReward.cs:45-50), so PotionReward.Populate does NOT re-roll: the rarity-tier leg of EV-9 does not apply and this site is exactly the endless_conveyor SUSPICIOUS_CONDIMENT shape -- one draw, wrong stream, wrong population. EXECUTED (`py tools/audit/event_probes_c.py drawcount`): BOTTLE takes exactly 1 draw and it is on the shared run rng.",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-9, one verdict at every random-potion site (rule 3). ALREADY RECORDED as a gap at event/battleworn_dummy (Setting1) and event/endless_conveyor (SUSPICIOUS_CONDIMENT) -- named here so the mechanism has an id, because it is NOT EV-3: EV-3 is 'the sim uses the shared run rng where C# uses the per-event base.Rng', and the stream C# uses here is the per-player PlayerRng.Rewards, which the sim already exposes as run.rewards_rng (run.py:270-274). endless_conveyor's guard labels its own instance '(EV-3)'; that label is imprecise and should be narrowed. EXECUTED (`py tools/audit/event_probes_c.py potionroll`): the sim's reward pool is 48 potion classes split 16 common / 16 uncommon / 16 rare, so a uniform choice gives P(rare) = 0.3333 where the game's PotionFactory tier gives 0.10 (and 0.25 / 0.65 for uncommon / common). Three observables at every site: the wrong stream, the wrong population (in_reward_pool is not the character-pool + SharedPotionPool union the source composes), and no rarity tier. LIVE for parity and, because the rarity tier is a distribution change, for the RL path too."
+    },
+    {
+      "what": "EV-4: Bottle's PotionReward (Wellspring.cs:36-40) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3); the owning records are event/drowning_beacon (BOTTLE), event/brain_leech (RIP) and event/endless_conveyor (SUSPICIOUS_CONDIMENT). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all ordinary event branches with no exotic gate."
+    },
+    {
+      "what": "the belt rules on the taken path",
+      "maps_to": "events/wellspring.py:30 run.add_potion(...) (run.py:474-485) gates on Hook.ShouldProcurePotion (Sozu) and on a free slot, which is what PotionReward.OnSelect's PotionCmd.TryToProcure does. Same finding as event/drowning_beacon's, cited not re-verdicted.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "HoverTipFactory.FromCardWithCardHoverTips<Guilty> on the BATHE option (Wellspring.cs:26)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

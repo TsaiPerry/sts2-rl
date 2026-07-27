@@ -1,0 +1,41 @@
+{
+  "unit": "event/doors_of_light_and_dark",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\DoorsOfLightAndDark.cs",
+    "sha256": "ef7233f0b82ec9e37577bd3541d599acfd1709bba37c3bf0ffeb4e9f0381306f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\doors_of_light_and_dark.py",
+    "sha256": "0504db3cb9a433c0d67bbed03f258ba71ada34418990b4b4cef1163be89cd343"
+  },
+  "hooks": {},
+  "guards": [
+    {
+      "what": "CanonicalVars CardsVar(2) (DoorsOfLightAndDark.cs:15)",
+      "maps_to": "events/doors_of_light_and_dark.py:3 _CARDS = 2, used as both the LIGHT upgrade count and nothing else -- matching the source, where DARK's removal count is the literal 1 (DoorsOfLightAndDark.cs:40).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Dark (DoorsOfLightAndDark.cs:38-43): FromDeckForRemoval(1) with NO filter, then CardPileCmd.RemoveFromDeck",
+      "maps_to": "events/doors_of_light_and_dark.py:33-36: select_cards('remove', run.removable_cards(), 1) then remove_cards. The unfiltered C# selector still respects IsRemovable inside CardSelectCmd, which is what removable_cards() (run.py:360-362) reproduces.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Light's `Take(Cards.IntValue)` is a TAKE, not a require -- a deck with fewer than 2 upgradable cards upgrades what it has (DoorsOfLightAndDark.cs:28-33)",
+      "maps_to": "events/doors_of_light_and_dark.py:27-30 `count = min(_CARDS, len(upgradable))`, and the loop is a no-op at 0. Same tolerance.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-5: Light's `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (DoorsOfLightAndDark.cs:28-29) is `...ToList().StableShuffle(base.Rng).Take(n)`; the sim uses `self.rng.sample(upgradable, count)` (events/doors_of_light_and_dark.py:29)",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-5, one verdict at every site (rule 3). StableShuffle is SORT-then-Fisher-Yates (ListExtensions; actmap.stable_shuffle, actmap.py:193-201, is the sim's faithful port and IS used elsewhere -- events/doll_room.py:53 and relics/fragrant_mushroom.py:31-36). The sort is the point: it makes the pick independent of the pile's incidental order, so two runs whose decks hold the same cards in a different order pick the same ones. Both substitutes drop it -- `random.sample` is a different algorithm entirely (it does not even consume the stream the same way) and a bare `shuffle` keeps the incidental order as its input. Compounded by EV-3's wrong stream. LIVE: every site is an ordinary event branch, and a deck whose card order differs from its sorted order is the normal case after any add/transform."
+    },
+    {
+      "what": "EV-3: Light's StableShuffle stream (DoorsOfLightAndDark.cs:28) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

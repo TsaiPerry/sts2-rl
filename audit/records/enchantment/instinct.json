@@ -1,0 +1,30 @@
+{
+  "unit": "enchantment/instinct",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Instinct.cs",
+    "sha256": "d2fe462be8634c2b35f108e07e7ed3b9a942bfd278a4e8062c2153be9f457d5a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "CanEnchantCardType": {
+      "maps_to": "InstinctEnchantment.can_enchant (enchantments.py:371-375) -- `card_type == CardType.ATTACK`, matching Instinct.cs:8-11. Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "EnchantDamageMultiplicative": {
+      "maps_to": "InstinctEnchantment.modify_damage_multiplicative (enchantments.py:377-383). Returns 2 for its own card and 1 otherwise; Instinct.cs:13-20's `!props.IsPoweredAttack() -> 1m` guard is hoisted into the caller (cmds.py:56), so the same set of hits is doubled. The factor 2m is exact. WHERE it lands in the fold is BR-1.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "BR-1 (blast radius, NOT a new mechanism): Hook.cs:1490-1499 applies the source card's Enchant*Additive then Enchant*Multiplicative to the running damage BEFORE either listener loop (Hook.cs:1314-1319 is the block twin); the sim registers the enchantment as an ordinary hook listener (combat.py:130-133) so its factor is pooled into the same sum/product as everyone else's (hooks.py:52-78, applied once at cmds.py:57-58)",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED, same verdict at every site (rule 3): audits/seam/damage_pipeline.json guard N3 names this explicitly (\"This includes card-enchantment bonuses, which the sim registers as ordinary hooks (combat.py:133) rather than as C#'s explicit pre-step (Hook.cs:1490-1499)\") and audits/seam/creature_card_cmds.json step 13 clause (b) carries the block half. NOT re-verdicted here; recorded because THIS unit is in the blast radius, and with a sharper witness than either seam record states. EXECUTED (`py tools/audit/enchantment_probes.py order`): an Instinct Strike (base 6) with Strength 3 deals 18 in the sim and 15 in the game -- C# folds 6 * 2 = 12 and then adds Strength 3; the sim sums 6 + 3 = 9 and then doubles. A 3-damage-per-hit error on every Strength stack, on the sim's largest ported damage multiplier. Both sides reachable with ported content: Instinct comes from the ported Tri-Boomerang relic (relics/tri_boomerang.py:21-27) and Strength is on the Ironclad's basic curve. The additive-only control in the same probe MATCHES, isolating the multiplicative phase. The seam records' own liveness evidence is the Shrink x Vulnerable float case; this witness needs no float at all -- it is a pure phase-order difference, and it should be folded into damage_pipeline N3 by that record's owner."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

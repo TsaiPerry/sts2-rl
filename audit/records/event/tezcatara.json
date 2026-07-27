@@ -1,0 +1,77 @@
+{
+  "unit": "event/tezcatara",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Tezcatara.cs",
+    "sha256": "915f53307c3931fc7d81d5dce828b34d15b5da55a1de1dff98ec0d9ddc54dae0"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\tezcatara.py",
+    "sha256": "fe83c36275e02c36d3807758f33658fab29bc39bf010c1e2941fe947f458d6f4"
+  },
+  "hooks": {
+    "AnyCharacterDialogueBlacklist": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only AND other-characters: Tezcatara.cs:16-20 suppresses the friendly 'any character' DIALOGUE lines for the Defect. Its only reader is the ancient-dialogue picker, it names a character the Ironclad-only sim never plays, and it takes no stream draw. Out of scope on both of the shared contract's counts."
+    },
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Tezcatara.cs:26-40 flattens the three pools plus Nutritious Soup for the run-history / compendium listing. Its only reader in the source is AncientEventModel.GenerateInitialOptionsWrapper's DebugOption swap (AncientEventModel.cs:198-202), which is dev tooling -- GenerateInitialOptions builds its own lists. Same mapping the nonupeipe record made (rule 3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "the three option pools and their ORDER (Tezcatara.cs:44-96): pool 1 = VeryHotCocoa, YummyCookie; pool 2 = BiiigHug, Storybook, ToastyMittens; pool 3 = GoldenCompass, PumpkinCandle, ToyBox, SealOfGold",
+      "maps_to": "events/tezcatara.py:16-20 OPTION_POOL_1/2/3 are those exact nine in source order, and order is load-bearing because NextItem indexes the list. All nine plus Nutritious Soup are ported (EXECUTED, `py tools/audit/event_probes_a.py reacha`).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Nutritious Soup gate (Tezcatara.cs:192-195): append it to pool 1 when `Deck.Cards.Any(c => c.Tags.Contains(CardTag.Strike) && c.Rarity == CardRarity.Basic)` -- appended BEFORE the pick, so it competes for the pool-1 slot rather than being added as a fourth option",
+      "maps_to": "events/tezcatara.py:39-44 tests `c.rarity == CardRarity.BASIC and 'strike' in c.tags` over run.deck and appends to a COPY of OPTION_POOL_1 before pick() -- both clauses, the same order, and the same 3-option output either way. EXECUTED (`py tools/audit/event_probes_a.py ancientdraws`): with the Ironclad starting deck the soup is offered; with a deck holding no Basic Strike it is not.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three `base.Rng.NextItem` picks in pool order (Tezcatara.cs:196-198), one per pool, evaluated left to right",
+      "maps_to": "events/tezcatara.py:45-47 first/second/third in the same order through one pick() helper. Rng.next_item (rng.py:248-252) is NextInt(0, len) over the list, which is Rng.NextItem. No pool can be empty, so the null branch never arises.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit is one of the six events with a parity RNG branch, so EV-3 does NOT apply -- and the branch is CLEAN on every path (the check the orobas lesson asks for)",
+      "maps_to": "events/tezcatara.py:34-37 uses self.event_rng when present, falling back to the shared rng only in legacy mode. EXECUTED (`py tools/audit/event_probes_a.py ancientdraws`): exactly 3 event-Rng draws on BOTH paths -- with Nutritious Soup in pool 1 (a 3-element list) and without it (a 2-element list). The event offers no locked option, so the orobas defect shape -- NextItem over a list that still holds a null-onChosen entry, taking a draw the sim's branch skips -- cannot arise here.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited (AncientEventModel.cs:170-191)",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(). Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so NOT in turn_structure step 38a's radius. Same mapping the nonupeipe record made (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() (AncientEventModel.cs:268-288)",
+      "maps_to": "events/ancient.py:34-44 _relic_option -- run.add_relic (which runs AfterObtained, run.py:546-553) then _finish. Same mapping the nonupeipe record made (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel's Hook.ShouldAllowAncient gate (AncientEventModel.cs:195, :147-152), unmodelled in the sim",
+      "maps_to": "NEGATIVE CONTROL, EXECUTED (`py tools/audit/event_probes_a.py ancienthook`): AbstractModel.ShouldAllowAncient (AbstractModel.cs:2167) has ZERO overrides in the entire game source and there is no WaxChoker.cs, so nothing can answer the hook and the PROCEED-only fallback (AncientEventModel.cs:206) is dead on both sides. Recorded once per Ancient in this batch; see the tanx record for the full derivation (rule 3, one verdict).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DefineDialogues (Tezcatara.cs:98-187) and the per-character / per-VisitIndex dialogue table",
+      "verdict": "waiver",
+      "rationale": "presentation only: an FMOD event-path table (empty strings for this Ancient) keyed by character and visit index, consumed by NAncientDialogueLine. No gameplay reader, no stream draw, and four of the five character keys are other characters."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

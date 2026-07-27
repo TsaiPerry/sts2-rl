@@ -1,0 +1,41 @@
+{
+  "unit": "event/brain_leech",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\BrainLeech.cs",
+    "sha256": "f261a4f0d9f6a437747a4087bff7c3591e11406d6777b53c5ecbed0aa7915ea4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\brain_leech.py",
+    "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "BrainLeech.is_allowed (events/brain_leech.py:31-33) `run.act_index < 2`, matching BrainLeech.cs:37-40 `runState.CurrentActIndex < 2`. No Players.All quantifier on this one.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars: RipHpLoss 5 (Unblockable|Unpowered), RewardCount 1, CardChoiceCount 1, FromCardChoiceCount 5 (BrainLeech.cs:29-35)",
+      "maps_to": "events/brain_leech.py:10-13 _RIP_HP_LOSS=5, _REWARD_COUNT=1, _CARD_CHOICE_COUNT=1, _FROM_CHOICE_COUNT=5. All four exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ShareKnowledge (BrainLeech.cs:63-77): CreateForReward(5) from the CHARACTER pool with ForNonCombatWithDefaultOdds, a NON-cancelable grid pick of 1, then CardPileCmd.Add(card, Deck)",
+      "maps_to": "events/brain_leech.py:41-51: create_reward_cards(REGULAR, count=5, mutate_pity=False) then select 1 then add_card. `Cancelable = false` (BrainLeech.cs:69) is why forcing the pick is correct here, and run.add_card runs the deck-entry hooks CardPileCmd.Add runs.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Rip (BrainLeech.cs:51-61): 5 damage, then RewardCount iterations of a 3-card COLORLESS CardReward offered through RewardsCmd.OfferCustom -- a SKIPPABLE screen",
+      "verdict": "gap",
+      "issue": "events/brain_leech.py:53-67 takes the damage and builds the same 3-card colourless choice with the same flags (NoRarityModification|NoCardPoolModifications -> mutate_pity=False, modify_hooks=False), but then does `for card in self.run.select_cards('card_reward', cards, 1): add_card(card)`, and select_cards always returns a card when the candidate list is non-empty (run.py:384-390). The player cannot decline the card. That is observable: the colourless pool contains curses and situational cards, and BrainLeech's own SHARE_KNOWLEDGE branch shows the source distinguishes the two screens deliberately -- it sets `Cancelable = false` there and uses plain OfferCustom here. Unlike the Battleworn Dummy potion case there is no driver-level skip to fall back on: the card is added inside the event. LIVE -- Brain Leech is eligible in acts 1-2 with no other gate."
+    },
+    {
+      "what": "EV-1: Rip's 5 HP loss (BrainLeech.cs:53) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py tools/audit/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

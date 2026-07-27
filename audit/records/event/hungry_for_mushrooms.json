@@ -1,0 +1,36 @@
+{
+  "unit": "event/hungry_for_mushrooms",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\HungryForMushrooms.cs",
+    "sha256": "2d2d2d521b75a254729bbc78b230a56bd4177feafcdadb60d9e821c33f49fdbc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\hungry_for_mushrooms.py",
+    "sha256": "a4e4d128eec5f074343ab46cd4d3c7edd50ce072a2aaa619ebbe9bc43243e9b6"
+  },
+  "hooks": {},
+  "guards": [
+    {
+      "what": "the two options are RelicOption<T>(handler) pairs whose handlers are bare RelicCmd.Obtain calls (HungryForMushrooms.cs:11-30) -- no gate, no vars, no RNG",
+      "maps_to": "events/hungry_for_mushrooms.py:26-41: two options, each add_relic then _finish. run.add_relic runs the relic's after_obtained (run.py:546-553), which is RelicCmd.Obtain's AfterObtained dispatch.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "FragrantMushroom's pickup effect reaches the player through the relic, as in the source",
+      "maps_to": "relics/fragrant_mushroom.py:26-42 implements after_obtained (15 HP loss then 2 StableShuffle'd upgrades on the Niche stream), so it fires from any grant path. That is the faithful shape, and it uses actmap.stable_shuffle with an explicit ModelId key -- the pattern EV-5 says the event sites should have followed.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BigMushroom's +20 Max HP pickup effect is implemented on the EVENT, not on the relic. BigMushroom.cs:25-29 AfterObtained calls CreatureCmd.GainMaxHp(MaxHpVar 20)",
+      "verdict": "gap",
+      "issue": "relics/big_mushroom.py has NO after_obtained override -- only modify_hand_draw -- and events/hungry_for_mushrooms.py:32-35 applies the +20 itself right after add_relic. The amount and ordering are right today, so nothing is currently double-applied or dropped: verified by grep that this event is the ONLY grant path in the sim (`grep -rn big_mushroom sts2_rl` outside the relic module returns only events/hungry_for_mushrooms.py:28, 32-33). It is still a divergence in SHAPE at a site where the twin relic in the same event does it correctly, and the relic's own docstring (relics/big_mushroom.py:18-19) justifies it with a false claim -- 'RunState has no run-level AfterObtained dispatch' -- when run.py:552 is exactly that dispatch and FragrantMushroom relies on it. DORMANT, and the concrete thing that would make it live is named: any second grant path for Big Mushroom (a relic reward, a shop, a grab-bag pull) would silently drop the 20 Max HP."
+    },
+    {
+      "what": "`.ThatDoesDamage(15m)` on the FRAGRANT_MUSHROOM option (HungryForMushrooms.cs:16)",
+      "verdict": "waiver",
+      "rationale": "presentation only -- the option's damage preview. The 15 itself is real and lives on the relic (relics/fragrant_mushroom.py:22), where the source puts it too (FragrantMushroom.cs's HpLossVar)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

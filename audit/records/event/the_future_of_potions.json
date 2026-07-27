@@ -1,0 +1,96 @@
+{
+  "unit": "event/the_future_of_potions",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\TheFutureOfPotions.cs",
+    "sha256": "e04c069bb629c1a27faf5d162ab255d8e89c0027b6e9900c02ce97f24fa3cb64"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\the_future_of_potions.py",
+    "sha256": "b3933f588170b2f12485c023786d09a100bb69039622a28ad02dcf342d21351a"
+  },
+  "hooks": {
+    "GameInfoOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: TheFutureOfPotions.cs:66-83 substitutes literal placeholder strings ('[rarity]', '[potion]', '[same-rarity]', '[card of random type]') into the two loc entries for the compendium/game-info screen, and throws if the loc format changes. No game state is read or written."
+    },
+    "IsAllowed": {
+      "maps_to": "TheFutureOfPotions.is_allowed (events/the_future_of_potions.py:42-44) `len(run.held_potions) >= 2`, matching TheFutureOfPotions.cs:85-88's `p.Potions.Count() >= 2`. run.held_potions is Player.cs's null-filtered Potions (run.py:501-507), so the count is over the same collection the option list then walks. Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "PotionToCardType (TheFutureOfPotions.cs:34-64): one `base.Rng.NextItem` per HELD potion -- ALL of them, not just the three that get options -- over [Attack, Skill, Power] with Power removed for Common and Token",
+      "maps_to": "events/the_future_of_potions.py:46-53 loops run.held_potions in belt order, builds the same three-element list in the same order, removes CardType.POWER for `potion.rarity in ('common', 'token')`, and stores one pick per potion. Same count, same per-potion candidate list, same order. Only the stream diverges (EV-3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "WHEN the per-potion rolls happen: the source's PotionToCardType is a LAZY property forced inside GenerateInitialOptions (TheFutureOfPotions.cs:39, :114), i.e. AFTER CalculateVars; the sim rolls them IN calculate_vars",
+      "maps_to": "events/the_future_of_potions.py:46 is calculate_vars, and Event.begin calls calculate_vars then initial_options (events/base.py:126-130). The two orders are observationally identical because this event overrides no CalculateVars and nothing else draws between the two points -- so the N per-potion draws are still the FIRST N draws of the visit in both engines. Recorded because the placement differs on paper.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GetCardRarity (TheFutureOfPotions.cs:147-162): Rare/Event -> Rare, Uncommon -> Uncommon, Common/Token -> Common, and an InvalidOperationException for anything else",
+      "maps_to": "events/the_future_of_potions.py:14-20 _CARD_RARITY is that exact 5-entry map. The throw branch is unreachable on both sides: the game's PotionRarity enum has exactly those five members and every sim potion carries one of them (potion_pools.py's roster uses only common/uncommon/rare, plus event for FoulPotion/GlowwaterPotion and token for the token pool).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions (TheFutureOfPotions.cs:101-121): `Mathf.Min(3, Potions.Count)` options over the FIRST three held potions in belt order, each closing over its own potion",
+      "maps_to": "events/the_future_of_potions.py:55-62 enumerates run.held_potions[:3] and binds each potion into its option's default argument. Same slice, same order, same per-option capture. The keys are POTION_0/1/2 where the source reuses one loc key with a dynamic title -- a presentation difference (see the UI guard) that the sim needs because its option keys must be distinguishable.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Trade's ORDER (TheFutureOfPotions.cs:123-131): GetCardRarity is read BEFORE PotionCmd.Discard, so the discarded potion's rarity is still available, and the card offer is built after",
+      "maps_to": "events/the_future_of_potions.py:67-69 reads target_rarity and card_type first, then discard_potion(potion), then builds the offer. Same order. run.discard_potion nulls the named slot without compacting the belt (run.py:487-490), matching Player.DiscardPotionInternal, and PotionCmd.Discard's Hook.AfterPotionDiscarded tail is a no-op out of combat -- ALREADY EXECUTED and recorded on the stone_of_all_time record (`py tools/audit/event_probes.py potiondiscard`), rule 3.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the offer's pool and filters (TheFutureOfPotions.cs:127): ForNonCombatWithUniformOdds over `Owner.Character.CardPool` with `c.Rarity == targetRarity && c.Type == PotionToCardType[potion]`, WithFlags(NoRarityModification | NoCardPoolModifications), and 3 DISTINCT cards",
+      "maps_to": "events/the_future_of_potions.py:70-75 filters IRONCLAD_POOL on both clauses and takes `self.rng.sample(candidates, min(3, len(candidates)))`. The pool is right: GetPossibleCards resolves to CardPool.GetUnlockedCards (CardCreationOptions.cs:168-178), which for a non-ascension Ironclad is the whole pool -- the equivalence cards/pool.py:120-133 records. Uniform odds means CreateForReward skips RollForRarity entirely and only strips Basic/Ancient (CardFactory.cs:221-223), which the rarity filter already does. Distinct is right -- CreateForReward accumulates a blacklist and `Except`s it each iteration (CardFactory.cs:91-97, :217) -- and sampling without replacement has the same distribution as the source's sequential Except-then-NextItem. The `min(3, len)` guard matches the source's own inability to fill a short pool. UNLIKE room_full_of_cheese, NoCardPoolModifications IS set here, so the sim's static pool is correct rather than merely currently-unobservable: the four ModifyCardRewardCreationOptions implementers that widen a pool (DingyRug.cs:19, PrismaticGem.cs:34, CharacterCards.cs:46, BigGameHunter.cs:40) all bail on that flag.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`reward.AfterGenerated += UpgradeCardsInReward` (TheFutureOfPotions.cs:129, :132-138): every offered card is upgraded, and NoUpgradeRoll is already set by ForNonCombatWithUniformOdds (CardCreationOptions.cs:160-163) so there is no rarity-scaled upgrade draw",
+      "maps_to": "events/the_future_of_potions.py:77-80 calls card.upgrade() on each of the three and takes no upgrade draw. AfterGenerated fires from CardReward.Populate right after CreateForReward returns (CardReward.cs:158-162), i.e. after the reward hooks -- see the EV-8 guard for what the sim misses in between. EXECUTED (`py tools/audit/event_probes_a.py futurepotions`): all three offered cards come out at upgrade level 1 in the sim, and no Ironclad pool card is upgradable a second time, so the source's egg-then-AfterGenerated pair cannot reach +2 either -- the levels agree.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-8: Trade's 3-card CardReward (TheFutureOfPotions.cs:127-130) builds its offer through CardFactory.CreateForReward, whose tail runs Hook.ModifyCardRewardCreationOptions (CardFactory.cs:216) and Hook.TryModifyCardRewardOptions (CardFactory.cs:104) unless NoModifyHooks is set -- it is not here. events/the_future_of_potions.py:70-80 hand-rolls the three cards with random.sample and never calls rewards.create_reward_cards (rewards.py:235-302), so neither pass runs.",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-8, one verdict at every hand-rolled offer (rule 3). Hook.TryModifyCardRewardOptions dispatches TWO passes over the run's listeners -- TryModifyCardRewardOptions and TryModifyCardRewardOptionsLate (Hook.cs:1445-1468) -- and the offer-side relics live in the late one (MoltenEgg.cs:21-32, Glitter.cs:18-33, SilkenTress.cs:47-61, SilverCrucible.cs:94-108, WingCharm.cs:24-38, FresnelLens.cs:23-31). The sim HAS the hook: Relic.modify_card_reward_options (relics/base.py:172), implemented by the egg relics (relics/_eggs.py:38-41), glitter (relics/glitter.py:16), silken_tress (relics/silken_tress.py:27) and silver_crucible (relics/silver_crucible.py:28), and rewards.create_reward_cards runs it (rewards.py:297-301). A hand-rolled offer never reaches it. LIVE, and the witness has to be a NON-egg implementer here: EXECUTED (`py tools/audit/event_probes_a.py futurepotions`), the egg leg is inert at this site because reward.AfterGenerated already upgrades all three and nothing in the Ironclad pool upgrades twice. Glitter does the work instead -- Glitter.cs:18-33 enchants EVERY Glam-eligible option and has no flag gate. Executed on the Attack branch (seed 0, offering breakthrough / anger / body_slam): all 3 satisfy Glam.CanEnchant, so the game's screen shows 3 Glam-enchanted cards and the sim's shows 0. Glitter is ported (relics/glitter.py) and reachable: it is Ancient rarity, correctly absent from the grab bag, and IS in Nonupeipe's Ancient option pool (events/nonupeipe.py OPTION_POOL) -- both sides proven reachable per rule 6. Two more ported implementers reach this same offer because CardReward's ctor sets CardCreationFlags.IsCardReward (CardReward.cs:114-115), which is exactly what SilkenTress.cs:53-56 and SilverCrucible.cs:104-107 gate on; WingCharm.cs:36 additionally takes a `Rng.Niche.NextItem` draw the sim never takes. Sites: room_full_of_cheese GORGE (egg witness) and the_future_of_potions TRADE (Glitter witness)."
+    },
+    {
+      "what": "EV-4: Trade's CardReward (TheFutureOfPotions.cs:130) is wrapped in RewardsCmd.OfferCustom in the source (RewardsCmd.cs:47-50 -> new RewardsSet(player).WithCustomRewards(rewards).Offer()), a TAKE-OR-SKIP screen; events/the_future_of_potions.py:81-82 `for card in self.run.select_cards('card_reward', cards, 1): run.add_card(card)`, and select_cards always returns a card when the candidate list is non-empty (run.py:371-390). The player cannot decline. Same shape as brain_leech RIP: the card is added inside the event, so unlike the battleworn_dummy potion there is no driver-level skip to fall back on -- and here the forced card is an UPGRADED one the player may not want in the deck at all.",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a card reward can be a card the player does not want in the deck, and a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` on its grid pick (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all of which are reachable event branches with no exotic gate."
+    },
+    {
+      "what": "EV-3: every draw this event takes: the per-held-potion `base.Rng.NextItem(list2)` card-type rolls (TheFutureOfPotions.cs:59), which events/the_future_of_potions.py:53 takes off `self.rng`; and the three card draws inside CardFactory.CreateForReward (CardFactory.cs:235-236, reached from TheFutureOfPotions.cs:128), which come off `player.PlayerRng.Rewards` in the source and off `self.rng` via random.Random.sample in the sim (events/the_future_of_potions.py:75). The second group is not literally the per-event Rng, but it is the same defect shape and takes EV-3's verdict per rule 3, exactly as the room_full_of_cheese and infested_automaton records recorded it. Confirmed by `py tools/audit/event_probes.py eventrng`, which lists the_future_of_potions among the modules that roll ONLY on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "the card lands in the deck through CardPileCmd.Add(PileType.Deck)",
+      "maps_to": "events/the_future_of_potions.py:82 run.add_card(card), which runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:341-354) -- so the egg relics see the TAKEN card in both engines. This event is in the add_card set and NOT in creature_card_cmds G3's transform radius.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BeforeEventStarted / OnEventFinished setting `Owner.CanRemovePotions = false/true` (TheFutureOfPotions.cs:90-99), which events/the_future_of_potions.py:34-36 declares unmodelled",
+      "verdict": "waiver",
+      "rationale": "presentation only, and ALREADY VERIFIED rather than accepted on the stone_of_all_time record (rule 3): `grep -rn CanRemovePotions src` returns the flag's declaration (Player.cs:168-177, 242), the three events that set it (StoneOfAllTime, RanwidTheElder, TheFutureOfPotions) and exactly two readers, both in NPotionPopup (NPotionPopup.cs:139, 338) -- the potion popup's button state. Nothing in Core reads it to gate a potion's EFFECT."
+    },
+    {
+      "what": "`runState.Players.All(p => p.Potions.Count() >= 2)` (TheFutureOfPotions.cs:87)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the ChoiceTitle / ChoiceDescription LocStrings and their four var substitutions (TheFutureOfPotions.cs:30-32, :109-114), `.ThatHasDynamicTitle()` (TheFutureOfPotions.cs:118) and the potion hover tips",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

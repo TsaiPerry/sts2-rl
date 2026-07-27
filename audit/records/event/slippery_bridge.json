@@ -1,0 +1,81 @@
+{
+  "unit": "event/slippery_bridge",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\SlipperyBridge.cs",
+    "sha256": "fde2aa8f227c512622958a84f9efed8740714c8b6b02cfe7c7e31cca410962ef"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\slippery_bridge.py",
+    "sha256": "d505216c9348293f3da1da0ec6d85074302b80d0ea0cd96b74524dc96c79ecb4"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "SlipperyBridge.is_allowed (events/slippery_bridge.py:38-40) `run.total_floor > 6 and bool(run.removable_cards())`, matching SlipperyBridge.cs:82-89's early `TotalFloor > 6` guard followed by `p.Deck.Cards.Any(c => c.IsRemovable)`. run.removable_cards (run.py:360-362) is IsRemovable (everything but Eternal). Quantifier collapses -- see the multiplayer guard.",
+      "verdict": "faithful"
+    },
+    "OnRoomEnter": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: SlipperyBridge.cs:101-104 adds NRainVfx to the event room's VfxContainer. No game-state reader, and it takes no stream draw."
+    }
+  },
+  "guards": [
+    {
+      "what": "CurrentHpLoss = 3 + NumberOfHoldOns (SlipperyBridge.cs:27, 74) and the DynamicVar('HpLoss', CurrentHpLoss) that tracks it (SlipperyBridge.cs:79, 142)",
+      "maps_to": "events/slippery_bridge.py:11 _BASE_HP_LOSS = 3 and events/slippery_bridge.py:79 `lose_hp(_BASE_HP_LOSS + self._holds)`. Exact, and the sim needs no separate var because it recomputes.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GetNewRandomCard's FIRST pass (SlipperyBridge.cs:109-113, 122): non-Basic deck cards, then RemoveAll(!IsRemovable || skipped)",
+      "maps_to": "events/slippery_bridge.py:45-47: `removable = run.removable_cards()` then `[c for c in removable if c.rarity != CardRarity.BASIC]`. The source filters non-Basic first and removability second; the sim does it in the other order over the same two predicates, which is the same set (SkippedRemovals is still null on the first pass).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GetNewRandomCard's RE-ROLL pass (SlipperyBridge.cs:115-122): add the current card to SkippedRemovals, then take deck cards whose TYPE differs from the shown one, then RemoveAll(!IsRemovable || skipped) -- note the Basic exclusion is NOT reapplied, so Strikes and Defends become eligible after the first hold",
+      "maps_to": "events/slippery_bridge.py:49-55 reproduces all four details: the `self._skipped.add(id(self.shown_card))` before the list is built, the `c.id != self.shown_card.id` type test (sim card ids are the source's GetType() equivalence class), the per-instance skip set, and the ABSENCE of the Basic filter. The skip set is instance-keyed in both -- HashSet<CardModel> vs a set of id() -- so a second copy of a skipped card stays eligible.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the empty-list fallback (SlipperyBridge.cs:123-126): fall back to every removable deck card, ignoring both exclusions",
+      "maps_to": "events/slippery_bridge.py:56-57 `if not candidates: candidates = removable`. Same fallback, same breadth -- which is what makes the HOLD_ON loop non-terminating rather than crashing in both engines.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Overcome (SlipperyBridge.cs:132-136): CardPileCmd.RemoveFromDeck(RandomCardToLose) -- the specific instance",
+      "maps_to": "events/slippery_bridge.py:74-76 `run.remove_cards([self.shown_card])`, and run.remove_cards is `self.deck.remove(card)` (run.py:356-358). That is instance-exact here, not value-exact: Card defines no __eq__ anywhere in sts2_rl (grep), so list.remove falls back to identity and cannot pull a different duplicate Strike. Worth stating because the sim's own transform_card docstring (run.py) claims 'duplicate basics compare equal' -- for Card that claim is false, and the identity-based removal here is correct.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "HoldOn's ORDER (SlipperyBridge.cs:138-152): Damage(CurrentHpLoss) FIRST, then NumberOfHoldOns++, then the HpLoss var write, then GetNewRandomCard, then the new page",
+      "maps_to": "events/slippery_bridge.py:78-82: lose_hp(3 + holds), holds += 1, _roll_shown_card(), _set_state(...). Same four steps in the same order, which matters because the damage uses the PRE-increment cost and the re-roll happens after it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the page/option key skew (SlipperyBridge.cs:144-151): the PAGE is HOLD_ON_{suffix(n-1)} while the option on it is HOLD_ON_{suffix(n)}, and GetHoldOnSuffix caps at 'LOOP' from 7 (SlipperyBridge.cs:154-161)",
+      "maps_to": "events/slippery_bridge.py:60-68, 82 reproduce the skew exactly -- _page_options() labels the hold option with suffix(self._holds) and _hold_on passes suffix(self._holds - 1) as the page -- and _suffix returns 'LOOP' for >= 7. The INITIAL page's literal 'HOLD_ON_0' (SlipperyBridge.cs:97) falls out of suffix(0). OVERCOME keeps the INITIAL loc key on every page in both.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: GetNewRandomCard's `base.Rng.NextItem(list)` (SlipperyBridge.cs:127) -- events/slippery_bridge.py:58 `self.rng.choice(candidates)`. One draw per page in both, including the one GenerateInitialOptions forces rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "EV-1: HOLD_ON's escalating 3 + n HP loss (SlipperyBridge.cs:140), which is an UNBOUNDED loop -- the player can hold on until dead, so this is the event where EV-1's death-prevention pass matters most can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py tools/audit/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    },
+    {
+      "what": "`runState.Players.All(...)` (SlipperyBridge.cs:86)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the RandomCard StringVar and its per-page write (SlipperyBridge.cs:78, 128-129), the FromCard hover tips and the `.ThatDoesDamage(CurrentHpLoss)` annotations (SlipperyBridge.cs:96-97, 149-150)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

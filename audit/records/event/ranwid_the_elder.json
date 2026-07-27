@@ -1,0 +1,86 @@
+{
+  "unit": "event/ranwid_the_elder",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\RanwidTheElder.cs",
+    "sha256": "3471ba50086f4bf759eab58569fcadc35b44e2bfae983c7f8ab7ddb83ca21c2c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\ranwid_the_elder.py",
+    "sha256": "d0e4f2982b6cbb00c6d50700886cf5dfae728319278d8eb1784f8ede398f9b2f"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "RanwidTheElder.is_allowed (events/ranwid_the_elder.py:31-38) is the four source clauses in the source's order (RanwidTheElder.cs:51-70): `run.act_index != 0` for the early `CurrentActIndex == 0 -> false`; `any(r.is_tradable for r in run.relics)` for `!GetValidRelics(p).Any()` (GetValidRelics is `Relics.Where(r => r.IsTradable)`, RanwidTheElder.cs:72-75 -- the same filter relic_trader uses, and Relic.is_tradable (relics/base.py:125-135) is that record's clause-for-clause port of RelicModel.IsTradable); `run.gold >= 100`; and `len(run.held_potions) > 0` for `!p.Potions.Any()`, where run.held_potions is Player.cs's null-filtered Potions (run.py:501-507). Quantifiers collapse -- see the multiplayer guard.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars GoldVar(100) plus two StringVars (RanwidTheElder.cs:33-38), and GiveGold's `LoseGold(DynamicVars.Gold.IntValue)` (RanwidTheElder.cs:120)",
+      "maps_to": "events/ranwid_the_elder.py:10 _GOLD_COST = 100, used by both the gate and the payment. Exact, and read from one constant in both.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GenerateInitialOptions' DRAW ORDER (RanwidTheElder.cs:77-107): the POTION `base.Rng.NextItem(Owner.Potions)` is rolled FIRST, the GOLD option is appended with no roll, and the RELIC `base.Rng.NextItem(Owner.Relics.Where(IsTradable))` is rolled LAST",
+      "maps_to": "events/ranwid_the_elder.py:40-58 does exactly that, with a comment naming the order (`:42`). Two draws per visit in both, in the same sequence, and the option list comes out POTION / GOLD / RELIC in both. Only the stream diverges (EV-3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "both LOCKED branches (RanwidTheElder.cs:89-92, :103-106): a null onChosen option when NextItem returns null",
+      "maps_to": "events/ranwid_the_elder.py:49 and :57 emit EventOption('POTION_LOCKED', None) / ('RELIC_LOCKED', None), and EventOption.locked + choose()'s refusal (events/base.py:62-64, :153-154) reproduce the unclickable option. Dead code in BOTH engines -- IsAllowed already requires a potion and a tradable relic -- and the sim reproduces the dead branch rather than dropping it, exactly as it does for relic_trader's `Count == 0 -> PROCEED` fallback.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GivePotion (RanwidTheElder.cs:110-116): PotionCmd.Discard(potion) THEN one PullNextRelicFromFront -> RelicCmd.Obtain",
+      "maps_to": "events/ranwid_the_elder.py:66-69 discard_potion(potion) then _obtain_grab_bag(1). Order preserved. run.discard_potion nulls the named slot without compacting the belt (run.py:487-490), matching Player.DiscardPotionInternal, and the potion is identified by IDENTITY in both (the C# closure captures the PotionModel; the sim's lambda captures the instance and list.index is identity-based for a Potion, which defines no __eq__).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "PotionCmd.Discard's Hook.AfterPotionDiscarded tail (PotionCmd.cs:55-60), which run.discard_potion does not fire",
+      "maps_to": "ALREADY EXECUTED and recorded on the stone_of_all_time record (`py tools/audit/event_probes.py potiondiscard`), rule 3: the hook has exactly ONE implementer in the whole game source, BeltBuckle.cs:72-79, whose body is gated on `CombatManager.Instance.IsInProgress`. Ranwid's discard is out of combat, so the hook resolves to a no-op here too.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GiveGold (RanwidTheElder.cs:118-124): PlayerCmd.LoseGold(100, GoldLossType.Spent) THEN PullNextRelicFromFront -> RelicCmd.Obtain",
+      "maps_to": "events/ranwid_the_elder.py:71-74 lose_gold(100) then _obtain_grab_bag(1). Order preserved, and run.lose_gold (run.py:335-337) `max(0, gold - int(amount))` is exactly PlayerCmd.LoseGold's `int.Max(0, Gold - (int)amount)` (PlayerCmd.cs:198). GoldLossType.Spent adds only `PlayerMapPointHistoryEntry.GoldSpent += (int)amount` (PlayerCmd.cs:185-188) -- a run-history counter with no gameplay reader, and Spent is the ordinary purchase annotation the luminous_choir record already mapped as faithful (rule 3). Only GoldLossType.Stolen's extra MarkLootStolen call is recorded as a divergence, on morphic_grove.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "GiveRelic (RanwidTheElder.cs:126-134): RelicCmd.Remove(relic) THEN TWO PullNextRelicFromFront -> RelicCmd.Obtain pairs, interleaved",
+      "maps_to": "events/ranwid_the_elder.py:76-79 `run.relics.remove(relic)` then _obtain_grab_bag(2), whose loop is pull; add; pull; add -- the same interleave, which matters because the second pull sees the first relic already owned. The bare list-remove drops nothing: ALREADY EXECUTED on the relic_trader record (`py tools/audit/event_probes.py relictrade`), rule 3 -- RelicModel.AfterRemoved has ZERO overrides in the whole game source. list.remove is identity-based (Relic defines no __eq__), so it removes the exact instance the option named.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "all three branches pull on the right stream: the one-argument `RelicFactory.PullNextRelicFromFront(base.Owner)` rolls rarity on `player.PlayerRng.Rewards` (RelicFactory.cs:28, :82)",
+      "maps_to": "events/ranwid_the_elder.py:62 run.pull_relic_from_front() with no rarity_rng falls back to run.rewards_rng (run.py:588-589), which is PlayerRng.Rewards in parity runs (run.py:271-274). EV-3 does NOT apply to the four grab-bag pulls -- only to the two option-generation NextItem draws. Same derivation the relic_trader and round_tea_party records made.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: GenerateInitialOptions' two `base.Rng.NextItem` draws -- the potion (RanwidTheElder.cs:80) and the tradable relic (RanwidTheElder.cs:94) -- which events/ranwid_the_elder.py:44 and :52 take off `self.rng` via random.Random.choice. Right count, right order, right candidate lists; wrong stream. Confirmed by `py tools/audit/event_probes.py eventrng`, which lists ranwid_the_elder among the modules that roll ONLY on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "BR-relic_trader (blast radius): the grab-bag-runs-dry state. RanwidTheElder.cs:113, :121 and :131 call `RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable()` with no null check at all, so an empty bag is an NRE in the source",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as the relic_trader record's grab-bag guard (rule 3, not re-verdicted): events/ranwid_the_elder.py:62-64 guards with `if relic is not None`, silently granting fewer relics than the option promised where the game would crash. DORMANT, with the same concrete trigger relic_trader names: fewer relics left in the bag than the branch pulls (1, 1 or 2 here). IsAllowed guarantees only that the player OWNS a tradable relic, not that the bag is stocked, but exhausting a 200+ relic bag inside one run does not happen with ported content. Recorded so the sim's defensive guard is not mistaken for the source's shape."
+    },
+    {
+      "what": "BeforeEventStarted / OnEventFinished setting `Owner.CanRemovePotions = false/true` (RanwidTheElder.cs:40-49), which events/ranwid_the_elder.py:25 declares unmodelled",
+      "verdict": "waiver",
+      "rationale": "presentation only, and ALREADY VERIFIED rather than accepted on the stone_of_all_time record (rule 3): `grep -rn CanRemovePotions src` returns the flag's declaration (Player.cs:168-177, 242), the three events that set it (StoneOfAllTime, RanwidTheElder, TheFutureOfPotions) and exactly two readers, both in NPotionPopup (NPotionPopup.cs:139, 338) -- the potion popup's button state. Nothing in Core reads it to gate a potion's EFFECT. The sim has no potion UI, so there is nothing to disable."
+    },
+    {
+      "what": "the three `runState.Players.Any(...)` quantifiers (RanwidTheElder.cs:57, :61, :65)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "the four LocString title/description properties (RanwidTheElder.cs:25-31), the two StringVar writes (RanwidTheElder.cs:83, :97), `.ThatHasDynamicTitle()` (RanwidTheElder.cs:87, :101) and the potion / relic hover tips",
+      "verdict": "waiver",
+      "rationale": "presentation only: every one is a title, a description or a hover-tip list for the two dynamic rows. The sim names the options POTION / GOLD / RELIC and lets the driver read the chosen potion and relic off the captured closure, so no game state depends on the strings."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

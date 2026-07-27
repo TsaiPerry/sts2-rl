@@ -1,0 +1,37 @@
+{
+  "unit": "enchantment/sown",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Sown.cs",
+    "sha256": "cff20c8353deb276569353afd724c2c069768a4b077f11b2ba06d15914359e04"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "OnPlay": {
+      "maps_to": "SownEnchantment.before_card_played (enchantments.py:90-96) -- `EnergyCmd.gain(player, amount)` then `disabled = True`, guarded on `not disabled`, matching Sown.cs:13-20's `if (Status == Normal) { PlayerCmd.GainEnergy(Amount, Owner); Status = Disabled; }`. The amount and the once-per-combat latch are right; Enchantment.reset (enchantments.py:70-72) clears the latch each combat, matching the game's per-combat clone",
+      "verdict": "gap",
+      "issue": "Wrong slot. See guard EG1: C# runs Enchantment.OnPlay AFTER the card's own OnPlay, inside the replay loop (CardModel.cs:1931 then 1937-1945); the sim wires it to before_card_played, which fires once, before the card's effect. Same mechanism, same verdict as Corrupted's OnPlay (rule 3), where both legs are proven by execution. Sown's own latch means the replay leg cannot bite, but the POSITION leg does: the energy arrives before the card resolves instead of after it."
+    }
+  },
+  "guards": [
+    {
+      "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
+      "verdict": "gap",
+      "issue": "Sown is the second of the three EnchantmentModel.OnPlay ports. The mechanism's executed proof lives on the Corrupted record (`py tools/audit/enchantment_probes.py onplay-slot replay`); Sown's own once-per-combat latch (Sown.cs:15-19) makes the replay leg inert here, leaving the position leg. Reachability of this unit proven: granted by the ported Sapphire Seed event (events/sapphire_seed.py:36-39, amount 1)."
+    },
+    {
+      "what": "EG1 scope note for Sown: is the position leg observable on its own?",
+      "verdict": "faithful",
+      "maps_to": "measured, not assumed. `py tools/audit/enchantment_probes.py onplay-slot` plays a Sown-enchanted Whirlwind at 3 energy: the sim spends X before before_card_played fires, so the X capture sees the pre-gain energy in BOTH engines and this particular reading does not diverge. The position leg's proven witness is Corrupted's Rupture case; Sown's is recorded as the same mechanism rather than as an independently-proven observable."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

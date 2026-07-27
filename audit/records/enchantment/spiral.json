@@ -1,0 +1,29 @@
+{
+  "unit": "enchantment/spiral",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Spiral.cs",
+    "sha256": "2559092c34b048342088c6a3a02d26e86cb34f1712bd675eb3a155a0c4197edb"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "CanEnchant": {
+      "maps_to": "SpiralEnchantment.can_enchant (enchantments.py:157-165) -- base plus `rarity == CardRarity.BASIC and ('strike' in tags or 'defend' in tags)`, matching Spiral.cs:17-28 exactly (the decompiler's inverted `if (!Tags.Contains(Strike)) return Tags.Contains(Defend); return true;` is the same disjunction). Enchantment.can_enchant (enchantments.py:51-61) + the subclass override. Base CanEnchant (EnchantmentModel.cs:273-294) rejects CardType 4/5/6 (Status/Curse/Quest), then CanEnchantCardType, then an Unplayable card whose pile is PileType.Deck, then a card that already has a (non-stackable) enchantment. The sim folds CanEnchantCardType into each subclass's own can_enchant and replaces the pile-qualified Unplayable test with an unconditional `not card.is_playable` -- equal in practice because every ported grant enchants a DECK card (probe `grants`).",
+      "verdict": "faithful"
+    },
+    "EnchantPlayCount": {
+      "maps_to": "SpiralEnchantment.modify_card_play_count (enchantments.py:167-170) -- `count + amount` unconditionally for its own card, matching Spiral.cs:30-33's `originalPlayCount + DynamicVars[\"Times\"].IntValue`. Times' canonical value is 1m (Spiral.cs:13) and the grant (events/spiraling_whirlpool.py:46) uses the default amount 1. POSITION: C# folds EnchantPlayCount into BaseReplayCount before Hook.ModifyCardPlayCount (CardModel.cs:1129-1131, 2015-2021: `GetEnchantedReplayCount() + 1` then the hook) while the sim runs it as one listener inside that hook against `1 + card.base_replay_count` (combat.py:469-471). Numerically identical: every ported modify_card_play_count implementation is a pure `count + k` (powers.py:966, 3919; relics/throwing_axe.py:30-36; enchantments.py:167, 232), so the fold is order-free -- verified by reading all five.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "reachability: granted by the ported Spiraling Whirlpool event (events/spiraling_whirlpool.py:44-46). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

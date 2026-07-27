@@ -1,0 +1,67 @@
+{
+  "unit": "event/nonupeipe",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Nonupeipe.cs",
+    "sha256": "81690f29d04b055c84d9ceab7aebe5c98958a11f72ec0fa95d6fcc8438afec82"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\nonupeipe.py",
+    "sha256": "8ecd4c4afbb545903025c44f0b845dba8dd94bb1a0f2a0423572073ff06b03e9"
+  },
+  "hooks": {
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Nonupeipe.cs:16 concatenates the pool with Beautiful Bracelet for the run-history / compendium listing. Unlike Neow's, this one has no gameplay reader -- nothing in the source draws from it (GenerateInitialOptions builds its own list), and no ported relic consults it."
+    }
+  },
+  "guards": [
+    {
+      "what": "OptionPool's 9 relics (Nonupeipe.cs:18-28)",
+      "maps_to": "events/nonupeipe.py:11-14 OPTION_POOL: blessed_antler, brilliant_scarf, delicate_frond, diamond_diadem, fur_coat, glitter, jewelry_box, looming_fruit, signet_ring -- the same nine in source order, which is the shuffle's input.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Beautiful Bracelet gate (Nonupeipe.cs:34-35): append it when `Deck.Cards.Count(Swift.CanEnchant) >= 4`",
+      "maps_to": "events/nonupeipe.py:26-31 counts SwiftEnchantment.can_enchant over the deck and compares against BeautifulBracelet.MIN_ELIGIBLE, which is 4 (relics/beautiful_bracelet.py:20). The threshold lives on the relic in the sim rather than inline, but the value and the predicate match; Swift's CanEnchant is audited under enchantment/swift.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "UnstableShuffle then Take(3) (Nonupeipe.cs:36-37)",
+      "maps_to": "events/nonupeipe.py:34-35 shuffles then slices [:3]. UnstableShuffle is a bare Fisher-Yates, so `shuffle` is the right primitive -- no EV-5 here. Note the bracelet is appended BEFORE the shuffle in both, so it competes for all three slots rather than being bolted on.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit is one of the six with a parity RNG branch, so EV-3 does NOT apply",
+      "maps_to": "events/nonupeipe.py:34 uses self.event_rng when present, falling back to the shared rng only in legacy mode.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EventButtonColor (Nonupeipe.cs:30) -- a `protected override`, so the harness does not enumerate it; audited here",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(), the between-acts heal every Ancient does. Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so this is NOT in turn_structure step 38a's radius.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() -- an option whose choice obtains the relic and finishes the event",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

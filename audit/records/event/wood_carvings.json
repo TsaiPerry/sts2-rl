@@ -1,0 +1,56 @@
+{
+  "unit": "event/wood_carvings",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\WoodCarvings.cs",
+    "sha256": "d20954b51973fbe71cea76b6175bc5f52e224cf3d44bb4206cf3c4e5e64f0ea3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\wood_carvings.py",
+    "sha256": "82a83e9d2967853471e63b02d30b56a9aa87af98373eb27fb3163c89dddc3f15"
+  },
+  "hooks": {
+    "IsAllowed": {
+      "maps_to": "WoodCarvings.is_allowed (events/wood_carvings.py:30-34) `any(c.rarity == BASIC and not c.eternal for c in run.deck)`, matching WoodCarvings.cs:36-39 `Players.All(p => CardPile.Get(Deck, p).Cards.Any(c => c != null && c.Rarity == CardRarity.Basic && c.IsRemovable))`. IsRemovable is 'everything except Eternal' (run.py:360-362), so `not c.eternal` is the same clause. Multiplayer quantifier waived separately.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "GenerateInitialOptions (WoodCarvings.cs:41-51): BIRD, then SNAKE or SNAKE_LOCKED, then TORUS -- and the SNAKE lock is decided by `Deck.Cards.Any(c => Slither.CanEnchant(c))`, a WIDER predicate than the Basic-rarity one the other two use",
+      "maps_to": "events/wood_carvings.py:42-55 builds the same three-option list in the same order and gates SNAKE on the same whole-deck SlitherEnchantment.can_enchant scan (:43-45), which is separate from _basic_candidates (:36-40). Note BIRD and TORUS are never locked in either implementation -- IsAllowed already guarantees a Basic card exists.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Bird (WoodCarvings.cs:53-61) and Torus (:78-86): FromDeckGeneric with the filter `c.IsTransformable && c.Rarity == CardRarity.Basic`, FirstOrDefault, then CardCmd.TransformTo<Peck> / <ToricToughness> -- a FIXED replacement, so no RNG",
+      "maps_to": "events/wood_carvings.py:57-61 and :70-74 pass `into=make_card('peck')` / `into=make_card('toric_toughness')` to run.transform_card, whose `if into is None` branch (run.py:437) is therefore never entered, and both cards ARE ported. The `if chosen:` guards reproduce FirstOrDefault's null case. Torus's extra `c != null` clause is a C#-only defence.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Snake (WoodCarvings.cs:63-76): FromDeckForEnchantment(Slither, amount 1, prefs count 1).FirstOrDefault() then CardCmd.Enchant<Slither>(card, 1m)",
+      "maps_to": "events/wood_carvings.py:63-68 re-derives the candidate list with the same CanEnchant predicate, selects 1, and attaches. SlitherEnchantment.can_enchant (enchantments.py:113-114) adds the `not card.energy_cost_x` clause on top of the base, matching Slither.cs:31-38's `base.CanEnchant(card) && !Keywords.Contains(Unplayable) && !EnergyCost.CostsX` -- the Unplayable clause is already inside the sim's base can_enchant (enchantments.py:52-60). Both the base port and Slither's body are audited by audits/enchantment/slither.json, which owns the finding that Slither's in-combat cost roll uses the wrong RNG stream (Slither.cs:61 Rng.CombatEnergyCosts vs enchantments.py:119 combat._rng) -- cited as blast radius, not re-verdicted (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "BR-G3 (blast radius): Bird's and Torus's CardCmd.TransformTo<T> (WoodCarvings.cs:58, :83) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as audits/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py tools/audit/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+    },
+    {
+      "what": "this event consumes NO randomness on any path, so EV-3 does not apply",
+      "maps_to": "EXECUTED (`py tools/audit/event_probes_c.py drawcount`): BIRD, SNAKE and TORUS each take 0 shared-rng and 0 event-rng draws with the card choice pinned, matching a source whose only card creation is the deterministic TransformTo<T>. NOTE `py tools/audit/event_probes.py eventrng` lists wood_carvings among the modules that 'roll ONLY on the shared rng' -- that is a FALSE POSITIVE of its regex, which counts any `run.transform_card(` call as a roll; this unit always passes `into=`. Flagged so the report's 28-of-34 EV-3 count is not read as including this unit.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the three CanonicalVars StringVars naming Peck / Slither / Toric Toughness (WoodCarvings.cs:29-34), the two card hover tips and HoverTipFactory.FromEnchantment<Slither> (:44, :47, :49), and NCardEnchantVfx.Create + CardPreviewContainer (:69-73)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "IsAllowed's `runState.Players.All(p => ...)` quantifier (WoodCarvings.cs:38)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

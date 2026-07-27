@@ -1,0 +1,72 @@
+{
+  "unit": "event/pael",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Pael.cs",
+    "sha256": "35411063dc0bb8f3333285347e0116d6c79fdbac1bb2e3c97512ec5a96e3fb6d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\pael.py",
+    "sha256": "b44cc9f4d65cd83d22c38a23dfbb238a20f3efc978f8e15870e3102ce26da348"
+  },
+  "hooks": {
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Pael.cs:13 concatenates the three pools with the four conditional options for the compendium listing. No gameplay reader."
+    }
+  },
+  "guards": [
+    {
+      "what": "the three pools (Pael.cs:24-41 region): OptionPool1 = Pael's Flesh / Horn / Tears; OptionPool2 = Pael's Wing; OptionPool3 = Pael's Eye, Pael's Blood",
+      "maps_to": "events/pael.py:18 OPTION_POOL_1 (three ids, source order), events/pael.py:41 pool2 = ['paels_wing'], events/pael.py:53 pool3 = ['paels_eye', 'paels_blood']. Verified against the decompiled span writes -- OptionPool3 is `num = 2` with PaelsEye at index 0 and PaelsBlood at index 1.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the OptionPool2 weighting trick (Pael.cs, GenerateInitialOptions): conditionally append Claw and Tooth, then `list.AddRange(list)` -- which DOUBLES the whole list in place -- and only then append Growth, so Growth rolls at half the weight of every other entry",
+      "maps_to": "events/pael.py:41-51 reproduces it literally: build pool2, `pool2 = pool2 + pool2`, then append 'paels_growth'. The order matters and is preserved -- doubling before the Growth append is what creates the half weight. events/pael.py:6-9 documents the intent.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the two OptionPool2 gates: Claw when `Deck.Count(Goopy.CanEnchant) >= 3`, Tooth when `Deck.Count(IsRemovable) >= 5`",
+      "maps_to": "events/pael.py:42-48: GoopyEnchantment.can_enchant counted against PaelsClaw.MIN_ELIGIBLE (3, relics/paels_claw.py:17) and len(run.removable_cards()) against PaelsTooth.MIN_REMOVABLE (5, relics/paels_tooth.py:20). Both thresholds exact; Goopy's CanEnchant is audited under enchantment/goopy and IsRemovable is run.py:360-362.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the OptionPool3 gate: append Pael's Legion when `!Owner.HasEventPet()`",
+      "maps_to": "events/pael.py:54-55 `if not run.has_event_pet` (run.py:1085), the same predicate event/byrdonis_nest audits against Player.cs:244-251.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "three NextItem picks, one per slot, in pool order (Pael.cs GenerateInitialOptions' three `base.Rng.NextItem` calls)",
+      "maps_to": "events/pael.py:35, 51, 56 in the same order on the same stream, returned as [first, second, third] (events/pael.py:58) -- matching the source's `new EventOption[3] { eventOption, eventOption2, eventOption3 }`. Unlike Orobas, no slot here can be empty, so there is no missing-draw path.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit is one of the six with a parity RNG branch, so EV-3 does NOT apply",
+      "maps_to": "events/pael.py:30-33 uses self.event_rng.next_item when present.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(), the between-acts heal every Ancient does. Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so this is NOT in turn_structure step 38a's radius.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() -- an option whose choice obtains the relic and finishes the event",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,30 @@
+{
+  "unit": "enchantment/perfect_fit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\PerfectFit.cs",
+    "sha256": "034bb8bd5daa7b987c0e4f1127f4d432cd029a10aef0fd7dab821b0a131f7a91"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "ModifyShuffleOrder": {
+      "maps_to": "PerfectFitEnchantment.on_shuffle (enchantments.py:186-189), dispatched by HookSystem.on_shuffle (hooks.py:433-437). Four things checked against PerfectFit.cs:10-16: (1) the `!isInitialShuffle` guard -- the sim only fires on_shuffle from the two mid-combat reshuffles (player.py:218, 239) and never from the combat-start shuffle (player._shuffle_draw_pile, player.py:241-274, has no dispatch), matching C#'s CardPileCmd.cs:877 `isInitialShuffle: false` vs CardPile.cs:73 `isInitialShuffle: true`; (2) the `cards.Contains(base.Card)` guard maps to `self.card in player.draw_pile`; (3) `Remove` then `Insert(0, ...)` maps to `remove` then `append`, correct because C# stores the pile top at index 0 while the sim draws off the END of the list (player.py:290) -- the sim's own _shuffle_draw_pile reverses for exactly this reason (player.py:264-274); (4) ORDER -- C# runs ModifyShuffleOrder AFTER the StableShuffle (CardPileCmd.cs:876 then 877) and the sim runs on_shuffle after _shuffle_draw_pile (player.py:217-218, 238-239).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "reachability: granted by the ported Field of Man-Sized Holes event (events/field_of_man_sized_holes.py:46-48). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

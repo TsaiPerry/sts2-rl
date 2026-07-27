@@ -1,0 +1,43 @@
+{
+  "unit": "enchantment/swift",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Swift.cs",
+    "sha256": "a61591150f8808e285d6111c52aec7bbc0d63d591cf5b1fcc830ab424f2d0083"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+  },
+  "hooks": {
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "ShowAmount": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
+    },
+    "OnPlay": {
+      "maps_to": "SwiftEnchantment.on_card_played (enchantments.py:352-357) -- `DrawCmd.draw(player, amount)` then `disabled = True`, guarded on `not disabled`, matching Swift.cs:15-22's `if (Status == Normal) { CardPileCmd.Draw(Amount, Owner); Status = Disabled; }`. The count and the once-per-combat latch are right (grant amount 3 from Beautiful Bracelet, relics/beautiful_bracelet.py:22-29, and 2 from Self Help Book's READ_ENTIRE_BOOK, events/self_help_book.py:13,19)",
+      "verdict": "gap",
+      "issue": "Wrong slot. See guard EG1: C# runs Enchantment.OnPlay inside the replay loop, after the card's own OnPlay and BEFORE Hook.AfterCardPlayed (CardModel.cs:1931, 1937-1945, 1959); the sim wires it to on_card_played, which fires once, after ALL replays AND after the card has been moved to its result pile (combat.py:500-514). Same mechanism, same verdict as Corrupted's and Sown's OnPlay (rule 3). Swift's latch makes the replay COUNT correct -- executed control, `py tools/audit/enchantment_probes.py replay`: Swift(3) with Throwing Axe draws 3 in both -- but with a play count above 1 the cards arrive after every iteration instead of after the first, so the later iterations of a multi-play card see a smaller hand than the game's."
+    }
+  },
+  "guards": [
+    {
+      "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
+      "verdict": "gap",
+      "issue": "Swift is the third of the three EnchantmentModel.OnPlay ports, and the one hung on the far side of the loop rather than the near side. The mechanism's executed proof lives on the Corrupted record. Reachability of this unit proven two ways: the ported Beautiful Bracelet relic (relics/beautiful_bracelet.py:22-29) and the ported Self Help Book event (events/self_help_book.py:19)."
+    },
+    {
+      "what": "BR-2 (blast radius): audits/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
+      "extra": "Swift's draw is the CONTROL for the replay leg: its Status latch means both engines draw exactly once (sim 3, game 3)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,46 @@
+{
+  "unit": "event/lost_wisp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\LostWisp.cs",
+    "sha256": "a6779ac7cf9cbd79cbe348b74d6c5a944f828acaa7c44ccd7a116dcd426c2f5c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\lost_wisp.py",
+    "sha256": "b823be6835ae4bf5b073869148c2342d095e746bd9dc3ac39cdc6357c32ad92f"
+  },
+  "hooks": {
+    "CalculateVars": {
+      "maps_to": "LostWisp.calculate_vars (events/lost_wisp.py:27-28) `_BASE_GOLD + self.rng.randint(-15, 15)` maps `Gold.BaseValue += base.Rng.NextInt(-15, 16)` (LostWisp.cs:42-45). The bound conversion is right: NextInt's upper bound is exclusive, so [-15, 16) is randint(-15, 15) inclusive -- 31 outcomes either way, and the sim's comment records the conversion. Only the stream diverges (EV-3).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars GoldVar(60), and the _baseGold / _goldVariance constants 60 / 15 (LostWisp.cs:19-25)",
+      "maps_to": "events/lost_wisp.py:6 _BASE_GOLD = 60 and the +/-15 in calculate_vars. Exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Claim (LostWisp.cs:47-52): AddCursesToDeck([Decay]) FIRST, then RelicCmd.Obtain<LostWisp>",
+      "maps_to": "events/lost_wisp.py:36-39: add_card(make_card('decay')) then add_relic('lost_wisp'). Order preserved, and it is observable -- run.add_card's AfterCardChangedPiles tail (run.py:352-353) fires for the Curse BEFORE the relic is in the collection, so a relic that reacts to gaining a Curse (Darkstone Periapt) does not see this one, in either engine.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Search (LostWisp.cs:54-58): GainGold(Gold.IntValue) -- the INT value, so the roll is already whole here",
+      "maps_to": "events/lost_wisp.py:41-43 gain_gold(self.gold), where self.gold is an int from randint. Same value; no truncation question, unlike Jungle Maze's float golds.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: CalculateVars' `base.Rng.NextInt(-15, 16)` (LostWisp.cs:44) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "the two StringVar CanonicalVars and the relic + Decay hover tips on CLAIM (LostWisp.cs:26-27, 34-37)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

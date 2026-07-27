@@ -1,0 +1,72 @@
+{
+  "unit": "event/tanx",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\Tanx.cs",
+    "sha256": "cdf5618f1c15d03bf4c7fc9ca691fa3e9ce9701e8cfd255155b841a2529a8a71"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\tanx.py",
+    "sha256": "da7e5f6b2b2811e2b211e0fc6f0af420d903bef871435d06e2871844e6f1a054"
+  },
+  "hooks": {
+    "ButtonColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    "AllPossibleOptions": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "presentation only: Tanx.cs:27 concatenates BaseOptionPool with the Tri-Boomerang option for the run-history / compendium listing. Its only reader in the source is AncientEventModel.GenerateInitialOptionsWrapper's DebugOption swap (AncientEventModel.cs:198-202), which is dev tooling -- GenerateInitialOptions builds its own list. Same mapping the nonupeipe record made (rule 3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "BaseOptionPool's 9 relics (Tanx.cs:29-40)",
+      "maps_to": "events/tanx.py:11-14 OPTION_POOL: claws, crossbow, iron_club, meat_cleaver, sai, spiked_gauntlets, tanxs_whistle, throwing_axe, war_hammer -- the same nine in source order, which is the shuffle's input and therefore load-bearing (UnstableShuffle is order-dependent by construction, ListExtensions.cs:33-44). All nine are ported (EXECUTED, `py tools/audit/event_probes_a.py reacha`).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the Tri-Boomerang gate (Tanx.cs:138-141): append it when `Deck.Cards.Count(Instinct.CanEnchant) >= 3`",
+      "maps_to": "events/tanx.py:27-31 counts InstinctEnchantment.can_enchant over the deck and compares against TriBoomerang.MIN_ELIGIBLE. EXECUTED (`py tools/audit/event_probes_a.py reacha`): MIN_ELIGIBLE is 3, the source's `_triBoomerangCount` (Tanx.cs:21). The threshold lives on the relic in the sim rather than inline, the same placement the nonupeipe record recorded for Beautiful Bracelet. Instinct's CanEnchant is audited under enchantment/instinct.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "`list.UnstableShuffle(base.Rng).Take(3)` (Tanx.cs:142)",
+      "maps_to": "events/tanx.py:34-35 shuffles in place then slices [:3]. The primitive is exact, not merely similar: ListExtensions.UnstableShuffle walks i = Count-1 down to 1 taking one `rng.NextInt(i + 1)` and swapping list[i] with list[j] (ListExtensions.cs:45-58), and Rng.shuffle (rng.py:270-273) is that same loop -- which is why rng.py:290-291 already documents the equivalence for the map generator. No sort precedes it, so neither EV-5 nor EV-7 applies. EXECUTED (`py tools/audit/event_probes_a.py ancientdraws`): the shuffle takes 9 event-Rng draws on a 10-relic pool and 8 on the 9-relic pool -- Count - 1 in both cases, on both paths. The Tri-Boomerang is appended BEFORE the shuffle in both, so it competes for all three slots.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "this unit is one of the events with a parity RNG branch, so EV-3 does NOT apply -- and the branch is CLEAN on every path (the check the orobas lesson asks for)",
+      "maps_to": "events/tanx.py:34 uses self.event_rng when present, falling back to the shared rng only in legacy mode. EXECUTED (`py tools/audit/event_probes_a.py ancientdraws`): the draw count matches Count - 1 with and without the Tri-Boomerang, and the event offers no locked option, so the orobas defect shape -- NextItem over a list that still holds a null-onChosen entry, taking a draw the sim's branch skips -- cannot arise here. NOTE the `eventrng` probe in tools/audit/event_probes.py misclassifies this module as 'rolls nothing': its regex looks for `self.rng.<method>(` and tanx writes `(self.event_rng if ... else self.rng).shuffle(pool)`. Flagged in the stream report; the probe module is not this batch's to edit.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.BeforeEventStarted's full heal, inherited (AncientEventModel.cs:170-191)",
+      "maps_to": "events/ancient.py:24-32 heals `max_hp - hp` on begin(), the between-acts heal every Ancient does. Plain CreatureCmd.Heal on the C# side (CreatureCmd.cs:691-703), which dispatches no hooks, so this is NOT in turn_structure step 38a's radius. Same mapping the nonupeipe record made (rule 3); the WearyTraveler 0.8 scaling (AncientEventModel.cs:180-183) is out of scope per the non-ascension convention.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel.RelicOption<T>() (AncientEventModel.cs:268-288) -- an option whose choice runs RelicCmd.Obtain and then Done()",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Same mapping the nonupeipe record made (rule 3).",
+      "verdict": "faithful"
+    },
+    {
+      "what": "AncientEventModel's Hook.ShouldAllowAncient gate (AncientEventModel.cs:195 and the InitialDescription swap at :147-152), which the sim's AncientEvent does not model at all",
+      "maps_to": "NEGATIVE CONTROL, EXECUTED (`py tools/audit/event_probes_a.py ancienthook`): AbstractModel.ShouldAllowAncient (AbstractModel.cs:2167) is a virtual returning true and has ZERO overrides in the entire game source; the only WaxChoker reference left anywhere is the block-message loc key itself (AncientEventModel.cs:151), and there is no WaxChoker.cs. So nothing can answer the hook, the wrapper always takes the GenerateInitialOptions branch, and the PROCEED-only fallback (AncientEventModel.cs:206) is dead on both sides. Recorded here rather than asserted, per rule 5. Applies identically to every Ancient -- including the four audited in batch 3, whose records did not enumerate it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DefineDialogues (Tanx.cs:44-133), the three SFX path constants (Tanx.cs:15-19) and the per-character / per-VisitIndex dialogue table",
+      "verdict": "waiver",
+      "rationale": "presentation only: AncientDialogueSet is an FMOD event-path table keyed by character and visit index, consumed by NAncientDialogueLine. No gameplay reader, no stream draw, and four of the five character keys are other characters (out of scope in an Ironclad-only sim)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

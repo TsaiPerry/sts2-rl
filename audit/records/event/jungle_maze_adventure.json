@@ -1,0 +1,55 @@
+{
+  "unit": "event/jungle_maze_adventure",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\JungleMazeAdventure.cs",
+    "sha256": "4d90f81308fc0e16e261e727e8e272665196be8e07a7d4477a4784d5269f8de5"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\jungle_maze_adventure.py",
+    "sha256": "3ecd10d0e822daefe580ab38b140158248c545b46747c09126dc942205cb88c0"
+  },
+  "hooks": {
+    "IsShared": {
+      "maps_to": "JungleMazeAdventure.cs:34 `IsShared => true`; the sim carries shared membership as registry position (events/__init__.py) and this unit is in the 18-id pool.",
+      "verdict": "faithful"
+    },
+    "CalculateVars": {
+      "maps_to": "JungleMazeAdventure.calculate_vars (events/jungle_maze_adventure.py:31-33) reproduces JungleMazeAdventure.cs:52-56 exactly in shape and ORDER: SoloGold first, then JoinForcesGold, each `base + NextFloat(-15f, 15f)` mapped to `base + rng.uniform(-15.0, 15.0)`. Order matters because the two draws come off one stream. The values stay FRACTIONAL until PlayerCmd.GainGold truncates -- the sim keeps them as floats (events/jungle_maze_adventure.py:28-29) and run.gain_gold does the `int()` (run.py:331), which is the same place the source truncates. Only the stream diverges -- see EV-3.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars: SoloGold 150, SoloHp 18 (Unblockable|Unpowered), JoinForcesGold 50 (JungleMazeAdventure.cs:36-41)",
+      "maps_to": "events/jungle_maze_adventure.py:5-8 _SOLO_GOLD=150, _SOLO_HP_LOSS=18, _JOIN_GOLD=50, _GOLD_VARIANCE=15.0. All four exact.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "DontNeedHelp (JungleMazeAdventure.cs:58-77): after the VFX loop, Damage(SoloHp, Unblockable|Unpowered) THEN GainGold(SoloGold)",
+      "maps_to": "events/jungle_maze_adventure.py:41-44: lose_hp(18) then gain_gold(self.solo_gold). Damage-before-gold order preserved, which is observable if the damage is lethal.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "SafetyInNumbers (JungleMazeAdventure.cs:79-85): GainGold only",
+      "maps_to": "events/jungle_maze_adventure.py:46-48. No damage, no gate.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "EV-3: CalculateVars' two `base.Rng.NextFloat(-15f, 15f)` draws (JungleMazeAdventure.cs:54-55) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+    },
+    {
+      "what": "the three-step VFX loop with its `_fx` StableShuffle, the CustomScaledWait pauses and the 'hey.mp3' cue (JungleMazeAdventure.cs:27-32, 58-73, 81-82)",
+      "verdict": "waiver",
+      "rationale": "presentation only. NOTE the `_fx.ToList().StableShuffle(base.Rng)` at JungleMazeAdventure.cs:60 IS a real stream draw the sim does not take, which is an EV-3-adjacent parity concern rather than a gameplay one; it is called out here because a purely-cosmetic shuffle still consumes the event stream. Recorded under the presentation waiver because nothing about the outcome depends on it, but flagged for the parity grind."
+    },
+    {
+      "what": "EV-1: SOLO_QUEST's 18 HP loss (JungleMazeAdventure.cs:74) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "verdict": "gap",
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py tools/audit/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

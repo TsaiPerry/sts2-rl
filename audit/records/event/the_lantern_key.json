@@ -1,0 +1,66 @@
+{
+  "unit": "event/the_lantern_key",
+  "game_source": {
+    "path": "src\\Core\\Models\\Events\\TheLanternKey.cs",
+    "sha256": "794c74da49770381f1a4e342d50ce91ee08e935de54ac827b8e45f415316cc5b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\events\\the_lantern_key.py",
+    "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec"
+  },
+  "hooks": {
+    "LayoutType": {
+      "maps_to": "events/the_lantern_key.py has no analogue",
+      "verdict": "gap",
+      "issue": "TheLanternKey.cs:15 `EventLayoutType.Combat` is NOT presentation-only: EventRoom.EnterInternal branches on it to call GenerateInternalCombatState (EventRoom.cs:67-71). See the EV-12 guard below -- this hook is the trigger for that mechanism, so it carries EV-12's verdict rather than the UI waiver its sibling LayoutType overrides get (fake_merchant's Custom layout really is presentation). CORRECTS THIS RECORD'S OWN FIRST CUT, which waived this hook on the reasoning that a Combat layout 'constrains how the room system builds the combat, not what the combat is, and the sim's driver builds the combat from pending_encounter either way'. That reasoning is observationally false in parity mode: the layout decides WHEN the encounter is built, and building it consumes RNG."
+    },
+    "CanonicalEncounter": {
+      "maps_to": "events/the_lantern_key.py:41 sets `self.pending_encounter = MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER`, the driver's stand-in for the encounter the room system instantiates. EXECUTED (`py tools/audit/event_probes_b.py ids`): the sim encounter generates exactly one monster, MysteriousKnight, matching MysteriousKnightEventEncounter.cs:13-16's single-element GenerateMonsters and its AllPossibleMonsters.",
+      "verdict": "faithful"
+    },
+    "IsShared": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: TheLanternKey.cs:19 `IsShared => true` marks the event as one every player experiences together, and its only enforcement is EventModel.cs:610-613, which throws if a NON-shared event tries to enter combat. Single-player collapses the distinction. Out of scope per the shared contract's multiplayer waiver."
+    }
+  },
+  "guards": [
+    {
+      "what": "CanonicalVars GoldVar(100) (TheLanternKey.cs:21)",
+      "maps_to": "events/the_lantern_key.py:6 `_GOLD = 100`, the only constant the event declares.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "ReturnTheKey (TheLanternKey.cs:32-36): PlayerCmd.GainGold(DynamicVars.Gold.BaseValue) then SetEventFinished",
+      "maps_to": "events/the_lantern_key.py:31-33 run.gain_gold(100) then _finish('RETURN_THE_KEY'). run.gain_gold (run.py:325-333) runs the Hook.ModifyGoldGained pass PlayerCmd.GainGold runs and truncates the same way.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "KeepTheKey (TheLanternKey.cs:38-42): SetEventState to a one-option FIGHT page",
+      "maps_to": "events/the_lantern_key.py:35-36 _set_state('KEEP_THE_KEY', [EventOption('FIGHT', ...)]). Same page, same single option, same loc key.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "Fight (TheLanternKey.cs:44-53): build a SpecialCardReward carrying a freshly created LanternKey, then EnterCombatWithoutExitingEvent<MysteriousKnightEventEncounter>(list, shouldResumeAfterCombat: false)",
+      "maps_to": "events/the_lantern_key.py:38-45 sets pending_reward_extras = [RewardExtra.of_card(make_card('lantern_key'))] -- the sim's port of a SpecialCardReward, a take-or-skip entry on the fight's reward screen (rewards.py:344-346) that driver.py:419 transfers onto the combat. `shouldResumeAfterCombat: false` is matched by the sim NOT overriding Event.resume_after_combat (events/base.py:116-122), so nothing runs after the fight -- and by _finish('KEEP_THE_KEY'), which is the same observable: the C# event is left mounted only so the Combat-layout room can tear it down, and with resume false the run proceeds straight to the next map point. EXECUTED (`py tools/audit/event_probes_b.py ids`): the lantern_key card is ported (cards/event_cards.py:373). NOTE this rationale leans on a third file, cards/event_cards.py, which this record does not hash (rule 7); the card's own behaviour -- including the map redirection the sim's docstring says is unmodelled -- belongs to the card stream, not to this event, which only creates it.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the `foreach (Player player in base.Owner.RunState.Players)` loop that builds one SpecialCardReward per player (TheLanternKey.cs:47-50)",
+      "verdict": "waiver",
+      "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
+    },
+    {
+      "what": "EV-12 (blast radius): TheLanternKey.cs:15's Combat layout makes EventRoom.EnterInternal build the whole encounter -- monsters, slots and max-HP rolls -- when the ROOM IS ENTERED, before any option is chosen; the sim only records `pending_encounter` (events/the_lantern_key.py:41) and builds monsters later, when the driver runs the fight",
+      "verdict": "gap",
+      "issue": "ALREADY RECORDED as audits/event/punch_off.json's EV-12 guard (rule 3, not re-verdicted); recorded here so this unit's record shows it is in the radius. EXECUTED (`py tools/audit/event_probes_a.py combatlayout`): the probe enumerates every Combat-layout event in the source and TheLanternKey.cs:15 is one of the three (with PunchOff.cs:33 and the unported TheArchitect.cs:52). The observable is RNG position, so it is LIVE for parity and invisible in legacy mode: entering the room costs the game encounter-Rng and Rng.Niche draws that the sim does not take there, and on the RETURN_THE_KEY path the sim never takes them at all. NOTE the divergence is WIDER here than at punch_off: punch_off's two options both end in a fight, so the sim eventually spends the draws on both paths, whereas this event's RETURN_THE_KEY option leaves the event with no combat -- the game has still paid for a Mysterious Knight it never fights."
+    },
+    {
+      "what": "this event rolls NOTHING, so EV-3 does not apply",
+      "maps_to": "EXECUTED (`py tools/audit/event_probes_b.py rng5b`): the_lantern_key is one of the two slice-B modules with no RNG draw of any kind. That is a statement about the EVENT MODULE's own draws and is not in tension with the EV-12 guard above, whose draws are spent by the room/encounter machinery rather than by this module.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
