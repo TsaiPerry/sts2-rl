@@ -179,35 +179,64 @@ random option where `glitter` enchants all and `silken_tress` is one-shot.
 
 ## Faults found in shared tooling and seam records — reported, not edited
 
-**1. `tools/audit/citation_check.py` mis-resolves a cited path by BASENAME,
-discarding the directory — and this has already produced three false
-OUT-OF-RANGE reports in the committed seam records.**
-`_resolve` (`citation_check.py:78-109`) tries the path as repo-relative, then
-falls back to matching the **basename** against the record's own hashed sources
-and then to an `rglob`. A citation like `relics/base.py:235` in a record that
-hashes `sts2_rl/monsters/base.py` therefore resolves to the *monster* file,
-reports it out of range at 148 lines, and — because the hashed-source branch
-returns `ambiguous=False` — does **not** get the AMBIGUOUS escape hatch that
-exists for exactly this case. Executed: `py tools/audit/citation_check.py audits/seam`
-reports 9 OUT-OF-RANGE, of which three are this bug
-(`seam/hook_dispatch: cards/base.py:232`, `seam/hook_dispatch: relics/base.py:235`,
-`seam/turn_structure: cards/base.py:269`, all "resolved" against
-`sts2_rl/monsters/base.py`). Fix is one condition: prefer a candidate whose
-repo-relative path **ends with** the cited path, and only then fall back to the
-basename. Consequence for auditors meanwhile: cite shared sim files with their
-full `sts2_rl/...` path — this batch does, which is why its own count is 0.
+**1. `tools/audit/citation_check.py` IS NONDETERMINISTIC. It can report
+OUT-OF-RANGE 0 on one run and 1 on the next, over byte-identical records — and it
+mis-resolves a correct citation to a same-basename file in a different
+directory.** This is the batch's most consequential tooling finding, because the
+gate is the mechanical enforcement of binding rules 7 and 8 and a gate that
+sometimes passes is worse than one that always fails.
 
-**2. Six genuinely stale citations in the committed seam records** (found while
-matching `creature_card_cmds` G2's evidence, not by reviewing the tooling):
-`seam/creature_card_cmds: cards/evil_eye.py:42` (file has 41 lines),
-`cards/true_grit.py:55` (54), `relics/fiddle.py:31` (29);
-`seam/hook_dispatch: relics/spiked_gauntlets.py:32` (31);
-`seam/turn_structure: relics/crossbow.py:32` (31) and a MISSING
-`seam/turn_structure: non-hooks.py`. All are off-by-one/two drifts, so the cited
-evidence is almost certainly still correct one line up — but each one is exactly
-the class of defect `citation_check` was built to catch, and they are *reported*
-in the tool's output today and not acted on. `audits/seam/**` is read-only to
-this batch.
+`_resolve` (`citation_check.py:78-109`) tries the cited path as repo-relative,
+then falls back to matching only its **basename**, first against the record's own
+hashed sources and then via `rglob`. `_hashed_paths` returns a **set**, so when a
+record hashes two files with the same basename the `for rel in hashed` loop
+returns whichever comes first in set-iteration order — and the branch sets
+`ambiguous=False`, so the AMBIGUOUS escape hatch built for exactly this case never
+fires. `audits/seam/turn_structure.json` hashes BOTH `sts2_rl/monsters/base.py`
+(148 lines) and `sts2_rl/cards/base.py` (312 lines), so a citation of
+`cards/base.py:269` resolves to the monster file and is reported past EOF.
+
+EXECUTED, on the seam records exactly as they stand at `audit-relic`
+(`e12a6f29`, the commit that fixed the seam citations), copied out with
+`git show` and checked in isolation:
+
+```
+PYTHONHASHSEED=0 -> OUT-OF-RANGE: 0
+PYTHONHASHSEED=1 -> OUT-OF-RANGE: 1   seam/hook_dispatch: cards/base.py:232 ... monsters/base.py has 148
+PYTHONHASHSEED=2 -> OUT-OF-RANGE: 0
+PYTHONHASHSEED=3 -> OUT-OF-RANGE: 0
+PYTHONHASHSEED=4 -> OUT-OF-RANGE: 1   seam/hook_dispatch: cards/base.py:232 ... monsters/base.py has 148
+PYTHONHASHSEED=5 -> OUT-OF-RANGE: 0
+```
+
+and with this worktree's default interpreter it reports
+`seam/turn_structure: cards/base.py:269 but sts2_rl\monsters\base.py has 148 lines`
+— a **false positive**, since `sts2_rl/cards/base.py:269` exists. That reconciles
+a discrepancy worth flagging on its own: commit `e12a6f29`'s message states "Seam
+tree now: 5 records, 297 citations, MISSING 0, OUT-OF-RANGE 0", and the same 297
+citations reproduce 0 or 1 depending on nothing but the hash seed. The seam
+records are fine; the number in that message is not reproducible.
+
+The fix is one condition: in `_resolve`, prefer a candidate whose repo-relative
+path **endswith** the cited path (`/`-anchored) and only then fall back to a bare
+basename; and make the hashed-source loop deterministic by sorting. Until then,
+auditors should cite shared sim files with their full `sts2_rl/...` path. This
+batch does throughout, and its own 15 records are stable: OUT-OF-RANGE 0 and
+MISSING 0 on `PYTHONHASHSEED` 0 through 7.
+
+**2. Six genuinely stale citations in the committed seam records — INDEPENDENTLY
+CONFIRMED, and already fixed upstream while this batch ran.** Found while quoting
+`creature_card_cmds` G2's evidence verbatim, not by reviewing the tooling:
+`cards/evil_eye.py:42` (file has 41 lines), `cards/true_grit.py:55` (54),
+`relics/fiddle.py:31` (29), `relics/spiked_gauntlets.py:32` (31),
+`relics/crossbow.py:32` (31), plus a MISSING `non-hooks.py` that is a
+prose-parsing false positive. `audit-relic` has since advanced to `e12a6f29`,
+which clamps all six and rewords the false positive — batch 15 reported the same
+thing first, by the same method. Recorded here as a duplicate confirmation, and
+because it is the second independent arrival at the same defect: **quoting a seam
+record's citation verbatim into your own record is a cheap way to test the seam
+tree**, and it worked twice. `audits/seam/**` is read-only to this batch; nothing
+was edited.
 
 **3. Sweep A re-run against the brief's paraphrase (per the coordinator's
 mid-flight correction): the CURRENT output agrees with the brief on all three
