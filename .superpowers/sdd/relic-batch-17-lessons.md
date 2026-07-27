@@ -349,4 +349,4 @@ execution and is the batch's only `faithful` unit.
 - Ascension values, multiplayer paths and relic-UI presentation waived per the
   shared contract throughout.
 
-**Commit:** see the batch commit on `audit-relic-b17` (SHA in the batch report).
+**Commit:** `2d97b0db` on `audit-relic-b17`.
