@@ -1,0 +1,215 @@
+{
+  "unit": "monster/decimillipede_segment_front",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\DecimillipedeSegmentFront.cs",
+    "sha256": "aa560470bf39e41d5d062ddea747cfbb14ec29ed2abd1eb8e539b7d116365bd8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
+    "sha256": "1d5da20a4610eaa091d70e23095bae077ac6658e8cf942b6a5c5ea695cf467e8"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# DecimillipedeSegment.cs:64,66 non-ascension branch = 40 (AscensionHelper.GetValueIfAscension puts the non-ascension value LAST); sim min_hp = 40. Confirmed by `monster_probes.py hp` (102/109 compared, 0 mismatches). The HP sweep reports the three concrete segments INCONCLUSIVE because they inherit this member; resolved by hand here, read from src/Core/Models/Monsters/DecimillipedeSegment.cs:64-66 (DecimillipedeSegmentFront/Middle/Back.cs declare no HP of their own -- each is 15 lines and overrides only SegmentAttack)."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# DecimillipedeSegment.cs:64,66 non-ascension branch = 46; sim max_hp = 46. The HP sweep reports the three concrete segments INCONCLUSIVE because they inherit this member; resolved by hand here, read from src/Core/Models/Monsters/DecimillipedeSegment.cs:64-66 (DecimillipedeSegmentFront/Middle/Back.cs declare no HP of their own -- each is 15 lines and overrides only SegmentAttack)."
+    },
+    "HpBarSizeReduction": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "ShouldFadeAfterDeath": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "ShouldShowInCompendium": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "CanChangeScale": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "DeathSfx": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "AssetPaths": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "Title": {
+      "maps_to": "DecimillipedeSegment.name = \"Decimillipede\" (decimillipede.py:37), inherited by all three concrete segments",
+      "verdict": "faithful",
+      "rationale": "DecimillipedeSegment.cs:49 overrides Title to the SHARED lookup key \"DECIMILLIPEDE_SEGMENT.name\" rather than to each concrete class's own key, so Front, Middle and Back all display one name. The sim reproduces exactly that: `name` is set once on the shared base and the three subclasses (decimillipede.py:132-141) add nothing, so all three report \"Decimillipede\". The localized string itself is presentation; the mechanical content of the override -- that the three classes share one display name -- is ported."
+    },
+    "ShouldDisappearFromDoom": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "SHARED-FINDINGS section 4 says not to reflex-waive this one, so it was traced: the only reader in the entire game is DoomPower.cs:90, inside `PlayVfx`, feeding StartDoomAnim and NDoomVfx.Create as the 'does the sprite vanish' flag (DoomPower.cs:80-144). DoomKill itself never consults it. So `false` (DecimillipedeSegment.cs:93) only stops the doom animation from making a segment disappear -- fitting, since a segment's corpse is meant to stay on the board. Presentation."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "adjust_hp_after_added (decimillipede.py:54-68), called from combat.py:255-257, plus the ReattachPower application in __init__ (decimillipede.py:50-52)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance: the sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect is applied from __init__ (decimillipede.py:50-52). The game runs it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:393-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); the concrete trigger that would make it a gap is a relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and sts2_rl/powers.py that section 2's clause (a)/(b) argument cites are NOT hashed by this record. This unit's override does TWO things (DecimillipedeSegment.cs:120-144) and the sim splits them. (1) The even-and-unique HP pass: round MaxHp up to even, then add 2 while any teammate already holds that value, wrapping MaxInitialHp back to MinInitialHp, then CreatureCmd.SetMaxAndCurrentHp. The sim runs this from `adjust_hp_after_added`, which combat.py:255-257 invokes for each enemy AFTER the parity Niche HP roll -- the correct order, because C# also rolls HP at creature creation and only then runs AfterAddedToRoom. The teammate set is right too: CombatManager.StartCombatInternal loops `foreach (creature in _state.Creatures) await AfterCreatureAdded(creature)` (CombatManager.cs:393-398, 860-867), so every segment is already on the board with its raw rolled HP when the first segment runs its pass -- exactly what `[o for o in enemies if o is not e]` gives. (2) PowerCmd.Apply<ReattachPower>(Creature, 25m) -> PowerCmd.apply(hooks, self, ReattachPower, 25) in __init__. The sim therefore applies the power BEFORE the HP pass and the game after it; the amount is the literal 25 on both sides and ReattachPower reads no HP at apply time, so the inversion is not observable. Executed: monster_probes_b04.py deci-hp."
+    },
+    "AfterDeath": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "One of monster_state_machine boundary-hole 5's eleven unclaimed overrides. Read to the end (N6): DecimillipedeSegment.cs:241-253 is `if (creature != Creature) return;`, `if (TestMode.IsOn) return;`, then ChangePhobiaModeTexture(load(PhobiaModeDeadTexture)) -- and ChangePhobiaModeTexture (:255-262) is `((Sprite2D)creatureNode.Body).Texture = tex` guarded on IsUsingPhobiaModeBody. The whole override swaps one accessibility-mode sprite for the shrivelled one. No state change, no command, nothing the sim could be missing. hook_dispatch G5 is not re-verdicted. NOTE this is NOT where the wither behaviour lives: that is ReattachPower.AfterDeath (ReattachPower.cs:52-70), a separate model, and it IS ported -- see the death-vs-removal guard."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (decimillipede.py:70-100)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node identical to DecimillipedeSegment.cs:146-178: the live ring CONSTRICT -> BULK -> WRITHE -> CONSTRICT, the death path DEAD_MOVE -> REATTACH_MOVE -> RandomBranchState 'RAND', RAND branching back to the three live moves, and the initial state selected by `(StarterMoveIdx % 3)` mapping 0/1/_ to WRITHE/BULK/CONSTRICT. REATTACH_MOVE carries MustPerformOnceBeforeTransitioning = true on both sides (:153-156 vs decimillipede.py:84-87). Branch add order matches (WRITHE, BULK, CONSTRICT). Executed (monster_probes_b04.py graphs and branches)."
+    },
+    "SegmentAttack": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port. This is the ONLY member the three concrete classes declare, and each body is a single `GetCreatureNode()?.GetSpecialNode<NDecimillipedeSegmentDriver>(...)?.AttackShake()` (Front/Back name \"%Visuals/SegmentDriver\", Middle shakes a left and a right driver). Its one caller is AnimSegmentsAttack (DecimillipedeSegment.cs:222-239), which early-returns under TestMode and otherwise instantiates a rocks VFX scene and waits 0.5s. That is why the sim's three subclasses (decimillipede.py:132-141) are empty bodies with a docstring."
+    }
+  },
+  "guards": [
+    {
+      "what": "death is NOT removal: a withered segment keeps taking turns",
+      "verdict": "faithful",
+      "rationale": "This is the shape PROMPT.md bug class 21 warns about, and the port gets it RIGHT -- checked deliberately because the stream prompt asked. C#: ReattachPower.ShouldCreatureBeRemovedFromCombatAfterDeath returns false for its owner (ReattachPower.cs:87-94), so the segment really dies (AfterDeath fires) and only its REMOVAL from Enemies is vetoed; ReattachPower.AfterDeath (:52-70) then sets isReviving and calls SetMoveImmediate(DeadState). The sim ports it onto the matching hook, `should_remove_from_combat_after_death` (powers.py:2338-2341, dispatched by hooks.py:603-610), NOT onto `should_die`: cmds.py:96-110 and :190-206 take the `should_die` TRUE arm, set `retained_after_death = not should_remove_from_combat_after_death(target)` and then fire `hooks.on_death`. combat.py:286-306's enemy loop skips only enemies that are gone AND not retained, so the corpse keeps taking turns. Executed (monster_probes_b04.py deci-death): killing a segment gives hp=0, is_dead=True, retained_after_death=True, `on_death dispatches: ['Decimillipede']` (a should_die veto would have fired none), the move parked on DEAD_MOVE, and the next four enemy sides run DEAD -> REATTACH -> WRITHE(25 hp) -> CONSTRICT(25) -> BULK(25). Contrast waterfall_giant, where the same C# member IS ported onto should_die and the gap is live."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned) -- does Decimillipede make it LIVE?",
+      "verdict": "gap",
+      "live": false,
+      "issue": "DORMANT through this monster -- determined by execution, as the stream prompt required, and the answer agrees with the seam's own (creature_card_cmds step 26 records the same call sites as dormant; this entry records the monster-level consequence and does NOT re-verdict the seam). C# uses CreatureCmd.SetMaxAndCurrentHp (DecimillipedeSegment.cs:142), which is SetMaxHp then SetCurrentHp (CreatureCmd.cs:856-860) and therefore carries three things the sim's raw `self.max_hp = self.hp = hp` (decimillipede.py:68, and the duplicate pass at :159-167) skips: SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)` clamp (Creature.cs:493-501), SetMaxHp's `if (MaxHp <= 0) await Kill` (CreatureCmd.cs:841-848), and SetCurrentHp's Hook.AfterCurrentHpChanged dispatch plus its trailing `if (IsDead) await Kill` (CreatureCmd.cs:762-778). Executed (monster_probes_b04.py deci-hp), legacy and parity: the assigned values are 40/46/44 and 46/42/44 -- every one even, strictly positive, distinct, and with hp == max_hp -- so the clamp cannot differ and neither Kill arm is reachable; the third clause was checked with a live on_hp_changed spy, which recorded 0 calls, and the ONLY on_hp_changed listener in the whole sim is relics/red_skull.py:45, which early-returns unless the creature is the player (enumerated in the same probe run). The named unported thing that would make this live: any monster or effect that routes a max-HP SET through this path with a value that could land at or below 0, or a non-player on_hp_changed listener -- the game already has three AfterCurrentHpChanged implementers the sim lacks (Crusher.cs:122, Rocket.cs:99, NecroMasteryPower.cs:17), and Crusher and Rocket are monsters, so porting either into a shared encounter with a Decimillipede would flip this."
+    },
+    {
+      "what": "the HP pass is implemented TWICE in the sim",
+      "verdict": "deliberate-divergence",
+      "rationale": "decimillipede.py:54-68 (`adjust_hp_after_added`, the faithful port, driven by combat.py:255-257) and decimillipede.py:159-167 (an inline copy inside DecimillipedeEncounter.create_monsters) implement the same even-and-unique rule. The duplication is deliberate coverage of the two modes: the encounter copy is what runs in LEGACY mode, where combat.py:252-257 is gated behind `if self._niche is not None` and `adjust_hp_after_added` is never called; in PARITY mode the encounter copy's result is overwritten by the Niche roll and then reshaped by the real port. Executed (monster_probes_b04.py deci-hp): both modes end with three even, distinct, positive HP values with hp == max_hp (legacy 40/46/44, parity 46/42/44), and re-running adjust_hp_after_added on top is idempotent (values unchanged, 0 hook calls). Same observable, two routes -- the maintenance hazard (two copies of one rule) is a code smell, not a fidelity divergence."
+    },
+    {
+      "what": "AddBranch integer arguments",
+      "verdict": "faithful",
+      "rationale": "All three C# calls are `AddBranch(state, MoveRepeatType.CannotRepeat)` (DecimillipedeSegment.cs:163-165) = overload #10, no int, weight defaulting to 1f. The sim writes `rand.add_branch(writhe, 1.0, MoveRepeatType.CANNOT_REPEAT)` (decimillipede.py:94-96) -- POSITIONAL, and this is precisely the shape that produced seam G1's five misreadings, so it was checked digit by digit: the sim's positional slot 2 is `weight`, the value passed is 1.0, and 1f is exactly what overload #10 defaults the weight to. No integer is being smuggled in. Executed (monster_probes_b04.py branches): resolved tuples [(WRITHE_MOVE, 1.0, CANNOT_REPEAT, 0, 0), (BULK_MOVE, 1.0, ...), (CONSTRICT_MOVE, 1.0, ...)] -- MATCH for all three concrete segments, 0 mismatches. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
+    },
+    {
+      "what": "move damage / power constants",
+      "verdict": "faithful",
+      "rationale": "Non-ascension, DecimillipedeSegment.cs:68-74: WritheDamage 5 (2 hits, the const _writheRepeat at :31), ConstrictDamage 8, BulkDamage 6, BulkStrength 2; WeakPower 1 (:204); ReattachPower 25m (:143). Sim decimillipede.py:22-28 = 5 / 2 / 6 / 2 / 8 / 1 / 25. All match. BULK applies its +2 Strength AFTER the hit and CONSTRICT its Weak AFTER the hit, same as C# (:189-205 vs :111-121)."
+    },
+    {
+      "what": "enter_dead_state is unguarded where C# calls SetMoveImmediate",
+      "verdict": "faithful",
+      "rationale": "ReattachPower.AfterDeath uses SetMoveImmediate(DeadState) with forceTransition defaulted to FALSE (ReattachPower.cs:62), so C# honours the NextMove.CanTransitionAway guard (MonsterModel.cs:420-432) while the sim's enter_dead_state (decimillipede.py:102-106) forces the state unconditionally. monster_state_machine G5 names DecimillipedeSegment as a trigger for exactly this missing guard, so it was checked (G5 itself is not re-verdicted). The guard can only bite while NextMove is the one must-perform-once move, REATTACH_MOVE, i.e. during the wither window -- and in that window the sim's ReattachPower early-returns on `self.is_reviving` before ever calling enter_dead_state (powers.py:2343-2352), so the forced transition is never attempted. Both sides therefore do nothing; the sim reaches that outcome one layer earlier."
+    },
+    {
+      "what": "ReattachMove's IsLiveCombat guard",
+      "verdict": "waiver",
+      "rationale": "DecimillipedeSegment.cs:212-220 wraps the actual `ReattachPower.DoReattach()` in `if (CombatState.IsLiveCombat())`, i.e. it is skipped in a prediction/preview simulation, and then swaps the phobia-mode texture. The sim has no preview-simulation machinery for the guard to distinguish, so it calls do_reattach unconditionally (decimillipede.py:126-129); out of scope the same way multiplayer plumbing is."
+    },
+    {
+      "what": "ScaleHpForMultiplayer in the HP wrap",
+      "verdict": "faithful",
+      "rationale": "DecimillipedeSegment.cs:137-140 compares and wraps against `Creature.ScaleHpForMultiplayer(Max/MinInitialHp, encounter, playerCount, actIndex)`. Creature.cs:744-751 returns `hp` unchanged when `playerCount <= 1`, so at the sim's single player the bounds are the plain 46 and 40 that decimillipede.py:66-67 uses. Multiplayer scaling is noted in the mapping, not treated as a divergence."
+    },
+    {
+      "what": "the concrete subclass adds no behaviour",
+      "verdict": "faithful",
+      "rationale": "DecimillipedeSegmentFront/Middle/Back.cs is 15 lines whose XML doc says \"Monster class exists to connect this to the correct monster visual scene. All logic lives in the DecimillipedeSegment\", and the only member is SegmentAttack. Every mechanical member -- HP, moves, the AfterAddedToRoom HP pass, AfterDeath, the flags -- is inherited, so this record verdicts the inherited surface as well as the declared one (harness `enumeration_gaps` / `validate --strict-inherited`). The sim's counterpart (decimillipede.py:132-141) is likewise an empty subclass of the shared DecimillipedeSegment; it exists so DecimillipedeEncounter can build [Front, Middle, Back] in the order DecimillipedeElite.GenerateMonsters does (DecimillipedeElite.cs:35-49), with StarterMoveIdx = n, n+1, n+2 mod 3 -- which the sim reproduces at decimillipede.py:152-158."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Commands\\CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\ReattachPower.cs",
+      "sha256": "7d8b21db9c6908f0e87c1a4c803cdca54066ba628df5f9ee2e066fa71bf0e652",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
+      "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\DecimillipedeSegment.cs",
+      "sha256": "64a5bf3152a490cd43b85b9fc46c341596f96bc02e58398af7907d45c135fa1f",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Encounters\\DecimillipedeElite.cs",
+      "sha256": "d75edaf36e6f5c62da7df61703931e8a23ee84afaf2f8a7dc1c59896eef1830b",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\red_skull.py",
+      "sha256": "8d85bd8f0c5a8700b24cef96645e2fb9041b48a6acb4d7ffbc997296b1a3caf4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
+      "sha256": "1d5da20a4610eaa091d70e23095bae077ac6658e8cf942b6a5c5ea695cf467e8",
+      "side": "sim"
+    }
+  ]
+}

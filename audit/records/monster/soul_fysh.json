@@ -1,0 +1,89 @@
+{
+  "unit": "monster/soul_fysh",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\SoulFysh.cs",
+    "sha256": "728ac2eedd08ea4d974abfb7801797c6eb2625244a01206446e964695076ab24"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\soul_fysh.py",
+    "sha256": "4c072f390bc091b4197a1699ce769ae2fa5f78d5b8fa00718d14226dcca6c87c"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# SoulFysh.cs:50,52 (MaxInitialHp => MinInitialHp) non-ascension branch = 211 (AscensionHelper.GetValueIfAscension puts the non-ascension value LAST); sim min_hp = 211. Confirmed by `monster_probes.py hp` (102/109 compared, 0 mismatches)."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (class attr)",
+      "verdict": "faithful",
+      "rationale": "C# SoulFysh.cs:50,52 (MaxInitialHp => MinInitialHp) non-ascension branch = 211; sim max_hp = 211."
+    },
+    "HurtSfx": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port."
+    },
+    "AfterDeath": {
+      "maps_to": "(none -- presentation; the sim has no MonsterModel listener category, hook_dispatch G5, not re-verdicted)",
+      "verdict": "waiver",
+      "rationale": "One of monster_state_machine boundary-hole 5's eleven unclaimed C# hook overrides, handed to this stream. Read to the end (the KinPriest/N6 lesson): SoulFysh.cs:81-89 is `if (creature != Creature) return;` followed by `NRunMusicController.Instance?.UpdateMusicParameter(\"soulfysh_progress\", 5f)` and nothing else. The ENTIRE override is a music parameter -- no state change, no command, no hook dispatch -- so there is no mechanical behaviour for the sim to be missing. Waiver, presentation, exactly as N6 waived KinPriest. hook_dispatch's G5 (no MonsterModel listener category) is NOT re-verdicted here."
+    },
+    "AfterCardChangedPilesLate": {
+      "maps_to": "(none -- presentation)",
+      "verdict": "waiver",
+      "rationale": "The second of this unit's two boundary-hole-5 overrides. SoulFysh.cs:91-108: three early returns (not my player's card / not a Beckon / combat is over), then a Hand scan `Hand.Cards.Any(c is Beckon)` whose ONLY consumer is `NRunMusicController...UpdateMusicParameter(\"beckon\", flag ? 1 : 0)`. The scan result is never stored and never read again, so the whole override is a music parameter. Read to the end before verdicting, per N6."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (soul_fysh.py:33-59)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node identical to SoulFysh.cs:110-129: five MoveStates in a pure deterministic ring BECKON -> DE_GAS -> GAZE -> FADE -> SCREAM -> BECKON, initial BECKON, no branch state on either side. Even the registration list order matches C#'s ([beckon, de_gas, gaze, scream, fade]). Executed (monster_probes_b04.py graphs)."
+    }
+  },
+  "guards": [
+    {
+      "what": "move damage / status counts",
+      "verdict": "faithful",
+      "rationale": "Non-ascension, SoulFysh.cs:54-64: DeGasDamage 16, ScreamDamage 13, GazeDamage 7, BeckonMoveAmount 2, GazeMoveAmount 1, ScreamMoveAmount 3; FadeMove applies IntangiblePower 2 (:203). Sim soul_fysh.py:13-18 = 16 / 7 / 13 / 3 / 2 / 2. All match."
+    },
+    {
+      "what": "BECKON / GAZE card placement and pile",
+      "verdict": "faithful",
+      "rationale": "SoulFysh.cs:141-147 creates TWO Beckons: the first via AddGeneratedCardToCombat(card, PileType.Draw, null, CardPilePosition.Random) and the second into PileType.Discard, in that order; GAZE (:165-168) adds ONE into Discard after the attack. Sim _beckon (soul_fysh.py:61-65) calls CardPileCmd.add_to_draw then add_to_discard, and add_to_draw (cmds.py:475-497) is documented and implemented as the Random position drawn from the SHUFFLE stream; _gaze (:70-74) attacks then adds one to the discard. Executed (monster_probes_b04.py fysh-beckon): BECKON draw 4->5 with the new card at index 1 of 5 (not top, not bottom) and discard 0->1; GAZE discard 1->2 after the hit lands."
+    },
+    {
+      "what": "IsInvisible (set by FADE, cleared by SCREAM)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port. SoulFysh.cs:68-79 / :187 / :199. Every read of IsInvisible is a GenerateAnimator AddAnyState predicate (SoulFysh.cs:237-240) choosing between the normal and intangible hurt/death animations. It gates nothing mechanical -- the actual damage reduction is IntangiblePower, which the sim applies."
+    },
+    {
+      "what": "SCREAM ordering: damage before Vulnerable 3",
+      "verdict": "faithful",
+      "rationale": "SoulFysh.cs:189-193 awaits the attack and then PowerCmd.Apply<VulnerablePower>(targets, 3), so the Vulnerable does not amplify the hit that applied it; sim _scream (soul_fysh.py:81-85) has the same order."
+    },
+    {
+      "what": "no RandomBranchState -- AddBranch bug class not applicable",
+      "verdict": "faithful",
+      "rationale": "Executed (monster_probes_b04.py branches): soul_fysh builds no RandomBranchState on either side. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ]
+}
