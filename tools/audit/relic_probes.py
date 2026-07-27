@@ -856,12 +856,24 @@ def probe_sweep_reset_exec() -> None:
     """
     import contextlib
     import io
+    import re as _re
 
     from sts2_rl import CombatState
     from sts2_rl.relics import make_relic
 
-    with contextlib.redirect_stdout(io.StringIO()):
+    _buf = io.StringIO()
+    with contextlib.redirect_stdout(_buf):
         candidates = probe_sweep_reset()
+    # SEVENTH sweep-A defect, found by batch 18: the executed pass runs only the
+    # PRIORITISED subset, so a unit the static pass flagged but the driver never
+    # takes produces NO LINE AT ALL -- not confirmed, not inconclusive, not
+    # no-delta. Silence is even easier to read as clean than a false clear, and
+    # it is the mechanism by which permafrost hid until defect 6 was fixed.
+    # wongos_mystery_ticket is batch 18's witness. Name them explicitly.
+    _sec = _buf.getvalue().split("NEVER RESET BEFORE A READER")
+    _flagged = (_re.findall(r"^    ([a-z_]+) +\[", _sec[1].split(
+        "RESET AT TURN START")[0], _re.M) if len(_sec) > 1 else [])
+    _skipped = sorted(set(_flagged) - set(candidates))
 
     def _snapshot(relic, cs) -> dict:
         """The relic's own fields PLUS the combat state it can move.
@@ -1002,6 +1014,18 @@ def probe_sweep_reset_exec() -> None:
               "build -- audit by hand):")
         for rid, err in errored:
             print(f"    {rid:<26} {err}")
+    if _skipped:
+        print(f"\n  STATICALLY FLAGGED BUT NEVER EXECUTED ({len(_skipped)} of "
+              f"{len(_flagged)}) -- this pass says NOTHING about these, and "
+              f"saying nothing\n"
+              f"  is easier to misread as clean than any wrong answer. They "
+              f"are excluded because their C# counterpart makes no\n"
+              f"  combat-boundary assignment, which is evidence and not proof "
+              f"-- permafrost sat here and was a LIVE gap until the\n"
+              f"  census was fixed to include AfterRoomEntered. Each needs a "
+              f"purpose-built probe in its own batch:")
+        for rid in _skipped:
+            print(f"    {rid}")
 
 
 # ── sweep-isallowed ───────────────────────────────────────────────────────

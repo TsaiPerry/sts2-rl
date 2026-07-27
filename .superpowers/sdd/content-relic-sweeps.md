@@ -32,10 +32,10 @@ second combat with the same instance, and diff both the relic's own fields *and*
 the player/enemy state against a freshly-constructed instance entering its first
 combat.
 
-### REWRITTEN 2026-07-26 — the first version was unsound, in six ways
+### REWRITTEN 2026-07-26 — the first version was unsound, in seven ways
 
-**Six of the ten batches that used this sweep independently faulted it** —
-batches 4, 5, 6 and 7 before the rewrite, then 12 and 13 after it, each on
+**Seven of the fifteen batches that used this sweep independently faulted it** —
+batches 4, 5, 6 and 7 before the rewrite, then 12, 13 and 18 after it, each on
 different grounds. Every fault was confirmed at the source and every one is now
 fixed. Read this before trusting any earlier sweep-A output:
 
@@ -116,8 +116,18 @@ fixed. Read this before trusting any earlier sweep-A output:
    rescan finds 11 C# relics assigning inside that hook, and both tea sets *arm*
    `GainEnergyInNextCombat = true` there — batch 17 should know.
 
-**Six defects, three of them false clears, and the sweep is still not an
-oracle.** `permafrost` is now a candidate but lands in `INCONCLUSIVE`, because
+7. **20 of the 38 statically-flagged units were never executed at all, and the
+   pass said nothing about them.** Found by batch 18. `sweep-reset-exec` runs
+   only the PRIORITISED subset, so a unit the static pass flagged but the driver
+   never takes produces **no line** — not confirmed, not inconclusive, not
+   no-delta. Silence is easier to misread as clean than any wrong answer, and it
+   is the *mechanism* by which `permafrost` hid until defect 6 was fixed:
+   `permafrost` sat in exactly this silent set. `wongos_mystery_ticket` is batch
+   18's witness — statically flagged, absent from every executed bucket, and it
+   carries a LIVE gap. The pass now prints the skipped set with its count.
+
+**Seven defects, three of them false clears, one of them pure silence, and the
+sweep is still not an oracle.** `permafrost` is now a candidate but lands in `INCONCLUSIVE`, because
 the driver plays a Defend and Permafrost triggers on a Power. That is the
 correct behaviour for a candidate-generator: escalate, never clear. Chasing full
 generality in the driver is the wrong investment — the sixth defect was found,
