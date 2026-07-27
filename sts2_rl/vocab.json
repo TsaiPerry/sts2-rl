@@ -391,7 +391,11 @@
   "duplication",
   "gigantification",
   "radiance",
-  "shackling_potion"
+  "shackling_potion",
+  "flex_potion",
+  "heist",
+  "speed_potion",
+  "thievery"
  ],
  "monsters": [
   "Aeonglass",

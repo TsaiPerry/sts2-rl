@@ -4191,6 +4191,8 @@ ALL_POWERS: dict[str, type[Power]] = {
         AdaptablePower,
         PainfulStabsPower,
         NemesisPower,
+        ThieveryPower,
+        HeistPower,
         # Colorless card powers
         AutomationPower,
         CalamityPower,
@@ -4217,5 +4219,7 @@ ALL_POWERS: dict[str, type[Power]] = {
         RadiancePower,
         DemisePower,
         ShacklingPotionPower,
+        FlexPotionPower,
+        SpeedPotionPower,
     ]
 }
