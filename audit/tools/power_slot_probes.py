@@ -1,16 +1,16 @@
 """Executed dormancy probes for the power stream's half-B (enemy-power) audits.
 
-Every number quoted in `audits/power/*.json` for the units below, and every
+Every number quoted in `audit/records/power/*.json` for the units below, and every
 number in `.superpowers/sdd/content-power-report-b.md`, is re-derivable from
 one of these subcommands. Follows the pattern of
-`tools/audit/dormancy_probes.py` and `tools/audit/power_census.py`.
+`audit/tools/dormancy_probes.py` and `audit/tools/power_census.py`.
 
-    py tools/audit/power_slot_probes.py rosters
-    py tools/audit/power_slot_probes.py g5-witness
-    py tools/audit/power_slot_probes.py enemy-hook-order
-    py tools/audit/power_slot_probes.py ungated-modifiers
-    py tools/audit/power_slot_probes.py extra-turns
-    py tools/audit/power_slot_probes.py applier-readers
+    py audit/tools/power_slot_probes.py rosters
+    py audit/tools/power_slot_probes.py g5-witness
+    py audit/tools/power_slot_probes.py enemy-hook-order
+    py audit/tools/power_slot_probes.py ungated-modifiers
+    py audit/tools/power_slot_probes.py extra-turns
+    py audit/tools/power_slot_probes.py applier-readers
 """
 from __future__ import annotations
 

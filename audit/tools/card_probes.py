@@ -1,11 +1,11 @@
-"""Reproducible probes for the `audits/card/**` content stream.
+"""Reproducible probes for the `audit/records/card/**` content stream.
 
 Every "executed evidence" number the card records state about a *pool-wide*
 property is produced here, so a later auditor can re-derive it instead of
 trusting a throwaway script.
 
-  py tools/audit/card_probes.py                  # every probe
-  py tools/audit/card_probes.py downgrade        # one probe
+  py audit/tools/card_probes.py                  # every probe
+  py audit/tools/card_probes.py downgrade        # one probe
 
 Probes:
   downgrade      Which sim cards fail to restore their printed state after
@@ -38,7 +38,7 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from tools.audit.harness import DEFAULT_GAME_ROOT  # noqa: E402
+from audit.tools.harness import DEFAULT_GAME_ROOT  # noqa: E402
 
 # Printed state a player can see on the card face or feel in play.
 _FLAGS = (
@@ -97,7 +97,7 @@ def probe_unpowered_block() -> None:
     sim ports them (gap G1's blast radius)."""
     ported = _cards()
     game_dir = DEFAULT_GAME_ROOT / "src/Core/Models/Cards"
-    from tools.audit.harness import _pascal
+    from audit.tools.harness import _pascal
     by_pascal = {_pascal(cid): cid for cid in ported}
     hits = []
     for cs in sorted(game_dir.glob("*.cs")):

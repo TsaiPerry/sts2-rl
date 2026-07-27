@@ -1,13 +1,19 @@
 """Emit docs/audit/content/power/gap-ledger.md from the 138 committed records.
 
-Every line is derived from audits/power/*.json -- nothing is hand-entered, so
-re-running this after a record changes regenerates a correct ledger.
+Every line is derived from audit/records/power/*.json -- nothing is hand-entered,
+so re-running this after a record changes regenerates a correct ledger.
+
+  py audit/tools/gap_ledger.py
 """
-import json, glob, re, collections
+import json, re, collections, pathlib
+
+# audit/tools/gap_ledger.py -> parents[0]=audit/tools, [1]=audit, [2]=repo root.
+# Anchored so the ledger reads the same records wherever it is run from.
+_REPO = pathlib.Path(__file__).resolve().parents[2]
 
 RECS = {}
-for p in sorted(glob.glob('audits/power/*.json')):
-    r = json.load(open(p))
+for p in sorted((_REPO / 'audit' / 'records' / 'power').glob('*.json')):
+    r = json.loads(p.read_text(encoding='utf-8'))
     RECS[r['unit'].split('/')[1]] = r
 
 
@@ -55,7 +61,7 @@ w = L.append
 w('# Power tier — gap ledger')
 w('')
 w('Every `gap`-verdict entry in the 138 committed power audit records, in one')
-w('place. **Generated from `audits/power/*.json`, not hand-written** — each line')
+w('place. **Generated from `audit/records/power/*.json`, not hand-written** — each line')
 w("traces to a record, and the record carries the full reasoning and the file:line")
 w('citations. Regenerate after any record changes rather than editing this file.')
 w('')
@@ -126,7 +132,7 @@ live = [g for g in gaps if g[3] == 'LIVE']
 for unit, kind, name, _, text in sorted(live):
     w(f'### `{unit}` — {name}')
     w('')
-    w(f'*({kind}; record: `audits/power/{unit}.json`)*')
+    w(f'*({kind}; record: `audit/records/power/{unit}.json`)*')
     w('')
     w(text)
     w('')
@@ -165,11 +171,10 @@ if unc:
 w('## Regenerating')
 w('')
 w('```')
-w('py tools/audit/gap_ledger.py > docs/audit/content/power/gap-ledger.md')
+w('py audit/tools/gap_ledger.py > docs/audit/content/power/gap-ledger.md')
 w('```')
 
-import pathlib
-dest = pathlib.Path('docs/audit/content/power/gap-ledger.md')
+dest = _REPO / 'docs/audit/content/power/gap-ledger.md'
 dest.parent.mkdir(parents=True, exist_ok=True)
 dest.write_text('\n'.join(L) + '\n', encoding='utf-8')
 print(f'wrote {dest} — {len(L)} lines, {len(gaps)} gap entries')

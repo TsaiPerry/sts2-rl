@@ -1,12 +1,12 @@
 """Reproducible probes for the LAST event-audit batch (the `w`/`z` units).
 
-Same contract as tools/audit/event_probes.py: every "executed evidence" number
-stated by audits/event/{war_historian_repy, waterlogged_scriptorium,
+Same contract as audit/tools/event_probes.py: every "executed evidence" number
+stated by audit/records/event/{war_historian_repy, waterlogged_scriptorium,
 welcome_to_wongos, wellspring, whispering_hollow, wood_carvings,
 zen_weaver}.json is produced here.
 
-  py tools/audit/event_probes_c.py            # every probe
-  py tools/audit/event_probes_c.py hollow     # one probe
+  py audit/tools/event_probes_c.py            # every probe
+  py audit/tools/event_probes_c.py hollow     # one probe
 
 Probes:
   hollow      whispering_hollow is one of the six events with a parity RNG
@@ -54,7 +54,7 @@ def _say(label, observed, expected_cs):
 
 def _cs_lines(relpath: str, first: int, last: int) -> None:
     """Quote game-source lines so a source-only claim is still reproducible."""
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
     txt = (DEFAULT_GAME_ROOT / relpath).read_text(encoding="utf-8-sig",
                                                   errors="replace").splitlines()
     for n in range(first, last + 1):
@@ -326,7 +326,7 @@ def probe_repy() -> None:
 
     # FreedRepy's only non-serialisation reader.
     print("  ExtraRunFields.FreedRepy readers in the game source:")
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
     for f in sorted((DEFAULT_GAME_ROOT / "src").rglob("*.cs")):
         txt = f.read_text(encoding="utf-8-sig", errors="replace")
         for n, line in enumerate(txt.splitlines(), 1):

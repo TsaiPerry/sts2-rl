@@ -1,6 +1,6 @@
-"""Reproducible probes for event audit batch 5, slice B (audits/event/**).
+"""Reproducible probes for event audit batch 5, slice B (audit/records/event/**).
 
-Companion to tools/audit/event_probes.py -- same contract: every "executed
+Companion to audit/tools/event_probes.py -- same contract: every "executed
 evidence" number the slice-B records state is produced here. Kept in its own
 module because three slices of batch 5 ran concurrently against one branch and
 event_probes.py is shared/committed.
@@ -8,8 +8,8 @@ event_probes.py is shared/committed.
 Units covered: the_lantern_key, the_legends_were_true, this_or_that,
 tinker_time, trash_heap, trial, unrest_site, vakuu.
 
-  py tools/audit/event_probes_b.py                # every probe
-  py tools/audit/event_probes_b.py potionoffer    # one probe
+  py audit/tools/event_probes_b.py                # every probe
+  py audit/tools/event_probes_b.py potionoffer    # one probe
 
 Probes:
   potionoffer  gap EV-9  Four events share one C# idiom -- concat the

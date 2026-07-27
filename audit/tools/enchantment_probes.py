@@ -1,13 +1,13 @@
-"""Reproducible probes for the enchantment content audits (audits/enchantment/**).
+"""Reproducible probes for the enchantment content audits (audit/records/enchantment/**).
 
 Every "executed evidence" number an enchantment record states is produced here,
 so a later auditor can re-derive it instead of trusting a throwaway script
-(the pattern set by tools/audit/dormancy_probes.py). Each probe prints the sim's
+(the pattern set by audit/tools/dormancy_probes.py). Each probe prints the sim's
 observed value AND the value C# would produce, with the C# line numbers the
 expectation is read off.
 
-  py tools/audit/enchantment_probes.py              # every probe
-  py tools/audit/enchantment_probes.py order        # one probe
+  py audit/tools/enchantment_probes.py              # every probe
+  py audit/tools/enchantment_probes.py order        # one probe
 
 Probes:
   order        gap E1  Enchant*Additive/Multiplicative run BEFORE the two

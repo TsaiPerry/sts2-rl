@@ -1,12 +1,12 @@
-"""Reproducible probes for event audit batch 5 slice A (audits/event/**).
+"""Reproducible probes for event audit batch 5 slice A (audit/records/event/**).
 
-Same contract as tools/audit/event_probes.py: every "executed evidence" number
+Same contract as audit/tools/event_probes.py: every "executed evidence" number
 the eight slice-A records state is produced here. Slice A =
 potion_courier, punch_off, ranwid_the_elder, reflections, tanx, tea_master,
 tezcatara, the_future_of_potions.
 
-  py tools/audit/event_probes_a.py            # every probe
-  py tools/audit/event_probes_a.py ancienthook
+  py audit/tools/event_probes_a.py            # every probe
+  py audit/tools/event_probes_a.py ancienthook
 
 Probes:
   ancienthook  Hook.ShouldAllowAncient / AbstractModel.ShouldAllowAncient is
@@ -51,7 +51,7 @@ def _say(label, observed, expected_cs):
 
 def _cs_grep(pattern: str, subdir: str = "src") -> list[str]:
     """Every line in the game source matching `pattern` (regex)."""
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
     rx = re.compile(pattern)
     out = []
     for f in sorted((DEFAULT_GAME_ROOT / subdir).rglob("*.cs")):

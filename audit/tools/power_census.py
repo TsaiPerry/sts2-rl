@@ -1,18 +1,18 @@
 """Census probes for the power content-audit stream (Tier 1).
 
-Follows `tools/audit/dormancy_probes.py`'s pattern: every number the power
+Follows `audit/tools/dormancy_probes.py`'s pattern: every number the power
 audit records comes out of a committed, re-runnable probe rather than an
 agent's reading. Nothing here judges faithfulness -- it extracts declarations
 from both trees so the per-unit records can cite reproducible figures.
 
 Usage:
-  py tools/audit/power_census.py typing        # sign-aware-typing census
-  py tools/audit/power_census.py neg-appliers  # C# sites applying a power < 0
-  py tools/audit/power_census.py stack         # StackType vs sim on_stack
-  py tools/audit/power_census.py instance      # InstanceType overrides
-  py tools/audit/power_census.py visible       # IsVisibleInternal overrides
-  py tools/audit/power_census.py multipliers   # sim multiplicative factors
-  py tools/audit/power_census.py unregistered  # sim Power classes not in ALL_POWERS
+  py audit/tools/power_census.py typing        # sign-aware-typing census
+  py audit/tools/power_census.py neg-appliers  # C# sites applying a power < 0
+  py audit/tools/power_census.py stack         # StackType vs sim on_stack
+  py audit/tools/power_census.py instance      # InstanceType overrides
+  py audit/tools/power_census.py visible       # IsVisibleInternal overrides
+  py audit/tools/power_census.py multipliers   # sim multiplicative factors
+  py audit/tools/power_census.py unregistered  # sim Power classes not in ALL_POWERS
 """
 from __future__ import annotations
 

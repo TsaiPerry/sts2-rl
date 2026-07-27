@@ -1,10 +1,10 @@
-"""Reproducible probes for the event content audits (audits/event/**).
+"""Reproducible probes for the event content audits (audit/records/event/**).
 
-Same contract as tools/audit/dormancy_probes.py and enchantment_probes.py:
+Same contract as audit/tools/dormancy_probes.py and enchantment_probes.py:
 every "executed evidence" number an event record states is produced here.
 
-  py tools/audit/event_probes.py              # every probe
-  py tools/audit/event_probes.py lethal       # one probe
+  py audit/tools/event_probes.py              # every probe
+  py audit/tools/event_probes.py lethal       # one probe
 
 Probes:
   lethal    gap EV-1  RunState.lose_hp (run.py:294-302) subtracts HP directly.
@@ -206,7 +206,7 @@ def probe_sortkey() -> None:
 # -- relictrade: what RelicCmd.Remove dispatches -------------------------
 def _cs_grep(pattern: str, subdir: str = "src") -> list[str]:
     """Every line in the game source matching `pattern` (regex)."""
-    from tools.audit.harness import DEFAULT_GAME_ROOT
+    from audit.tools.harness import DEFAULT_GAME_ROOT
     rx = re.compile(pattern)
     out = []
     for f in sorted((DEFAULT_GAME_ROOT / subdir).rglob("*.cs")):
