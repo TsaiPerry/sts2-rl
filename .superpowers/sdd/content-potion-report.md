@@ -164,7 +164,7 @@ Two corrections to the stream prompt's own numbers, for whoever edits it:
   `PotionOfCapacity`, `PotionOfDoom`, `StarPotion`. Cross-character and cut
   content, as expected, just far fewer of them.
 - It says the sim keeps potions in "a single ~1300-line module". True
-  (`sts2_rl/potions.py`, 1278 lines) — and the predicted consequence held:
+  (`sts2_rl/potions.py`, 1277 lines) — and the predicted consequence held:
   **one edit to `potions.py` stales all 51 records at once.** Nothing was
   rehashed to hide it; `audit_status` reports 0 stale because `sts2_rl/` was
   never touched.
