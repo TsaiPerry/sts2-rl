@@ -1,0 +1,77 @@
+{
+  "unit": "relic/shuriken",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Shuriken.cs",
+    "sha256": "07a1162ad993818794a249365dad5769b1571ca6d310dc5f69bfee970c82eb7a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\shuriken.py",
+    "sha256": "759c89366bd7c8e91a5c36ee1854454e454ce965c2c49cebbc37ebea76dfc4f2"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (shuriken.py:19)",
+      "verdict": "faithful",
+      "rationale": "Matches Shuriken.cs:24. Obtainable: Rare in the transcribed grab bag (relic_pools.py:132, 'RELIC.SHURIKEN'). Rule 7: relic_pools.py is not hashed here."
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (shuriken.py:27-28) -- the sim's PRE-draw turn-start slot, executed-confirmed to sit AFTER the block clear and the energy reset (py tools/audit/relic_probes.py turn-order)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Shuriken.cs:90-99 resets AttacksPlayedThisTurn from BeforeSideTurnStart, which is audits/seam/turn_structure.json step 9 -- BEFORE the block clear. The sim's on_player_turn_start is step ~12-13, after the clear and the energy reset. Only a counter reset happens here, and nothing can read the counter in the intervening window: the only reader is on_card_played and the play phase does not open until step 28, so the counter is 0 at every point either codebase can observe it. Recorded as a divergence rather than faithful because the slot genuinely differs and a future effect placed between steps 9 and 13 would expose it -- the same reasoning and the same verdict as relic/brilliant_scarf's and relic/beating_remnant's BeforeSideTurnStart entries (binding rule 3). Also note C#'s `if (!participants.Contains(base.Owner.Creature)) return;` (Shuriken.cs:92-95) is structurally satisfied: on_player_turn_start is dispatched only for the player side. Rule 7: turn_structure.json, hooks.py and combat.py are not hashed here."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (shuriken.py:30-39)",
+      "verdict": "faithful",
+      "rationale": "Shuriken.cs:101-113 increments on an Attack owned by the relic's owner while the combat is in progress, then applies PowerVar<StrengthPower>(1) whenever the running count is a multiple of CardsVar(3). shuriken.py:31-39 mirrors it clause for clause: the Attack type check, the `% self.ATTACKS == 0` test on the post-increment count, and PowerCmd.apply(..., StrengthPower, 1, applier=self.player) against C#'s `PowerCmd.Apply<StrengthPower>(ctx, Owner.Creature, Strength.BaseValue, Owner.Creature, null)` -- same applier, same target. EXECUTED (py tools/audit/relic_probes_b14.py shuriken): four Strikes give counter 1/2/3/4 and Strength 0/0/1/1; a Defend does not advance the counter. The two C# guards the sim omits are both structurally satisfied -- `cardPlay.Card.Owner == base.Owner` is single-player (see guard N2) and `CombatManager.Instance.IsInProgress` holds because on_card_played is a combat hook and combat.py breaks the play loop once the fight is decided. Rule 7: cmds.py, powers.py and combat.py are not hashed here."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; the sim's only reset is on_player_turn_start (shuriken.py:27-28)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Shuriken.cs:123-129 zeroes AttacksPlayedThisTurn (and the two display fields) at combat end as well as at turn start; the sim keeps only the turn-start half. The stale value is provably unreadable and this was EXECUTED rather than reasoned (py tools/audit/relic_probes_b14.py shuriken): the relic instance carries counter = 4 out of combat 1, and the same instance in a fresh CombatState reports counter = 0 and Strength 0 after turn setup, because on_player_turn_start's reset is UNCONDITIONAL (`self._attacks_this_turn = 0`, no guard) and runs before the play phase opens. This is PROMPT.md bug class 13's required trace-to-the-first-reader, and it is the relic/art_of_war shape -- contrast this batch's self_forming_clay, whose turn-start write is a consume-then-clear and therefore is NOT safe, and relic/belt_buckle, which has no turn-start reset to fall back on. Rule 7: relics/art_of_war.py, relics/belt_buckle.py and audits/relic/self_forming_clay.json are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: C# has NO `cardPlay.IsAutoPlay` exclusion, so the sim counting auto-plays is CORRECT here (PROMPT.md class 29)",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because the sibling relic/brilliant_scarf's LIVE gap G1 is exactly the opposite: BrilliantScarf.cs:84-87 opens with `if (cardPlay.IsAutoPlay) return;` and its port counts every play. Shuriken.cs:101-113 has no such clause -- read the whole method -- so an auto-played Attack DOES advance the game's counter, and shuriken.py:30-33 counting it is right. PROMPT.md class 29 records this trap for RainbowRing/RazorTooth; Shuriken is a fourth site. EXECUTED (relic_probes_b14.py shuriken): an auto-played Strike through CombatState.auto_play_card leaves the counter at 1, matching C#. Copying the Scarf's verdict would have filed a false gap. Rule 7: BrilliantScarf.cs, relics/brilliant_scarf.py and combat.py are not hashed here."
+    },
+    {
+      "what": "N2: `cardPlay.Card.Owner == base.Owner` (Shuriken.cs:103) -- the sim's on_card_played carries no owner",
+      "verdict": "faithful",
+      "rationale": "A multiplayer guard: another player's Attack must not advance this Shuriken. The sim's hook signature is on_card_played(card) with no player, and CombatState holds one player, so the condition is unsatisfiable. Noted in the mapping per the shared contract's scope section rather than filed as a divergence."
+    },
+    {
+      "what": "N3: the constants -- CardsVar(3) read as IntValue (Shuriken.cs:106) and PowerVar<StrengthPower>(1m) read as BaseValue (line 110)",
+      "verdict": "faithful",
+      "rationale": "ATTACKS = 3 and the literal 1 (shuriken.py:21, :38) match, and there is no AscensionHelper.GetValueIfAscension anywhere in Shuriken.cs, so both are the pinned non-ascension values. Re-read against the C# per PROMPT.md class 19 rather than trusting the port's docstring."
+    },
+    {
+      "what": "N4: the modulo semantics -- the counter is never reset ON activation, so the relic fires on every 3rd Attack, not once",
+      "verdict": "faithful",
+      "rationale": "Worth pinning because the obvious alternative implementation (reset to 0 on trigger) would look equivalent and is not: C# keeps incrementing and tests `AttacksPlayedThisTurn % intValue == 0` (Shuriken.cs:107), so attacks 3, 6 and 9 in one turn each grant Strength. shuriken.py:34 does the same. EXECUTED: the probe's four-Strike run shows Strength arriving on attack 3 and not on attack 4. The `_isActivating` flag C# also keeps is display-only (Shuriken.cs:48-60, :76-88, :115-121) and drives DisplayAmount, not the trigger."
+    },
+    {
+      "what": "N5: `IsActivating` / `AttacksPlayedThisTurn` property setters calling UpdateDisplay, TaskHelper.RunSafely(DoActivateVisuals()), Cmd.Wait(1f), Flash() (Shuriken.cs:48-88, :109, :115-121)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. DoActivateVisuals is fire-and-forget (TaskHelper.RunSafely, not awaited) and only toggles the display flag around a 1-second wait, so it cannot affect the Strength application that follows it on the same line."
+    },
+    {
+      "what": "N6: the PlayerChoiceContext parameters on BeforeSideTurnStart and AfterCardPlayed",
+      "verdict": "waiver",
+      "rationale": "Multiplayer choice-synchronisation handles. Noted in the mapping per the shared contract's scope section rather than filed as a divergence; the sim's PowerCmd.apply needs no context because it never prompts."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

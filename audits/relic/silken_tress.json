@@ -1,0 +1,82 @@
+{
+  "unit": "relic/silken_tress",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SilkenTress.cs",
+    "sha256": "f045974dee1b42bf18fb678bd11b4f60b529f3d272866dfad3c266884d099139"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\silken_tress.py",
+    "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee"
+  },
+  "hooks": {
+    "IsUsedUp": {
+      "maps_to": "is_used_up property -> self.is_used (silken_tress.py:20-22)",
+      "verdict": "faithful",
+      "rationale": "Matches SilkenTress.cs:18 (`IsUsedUp => IsUsed`). Load-bearing beyond display in the sim: Relic.is_tradable excludes used-up relics (relics/base.py:132), the same exclusion C#'s IsTradable applies -- moot here because Ancient rarity excludes it anyway. Rule 7: relics/base.py is not hashed here."
+    },
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (silken_tress.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches SilkenTress.cs:20. Obtainable: one of Neow's 8 curse relics (events/neow.py:47)."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (silken_tress.py:24-25), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "SilkenTress.cs:42-45 is `PlayerCmd.LoseGold(base.Owner.Gold, base.Owner)` -- lose exactly the current balance, i.e. all of it. silken_tress.py:25 is `run.lose_gold(run.gold)`, and RunState.lose_gold truncates and clamps at 0 (run.py:335-337), which cannot differ when the amount IS the balance. Both leave the player at 0 gold. Note the pairing with this batch's seal_of_gold: at 0 gold Seal of Gold grants nothing, and that interaction is correct on both sides. Rule 7: run.py is not hashed here."
+    },
+    "TryModifyCardRewardOptionsLate": {
+      "maps_to": "modify_card_reward_options (silken_tress.py:27-35), dispatched by rewards.create_reward_cards (rewards.py:299-301)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and N1 per binding rule 4. The Glam-enchant loop itself is faithful -- `glam.CanEnchant(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` maps to GlamEnchantment.can_enchant then GlamEnchantment().attach with the default amount 1 -- but the port drops BOTH remaining clauses of the C# guard: the owner check and, more consequentially, `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` (G1, LIVE). It also collapses C#'s two dispatch passes (G2) and mutates in place where C# clones (N1)."
+    },
+    "AfterModifyingCardRewardOptions": {
+      "maps_to": "the `self.is_used = True` tail of modify_card_reward_options (silken_tress.py:35) -- the sim fuses C#'s separate companion hook into the modifier",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# spends the charge from a SEPARATE hook, and Hook.AfterModifyingCardRewardOptions only notifies models that RETURNED TRUE from the modifier pass (Hook.cs:679-690 walks the listeners and skips any not in the `modifiers` list collected at Hook.cs:1445-1467). So the charge is spent exactly when the relic declined to return false -- and SilkenTress.cs:47-73 returns false on three conditions: wrong owner, not a card reward, already used. The sim's fused write at silken_tress.py:35 is reached after only ONE of those three (the `is_used` check at line 30). The owner check is structurally satisfied (single-player), so the observable divergence is the IsCardReward clause: guard G1's executed evidence shows Lead Paperweight's pickup burning the one-shot. Correct in one respect worth pinning: C# returns true (and therefore spends the charge) even when the loop enchanted NOTHING -- the `return true` at SilkenTress.cs:72 is unconditional after the loop -- so the sim setting is_used unconditionally at line 35 is right, and a 'only spend it if something got enchanted' fix would be a NEW divergence. Rule 7: Hook.cs and rewards.py are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the port drops `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` (SilkenTress.cs:53-56), so the one-shot is spent by generations that are not card rewards",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# refuses to touch the options unless `options.Flags.HasFlag(CardCreationFlags.IsCardReward)`, and that flag is set by exactly two places in the whole game -- CardReward's two constructors (CardReward.cs:113-115 and :134) and the SealedDeck modifier (SealedDeck.cs:30). Every other CardFactory.CreateForReward caller leaves it clear, and CardFactory dispatches the hook regardless (CardFactory.cs:104, gated on the DIFFERENT flag NoModifyHooks), so this flag is the relic's own gate and nothing else enforces it. The sim has no flag at all: rewards.py:299-301 runs modify_card_reward_options for every create_reward_cards call whose `modify_hooks` argument is True -- and that argument is NoModifyHooks, not IsCardReward. Three ported call sites are therefore wrong, EXECUTED (py tools/audit/relic_probes_b14.py card-reward-flag): (a) relics/lead_paperweight.py:24-29 passes modify_hooks=True where LeadPaperweight.cs:21-22 builds a bare CardCreationOptions and calls CreateForReward directly -- IsCardReward CLEAR, so C# skips both relics; the probe offers [('restlessness', 1, 'glam'), ('impatience', 1, 'glam')] and reports Silver Crucible's times_used 0 -> 1 and Silken Tress's is_used False -> True, where C# offers two unmodified level-0 Colorless cards and spends neither relic. (b) events/brain_leech.py:44's SHARE_KNOWLEDGE leaves modify_hooks at its True default where BrainLeech.cs:66 is also a bare CreateForReward (ForNonCombatWithDefaultOdds) -- IsCardReward CLEAR; the probe reports six upgraded options and times_used 1. (c) the OPPOSITE direction: events/brain_leech.py:60's RIP passes modify_hooks=False, but BrainLeech.cs:57 builds a real `new CardReward(options, 3, Owner)` whose Populate sets IsCardReward -- so C# DOES modify those options and the sim does not; the probe reports three level-0 options and times_used 0. The reference case is correct on both sides: a normal combat card reward fires (probe case (d): three level-1 options, times_used 1). REACHABILITY (LIVE): both relics come from Neow's curse pool at floor 0 (events/neow.py:47); Lead Paperweight is in Neow's positive pool (events/neow.py:39) and Brain Leech is a ported event any run can roll (events/__init__.py:118) -- so a run holding either relic and reaching either site diverges, with no further content needed. The observable is compound: the wrong CARDS are offered, and a limited charge is spent (or not spent), which changes what the NEXT card reward looks like. The fix is a field, not a flag flip: create_reward_cards needs an is_card_reward parameter distinct from modify_hooks, and its four ported callers need auditing against their C# counterparts -- brain_leech's two arms are currently inverted. Rule 7: CardReward.cs, CardFactory.cs, SealedDeck.cs, LeadPaperweight.cs, BrainLeech.cs, rewards.py, relics/lead_paperweight.py, events/brain_leech.py and events/neow.py are not hashed here. AT THIS UNIT'S SITE specifically: Silken Tress is one-shot, so a wrongly-fired enchant does not merely add Glam to the wrong cards -- it permanently consumes the relic, and the player's NEXT card reward (the one the relic is for) comes out unenchanted."
+    },
+    {
+      "what": "G2 (DORMANT): TryModifyCardRewardOptionsLate is C#'s SECOND dispatch pass and the sim runs one flat walk (PROMPT.md class 25)",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.TryModifyCardRewardOptions runs TWO complete listener passes -- every model's TryModifyCardRewardOptions first, then every model's TryModifyCardRewardOptionsLate (Hook.cs:1445-1467) -- so a Late implementer is guaranteed to see the plain pass's edits. The sim has one flat walk over run.relics (rewards.py:299-301), so the guarantee becomes relic-acquisition order. Same shape as audits/seam/turn_structure.json guard G12 and PROMPT.md class 25. DORMANT, checked by execution rather than assumed (py tools/audit/relic_probes_b14.py card-reward-flag case (e)): the sim has exactly four modify_card_reward_options implementers -- relics/_eggs.py:39, relics/glitter.py:16, relics/silken_tress.py:27 and relics/silver_crucible.py:28 -- and all four are TryModifyCardRewardOptionsLate in C#. The game's ONLY non-Late implementer is LastingCandy.cs:100, whose port (relics/lasting_candy.py) is a behaviourless stub, so nothing occupies the earlier pass today. Porting Lasting Candy's Power-card substitution makes it live, and directionally: C# guarantees the substituted Power card is in the list BEFORE the Late relics upgrade or enchant it. Rule 7: Hook.cs, LastingCandy.cs, rewards.py, relics/lasting_candy.py, relics/glitter.py, relics/_eggs.py and turn_structure.json are not hashed here."
+    },
+    {
+      "what": "N1: `RunState.CloneCard(card)` then `cardReward.ModifyCard(card2, this)` (SilkenTress.cs:67-69) vs the sim enchanting the offered card in place (silken_tress.py:34) -- PROMPT.md class 17",
+      "verdict": "deliberate-divergence",
+      "rationale": "MECHANISM: C# does not mutate the offered card. It clones it (`base.Owner.RunState.CloneCard(card)`), edits the CLONE, and swaps it in through `cardReward.ModifyCard(card2, this)`, which keeps the untouched `originalCard` alongside it -- LastingCandy.cs:115's `o.originalCard.Id` is the one reader of that field in the game. The sim edits the offered Card object in place. PROMPT.md class 17 flags shallow rebuilds that DROP per-instance state, and this site is the inverse: because the sim mutates rather than rebuilds, enchantment, affliction and cost modifiers survive by construction, which is also what CloneCard's ClonePreservingMutability does (CardModel.cs:2168-2179). So the OFFERED card is equivalent on both sides and binding rule 2 is satisfied -- verdicted deliberate-divergence, not a gap. Two residues recorded rather than waved through: the sim cannot answer `originalCard` at all, which a ported Lasting Candy would need; and an unpicked C# clone is a real CardModel created on the run, so if RunState.CloneCard ever gains a side effect (a net-id counter, a discovered-cards ledger) the counts diverge. Neither is observable today. Rule 7: CardModel.cs, LastingCandy.cs and cards/base.py are not hashed here."
+    },
+    {
+      "what": "N2: `if (player != base.Owner) return false;` (SilkenTress.cs:49-52) -- the sim's hook takes the run, not a player",
+      "verdict": "faithful",
+      "rationale": "A multiplayer guard: another player's card reward must not be enchanted by this Silken Tress. modify_card_reward_options(run, cards) (relics/base.py:172-176) has no player parameter; structurally satisfied because the sim is single-player. Noted in the mapping per the shared contract's scope section. Recorded separately from G1 because the two clauses of the same guard have very different consequences -- this one is unsatisfiable, that one is live. Rule 7: relics/base.py is not hashed here."
+    },
+    {
+      "what": "N3: `glam.CanEnchant(card)` (SilkenTress.cs:65) vs GlamEnchantment.can_enchant (silken_tress.py:33), and `CardCmd.Enchant<Glam>(card2, 1m)`'s amount",
+      "verdict": "faithful",
+      "rationale": "The amount matches: C# passes the literal 1m and Glam's own CanonicalVars pin `DynamicVar(\"Times\", 1m)` (Glam.cs:17) with no AscensionHelper branch, while GlamEnchantment() takes the base default amount = 1 (enchantments.py:42-43). The eligibility predicate is shared machinery rather than this relic's: Enchantment.can_enchant excludes Status/Curse/Quest cards, unplayable deck cards and already-enchanted cards (enchantments.py:51-61), and GlamEnchantment adds no override -- matching Glam.cs, which declares no CanEnchantCardType (contrast Imbued, which restricts to Skills). Executed evidence that the path works end to end is in guard G1's probe output, where both offered cards come back carrying 'glam'. Rule 7: enchantments.py, Glam.cs and Imbued.cs are not hashed here -- a change to the sim's shared can_enchant would go stale via the enchantment stream's records, not this one."
+    },
+    {
+      "what": "N4: `is_used` is per-RUN on both sides, and the relic has no combat-boundary reset to drop (PROMPT.md classes 10, 13, 24)",
+      "verdict": "faithful",
+      "rationale": "py tools/audit/relic_probes.py sweep-reset lists silken_tress in its 'NOT RESET BEFORE A READER' bucket with `['is_used']`, which is a candidate and not a verdict. Settled here: C#'s IsUsed is a `[SavedProperty]` (SilkenTress.cs:24) -- persisted across combats and across save/load by design -- and the relic has no BeforeCombatStart, AfterCombatEnd or AfterRoomEntered override at all, so there is no reset for the port to have dropped. Intended persistence on both sides, exactly the nunchaku shape PROMPT.md class 24 records. The sim's flag lives on the relic instance, which lives on RunState.relics, so it persists identically. Rule 7: relic_probes.py is never hashed (tools/audit/)."
+    },
+    {
+      "what": "N5: `undo_after_obtained` is not implemented, and the pickup zeroes the run's gold",
+      "verdict": "faithful",
+      "rationale": "The consequence, for the record: a conformance-runner relic swap cannot restore the lost gold, and unlike a max-HP relic there is no record of how much was taken -- so this unit would need the pre-loss balance captured to be undoable at all. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+    },
+    {
+      "what": "N6: the IsUsed setter's `base.Status = RelicStatus.Disabled` (SilkenTress.cs:35-38) and ExtraHoverTips (line 22)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CheckIfUsedUp's status write / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
