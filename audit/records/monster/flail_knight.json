@@ -1,0 +1,63 @@
+{
+  "unit": "monster/flail_knight",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\FlailKnight.cs",
+    "sha256": "7e5158dd5559c57156fee1ff9be34600d656ddb42a1bc0de61ef1207fe9b089b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
+    "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "FlailKnight.min_hp = 101 (flail_knight.py:34)",
+      "verdict": "faithful",
+      "rationale": "FlailKnight.cs:32 (ToughEnemies, 108, 101) -> 101."
+    },
+    "MaxInitialHp": {
+      "maps_to": "FlailKnight.max_hp = 101 (flail_knight.py:35)",
+      "verdict": "faithful",
+      "rationale": "FlailKnight.cs:34 MaxInitialHp => MinInitialHp -> 101."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation only (SHARED-FINDINGS section 4): no mechanical reader."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "FlailKnight.build_machine (flail_knight.py:40-56)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "FlailKnight.cs:50 AddBranch(FLAIL_MOVE, 2) and :51 AddBranch(RAM_MOVE, 2) are overload #9 (`int maxRepeats`, seam step-13 table row 9): maxRepeats = 2, weight = 1f, repeatType forced to CanRepeatXTimes. flail_knight.py:51-52 write add_branch(flail, weight=2.0) / add_branch(ram, weight=2.0), i.e. weight 2 and CAN_REPEAT_FOREVER. Same bug class as monster_state_machine G1 (the seam owns G1 itself; this entry is the unit-level consequence and does not re-verdict it). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and NEVER a weight (seam seed fact 1 / step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts weight there. Observable: a different intent distribution (seam's `distribution` probe, 100000 rolls, seed 7: sim FLAIL 41.6% / RAM 41.6% / WAR_CHANT 16.8% vs game 36.2% / 36.4% / 27.4%), the loss of the 'never three FLAILs in a row' rule, and a different MonsterAi draw sequence. Re-executed for this record: `py audit/tools/state_machine_probes.py mismatch` prints this pair as MISMATCH with FLAIL/RAM C#(w=1.0 CAN_REPEAT_X_TIMES max=2 cd=0) vs sim:51/52 (w=2.0 CAN_REPEAT_FOREVER max=0 cd=0), matching the seam's description of the site exactly. LIVE: FlailKnight is in KNIGHTS_ELITE (glory/knights.py:129-132), which rooms.py:195 lists in the Glory elite pool - executed by `py audit/tools/monster_probes_b05.py reach` (flail_knight -> pools=['glory.elite'])."
+    }
+  },
+  "guards": [
+    {
+      "what": "AddBranch(WAR_CHANT, MoveRepeatType.CannotRepeat) - the branch that IS read right",
+      "verdict": "faithful",
+      "rationale": "FlailKnight.cs:49 is overload #10 (R repeatType only) -> weight 1f, CannotRepeat. flail_knight.py:50 add_branch(war_chant, repeat_type=MoveRepeatType.CANNOT_REPEAT) leaves weight at its 1.0 default. Correct, and it is the counter-evidence that the port's error is positional rather than conceptual."
+    },
+    {
+      "what": "branch add order and the initial state",
+      "verdict": "faithful",
+      "rationale": "C# adds WAR_CHANT, FLAIL, RAM in that order (FlailKnight.cs:49-51) and the sim adds them in the same order (flail_knight.py:50-52); add order is observable because GetNextState walks the branches in order and resolves ties toward the earlier one (seam step 14). Registration order [WAR_CHANT, FLAIL, RAM, RAND] and initialState = RAM_MOVE both match (FlailKnight.cs:52-56 vs flail_knight.py:56)."
+    },
+    {
+      "what": "move numerics",
+      "verdict": "faithful",
+      "rationale": "FlailDamage (DeadlyEnemies, 10, 9) -> 9 with WithHitCount(2); RamDamage (DeadlyEnemies, 17, 15) -> 15; WarChantMove applies StrengthPower 3m (FlailKnight.cs:38, 40, 63). Sim _FLAIL_DMG=9/_FLAIL_HITS=2, _RAM_DMG=15, _WAR_CHANT_STRENGTH=3."
+    },
+    {
+      "what": "the sim's WAR_CHANT intent is a callable",
+      "verdict": "faithful",
+      "rationale": "C# BuffIntent() carries no amount; the sim returns Intent(MoveType.BUFF, buffs=[(StrengthPower, 3)]) from a callable (flail_knight.py:58-61). Strictly more intent detail than the source shows, on the display side only - no move, roll or damage reads it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}
