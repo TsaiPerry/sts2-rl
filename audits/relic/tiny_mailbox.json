@@ -1,0 +1,57 @@
+{
+  "unit": "relic/tiny_mailbox",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TinyMailbox.cs",
+    "sha256": "1a182ac3e18b3eecb44a826274b4bfa83e3bef5fc49d3d1745546edcd281d285"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\tiny_mailbox.py",
+    "sha256": "4dea8ad9376467027523a08bbe4a5a6b5e53542bd8c5711deb24f1fe46683df9"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (tiny_mailbox.py:13)",
+      "verdict": "faithful",
+      "rationale": "TinyMailbox.cs:12. Executed: Uncommon in the transcribed grab bag (relic_pools.py:142 'RELIC.TINY_MAILBOX'), `py tools/audit/relic_probes_b16.py pool`."
+    },
+    "TryModifyRestSiteHealRewards": {
+      "maps_to": "no counterpart -- the port is a behaviourless stub, though `Relic.modify_rest_site_heal_rewards` exists (relics/base.py:245-249) and is dispatched",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 (LIVE)."
+    },
+    "ModifyExtraRestSiteHealText": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "TinyMailbox.cs:26-41 appends `base.AdditionalRestSiteHealText` to the rest-site button's flavour text, behind a `LocalContext.IsMe(base.Owner)` client check. Localised UI text on a button; the sim has no rest-site UI. Waived under the shared contract's presentation exclusion. Sweep C lists this hook among the ones with no `Relic` base member, which is correct and does not need one."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the two potion rewards after a Rest are missing entirely, and the stub's stated premise is false",
+      "verdict": "gap",
+      "issue": "MECHANISM: TinyMailbox.cs:14-24 adds TWO `new PotionReward(player)` entries to the rest-site heal reward list and returns true. tiny_mailbox.py is a class body with an id, a name and a rarity -- no methods at all -- justified by the docstring 'an out-of-combat rest-site reward, so this is a no-op stub' (tiny_mailbox.py:8-9). PROMPT.md bug class 12 says to check the premise; it is false in four separate ways, all executed (`py tools/audit/relic_probes_b16.py mailbox-rest`): (1) `Relic.modify_rest_site_heal_rewards` exists on the base (relics/base.py:245-249); (2) RunState.rest_heal_rewards dispatches it over every relic (run.py:1097-1110); (3) a SIBLING ported relic already uses it -- relics/dream_catcher.py:22-25, also an Event relic from the same Trash Heap pool -- and the probe shows it producing cards=['feel_no_pain', 'rampage', 'iron_wave'] on the same seed where tiny_mailbox produces nothing; (4) the destination field for exactly this reward shape exists and is consumed: CombatRewards.special_potions (rewards.py:385-388, 'Extra potion offers (PotionReward extras)') is surfaced as an independent take-or-skip offer by driver.py:388-390, and run.random_potion() works (probe: 'clarity'). So the relic is a complete no-op where the game gives two potions per rest. Both sides ported: Uncommon in the grab bag, and the sim has rest sites with a heal option and a reward screen. SCOPE NOTE, stated because it is arguable: the shared contract defers potions, but what is missing here is the RELIC's hook implementation, not any potion mechanic -- the sim's potion-reward pipeline is built, dispatched and consumed, and the same hook is already implemented by a sibling. Filed as a gap on the belt_buckle precedent (audits/relic/belt_buckle.json AfterPotionProcured), where a potion-triggered divergence was recorded rather than waived because the divergent observable was ordinary run state. Rule 7: relics/base.py, run.py, rewards.py, driver.py and relics/dream_catcher.py are NOT hashed by this record."
+    },
+    {
+      "what": "N1: `player != base.Owner` (TinyMailbox.cs:16-19) and `LocalContext.IsMe(base.Owner)` (:28-31)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true."
+    },
+    {
+      "what": "N2: the `isMimicked` parameter of TryModifyRestSiteHealRewards, and the C# return value",
+      "verdict": "faithful",
+      "rationale": "TinyMailbox ignores `isMimicked` entirely -- it adds the two potions whether the heal came from the rest site or from PlayerCmd.MimicRestSiteHeal (PlayerCmd.cs:264) -- so a port that also ignores it is correct, and the sim's hook signature (run, rewards) drops a parameter no implementer here reads. The `return true` is the Try-chain's 'I modified something' flag, which audits/seam/hook_dispatch.json step 34 already verdicts as a deliberate-divergence collapsed into a void mutator across the whole family; matched here rather than re-derived (binding rule 3). Rule 7: PlayerCmd.cs and audits/seam/hook_dispatch.json are not hashed here."
+    },
+    {
+      "what": "N3: `rewards.Add(new PotionReward(player))` TWICE rather than one two-potion reward",
+      "verdict": "faithful",
+      "rationale": "Recorded for whoever implements G1: they are two independent take-or-skip offers, not a pick-one-of-two, so the fix is two appends to CombatRewards.special_potions (which driver.py:388-390 already offers one at a time) and NOT the single `rewards.potion` pity slot. Each PotionReward rolls its own potion, so the fix also costs two potion-generation draws -- relevant to RNG parity, and the reason a one-line 'give 2 potions' shortcut would be wrong."
+    },
+    {
+      "what": "N4: no `is_allowed` / `is_allowed_at_neow` override in the C#",
+      "verdict": "faithful",
+      "rationale": "Checked because sweep B's 17-relic IsBeforeAct3TreasureChest cluster is the pool-wide shape for this kind (PROMPT.md bug class 16): TinyMailbox.cs declares neither IsAllowed nor IsAllowedAtNeow, so the sim's defaults (no is_allowed member at all; is_allowed_at_neow True) are correct here and this relic is NOT in that cluster. Confirmed against `py tools/audit/relic_probes.py sweep-isallowed`, whose list of 20 IsAllowed overrides does not include it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

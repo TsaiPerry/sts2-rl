@@ -1,0 +1,62 @@
+{
+  "unit": "relic/tri_boomerang",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TriBoomerang.cs",
+    "sha256": "a7eb418f276ccc8a1989287d842cd4e40353ed9cf93ca859317b26e728fb9e9b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\tri_boomerang.py",
+    "sha256": "4b3b40d18520bb63bff1f5f7302b74495b38c9e6d0adb93f5610702258a5c405"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (tri_boomerang.py:14)",
+      "verdict": "faithful",
+      "rationale": "TriBoomerang.cs:17. Granted by the ported Tanx shrine (events/tanx.py:31). Executed: `py tools/audit/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (tri_boomerang.py:20-27), invoked by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "TriBoomerang.cs:23-34: select from the deck's Instinct-enchantable cards with prefs(EnchantSelectionPrompt, Cards.IntValue) and enchant each pick with Instinct at amount 1. tri_boomerang.py:20-27 builds the same candidate list, selects the same count and attaches the same enchantment. Every clause is settled below: the candidate filter (N1), the count and the confusing `amount: 1` argument (N2), the small-deck case (N3), the selection order (N4), the enchant semantics (N5). No gap found."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the candidate filter -- `PileType.Deck.GetPile(player).Cards.Where(c => enchantment.CanEnchant(c))` (CardSelectCmd.cs:549) vs `[c for c in run.deck if InstinctEnchantment.can_enchant(c)]` (tri_boomerang.py:23-25)",
+      "verdict": "faithful",
+      "rationale": "Instinct.CanEnchantCardType is `cardType == CardType.Attack` (Instinct.cs:8-11), and the sim's InstinctEnchantment.can_enchant is `super().can_enchant(card) and card.card_type == CardType.ATTACK` (enchantments.py:371-375) on top of the base's EnchantmentModel.CanEnchant transcription -- no Status/Curse/Quest, no unplayable deck card, one enchantment per card (enchantments.py:52-61). Both sides therefore offer exactly the deck's unenchanted Attacks. No `additionalFilter` is passed by this relic (it takes the 4-arg overload, CardSelectCmd.cs:532-535, which forwards null). Rule 7: enchantments.py is not hashed by this record."
+    },
+    {
+      "what": "N2: `CardsVar(3)` is the SELECTION COUNT and the literal `amount: 1` is the ENCHANTMENT AMOUNT -- reading the call left to right gets this backwards",
+      "verdict": "faithful",
+      "rationale": "TriBoomerang.cs:25 is `CardSelectCmd.FromDeckForEnchantment(prefs: new CardSelectorPrefs(CardSelectorPrefs.EnchantSelectionPrompt, base.DynamicVars.Cards.IntValue), player: base.Owner, enchantment: ModelDb.Enchantment<Instinct>(), amount: 1)` -- named arguments in a different order from the signature. `CardSelectorPrefs(prompt, selectCount)` sets MinSelect == MaxSelect == selectCount (CardSelectorPrefs.cs:62-66, 68-78), so CardsVar(3) is how many cards are picked; `amount` is the enchantment amount handed to the preview, and the actual application at TriBoomerang.cs:27 passes `1m` explicitly anyway. tri_boomerang.py:16 CARDS = 3 is used as the selection count (:26) and the sim's attach carries no amount, which matches Instinct having no amount-scaled behaviour (Instinct.cs:13-20 returns a flat 2x). Recorded in this shape because PROMPT.md bug class 19 is about exactly this failure mode -- and here the port got it right. No AscensionHelper.GetValueIfAscension in the file, so 3 and 1 are the pinned non-ascension values."
+    },
+    {
+      "what": "N3: `if (cards.Count <= prefs.MinSelect) enumerable = cards;` (CardSelectCmd.cs:576-579) -- a deck with 3 or fewer eligible Attacks enchants all of them with no screen",
+      "verdict": "faithful",
+      "rationale": "RunState.select_cards clamps with `count = min(count, len(candidates))` and returns everything when the selector is absent or returns more than asked (run.py:384-390), so the sim also enchants all of them. Also faithful for the empty case: `if count <= 0 or not candidates: return []` matches CardSelectCmd's `cards.Count > 0` guard (CardSelectCmd.cs:569). Note the relic's own MIN_ELIGIBLE = 3 (tri_boomerang.py:17) is NOT this clause -- it is Tanx.cs's offer gate (`_triBoomerangCount`) parked on the relic class and read by events/tanx.py, so the shrine will not offer the relic unless 3 eligible cards exist; the relic itself would cope with fewer. Rule 7: run.py and events/tanx.py are not hashed here."
+    },
+    {
+      "what": "N4: the selection LIST ORDER -- C# re-sorts the candidates into deck order before showing them (CardSelectCmd.cs:572-573)",
+      "verdict": "faithful",
+      "rationale": "`indexMap` maps each deck card to its pile index and the candidate list is re-ordered by it, so the screen is in deck order. tri_boomerang.py:23-25 builds the list by iterating run.deck, which is already deck order, so the two agree without an explicit sort. Load-bearing for a seeded run: with no selector installed the sim picks with `self.rng.sample(candidates, count)` (run.py:390), and sample's result depends on the candidate order."
+    },
+    {
+      "what": "N5: `CardCmd.Enchant<Instinct>(item, 1m)` (TriBoomerang.cs:27) vs `make_enchantment('instinct').attach(card)` (tri_boomerang.py:27)",
+      "verdict": "faithful",
+      "rationale": "CardCmd.Enchant (CardCmd.cs:518-559) throws if CanEnchant is false, attaches when the card has no enchantment, STACKS the amount when the same type is re-applied, throws when a different type is present, then runs FinalizeUpgradeInternal and a history entry. The sim's Enchantment.attach raises if can_enchant is false and assigns (enchantments.py:63-68); the stacking and different-type branches are unreachable here because the candidate filter already required `card.enchantment is None`, so no pick can be a re-enchant. FinalizeUpgradeInternal recomputes the card's displayed values from its upgrade level, which the sim does not model as a separate step. The history entry (`CardsEnchanted`) is save/replay bookkeeping with no sim counterpart and no gameplay effect. Rule 7: enchantments.py and CardCmd.cs are not hashed here."
+    },
+    {
+      "what": "N6: `undo_after_obtained` is not implemented",
+      "verdict": "faithful",
+      "rationale": "Per PROMPT.md v6 binding item 3 the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart, nothing in the game un-picks a relic. Recorded because the operational consequence here is concrete: the conformance runner grants a node's relic speculatively and then swaps it for the one the save says was picked, and a discarded Tri-Boomerang leaves THREE Instinct enchantments on deck cards, which double every powered attack those cards make for the rest of the run. That is a tooling defect to log, not a fidelity gap. Rule 7: conformance/runner.py is not hashed here."
+    },
+    {
+      "what": "N7: NCardEnchantVfx.Create / CardPreviewContainer.AddChildSafely (TriBoomerang.cs:28-32), CanonicalVars (:19) and the Instinct ExtraHoverTips (:21)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

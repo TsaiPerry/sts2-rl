@@ -1,0 +1,67 @@
+{
+  "unit": "relic/tungsten_rod",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TungstenRod.cs",
+    "sha256": "b79fe26e7bcaeb914ac93cd7bc3be2706a2b8c2525d49e342ec6f76d23502b08"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\tungsten_rod.py",
+    "sha256": "ab9b89a56591508c28c6b75c117837bebf0de377e47ed960c0f75c90b2bced29"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (tungsten_rod.py:24)",
+      "verdict": "faithful",
+      "rationale": "TungstenRod.cs:15. Executed: Rare in the transcribed grab bag (relic_pools.py:145 'RELIC.TUNGSTEN_ROD'), `py tools/audit/relic_probes_b16.py pool`."
+    },
+    "ModifyHpLostAfterOsty": {
+      "maps_to": "SPLIT across two sim members -- modify_hp_lost (tungsten_rod.py:28-37) for combat damage, dispatched from DamageCmd.deal (cmds.py:84-87), and modify_run_hp_loss (tungsten_rod.py:39-40) for out-of-combat HP loss, dispatched from RunState.lose_hp (run.py:300-301)",
+      "verdict": "deliberate-divergence",
+      "rationale": "See guards N1 and N3. The C# hook is ONE member dispatched over `runState.IterateHookListeners(combatState)` (Hook.cs:1741-1750), which includes relics whether or not a combat is running (RunState.cs:563-572), and CreatureCmd.Damage is called both in combat and from events (AbyssalBaths.cs:103, BrainLeech.cs:53). The sim has two disjoint dispatch systems -- the combat HookSystem and the run-level duck-typed walk -- so a relic that must cover both has to implement both, and this one does. Same observable, so binding rule 2 is satisfied; recorded as a divergence rather than faithful because the split is real and a future relic could implement one half and forget the other. This is audits/seam/hook_dispatch.json guard N5 (the run/combat delegation split) at a content site; matched, not re-derived (binding rule 3)."
+    },
+    "AfterModifyingHpLostAfterOsty": {
+      "maps_to": "no counterpart; the sim HAS the hook (after_modify_hp_lost, hooks.py:149-154, used by BufferPower at powers.py:4015) and the relic simply does not implement it",
+      "verdict": "waiver",
+      "rationale": "TungstenRod.cs:28-32 is a bare `Flash(); return Task.CompletedTask;`. Presentation only, waived under the shared contract's presentation/animation exclusion. Recorded rather than skipped because the sim DOES have the companion hook, so this is a deliberate no-op and not a missing pipeline (PROMPT.md bug class 12). Rule 7: hooks.py and powers.py are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (PROMPT.md bug class 19, VERIFIED AT THE SOURCE): the port's docstring claims 'Hook.ModifyHpLost dispatches over the run state (CreatureCmd.cs), so both combat damage and out-of-combat event HP loss are reduced'",
+      "verdict": "faithful",
+      "rationale": "Class 19 is about a docstring that misquotes the SOURCE, so the claim was checked rather than trusted, and it is TRUE. `grep -rn 'Hook.ModifyHpLost(' src/` gives exactly three call sites, all inside CreatureCmd.Damage (CreatureCmd.cs:266, 269, 283); the dispatcher iterates `runState.IterateHookListeners(combatState)` (Hook.cs:1741, 1746) and RunState.IterateHookListeners adds every unmelted relic when `childCombatState == null` (RunState.cs:563-572); and events do call CreatureCmd.Damage out of combat -- AbyssalBaths.cs:103 and BrainLeech.cs:53 both pass `base.Owner.Creature` with a null dealer and cardSource. So Tungsten Rod really does reduce event HP loss by 1 in the game, and tungsten_rod.py:39-40 is a correct port of that half rather than an invented behaviour. Rule 7: CreatureCmd.cs, Hook.cs and RunState.cs are not hashed here."
+    },
+    {
+      "what": "N2: `Math.Max(0m, amount - DynamicVars['HpLossReduction'].BaseValue)` (TungstenRod.cs:25) with HpLossReduction = 1 (:17)",
+      "verdict": "faithful",
+      "rationale": "tungsten_rod.py:26 pins REDUCTION = 1 and both members return `max(0, amount - self.REDUCTION)`. No AscensionHelper.GetValueIfAscension in the file, so 1 is the pinned non-ascension value, and the clamp at 0 is present on both sides in both members. Re-read against the C# per PROMPT.md bug class 19."
+    },
+    {
+      "what": "G1 (DORMANT): `ModifyHpLostAfterOsty` is C#'s FIRST of two HP-loss passes and the sim has no phase concept, so Tungsten Rod's -1 can land after an effect the game runs strictly later",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.ModifyHpLost (Hook.cs:1742-1762) runs ModifyHpLostAfterOsty over every listener and THEN ModifyHpLostAfterOstyLate over every listener; Tungsten Rod is in the first pass. The sim's hooks.modify_hp_lost is one flat walk in registration order (hooks.py:142-146). This is audits/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes) compounded with its G2 (cross-listener order) -- one verdict per mechanism, binding rule 3. DORMANT AT THIS SITE, and the argument is a census rather than a guess: the whole source has exactly two ModifyHpLostAfterOstyLate implementers (BufferPower.cs:20 and TheBoot.cs:26 -- `grep -rn 'ModifyHpLostAfterOstyLate' src/Core/Models/`). Against BufferPower the order cannot matter, because Buffer returns a flat 0 (powers.py:4004-4013) and `max(0, 0 - 1)` is still 0 whichever runs first. Against The Boot the DOMAINS are disjoint: The Boot requires `target != Owner.Creature` (TheBoot.cs:32-35) and Tungsten Rod requires `target == Owner.Creature` (TungstenRod.cs:21-24), so no single damage event can reach both. The three same-pass implementers (IntangiblePower.cs:18, SlipperyPower.cs:19, BeatingRemnant.cs:42) are in Tungsten Rod's own pass, where C# gives no order guarantee beyond the listener walk. Porting a THIRD Late implementer whose domain includes the player and whose result is not a flat constant makes it live. Contrast audits/relic/the_boot.json G1 in this same batch, where the identical mechanism IS live -- the difference is that The Boot is the Late one. Rule 7: hooks.py, powers.py and audits/seam/hook_dispatch.json are not hashed here."
+    },
+    {
+      "what": "N3: `target != base.Owner.Creature -> return amount` (TungstenRod.cs:21-24) is the relic's ONLY guard -- no props test and no dealer test",
+      "verdict": "faithful",
+      "rationale": "So the reduction applies to every kind of HP loss the player takes: monster attacks, Poison and other unblockable power damage, and a card's own 'lose X HP' drawback. tungsten_rod.py:35 checks `target is self.player` and nothing else, which reproduces that exactly -- and the out-of-combat member has no target test at all, correctly, because RunState.lose_hp is by definition the player's own HP. Recorded because relic/the_boot in this same batch DOES have a props test that the sim cannot express, so the contrast shows the missing `props` parameter on hooks.modify_hp_lost is harmless here and not there."
+    },
+    {
+      "what": "N4: C# calls Hook.ModifyHpLost unconditionally, including with a zero amount; the sim gates on `if hp_lost > 0` (cmds.py:83-87)",
+      "verdict": "faithful",
+      "rationale": "For a subtract-and-clamp relic the two agree at 0 (`max(0, 0 - 1)` == 0), so the gate cannot change the number. Checked because the same gate is what makes the sim skip the hook after a fully blocked hit, and a relic that ADDED HP loss (or floored it, like The Boot) would be affected -- the exposure is real, just not for this relic."
+    },
+    {
+      "what": "N5: the run-level walk's listener SET -- `RunState.lose_hp` iterates relics only (run.py:300-301), where C#'s IterateHookListeners(null) also walks every deck card and its enchantment (RunState.cs:554-561) and the player's potions (:570)",
+      "verdict": "gap",
+      "issue": "MECHANISM: out of combat, C# gives deck cards, card enchantments, relics, potions, Modifiers, BadgeModels and the MultiplayerScalingModel a chance at ModifyHpLost; the sim's out-of-combat path consults relics alone. That is audits/seam/hook_dispatch.json guard N5 (the run/combat delegation split, verdicted `gap` there) observed on the HP-loss hook -- one verdict per mechanism, binding rule 3, so this entry does not re-derive it and this record does not own the fix. DORMANT: `grep -rn 'def modify_hp_lost' sts2_rl/` returns only hooks.py:126 (the dispatcher), powers.py:374/1513/1974/4004 and relics/beating_remnant.py:27, the_boot.py:27 and tungsten_rod.py:28 -- no ported CARD and no ported enchantment implements it, and powers do not exist outside combat, so the sim's relic-only walk visits every listener that could have contributed. Porting a card or enchantment that modifies HP loss makes it live. Rule 7: run.py, hooks.py, powers.py, RunState.cs and audits/seam/hook_dispatch.json are not hashed here."
+    },
+    {
+      "what": "N6: CanonicalVars (TungstenRod.cs:17) and Flash() (:30)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
