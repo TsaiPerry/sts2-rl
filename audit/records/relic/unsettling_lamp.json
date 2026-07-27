@@ -1,0 +1,91 @@
+{
+  "unit": "relic/unsettling_lamp",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\UnsettlingLamp.cs",
+    "sha256": "f4d772296f344ba05eedcc2131f60435a9bd4afe1166bab435e13bce517cf9b3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\unsettling_lamp.py",
+    "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (unsettling_lamp.py:21)",
+      "verdict": "faithful"
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_combat_start (unsettling_lamp.py:29-32)",
+      "verdict": "faithful",
+      "rationale": "UnsettlingLamp.cs:62-69 clears TriggeringCard, DoubledPowers and IsFinishedTriggering; on_combat_start clears the sim's three equivalents (_in_flight, _triggering, _finished). The sim has no DoubledPowers list at all because it has no ITemporaryPower double-dip guard -- that absence is verdicted on its own guard entry (N1) rather than double-counted here. base.Status = RelicStatus.Active is presentation."
+    },
+    "BeforePowerAmountChanged": {
+      "maps_to": "modify_power_amount (unsettling_lamp.py:44-53) -- the sim COLLAPSES C#'s two-phase latch-then-double into one method: the `self._triggering = self._in_flight` assignment at line 52 is the latch, and `return amount * 2` on the same line is the multiplicative. C#'s cardSource parameter is modelled as the before_card_played/on_card_played bracket (lines 36-42).",
+      "verdict": "gap",
+      "issue": "The latch is not separable from the double in the sim, which is what makes guards G2 and G3 possible: C# runs seven latch guards (UnsettlingLamp.cs:73-100) and a DIFFERENT five-guard set on the multiplicative (lines 108-127), and the two sets are not the same. Specifically the C# multiplicative has NO target-side check and NO applier check, while the sim applies `applier is not self.player or target is self.player` (unsettling_lamp.py:47) to both roles at once. Each resulting divergence is verdicted at its own guard (G2, G3, G4, G5); this hook entry carries their rollup per binding rule 4."
+    },
+    "ModifyPowerAmountGivenMultiplicative": {
+      "maps_to": "modify_power_amount's `return amount * 2` (unsettling_lamp.py:53), dispatched by HookSystem.modify_power_amount (hooks.py:170-183) from PowerCmd.apply (cmds.py:294)",
+      "verdict": "gap",
+      "issue": "C# returns a MULTIPLICATIVE factor into Hook.ModifyPowerAmountGiven's two-pass fold (Hook.cs:1887-1908: every listener's additive contribution is summed FIRST, then every listener's multiplicative factor is applied to that sum). The sim's modify_power_amount is a single flat chain over hook-registration order (hooks.py:180-182), so the Lamp's x2 covers only whatever ran BEFORE it, not the post-additive total the way C# guarantees by construction. This is audits/seam/power_cmd.json gap G3 observed at the Lamp's own site -- one verdict per mechanism, binding rule 3 -- and it is DORMANT for the same reason G3 records: the sim has exactly two modify_power_amount listeners (grep 'def modify_power_amount' over sts2_rl/ returns relics/unsettling_lamp.py:44 and relics/ruined_helmet.py:23) and their domains are disjoint (debuffs vs a positive-amount StrengthPower). Porting any second given-side power-amount modifier whose domain overlaps debuffs makes it live."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (unsettling_lamp.py:39-42)",
+      "verdict": "gap",
+      "issue": "See guard G1: C# fires Hook.AfterCardPlayed once per Replay iteration, the sim once per play, so the Lamp's once-per-combat activation is not spent until every replay of the triggering card has resolved. Executed: 8 Vulnerable vs C#'s 6 (py tools/audit/relic_probes.py lamp-replay). Rollup of G1 per binding rule 4. The `cardPlay.Card != TriggeringCard` and `IsFinishedTriggering` guards themselves (UnsettlingLamp.cs:133-140) are mirrored exactly by `if card is self._triggering: self._finished = True`."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; the sim resets the same three fields at on_combat_start (unsettling_lamp.py:29-32) instead",
+      "verdict": "deliberate-divergence",
+      "rationale": "UnsettlingLamp.cs:147-154 resets TriggeringCard / DoubledPowers / IsFinishedTriggering at combat end AND BeforeCombatStart resets the identical set (lines 62-69), so the C# reset is redundant by construction: no code path reads any of the three between AfterCombatEnd and the next BeforeCombatStart (the relic's other four hooks are all combat hooks). The sim keeps only the combat-start half, which reaches the same observable state at every point either codebase can be observed. Contrast relic/belt_buckle, whose sim port ALSO dropped a combat-end reset but has no combat-start reset to fall back on -- there it is a live gap, and the difference between the two is exactly why this one is a divergence rather than a waiver."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed triggering card has EVERY iteration's debuffs doubled instead of only the first",
+      "verdict": "gap",
+      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop. UnsettlingLamp.AfterCardPlayed (UnsettlingLamp.cs:131-145) therefore sets IsFinishedTriggering = true at the end of iteration 0, and iteration 1's ModifyPowerAmountGivenMultiplicative bails at line 116. The sim's _resolve_card_play (combat.py:477-494) runs the whole play-count loop and only then calls hooks.on_card_played (combat.py:514), so _finished stays False for every iteration and unsettling_lamp.py:45's `if self._finished` never bails. REACHABILITY (LIVE, both sides proved by execution -- py tools/audit/relic_probes.py lamp-replay): Unsettling Lamp is Rare in the transcribed shared grab bag (relic_pools.py:'RELIC.UNSETTLING_LAMP'), and Throwing Axe -- which makes the first card of each combat play twice (relics/throwing_axe.py:30-35) -- is granted by the ported Tanx shrine (events/tanx.py). Probe output: Lamp alone gives 4 Vulnerable from Bash (2 base, doubled once, correct); Lamp + Throwing Axe gives 8, where C# gives 4 + 2 = 6. Two further ported replay sources reach the same combat.py:469 play-count hook: the Spiral and Glam enchantments (enchantments.py:167, 232, granted by events/spiraling_whirlpool.py and cards/colorless_skills.py) and Hidden Gem's base_replay_count (cards/base.py:127). This is the site-specific observable of audits/seam/hook_dispatch.json gap G4 (the per-Replay CardPlay loop), which that record labels LIVE for the same reason; per the seam's ownership policy the seam owns the machinery and this record owns the Lamp's observable."
+    },
+    {
+      "what": "N1 (MANDATED by the design's worked example): `if (!power.IsVisible) return;` -- the Lamp's latch visibility gate (UnsettlingLamp.cs:93-96), entirely absent from the sim",
+      "verdict": "waiver",
+      "rationale": "UNREACHABLE BECAUSE THE GATE IS DEAD CODE IN THE C# SOURCE ITSELF, not because it is unported content. PowerModel.IsVisible (PowerModel.cs:150-167) is default-true and the ONLY way to make it false is to override IsVisibleInternal; a grep for `IsVisibleInternal` across the whole decompiled game returns ZERO matches -- not zero in Ironclad scope, zero anywhere. IsVisible is therefore provably constant-true for every power that exists, so the sim's total omission of the concept cannot change any outcome, and it cannot become live from porting more content: it would take a change to the game's own source. This is the same executed finding as audits/seam/power_cmd.json guard N1 (which reaches it via Artifact's copy of the same gate, ArtifactPower.cs:29-33), and carries the same verdict per binding rule 3. NOTE per binding rule 7: this rationale leans on PowerModel.cs and ArtifactPower.cs, which this record does NOT hash -- power_cmd does, so a change there goes stale via that record, not this one."
+    },
+    {
+      "what": "G2 (MANDATED, DORMANT): sign-aware `power.GetTypeForAmount(amount) != PowerType.Debuff` (UnsettlingLamp.cs:97 and :124) vs the sim's static `power_cls.power_type != PowerType.DEBUFF` plus an `amount <= 0` early bail",
+      "verdict": "gap",
+      "issue": "MECHANISM: PowerModel.GetTypeForAmount (PowerModel.cs:460-471) returns Debuff when `StackType == Counter && AllowNegative && amount < 0`, so a NEGATIVE-amount Strength or Dexterity -- both declared Type => Buff -- is a Debuff for the Lamp's purposes and gets doubled. unsettling_lamp.py:45 bails on `amount <= 0` BEFORE any typing question is asked, and line 50 then consults the fixed class attribute `power_cls.power_type`, so the sim can never double a negative-amount buff-typed power. REACHABILITY (DORMANT, and the concrete unported things are named): the shape C# is written for is a player card applying negative Strength to an enemy with cardSource set -- Malaise.cs:40 and Resonance.cs:33 are the two such cards in the game, and neither is ported (no sts2_rl/cards/*.py matches either name). No other ported effect applies a negative-amount Counter+AllowNegative power to an enemy from a card. Porting Malaise or Resonance makes it live immediately and in the SILENT direction: the sim would simply fail to double, with no error. This is audits/seam/power_cmd.json gap G2 at the site power_cmd names in its own issue text; one verdict per mechanism, binding rule 3."
+    },
+    {
+      "what": "N2 (MANDATED): the ITemporaryPower double-dip guard `HasDoubledTemporaryPowerSource(power)` (UnsettlingLamp.cs:120, 164-167) and its DoubledPowers list -- neither exists in the sim",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# needs the guard because TemporaryStrengthPower.BeforeApplied (TemporaryStrengthPower.cs:146-156) re-applies its InternallyAppliedPower through a full PowerCmd.Apply carrying the SAME applier and cardSource as the wrapper, which would let the Lamp double the wrapper AND its internal power (quadrupling) -- the source's own <example> names PiercingWail -> negative Dexterity. The sim's TemporaryStrengthPower and TemporaryDexterityPower instead OMIT the applier argument on every internal application, and the Lamp's own `applier is not self.player` bail (unsettling_lamp.py:47) then skips the internal power for free -- same 'double once, not twice' outcome by a different mechanism, so binding rule 2 is satisfied. audits/seam/power_cmd.json guard N2 verified that equivalence BY EXECUTION and reached the same verdict (binding rule 3). What that record did not establish, and this one does, is that the equivalence is COMPLETE for the Lamp: `py tools/audit/relic_probes.py lamp-temporary` enumerates every C# ITemporaryPower implementer -- exactly three (TemporaryStrengthPower -> StrengthPower, TemporaryDexterityPower -> DexterityPower, TemporaryFocusPower -> FocusPower), plus PiercingWailPower which inherits from TemporaryStrengthPower; IllusionPower.cs:63 and SleightOfFleshPower.cs:23 only REFERENCE the interface -- and confirms that both ported counterparts pass applier on ZERO of their three PowerCmd.apply call sites, while PiercingWailPower and TemporaryFocusPower (Focus is Defect-only) are unported. So there is currently no ported ITemporaryPower for which the equivalence could fail. The residual risk is that the equivalence is INCIDENTAL rather than enforced: a future port that passes applier= on an internal application silently reintroduces the quadrupling C# guards against, and nothing in the sim would flag it."
+    },
+    {
+      "what": "G3 (DORMANT): C#'s ModifyPowerAmountGivenMultiplicative has NO target-side guard and NO giver guard -- only the LATCH checks `target.Side == Owner.Creature.Side` and `applier != Owner.Creature` -- whereas the sim applies both checks to the doubling as well",
+      "verdict": "gap",
+      "issue": "MECHANISM: UnsettlingLamp.cs:85-92 puts the applier and target-side checks on BeforePowerAmountChanged (the latch) only. ModifyPowerAmountGivenMultiplicative (lines 106-129) checks just TriggeringCard / cardSource / IsFinishedTriggering / the temporary-power guard / debuff typing, and Hook.ModifyPowerAmountGiven (Hook.cs:1899-1907) dispatches it over EVERY combat hook listener with no giver filter of its own. So in C#, once a card has latched the Lamp on an enemy-aimed debuff, a debuff that same card applies to the PLAYER is also doubled. The sim's single collapsed method guards `applier is not self.player or target is self.player` (unsettling_lamp.py:47) before the doubling, so the self-aimed debuff comes out at face value. A second, narrower difference hides in the same line: C# compares SIDES (`target.Side == Owner.Creature.Side`) while the sim compares IDENTITY (`target is self.player`), so a debuff aimed at a player-SIDE creature that is not the player would latch and double in the sim and not in C#. REACHABILITY (DORMANT, both halves): (a) `py tools/audit/relic_probes.py lamp-self-debuff` finds 6 ported cards that apply a Debuff to the player -- battle_trance (NoDraw), doubt (Weak), expect_a_fight (NoEnergyGain), panic_button (NoBlock), shame (Frail), the_gambit -- and NONE of them also debuffs an enemy, so no single ported card play can both latch the Lamp and then self-debuff; porting any card that debuffs an enemy and the player in one play makes it live. (b) the side-vs-identity half needs a player-side creature other than the player, which the sim has no content for at all (CombatState holds one player and an enemy list); porting a player-side summon/minion makes it live."
+    },
+    {
+      "what": "G4 (DORMANT): C#'s cardSource is a per-APPLICATION argument; the sim substitutes an ambient `_in_flight` card set by before_card_played and cleared by on_card_played, so a nested card play inside the triggering card's resolution clears it",
+      "verdict": "gap",
+      "issue": "MECHANISM: PowerCmd.Apply carries cardSource explicitly, so C# knows the exact card responsible for each individual power application; the Lamp compares `cardSource != TriggeringCard` (UnsettlingLamp.cs:112). The sim reconstructs it from the card-play bracket (unsettling_lamp.py:36-42). Two consequences follow. (a) A power applied during a card play but NOT sourced by that card (cardSource == null in C#) still sees _in_flight set in the sim, so the sim can latch and double where C# would not. (b) combat.py's auto_play_card routes through the SAME _resolve_card_play bracket (combat.py:516+), so a card that auto-plays another card mid-resolution fires on_card_played(inner) and leaves _in_flight = None (unsettling_lamp.py:42) for the rest of the OUTER card's resolution -- the sim then stops doubling where C# keeps going, because C#'s TriggeringCard is still latched. REACHABILITY (DORMANT): three ported cards do auto-play another card from inside their own on_play -- cards/cascade.py:58 and cards/colorless_skills.py:117 and :164 -- so the SHAPE exists, but none of the three applies a debuff to an enemy both before and after its nested play, which is what a demonstration needs. Porting (or editing) any card that debuffs, then plays a card, then debuffs again makes (b) live; a relic or power that applies an enemy debuff with no card source during a card play makes (a) live."
+    },
+    {
+      "what": "N3: `if (TriggeringCard != null) return;` -- C# latches exactly once per combat (UnsettlingLamp.cs:73-76) while the sim re-assigns `self._triggering = self._in_flight` on every doubling call (unsettling_lamp.py:52)",
+      "verdict": "faithful",
+      "rationale": "The re-assignment is idempotent for as long as _in_flight is unchanged, which is the whole of one card's resolution, and the only way _in_flight changes mid-resolution is the nested auto-play of guard G4 -- where it becomes None, and line 45's `self._in_flight is None` bail then prevents line 52 from ever re-latching onto a different card. So _triggering can only ever hold the first card that doubled, which is exactly what C#'s single latch guarantees. The observable consequence that DOES differ is already carried by G4; this entry exists to record that the missing single-latch guard is not an independent defect."
+    },
+    {
+      "what": "N4: the C# latch's `if (IsFinishedTriggering) return;` and `if (cardSource == null) return;` early bails (UnsettlingLamp.cs:77-84)",
+      "verdict": "faithful",
+      "rationale": "unsettling_lamp.py:45 checks `self._finished or self._in_flight is None` in one expression before anything else, mapping both bails exactly: _finished is the IsFinishedTriggering flag and a None _in_flight is the sim's cardSource == null (the fidelity of that substitution is G4's subject, not this entry's)."
+    },
+    {
+      "what": "N5: Flash() and base.Status = RelicStatus.Active/Normal (UnsettlingLamp.cs:67, 141-143, 152)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,56 @@
+{
+  "unit": "relic/fake_anchor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FakeAnchor.cs",
+    "sha256": "75273d725ef556851d7d53c00f7ab688471c5bfb195983222b38602746282e1f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fake_anchor.py",
+    "sha256": "19fa95fdd8425d49b53dff011273ca39cd24038b8240b6daa5bf5843a7c0d84b"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fake_anchor.py:19)",
+      "verdict": "faithful"
+    },
+    "MerchantCost": {
+      "maps_to": "merchant_cost_override = 50 (fake_anchor.py:20)",
+      "verdict": "faithful",
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+    },
+    "BeforeCombatStart": {
+      "maps_to": "on_block_cleared, gated on `target is self.player and self.turn == 1` (fake_anchor.py:24-29)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Identical port shape to relic/anchor, whose record already verdicts this mechanism deliberate-divergence, and carried here with the same verdict per binding rule 3. FakeAnchor.cs:21-25 grants BlockVar(4m, ValueProp.Unpowered) (line 17) at Hook.BeforeCombatStart, which audits/seam/turn_structure.json places at step 3, BEFORE the first StartTurn; the block then survives turn 1 because C# skips the turn-1 block clear for the player. The sim has no such skip, so a naive on_combat_start port would be wiped -- granting on the turn-1 block-clear event instead reproduces the observable exactly. Executed for this relic's own numbers (py tools/audit/relic_probes_b05.py anchor-window): turn 1 block = 4, turn 2 block = 0, at the same ValueProp.UNPOWERED (fake_anchor.py:29). The amount is 4 with no AscensionHelper branch in the file (the real Anchor's is 10, which is the whole joke). Binding rule 2 is satisfied."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `target is self.player` on the block-clear callback (fake_anchor.py:25)",
+      "verdict": "faithful",
+      "rationale": "Identical to relic/anchor's N1 and carried with the same verdict (binding rule 3): the sim's AfterBlockCleared analogue fires per creature (player.py:159 for the player, and per enemy from combat.py), so without the identity check an enemy's clear would grant the player block. C#'s hook is on the relic's owner by construction. Rule 7: player.py is unhashed here."
+    },
+    {
+      "what": "N2: `self.turn == 1` (fake_anchor.py:25) has no C# counterpart",
+      "verdict": "faithful",
+      "rationale": "Identical to relic/anchor's N2 (binding rule 3): it is the price of the divergent hook choice, not an extra condition. on_block_cleared fires every turn (executed, py tools/audit/relic_probes.py turn-order: turn=1 and turn=2), so the guard is what restores 'once per combat', and the executed turn-2 block of 0 confirms it."
+    },
+    {
+      "what": "N3 (DORMANT): the ordering window -- C# grants the block at turn_structure step 3, the sim at the step-14 AfterBlockCleared loop, and anything between the two that reads player Block sees 4 in C# and 0 in the sim",
+      "verdict": "gap",
+      "issue": "Same mechanism as relic/anchor's guard N3 and carried with the same gap verdict per binding rule 3, with this relic's own dormancy evidence re-executed rather than inherited: the window spans turn_structure steps 4-13, which includes the per-power AmountOnTurnStart snapshot and the enemies' RollMove, so a monster whose move selection read the player's Block would choose differently. REACHABILITY (DORMANT, executed -- py tools/audit/relic_probes_b05.py anchor-window): an AST-free source scan of every ported relic's on_combat_start body finds ZERO that read `.block`, and anchor's record already establishes that no ported monster's move logic reads player block. Porting a block-reading intent makes it live. Recorded rather than folded into the hook's deliberate-divergence because the divergence is real and only its consequence is currently unobservable."
+    },
+    {
+      "what": "N4: Flash() (FakeAnchor.cs:23) and the Block ExtraHoverTips (line 19)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / VfxCmd / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, the damage/heal numbers and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N5: FakeAnchor.cs overrides neither HasUponPickupEffect nor IsAllowed nor IsUsedUp",
+      "verdict": "faithful",
+      "rationale": "The sim leaves all three at their base defaults (relics/base.py's has_upon_pickup_effect = False, no is_allowed member at all, is_used_up False). Checked per PROMPT.md bug class 16 and because relic/arcane_scroll's N4 established that the pickup flag drives is_tradable; an EVENT-rarity relic is untradable anyway (relics/base.py:126-136), so the flag is inert here either way."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

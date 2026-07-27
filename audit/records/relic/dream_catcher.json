@@ -1,0 +1,56 @@
+{
+  "unit": "relic/dream_catcher",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\DreamCatcher.cs",
+    "sha256": "8b0d1e60c9d2b41151cd2e523df3dccd7af610f56b15cac30bdc286aee645af9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\dream_catcher.py",
+    "sha256": "141dbc25ea89fffa0ad2bc118e1fda19ac29406d7331b76c6ff75b90c4af6e95"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (dream_catcher.py:20)",
+      "verdict": "faithful"
+    },
+    "TryModifyRestSiteHealRewards": {
+      "maps_to": "modify_rest_site_heal_rewards (dream_catcher.py:22-25), dispatched by RunState.rest_heal_rewards (run.py:1097-1110) and offered by driver.py:521",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 (LIVE) and G3 per binding rule 4. The relic's own body is faithful -- a 3-card, Monster-odds choice appended to the rest-heal reward screen (guard G2) -- and both gaps are in the surrounding dispatch: the MIMICKED rest heal never fires the hook at all (G1), and two relics adding rest rewards would collapse into one choice group instead of two screens (G3)."
+    },
+    "ModifyExtraRestSiteHealText": {
+      "maps_to": "no counterpart (dream_catcher.py's docstring names it 'UI-only flavor text on the heal button and isn't modeled')",
+      "verdict": "waiver",
+      "rationale": "DreamCatcher.cs:27-42 appends base.AdditionalRestSiteHealText to the list of LocStrings shown under the rest site's Heal button, gated on LocalContext.IsMe. LocString rendering is presentation, and the gate is multiplayer -- both are named exclusions in the shared contract. Waived on the exclusion, not on an unreachability claim: the text has no mechanical effect on either side, and .superpowers/sdd/content-relic-sweeps.md sweep C lists ModifyExtraRestSiteHealText among the hooks with no Relic base method for the same reason."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): a MIMICKED rest-site heal fires Hook.ModifyRestSiteHealRewards in C# and nothing in the sim, so Dream Catcher gives no cards on the Dense Vegetation event's Rest option",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# has exactly one rest-heal implementation, HealRestSiteOption.ExecuteRestSiteHeal, and its own doc comment says it is 'public because PlayerCmd.MimicRestSiteHeal calls it for mimicking rest site heals (for example, for DenseVegetation's Rest option)'. That method always runs Heal -> Hook.AfterRestSiteHeal -> Hook.ModifyRestSiteHealRewards -> RewardsCmd.OfferCustom (HealRestSiteOption.cs:107-113), and DreamCatcher.cs:16 IGNORES its isMimicked parameter, so the 3-card choice is offered on the mimic exactly as at a real rest site. The sim has TWO implementations and only one of them fires the hooks: RunState.rest_heal (run.py:1090-1095) plus rest_heal_rewards (run.py:1097-1110) at a real rest site, and events/dense_vegetation.py:65-68's _rest, which calls `self.run.heal(self.run.rest_site_heal_amount())` directly -- executed, the string 'rest_heal_rewards' does not appear in that method and neither does 'after_rest_site_heal'. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py dream-driftwood): with the relic on the run, the real rest screen offers ['drum_of_battle', 'blood_wall', 'true_grit'], while _rest() heals 50 -> 74 and moves the event to page 'REST' with options ['FIGHT'] and no reward screen at all. Both sides ported: Dream Catcher is granted by the Trash Heap event (events/trash_heap.py:15) and Dense Vegetation is a ported event with a Rest option. The same missing dispatch also silences relic/stone_humidifier's AfterRestSiteHeal and relic/tiny_mailbox on the mimic path, so the fix is one call in the event, not one per relic. RULE 7: events/dense_vegetation.py, run.py, driver.py and HealRestSiteOption.cs are not hashed here."
+    },
+    {
+      "what": "G2: `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3, base.Owner)` (DreamCatcher.cs:22) vs `create_reward_cards(run, RarityOddsType.REGULAR)` (dream_catcher.py:23-25)",
+      "verdict": "faithful",
+      "rationale": "Three things had to match and all three do, checked in the source rather than assumed. (a) COUNT: the C# 3 is the CardReward's option count and create_reward_cards defaults to CARD_REWARD_COUNT = 3 (rewards.py:109, :238). (b) ODDS TABLE: CardCreationOptions.ForRoom maps RoomType.Monster to CardRarityOddsType.RegularEncounter (CardCreationOptions.cs:121-127), which is RarityOddsType.REGULAR via rewards.ROOM_RARITY_ODDS (rewards.py:92-96). (c) PITY MUTATION, the one that could easily have gone wrong: ForRoom also sets Source = CardCreationSource.Encounter for a Monster room (CardCreationOptions.cs:104-110), and CardFactory.RollForRarity uses the MUTATING PlayerOdds.CardRarity.Roll rather than RollWithBaseOdds exactly when the source is Encounter and the odds table is one of Regular/Elite/Boss (CardFactory.cs:245-260) -- so Dream Catcher's screen DOES advance the rarity pity, and the sim's default `mutate_pity=True` is correct. Had it been a non-Encounter source, rewards.py's own docstring says the port would need mutate_pity=False (the Lost Coffer path), and every later reward's rarity would have drifted. The pool is the character pool on both sides (ForRoom passes player.Character.CardPool; the sim's default is IRONCLAD_POOL), so relic/dingy_rug's Colorless widening is that relic's gap, not this one's. RULE 7: rewards.py, CardCreationOptions.cs and CardFactory.cs are not hashed here."
+    },
+    {
+      "what": "G3 (DORMANT): C# ADDS a distinct CardReward instance to the reward list; the sim extends one shared `rewards.cards` list, so two relics adding rest rewards would merge into a single pick-one-of-N group",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.ModifyRestSiteHealRewards (Hook.cs:1965-1972) walks every listener over one List<Reward>, and each CardReward is an independent pick-one-of-3 screen; dream_catcher.py:25 does `rewards.cards.extend(create_reward_cards(...))` onto the single CombatRewards.cards list, which rewards.py:380-383 documents as 'a pick-one-of-N group'. With one contributor the two are the same thing -- 3 options, take 1 -- so the merge is invisible today. REACHABILITY (DORMANT, and the concrete unported thing is named): the game's only other TryModifyRestSiteHealRewards implementer is TinyMailbox.cs:14, whose sim port relics/tiny_mailbox.py is one of sweep C's behaviourless stubs, so no second contributor exists. Porting Tiny Mailbox's rest reward makes it live: C# would offer two separate take-or-skip screens and the sim one merged choice, halving what the player can keep. Filed as a gap rather than waived because 'only one implementer is ported' is today's content, not the divergence's shape (binding rule 1)."
+    },
+    {
+      "what": "G4: `if (player != base.Owner) return false;` (DreamCatcher.cs:18-21) and the bool return value that Hook.ModifyRestSiteHealRewards collects into its modifier list",
+      "verdict": "faithful",
+      "rationale": "The owner clause is the multiplayer per-player filter the shared contract puts out of scope (one player in the sim, and run.py:1108-1109 passes the run itself). The bool return is not a mechanic: Hook.cs:1965-1972 uses it only to build the list of models passed to the AfterModifying* companion event, and DreamCatcher has no such companion -- the sim's void hook loses nothing. The same reasoning covers the isMimicked parameter the relic ignores; that it ignores it is precisely what makes guard G1 a gap rather than a difference in intent."
+    },
+    {
+      "what": "N1: Flash() (DreamCatcher.cs:23)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

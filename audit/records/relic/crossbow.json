@@ -1,0 +1,56 @@
+{
+  "unit": "relic/crossbow",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Crossbow.cs",
+    "sha256": "d78e68a17a38a6c0058fcc0b3d1d6a9d345691bb6555474da39f7289ca570b96"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\crossbow.py",
+    "sha256": "51d9453ef84e5350051683f0875c6b3aa49646f738ef816340faf115b160c52b"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (crossbow.py:19)",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (crossbow.py:21-31). Executed slot check (py tools/audit/relic_probes.py turn-order): the sim's order is on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started, so this method is audits/seam/turn_structure.json's MERGED step 22 (Hook.AfterPlayerTurnStart, verdicted faithful there) + step 23 (Hook.AfterSideTurnStart, the C# hook this relic actually implements). Crossbow is a plain player-side AfterSideTurnStart listener, so turn_structure's G5 (no enemy-side counterpart) and the AfterSideTurnStartLate half of G12 do not touch it.",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 (the auto-play phase boundary, LIVE), G2 (the RNG stream and draw shape) and G3 (FilterForCombat's Event-rarity clause) per binding rule 4. The relic's own arithmetic is right: one distinct Attack from the character pool, free this turn, appended to the hand. Executed (py tools/audit/relic_probes_b04.py crossbow): the hand goes from 5 cards to 6 and the extra card ('molten_fist') has energy_cost 0."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C# runs the start-of-turn AUTO-PLAY phase strictly AFTER Hook.AfterSideTurnStart, so the generated Attack is always in hand before any auto-player looks at it; the sim fires Crossbow and every auto-player from the SAME on_player_turn_started pass in listener-registration order",
+      "verdict": "gap",
+      "issue": "MECHANISM: CombatManager.cs:556-572 enters the AutoPrePlay phase after Hook.AfterSideTurnStart (CombatManager.cs:520-524) has completed for every listener -- the ordering is structural in C#. The sim has no auto-play phase at all, so relics/whispering_earring.py:27-43 auto-plays from on_player_turn_started, exactly where crossbow.py:21 adds its card. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b04.py earring-order): with relics=[crossbow, whispering_earring] the Earring plays the generated Attack and the enemy ends turn 1 at 36 HP; with relics=[whispering_earring, crossbow] the Attack is still in hand ('headbutt') and the enemy ends at 45 HP -- a 9-damage difference in one turn from relic order alone. C# always gives the 36 answer. Both sides ported: Crossbow is granted by the Tanx shrine (events/tanx.py:12) and Whispering Earring by the Vakuu shrine (events/vakuu.py:16). This is audits/seam/turn_structure.json guard G8 (the missing AutoPrePlay/AutoPostPlay phases) at a new site, and it carries G8's verdict per binding rule 3 -- but it CONTRADICTS G8's dormancy argument for the AutoPrePlay half, which reads 'Whispering Earring ... and Imbued ... both fire from on_player_turn_started and neither reads another turn-start listener's output'. Crossbow does not read the Earring's output; it WRITES the hand the Earring consumes, which is the same dependency with the arrow reversed. Reported as a cross-record signal rather than edited into the seam record, per the ownership contract. RULE 7: this rationale leans on relics/whispering_earring.py, events/tanx.py, events/vakuu.py and CombatManager.cs, none of which this record hashes."
+    },
+    {
+      "what": "G2: C# names Rng.CombatCardGeneration and draws with TakeRandom == UnstableShuffle + Take(1) (Crossbow.cs:31, CardFactory.cs:119-129); crossbow.py:26-28 passes the shared self.combat._rng to random_pool_cards, which uses rng.sample",
+      "verdict": "gap",
+      "issue": "MECHANISM: PROMPT.md bug class 16's second half. TWO divergences in one call, and the stream IS consumed on both sides so the class-16 caveat does not apply. (a) STREAM: the sim's parity helper cards/pool.py:182-204 get_distinct_for_combat_parity exists precisely for this shape -- 'rng is the combat card_gen accessor ... a GameRandomAdapter over the CombatCardGeneration stream' -- and crossbow.py does not use it (executed: the string is absent from the port's source while the helper is present in cards.pool). (b) DRAW SHAPE: rng.sample(options, 1) and a top-down Fisher-Yates shuffle then Take(1) are different consumers of the same stream; executed with seed 7 over the sim's own 33 Attack candidates they return 'pommel_strike' vs 'conflagration'. LIVE for RNG parity (every conformance seed that takes Crossbow diverges in both the card and the stream position, and this fires on EVERY player turn, so the drift compounds); dormant for RL play, where any legal Attack is acceptable. Same shape as relic/astrolabe's N1 in batch 1."
+    },
+    {
+      "what": "G3 (DORMANT): CardFactory.FilterForCombat also drops CardRarity.Event (CardFactory.cs:161); the sim's pool_card_ids (cards/pool.py:100-117) drops only Basic and Ancient",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# filters the Attack list through FilterForCombat, whose predicate is 'CanBeGeneratedInCombat && Rarity != Basic && Rarity != Ancient && Rarity != Event'. pool_card_ids implements the first three clauses and omits the Event one, so an Event-rarity Attack in the Ironclad pool would be offerable by Crossbow in the sim and not in the game. DORMANT, executed rather than assumed (py tools/audit/relic_probes_b04.py crossbow): zero cards in IRONCLAD_POOL carry CardRarity.EVENT, so the missing clause is a no-op on today's content. Porting any Event-rarity Attack into the Ironclad pool makes it live -- and it would go live for every in-combat card generator at once, not just Crossbow, because the defect is in the shared helper. RULE 7: cards/pool.py is not hashed by this record."
+    },
+    {
+      "what": "N1: `if (!participants.Contains(base.Owner.Creature)) return;` (Crossbow.cs:19-22) and `if (readOnlyList.Count == 0) return;` (Crossbow.cs:26-29)",
+      "verdict": "faithful",
+      "rationale": "The participants guard is structurally satisfied: on_player_turn_started is dispatched only for the player side (hooks.py's player turn-start dispatcher, reached from PlayerCombatState.start_turn), so the owner is always a participant in the sim's single-player scope. The empty-pool guard is satisfied by random_pool_cards' own `if not options: return []` (cards/pool.py:155-156), after which crossbow.py:29's loop body never runs."
+    },
+    {
+      "what": "N2: `CardPileCmd.AddGeneratedCardsToCombat(list, PileType.Hand, owner)` (Crossbow.cs:36) vs `CardPileCmd.add_to_hand` (crossbow.py:31)",
+      "verdict": "faithful",
+      "rationale": "AddGeneratedCardsToCombat (CardPileCmd.cs:216-247) adds at CardPilePosition.Bottom, records the generation in the combat history and fires Hook.AfterCardGeneratedForCombat; cmds.py:500-512 appends to the hand, spills overflow to the discard pile past MAX_HAND_SIZE, and calls CardPileCmd._enter_combat -- the sim's own docstring names AddGeneratedCardToCombat as the mirror. The combat history is the replay recorder, not a game mechanic. SetToFreeThisTurn (Crossbow.cs:34) maps to card.set_free_this_turn (cards/base.py:260-263) and is cleared by reset_turn_cost_modifiers (cards/base.py:265-269) at the next turn start, matching the C# per-turn cost modifier's lifetime."
+    },
+    {
+      "what": "N3: Flash() (Crossbow.cs:30)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

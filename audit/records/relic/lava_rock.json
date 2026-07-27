@@ -1,0 +1,71 @@
+{
+  "unit": "relic/lava_rock",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LavaRock.cs",
+    "sha256": "3fb81e2b172260204bf0ae6a36891480d5924467b82ac0346a9023e6c5339859"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lava_rock.py",
+    "sha256": "416e64377c7676aa70c94a6199ac9458b880de0fa2f46551dca2d17bf3628e42"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (lava_rock.py:13)",
+      "verdict": "faithful"
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / HasDisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / DoActivateVisuals / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Note LavaRock.cs:19 overrides ShowCounter to FALSE, i.e. it suppresses UI the base class would show -- still presentation."
+    },
+    "TryModifyRewards": {
+      "maps_to": "modify_combat_rewards (lava_rock.py:20-35), dispatched over run.relics at rewards.py:497-500",
+      "verdict": "deliberate-divergence",
+      "rationale": "LavaRock.cs:38-64 appends `DynamicVars[\"Relics\"].IntValue` == 2 `new RelicReward(player)` to a Boss room's reward list while `CurrentActIndex == 0` and HasTriggered is false, then latches HasTriggered. lava_rock.py:23-35 reproduces all three guards, both pulls and the latch. EXECUTED (py tools/audit/relic_probes_b08.py b08-lavarock): on an act-0 BOSS screen the relic adds ['miniature_cannon', 'pantograph'] to rewards.relics, grows run.relics 2 -> 4 and shrinks the grab bag 96 -> 94; a second act-0 BOSS screen adds nothing (has_triggered latched); a MONSTER screen adds nothing. The residual is the auto-keep divergence of guard N1. RewardsSet offers rewards rather than granting them (RelicReward.OnSelect, RelicReward.cs:109-115), so a player may decline. The sim auto-keeps, which is the house rule for non-choice relic offers -- rewards.py's own comment at the modify_combat_rewards dispatch (rewards.py:497-500) states that 'a hook that appends to rewards.relics grants them itself (run.add_relic), like the elite branch above', and the elite branch does the same. Verdicted deliberate-divergence and not a gap on the same basis as audits/relic/calling_bell.json guard G3 (binding rule 3): the divergent thing is the sim's player-choice model, applied consistently across relic offers, not this relic's effect. If a policy that ever declines a relic is added, this becomes a gap. Rule 7: rewards.py and src/Core/Rewards/RelicReward.cs are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: RelicReward is a take-or-skip offer; the port grants both relics unconditionally",
+      "verdict": "deliberate-divergence",
+      "rationale": "RewardsSet offers rewards rather than granting them (RelicReward.OnSelect, RelicReward.cs:109-115), so a player may decline. The sim auto-keeps, which is the house rule for non-choice relic offers -- rewards.py's own comment at the modify_combat_rewards dispatch (rewards.py:497-500) states that 'a hook that appends to rewards.relics grants them itself (run.add_relic), like the elite branch above', and the elite branch does the same. Verdicted deliberate-divergence and not a gap on the same basis as audits/relic/calling_bell.json guard G3 (binding rule 3): the divergent thing is the sim's player-choice model, applied consistently across relic offers, not this relic's effect. If a policy that ever declines a relic is added, this becomes a gap. Rule 7: rewards.py and src/Core/Rewards/RelicReward.cs are not hashed by this record."
+    },
+    {
+      "what": "N2: `new RelicReward(player)` -> Populate -> `RelicFactory.PullNextRelicFromFront(player)` (RelicReward.cs:75-96) vs `run.pull_relic_from_front()` (lava_rock.py:30)",
+      "verdict": "faithful",
+      "rationale": "The rarity-less RelicReward ctor leaves _rarity at RelicRarity.None, so Populate takes the `PullNextRelicFromFront(base.Player)` branch, which is `PullNextRelicFromFront(player, RollRarity(player), _ => true)` -- one NextFloat off player.PlayerRng.Rewards, then the first bag relic of that rarity. run.pull_relic_from_front with no arguments rolls on self.rewards_rng, which run.py:576-584 documents as exactly that default, and the project's 'Relic rarity rolls on Rewards' note agrees. Two pulls, two rarity draws, same stream. This is the same idiom relic/black_star and relic/wongos_mystery_ticket use in the same hook. Rule 7: src/Core/Rewards/RelicReward.cs, run.py, relics/black_star.py and relics/wongos_mystery_ticket.py are not hashed by this record."
+    },
+    {
+      "what": "N3: WHEN the two added rewards Populate -- C# populates every newly-added reward AFTER the whole hook loop (RewardsSet.cs:125-146), the sim populates inside the relic's own hook",
+      "verdict": "faithful",
+      "rationale": "RewardsSet.GenerateWithoutOffering populates the pre-existing rewards, runs Hook.ModifyRewards over every listener, and only THEN populates `Rewards.Except(second)` in list order. The sim rolls gold, the potion, the reward cards and the elite relic before the hook loop (rewards.py:456-495) and each relic's hook pulls inline. The Rewards-stream draw ORDER is nevertheless identical, and the reason is worth writing down: newly-added rewards populate in list-append order in C#, the sim's hook loop iterates run.relics in the same order, and NO ported modify_combat_rewards implementer consumes the Rewards stream for anything other than a relic pull -- relics/black_star.py:15-22 and relics/wongos_mystery_ticket.py pull relics (same draw), relics/driftwood.py:17-19 sets a flag, relics/paels_wing.py sets a flag. So the interleaving cannot differ today. Checked because a wrong stream position shifts every later reward in the run. Rule 7: src/Core/Rewards/RewardsSet.cs, rewards.py, relics/black_star.py, relics/wongos_mystery_ticket.py, relics/driftwood.py and relics/paels_wing.py are not hashed by this record."
+    },
+    {
+      "what": "N4 (DORMANT): the sim's single `modify_combat_rewards` collapses C#'s TryModifyRewards and TryModifyRewardsLate passes (Hook.cs:1981-1999)",
+      "verdict": "gap",
+      "issue": "Hook.ModifyRewards runs every listener's TryModifyRewards in a first full pass and every listener's TryModifyRewardsLate in a second; rewards.py:497-500 is one flat loop. Lava Rock is an EARLY implementer. DORMANT, and the argument is a domain check rather than a population count: the only ported Late implementer is relic/driftwood (Driftwood.cs:14, relics/driftwood.py:17-19), whose whole body is `if rewards.cards: rewards.can_reroll = True` -- it reads rewards.cards and writes a flag, while Lava Rock reads room_type/act_index and writes rewards.relics. Disjoint, so no ordering of the two changes any observable. (The other two C# Late implementers, Midas and Vintage, are run Modifiers and unported.) Porting any TryModifyRewardsLate relic that reads or rewrites rewards.relics makes it live. Same mechanism as the card-reward phase collapse audits/relic/lasting_candy.json guard G4 records, one verdict per mechanism (binding rule 3). Rule 7: src/Core/Hooks/Hook.cs, rewards.py and relics/driftwood.py are not hashed by this record."
+    },
+    {
+      "what": "N5: HasTriggered is [SavedProperty] and per-RUN; the sim's has_triggered is set in __init__ and never reset",
+      "verdict": "faithful",
+      "rationale": "The C# relic overrides NO combat-boundary hook at all, which .superpowers/sdd/content-relic-sweeps.md sweep A treats as decent evidence that the state is per-run on both sides -- and lava_rock is on that sweep's list of 16 never-executed candidates for exactly this reason. Settled here, per PROMPT.md bug class 13's reader trace: [SavedProperty] means the flag survives a save/load, so it is definitionally per-run, and the sim's `self.has_triggered = False` in __init__ (lava_rock.py:16-18) runs once per RunState.add_relic -- once per run. EXECUTED (b08-lavarock): a second act-0 BOSS screen with the same instance adds nothing, has_triggered=True. Correct as written; no reset belongs here."
+    },
+    {
+      "what": "N6: `base.Status = RelicStatus.Disabled` after triggering (LavaRock.cs:62) vs the sim's is_used_up, which lava_rock does NOT override",
+      "verdict": "faithful",
+      "rationale": "Checked because relic/lizard_tail in this same batch maps a very similar 'spent' concept onto `is_used_up`, and getting it wrong would change tradability. C# uses base.Status (presentation) here and does NOT override IsUsedUp, so the relic stays IsUsedUp == false after firing; the sim's Relic.is_used_up default is likewise False (relics/base.py:119-123). Both sides agree, and since the rarity is Ancient, is_tradable is False on both regardless. Rule 7: relics/base.py are not hashed by this record."
+    },
+    {
+      "what": "N7: `DynamicVar(\"Relics\", 2m).IntValue` (LavaRock.cs:36, 57) vs RELICS = 2 (lava_rock.py:15), and `room.RoomType != RoomType.Boss` / `CurrentActIndex != 0` vs `rewards.room_type != RoomType.BOSS` / `run.act_index != 0`",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 2 is the pinned non-ascension value. The two room/act predicates are transcribed exactly, including `room == null -> return` (structurally satisfied: the sim's rewards object always carries a room_type). One order note: generate_combat_rewards returns EARLY for a BOSS room in the final act (rewards.py:439-441), before the hook loop -- harmless here because the relic only fires on act 0, but it means a future act-3 reward relic would never see the hook. Rule 7: rewards.py are not hashed by this record."
+    },
+    {
+      "what": "N8: the `player != base.Owner` guard (LavaRock.cs:40-43) and `rewards.relics.append(relic)` alongside `run.add_relic(relic)` (lava_rock.py:33-34)",
+      "verdict": "faithful",
+      "rationale": "The player comparison is the multiplayer filter, in maps_to per the contract. The double bookkeeping is NOT a double grant: rewards.relics is the screen's display list and run.add_relic is the grant, exactly as the elite branch at rewards.py:474-478/491-494 does it, and the executed run.relics 2 -> 4 (not 6) confirms each relic is added once. Rule 7: rewards.py are not hashed by this record."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

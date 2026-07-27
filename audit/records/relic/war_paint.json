@@ -1,0 +1,57 @@
+{
+  "unit": "relic/war_paint",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\WarPaint.cs",
+    "sha256": "14a04cdedec34cfce26aedb1b9d965c7e35bc41b5f54188c1fbf21915d35bca8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\war_paint.py",
+    "sha256": "08e8b1c0c3cb5dc944b5dea3a11f12c1bf24e7ed0f85179fda470ef95aaab0a1"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (war_paint.py:13)",
+      "verdict": "faithful",
+      "rationale": "WarPaint.cs:14. Common in the transcribed grab bag (py tools/audit/relic_probes_b17.py pool -> bag=Common), so it is obtainable from any Common pull, from a shop, and from Neow."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (war_paint.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches WarPaint.cs:16. Load-bearing beyond display: Relic.is_tradable (sts2_rl/relics/base.py:126-136) excludes has_upon_pickup_effect relics, mirroring RelicModel.IsTradable, so War Paint is correctly barred from the trade events even though its pickup effect is not implemented."
+    },
+    "AfterObtained": {
+      "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (war_paint.py has no methods at all)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. WarPaint.cs:20-29 upgrades CardsVar(2) randomly chosen upgradable SKILLS in the deck; the port upgrades nothing and consumes no Niche draw."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the port implements no pickup effect at all, and the premise behind the stub is false -- after_obtained IS dispatched",
+      "verdict": "gap",
+      "issue": "MECHANISM: WarPaint.cs:22-27 is `Deck.Cards.Where(c => c != null && c.Type == CardType.Skill && c.IsUpgradable).ToList().StableShuffle(Rng.Niche).Take(Cards.IntValue)` then CardCmd.Upgrade on each -- two random upgraded Skills, permanently. war_paint.py declares only id/name/rarity/has_upon_pickup_effect and its docstring justifies that with 'an out-of-combat deck edit, so this is a no-op stub'. PROMPT.md bug class 12 applied: the premise is false. Relic.after_obtained is a real base hook (sts2_rl/relics/base.py:138-141) and RunState.add_relic calls it on EVERY granted relic (run.py:552); .superpowers/sdd/content-relic-sweeps.md's sweep C lists this unit in the 'out-of-combat pickup effect, stub' family and reports a LIVE dispatch site for it. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes_b17.py upgradestubs): `run.add_relic('war_paint')` changes 0 deck cards, where C# would upgrade 2 Skills (the Ironclad starting deck holds 4 Defends, all Skills and all upgradable, so the effect is available from floor 0). The CONTROL in the same probe is decisive: `run.add_relic('neows_talisman')` upgrades 2 deck cards through the same run.py:552 dispatch (sts2_rl/relics/neows_talisman.py:29-33), so the pipeline is not merely present but already used by a ported relic to do exactly this kind of deck edit. Both sides ported: the relic is Common in the grab bag and the deck is a first-class run object. Observable in RL play (2 permanently upgraded Skills) and in conformance (sts2_rl/conformance/runner.py:618 compares the deck as (id, upgrade_level) pairs). Rule 7: sts2_rl/relics/base.py, run.py, sts2_rl/relics/neows_talisman.py, sts2_rl/conformance/runner.py and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+    },
+    {
+      "what": "N1 (LIVE for RNG parity, dormant for RL): `StableShuffle(Rng.Niche)` names an explicit stream and the stub consumes none",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 16's second half, and the same mechanism this batch records at relic/war_hammer N2 and relic/whetstone N1 -- one verdict per mechanism (binding rule 3). The shuffle is genuinely CONSUMED in C# (StableShuffle always draws, unlike the `claws` case class 16 warns about), so a run that picks up War Paint shifts every later Niche consumer's position. Distinct from G1: an implementation that upgraded the first two Skills in deck order would close G1 and leave this open. Rule 7: audits/relic/war_hammer.json and audits/relic/whetstone.json are NOT hashed by this record."
+    },
+    {
+      "what": "N2: `c.Type == CardType.Skill && c.IsUpgradable` and the `c != null` null-guard (WarPaint.cs:22)",
+      "verdict": "gap",
+      "issue": "Recorded so a fix does not lose the filter: the Skill test is what distinguishes this relic from its identical twin Whetstone (Attacks) and from War Hammer (any upgradable card), and `IsUpgradable` is what keeps PROMPT.md bug class 14 from firing -- the sim's Card.upgrade() is a bare `upgrade_level += 1` (sts2_rl/cards/base.py:146-147) with no guard, and 18 ported Curses and 14 Statuses have max_upgrade_level 0. Curses and Statuses are not Skills, so the type filter alone would already exclude them, but a fix that filtered on type and forgot IsUpgradable would still be wrong for any Skill already at its max upgrade level. Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: sts2_rl/cards/base.py is NOT hashed here."
+    },
+    {
+      "what": "N3: CanonicalVars = CardsVar(2) (WarPaint.cs:18)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in WarPaint.cs, so 2 is the pinned non-ascension value read as `Cards.IntValue` at the single call site (:23). Recorded for whoever implements G1 -- the number to use is 2, and it is 2 for Whetstone as well but 4 for War Hammer, so the family does not share one constant."
+    },
+    {
+      "what": "N4: `undo_after_obtained` is absent from this port",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart (nothing in the game un-picks a relic), so a port lacking it is not diverging from the source. Operational consequence worth naming: this relic's pickup DOES mutate run state outside run.relics once G1 is fixed (two permanent deck upgrades), so a fix must not add after_obtained without considering the conformance runner's relic swap (sts2_rl/conformance/runner.py:461, :694 call undo_after_obtained on a dropped relic) -- and a card upgrade is not reversible by the clamping pattern PROMPT.md notes for the max-HP family. That is a tooling constraint on the fix, not a fidelity gap. Rule 7: sts2_rl/conformance/runner.py is NOT hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

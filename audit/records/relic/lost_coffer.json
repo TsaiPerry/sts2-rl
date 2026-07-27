@@ -1,0 +1,56 @@
+{
+  "unit": "relic/lost_coffer",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LostCoffer.cs",
+    "sha256": "96579eaef2fdec892f201d1e643f0659d589a6521025339b06e762a5be85b79e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lost_coffer.py",
+    "sha256": "ed0c495e21dfb37787cffa60ff97ee7686b30d4e58cc496b3043a7a15f7aeafa"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (lost_coffer.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (lost_coffer.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches LostCoffer.cs:14. Load-bearing beyond display: Relic.is_tradable (relics/base.py:132) excludes any relic with an upon-pickup effect, so a dropped declaration would make the Coffer tradable at Ranwid the Elder / the Relic Trader."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (lost_coffer.py:16-24)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The card half is faithful in count, pool, odds type and pity behaviour (guard N1); the SKIP affordance is gone (G1) and the potion half rolls on the wrong stream from an approximated pool (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: `RewardsCmd.OfferCustom` (LostCoffer.cs:22) is a take-or-SKIP reward screen; the port takes one card and the potion unconditionally",
+      "verdict": "deliberate-divergence",
+      "rationale": "The card choice itself is modelled -- run.select_cards('card_reward', cards, 1) (lost_coffer.py:22) delegates to the driver's selector -- but neither the card nor the potion can be DECLINED, where the game's reward screen lets the player leave the screen with nothing. This is the same divergence and the same verdict as relic/calling_bell guard G3 (binding rule 3): the divergent thing is the sim's player-choice model, applied consistently across relic reward offers, not the relic's effect. Flagged rather than waived so that whoever adds a declining policy revisits both records; at that point it becomes a gap."
+    },
+    {
+      "what": "G2: PotionReward (LostCoffer.cs:21) rolls `PotionFactory.CreateRandomPotionOutOfCombat(player, player.PlayerRng.Rewards)` (PotionReward.cs:54-60); the port calls run.random_potion(), which draws on the shared legacy RNG from an `in_reward_pool` approximation of the pool",
+      "verdict": "waiver",
+      "rationale": "Potions are out of scope entirely under the shared contract, and BOTH halves of the divergence are inside the potion domain: the pool identity and the RNG stream. Recorded rather than silently skipped because the stream half is PROMPT.md bug class 16's second shape -- a C# caller that names a stream reaching a sim helper on the legacy shared rng -- and it is invisible outside the conformance harness. Contrast relic/belt_buckle, where a potion-TRIGGERED divergence was filed as a gap because its observable was Dexterity; here the observable is the potion itself, so the exclusion applies. If potions are ever brought into scope this waiver must be revisited."
+    },
+    {
+      "what": "N1: the CardCreationOptions (LostCoffer.cs:19) -- character card pool ONLY (a single-element list, no Colorless), CardCreationSource.Other, CardRarityOddsType.RegularEncounter, cardCount 3, no NoUpgradeRoll flag",
+      "verdict": "faithful",
+      "rationale": "Every clause checks out against rewards.create_reward_cards(run, RarityOddsType.REGULAR, mutate_pity=False) (lost_coffer.py:19-21). (a) count: the default CARD_REWARD_COUNT is 3 (rewards.py:109, 238), matching `new CardReward(options, 3, ...)`. (b) odds: RarityOddsType.REGULAR is CardRarityOddsType.RegularEncounter (rewards.py:75, 84). (c) pity: `mutate_pity=False` is CORRECT and non-obvious -- CardFactory.RollForRarity (CardFactory.cs:244-261) takes the MUTATING `PlayerOdds.CardRarity.Roll` only when `source == CardCreationSource.Encounter` (or ForceRarityOddsChange), and this caller passes Other, so RollWithBaseOdds is right. (d) upgrade roll: no NoUpgradeRoll flag is set, so CardFactory.cs:98-102 does roll for upgrades, and create_reward_cards keeps its act-scaled upgrade draw. (e) pool: the sim's Ironclad reward pool is the character pool, and the `pool=None` default is exactly that (rewards.py:258-267). `CardCreationFlags.IsCardReward`, added by CardReward's own ctor (CardReward.cs:114), is guard N2's subject."
+    },
+    {
+      "what": "N2: `CardCreationFlags.IsCardReward` is set by CardReward's constructor (CardReward.cs:110-118); the sim has no card-creation flag concept at all",
+      "verdict": "gap",
+      "issue": "The flag exists so that relics which affect card REWARDS only (CardCreationFlags.cs:56-60 names Prismatic Gem and Dingy Rug) can tell a reward roll from any other card creation. The sim's create_reward_cards runs `modify_card_reward_options` over every relic with no flag to discriminate on (rewards.py:297-301). DORMANT and NOT this relic's defect: the divergence would need a ported relic that keys off IsCardReward, and it belongs to rewards.py rather than lost_coffer.py. Recorded here because this is the record that reads the flag being set. Porting Prismatic Gem or Dingy Rug makes it live. Rule 7: leans on rewards.py and CardCreationFlags.cs, neither hashed here."
+    },
+    {
+      "what": "N3: the ORDER -- card reward first, potion second (LostCoffer.cs:20-21), and both offered on ONE screen",
+      "verdict": "faithful",
+      "rationale": "lost_coffer.py:22-24 keeps the same order. Checked because Hook.ShouldProcurePotion (Sozu) gates the potion and modify_card_being_added_to_deck (the egg relics) gates the card, and neither reads the other's result, so the sequential resolution reaches the same state as the game's single screen. EXECUTED (py tools/audit/relic_probes_b09.py b09-simple): deck 10 -> 11, potions 0 -> 1."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

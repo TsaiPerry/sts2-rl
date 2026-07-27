@@ -1,0 +1,61 @@
+{
+  "unit": "relic/parrying_shield",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ParryingShield.cs",
+    "sha256": "8938397a0a8fb658ea71e6e404340f186c388d8f00074549691e63b8fb209a35"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\parrying_shield.py",
+    "sha256": "1d5e18611546ef527480348df2ff93ba678131e4e9724079586c1d1fe45ff794"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (parrying_shield.py:19)",
+      "verdict": "faithful"
+    },
+    "AfterSideTurnEnd": {
+      "maps_to": "after_player_turn_end (parrying_shield.py:24-38), dispatched by HookSystem.after_player_turn_end (hooks.py:303-310) from CombatState.end_turn (combat.py:665)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. Everything else maps: the threshold and the damage are `new BlockVar(10m, ValueProp.Unpowered)` and `new DamageVar(6m, ValueProp.Unpowered)` (ParryingShield.cs:20-21) with no AscensionHelper.GetValueIfAscension in the file, matching BLOCK_THRESHOLD = 10 / DAMAGE = 6 (parrying_shield.py:21-22) and props=DamageProps.NON_CARD_UNPOWERED (:37, = ValueProp.UNPOWERED, valueprops.py:42) so Strength and Vulnerable do not scale it; the comparison is C#'s double negative `!(Block < 10)` i.e. Block >= 10, matching `if player.block < self.BLOCK_THRESHOLD: return`; the dealer is the player on both sides; and the target draw is `RunState.Rng.CombatTargets.NextItem(...)` (:28) against `self.combat.combat_rng.targets.choice(...)` (:34), the same run-level stream (combat_rng.py:22 maps 'targets' to combat_targets). The SLOT is right and worth stating because it is easy to get wrong: AfterSideTurnEnd is Hook.AfterTurnEnd, which CombatManager fires in phase TWO, AFTER FlushPlayerHand (CombatManager.cs:1296 then :1307), and the sim's after_player_turn_end fires after discard_hand for the same reason (combat.py:661-665) -- so block a turn-end effect just added still counts. What diverges is the enemy candidate set (G1, LIVE) and the fact that the whole hook is skipped on a Pael's Eye extra turn (G2, LIVE)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE at this site): `HittableEnemies` vs the sim's `living_enemies()` -- the sim can aim the shield at an alive-but-unhittable enemy",
+      "verdict": "gap",
+      "issue": "MECHANISM: ParryingShield.cs:28 draws over `base.Owner.Creature.CombatState.HittableEnemies`, which is `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142) with IsHittable = `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). `Relic.living_enemies()` filters on `not e.is_gone` ONLY (relics/base.py:294-297, and its own docstring concedes the should_allow_hitting predicate is applied by DamageCmd rather than here). SAME MECHANISM as audits/relic/bag_of_marbles.json guard G2, and it carries the SAME `gap` verdict per binding rule 3 -- what differs is the reachability, and that difference is the finding. bag_of_marbles fires only during turn-1 setup, where nothing can yet be mid-revival, so its record labels the gap DORMANT and names 'a turn-1 untargetable enemy' as what would make it live. Parrying Shield fires at EVERY player turn end, i.e. immediately after the player's own attacks, which is exactly when an Illusion creature sits unhittable. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b11.py shield-hittable`): an Eye with Teeth (the Fogmog-summoned minion, monsters/overgrowth/fogmog.py:24-35, act-1 Overgrowth) driven to lethal damage reports `is_dead=False is_gone=False is_reviving=True` and `should_allow_hitting -> False`; the sim's candidate list is then 3 creatures and C#'s HittableEnemies is 2, and 6 damage aimed at the reviving one moves its HP from 1 to 1. Two observables: the 6 damage is lost, and the CombatTargets index is drawn over a differently-sized list, so the pick diverges for the rest of the combat. Both sides ported -- the relic is Uncommon in the transcribed grab bag and the Fogmog encounter is a ported act-1 fight. NOTE that in C# the same creature is excluded for a different reason: IllusionPower implements ShouldCreatureBeRemovedFromCombatAfterDeath (IllusionPower.cs:108) so it genuinely IS dead and stays in Enemies, and it ALSO implements ShouldAllowHitting (:95) -- either clause alone excludes it. The sim's routing of that C# concept onto should_die is PROMPT.md bug class 21, recorded at its own site; this gap is the CALL-SITE candidate set and is independent of it."
+    },
+    {
+      "what": "G2 (LIVE, mechanism owned by relic/paels_eye G3): the hook never fires on a Pael's Eye extra turn",
+      "verdict": "gap",
+      "issue": "MECHANISM: the sim's CombatState.end_turn consults should_take_extra_turn FIRST and `return`s (combat.py:648-652), skipping on_player_turn_end, the turn-end cards, the hand flush AND after_player_turn_end (combat.py:654-665). C# runs the entire turn-end pass and only then asks (Hook.AfterTurnEnd at CombatManager.cs:1307 vs Hook.ShouldTakeExtraTurn at :1366). So a turn in which Pael's Eye grants an extra turn loses Parrying Shield's 6 damage entirely, and loses the CombatTargets draw with it. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b11.py eye-turnend`: a sentinel listener records after_player_turn_end firing without Pael's Eye and not firing with it, on the same end_turn call). Both sides ported and co-obtainable: Parrying Shield is Uncommon in the grab bag, Pael's Eye is Ancient from the ported Pael shrine, and the turn Pael's Eye triggers is by definition one where no card was played -- which is a turn the player is likely to be holding block from a previous Defend. Per binding rule 3 this is ONE mechanism with ONE verdict, recorded in full at audits/relic/paels_eye.json guard G3 (which owns the extra-turn machinery); reproduced here because the lost 6 damage is this relic's observable."
+    },
+    {
+      "what": "N1: `participants.Contains(base.Owner.Creature)` (ParryingShield.cs:26)",
+      "verdict": "faithful",
+      "rationale": "Structurally satisfied: after_player_turn_end is fired only from the player's own end_turn path (combat.py:665) with the combat's single player, so the owner is always a participant. Multiplayer-only in effect, noted per the shared contract rather than verdicted as a divergence."
+    },
+    {
+      "what": "N2: `if (creature != null)` (ParryingShield.cs:29-33) -- C# tolerates NextItem returning null on an empty list; the sim returns early on an empty candidate list",
+      "verdict": "faithful",
+      "rationale": "parrying_shield.py:30-31 (`if not living: return`) reaches the same outcome and, importantly, does so BEFORE touching the RNG -- which matters for parity because C#'s NextItem on an empty collection returns null without consuming a draw. Checked deliberately: a port that drew first and then bailed would desynchronise the CombatTargets stream on any turn that ends with no living enemies."
+    },
+    {
+      "what": "N3: the sim adds a `_check_win()` after the damage (parrying_shield.py:38); C# has no such call in the relic",
+      "verdict": "faithful",
+      "rationale": "Not an addition to behaviour but the sim's stand-in for the CheckWinCondition that follows the game's own commands -- Relic._check_win's docstring says exactly that (relics/base.py:299-304), and CombatManager runs CheckWinCondition around the turn-end hooks (CombatManager.cs:1181, :1208). Without it a relic that lands the killing blow at turn end would hand back a turn with no living enemies. Same shape and same verdict as the other turn-end damage relics."
+    },
+    {
+      "what": "N4: VfxCmd.PlayOnCreatureCenter (ParryingShield.cs:31)",
+      "verdict": "waiver",
+      "rationale": "The blunt-attack VFX; presentation exclusion."
+    },
+    {
+      "what": "N5 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; the Rng stream IS named and IS correctly routed",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's fifteen C# relic files finds no IsAllowed override, so sweep B's cluster excludes this unit. C# names `base.Owner.RunState.Rng.CombatTargets` and the sim reaches the same stream through combat_rng.targets, which maps to the RunRngSet's combat_targets on a parity run and to the shared legacy rng otherwise (combat_rng.py:17-25, :39-46) -- so this is NOT the silent-default failure mode class 16 warns about. The relic holds no state, so bug class 13 has nothing to bite on. NOTE per binding rule 7: this leans on sts2_rl/combat_rng.py and sts2_rl/relics/base.py, neither of which this record hashes."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

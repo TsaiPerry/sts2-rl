@@ -1,0 +1,61 @@
+{
+  "unit": "relic/beating_remnant",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BeatingRemnant.cs",
+    "sha256": "bfa2bfaa040c6af14af6b6f3845b8542b5f93317fd52c139e642de2f0a54fab3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\beating_remnant.py",
+    "sha256": "33dd62d3739e30b693cf92848eb2ce814dfe4310324074884ec277bc8f76c8f8"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (beating_remnant.py:19)",
+      "verdict": "faithful"
+    },
+    "ModifyHpLostAfterOsty": {
+      "maps_to": "modify_hp_lost (beating_remnant.py:27-36)",
+      "verdict": "faithful",
+      "rationale": "BeatingRemnant.cs:42-53 returns `Math.Min(amount, 20 - DamageReceivedThisTurn)` for its owner while combat is in progress; beating_remnant.py:34-36 is the same expression with MAX_HP_LOSS = 20 matching DynamicVar('MaxHpLoss', 20m).BaseValue (line 35, no ascension branch). The source's own comment (lines 37-41) explains why it uses the AfterOsty hook rather than ModifyDamageCap -- trample damage from Osty has already run the ModifyDamage hooks -- and the sim has exactly one modify_hp_lost chain, so there is no before/after choice to get wrong here. Both can return a NEGATIVE cap once DamageReceivedThisTurn exceeds 20; the arithmetic is identical on both sides, so any consequence is shared and is not a port defect."
+    },
+    "AfterModifyingHpLostAfterOsty": {
+      "maps_to": "no counterpart (Flash() only)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "AfterDamageReceived": {
+      "maps_to": "on_damage_received (beating_remnant.py:38-47)",
+      "verdict": "faithful",
+      "rationale": "BeatingRemnant.cs:61-73 accumulates `result.UnblockedDamage` for its owner; the sim accumulates the `amount` its on_damage_received is handed. audits/seam/damage_pipeline.json establishes that the sim's on_damage_received carries the unblocked figure (it is the same value CombatHistory.times_damaged counts, and test_engine_features.py asserts a fully-blocked hit does not count), so the two accumulate the same number. The killing-blow guard (CreatureCmd.cs:392, `!WasTargetKilled || !IsDead`) applies to this hook on both sides -- the sim's DamageCmd.deal skips on_damage_received on a lethal hit, per the fix recorded in cmds.py -- and a dead player has no next turn to cap, so the skip is harmless here."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (beating_remnant.py:49-50)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The C# hook is turn_structure step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed to sit two steps later, after the block clear and the energy reset (py tools/audit/relic_probes.py turn-order). Unlike relic/bag_of_marbles -- where the same mis-labelled mapping in relics/base.py:11 pushed an EFFECT past the enemy move roll -- the only thing in this window is a counter RESET, and nothing between step 9 and the sim's slot deals damage to the player (the block clear and the energy assignment are the entire window, and turn_structure step 13's RoyalPoison turn-1 player-damage trigger fires from a listener the sim runs after this reset, not inside it). Same observable cap window on both sides: from the player's turn start through the whole enemy turn. Recorded as a divergence rather than faithful because the slot genuinely differs and a future effect placed in that window would expose it."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `!CombatManager.Instance.IsInProgress -> return amount` on the cap (BeatingRemnant.cs:44-47) -- the relic must NOT cap out-of-combat HP loss",
+      "verdict": "faithful",
+      "rationale": "The sim keeps combat HP loss and run HP loss on different hooks: modify_hp_lost is combat-only and Relic.modify_run_hp_loss (relics/base.py:222-228) is the out-of-combat chain the game reaches through the run state. beating_remnant.py implements the combat one and NOT the run one, so event damage is uncapped in the sim exactly as C#'s IsInProgress guard makes it uncapped there. This is the kind of absence that is easy to misread as a missing port; it is the correct behaviour."
+    },
+    {
+      "what": "N2: the same IsInProgress guard on AfterDamageReceived (BeatingRemnant.cs:63-66)",
+      "verdict": "faithful",
+      "rationale": "Symmetric to N1: out-of-combat HP loss must not consume the turn's 20-point budget. The sim's on_damage_received is dispatched only from the combat damage pipeline, so RunState.lose_hp cannot reach it."
+    },
+    {
+      "what": "N3: `target != base.Owner.Creature` on both hooks vs the sim's `target is not self.player` / `target is self.player`",
+      "verdict": "faithful",
+      "rationale": "Identity comparison against the relic's owner on both sides. The sim's Relic.player property resolves to the combat's single player, which is the owner by construction."
+    },
+    {
+      "what": "N4: the cap is per-TURN, keyed on the reset in BeforeSideTurnStart, and is NOT reset at combat start or combat end on either side",
+      "verdict": "faithful",
+      "rationale": "C# has no BeforeCombatStart/AfterCombatEnd override at all, and the sim initialises _received_this_turn to 0 in __init__ (beating_remnant.py:25) and resets it at every player turn start. Because the first player turn start of any combat runs before any damage in that combat, a value carried over from a previous combat is cleared before it can be read -- so the shared absence of a combat-boundary reset is safe on both sides. Contrast relic/belt_buckle, where the analogous missing reset IS live."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,62 @@
+{
+  "unit": "relic/the_boot",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TheBoot.cs",
+    "sha256": "8576e133831f8964d485db7266957cc63e041aab4a397667350b4dae20f1aec6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\the_boot.py",
+    "sha256": "e208c4539f697911e05cc4e54f440e0b5976a35ecca55d0843dd89617248c809"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (the_boot.py:23)",
+      "verdict": "faithful",
+      "rationale": "TheBoot.cs:18. Granted by the ported Trash Heap event (events/trash_heap.py:15 _RELICS), which sits in the ACT-2 Underdocks event pool (events/__init__.py:81). Executed: `py tools/audit/relic_probes_b16.py pool`."
+    },
+    "ModifyHpLostAfterOstyLate": {
+      "maps_to": "modify_hp_lost (the_boot.py:27-41), dispatched by HookSystem.modify_hp_lost (hooks.py:126-147) from DamageCmd.deal step 5 (cmds.py:84-87)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The arithmetic is right (raise 1..4 unblocked HP loss to 5), but the sim has no LATE phase, so the relic loses the ordering guarantee its C# hook name carries (G1, LIVE), and the sim's modify_hp_lost signature has no `props`, so the port substitutes a proxy that does not mean the same thing (G2, dormant)."
+    },
+    "AfterModifyingHpLostAfterOsty": {
+      "maps_to": "no counterpart; the sim HAS the hook (after_modify_hp_lost, hooks.py:149-154, used by BufferPower at powers.py:4015) and the relic simply does not implement it",
+      "verdict": "waiver",
+      "rationale": "TheBoot.cs:51-55 is a bare `Flash(); return Task.CompletedTask;`. Presentation only, waived under the shared contract's presentation/animation exclusion. Recorded rather than skipped because the sim DOES have the companion hook, so the omission is a deliberate no-op rather than a missing pipeline -- checked against PROMPT.md bug class 12. Rule 7: hooks.py and powers.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `ModifyHpLostAfterOstyLate` is C#'s SECOND complete HP-loss pass, and The Boot is one of only two implementers of it -- the sim's single flat listener walk runs the relic BEFORE any power gained mid-combat",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.ModifyHpLost (Hook.cs:1742-1762) runs `ModifyHpLostAfterOsty` over EVERY listener and then `ModifyHpLostAfterOstyLate` over EVERY listener -- two `foreach`es, which PROMPT.md bug class 25 says to count before verdicting any ordering question. A whole-source census of the two hooks gives four AfterOsty implementers (IntangiblePower.cs:18, SlipperyPower.cs:19, BeatingRemnant.cs:42, TungstenRod.cs:19) and exactly two Late ones (BufferPower.cs:20, TheBoot.cs:26), so in the game The Boot's floor is applied strictly LAST. hooks.py:142-146 is one pass in registration order, and combat.py:159 attaches relics at CombatState setup while cmds.py registers a power only when it is applied -- so a power gained during the fight lands AFTER the relic. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b16.py boot-order`): with The Boot held and a Soul Fysh that has used its FADE move (monsters/underdocks/soul_fysh.py:76-79 applies IntangiblePower), the sim's listener order is ['TheBoot', 'IntangiblePower'] and 4 powered unblocked damage costs the enemy **1 HP**; the game runs Intangible in pass 1 (4 -> 1) and The Boot in pass 2 (1 -> 5) for **5 HP**. Co-occurrence is explicit, not implied: The Boot is granted by the Trash Heap event, which is in the ACT-2 Underdocks pool (events/__init__.py:81), and Soul Fysh is an Underdocks monster (monsters/underdocks/). The same probe shows the divergence turns on registration order rather than on the relic: Inklet and Vantom apply SlipperyPower from their __init__ (inklets.py:33-34, vantom.py:34-35), which runs at combat.py:134 BEFORE the relics attach, so the sim accidentally agrees there (5 HP both ways). This is audits/seam/hook_dispatch.json gap G3 (missing Early/Late phase passes) compounded with its G2 (cross-listener order: powers first in the game, last in the sim) observed at this relic's site -- one verdict per mechanism, binding rule 3, so this entry does not re-derive them; the seam owns the machinery and this record owns The Boot's observable. Rule 7: hooks.py, cmds.py, combat.py, powers.py, the monster files and audits/seam/hook_dispatch.json are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): C# gates on `props.IsPoweredAttack()`; the sim's modify_hp_lost signature carries no props at all, so the port substitutes `card is None or card.is_unpowered`",
+      "verdict": "gap",
+      "issue": "MECHANISM: ValuePropExtensions.IsPoweredAttack (ValuePropExtensions.cs:5-12) is `props.HasFlag(Move) && !props.HasFlag(Unpowered)` -- a property of the DAMAGE CALL. the_boot.py:37 asks about the CARD instead: `if card is None or card.is_unpowered: return amount`, where Card.is_unpowered is a class attribute set on curses and statuses (cards/base.py:64). The two disagree in both directions. (a) A card that deals non-Move or explicitly Unpowered damage while not itself being an is_unpowered card: the sim raises it, C# does not. (b) Card-less powered-Move damage dealt by the player: C# raises it, the sim bails. REACHABILITY (DORMANT, both directions, executed -- `py tools/audit/relic_probes_b16.py boot-props`). For (b) the probe finds NO ported site: every DamageCmd.deal in powers.py and relics/ that omits `card=` passes DamageProps.NON_CARD_UNPOWERED or NON_CARD_HP_LOSS, and monster moves are the player's dealer-check away. For (a) there is exactly ONE ported site that aims at an enemy -- Omnislice's splash leg (cards/colorless_attacks.py:320-325, `props=DamageProps.CARD_UNPOWERED, card=self`, and Omnislice is a normal Attack so is_unpowered is False); the other nine sites (bad_luck, beckon, blood_wall, bloodletting, brand, hemokinesis, offering, regret, enchantments.py:500) all target the PLAYER and are stopped by the `target is self.player` bail. And Omnislice still cannot produce a difference: its splash amount is the FIRST leg's returned `dealt`, and the first leg is DamageProps.CARD -- a powered Move -- which The Boot has already floored at 5, so the splash can never arrive inside the 1..4 window while the relic is held. Executed confirmation of that: with `_damage` forced to 3 the sim reports HP lost [5, 5] and so does the C# trace. What would make it live: porting a card that deals unpowered or unblockable damage to an ENEMY with an amount that is not derived from a powered leg -- or fixing the sim's modify_hp_lost to carry props, which is the correct fix and would close this without a content change. Rule 7: cards/colorless_attacks.py, cards/base.py, powers.py and valueprops.py are not hashed here."
+    },
+    {
+      "what": "N1: `dealer != base.Owner.Osty` -- half of C#'s dealer test (TheBoot.cs:28) has no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "OTHER CHARACTERS, named and verified: Osty is `Player.PlayerCombatState.GetPet<Osty>()` (Player.cs:132) and the only summoners in the whole source are BoundPhylactery.cs:42 and PhylacteryUnbound.cs:34 -- the Necrobinder's starter relic and its refinement (both appear in TouchOfOrobas.cs:44-46's RefinementUpgrades map as Necrobinder entries). The sim models no pets at all (`grep -rn 'osty' sts2_rl/` returns nothing) and cannot, being Ironclad-only. Waived under the contract's 'characters other than Ironclad' exclusion with the reason named, not skipped. The sibling PenNib.cs:116 carries the identical `dealer != Owner.Creature && dealer != Owner.Osty` test, so this waiver should be matched at that site too (binding rule 3)."
+    },
+    {
+      "what": "N2: DynamicVar('DamageThreshold', 4) is declared (TheBoot.cs:23) and never read; both the comparison and the returned floor use DynamicVar('DamageMinimum', 5) (:44, :48)",
+      "verdict": "faithful",
+      "rationale": "The relic's text reads '4 or less -> 5', so the two vars are the same number expressed twice and the source only wires up one of them. the_boot.py:25 pins MINIMUM = 5 and the port's `if 1 <= amount < self.MINIMUM: return self.MINIMUM` reproduces C#'s three-branch form exactly (`amount < 1` -> unchanged, `amount >= 5` -> unchanged, else 5). No AscensionHelper.GetValueIfAscension in the file, so 5 and 4 are the pinned non-ascension values. PROMPT.md bug class 19 says to re-read every numeric against the C# even when the port names the C# expression; done, and both agree."
+    },
+    {
+      "what": "N3: the `amount < 1` bail (TheBoot.cs:40-43) vs the sim's `1 <= amount` plus DamageCmd's own `if hp_lost > 0` gate (cmds.py:83-87)",
+      "verdict": "faithful",
+      "rationale": "C# calls Hook.ModifyHpLost unconditionally, including with a zero amount after a full block, and The Boot returns it unchanged; the sim never calls the hook at 0 at all. Same outcome (a fully blocked hit costs 0 HP either way), and the relic's own `1 <=` clause makes the port correct even where the sim's caller does dispatch. Recorded because a floor-to-5 relic is exactly the shape where a missing zero guard would turn a blocked hit into 5 damage."
+    },
+    {
+      "what": "N4: `target == base.Owner.Creature -> return amount` (TheBoot.cs:32-35) vs `target is self.player` (the_boot.py:34)",
+      "verdict": "faithful",
+      "rationale": "Both are identity comparisons against the owning player's creature (Relic.player returns CombatState.player, relics/base.py:282-284, which is the sim's player Creature). Not a side comparison on either side, so a player-side minion -- if the sim ever gets one -- would be treated the same way by both, unlike the side-vs-identity split recorded at relic/unsettling_lamp G3. Rule 7: relics/base.py is not hashed here."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

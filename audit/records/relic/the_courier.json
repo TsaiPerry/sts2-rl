@@ -1,0 +1,67 @@
+{
+  "unit": "relic/the_courier",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TheCourier.cs",
+    "sha256": "2d2e8a3c5b662754b79bc06c07374af66764776a8e15cf30c3eb3149ec2ce307"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\the_courier.py",
+    "sha256": "5ddf4592392cfd96b4e68af97f22415ad4c19a05e07ba7cd951ac9dd06648781"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (the_courier.py:13)",
+      "verdict": "faithful",
+      "rationale": "TheCourier.cs:13. Executed: Rare in the transcribed grab bag (relic_pools.py:141 'RELIC.THE_COURIER'), `py tools/audit/relic_probes_b16.py pool`."
+    },
+    "IsAllowedInShops": {
+      "maps_to": "is_allowed_in_shops = False (the_courier.py:14)",
+      "verdict": "faithful",
+      "rationale": "TheCourier.cs:15. The flag exists on the sim's Relic base (relics/base.py:90) and shop.py's relic stocking filters on it, so this declaration is honoured rather than merely recorded. Rule 7: relics/base.py and shop.py are not hashed here."
+    },
+    "ModifyMerchantPrice": {
+      "maps_to": "no counterpart -- `Relic` declares no modify_merchant_price and shop.py has no dispatch site",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 (LIVE)."
+    },
+    "ShouldRefillMerchantEntry": {
+      "maps_to": "no counterpart -- `Relic` declares no should_refill_merchant_entry and MerchantEntry.purchase has no restock branch",
+      "verdict": "gap",
+      "issue": "Rollup of guard G2 per binding rule 4 (LIVE)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): shop prices are not discounted at all -- the 20% off is missing",
+      "verdict": "gap",
+      "issue": "MECHANISM: MerchantEntry.Cost (MerchantEntry.cs:19-30) recomputes `Hook.ModifyMerchantPrice(RunState, player, this, _cost)` on EVERY read while the current room is a MerchantRoom, then truncates to int; TheCourier.cs:19-26 returns `originalPrice * (1 - 20/100)`. The sim's Relic base declares no such member (executed: `hasattr(Relic, 'modify_merchant_price')` is False) and shop.py's MerchantEntry.cost is a plain attribute assigned once at stocking time (e.g. shop.py:284 for the relic entry). REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b16.py courier-price`): the same seeded shop stocks entry costs [50, 37, 74, 78, 79, 84, 181, 194, 201, 208, 49, 48, 51, 75] with the relic, without it, and with membership_card -- byte-identical. Both sides ported: the relic is Rare in the transcribed grab bag and the sim has a fully stocked merchant with gold, prices and purchases (shop.py, driver's Shop room). The observable is every price the player pays for the rest of the run. THIS IS THE LARGER FIX Sweep C flagged: `ModifyMerchantPrice` needs a new base hook plus a dispatch site, so it is not a one-relic change -- and rule 3 binds the fix to cover MembershipCard.cs:18-29 (50% off, relics/membership_card.py is the same stub) at the same time, because it is the same mechanism at a second site. Rule 7: relics/base.py and shop.py are not hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): a purchased shop slot never restocks",
+      "verdict": "gap",
+      "issue": "MECHANISM: MerchantEntry.OnTryPurchaseWrapper (MerchantEntry.cs:81-89) asks `Hook.ShouldRefillMerchantEntry` after a successful purchase and calls RestockAfterPurchase instead of ClearAfterPurchase when any listener says yes; TheCourier.cs:28-31 says yes for its owner, which is the relic's second printed effect. The sim's Relic base declares no should_refill_merchant_entry (executed: False) and shop.py's own module docstring names the omission outright -- 'The Courier's restock-after-purchase is not modeled (entries clear when bought)' (shop.py:30-31). REACHABILITY (LIVE, executed -- same probe): after buying one entry with the relic held, `entry.is_stocked` is False, where the game restocks the slot. That is a whole printed relic effect missing, and it compounds with G1 (a discounted, infinitely restocking shop is the relic's actual power level). Filed as a gap and NOT a waiver even though shop.py documents the deviation: a documented omission is still a divergence, and 'the sim does not model it' is exactly what binding rule 1 says is a dormant-or-live gap rather than a waiver -- here it is live. Rule 7: relics/base.py and shop.py are not hashed here."
+    },
+    {
+      "what": "N1: `player != base.Owner` on both hooks (TheCourier.cs:21-24, :30)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true."
+    },
+    {
+      "what": "N2: DynamicVar('Discount', 20) and the exact price arithmetic",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 20 is the pinned non-ascension value. Recorded for whoever implements G1: the discount is a multiply by 0.8 applied to the ALREADY-jittered, already-on-sale `_cost`, and MerchantEntry.Cost truncates the decimal result with `(int)num` (MerchantEntry.cs:28) -- it does not round. The sim's costs are ints produced by `round(...)` at stocking time (shop.py:284), so the fix must truncate after multiplying, not round."
+    },
+    {
+      "what": "N3: LocalContext.IsMe -- present on MembershipCard.cs:24-27 and ABSENT from TheCourier.cs",
+      "verdict": "faithful",
+      "rationale": "Noted because the two relics are otherwise the same mechanism and the asymmetry is in the source, not the port: Membership Card's discount is gated on the local client (a presentation-layer read) and The Courier's is not. Neither matters single-player, but a fix for G1 must not copy Membership Card's extra clause onto The Courier -- PROMPT.md bug class 29, siblings may differ on purpose."
+    },
+    {
+      "what": "N4: CanonicalVars (TheCourier.cs:17)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

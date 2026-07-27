@@ -1,0 +1,67 @@
+{
+  "unit": "relic/toasty_mittens",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ToastyMittens.cs",
+    "sha256": "301a6bfc9942466f7533e2b73f1aded24f37b1aa6eb3c39e0fdd2903bda27ddc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\toasty_mittens.py",
+    "sha256": "bb9b9c5a8f7ec101b2b91bbfc349f725d3b2b07f75ba9e67bdb5df5ccb001820"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (toasty_mittens.py:19)",
+      "verdict": "faithful",
+      "rationale": "ToastyMittens.cs:18. Granted by the ported Tezcatara shrine (events/tezcatara.py:17 OPTION_POOL_2). Executed: `py tools/audit/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
+    },
+    "BeforeHandDraw": {
+      "maps_to": "on_player_turn_start (toasty_mittens.py:21-39)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. HALF THE RELIC IS MISSING: ToastyMittens.cs:28-51 exhausts a draw-pile card AND applies 1 Strength every turn; the port implements only the exhaust. The slot, the reshuffle, the turn-1 non-Innate pick and the top-of-pile orientation are all correct (N1-N4)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the +1 Strength per turn is not implemented at all",
+      "verdict": "gap",
+      "issue": "MECHANISM: ToastyMittens.cs:50 is `await PowerCmd.Apply<StrengthPower>(choiceContext, player.Creature, base.DynamicVars.Strength.BaseValue, player.Creature, null);` and it sits OUTSIDE the `if (cardModel != null)` branch that guards the exhaust (lines 46-49) -- so the Strength lands every single turn, even on a turn where the draw pile and discard pile are both empty and nothing is exhausted. PowerVar<StrengthPower>(1m) (ToastyMittens.cs:20) with no AscensionHelper branch pins the amount at 1, and the applier argument is `player.Creature` (non-null). toasty_mittens.py:21-39 contains no PowerCmd call and no reference to Strength; the class's only effect is the exhaust. `grep -rn toasty sts2_rl/` finds the relic implemented nowhere else (only events/tezcatara.py:17, the grant path), so the Strength is not applied elsewhere either. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b16.py mittens-power`): with the relic attached, turns 1/2/3 report player powers `[]` and exhaust pile 1/2/3, where the game reports Strength 1/2/3. Both sides ported: the relic is granted by the ported Tezcatara shrine and StrengthPower is ported and applied by dozens of sim effects. This is not a dormancy question -- every turn of every combat after the relic is picked is wrong, and it is the direction that makes the relic strictly worse than the game's (the port keeps the drawback and drops the payoff). NOTE FOR THE FIX: pass the applier, as C# does. Today it cannot matter (relic/unsettling_lamp only doubles debuffs and Strength at +1 is a Buff), but the sim's TemporaryStrengthPower equivalence recorded at unsettling_lamp N2 rests on ports NOT passing applier, so the fixer should read that entry before choosing. Also pass it as one PowerCmd.apply of 1 rather than a modify_strength_given path, because C# routes it through Hook.ModifyPowerAmountGiven like any other application. Rule 7: powers.py, events/tezcatara.py and audits/relic/unsettling_lamp.json are NOT hashed by this record."
+    },
+    {
+      "what": "N1: the hook slot -- C#'s BeforeHandDraw vs the sim's on_player_turn_start",
+      "verdict": "faithful",
+      "rationale": "BeforeHandDraw is turn_structure step 19 and audits/seam/turn_structure.json verdicts that step `faithful` with `on_player_turn_start` as its sim counterpart -- 'fired after on_energy_reset and before modify_hand_draw'. Matched here rather than re-derived (binding rule 3), and re-executed: `py tools/audit/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started. PROMPT.md bug class 11 warns against verdicting a slot off relics/base.py:10-18's table, whose `BeforeSideTurnStart -> on_player_turn_start` line is wrong; the slot is right anyway, but for the BeforeHandDraw reason and not that one. Rule 7: audits/seam/turn_structure.json and relics/base.py are not hashed by this record. Load-bearing here: the relic exhausts from the DRAW PILE and must run before the hand is drawn, or it burns cards the player was about to hold."
+    },
+    {
+      "what": "N2: `CardPileCmd.ShuffleIfNecessary(choiceContext, base.Owner)` (ToastyMittens.cs:35) vs the port's inline `if not player.draw_pile and player.discard_pile: player.reshuffle_discard_into_draw()` (toasty_mittens.py:24-25)",
+      "verdict": "faithful",
+      "rationale": "CardPileCmd.ShuffleIfNecessary is exactly `if (!drawPile.Cards.Any() && discardPile.Cards.Any()) await Shuffle(...)` (CardPileCmd.cs:972-981), and PlayerCombatState.reshuffle_discard_into_draw is the sim's port of the Shuffle it calls -- including the StableShuffle and the AfterShuffle dispatch (player.py:199-218). So the relic's reshuffle DOES fire on_shuffle and therefore The Abacus and Stratagem, as it does in the game. The one C# leg the port skips is the FTUE modal (CardPileCmd.cs:978, 986-994), which is UI. Rule 7: player.py and CardPileCmd.cs are not hashed here."
+    },
+    {
+      "what": "N3: `cards.FirstOrDefault()` is the TOP of the pile in C# (index 0) and the END of the list in the sim",
+      "verdict": "faithful",
+      "rationale": "The port takes `pile[-1]` and, for the turn-1 case, `next(c for c in reversed(pile) ...)` (toasty_mittens.py:31-36), with the convention stated in its own comment and confirmed by PlayerCombatState._draw's `card = self.draw_pile.pop()  # end of list = top of pile` (player.py:290). PROMPT.md bug class 19 says to re-check a numeric/positional claim even when the port names it; done, and the orientation is right -- which is worth stating because the sibling finding in this same batch (relic/tea_of_discourtesy G1) is the same orientation question answered WRONG."
+    },
+    {
+      "what": "N4: the turn-1 Innate carve-out and the fallback (ToastyMittens.cs:38-45)",
+      "verdict": "faithful",
+      "rationale": "C#: on TurnNumber == 1 take the first non-Innate card; if that found nothing (or it is not turn 1) take the first card whatever it is; if the pile is empty do nothing. toasty_mittens.py:29-37 reproduces all three branches, using Relic.turn (relics/base.py:290-292 -> CombatState.turn) for TurnNumber and `card.innate` for the Innate keyword. The point of the carve-out is that an Innate card is about to be drawn anyway, so exhausting it would waste the relic's own drawback -- and the sim gets the fallback right too (a turn-1 pile of nothing but Innate cards exhausts an Innate card on both sides). Rule 7: relics/base.py is not hashed here."
+    },
+    {
+      "what": "N5: `CardCmd.Exhaust(choiceContext, cardModel)` (ToastyMittens.cs:48) vs the port's manual pile move plus `self.hooks.on_card_exhausted(card)` (toasty_mittens.py:37-39)",
+      "verdict": "faithful",
+      "rationale": "CardCmd.Exhaust is `CardPileCmd.Add(card, PileType.Exhaust, Bottom)` + History + `Hook.AfterCardExhausted(..., causedByEthereal: false)` (CardCmd.cs:237-246); the manual move reaches the same pile and fires the same hook with the same (absent) ethereal cause. The port cannot use the sim's ExhaustCmd.exhaust because that helper only removes from the hand or the discard pile (cmds.py:379-383) and this card is in the DRAW pile -- which also explains the dead `from ..cmds import ExhaustCmd` import at toasty_mittens.py:22, an unused name and not a behavioural defect. Rule 7: cmds.py and CardCmd.cs are not hashed here."
+    },
+    {
+      "what": "N6: `player != base.Owner.Creature.Player` (ToastyMittens.cs:30-33)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true. The port does not restate it; on_player_turn_start is dispatched with the one PlayerCombatState (player.py:169)."
+    },
+    {
+      "what": "N7: Flash() (ToastyMittens.cs:34), CanonicalVars (:20) and the Exhaust/Strength ExtraHoverTips (:22-26)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,41 @@
+{
+  "unit": "relic/blood_vial",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BloodVial.cs",
+    "sha256": "68a09be73d3832bd3f4eac44bc1d81d6165f33a306b896fdcfdff141499fa7b6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\blood_vial.py",
+    "sha256": "98cfc1671777d422e98845f62073c981393019a2ddd196a9352fa5a6b5ab50f9"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.COMMON (blood_vial.py:16)",
+      "verdict": "faithful"
+    },
+    "AfterPlayerTurnStartLate": {
+      "maps_to": "on_player_turn_started (blood_vial.py:18-21)",
+      "verdict": "gap",
+      "issue": "The effect is right -- HealVar(2m).IntValue healed to the owner on TurnNumber <= 1 (BloodVial.cs:9-15) vs CreatureCmd.heal(player, 2) on `self.turn <= 1` -- and the post-draw slot is right (executed: py tools/audit/relic_probes.py turn-order puts on_player_turn_started after the draw, where turn_structure step 22 puts AfterPlayerTurnStart). What is lost is the LATE phase, which is guard G1."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): C#'s hook is AfterPlayerTurnStart**Late** -- a second full listener pass after the plain pass -- and the sim has no phase structure at all",
+      "verdict": "gap",
+      "issue": "MECHANISM: the game runs its turn-start listener list twice, plain then Late, so a Late listener is guaranteed to observe every plain listener's effect. The sim's hooks.on_player_turn_started (hooks.py:285-295) is a single flat pass in hook-registration order, so Blood Vial's heal lands wherever the relic happens to sit in the list rather than reliably last. This is the multi-pass phase collapse audits/seam/hook_dispatch.json records (its gaps G2/G3 are the same machinery observed at the energy-cost dispatchers), so one verdict per mechanism, binding rule 3. REACHABILITY (DORMANT): a live case needs a second ported turn-start listener whose plain-phase effect changes what Blood Vial's 2 HP does -- concretely, one that changes max HP or applies a heal-modifying power at turn start. The ported turn-start relics in these two batches (akabeko's Vigor, bag_of_marbles' Vulnerable, bellows' hand upgrade, bone_tea's hand upgrade, brimstone's Strength, bread's energy loss) touch none of those, and a heal that is capped at max HP is order-independent with respect to all of them. Porting a turn-start max-HP or heal-modifier effect makes it live."
+    },
+    {
+      "what": "N1: `player == base.Owner` (BloodVial.cs:11)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `shuffler == base.Owner` / `cardPlay.Card.Owner != base.Owner` family is the multiplayer per-player filter on a hook the game dispatches for every player. The sim is single-player by construction (one RunState, one PlayerCombatState), so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: HealVar(2m) read with IntValue (BloodVial.cs:13) and the sim's literal 2",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 2 is the pinned non-ascension value. Note the relic heals rather than granting max HP, so it is capped by the player's current max on both sides -- CreatureCmd.Heal and the sim's CreatureCmd.heal both clamp."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

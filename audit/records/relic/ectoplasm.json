@@ -1,0 +1,56 @@
+{
+  "unit": "relic/ectoplasm",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Ectoplasm.cs",
+    "sha256": "064fca6868e0ff78c19ed523f448fd0307df40625f431b1bed43c74025635815"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\ectoplasm.py",
+    "sha256": "2fee00517001c4835faa247b6251e119185befad3150b29d540c2bd7bdfe7c72"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (ectoplasm.py:19)",
+      "verdict": "faithful"
+    },
+    "ModifyGoldGained": {
+      "maps_to": "modify_gold_gained (ectoplasm.py:26-27)",
+      "verdict": "faithful",
+      "rationale": "Ectoplasm.cs:18-25 returns 0 for its owner and the input amount for anyone else; ectoplasm.py:27 returns 0 (the owner clause is the multiplayer filter of guard G2). The sim's chain hook is dispatched from RunState.gain_gold (run.py:329-330) before the truncation and the `amount > 0` bail, which is the same position as Hook.ModifyGoldGained at PlayerCmd.cs:144. Executed (py tools/audit/relic_probes_b04.py ectoplasm): `run.gain_gold(99)` with the relic leaves gold at 99 (unchanged), and a MONSTER reward screen that rolls gold=11 also leaves the run at 99 -- see guard G1 for why that second case is the one worth executing."
+    },
+    "AfterModifyingGoldGained": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Ectoplasm.cs:27-31's entire body is `Flash(); return Task.CompletedTask;` -- there is no state change to model, and the override exists only so the relic glows when it eats a gold gain. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim: the sim would have nothing to do here even if it dispatched the event. Note for anyone porting a different AfterModifyingGoldGained implementer: unlike AfterGoldGained (which relic/dragon_fruit needs and which PlayerCmd.cs:146-149 skips on a non-positive amount), this one fires at PlayerCmd.cs:145 BEFORE that bail, so it runs even when the amount has been zeroed -- which is exactly why Ectoplasm can use it to flash."
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (ectoplasm.py:23-24)",
+      "verdict": "faithful",
+      "rationale": "Ectoplasm.cs:33-40 returns `amount + EnergyVar.IntValue` for its owner; ectoplasm.py:24 returns `amount + self.ENERGY` with ENERGY = 1. The dispatch positions match: C# reads it in PlayerCombatState.MaxEnergy (PlayerCombatState.cs:101, a property recomputed on every read) and the sim in PlayerCombatState's energy reset (player.py:163, `self._hooks.modify_max_energy(self, self.ENERGY_PER_TURN)`), so the relic's +1 is present on every turn of every combat rather than being applied once. Executed (py tools/audit/relic_probes_b04.py ectoplasm): turn-1 energy is 3 without the relic and 4 with it. RULE 7: player.py and PlayerCombatState.cs are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1: whether EVERY ported gold gain actually routes through RunState.gain_gold -- the relic's 'you can never gain gold' promise is only as strong as its single dispatch site (binding rule 5)",
+      "verdict": "faithful",
+      "rationale": "This is the one claim in the record that could not be settled by reading the two files, so it was executed rather than assumed (py tools/audit/relic_probes_b04.py ectoplasm). A repo-wide scan for direct writes to RunState.gold returns exactly three engine lines: run.py:152 (the constructor's starting gold), run.py:333 (`self.gold += gained`, INSIDE gain_gold and after the hook chain) and run.py:337 (lose_gold). Every other hit is an event's own local `self.gold` variable (events/dense_vegetation.py:49/52, events/lost_wisp.py:25/28, events/sunken_statue.py:25/28) that is later handed to run.gain_gold. The case worth executing is the reward screen, because audits/relic/amethyst_aubergine.json's implementation note records that combat gold is banked at rewards.py:464/485 BEFORE the modify_combat_rewards hook loop at rewards.py:499 -- an ordering that breaks a relic reading rewards.gold. Ectoplasm is unaffected precisely because it uses the gain-time chain hook rather than the reward hook: the probe shows a screen that rolls gold=11 leaving the run's gold unchanged. RULE 7: run.py, rewards.py and the events named above are not hashed here."
+    },
+    {
+      "what": "G2: the `player != base.Owner` guards on both ModifyGoldGained (Ectoplasm.cs:20-23) and ModifyMaxEnergy (:35-38), and the ORDER in which multiple modify_gold_gained listeners chain",
+      "verdict": "faithful",
+      "rationale": "The owner clauses are the multiplayer per-player filter the shared contract puts out of scope -- one player exists in the sim, so both are vacuous. The chaining order was checked because it is the classic place for a collapse to bite (PROMPT.md class 15): the sim walks run.relics in grab-bag order (run.py:329-330) while C# walks runState.IterateHookListeners, and the sim's only other ported modify_gold_gained implementer is relic/bowler_hat's x1.25. Multiplication and zeroing commute -- 0 x 1.25 and 1.25 x 0 are both 0 -- so the two orders produce the same observable and no divergence exists today. It would matter for a listener that ADDS a flat amount, which no ported relic does on this hook (relic/amethyst_aubergine's +15 is on TryModifyRewards, not here). RULE 7: run.py and relics/bowler_hat.py are not hashed here."
+    },
+    {
+      "what": "G3: EnergyVar(1) read as IntValue (Ectoplasm.cs:14, 39) vs ENERGY = 1 (ectoplasm.py:21), and the absence of any IsAllowed / IsAllowedAtNeow / HasUponPickupEffect override",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 1 is the pinned non-ascension value, and IntValue is the un-modified read. The declarative side is complete rather than merely absent: Ectoplasm.cs overrides Rarity and nothing else declarative, and ectoplasm.py adds no extra declaration either -- which is worth stating because relic/dragon_fruit in this same batch DOES override IsAllowed (a gap) and relic/dusty_tome's port ADDS a HasUponPickupEffect the source does not declare (also a gap). .superpowers/sdd/content-relic-sweeps.md sweep B's executed list of the 20 IsAllowed overrides does not include Ectoplasm, so the absence is confirmed pool-wide and not just by reading this file."
+    },
+    {
+      "what": "N1: Flash() (Ectoplasm.cs:29), the EnergyVar canonical var (:14) and ExtraHoverTips (HoverTipFactory.ForEnergy, :16)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

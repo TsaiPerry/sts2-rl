@@ -1,0 +1,56 @@
+{
+  "unit": "relic/fake_lees_waffle",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FakeLeesWaffle.cs",
+    "sha256": "d5125732afa217b03144c673831c2937bc9005708c32b75966e7fe68748e96a6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fake_lees_waffle.py",
+    "sha256": "c69c4de7105f5b0fd627d517d2bf11bba438ab7c23bfb7ddfd309ce2150339a2"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fake_lees_waffle.py:14)",
+      "verdict": "faithful"
+    },
+    "MerchantCost": {
+      "maps_to": "merchant_cost_override = 50 (fake_lees_waffle.py:15)",
+      "verdict": "faithful",
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (fake_lees_waffle.py:16)",
+      "verdict": "faithful",
+      "rationale": "Matches FakeLeesWaffle.cs:13; drives RelicModel.IsTradable (RelicModel.cs:176-190) mirrored at relics/base.py:126-136. Inert in practice here because an EVENT-rarity relic is untradable anyway on both sides. Rule 7: those two files are unhashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (fake_lees_waffle.py:20-21)",
+      "verdict": "faithful",
+      "rationale": "FakeLeesWaffle.cs:19-22 heals `MaxHp * (Heal.BaseValue / 100)` with HealVar(10m) (line 17), i.e. 10% of Max HP as a DECIMAL, and no AscensionHelper branch in the file. fake_lees_waffle.py:21 computes `int(run.max_hp * 10 / 100)` -- it truncates the AMOUNT where C# truncates the SUM inside Creature.SetCurrentHpInternal (Creature.cs:488-491). Guard N1 settles by exhaustive execution that the two agree at every reachable HP value, so this is faithful rather than a rounding divergence."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: C# truncates `(int)Math.Min(CurrentHp + amount, MaxHp)` (Creature.cs:488-491, reached via HealInternal at :477-486 from CreatureCmd.Heal at :691); the sim truncates the amount first and then caps (fake_lees_waffle.py:21 + run.heal, run.py:288-292)",
+      "verdict": "faithful",
+      "rationale": "SETTLED BY EXECUTION, not by argument, because this is precisely the kind of decimal-vs-int claim PROMPT.md warns about and 10% of an odd Max HP is genuinely fractional. `py tools/audit/relic_probes_b05.py waffle-round` walks max_hp 1..399 against EVERY current-HP value in range (about 80,000 pairs), computing C#'s decimal path with Python's `decimal` and the sim's int path side by side: 0 mismatches. The reason is structural -- current HP is always an integer, so truncating (hp + a) equals hp + trunc(a) for a >= 0 -- and both sides clamp to Max HP, but the range was executed rather than trusted. Rule 7: Creature.cs, CreatureCmd.cs and run.py are unhashed here."
+    },
+    {
+      "what": "N2: the heal uses Heal.BaseValue where the relic's twin fake_mango uses MaxHp.BaseValue -- and this relic does NOT raise Max HP",
+      "verdict": "faithful",
+      "rationale": "The joke of the knock-off is that the real Lee's Waffle raises Max HP AND heals to full, while FakeLeesWaffle.cs:21 only heals 10% of the CURRENT Max HP. The sim reproduces exactly that: fake_lees_waffle.py:21 calls run.heal and never run.gain_max_hp. Recorded because the sibling relic/fake_mango in this batch DOES raise Max HP, so the two are easy to cross-contaminate, and because a wrong max HP would be reported by the conformance runner's act-boundary player-state assertion."
+    },
+    {
+      "what": "N3: CreatureCmd.Heal's `if (CombatManager.Instance.IsEnding && !creature.IsPlayer) return;` early bail and the MapPointHistoryEntry.HpHealed bookkeeping (CreatureCmd.cs:691-750)",
+      "verdict": "waiver",
+      "rationale": "The bail cannot fire for a player (its own condition excludes them) and this is an out-of-combat pickup in any case. HpHealed is the run's statistics history -- meta-progression bookkeeping, waived under the same run-configuration/meta-progression head as audits/seam/hook_dispatch.json's N4, not under an unreachability claim. Rule 7: CreatureCmd.cs is unhashed here."
+    },
+    {
+      "what": "N4: FakeLeesWaffle.cs declares no undo path, and the sim's Relic.undo_after_obtained default is a no-op (relics/base.py:142-151)",
+      "verdict": "faithful",
+      "rationale": "Checked because relic/big_mushroom's batch-1 gap turned on undo_after_obtained: the conformance runner grants a node's relic and may swap it, and a max-HP relic that does not unwind leaves the player-state parity check reading high. This relic changes only CURRENT HP, which the runner re-asserts from the save at act boundaries anyway, so no undo is needed -- unlike relic/fake_mango in this same batch, which does raise Max HP and whose undo is verdicted in its own record. Rule 7: relics/base.py is unhashed here."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

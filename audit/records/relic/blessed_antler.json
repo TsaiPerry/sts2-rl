@@ -1,0 +1,46 @@
+{
+  "unit": "relic/blessed_antler",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BlessedAntler.cs",
+    "sha256": "a1510a9be4bb28f9d34cce3977fcea155ee6a09be7b5e5d1dc68f2a7cf6ceb59"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\blessed_antler.py",
+    "sha256": "f3db307888350c1d72c4886e37478a170b7fc2b761386b8521f7a383537e75ad"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (blessed_antler.py:18)",
+      "verdict": "faithful"
+    },
+    "ModifyMaxEnergy": {
+      "maps_to": "modify_max_energy (blessed_antler.py:23-24)",
+      "verdict": "faithful",
+      "rationale": "BlessedAntler.cs:24-31 adds EnergyVar(1).IntValue to the owner's max energy; the sim adds ENERGY = 1. The sim's modify_max_energy is consulted at player.py:163, which is audits/seam/turn_structure.json step 17's Hook.ModifyMaxEnergy -- the same point in the turn, before the reset/add decision."
+    },
+    "BeforeHandDraw": {
+      "maps_to": "on_player_turn_start (blessed_antler.py:26-33)",
+      "verdict": "faithful",
+      "rationale": "THE MAPPING IS CORRECT HERE, and the executed order is why. py tools/audit/relic_probes.py turn-order shows the sim fires on_energy_reset -> on_player_turn_start -> modify_hand_draw; audits/seam/turn_structure.json puts AfterEnergyReset at step 18, BeforeHandDraw at 19 and ModifyHandDraw at 20. So the sim's on_player_turn_start IS the BeforeHandDraw slot -- which is what relics/base.py:11's mapping table gets wrong when it labels the same method 'BeforeSideTurnStart' (that is step 9, five steps earlier; see PROMPT.md bug class 11). This relic needs the pre-draw position: three Dazed must be in the draw pile BEFORE the turn-1 hand is drawn, or they cannot be drawn into the opening hand. `TurnNumber == 1` matches `self.turn != 1: return`, and 3 matches CardsVar(3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: C# adds all 3 Dazed in ONE AddGeneratedCardsToCombat call (BlessedAntler.cs:43); the sim makes three separate add_to_draw calls",
+      "verdict": "faithful",
+      "rationale": "Checked rather than assumed, because a batch insert that computed all three random slots against the ORIGINAL pile size would consume the Shuffle stream differently and land the cards elsewhere. It does not: AddGeneratedCardsToCombat's body (CardPileCmd.cs) is a `foreach (CardModel card in list)` that awaits `Add(card, pile, position)` once per card, so each Random slot is drawn against the pile as it grows -- structurally identical to the sim's three sequential calls. NOTE per binding rule 7: this rationale leans on CardPileCmd.cs, which this record does NOT hash; a change to that loop invalidates this verdict without making the record stale."
+    },
+    {
+      "what": "N2: `player == base.Owner` on both hooks (BlessedAntler.cs:26, 35)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `shuffler == base.Owner` / `cardPlay.Card.Owner != base.Owner` family is the multiplayer per-player filter on a hook the game dispatches for every player. The sim is single-player by construction (one RunState, one PlayerCombatState), so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N3: Flash(), Cmd.Wait(3f), the card-pile-add preview and the Energy/Dazed hover tips (BlessedAntler.cs:13-22, 37, 43-44)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

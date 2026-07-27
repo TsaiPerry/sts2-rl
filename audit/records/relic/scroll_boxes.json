@@ -1,0 +1,72 @@
+{
+  "unit": "relic/scroll_boxes",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ScrollBoxes.cs",
+    "sha256": "0199d9370fac6d20d9dffeeb668dac478a3983fdac5ded24ea0f98711ad3d1cc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\scroll_boxes.py",
+    "sha256": "71c1d470dbd06fda5a51bbfb3d1e97cb5897ef6b55304f116bd94826973fde65"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (scroll_boxes.py:13)",
+      "verdict": "faithful",
+      "rationale": "Matches ScrollBoxes.cs:21. Obtainable: one of Neow's 14 fixed positive relics (events/neow.py:41), executed via neow_relic_pool -- see the IsAllowedAtNeow entry."
+    },
+    "IsAllowedAtNeow": {
+      "maps_to": "is_allowed_at_neow = True (inherited from Relic, relics/base.py:159); the sim declares no override on ScrollBoxes",
+      "verdict": "faithful",
+      "rationale": "Sweep B (.superpowers/sdd/content-relic-sweeps.md) flagged this as a MISMATCH needing a per-unit verdict because C# overrides the member. Settled here BY EXECUTION rather than by reading, per binding rule 5. ScrollBoxes.cs:23-30 returns `CanGenerateBundles(player) ? base.IsAllowedAtNeow(player) : false`. Both halves resolve to true for the only character the sim has: (a) CanGenerateBundles (ScrollBoxes.cs:50-60) needs >= 4 unlocked Commons AND >= 2 unlocked Uncommons in the character's pool, and the executed Ironclad pool has 20 Commons and 35 Uncommons (py tools/audit/relic_probes_b14.py scroll-neow); (b) `base.IsAllowedAtNeow` is `IsAllowed(player.RunState)` (RelicModel.cs:443-446) and ScrollBoxes does not override IsAllowed, so it is the default `true` (RelicModel.cs:434-437) -- which also means this unit is NOT part of sweep B's 17-relic IsBeforeAct3TreasureChest cluster and needs no is_allowed member to be correct. Executed confirmation that the flag has the intended effect: neow_relic_pool(run) contains 'scroll_boxes'. NOTE for the fix ordering PROMPT.md v6 binding item 2 raises: whoever adds `Relic.is_allowed(run)` must make is_allowed_at_neow DELEGATE to it, or this relic's correct-by-accident True becomes a stale flag the moment any override lands. Rule 7: relics/base.py, events/neow.py, cards/pool.py and RelicModel.cs are not hashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (scroll_boxes.py:15-52), dispatched by RunState.add_relic (run.py:552); the choose-a-bundle screen maps to run.select_option('bundle', 2) (scroll_boxes.py:50)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N4 per binding rule 4. The bundle SHAPE is faithful and executed -- 2 bundles, 2 Commons then 1 Uncommon each, all 6 distinct, drawn off PlayerRng.Rewards with NextItem-and-remove, and the Defect-only 1%-Claw arm correctly skipped -- but the port drops both of C#'s Hook.ModifyCardRewardCreationOptions dispatches (G1) and creates only the chosen bundle's cards instead of all six (N4)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): ScrollBoxes.cs:73 and :75 each run `Hook.ModifyCardRewardCreationOptions(player.RunState, player, options)`; the sim has no such hook anywhere",
+      "verdict": "gap",
+      "issue": "MECHANISM: the hook lets a listener rewrite the CardCreationOptions -- pool, rarity filter, flags -- before the candidate list is materialised, and ScrollBoxes calls it once per rarity (Common at line 73, Uncommon at line 75). `grep -rn ModifyCardRewardCreationOptions sts2_rl/` returns nothing, and the sweep-C survey already lists ModifyCardRewardCreationOptions among the dropped hooks that need a NEW base member rather than a one-relic fix. DORMANT, with the concrete unported things named: the game has four implementers -- DingyRug.cs:13 and PrismaticGem.cs:28 (relics) and BigGameHunter.cs:34 / CharacterCards.cs:44 (run modifiers, which the sim has no concept of). Of the two relics, prismatic_gem is ported but as a max-Energy relic only (its ModifyCardRewardCreationOptions arm is not implemented) and dingy_rug's port implements no card-reward hook, so today nothing in the sim would answer the dispatch even if it existed. Porting DingyRug's or PrismaticGem's option rewrite makes it live -- and note it would also affect the ORDER of Rewards draws, because a rewritten pool changes how many candidates NextItem indexes into. Rule 7: DingyRug.cs, PrismaticGem.cs, BigGameHunter.cs, CharacterCards.cs and .superpowers/sdd/content-relic-sweeps.md are not hashed here."
+    },
+    {
+      "what": "N1: the candidate pool -- C# uses `options.GetPossibleCards(player)` (ScrollBoxes.cs:76-77) and the sim uses `pool_card_ids()`, the COMBAT-filtered pool",
+      "verdict": "faithful",
+      "rationale": "Checked because it is the exact defect batch 16 of the conformance stream fixed elsewhere (reward pools must be the full GetUnlockedCards, not FilterForCombat, so Feed / NotYet can be offered). CardCreationOptions.GetPossibleCards applies only the CardPoolFilter -- here the rarity predicate -- over GetUnlockedCards, with no combat filter (CardCreationOptions.cs:168-177), so scroll_boxes.py:20-27 using pool_card_ids() (which drops can_be_generated_in_combat=False cards) is the WRONG pool in principle. It is nonetheless faithful in effect, and that was settled by execution rather than assumed (py tools/audit/relic_probes_b14.py scroll-boxes): for COMMON the two pools are both 20 ids and for UNCOMMON both 35, with an empty set difference in each case -- every ported card carrying can_be_generated_in_combat=False is Rare, and Scroll Boxes never asks for a Rare. It becomes a gap the moment any Common or Uncommon Ironclad card is ported with can_be_generated_in_combat=False, and the fix is one identifier (reward_pool_card_ids). Rule 7: cards/pool.py, cards/base.py and CardCreationOptions.cs are not hashed here."
+    },
+    {
+      "what": "N2: the draw sequence -- `rewards.NextItem(list3)` with `list3.Remove(pick)` and a cross-bundle `usedCardIds` set (ScrollBoxes.cs:88-101) vs scroll_boxes.py:36-49",
+      "verdict": "faithful",
+      "rationale": "Matched clause for clause: the sim's `used` set spans both bundles (line 36), the Common list is rebuilt as `[c for c in commons if c not in used]` before each of the two Common picks and the Uncommon list before the single Uncommon pick, and the picks come off `run.player_rng.rewards.next_item` when a parity rng_set is present (scroll_boxes.py:31-34) -- the same `Rng rewards = player.PlayerRng.Rewards` C# names on line 69. C# rebuilds list3 once per bundle and removes within it while the sim rebuilds per pick; both yield the same candidate set at every draw because `used` is updated at the same points, so the NextItem index space is identical. EXECUTED: the probe's run adds ['headbutt', 'setup_strike', 'expect_a_fight'] -- 2 Commons and 1 Uncommon, distinct. Rule 7: rng.py is not hashed here."
+    },
+    {
+      "what": "N3: the Defect-only `if (flag && rewards.NextInt(100) < 1)` 3x-Claw arm (ScrollBoxes.cs:70, :82-87), and GetCardPool's TestMode.IsOn/Deprived arm (lines 106-113)",
+      "verdict": "waiver",
+      "rationale": "The Claw arm is gated on `player.Character is Defect`, and the sim is Ironclad-only -- an other-character path, which the shared contract's rule 1 lists as genuine waiver material. Worth stating precisely because the gate is on the CHARACTER, not on the roll: `flag` is false for Ironclad, so C# never evaluates `rewards.NextInt(100)` at all and the sim's omission of that draw is correct rather than a missing stream consumption (the sim's comment at scroll_boxes.py:29-30 says the same). GetCardPool's other arm is the TestMode fork PROMPT.md class 18 warns about: TestMode.TurnOnInternal (TestMode.cs:38) is documented 'NEVER CALL THIS' with no caller under src/, so the shipping game always returns `character.CardPool` -- which is what the port implements. Rule 7: TestMode.cs is not hashed here."
+    },
+    {
+      "what": "N4: C# materialises ALL six cards through RunState.CreateCard before the screen (ScrollBoxes.cs:36-39); the sim builds only the chosen bundle's cards (scroll_boxes.py:51-52)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# needs real CardModels to display two bundles and calls CreateCard on all six; the sim keeps ids until the pick and then makes three. Same observable -- RunState.CreateCard consumes no RNG and the unchosen three are discarded on both sides -- so binding rule 2 is satisfied. Recorded rather than ignored because it is the one place a future card-creation side effect (a net-id counter, an AfterCreated hook that mutates the run, a discovered-cards ledger) would make the counts diverge; cards/spoils_map.py's AfterCreated is the shape to watch. Rule 7: cards/spoils_map.py is not hashed here."
+    },
+    {
+      "what": "N5: `CardSelectCmd.FromChooseABundleScreen` (ScrollBoxes.cs:40) is not skippable, and the sim's select_option has no skip either",
+      "verdict": "faithful",
+      "rationale": "The C# call has no canSkip argument (contrast LeadPaperweight.cs:24's `canSkip: true`), so the player must take one bundle; run.select_option(purpose, count) returns an index in range and cannot decline (run.py:392-398). Same choice space on both sides. Rule 7: run.py is not hashed here."
+    },
+    {
+      "what": "N6: `undo_after_obtained` is not implemented, and the pickup adds 3 cards to the run deck",
+      "verdict": "faithful",
+      "rationale": "The consequence, for the record: a conformance-runner relic swap leaves the three bundle cards in the deck. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+    },
+    {
+      "what": "N7: the relic holds no state; nothing to reset (PROMPT.md classes 10, 13)",
+      "verdict": "faithful",
+      "rationale": "ScrollBoxes.cs's only field is the `_clawBundleChancePercent` const (line 19); every method is static or stateless. scroll_boxes.py has no __init__. Read both files; sweep-reset's 'hold no state' bucket agrees but is not the basis."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

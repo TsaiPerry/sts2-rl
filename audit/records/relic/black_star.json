@@ -1,0 +1,36 @@
+{
+  "unit": "relic/black_star",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BlackStar.cs",
+    "sha256": "236a57f088df6306350579a36d3e9de80b705e12675eb6c9e18d82c9285c2e37"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\black_star.py",
+    "sha256": "827347f3ab55418fcbd2d482eaef272e2c1d3635cf607c6936ac7456fb5221dd"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (black_star.py:13)",
+      "verdict": "faithful"
+    },
+    "TryModifyRewards": {
+      "maps_to": "modify_combat_rewards (black_star.py:15-23)",
+      "verdict": "deliberate-divergence",
+      "rationale": "BlackStar.cs:7-19 appends a payload-less `new RelicReward(player)` to an Elite room's rewards, and the game rolls the actual relic when the player takes it off the screen. The sim pulls the relic immediately (run.pull_relic_from_front), grants it, and appends the granted object. Same observable: the sim's reward screen has no skip button for relics -- rewards.py:490-493's own elite branch grants its relic the same way, and the module comment at rewards.py:496-499 states the convention outright ('A hook that appends to rewards.relics grants them itself (run.add_relic), like the elite branch above'). So this port follows the sim's established reward architecture rather than diverging from it, and the RNG cost is the same single PullNextRelicFromFront draw on the Rewards stream. The Elite room filter matches (`room.RoomType != RoomType.Elite` vs `rewards.room_type != RoomType.ELITE`), and the relic stacks with the elite screen's own relic on both sides -- two relics from an elite, which is the point of the relic."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `player != base.Owner` and the null-room bail (BlackStar.cs:9-16)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `shuffler == base.Owner` / `cardPlay.Card.Owner != base.Owner` family is the multiplayer per-player filter on a hook the game dispatches for every player. The sim is single-player by construction (one RunState, one PlayerCombatState), so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: the relic is granted at SCREEN-GENERATION time in the sim and at TAKE time in C#, so a run that never opens the screen differs",
+      "verdict": "faithful",
+      "rationale": "The sim generates a reward screen only when a combat actually ends in victory, and every generated screen is resolved, so there is no path where the relic is pulled and then not granted. The one consumer that could tell the difference -- the conformance runner's relic parity check -- compares the relic LIST after the screen resolves, by which time both codebases agree."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

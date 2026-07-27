@@ -1,0 +1,56 @@
+{
+  "unit": "relic/paels_growth",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PaelsGrowth.cs",
+    "sha256": "0ff5728cf4d9cd9861c51329f795afd985521aa4b4136cb10e59f55cb1a52155"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\paels_growth.py",
+    "sha256": "1e9597d2278c55d09e942119f2df1df00f57c56d5cab173f2f52bc232d6d2871"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (paels_growth.py:14)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained(run) (paels_growth.py:18-25), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "PaelsGrowth.cs:22-29 selects 1 card via `CardSelectCmd.FromDeckForEnchantment(prefs: (EnchantSelectionPrompt, 1), player, enchantment: Clone, amount: 1)` then `CardCmd.Enchant<Clone>(item, 4m)`. FromDeckForEnchantment filters the deck pile on `enchantment.CanEnchant(c)` (CardSelectCmd.cs:547-551), which paels_growth.py:21 mirrors with `CloneEnchantment.can_enchant`; the count of 1 matches `run.select_cards(\"enchant\", candidates, 1)`. The applied amount is the literal 4m at line 26 -- note it is NOT the selection `amount: 1`, which is the number of CARDS -- and paels_growth.py:24 sets `enchantment.amount = self.CLONE_AMOUNT` with CLONE_AMOUNT = 4 (:16). No AscensionHelper.GetValueIfAscension in the file. CardCmd.Preview (line 27) is presentation."
+    },
+    "TryModifyRestSiteOptions": {
+      "maps_to": "modify_rest_site_options (paels_growth.py:27-48), dispatched over run.relics by the rest-site driver (Relic.modify_rest_site_options, relics/base.py:233-237)",
+      "verdict": "faithful",
+      "rationale": "PaelsGrowth.cs:31-39 appends a CloneRestSiteOption for its owner; the sim appends `RestSiteOption(\"CLONE\", clone)`, matching CloneRestSiteOption.OptionId (CloneRestSiteOption.cs:25). The option body matches too: C#'s OnSelect snapshots `Owner.Deck.Cards.Where(c => c.Enchantment is Clone).ToList()` (:44) and, per card, `RunState.CloneCard(item)` (:48) then `CardPileCmd.Add(card, PileType.Deck)` (:50). The sim snapshots the same set with a list comprehension (paels_growth.py:36-38), rebuilds, and appends with run.add_card -- which is the sim's CardPileCmd.Add-for-the-deck (it dispatches ModifyCardBeingAddedToDeck and AfterCardChangedPiles, run.py:341-354), so the egg relics still get their substitution pass. Deck placement matches: CardPileCmd.Add defaults to CardPilePosition.Bottom (CardPileCmd.cs:259) and run.add_card appends. `player != base.Owner` is structurally satisfied (single player). The clone fidelity itself is N1."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (sweep E hit, settled: NO observable at this site): `RunState.CloneCard` is `ClonePreservingMutability()` (RunState.cs:394-398; CardModel.cs:2168-2179) -- a full model clone -- while paels_growth.py:39-45 REBUILDS from the id and replays the upgrades (PROMPT.md bug class 17)",
+      "verdict": "faithful",
+      "rationale": "CONFIRMS-BY-NARROWING .superpowers/sdd/content-relic-sweeps.md sweep E, which lists relics/paels_growth.py:39 as one of five shallow-rebuild sites. A true clone carries upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers. At THIS site the input set is filtered to Clone-enchanted RUN-DECK cards, and each of the five is accounted for: upgrade level is replayed under an is_upgradable guard (paels_growth.py:40-42, so bug class 14 does not fire); the enchantment is re-created with the original's amount (:43-45), and a card holds at most one enchantment, so no other enchantment can be present; an affliction cannot be present at all, because run.create_combat deep-copies the deck into every combat (run.py:1136) and afflictions are applied to the combat copies; the only ported permanent keyword and cost edits are performed BY enchantments (enchantments.py:135-142, :289-296, :322-331), which the one-enchantment rule excludes. EXECUTED (`py tools/audit/relic_probes_b11.py growth-clone`): an upgraded, Clone(4)-enchanted Bash clones to `lvl=1 ench=clone/4 affl=None cost=2 exhausts=False`, identical to the original on every field, appended at the deck's end. So sweep E over-reports at this site -- reported in .superpowers/sdd/relic-batch-11-lessons.md, and the shared sweep is left untouched per the concurrency contract. NOTE per binding rule 7: the rationale leans on sts2_rl/run.py, sts2_rl/enchantments.py and sts2_rl/cards/base.py, none of which this record hashes."
+    },
+    {
+      "what": "N2: repeated use of the rest-site option DOUBLES the Clone set on both sides",
+      "verdict": "faithful",
+      "rationale": "C#'s clone carries the Clone enchantment by construction, so every copy is itself Clone-enchanted and the next visit duplicates twice as many cards; the sim re-attaches a Clone enchantment to each copy (paels_growth.py:43-45), reproducing the growth deliberately (its own comment says so). Checked because the alternative -- copies without the enchantment -- would look equally plausible and would quietly cap the relic at one doubling."
+    },
+    {
+      "what": "N3: Clone.cs is an inert enchantment (its own doc comment: 'doesn't actually do anything on its own')",
+      "verdict": "faithful",
+      "rationale": "CloneEnchantment (enchantments.py:508-515, not hashed here -- binding rule 7) is likewise behaviourless, so the marker semantics match and there is no dropped enchantment behaviour hiding behind the relic. Confirmed by reading Clone.cs in full (9 lines, no overrides)."
+    },
+    {
+      "what": "N4 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; no Rng stream is named or consumed",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's C# files returns no IsAllowed override, so sweep B's cluster excludes this unit. Neither AfterObtained nor CloneRestSiteOption.OnSelect draws an Rng -- the card choice is a player selection, not a roll -- so the sim's selector-based `run.select_cards` consumes no parity stream either, and there is no silent fallback to the legacy shared random.Random. Obtainability: Ancient, offered by the ported Pael shrine as OptionPool2's half-weight entry (Pael.cs:165 `list.Add(PaelsGrowthOption)` after `list.AddRange(list)`; mirrored at events/pael.py)."
+    },
+    {
+      "what": "N5: CloneRestSiteOption's DoLocalPostSelectVfx / DoRemotePostSelectVfx and CardCmd.PreviewCardPileAdd (CloneRestSiteOption.cs:52-72)",
+      "verdict": "waiver",
+      "rationale": "Screen shake, character shake and the relic-flash VFX are presentation; the sim has no rest-site UI. Shared contract's presentation/animation exclusion."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-26"
+}

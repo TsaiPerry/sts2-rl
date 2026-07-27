@@ -1,0 +1,57 @@
+{
+  "unit": "relic/sword_of_jade",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\SwordOfJade.cs",
+    "sha256": "26b124fec0f4564ea2ca63918f82bc9a52adaa2f869099d50b425998d63c2f6c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\sword_of_jade.py",
+    "sha256": "ed085f35e4fd4185061cefb4bcc871df0be63cc4340531d2e0d9e4e165e697f6"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (sword_of_jade.py:19)",
+      "verdict": "faithful",
+      "rationale": "SwordOfJade.cs:15 is RelicRarity.Event. EXECUTED (b15-pool): absent from the grab bag and named by no event -- the ONLY way to get it is relic/sword_of_stone replacing itself after five elite victories, which the b15-swords probe drives end to end (relics ['sword_of_stone'] -> ['sword_of_jade'] on the fifth elite). That matches the C# situation exactly (SwordOfStone.cs:48 is the only RelicCmd.Replace target for it), so binding rule 6's relic-side leg is satisfied via the chain. Event rarity also makes it untradable on both sides (relics/base.py:132-136)."
+    },
+    "AfterRoomEntered": {
+      "maps_to": "on_combat_start (sword_of_jade.py:22-29)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. The power, the amount and the target are right and executed; the hook SITE is one dispatch later than C#'s and the applier identity differs."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): the C# hook is AfterRoomEntered, which runs a full dispatch BEFORE Hook.BeforeCombatStart; the port uses on_combat_start",
+      "verdict": "gap",
+      "issue": "POOL-WIDE SHAPE (executed census, py tools/audit/relic_probes_b15.py b15-censuses): TWELVE ported relics whose C# combat effect hangs off `AfterRoomEntered` with a `room is CombatRoom` test are mapped onto the sim's on_combat_start -- bronze_scales, ember_tea, ghost_seed, girya, gorget, oddly_smooth_stone, philosophers_stone, red_skull, stone_cracker, sword_of_jade, throwing_axe, vajra -- and the sim's on_combat_start IS Hook.BeforeCombatStart, which is ONE DISPATCH LATER: CombatRoom.cs:228 fires Hook.AfterRoomEntered right after CombatManager.SetUpCombat (CombatManager.cs:350-376, which has already cloned and shuffled the draw pile via Player.PopulateCombatState, Player.cs:802-811), and only then does AfterCombatRoomLoaded -> StartCombatInternal reach Hook.BeforeCombatStart (CombatManager.cs:380-403). So C# guarantees that EVERY AfterRoomEntered relic acts before EVERY BeforeCombatStart relic, and the sim flattens both groups into one listener walk in relic-list order. This is PROMPT.md bug class 20 (right hook, wrong SITE) crossed with class 25 (a two-pass ordering guarantee destroyed by a single walk). AT THIS SITE what moves is a +3 Strength application: in C# it is guaranteed to land before every BeforeCombatStart listener, and in the sim it lands somewhere inside the single on_combat_start pass at a position decided by relic-list (acquisition) order. REACHABILITY (DORMANT, executed census): the only sim combat-start listeners that touch powers at all are the AfterRoomEntered-side relics themselves (bronze_scales, girya, gorget, oddly_smooth_stone, vajra -- all on the SAME side of the collapse, so their relative order is preserved) plus snecko_eye/fake_snecko_eye on the BeforeCombatStart side, which apply ConfusedPower and neither read nor scale with Strength. Nothing ported READS the player's Strength at combat start, and relic/ruined_helmet -- the one relic whose behaviour depends on WHICH Strength gain comes first -- has no competing combat-start Strength source to be re-ordered against (Brimstone and Demon Form are turn-start). No two combat-start relics on opposite sides of the collapse share an RNG stream either. What makes it live: porting a BeforeCombatStart relic or power that grants or reads Strength, or one that draws from a stream an AfterRoomEntered relic also uses. The same guard on relic/stone_cracker in this batch carries the same verdict for the same census (binding rule 3)."
+    },
+    {
+      "what": "N1: C# passes applier = NULL (SwordOfJade.cs:25); the port passes applier=self.player (sword_of_jade.py:26-29)",
+      "verdict": "faithful",
+      "rationale": "A real argument difference, checked rather than waved through because the applier identity is load-bearing elsewhere: relic/unsettling_lamp's doubling requires `applier is self.player and target is not self.player` (unsettling_lamp.py:47) and relic/red_skull, RitualPower and the Possess powers all branch on it. EXECUTED census (py tools/audit/relic_probes_b15.py b15-swords, `git grep 'applier is'`): the sim has exactly four applier-branching listeners plus two docstrings -- powers.py:195 (RitualPower's `applier is not None and applier.side != owner.side` skip-first, which only fires when the power BEING applied is Ritual), powers.py:1167 (Vulnerable-only), powers.py:3094 (the Possess family's `applier is self.owner` on a NEGATIVE delta to a player-side target) and unsettling_lamp.py:47. Every one of them is unreachable for a self-targeted positive StrengthPower with applier=player: the Lamp bails because the target IS the player, Possess needs delta < 0 and applier == an enemy, Ritual needs the applied power to be Ritual, and the Vulnerable branch needs Vulnerable. relic/ruined_helmet -- the one relic that could plausibly care, since it doubles the first Strength gain -- ignores applier entirely (ruined_helmet.py:23-38 checks only power_cls, target and amount > 0), so it doubles the Jade's +3 identically either way. So the observable is unchanged today; recorded as faithful with the residual named -- any future applier-sensitive Strength listener would see a player applier where C# sees none. Rule 7: powers.py and relics/ruined_helmet.py are not hashed here."
+    },
+    {
+      "what": "N2: PowerVar<StrengthPower>(3m) read as BaseValue (SwordOfJade.cs:17, 25) vs STRENGTH = 3 (sword_of_jade.py:20)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in SwordOfJade.cs, so 3 is the pinned non-ascension value. Re-read against the C# expression per PROMPT.md bug class 19 even though the port names it in a comment. EXECUTED (b15-swords): a combat with the relic opens at Strength(3). cardSource is null on both sides (the sim omits the card argument entirely), which is what keeps the Lamp out of it."
+    },
+    {
+      "what": "N3: `room is CombatRoom` (SwordOfJade.cs:23) vs on_combat_start firing for every combat the sim builds",
+      "verdict": "faithful",
+      "rationale": "The port's own docstring makes the claim ('the sim fires on_combat_start for every combat room type, so the hook maps there') and it holds: CombatState.__init__ fires hooks.on_combat_start() unconditionally (combat.py:208) and every RunState combat path -- Monster, Elite, Boss and the combat events -- goes through it, which is the same set as `room is CombatRoom`. The non-combat AfterRoomEntered rooms (EventRoom.cs:80, MerchantRoom.cs:68, RestSiteRoom.cs:37, TreasureRoom.cs:44) are excluded on both sides. Distinct from relic/sling_of_courage, whose C# AfterRoomEntered additionally filters RoomType.Elite and which therefore needs the run's room_type; this relic needs no such filter."
+    },
+    {
+      "what": "N4: no state, no reset hook, no IsAllowed override; and the fact that AfterObtained is NOT overridden even though the relic arrives mid-run via RelicCmd.Replace",
+      "verdict": "faithful",
+      "rationale": "SwordOfJade.cs declares no field and no AfterObtained; sword_of_jade.py adds nothing to __init__ and inherits the base no-op after_obtained. That matters because relic/sword_of_stone's port calls `jade.after_obtained(run)` directly (sword_of_stone.py:42) to mirror RelicCmd.Obtain's AfterObtained dispatch (RelicCmd.cs:53) -- with no override on either side that call is correctly a no-op, so the swap grants no hidden effect. PROMPT.md bug classes 13 and 16 cannot apply (no state, no IsAllowed), and `sweep-reset` / `sweep-isallowed` list the relic in no bucket -- confirmed by reading both files in full."
+    },
+    {
+      "what": "N5: CanonicalVars / ExtraHoverTips (SwordOfJade.cs:17, 19)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

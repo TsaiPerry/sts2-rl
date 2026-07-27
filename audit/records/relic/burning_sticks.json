@@ -1,0 +1,71 @@
+{
+  "unit": "relic/burning_sticks",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BurningSticks.cs",
+    "sha256": "7c01f7308ea8d12a84161c069c669dbdadc18fb48ef5f551a5d9adcfbe3e8cf9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\burning_sticks.py",
+    "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (burning_sticks.py:18)",
+      "verdict": "faithful"
+    },
+    "AfterRoomEntered": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "The FIRST of C#'s two resets: BurningSticks.cs:33-42 clears WasUsedThisCombat on entering any CombatRoom. The sim implements neither this nor the AfterCombatEnd twin. Carries guard G1's LIVE label. Note the sim DOES have a run-level dispatch that could host it -- Relic.after_room_entered (relics/base.py) -- so this is a dropped hook, not a missing pipeline."
+    },
+    "AfterCardExhausted": {
+      "maps_to": "on_card_exhausted (burning_sticks.py:24-33)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G3 per binding rule 4. The trigger logic matches (first Skill exhausted, clone to hand), but the relic fires in the first combat of a run only (G1) and the copy it makes is a fresh card by id rather than C#'s CardModel.CreateClone (G3)."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart",
+      "verdict": "gap",
+      "issue": "The SECOND reset (BurningSticks.cs:56-61). Recorded separately from AfterRoomEntered because C# is deliberately redundant here and the sim has neither; with both missing the flag latches for the whole run. Exactly the relic/belt_buckle shape. Carries G1's LIVE label."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `_used_this_combat` is never reset, so Burning Sticks works in the first combat of a run only",
+      "verdict": "gap",
+      "issue": "MECHANISM: burning_sticks.py:22 initialises _used_this_combat = False in __init__ (once per RUN, when RunState.add_relic constructs the relic) and burning_sticks.py:29 sets it True on the first Skill exhaust. Nothing sets it back. Relic instances live on RunState.relics and are re-attached to every new CombatState, so combat 2 onward enters on_card_exhausted with the flag already True and returns immediately. C# clears it in TWO places -- BurningSticks.cs:39 (AfterRoomEntered on any CombatRoom) and :58 (AfterCombatEnd). REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes.py batch3`): the same relic instance carried into a second CombatState reports `combat 1: _used_this_combat=True copy added to hand=1` then `combat 2: _used_this_combat=True copy added to hand=0`, where C# adds a copy in both. Both sides ported: the relic is Shop rarity in the transcribed grab bag (relic_pools.py 'RELIC.BURNING_STICKS', confirmed by `py tools/audit/relic_probes.py batch3-pool`), Skills exhaust constantly, and every run has more than one combat. This is the third confirmed instance of the shape after relic/belt_buckle and relic/centennial_puzzle; the pool-wide list is in .superpowers/sdd/content-relic-sweeps.md sweep A and the fix is the same one line (clear the flag in on_combat_start)."
+    },
+    {
+      "what": "G3 (LIVE): the copy is rebuilt from the card id, where C# clones the actual card instance",
+      "verdict": "gap",
+      "issue": "MECHANISM: BurningSticks.cs:49 calls `card.CreateClone()`, which is `CardScope.CloneCard(this)` -> `ClonePreservingMutability()` (CardModel.cs:2168-2179; CombatState.cs:188-193) -- a full model clone that carries the card's upgrade level, its enchantment, its affliction, its keyword edits and its local energy-cost modifiers. burning_sticks.py:30-32 builds `make_card(card.id)` and replays `card.upgrade_level` upgrades, so ONLY the upgrade level survives. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes.py batch3`): an enchanted Defend reports `original.enchantment=Swift  clone.enchantment=None`. Both sides ported, and by two independent routes: (a) Swift is attached to deck cards by relic/beautiful_bracelet (Ancient, ported, relics/beautiful_bracelet.py:22-29) and the sim's enchantment layer is live (enchantments.py); (b) afflictions are applied to cards IN HAND by ported enemy powers -- Ringing, Entangled, Smog, Tainted and Galvanized all call CardCmd.afflict from powers.py (:1332, :1477, :1742, :2420, :3022) -- so a single combat with no second relic can put per-instance state on a Skill that is then exhausted. Route (b) also makes this reachable in the very combat that applies the state. POOL-WIDE: this is a SHAPE, not a one-off -- every sim port of CreateClone/CreateDupe/CloneCard uses the same shallow rebuild (relics/burning_sticks.py:30, relics/music_box.py:46, relics/paels_growth.py:39, cards/trash_heap_cards.py:18-24 which is Dual Wield's copier, powers.py:827). `py tools/audit/relic_probes.py sweep-clone` enumerates it and the triage is in .superpowers/sdd/content-relic-sweeps.md sweep E."
+    },
+    {
+      "what": "G2: sweep-upgrade flags burning_sticks.py:24 as an unguarded `Card.upgrade()` (PROMPT.md bug class 14) -- settled by execution as a false positive",
+      "verdict": "faithful",
+      "rationale": "The call is `for _ in range(card.upgrade_level): clone.upgrade()`, so the loop count is the ORIGINAL's own upgrade level and the clone is the same card id with the same max_upgrade_level -- it can never be pushed past a level the original legitimately holds, which is exactly what C#'s CardCmd.Upgrade IsUpgradable check (CardModel.cs:785-789) prevents. On top of that the relic only ever clones Skills (burning_sticks.py:25 `card.card_type != CardType.SKILL`). EXECUTED (`py tools/audit/relic_probes.py batch3`): the max_upgrade_level==0 population is {CURSE: 18, STATUS: 14, QUEST: 3} and `SKILL cards with max_upgrade_level==0: []`. Recorded rather than dropped because content-relic-sweeps.md sweep D lists this site as unaudited batch work; it is now cleared."
+    },
+    {
+      "what": "G4: `card.Owner == base.Owner` (BurningSticks.cs:46)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `card.Owner != base.Owner` / `participants.Contains(base.Owner.Creature)` family is the multiplayer per-player filter on a hook the game dispatches for every player (and, for the participants form, also admits pets). The sim is single-player by construction (one RunState, one PlayerCombatState) and models no pet creature, so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N1: `causedByEthereal` (BurningSticks.cs:44) has no sim parameter",
+      "verdict": "faithful",
+      "rationale": "Neither codebase reads it here -- C# names the parameter and ignores it, and the sim's on_card_exhausted(card) has no such argument. Checked because relic/charons_ashes in the same batch also takes and ignores it (`bool _`), so an ethereal exhaust triggers both relics on both sides."
+    },
+    {
+      "what": "N2: C# sets WasUsedThisCombat AFTER AddGeneratedCardToCombat (BurningSticks.cs:50-52); the sim sets it BEFORE (burning_sticks.py:29-33)",
+      "verdict": "faithful",
+      "rationale": "The ordering only matters under re-entrancy: if adding the clone could itself exhaust a Skill, C# would recurse once and the sim would not. CardPileCmd.add_to_hand (cmds.py:500-514) appends and fires _enter_combat; no ported on-enter effect exhausts a card, so the two orderings are indistinguishable today -- and the sim's is the safer one. Recorded because the flag is the same field guard G1 is about."
+    },
+    {
+      "what": "N3: Flash(), base.Status = RelicStatus.Active/Normal and ExtraHoverTips (BurningSticks.cs:31, 40, 48, 51, 59)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,81 @@
+{
+  "unit": "relic/lizard_tail",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\LizardTail.cs",
+    "sha256": "76084bfb5a0e4d4a24605204176af9d0639b08d818df8038639c0825f76aa537"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\lizard_tail.py",
+    "sha256": "f8aaa651db2976dba3b1b3c3ce57cb5ecd79122742cf82ce10d98b0d30346ab6"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE (lizard_tail.py:22)",
+      "verdict": "faithful"
+    },
+    "IsUsedUp": {
+      "maps_to": "is_used_up property (lizard_tail.py:31-33)",
+      "verdict": "faithful",
+      "rationale": "LizardTail.cs:18 is `IsUsedUp => _wasUsed`; lizard_tail.py:31-33 is `return self._used`. Correct and load-bearing: Relic.is_tradable (relics/base.py:126-136) refuses a used-up relic, so a spent Lizard Tail stops being offerable to the trade events on both sides, and Rare rarity does not otherwise exclude it. The Status = RelicStatus.Disabled the C# setter also performs (LizardTail.cs:33-37) is presentation (N4). The LIFETIME is per-RUN, not per-combat, on both sides -- [SavedProperty] on WasUsed (LizardTail.cs:22) means it survives a save, and `self._used` is set in __init__ and never reset. `py tools/audit/relic_probes.py sweep-reset` lists lizard_tail among the never-reset candidates whose C# relic has NO combat-boundary reset, which is exactly the evidence that per-run is intended; the sim's own docstring (lizard_tail.py:15) says 'once per combat' and is WRONG, but the code is right. Note that means the port's docstring is the only thing to fix in this member. Rule 7: relics/base.py are not hashed by this record."
+    },
+    "ShouldDieLate": {
+      "maps_to": "should_die (lizard_tail.py:35-40), dispatched by HookSystem.should_die (hooks.py:582-594) from DamageCmd.deal (cmds.py:90-113) and CreatureCmd.kill (cmds.py:192-207)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G3 and G4 per binding rule 4. The predicate itself is transcribed correctly -- veto only for the owner's creature, and only while not already used -- but (a) the sim collapses C#'s ShouldDie/ShouldDieLate two-pass priority into one flat pass, and Lizard Tail is the game's ONLY ShouldDieLate override, so it now competes with Fairy in a Bottle instead of deferring to it (G4, LIVE); and (b) the port SETS `_used` and `_heal_pending` inside should_die, where C# sets WasUsed in AfterPreventingDeath -- so any caller that uses should_die as a pure predicate burns the relic (G3, LIVE)."
+    },
+    "AfterPreventingDeath": {
+      "maps_to": "NOT after_preventing_death; the port instead latches `_heal_pending` in should_die and heals from on_damage_received (lizard_tail.py:42-53)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. LizardTail.cs:53-59 heals `Math.Max(1, MaxHp * HealVar(50)/100)` in AfterPreventingDeath. The sim HAS that hook -- HookSystem.after_preventing_death (hooks.py:596-601), dispatched by DamageCmd.deal at cmds.py:113 with the vetoing listener, and relics'/potions' sibling potions.py:1242-1249 uses it -- and the port declines it, choosing on_damage_received instead. That choice produces three separate divergences: the heal is 1 HP too high (G1, LIVE), it is lost entirely on the CreatureCmd.kill and ad-hoc should_die paths that fire no on_damage_received (G2, LIVE), and the relic can be spent with no heal at all (G3, LIVE). Rule 7: hooks.py, cmds.py and potions.py are not hashed by this record."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the heal is ONE HP too high -- the sim heals BY 50% of Max HP from the death-prevention floor of 1, where C# heals from 0",
+      "verdict": "gap",
+      "issue": "MECHANISM: C#'s Kill leaves CurrentHp at 0 when a listener prevents the death (the `else` arm at src/Core/Commands/CreatureCmd.cs does NOT restore HP), and AfterPreventingDeath then heals `Math.Max(1m, (decimal)MaxHp * (50m/100m))` -- so the player lands on exactly 50% of Max HP. The sim's DamageCmd.deal floors a prevented death at `target.hp = 1` (cmds.py:109-113, with its own comment explaining the substitution) and lizard_tail.py:53 heals BY `max(1, self.player.max_hp * self.HEAL_PCT // 100)` on top of that. EXECUTED (py tools/audit/relic_probes_b08.py b08-lizard): a lethal hit at max_hp 80 leaves hp=41 where C# gives 40; at max_hp 81, hp=41 where C# gives 40 -- the floor-division and C#'s `(int)` truncation of `CurrentHp + amount` agree, so the ONLY error is the extra 1. At max_hp 1 both give 1 (the max-HP cap masks it). REACHABILITY (LIVE): Lizard Tail is Rare in the transcribed grab bag (b08-pool), and the trigger is dying with it -- nothing further is needed. THE SIBLING GETS IT RIGHT, which is what makes this a defect rather than a house style: potions.py:1256 heals `heal_to - creature.hp`, explicitly compensating for the same 1-HP floor and saying so in its docstring. The observable is player HP, which conformance/runner.py asserts at act boundaries (DETECTOR 3). Rule 7: src/Core/Commands/CreatureCmd.cs, cmds.py, potions.py and conformance/runner.py are not hashed by this record."
+    },
+    {
+      "what": "G2 (LIVE): on the CreatureCmd.kill path the heal never happens -- the relic is spent, the player is left at 1 HP, and the pending heal fires on the NEXT damage instead",
+      "verdict": "gap",
+      "issue": "MECHANISM: the port routes its heal through on_damage_received, so it depends on that event firing after the veto. CreatureCmd.kill (cmds.py:192-207) calls `hooks.should_die(target)` with NO preventer list, never calls after_preventing_death, and fires no on_damage_received at all -- it just sets `target.hp = 1`. C#'s Kill runs BeforeDeath -> ShouldDie -> ShouldDieLate -> AfterPreventingDeath, so the heal happens on that path too. EXECUTED (py tools/audit/relic_probes_b08.py b08-lizard): kill at 40/80 leaves hp=1, _used=True and _heal_pending=True (C#: hp 40); one further point of damage then leaves the player at hp=0 and DEAD, because the stale _heal_pending never got to fire and the second death is not vetoed. REACHABILITY (LIVE, both sides ported): two ported effects call CreatureCmd.kill on the PLAYER -- SandpitPower (powers.py:2619), The Insatiable's devour timer (monsters/hive/the_insatiable.py, an act-2 encounter), and TheGambitPower (powers.py:3829), applied by the ported card cards/colorless_skills.py:772, whose id `the_gambit` is in COLORLESS_POOL (executed: True) and is therefore offerable by relic/lead_paperweight in this same batch. A THIRD path is worse: cards/breakthrough.py:49 calls `ctx.hooks.should_die(p)` after its own hand-rolled 1-HP self-loss with no HP floor at all, so EXECUTED, playing Breakthrough (an IRONCLAD_POOL card -- executed: True) at 1 HP with Lizard Tail held ends the combat with hp=0, is_dead=True and the Tail marked used, where C# prevents the death and heals to 40. The relic silently fails and the run ends. Rule 7: cmds.py, powers.py, monsters/hive/the_insatiable.py, cards/colorless_skills.py, cards/breakthrough.py and cards/pool.py are not hashed by this record."
+    },
+    {
+      "what": "G3 (LIVE): the port sets `_used` inside should_die, where C# sets WasUsed in AfterPreventingDeath -- so a should_die call that is only a PREDICATE burns the relic",
+      "verdict": "gap",
+      "issue": "MECHANISM: LizardTail.ShouldDieLate (LizardTail.cs:40-51) is pure -- it reads WasUsed and returns -- and the charge is spent in AfterPreventingDeath (line 56). lizard_tail.py:35-39 mutates `self._used = True` and `self._heal_pending = True` inside the predicate. Every sim caller that queries should_die without going on to run the prevention path therefore consumes the relic for nothing. EXECUTED (b08-lizard): cards/breakthrough.py:49's `if p.hp <= 0 and ctx.hooks.should_die(p)` is exactly that shape -- the veto makes the `if` false, so breakthrough does nothing at all: no HP floor, no after_preventing_death, no on_damage_received -- and the player is left at hp=0 with _used=True. CreatureCmd.kill (cmds.py:192-207) is the second such caller. This is the SAME mechanism audits/seam/damage_pipeline.json guard G4 describes from the other side (the killing-blow AfterDamageReceived skip that the port relies on), and that record explicitly notes the port 'relies on this on_damage_received re-fire to perform its heal'. What it does not record, and this entry does, is that the reliance also puts the CHARGE in the wrong place. FIX-ORDERING CONSTRAINT: moving the heal to after_preventing_death (which exists, hooks.py:596-601) fixes G1, G2 and G3 together, but it also means DamageCmd.deal must pass a preventer list on every path -- CreatureCmd.kill currently does not. Rule 7: cmds.py, cards/breakthrough.py, hooks.py and audits/seam/damage_pipeline.json are not hashed by this record."
+    },
+    {
+      "what": "G4 (LIVE): C#'s ShouldDie/ShouldDieLate two-pass priority is collapsed to one flat pass, so the sim can spend Lizard Tail while Fairy in a Bottle is held -- correcting audits/seam/damage_pipeline.json guard N4's 'currently inert'",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.ShouldDie (src/Core/Hooks/Hook.cs) runs EVERY listener's ShouldDie in a first full pass and only then every listener's ShouldDieLate in a second. A census of the game source finds exactly one non-mock override of each: FairyInABottle.cs:33 (early) and LizardTail.cs:40 (late). The two-pass structure therefore has exactly one purpose -- the Fairy is always spent before the Tail. HookSystem.should_die (hooks.py:582-594) is a single flat loop that returns on the first veto, so registration order decides. EXECUTED (py tools/audit/relic_probes_b08.py b08-lizard): with the Tail on the run's relics and a Fairy in the belt, the listener order is ['LizardTail', 'FairyInABottle'], a lethal hit spends the TAIL (used=True) and leaves the fairy_in_a_bottle in the belt, ending at hp=41; C# spends the Fairy, heals to 30% of Max HP (24 at 80) and keeps the Tail for later. Both the HP and which consumable was spent diverge. SCOPE NOTE: the shared contract defers potions, but the divergent observable is a RELIC charge that is permanent for the run -- so this is filed as a gap, not waived, on the same basis as audits/relic/belt_buckle.json's potion-triggered Dexterity finding: the potion is only the other participant. CROSS-RECORD DISAGREEMENT (binding rule 3, reported not edited): audits/seam/damage_pipeline.json guard N4 calls this collapse 'currently inert'. It is not -- Fairy in a Bottle is ported (potions.py) and its should_die vetoes for any player-side creature. The other three sim should_die implementers (IllusionPower powers.py:1566, SteamEruptionPower powers.py:2016, AdaptablePower powers.py:3365) all guard `creature is self.owner` on enemies, so they genuinely cannot collide -- which is presumably how N4 reached 'inert'. Rule 7: src/Core/Hooks/Hook.cs, hooks.py, potions.py, powers.py and audits/seam/damage_pipeline.json are not hashed by this record."
+    },
+    {
+      "what": "N1 (DORMANT): the port fires its heal from on_damage_received, which C# does NOT fire on a hit that was arithmetically lethal",
+      "verdict": "gap",
+      "issue": "C# decides whether to fire AfterDamageReceived from the pre-Kill snapshot (`!WasTargetKilled || !IsDead`) and never revisits it, so a hit that reduced the creature to 0 permanently skips AfterDamageReceived even when a listener later prevents the death; the sim floors HP to 1 inside DamageCmd.deal and only then tests `not target.is_dead` (cmds.py:109-113 then the post-damage events), so on_damage_received DOES fire. That is audits/seam/damage_pipeline.json guard G4 verbatim, which already labels it LIVE and names this relic plus relic/centennial_puzzle as its witness pair -- one verdict per mechanism, binding rule 3, and no re-derivation here. What belongs in THIS record is the dependency direction: Lizard Tail's port is BUILT ON the divergence, so fixing damage_pipeline G4 to match C# would stop the relic healing at all. FIX-ORDERING CONSTRAINT for the gap-fix stream, of the same kind audits/relic/anchor.json records against turn_structure G1: move the heal to after_preventing_death (guards G1-G3) BEFORE closing damage_pipeline G4, or the relic silently becomes a no-op. Marked dormant AT THIS UNIT only in the sense that no additional trigger is needed to expose it -- the seam record owns the live label. Rule 7: cmds.py, audits/seam/damage_pipeline.json and audits/relic/anchor.json are not hashed by this record."
+    },
+    {
+      "what": "N2: the heal ARITHMETIC -- `Math.Max(1m, (decimal)MaxHp * (HealVar(50).BaseValue / 100m))` (LizardTail.cs:57) vs `max(1, self.player.max_hp * self.HEAL_PCT // 100)` (lizard_tail.py:53)",
+      "verdict": "faithful",
+      "rationale": "Verified rather than assumed, because a decimal-vs-integer rounding slip here would be invisible. No AscensionHelper.GetValueIfAscension in the file, so HealVar(50) is the pinned non-ascension value and BaseValue is the contract's read. C# keeps the half in decimal and truncates only when CurrentHp is assigned -- SetCurrentHpInternal is `CurrentHp = (int)Math.Min(amount, MaxHp)` -- and because CurrentHp is an integer, truncating `hp + 40.5` gives the same result as adding `floor(40.5)`. So `max_hp * 50 // 100` is the right integer form for every max HP, EXECUTED at 80, 81 and 1 (b08-lizard). The `Math.Max(1, ...)` floor also matches: at max_hp 1 C# heals 1 and the sim heals max(1, 0) = 1. The 1-HP discrepancy G1 records comes from the STARTING HP, not from this expression. Rule 7: src/Core/Entities/Creatures/Creature.cs are not hashed by this record."
+    },
+    {
+      "what": "N3: `if (creature != base.Owner.Creature) return true;` (LizardTail.cs:42-45) vs `if creature is self.player and not self._used` (lizard_tail.py:36)",
+      "verdict": "faithful",
+      "rationale": "Both allow every non-owner death unconditionally and both require the relic unspent, so the two predicates partition identically. The sim compares against `self.player` (the PlayerCombatState's creature) rather than an owner reference, which coincides in a single-player sim with one player creature; a player-side minion would be a difference, and the sim has no content for one (CombatState holds one player and an enemy list) -- the same half-guard relic/unsettling_lamp G3 records for its side-vs-identity comparison."
+    },
+    {
+      "what": "N4: Flash(), the `base.Status = RelicStatus.Disabled` in the WasUsed setter, and CanonicalVars(HealVar(50m)) (LizardTail.cs:20, 33-37, 55)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / DoActivateVisuals / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / TaskHelper.RunSafely of a visuals task are presentation only -- the relic bar's glow, counter, sfx, icon variant and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "N5: no BeforeCombatStart / AfterCombatEnd reset on either side, and the sim's `_heal_pending` survives a combat",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 13's reader trace. `_used` is correctly per-run (see IsUsedUp). `_heal_pending` is the sim's own invention and IS carried across a combat boundary -- `py tools/audit/relic_probes.py sweep-reset` lists both fields as never reset -- but it cannot latch harmfully once G2 is fixed, and today its only reader is on_damage_received on the player, whose worst case is the DELAYED heal G2 already records with executed evidence. So the missing reset is not an independent defect; it is a symptom of the G2 mechanism, and the fix for G2 (heal from after_preventing_death) removes the field entirely. Recorded rather than filed so that the sweep's hit on this relic is closed rather than left open."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

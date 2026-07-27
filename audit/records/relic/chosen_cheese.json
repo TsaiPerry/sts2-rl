@@ -1,0 +1,56 @@
+{
+  "unit": "relic/chosen_cheese",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ChosenCheese.cs",
+    "sha256": "cbf74c424e68ccc4178e0379dd2ab26b22e3e289ac6f60eeffc7093c0eb3aa9a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\chosen_cheese.py",
+    "sha256": "67907b12c7831727ff42e1b670818565a98d0b39febe8860ba1bb28361cd89b5"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (chosen_cheese.py:15)",
+      "verdict": "faithful"
+    },
+    "AfterCombatEnd": {
+      "maps_to": "on_combat_end (chosen_cheese.py:19-26)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The +1 Max HP, the heal that accompanies it and the run-level propagation are all faithful and executed; what diverges is the hook -- C#'s AfterCombatEnd is a victory-only event that runs after a revive step, and the sim's on_combat_end is one collapsed callback fired on wins and losses alike."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): AfterCombatEnd and AfterCombatVictory are one sim hook, and the sim has no ReviveBeforeCombatEnd",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# reaches AfterCombatEnd and AfterCombatVictory only through EndCombatInternal (CombatManager.cs:970-999), which is the VICTORY path; a loss goes LoseCombat -> _pendingLoss -> ProcessPendingLoss (CombatManager.cs:945-965, 1046-1052) and fires NO hook at all. EndCombatInternal also runs `await player.ReviveBeforeCombatEnd()` (Player.cs:821-827, heal-to-1) before either hook. The sim collapses both hooks into one `on_combat_end(player_won)` (combat.py:347-350) and has no revive step. audits/seam/turn_structure.json step 71 / guard G10 already verdicts this mechanism a gap and labels it DORMANT, and names this exact relic file as one of the four ported on_combat_end listeners it read to establish the dormancy. One verdict per mechanism (binding rule 3): this record cites it and does not re-derive it. Rule 7: CombatManager.cs, Player.cs and sts2_rl/combat.py are NOT hashed by this record. WHAT WOULD MAKE IT LIVE for this relic: any sim path that reaches on_combat_end with the player alive on a LOSS (C# would fire nothing and grant no Max HP), or one that reaches a WIN with the player dead where C# would have revived to 1 HP and granted the point. Guard N1 shows by execution that neither is reachable today."
+    },
+    {
+      "what": "N1: chosen_cheese.py:20 adds an `if self.player.is_dead: return` guard that ChosenCheese.cs does not have",
+      "verdict": "faithful",
+      "rationale": "The port's own docstring calls this 'the victory path is the only one that matters', which is a claim about the sim and therefore checked rather than trusted (PROMPT.md bug class 12). It holds, from both directions. C# side: AfterCombatEnd is reached only from EndCombatInternal, which CheckWinCondition calls only on the IsEnding (victory) branch; a loss takes ProcessPendingLoss and fires no hook (CombatManager.cs:1046-1057, 945-965). Sim side: every one of the seven `_end_combat(player_won=False)` call sites is itself gated on `self.player.is_dead` (combat.py:309, 368, 420, 438, 558, 615, 685), so the sim never reaches on_combat_end(False) with a living player and the added guard suppresses exactly the calls C# never makes. Same observable, reached by a different mechanism."
+    },
+    {
+      "what": "N2: `CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue)` (ChosenCheese.cs:19) vs `self.player.max_hp += 1` followed by `CreatureCmd.heal(hooks, player, 1)` (chosen_cheese.py:25-26)",
+      "verdict": "faithful",
+      "rationale": "GainMaxHp is SetMaxHp followed by Heal of the same delta (CreatureCmd.cs:786-799), which is what the two inlined lines do -- and the sim even has the packaged version, CreatureCmd.gain_max_hp (cmds.py:169-177), doing precisely this. The heal half matters: without it the relic would raise the cap without filling it. Heal runs no hook chain in either codebase (CreatureCmd.cs:691-703), so the inlining loses nothing. Rule 7: CreatureCmd.cs and cmds.py are not hashed here."
+    },
+    {
+      "what": "N3: the Max HP must survive the combat -- combat-state max_hp vs the run's",
+      "verdict": "faithful",
+      "rationale": "The relic writes to `self.player.max_hp`, which is the PlayerCombatState's copy; a relic whose whole payoff is permanent Max HP is worthless if that copy is discarded. RunState.finish_combat syncs it back (`self.max_hp = combat.player.max_hp`, run.py:1178). EXECUTED (`py tools/audit/relic_probes.py batch3`): a run with the relic goes `run max_hp/hp (80, 80) -> (81, 81)` across a won combat, matching C#. Checked because batch 1's relic/big_mushroom failed the analogous question and lost 20 Max HP on the add_relic path. Rule 7: run.py is not hashed here."
+    },
+    {
+      "what": "N4: `MaxHpVar(1m).BaseValue` (ChosenCheese.cs:14, 19) vs `MAX_HP = 1` (chosen_cheese.py:17)",
+      "verdict": "faithful",
+      "rationale": "1, with no AscensionHelper call in the file."
+    },
+    {
+      "what": "N5: Flash() and CanonicalVars (ChosenCheese.cs:14, 18)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

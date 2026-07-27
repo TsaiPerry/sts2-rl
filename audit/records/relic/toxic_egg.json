@@ -1,0 +1,77 @@
+{
+  "unit": "relic/toxic_egg",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ToxicEgg.cs",
+    "sha256": "5199ee81e31f3273550d0fddf884df69a6d876df34c3b94f5105c5e946701d60"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\toxic_egg.py",
+    "sha256": "59e7bb9098485e8e0427dd8e1b66fb07a24d8ec054ce963d377513792270db74"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.RARE, inherited from EggRelic (_eggs.py:28)",
+      "verdict": "faithful",
+      "rationale": "ToxicEgg.cs:14. Executed: Rare in the transcribed grab bag (relic_pools.py:144 'RELIC.TOXIC_EGG'), `py tools/audit/relic_probes_b16.py pool`. Rule 7: relics/_eggs.py is the shared base this port's whole behaviour lives in and it is NOT hashed by this record -- every hook entry below leans on it."
+    },
+    "IsAllowed": {
+      "maps_to": "no counterpart -- `Relic` declares no is_allowed member at all",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 (LIVE, and one of sweep B's 17-relic single-fix cluster)."
+    },
+    "TryModifyCardRewardOptionsLate": {
+      "maps_to": "EggRelic.modify_card_reward_options (_eggs.py:39-42), dispatched from rewards.py over run.relics",
+      "verdict": "gap",
+      "issue": "Rollup of guards G2 and N1 per binding rule 4. The effect is right -- every upgradable Skill in the offer arrives upgraded -- but the sim has no LATE phase (G2, dormant) and drops the CardCreationFlags gate (N1, waived as dead C# code)."
+    },
+    "ModifyMerchantCardCreationResults": {
+      "maps_to": "EggRelic.modify_merchant_card_results (_eggs.py:44-45), dispatched from shop.py:87",
+      "verdict": "faithful",
+      "rationale": "ToxicEgg.cs:35-41 is the same EggRelicHelper.UpgradeValidCards call as the reward hook, minus the flags gate, minus the Late phase and with only the owner check. _eggs.py:44-45 forwards straight to the reward implementation, which is exactly right for this hook. shop.py:87 calls it per stocked card before the price is calculated, matching MerchantCardEntry's call order -- which matters, because an upgraded card is priced the same in both (rarity-based, not upgrade-based)."
+    },
+    "TryModifyCardBeingAddedToDeck": {
+      "maps_to": "EggRelic.modify_card_being_added_to_deck (_eggs.py:47-51), dispatched by RunState.add_card (run.py:341-355)",
+      "verdict": "faithful",
+      "rationale": "ToxicEgg.cs:43-61: bail if not the owner's card (N3), bail if the type is not Skill, bail if `!card.IsUpgradable`, else clone-and-upgrade and hand the clone back. _eggs.py:47-51 applies the same three conditions through `_applies` (_eggs.py:34-37) and returns the card. Guards N2 (the clone) and N4 (IsUpgradable / bug class 14) settle the two places this could have gone wrong. This is the hook that catches every non-reward route into the deck -- shops, events, Neow -- as _eggs.py:13-16 says and CardPileCmd.cs:501 confirms."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): `IsAllowed => IsBeforeAct3TreasureChest(runState)` (TotalFloor < 41) is entirely unmodelled, so the relic stays pullable for the whole run",
+      "verdict": "gap",
+      "issue": "MECHANISM: ToxicEgg.cs:16-19 overrides RelicModel.IsAllowed with RelicModel.IsBeforeAct3TreasureChest(runState), which is `runState.TotalFloor < 41` (RelicModel.cs:452-456), so from the Act 3 treasure chest onward the game stops offering it. The sim's `Relic` base declares no is_allowed member (EXECUTED: `hasattr(Relic, 'is_allowed')` is False) and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes_b16.py egg-floor`): at `run.total_floor = 60` the grab bag still yields toxic_egg. The sim already tracks RunState.total_floor. Both sides ported: Rare in the transcribed grab bag, and the observable is pool composition -- a wrong pull also shifts every subsequent pull, so it is not a one-relic error. This is sweep B cluster (a) at this unit's own site: 17 relics share the identical predicate (`py tools/audit/relic_probes.py sweep-isallowed`; the count was corrected from 16 to 17 by batch 8 after the sweep's first version read only the first line of each IsAllowed body), and audits/relic/amethyst_aubergine.json already verdicts the mechanism `gap` -- matched, not re-derived (binding rule 3). TWO NOTES FOR THE FIX, both from PROMPT.md v6: (i) RelicModel.IsAllowedAtNeow DEFAULTS to IsAllowed(player.RunState) (RelicModel.cs:443-446), so whoever adds `Relic.is_allowed(run)` must make `is_allowed_at_neow` delegate to it or Neow keeps using the stale flag; (ii) toxic_egg does not override IsAllowedAtNeow itself, so it is one of the relics that would silently change behaviour at Neow once (i) lands. Rule 7: relics/base.py, relic_pools.py, run.py and audits/relic/amethyst_aubergine.json are NOT hashed by this record."
+    },
+    {
+      "what": "G2 (DORMANT): the hook is TryModifyCardRewardOptions**Late** and the sim's modify_card_reward_options is a single flat pass with no phase structure",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.TryModifyCardRewardOptions (Hook.cs:1445-1465) runs `TryModifyCardRewardOptions` over every listener and THEN `TryModifyCardRewardOptionsLate` over every listener -- two complete passes -- and Toxic Egg is a Late implementer, so in the game its upgrade is applied after every plain-phase reward modifier has finished choosing WHICH cards are offered. The sim has one walk over run.relics and no phase concept. This is audits/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes), which PROMPT.md bug class 25 already names as 'card rewards are the same shape but dormant' -- one verdict per mechanism, binding rule 3, so this entry does not re-derive it. DORMANT AT THIS SITE, checked rather than assumed: `grep -rn 'def modify_card_reward_options' sts2_rl/` gives four ported implementers besides the eggs -- relics/glitter.py:16, relics/silken_tress.py:27, relics/silver_crucible.py:28 and _eggs.py:39 itself -- and none of them REMOVES or REPLACES a card in the offer, so no ordering can change which cards the egg sees. (Silver Crucible upgrades, Silken Tress enchants, Glitter mutates in place.) Porting a plain-phase implementer that swaps a card into the offer -- LastingCandy.cs:127 and PrismaticGem are the C# shapes -- makes it live. Rule 7: audits/seam/hook_dispatch.json and the four relic files are not hashed here."
+    },
+    {
+      "what": "N1: `options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades)` (ToxicEgg.cs:27-30) -- the sim's hook signature carries no options at all",
+      "verdict": "waiver",
+      "rationale": "UNREACHABLE BECAUSE THE FLAG HAS NO SETTER IN THE C# SOURCE ITSELF, not because it is unported content. EXECUTED: `grep -rn 'NoHookUpgrades' src/` returns exactly FOUR lines -- the enum declaration at CardCreationFlags.cs:29 and the three egg relics READING it (ToxicEgg.cs:27, FrozenEgg.cs:27, MoltenEgg.cs:27). The composite `CardCreationFlags.NoUpgrades = 6` (NoUpgradeRoll | NoHookUpgrades, CardCreationFlags.cs:64) also has no user: every `NoUpgrades`-family hit in the source is `NoUpgradeRoll` alone (CardFactory.cs:98, Draft.cs:21, SealedDeck.cs:30, ArcaneScroll.cs:21, HeftyTablet.cs:29, CardCreationOptions.cs:139/152/162). So the gate is provably never true for any card creation the shipping game performs, and the sim's total omission of it cannot change an outcome; it cannot become live from porting more content either -- it would take a change to the game's own source. Same basis and same verdict as audits/relic/unsettling_lamp.json N1 (power.IsVisible, zero IsVisibleInternal overrides) -- binding rule 3. Related but NOT the same: `CardCreationFlags.NoModifyHooks` IS set, by LastingCandy.cs:127, and CardFactory.cs:104 gates the whole hook dispatch on it -- that is a live C# path with no sim counterpart, and it belongs to relic/lasting_candy's record (batch 8) rather than here. Rule 7: CardCreationFlags.cs, CardFactory.cs and audits/relic/unsettling_lamp.json are not hashed here."
+    },
+    {
+      "what": "N2 (PROMPT.md bug class 17, checked and CLEARED): C# builds an upgraded CLONE and swaps it in; the sim upgrades the card in place",
+      "verdict": "faithful",
+      "rationale": "EggRelicHelper.UpgradeValidCards (EggRelicHelper.cs:17-19) does `RunState.CloneCard(card)` -> `CardCmd.Upgrade(clone)` -> `card3.ModifyCard(clone, eggRelic)`, and TryModifyCardBeingAddedToDeck does the same (ToxicEgg.cs:58-59). Bug class 17 is about clones that DROP per-instance state, and it does not fire here for two independent reasons. (a) The C# clone is the FULL one: RunState.CloneCard is `mutableCard.ClonePreservingMutability()` + AddCard (RunState.cs:394-399), which carries the enchantment, affliction, keyword edits and local cost modifiers (CardModel.cs:2168-2179). (b) The sim mutates the ORIGINAL object, so per-instance state survives a fortiori -- it is never copied. Same resulting card state, so binding rule 2 is satisfied and this is faithful rather than a divergence. Two residues, neither observable: CloneCard also registers the new CardModel in the run's card scope (an extra model in RunState with no reader), and the original card is left behind unreferenced. _eggs.py:17-18 states the equivalence and, unlike the docstrings PROMPT.md bug class 24 warns about, it is correct. Rule 7: EggRelicHelper.cs, RunState.cs, CardModel.cs and relics/_eggs.py are not hashed here."
+    },
+    {
+      "what": "N3: `player != base.Owner` on the two reward hooks and `card.Owner != base.Owner` on the deck hook (ToxicEgg.cs:23-26, 37, 46-49)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true."
+    },
+    {
+      "what": "N4 (PROMPT.md bug class 14, checked and GUARDED): `!card.IsUpgradable` is honoured, so no max-level-0 card is marked upgraded",
+      "verdict": "faithful",
+      "rationale": "CardCmd.Upgrade skips cards whose IsUpgradable is false (`CurrentUpgradeLevel < MaxUpgradeLevel`, CardModel.cs:785-789 and the `continue` at CardCmd.cs:273-276), ToxicEgg.cs:54-57 checks it explicitly, and EggRelic._applies (_eggs.py:35) checks `card.is_upgradable`. Contrast relic/astrolabe (batch 1) and relic/bone_tea (batch 2), where the same unguarded Card.upgrade() IS a live gap. Sweep D lists _eggs.py:39 and :47 as unguarded call sites and files both DORMANT for a second reason -- the egg filters to one of Attack/Skill/Power and every max_upgrade_level==0 card is Curse/Status/Quest; that reason holds, but the primary answer is that the guard is present. EXECUTED (`py tools/audit/relic_probes_b16.py egg-floor`): an offer of [defend, strike, dazed] comes out [('defend', 1), ('strike', 0), ('dazed', 0)] -- the Skill upgraded, the Attack and the Status untouched."
+    },
+    {
+      "what": "N5: the card TYPE -- Toxic upgrades SKILLS in sts2, not Attacks",
+      "verdict": "faithful",
+      "rationale": "ToxicEgg.cs:31 and :39 both pass CardType.Skill and toxic_egg.py:13 sets CARD_TYPE = CardType.SKILL. Recorded because the sts1 mapping is different and _eggs.py:2-5 flags the trap explicitly (Toxic=Skill, Frozen=Power, Molten=Attack). Also faithful: EggRelic.ONLY_UNUPGRADED defaults to False (_eggs.py:32) and ToxicEgg.cs has no already-upgraded clause -- only MoltenEgg.cs:58 does -- so a Skill+ offered by a reward goes to Skill++ here, on both sides."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

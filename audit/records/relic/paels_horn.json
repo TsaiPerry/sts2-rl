@@ -1,0 +1,46 @@
+{
+  "unit": "relic/paels_horn",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PaelsHorn.cs",
+    "sha256": "485cd839cb79a670b1054dd10076f8870913f64a5ea8f11742a8590cb24b98ac"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\paels_horn.py",
+    "sha256": "6413f8b4c45c2c5efe6f9c0702b84fd4ed856e699fa1651f6ed9f7d96f467f60"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (paels_horn.py:12)",
+      "verdict": "faithful"
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained(run) (paels_horn.py:16-20), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "PaelsHorn.cs:17-26 loops `for (int i = 0; i < 2; i++)`, building `base.Owner.RunState.CreateCard<Relax>(base.Owner)` and awaiting `CardPileCmd.Add(card, PileType.Deck)` each time. paels_horn.py:19-20 loops CARDS = 2 (:14) over `run.add_card(make_card(\"relax\"))`. The count is a bare literal 2 -- the relic declares no CanonicalVars and no AscensionHelper.GetValueIfAscension -- so 2 is the pinned value. The two C# calls collapse correctly onto one sim call: RunState.CreateCard (RunState.cs:383-389) is ToMutable + AddCard + AfterCreated, i.e. it registers the card with the run, and CardPileCmd.Add then places it in the Deck pile; run.add_card does both, and it dispatches the same two deck hooks C#'s Add fires -- Hook.ModifyCardBeingAddedToDeck (so the egg relics can upgrade the Relax) and RelicModel.AfterCardChangedPiles for the deck pile (so Darkstone Periapt sees it), at run.py:345-353. Position matches: CardPilePosition.Bottom is Add's default (CardPileCmd.cs:259) and run.add_card appends. CardCmd.PreviewCardPileAdd (line 25) is presentation."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the added card's identity -- `CreateCard<Relax>` vs `make_card(\"relax\")`",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/cards/relax.py registers id 'relax' and is the port of Relax.cs; ExtraHoverTips' `FromCardWithCardHoverTips<Relax>` (PaelsHorn.cs:15) names the same card and is presentation. The cards are created at upgrade level 0 on both sides (ToMutable of the canonical card; a fresh Card instance)."
+    },
+    {
+      "what": "N2: PaelsHorn does NOT override HasUponPickupEffect, and the sim does not set has_upon_pickup_effect",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because three other units in this batch (paels_tooth, pandoras_box, pear) DO override it and the flag feeds RelicModel.IsTradable (relics/base.py:126-136). The flags agree, and Ancient rarity excludes the relic from trading on both sides regardless."
+    },
+    {
+      "what": "N3 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; no Rng stream named or consumed",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's C# files finds no IsAllowed override (sweep B's cluster excludes this unit). Neither CreateCard nor CardPileCmd.Add takes an Rng, so unlike a transform-based pickup (contrast pandoras_box in this batch, which names Rng.Niche) there is no stream to lose. Obtainability: Ancient, offered by the ported Pael shrine from OptionPool1 (Pael.cs:30-36; events/pael.py OPTION_POOL_1)."
+    },
+    {
+      "what": "N4: no card-selection screen and no filter -- the relic adds unconditionally",
+      "verdict": "faithful",
+      "rationale": "The C# body has no guard clauses at all (not even an IsDead check, unlike PaelsTooth.cs:95), and neither does the port. Recorded so the absence is on the record rather than looking like an omission."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

@@ -1,0 +1,56 @@
+{
+  "unit": "relic/empty_cage",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\EmptyCage.cs",
+    "sha256": "5e23c6d3170586d9a334062647dd28c51c50726176e8efa13cc1b959b1618300"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\empty_cage.py",
+    "sha256": "05bf335e84d7acfb3dbefddc5e5c677919754fffbbddfaebc95c2578ee47471a"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (empty_cage.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (empty_cage.py:14)",
+      "verdict": "faithful",
+      "rationale": "Matches EmptyCage.cs:14; drives RelicModel.IsTradable (RelicModel.cs:176-190) mirrored at relics/base.py:126-136. Rule 7: those two files are unhashed here."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (empty_cage.py:18-20)",
+      "verdict": "gap",
+      "issue": "Rollup of guard N2 per binding rule 4. The count (CardsVar(2), EmptyCage.cs:16, vs CARDS = 2, empty_cage.py:16), the candidate filter (N1) and the removal itself all match -- executed: a fresh run's 10-card deck goes to 8. The only divergence is that the sim substitutes a seeded random pick for the game's player-choice screen, which also consumes RNG the game does not."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: CardSelectCmd.FromDeckForRemoval's `c.IsRemovable` filter (CardSelectCmd.cs:621-625) vs run.removable_cards() (run.py:360-362)",
+      "verdict": "faithful",
+      "rationale": "CardModel.IsRemovable is exactly `!Keywords.Contains(CardKeyword.Eternal)` (CardModel.cs:737) and run.removable_cards() is exactly `[c for c in self.deck if not c.eternal]`. FromDeckForRemoval passes no additional filter here (EmptyCage.cs:20 supplies only prefs and player), so the two candidate sets are the same set. Its sortingOrder lambda -- curses first via -999999999 (CardSelectCmd.cs:624) -- is the select screen's display order and has no effect on which cards are removable. Executed (py tools/audit/relic_probes_b05.py cage-feather): a starting deck contains no Eternal cards, so both sides offer all 10. Rule 7: CardSelectCmd.cs, CardModel.cs and run.py are unhashed here."
+    },
+    {
+      "what": "N2: run.select_cards falls back to `self.rng.sample` when no card_selector is installed (run.py:371-390), where the game opens a removal screen and draws no RNG",
+      "verdict": "gap",
+      "issue": "Same mechanism and same verdict as relic/electric_shrymp guard N3 in this batch (binding rule 3): C#'s FromDeckGeneric (CardSelectCmd.cs:636-677) reaches either the Selector, the local UI screen or a remote choice, none of which consumes an Rng, while the sim's default picks with the run's shared legacy random.Random -- so the sim removes different cards AND advances a stream the game does not. DORMANT for RL play and for the conformance harness (the runner installs run.card_selector from the replay's SelectGridCard commands, so the fallback is not taken); live for any parity run that reaches the Darv shrine's Empty Cage with no selector installed. Rule 7: CardSelectCmd.cs and run.py are unhashed here."
+    },
+    {
+      "what": "N3: C# removes one card at a time through `await CardPileCmd.RemoveFromDeck(item)` inside a foreach (EmptyCage.cs:20-23); the sim removes the whole selection in one run.remove_cards call (empty_cage.py:19-20)",
+      "verdict": "faithful",
+      "rationale": "Both iterate the SAME selection list, which is computed in full before the first removal on either side, so no removal can change the candidate set mid-loop. run.remove_cards (run.py:356-358) is itself a per-card loop over deck.remove. The one thing the sim's path lacks is any deck-removal hook -- but the game has none either: CardPileCmd.RemoveFromDeck fires no Hook that AbstractModel declares for relics, so there is no listener to skip. Rule 7: run.py is unhashed here."
+    },
+    {
+      "what": "N4: `!prefs.RequireManualConfirmation && list.Count <= prefs.MinSelect` auto-keeps the whole list (CardSelectCmd.cs:653-655) when the deck holds 2 or fewer removable cards",
+      "verdict": "faithful",
+      "rationale": "run.select_cards clamps to `min(count, len(candidates))` and returns [] for an empty list (run.py:384-386), so a 1-card or 2-card removable deck removes 1 or 2 on both sides. Recorded because the C# edge is guarded by a prefs flag whose value this record cannot see (CardSelectorPrefs is not read here) -- but the outcome is the same either way: with RequireManualConfirmation set, C# opens a screen whose only possible answers are the same 1 or 2 cards."
+    },
+    {
+      "what": "N5: CanonicalVars / ExtraHoverTips (EmptyCage.cs:16) and the removal-screen prompt string",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / VfxCmd / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, the damage/heal numbers and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

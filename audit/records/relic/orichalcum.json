@@ -1,0 +1,66 @@
+{
+  "unit": "relic/orichalcum",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Orichalcum.cs",
+    "sha256": "26ea7db10392ce478bef226d3b112f7b17575177d3d839ce176c135f031c06f8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\orichalcum.py",
+    "sha256": "5797b6afca188cd66619524d8ea170a678e96a2dfd831ce913462ff6dfce7a8c"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (orichalcum.py:18)",
+      "verdict": "faithful"
+    },
+    "BeforeSideTurnEndVeryEarly": {
+      "maps_to": "collapsed into on_player_turn_end (orichalcum.py:22-25) -- the `player.block == 0` test at orichalcum.py:23 is C#'s VeryEarly SNAPSHOT and the BlockCmd.apply on the next line is the plain-phase grant, with no phase separation between them",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. C# reads the player's Block in a COMPLETE earlier pass and stores the answer in ShouldTrigger (Orichalcum.cs:44-56); the sim reads it inline at grant time, so any other turn-end listener registered before it can add Block first and switch the relic off."
+    },
+    "BeforeSideTurnEnd": {
+      "maps_to": "the BlockCmd.apply at orichalcum.py:24-25, the same method as the VeryEarly snapshot",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The grant itself is faithful -- 6 unpowered Block to the owner -- and C#'s `ShouldTrigger = false` before granting (Orichalcum.cs:62) is subsumed by the sim having no flag at all. What is lost is the guarantee that the snapshot already happened."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "no counterpart",
+      "verdict": "faithful",
+      "rationale": "Orichalcum.cs:68-76 clears ShouldTrigger at turn start, i.e. it discards a snapshot that BeforeSideTurnEnd did not consume (the case where the turn ended without the plain phase running -- a won fight). The sim holds no flag between the two halves: the snapshot and the grant are one expression, so there is nothing to go stale and nothing to reset. PROMPT.md bug class 13 asks for the first READER of the stale field; here the field does not exist. Recorded as faithful rather than deliberate-divergence because no state and no observable differ -- the missing reset is a consequence of G1's collapse, not an independent divergence, and .superpowers/sdd/content-relic-sweeps.md's Sweep A correctly does not list orichalcum as holding any state. Rule 7: the sweeps document is unhashed here. Matches audits/relic/fake_orichalcum.json's BeforeSideTurnStart verdict for the identical override (binding rule 3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the deliberate two-phase VeryEarly-then-plain structure is collapsed into one method, so a plain-phase Block granter that runs first switches Orichalcum off",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.cs runs BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then BeforeSideTurnEnd as three COMPLETE listener passes (Hook.cs:1238-1261), and Orichalcum's own doc comment (Orichalcum.cs:38-43) says why it needs the first: 'it needs to check the player's block before PlatingPower triggers (otherwise, PlatingPower will prevent this relic's block gain)'. The sim's hooks.py dispatches on_player_turn_end as a single `for l in list(self._listeners)` pass, so the phase guarantee becomes registration-order luck. THIS RELIC IS THE NAMED WITNESS of audits/seam/turn_structure.json gap G12 -- that record cites Orichalcum.cs:44-56 and relics/orichalcum.py:22-25 by name, labels the mechanism LIVE, and pins it with test/test_hook_order.py::TestTurnStructureOrder::test_orichalcum_snapshots_block_before_other_turn_end_listeners (verified present, test_hook_order.py:791, a strict xfail). One verdict per mechanism, binding rule 3: matched, cited, not re-derived. RE-EXECUTED at this site (py tools/audit/relic_probes_b10.py orichalcum) rather than inherited: with a 5-card hand, relics=[cloak_clasp, orichalcum] gives 5 Block at turn end and relics=[orichalcum, cloak_clasp] gives 11, where C# always gives 11 because the VeryEarly pass precedes every plain listener. Orichalcum alone gives 6. LIVE, both sides ported: Orichalcum is Uncommon in the transcribed grab bag, Cloak Clasp is a ported Rare relic granting 1 Block per card in hand from plain BeforeSideTurnEnd (CloakClasp.cs:24, relics/cloak_clasp.py:19-24), and PlatingPower -- the contender the source's own comment names -- is ported (powers.py:1044-1078) and granted at combat start by relic/gorget and by two ported cards (cards/stone_armor.py:38, cards/colorless_powers.py:121). Rule 7: Hook.cs, hooks.py, CloakClasp.cs, relics/cloak_clasp.py, powers.py, relics/gorget.py, cards/stone_armor.py, cards/colorless_powers.py, test/test_hook_order.py and the turn_structure record are NOT hashed by this record. BINDING RULE 3 CROSS-CHECK: audits/relic/fake_orichalcum.json (batch 5) audited the knock-off's identical body and reached the SAME four verdicts -- BeforeSideTurnEndVeryEarly gap, BeforeSideTurnEnd gap, BeforeSideTurnStart faithful, the participants asymmetry faithful -- with the same cloak_clasp ordering evidence. No disagreement. Rule 7: relics/fake_orichalcum.py is unhashed here."
+    },
+    {
+      "what": "N1: BlockVar(6m, ValueProp.Unpowered) (Orichalcum.cs:21) passed as the whole DynamicVar to CreatureCmd.GainBlock (:64) vs BLOCK = 6 with props=ValueProp.UNPOWERED (orichalcum.py:20, :25)",
+      "verdict": "faithful",
+      "rationale": "Orichalcum.cs contains no AscensionHelper.GetValueIfAscension call, so 6 is the pinned non-ascension value. The ValueProp travels with the var in C#, which is why the port has to pass props explicitly; BlockCmd.apply skips the additive/multiplicative modifier chain unless `is_powered_attack(props)` (cmds.py:143-151), and ValueProp.UNPOWERED alone lacks MOVE so it is skipped. EXECUTED (relic_probes_b10.py orichalcum): with 5 Dexterity on the player the grant is still exactly 6. Rule 7: cmds.py is unhashed here."
+    },
+    {
+      "what": "N2: `Owner.Creature.Block > 0` (Orichalcum.cs:50) vs `player.block == 0` (orichalcum.py:23)",
+      "verdict": "faithful",
+      "rationale": "Complementary tests over a quantity that is never negative -- CreatureCmd's block absorption floors at 0 and cmds.py:148 clamps a grant with `max(0, amount)` -- so `not (block > 0)` and `block == 0` agree everywhere. EXECUTED (relic_probes_b10.py orichalcum): with 1 Block already on the player the relic grants nothing, leaving 1. Rule 7: cmds.py is unhashed here."
+    },
+    {
+      "what": "N3: `participants.Contains(base.Owner.Creature)` on the VeryEarly and turn-start halves (Orichalcum.cs:46, :70) but NOT on the plain BeforeSideTurnEnd half (:58-66)",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 15 says to list both guard sets side by side whenever the sim collapses two C# hooks into one method, because the collapse applies the UNION. Done: the union here is `participants.Contains(owner)` AND `Block > 0`, and the sim's on_player_turn_end is dispatched once per player turn for the player (hooks.py's player-scoped walk), so the participants clause -- a multiplayer extra-turn filter -- is structurally satisfied and adds nothing. C# can safely omit it on the plain half because ShouldTrigger is only ever set by the guarded half. So unlike relic/unsettling_lamp's G3, this collapse's union is not observable; the collapse's real cost is G1's phase ordering. Rule 7: hooks.py and relics/unsettling_lamp.py are unhashed here."
+    },
+    {
+      "what": "N4: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, null)` (Orichalcum.cs:64) -- the trailing null is the cardSource",
+      "verdict": "faithful",
+      "rationale": "BlockCmd.apply's `card` parameter defaults to None (cmds.py:135) and orichalcum.py:25 does not pass one, so both sides grant card-less Block. Checked because a card-sourced Block would reach card-scoped block modifiers."
+    },
+    {
+      "what": "N5: Flash() (Orichalcum.cs:63), ExtraHoverTips (:23) and the AssertMutable ShouldTrigger setter (:33)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

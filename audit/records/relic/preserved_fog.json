@@ -1,0 +1,57 @@
+{
+  "unit": "relic/preserved_fog",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PreservedFog.cs",
+    "sha256": "78b7ba31a3122554398d3c6b8c8584edd6a7847cb8eafb3755876e21d595ab85"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\preserved_fog.py",
+    "sha256": "3990b9562be96f93d62f71b22b8b0471beefaaada390b3b589b581744afdeb2a"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (preserved_fog.py:13), matching PreservedFog.cs:14",
+      "verdict": "faithful",
+      "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Vakuu shrine -- `py tools/audit/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/vakuu.py']."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (preserved_fog.py:17-22), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. Both halves land in the source's order -- three removable cards removed, then a Folly curse added, executed at b12-cutters (deck 10 -> 8 with folly_in_deck=True, i.e. -3 +1) -- but the removals drop the Hook.BeforeCardRemoved dispatch (G1)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the same missing `Hook.BeforeCardRemoved` dispatch as relic/precise_scissors, over three cards",
+      "verdict": "gap",
+      "issue": "PreservedFog.cs:24 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61. preserved_fog.py:21 calls `run.deck.remove(card)` DIRECTLY -- one step further from the source than its siblings, which at least go through RunState.remove_cards -- and the sim has no before_card_removed hook at all (`grep -rn 'before_card_removed' sts2_rl/` returns zero hits). Same mechanism, same verdict, same executed evidence as audits/relic/precise_scissors.json guard G1 (binding rule 3, not re-derived): removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py tools/audit/relic_probes_b12.py b12-cardremoved`). NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
+    },
+    {
+      "what": "N1: `run.deck.remove(card)` (preserved_fog.py:21) instead of `run.remove_cards(chosen)`, which the two sibling relics use",
+      "verdict": "faithful",
+      "rationale": "Checked because a bypassed helper is where a dropped hook usually hides, and here it does not: RunState.remove_cards (run.py:356-358) is literally `for card in cards: self.deck.remove(card)`, so the two are equivalent line for line today. The residual risk is forward-looking rather than current -- if remove_cards ever grows the missing before_card_removed dispatch of guard G1, this relic will not get it -- so the inconsistency is recorded as a note for whoever implements that fix, not as a second divergence. Also checked: the removal happens INSIDE the iteration over select_cards' result (preserved_fog.py:20-21), and select_cards materialises a list before returning (run.py:371-390), so mutating the deck mid-loop cannot skip a selected card."
+    },
+    {
+      "what": "N2: `CardPileCmd.AddCurseToDeck<Folly>(base.Owner)` (PreservedFog.cs:26) vs `run.add_card(make_card('folly'))` (preserved_fog.py:22)",
+      "verdict": "faithful",
+      "rationale": "Same mechanism and same verdict as audits/relic/calling_bell.json guard N1, which settled AddCurseToDeck for the identical shape (binding rule 3): the C# helper asserts the card is a Curse, creates it on the run and routes it through `Add(card, PileType.Deck)`, and RunState.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models. EXECUTED (py tools/audit/relic_probes_b12.py b12-cutters): with a spy relic attached, after_card_added_to_deck fires for ['folly'] and the curse is in the deck. The Folly card is ported (make_card('folly') resolves). ORDER: removals first, curse second, on both sides -- load-bearing because a curse entering the deck can trigger a relic that reacts to it (Darkstone Periapt's +6 Max HP on a gained Curse) and the removals must already have happened. NOTE per binding rule 7: CardPileCmd.cs, run.py and calling_bell.json are not hashed here."
+    },
+    {
+      "what": "N3: PreservedFog.cs declares NO HasUponPickupEffect override, and the port declares no has_upon_pickup_effect either",
+      "verdict": "faithful",
+      "rationale": "The port matches the source exactly, which is the point of the entry: three of this batch's four deck-editing pickup relics (phial_holster, precarious_shears, precise_scissors) DO declare the flag and their C# files DO override the property, while preserved_fog and pomander declare neither and their C# files override neither. So the apparent inconsistency across the five ports is a faithful transcription of an inconsistency in the source, and a reviewer who normalised them would introduce two defects. It cannot matter for this relic in any case: Relic.is_tradable excludes ANCIENT rarity outright (relics/base.py:134-136), mirroring RelicModel.IsTradable, so a spent Preserved Fog is untradable for the other reason. NOTE per binding rule 7: relics/base.py, PhialHolster.cs, PrecariousShears.cs, PreciseScissors.cs and Pomander.cs are not hashed here."
+    },
+    {
+      "what": "N4: `CardsVar(3)` (PreservedFog.cs:18) read as IntValue at the single call site (PreservedFog.cs:22) vs CARDS = 3 (preserved_fog.py:15)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 3 is the pinned non-ascension value. Re-read against the C# even though the port's docstring names the expression ('CardsVar(3)'), which is exactly the situation PROMPT.md bug class 19 was written for -- relics/iron_club.py cites `CardsVar(6)` against a source that says 4. Here the citation is correct, and the executed deck delta confirms it (b12-cutters: 10 -> 8 after -3 removals and +1 curse). The candidate filter and the auto-select-when-short semantics are identical to relic/precise_scissors N1 and N2 and are matched per binding rule 3. NOTE per binding rule 7: cards/iron_club-adjacent files and precise_scissors.json are not hashed here."
+    },
+    {
+      "what": "N5: `ExtraHoverTips => HoverTipFactory.FromCardWithCardHoverTips<Folly>()` (PreservedFog.cs:16), the RemoveSelectionPrompt LocString and the removal tween",
+      "verdict": "waiver",
+      "rationale": "ExtraHoverTips / HoverTipFactory / prompt text / the card-fly-away animation are presentation only -- the relic bar's hover text and the removal screen. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

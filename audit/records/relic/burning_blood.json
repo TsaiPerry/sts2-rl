@@ -1,0 +1,51 @@
+{
+  "unit": "relic/burning_blood",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BurningBlood.cs",
+    "sha256": "eefa04d6cee4b2da1245894fe1e4e1ed3ff0c36db8c8011264955870fb422410"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\burning_blood.py",
+    "sha256": "405e77409b015750d2a39b6b4c0c1281e3d2a003dd652d0027301b14c4309446"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.STARTER (burning_blood.py:11)",
+      "verdict": "faithful"
+    },
+    "AfterCombatVictory": {
+      "maps_to": "on_combat_end (burning_blood.py:15-18), guarded on player_won",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The heal itself is faithful (6 HP, `!IsDead`, no ascension branch); what diverges is the hook the sim maps it onto -- one collapsed on_combat_end(player_won) instead of C#'s separate AfterCombatEnd/AfterCombatVictory pair, with no ReviveBeforeCombatEnd step in between."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT): AfterCombatVictory and AfterCombatEnd are one sim hook, and the sim has no ReviveBeforeCombatEnd",
+      "verdict": "gap",
+      "issue": "MECHANISM: C# reaches AfterCombatEnd and AfterCombatVictory only through EndCombatInternal (CombatManager.cs:970-999), which is the VICTORY path; a loss goes LoseCombat -> _pendingLoss -> ProcessPendingLoss (CombatManager.cs:945-965, 1046-1052) and fires NO hook at all. EndCombatInternal also runs `await player.ReviveBeforeCombatEnd()` (Player.cs:821-827, heal-to-1) before either hook. The sim collapses both hooks into one `on_combat_end(player_won)` (combat.py:347-350) and has no revive step. audits/seam/turn_structure.json step 71 / guard G10 already verdicts this mechanism a gap and labels it DORMANT, and names this exact relic file as one of the four ported on_combat_end listeners it read to establish the dormancy. One verdict per mechanism (binding rule 3): this record cites it and does not re-derive it. Rule 7: CombatManager.cs, Player.cs and sts2_rl/combat.py are NOT hashed by this record. WHAT WOULD MAKE IT LIVE for this relic: an AfterCombatVictory-only listener whose effect is unconditional (this one is not -- it gates on player_won), or a sim path that reaches on_combat_end(player_won=True) with a dead player that C# would have revived. Both codebases currently agree on every reachable outcome, which is what makes it dormant rather than live."
+    },
+    {
+      "what": "N1: `!base.Owner.Creature.IsDead` (BurningBlood.cs:18) vs `player_won and not self.player.is_dead` (burning_blood.py:16)",
+      "verdict": "faithful",
+      "rationale": "The two guards have opposite standing and the same result. C#'s is effectively dead code in single-player: ReviveBeforeCombatEnd has already healed a dead player to 1 HP by the time AfterCombatVictory runs, so IsDead is false -- the guard exists for a downed co-op player. The sim's IS live, because there is no revive; but the only sim path that can declare a win with a dead player is combat.py:302-305 (all enemies die to an on_enemy_turn_start effect that also kills the player), and C# resolves exactly that race as a LOSS -- CheckWinCondition tests _pendingLoss before IsEnding (CombatManager.cs:1046-1057) -- where it likewise heals nothing. Same observable on every reachable path. Rule 7: neither CombatManager.cs nor combat.py is hashed here."
+    },
+    {
+      "what": "N2: `base.DynamicVars.Heal.BaseValue` from `HealVar(6m)` (BurningBlood.cs:14, 21) vs `HEAL = 6` (burning_blood.py:13)",
+      "verdict": "faithful",
+      "rationale": "6 on both sides, and there is no AscensionHelper.GetValueIfAscension call anywhere in the file, so BaseValue IS the non-ascension value the shared contract asks for."
+    },
+    {
+      "what": "N3: `CreatureCmd.Heal` (BurningBlood.cs:21) vs `CreatureCmd.heal(self.hooks, ...)` (burning_blood.py:18)",
+      "verdict": "faithful",
+      "rationale": "Checked deliberately because the sibling shortcut in relic/booming_conch IS a divergence: there, PlayerCmd.GainEnergy runs a hook chain the direct assignment skipped. Heal runs none -- CreatureCmd.cs:691-703 is an IsEnding guard, a min() against the missing HP, HealInternal, and SFX/VFX. The sim's heal (cmds.py:158-167) is the same min()-capped add. Rule 7: CreatureCmd.cs is not hashed by this record."
+    },
+    {
+      "what": "N4: Flash() and CanonicalVars (BurningBlood.cs:14, 20)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

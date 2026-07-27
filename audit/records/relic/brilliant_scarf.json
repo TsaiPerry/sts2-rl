@@ -1,0 +1,81 @@
+{
+  "unit": "relic/brilliant_scarf",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\BrilliantScarf.cs",
+    "sha256": "7256a929a0dff043f6d1a106df17917a47f6759b35c1b412476574d1e304ee04"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\brilliant_scarf.py",
+    "sha256": "831b8c3eb42f1650125d12e6938c7b294b01128b2065647ebf84027f3d8356d9"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (brilliant_scarf.py:21)",
+      "verdict": "faithful"
+    },
+    "ShowCounter": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "DisplayAmount": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    "TryModifyEnergyCostInCombatLate": {
+      "maps_to": "modify_card_energy_cost (brilliant_scarf.py:29-32)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G2 and G3 per binding rule 4. The trigger arithmetic matches -- cost 0 when CardsPlayedThisTurn == CardsVar(5) - 1, i.e. the fifth card of the turn -- but the sim drops the Late PHASE (G2) and both of ShouldModifyCost's remaining clauses, the owner check and the Hand/Play pile check (G3)."
+    },
+    "TryModifyStarCost": {
+      "maps_to": "no counterpart",
+      "verdict": "waiver",
+      "rationale": "Star cost is the second, parallel cost currency (TryModifyStarCost, BrilliantScarf.cs:57-66) and the sim models no star-cost concept anywhere -- grep for 'star' over sts2_rl/ returns no cost machinery. It is not Ironclad content: no ported card carries a star cost, so there is nothing for the relic to zero. Waived as out-of-scope currency rather than as an unported hook, because the whole SYSTEM is absent from the sim's scope, not merely this relic's use of it. If star costs are ever ported, this waiver must be revisited -- the relic zeroes BOTH costs on the same fifth card."
+    },
+    "BeforeSideTurnStart": {
+      "maps_to": "on_player_turn_start (brilliant_scarf.py:37-38)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C#'s hook is turn_structure step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed to sit at step ~19, after the block clear and the energy reset (py tools/audit/relic_probes.py turn-order). Only a counter RESET happens here, and no card can be played between the two points -- the play phase opens at step 28 -- so CardsPlayedThisTurn is 0 at every moment either codebase can observe it. Same reasoning and same verdict as relic/beating_remnant's BeforeSideTurnStart in batch 1; recorded as a divergence rather than faithful because the slot genuinely differs and a future effect placed in that window would expose it."
+    },
+    "AfterCardPlayed": {
+      "maps_to": "on_card_played (brilliant_scarf.py:34-35)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4 -- the sim counts auto-plays that C# explicitly excludes."
+    },
+    "AfterCombatEnd": {
+      "maps_to": "no counterpart; on_player_turn_start (brilliant_scarf.py:37-38) is the only reset",
+      "verdict": "deliberate-divergence",
+      "rationale": "BrilliantScarf.cs:96-100 zeroes CardsPlayedThisTurn at combat end as well as at turn start. The sim keeps only the turn-start half, and the stale value is provably unreadable: the first player turn of the next combat runs on_player_turn_start before the play phase opens, so the counter is 0 before any card can be played or any cost modified. The pool-wide scan (py tools/audit/relic_probes.py sweep-reset) classifies this relic in the 'reset at a TURN boundary only' bucket, which is the relic/art_of_war shape -- safe, but only because the turn reset runs before any reader, which is the trace PROMPT.md bug class 13 requires and which is done here. Contrast relic/belt_buckle, where the analogous missing reset is live."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): C#'s AfterCardPlayed skips auto-plays (`if (cardPlay.IsAutoPlay) return;`, BrilliantScarf.cs:84-87); the sim's on_card_played counts every play",
+      "verdict": "gap",
+      "issue": "MECHANISM: an auto-played card is free and is not a 'card you played' for this relic's purposes, so C# does not advance the counter; brilliant_scarf.py:34-35 increments unconditionally. Every auto-play therefore shifts which card gets the free cost, by one, for the rest of the turn. REACHABILITY (LIVE, executed -- py tools/audit/relic_probes.py batch2): one auto_play_card leaves cards_played_this_turn at 1 where C# leaves it at 0. Both sides are ported content: the sim routes auto-plays through CombatState.auto_play_card (combat.py:516), and three ported cards call it from inside their own on_play -- cards/cascade.py:58 and cards/colorless_skills.py:117 and :164 -- plus powers.py:713, :1041 and :3583 and potions.py:987. Brilliant Scarf is obtainable (Ancient; the hook_dispatch seam record already cites relics/brilliant_scarf.py as a ported witness for its own gaps G2/G3)."
+    },
+    {
+      "what": "G2 (DORMANT): the hook is TryModifyEnergyCostInCombat**Late** and the sim's modify_card_energy_cost is a single flat pass with no phase structure",
+      "verdict": "gap",
+      "issue": "This is audits/seam/hook_dispatch.json's gap G3 at the site that record already names: it cites Relics/BrilliantScarf.cs (56-63) and sts2_rl/relics/brilliant_scarf.py as the ported Late-phase witness that makes G2/G3 LIVE, and labels the mechanism a gap. One verdict per mechanism, binding rule 3 -- so this entry does not re-derive it, and the seam owns the machinery while this record owns the relic's observable. The Late phase is load-bearing for a cost-ZEROING modifier specifically: running last guarantees the 0 is final rather than being re-raised by a plain-phase listener that runs after it. DORMANT AT THIS SITE: the sim's other ported modify_card_energy_cost implementers (powers.py:597, 1147, 1486, 2883 -- Tangled, FreeAttack, Curious, and Spiked Gauntlets' relic counterpart) either also zero the cost or adjust it additively, and hook_dispatch's own analysis found no ordering that changes the final number with today's content. Porting a plain-phase listener that RAISES a cost makes it live."
+    },
+    {
+      "what": "G3 (DORMANT): the sim's modify_card_energy_cost drops ShouldModifyCost's owner check and its Hand/Play pile check (BrilliantScarf.cs:102-132)",
+      "verdict": "gap",
+      "issue": "C# refuses to modify a cost unless the card's owner is the relic's owner AND the card is currently in the Hand or Play pile; brilliant_scarf.py:29-32 checks only the counter. The pile clause is the substantive one: it stops the relic zeroing the displayed cost of a card sitting in the draw, discard or exhaust pile, which the game queries when PREVIEWING costs. REACHABILITY (DORMANT): the sim's cost hook is consulted from previews.py and cards/base.py, and its preview call sites pass hand cards; no ported effect asks for the cost of a draw- or discard-pile card while Brilliant Scarf is on its fifth-card turn. Porting a relic or card that reads or pays a non-hand card's cost -- a 'play the top card of your draw pile' effect is the obvious shape, and powers.py:3583 already auto-plays from the draw pile -- makes it live. Note the C# clause admits PileType.Play as well as Hand, which is the pile-limbo subtlety PROMPT.md bug class 7 records: a card mid-OnPlay is in Play, and the relic must still see it."
+    },
+    {
+      "what": "N1: `!CombatManager.Instance.IsInProgress` on both AfterCardPlayed and ShouldModifyCost (BrilliantScarf.cs:80-83, 104-107)",
+      "verdict": "faithful",
+      "rationale": "Both are structurally satisfied in the sim: on_card_played and modify_card_energy_cost are combat hooks dispatched only by a live CombatState, and combat.py:493-494 breaks the play loop once the combat is decided."
+    },
+    {
+      "what": "N2: CardsVar(5) read as IntValue in ShowCounter/UpdateDisplay but as BaseValue in ShouldModifyCost (BrilliantScarf.cs:41, 112)",
+      "verdict": "faithful",
+      "rationale": "Both resolve to 5 with no AscensionHelper branch in the file, so the source's inconsistency is harmless and the sim's single CARDS = 5 is correct for the one clause that matters. Same IntValue/BaseValue asymmetry noted for relic/big_mushroom vs relic/bag_of_preparation in batch 1 -- it is a source idiom, not a port error."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

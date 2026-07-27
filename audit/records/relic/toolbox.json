@@ -1,0 +1,72 @@
+{
+  "unit": "relic/toolbox",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Toolbox.cs",
+    "sha256": "8b68915fdcd5a9f62c4a299bbec42c1ed6c1b1d216ccfa630c183832a53175fc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\toolbox.py",
+    "sha256": "1cef69936219c458872c8ddaed702258eaf72a4bf0d99c9d37aa61a4f349646a"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.SHOP (toolbox.py:15)",
+      "verdict": "faithful",
+      "rationale": "Toolbox.cs:18. Executed: Shop rarity in the transcribed grab bag (relic_pools.py:143 'RELIC.TOOLBOX'), `py tools/audit/relic_probes_b16.py pool`."
+    },
+    "BeforeHandDraw": {
+      "maps_to": "on_player_turn_start (toolbox.py:18-30)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The effect is complete and correct -- three distinct Colorless options on turn 1, pick one, into the hand -- but the generation runs on the legacy shared Random with no parity branch, where Toolbox.cs:27 names `RunState.Rng.CombatCardGeneration` (G1, live for RNG parity)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE for RNG parity): the three Colorless options are drawn from the legacy shared Random and the CombatCardGeneration stream never advances -- and a sibling relic already does it correctly",
+      "verdict": "gap",
+      "issue": "MECHANISM: Toolbox.cs:27 passes `base.Owner.RunState.Rng.CombatCardGeneration` to CardFactory.GetDistinctForCombat, whose randomness is `TakeRandom(count, rng)` = `list.UnstableShuffle(rng).Take(count)` (IEnumerableExtensions.cs:17-20) -- one shuffle of the filtered pool, then the first three. toolbox.py:25-27 calls `random_pool_cards(combat._rng, self.CARDS, distinct=True, pool=COLORLESS_POOL)`, i.e. the legacy shared `random.Random` via `rng.sample` (cards/pool.py:157-158), with NO `is_parity` branch at all. The sim HAS the correct helper and the correct stream: `get_distinct_for_combat_parity(rng, count, ...)` (cards/pool.py:182-204) reproduces UnstableShuffle-then-take over the CombatCardGeneration accessor, and `CombatRng.card_gen` is that accessor (combat_rng.py:20, 50). This is PROMPT.md bug class 16's second half -- a named C# stream reaching a sim helper that silently falls back to the shared RNG -- and class 12's 'check whether a sibling already does the thing': relics/vexing_puzzlebox.py:29-33 is a ported RARE relic that generates ONE pool card at turn start and branches `if crng.is_parity: get_distinct_for_combat_parity(crng.card_gen, 1) else: random_pool_cards(self.combat._rng, 1)`. EXECUTED (`py tools/audit/relic_probes_b16.py toolbox-stream`): toolbox's source contains no 'is_parity' and no 'card_gen'; vexing_puzzlebox's contains both. Seven further ported sites use the parity helper (cards/infernal_blade.py:41, cards/mad_science.py:152, potions.py:453/482/1101/1134/1167), so this is a one-site omission, not a house convention. REACHABILITY: live on the conformance/parity path -- any seed that buys Toolbox diverges both in WHICH three Colorless cards are offered and in the position of the CombatCardGeneration stream, which then shifts every later draw off it (Infernal Blade, Mad Science, four potions and Vexing Puzzlebox). DORMANT for RL play, where the shared Random is the intended source. Same live/dormant split and same verdict as audits/relic/astrolabe.json N1 (binding rule 3). Rule 7: cards/pool.py, combat_rng.py, relics/vexing_puzzlebox.py and audits/relic/astrolabe.json are NOT hashed by this record."
+    },
+    {
+      "what": "N1: the hook slot -- C#'s BeforeHandDraw vs the sim's on_player_turn_start",
+      "verdict": "faithful",
+      "rationale": "BeforeHandDraw is turn_structure step 19 and audits/seam/turn_structure.json verdicts that step `faithful` with `on_player_turn_start` as its sim counterpart -- 'fired after on_energy_reset and before modify_hand_draw'. Matched here rather than re-derived (binding rule 3), and re-executed: `py tools/audit/relic_probes.py turn-order` prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started. PROMPT.md bug class 11 warns against verdicting a slot off relics/base.py:10-18's table, whose `BeforeSideTurnStart -> on_player_turn_start` line is wrong; the slot is right anyway, but for the BeforeHandDraw reason and not that one. Rule 7: audits/seam/turn_structure.json and relics/base.py are not hashed by this record. Load-bearing here only in that the granted card must be in hand for turn 1; both slots precede the draw."
+    },
+    {
+      "what": "N2: `player == base.Owner && base.Owner.PlayerCombatState.TurnNumber == 1` (Toolbox.cs:24)",
+      "verdict": "faithful",
+      "rationale": "toolbox.py:19-21 checks `combat is None or combat.turn != 1`. The owner half is the usual multiplayer no-op (see N6). The turn-1 half matters: the relic fires exactly once per combat and the port gets that right without needing a per-combat flag -- which is why `py tools/audit/relic_probes.py sweep-reset` does not list toolbox in any bucket (it holds no state at all, so PROMPT.md bug class 13 has nothing to trace)."
+    },
+    {
+      "what": "N3: the candidate pool -- `ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(...)` then `FilterForCombat` (Toolbox.cs:27; CardFactory.cs:119-129, 158-161)",
+      "verdict": "faithful",
+      "rationale": "FilterForCombat keeps cards with `CanBeGeneratedInCombat` and rarity not Basic, Ancient or Event, then Distinct. cards/pool.pool_card_ids (cards/pool.py:100-117) applies the same filter except for the Event-rarity clause -- EXECUTED and settled: no entry of COLORLESS_POOL is Event or Ancient or Basic rarity, and the three entries pool_card_ids does drop (alchemize, hand_of_greed, hidden_gem) are dropped by `can_be_generated_in_combat`, which is the C# clause. So the two candidate sets agree for this pool. The unlock dimension is a waiver: `grep -rn UnlockState sts2_rl/` returns nothing, the sim assumes full unlocks -- the same waiver batch 8 settled for relic/lasting_candy (binding rule 3). Also faithful: `distinct=True` matches GetDistinctForCombat rather than GetForCombat (Toolbox is the Distinct overload). Rule 7: cards/pool.py is not hashed here."
+    },
+    {
+      "what": "N4: `CardSelectCmd.FromChooseACardScreen(choiceContext, cards, base.Owner)` (Toolbox.cs:28) -- and whether the player may decline",
+      "verdict": "faithful",
+      "rationale": "The overload's `canSkip` parameter defaults to FALSE (CardSelectCmd.cs:216) and Toolbox does not pass it, so the screen is not skippable and exactly one of the three is taken. `if (cardModel != null)` (Toolbox.cs:29) is the softlock guard for an empty candidate list (CardSelectCmd.cs:222-226), not a skip. CombatState.select_cards (combat.py:560-581) returns min(count, len(candidates)) cards, so it takes one when there are options and none when there are not -- the same two behaviours. Contrast relic/toy_box G1 and relic/calling_bell G3, where the C# offer IS declinable and the sim's auto-keep is a recorded divergence; here there is nothing to decline, so no divergence arises. Rule 7: combat.py is not hashed here."
+    },
+    {
+      "what": "N5: CardsVar(3) (Toolbox.cs:20) vs CARDS = 3 (toolbox.py:16)",
+      "verdict": "faithful",
+      "rationale": "Read as `base.DynamicVars.Cards.IntValue` at the call site (Toolbox.cs:27); no AscensionHelper.GetValueIfAscension in the file, so 3 is the pinned non-ascension value. Re-read against the C# per PROMPT.md bug class 19 rather than trusted from the port's comment."
+    },
+    {
+      "what": "N6: `player == base.Owner` (Toolbox.cs:24) and `FilterForPlayerCount` (CardFactory.cs:126)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only owner disambiguation. The shared contract lists multiplayer-only params as out of scope; the sim's single Player makes the check structurally true. FilterForPlayerCount removes cards whose CardMultiplayerConstraint excludes the current player count, which is a no-op at one player."
+    },
+    {
+      "what": "N7: `CardPileCmd.AddGeneratedCardToCombat(cardModel, PileType.Hand, player)` (Toolbox.cs:31) vs `CardPileCmd.add_to_hand(combat.hooks, player, card)` (toolbox.py:30)",
+      "verdict": "faithful",
+      "rationale": "add_to_hand is the sim's port of the same command and routes through CardPileCmd._enter_combat (cmds.py:455-461), so the generated card is registered as a hook listener and on_card_entered_combat fires -- i.e. an active card-afflicting power can afflict it, as in the game. Recorded deliberately because relic/tea_of_discourtesy in this same batch hand-rolls the equivalent insert and MISSES that step (its G2). Rule 7: cmds.py is not hashed here."
+    },
+    {
+      "what": "N8: Flash() (Toolbox.cs:26) and CanonicalVars (:20)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

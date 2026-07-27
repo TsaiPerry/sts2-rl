@@ -1,0 +1,66 @@
+{
+  "unit": "relic/fresnel_lens",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\FresnelLens.cs",
+    "sha256": "05b7cf19010bdf4beffc4d45a3d374ef160a89f8d8a98739de2609c597880b34"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\fresnel_lens.py",
+    "sha256": "d7bc3d2029700deefae8553651c3704661993774445e904288910527c878b048"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (fresnel_lens.py:11)",
+      "verdict": "faithful"
+    },
+    "TryModifyCardRewardOptionsLate": {
+      "maps_to": "no counterpart; the sim's dispatch site is rewards.py:298-301 (`relic.modify_card_reward_options(run, cards)`), declared on Relic (relics/base.py:172-175)",
+      "verdict": "gap",
+      "issue": "FresnelLens.cs:23-31 enchants every Nimble-eligible card reward option. fresnel_lens.py implements NO methods at all; its docstring says 'the sim has no enchantments or deck edits, stub'. Both halves of that premise are FALSE (guard G1, LIVE): enchantments.py is ported with NimbleEnchantment at :412-433, and the hook is dispatched from rewards.py on every card reward and already used by five other relics. Executed: `py tools/audit/relic_probes_b06.py b06-stubs` reports the port defines none of the three hooks."
+    },
+    "ModifyMerchantCardCreationResults": {
+      "maps_to": "no counterpart; the sim's dispatch site is shop.py (`relic.modify_merchant_card_results`), declared on Relic (relics/base.py:177-180)",
+      "verdict": "gap",
+      "issue": "FresnelLens.cs:33-39 enchants every card the merchant stocks. Not implemented; same false premise as above (guard G1). The hook is live -- the egg relics use it (relics/_eggs.py:44-45) -- so the shelf shows un-enchanted cards where the game shows Nimble ones, and the price the shop computes is calculated from the un-enchanted card."
+    },
+    "TryModifyCardBeingAddedToDeck": {
+      "maps_to": "no counterpart; the sim's dispatch site is run.add_card via `modify_card_being_added_to_deck` (relics/base.py:182-187)",
+      "verdict": "gap",
+      "issue": "FresnelLens.cs:41-54 replaces every card entering the deck with a Nimble-enchanted clone, gated on `ModelDb.Enchantment<Nimble>().CanEnchant(card)`. Not implemented. LIVE, executed (`py tools/audit/relic_probes_b06.py b06-stubs`): with fresnel_lens in the run, `run.add_card(make_card('defend'))` leaves `enchantment=None`, and `NimbleEnchantment.can_enchant(Defend)` is True -- so the sim drops +2 Block on every Block card the player ever gains, for the rest of the run. The sibling hook on the same base class is already used by relics/_eggs.py:47-51."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the stub's premise -- 'the sim has no enchantments or deck edits' -- is false on both counts",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 12: a port that does nothing usually justifies itself with a claim about the sim, so check the claim. Executed (`py tools/audit/relic_probes_b06.py b06-stubs`): (a) `sts2_rl.enchantments.NimbleEnchantment` exists (enchantments.py:412-433) and is a faithful port of Nimble.cs -- CanEnchant additionally requires CardModel.GainsBlock, mirrored as `card.gains_block`, and EnchantBlockAdditive returns Amount, mirrored as modify_block_additive; (b) all three dropped hooks have live sim dispatch sites outside sts2_rl/relics/ (rewards.py:298-301, shop.py, run.add_card), which is also what the pool-wide `sweep-stub-premises` reported -- it counted 33 dropped hooks across 30 relics with a live dispatch site and ZERO with no pipeline. Under binding rule 1 this cannot be a waiver: 'the sim has no such system' would be a dormant gap even if it were true, and here it is not true. Both sides ported: Fresnel Lens is Event rarity in the transcribed grab bag AND granted by the ported Drowning Beacon event (events/drowning_beacon.py), and relic/beautiful_bracelet already attaches Swift through the same enchantment layer. NOTE per binding rule 7: enchantments.py, rewards.py, shop.py and run.py are not hashed by this record."
+    },
+    {
+      "what": "G2: `EnchantCard` clones the card first (`base.Owner.RunState.CloneCard(card)`, FresnelLens.cs:71) and enchants the CLONE, then hands it back via `option.ModifyCard(...)` / `out newCard`",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 17 (shallow clones) applies to whoever implements this relic, so it is recorded now rather than discovered by the fix: CardModel.CreateClone / CardScope.CloneCard (CardModel.cs:2168-2179) carries the card's upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers, and the sim has no clone helper -- sweep E found five sim sites that rebuild from the id and keep only the upgrade level. Same mechanism as audits/relic/burning_sticks.json G3, same verdict, binding rule 3. DORMANT AT THIS SITE ONLY BECAUSE THE SITE IS EMPTY: with no implementation there is nothing to clone shallowly yet. Recorded so that a fix which enchants in place (as relics/glitter.py:16-21 does) is understood to be a deliberate simplification, not an accident -- and note that for THIS relic in-place is nearly equivalent, since a card entering the deck has no prior per-instance state and CanEnchant already refuses an already-enchanted card (EnchantmentModel.cs:289, and no ported enchantment is IsStackable)."
+    },
+    {
+      "what": "N1: `player != base.Owner` / `card.Owner != base.Owner` on all three hooks (FresnelLens.cs:25-28, 35, 44-47)",
+      "verdict": "waiver",
+      "rationale": "Multiplayer-only ownership filters; the sim has one player and one deck. Waived under the shared contract's multiplayer exclusion. Recorded because bug class 15 warns that paired hooks rarely carry the same guard set -- here all three DO carry the owner check, and the reward hook returns false rather than mutating, which is the only asymmetry (a bookkeeping return, not an effect)."
+    },
+    {
+      "what": "N2: DynamicVar('NimbleAmount', 2m), read as IntValue for the hover tip and as **BaseValue** for the actual enchant (FresnelLens.cs:21, 72)",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper branch in FresnelLens.cs, so both resolve to 2, and a fix must pass amount=2 to NimbleEnchantment (whose default is 1, enchantments.py:42). Recorded because the amount is the one number the stub gives no home to."
+    },
+    {
+      "what": "N3: ExtraHoverTips (FresnelLens.cs:21)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    },
+    {
+      "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
+      "verdict": "faithful",
+      "rationale": "This record hashes only relic/fresnel_lens's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py tools/audit/citation_check.py audits/relic` prints: src/Core/Models/CardModel.cs, src/Core/Models/EnchantmentModel.cs, src/Core/Models/Enchantments/Nimble.cs, sts2_rl/cards/base.py, sts2_rl/enchantments.py, sts2_rl/events/drowning_beacon.py, sts2_rl/relics/_eggs.py, sts2_rl/relics/glitter.py, sts2_rl/rewards.py, sts2_rl/run.py, sts2_rl/shop.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

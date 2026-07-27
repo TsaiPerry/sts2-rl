@@ -1,0 +1,51 @@
+{
+  "unit": "relic/pear",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Pear.cs",
+    "sha256": "63d529653d676d8430d7c4a8fff9dd9242074ee3248c901db032b149e9504d37"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\pear.py",
+    "sha256": "06adb82a0e4e00582ec8b2a823a662c1f5f9cf44b7c8c4b4fb27007196f12acb"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.UNCOMMON (pear.py:13)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (pear.py:14)",
+      "verdict": "faithful",
+      "rationale": "Pear.cs:13 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:126-136, so an Uncommon relic that has already paid out is correctly excluded from the trade events on both sides. Matches."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained(run) (pear.py:18-19), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "Pear.cs:17-20 is `await CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)`. CanonicalVars is `new MaxHpVar(10m)` (line 15) with no AscensionHelper.GetValueIfAscension anywhere in the file, so MAX_HP = 10 (pear.py:16) is the pinned non-ascension value. GainMaxHp is SetMaxHp followed by `Heal(num)` for the same amount (CreatureCmd.cs:786-799), and run.gain_max_hp is `self.max_hp += amount; self.heal(amount)` (run.py:311-314) -- so the +10 max HP AND the accompanying +10 heal both land, which is the half a port easily drops. The MapPointHistoryEntry bookkeeping at CreatureCmd.cs:793-797 is a run-history statistic with no sim counterpart and no effect on play. IMPORTANT CONTRAST checked deliberately: audits/relic/big_mushroom.json records a LIVE gap for a max-HP relic whose port implements NO after_obtained at all, so the +20 lived only in the event that granted it; Pear does implement it, and `run.add_relic` really does invoke it (run.py:550-552), so the same defect is not present here."
+    },
+    "undo_after_obtained (no C# counterpart)": {
+      "maps_to": "undo_after_obtained(run) (pear.py:21-25)",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim ADDS a method the game has no counterpart for -- nothing in the game ever un-picks a relic. It exists for the conformance runner, which lets the sim grant a node's relic and then swaps it for the one the save says was really picked; without an undo, a discarded max-HP relic leaves its +MaxHp behind and DETECTOR 3's act-boundary HP assertion reads high for the rest of the run (Relic.undo_after_obtained's docstring, relics/base.py:143-150, names Pear as one of its two examples). Verdicted as a deliberate divergence rather than faithful because it is extra behaviour, and NOT as a gap because it is unreachable from play: `grep -rn undo_after_obtained sts2_rl/` shows the only caller is the conformance runner's relic resync, never the driver or the env. Its arithmetic is the correct inverse: run.lose_max_hp floors max HP at 1 and clamps current HP (run.py:316-321), and pear.py:24 re-clamps hp -- so granting then un-granting on a full-HP player returns exactly the starting state. NOTE per binding rule 7: this leans on sts2_rl/run.py and sts2_rl/relics/base.py, neither of which this record hashes."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: GainMaxHp's argument validation and the accompanying heal (CreatureCmd.cs:786-799)",
+      "verdict": "faithful",
+      "rationale": "C# throws on a negative amount and heals by the amount SetMaxHp actually returned (which can differ from the requested amount if a max-HP cap applied); the sim heals by the literal 10 after raising max HP by 10, and no ported effect caps max HP, so the two are equal. Checked because the heal is the part that is easy to lose and the part a player notices."
+    },
+    {
+      "what": "N2 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; no Rng draw; no state",
+      "verdict": "faithful",
+      "rationale": "Executed grep over the batch's fifteen C# relic files finds no IsAllowed override, so sweep B's 17-relic pool-eligibility cluster excludes this unit -- worth confirming rather than assuming, because several other one-shot pickup relics (dragon_fruit, girya, meal_ticket) ARE in that cluster and Pear looks just like them. The relic draws no Rng and holds no fields, so bug classes 13 and 16 have nothing to bite on, consistent with its absence from sweep-reset's candidate list. Obtainability confirmed by execution (`py tools/audit/relic_probes_b11.py pool`): Uncommon in the transcribed grab bag."
+    },
+    {
+      "what": "N3: the port implements no combat hooks at all, and none are dropped",
+      "verdict": "faithful",
+      "rationale": "Pear.cs has exactly three members -- Rarity, HasUponPickupEffect, CanonicalVars -- plus AfterObtained, so there is no behavioural override for the port to miss. This is one of the very few genuinely complete behaviourless-beyond-pickup ports; sweep C (.superpowers/sdd/content-relic-sweeps.md) counts 2 such stubs among 37, and unlike the other 35 there is no false premise here because the port DOES implement the one hook that matters."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-26"
+}

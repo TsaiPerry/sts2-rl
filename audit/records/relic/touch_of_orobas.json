@@ -1,0 +1,62 @@
+{
+  "unit": "relic/touch_of_orobas",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\TouchOfOrobas.cs",
+    "sha256": "383244ea3be8742267dbe023d6cbc59f19fcc2cbd062bec34acd04d9a965bc7c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\touch_of_orobas.py",
+    "sha256": "06e266d3d240b157532c4f15ccdf8ab3e625f8d81b098f68dce9d105646e0a7d"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (touch_of_orobas.py:15)",
+      "verdict": "faithful",
+      "rationale": "TouchOfOrobas.cs:27. Granted by the ported Orobas shrine (events/orobas.py:72). Executed: `py tools/audit/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (touch_of_orobas.py:20-32), invoked by RunState.add_relic (run.py:552)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and N4 per binding rule 4. The core behaviour is right and executed: the starter relic is replaced IN PLACE by its refinement and the replacement's own after_obtained runs. What the port drops from RelicCmd.Replace -> Obtain is the grab-bag strip (G1, dormant) and, for a starter outside the refinement map, the Circlet fallback (N4, waiver -- other characters)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1 (EXECUTED): RelicCmd.Replace's index preservation and the AfterObtained call on the replacement",
+      "verdict": "faithful",
+      "rationale": "RelicCmd.Replace (RelicCmd.cs:74-82) records `player.Relics.IndexOf(original)`, calls Remove(original), then `Obtain(replace, player, indexOfOriginal)` -- so the refinement occupies the starter's slot, which matters because the relic list order is the hook-listener order (CombatState.cs:428-435) and Burning Blood is index 0 (audits/seam/hook_dispatch.json's meat_on_the_bone finding turns on exactly that). touch_of_orobas.py:31 does `run.relics[run.relics.index(starter)] = upgraded`, preserving the index, and :32 calls `upgraded.after_obtained(run)`, which is Obtain's `await relic.AfterObtained()` (RelicCmd.cs:53). EXECUTED (`py tools/audit/relic_probes_b16.py orobas-replace`): relics go from ['burning_blood'] to ['black_blood', 'touch_of_orobas'] -- Black Blood at index 0, exactly where Burning Blood was. Rule 7: RelicCmd.cs, run.py and audits/seam/hook_dispatch.json are not hashed here."
+    },
+    {
+      "what": "G1 (DORMANT): RelicCmd.Obtain strips the obtained relic from both grab bags (`player.RelicGrabBag.Remove(relic)` and `runState.SharedRelicGrabBag.Remove(relic)`, RelicCmd.cs:41-45) and stamps `FloorAddedToDeck`; the port's direct list assignment does neither",
+      "verdict": "gap",
+      "issue": "MECHANISM: the port bypasses RunState.add_relic (run.py:546-553) entirely -- it writes into run.relics itself -- so nothing removes the replacement from the run's grab bag and a later pull could offer the same relic a second time. (RunState.add_relic does not strip the bag either, which is a separate shared question this record does not own.) REACHABILITY (DORMANT, executed -- same probe): the only refinement the Ironclad sim can reach is black_blood, and `black_blood` is NOT in the run's relic grab bag beforehand (the probe reports 'no'), so there is nothing to strip and no duplicate pull is possible. The refinement relics are not grab-bag relics in the transcribed pools (relic_pools.py). What would make it live: adding any refinement relic to a grab bag, or porting a second character's refinement pair. FloorAddedToDeck has no sim counterpart at all and no ported reader (`grep -rn floor_added sts2_rl/` finds nothing), which is the same shape and is folded in here rather than given its own entry. Rule 7: run.py and relic_pools.py are not hashed here."
+    },
+    {
+      "what": "N2: `RelicCmd.Remove(original)` awaits `original.AfterRemoved()` (RelicCmd.cs:61-66); the sim's Relic base declares no after_removed and the port calls nothing",
+      "verdict": "waiver",
+      "rationale": "UNREACHABLE BECAUSE THE HOOK HAS NO IMPLEMENTER IN THE C# SOURCE ITSELF, not because it is unported content: `grep -rn 'AfterRemoved' 'src/Core/Models/Relics/'` returns ZERO matches -- not one of the 298 relic models overrides it. EXECUTED: `hasattr(Relic, 'after_removed')` is False. So Burning Blood cannot be doing anything on removal in the game either, and the sim's omission provably cannot change an outcome. Same basis and same verdict as audits/relic/unsettling_lamp.json N1 (power.IsVisible) and audits/relic/calling_bell.json G4 (Hook.ShouldAddToDeck) -- a gate that is dead code in C# is a waiver, not a dormant gap (binding rule 3). Rule 7: relics/base.py and the two cited records are not hashed here."
+    },
+    {
+      "what": "N3: `StarterRelic ?? base.Owner.Relics.First(r => r.Rarity == Starter).Id` and the two [SavedProperty] members (TouchOfOrobas.cs:53-99, 154-158)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# lets the relic be SET UP before it is obtained -- SetupForPlayer(player) (TouchOfOrobas.cs:134-145) latches StarterRelic/UpgradedRelic so the offer screen can name them, and AfterObtained then prefers the latched ids over a fresh lookup. The sim models neither member and re-derives the starter at pickup time (touch_of_orobas.py:23-25). Same observable, because the only thing that could change between setup and pickup is the player's starter relic, and no ported path removes or replaces a starter before this relic resolves -- the Orobas shrine offers and grants inside one room. The offer-time half of SetupForPlayer IS ported, just not onto the relic: events/orobas.py:67-71 gates the option on `starter is not None and starter.id in TouchOfOrobas.REFINEMENTS`, which is SetupForPlayer's `return false if no starter` (see N4 for the difference in that condition). The InvalidOperationException guards ('Recursive Core setup called twice!') are structural. Rule 7: events/orobas.py is not hashed here."
+    },
+    {
+      "what": "N4: `GetUpgradedStarterRelic` falls back to `ModelDb.Relic<Circlet>()` for a starter outside RefinementUpgrades (TouchOfOrobas.cs:120-127); the port returns without doing anything (touch_of_orobas.py:26-29), and the shrine will not even offer it",
+      "verdict": "waiver",
+      "rationale": "OTHER CHARACTERS, named and verified. RefinementUpgrades (TouchOfOrobas.cs:29-51) has five entries: BurningBlood->BlackBlood (Ironclad), RingOfTheSnake->RingOfTheDrake (Silent), DivineRight->DivineDestiny (Regent), BoundPhylactery->PhylacteryUnbound (Necrobinder), CrackedCore->InfusedCore (Defect). The sim's REFINEMENTS keeps exactly the Ironclad row (touch_of_orobas.py:18), and the Ironclad's only starting relic is Burning Blood (granted unconditionally at run.py:659), so the fallback arm is unreachable in this sim's scope -- EXECUTED: `circlet` is not even a registered sim relic, so the arm could not be implemented today without porting it. Note the shape difference for the record: C#'s SetupForPlayer returns true for ANY starter and lets GetUpgradedStarterRelic degrade to Circlet, whereas events/orobas.py:67-71 refuses to offer the relic unless the starter is IN the map. Those differ only for a character whose starter is not in the five-entry map, which is not the Ironclad. Waived under the contract's 'characters other than Ironclad' exclusion with the concrete unported thing named (no `circlet` entry exists in the sim relic registry, relics/base.py _RELIC_CLASSES)."
+    },
+    {
+      "what": "N5: `undo_after_obtained` is not implemented",
+      "verdict": "faithful",
+      "rationale": "Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart, nothing in the game un-picks a relic, so a sim lacking it is not diverging from the source. Recorded here because the operational consequence is unusually bad for THIS relic: the conformance runner grants a node's relic and then swaps it for the one the save says was picked (conformance/runner.py's relic resync), and a speculative Touch of Orobas has already destroyed Burning Blood and replaced it with Black Blood by then -- so the swap leaves the run with the wrong starter and DETECTOR 3's act-boundary HP assertion drifts by the Black Blood/Burning Blood heal difference every combat. That is a tooling defect to log, not a fidelity gap. Rule 7: conformance/runner.py is not hashed here."
+    },
+    {
+      "what": "N6: `_extraHoverTips`, the two StringVars, `AfterCloned()` and SetupForTests (TouchOfOrobas.cs:25, 70-72, 94-96, 101-113, 147-152)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. SetupForTests is test scaffolding with no shipping caller, the same class of dead code as PROMPT.md bug class 18's TestMode.IsOn -- and unlike calling_bell, this port did not implement it."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

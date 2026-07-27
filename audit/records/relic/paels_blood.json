@@ -1,0 +1,41 @@
+{
+  "unit": "relic/paels_blood",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\PaelsBlood.cs",
+    "sha256": "311c23ed2996c13c9279eaf34aec9c139633f6a5443cdf256c2687d67ee21b59"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\paels_blood.py",
+    "sha256": "7c7b8066d0a06f90a2b3c566041923216f76c5cfd74a024d706ca8412df5f3e3"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (paels_blood.py:18)",
+      "verdict": "faithful"
+    },
+    "ModifyHandDraw": {
+      "maps_to": "modify_hand_draw (paels_blood.py:22-23), dispatched by HookSystem.modify_hand_draw (hooks.py:217-221) from PlayerCombatState.start_turn (player.py:171)",
+      "verdict": "faithful",
+      "rationale": "PaelsBlood.cs:14-21 returns `count + base.DynamicVars.Cards.IntValue`; CanonicalVars is `new CardsVar(1)` (PaelsBlood.cs:12) with no AscensionHelper.GetValueIfAscension anywhere in the file, so 1 is the pinned non-ascension value and paels_blood.py:20's `CARDS = 1` matches. Hook slot verified by execution rather than off the relics/base.py docstring (PROMPT.md bug class 11): `py tools/audit/relic_probes.py turn-order` prints `on_player_turn_start -> modify_hand_draw -> on_player_turn_started`, i.e. modify_hand_draw sits between the pre-draw turn-start slot and the draw, exactly where C# puts ModifyHandDraw (audits/seam/turn_structure.json steps 14-16: BeforeHandDraw -> ModifyHandDraw -> Draw)."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: `if (player != base.Owner) return count;` (PaelsBlood.cs:16-19) -- the sim's port has no player check at all",
+      "verdict": "faithful",
+      "rationale": "STRUCTURALLY SATISFIED, executed rather than asserted (binding rule 5): `py tools/audit/relic_probes_b11.py blood-draw` enumerates every caller of the hook and finds exactly one outside the dispatcher itself -- player.py:171, `self._hooks.modify_hand_draw(self, self.DRAW_PER_TURN)`, where `self` IS the combat's single PlayerCombatState. The sim's CombatState holds one player by construction, so `player != base.Owner` can never be true and the omitted guard cannot change an outcome. It is a multiplayer-only parameter check, noted in the mapping per the shared contract rather than verdicted as a divergence."
+    },
+    {
+      "what": "N2: the C# hook is a decimal chain and the sim's is an int chain",
+      "verdict": "faithful",
+      "rationale": "Hook.ModifyHandDraw folds `count` through every listener; the sim does the same (hooks.py:219-221) and the relic contributes a whole number, so no rounding can differ. Checked because the three other ported modify_hand_draw listeners are powers (powers.py:2648, :2746, :3895) that also contribute integers, so the fold cannot produce a fractional intermediate that the sim would truncate differently."
+    },
+    {
+      "what": "N3 (PROMPT.md bug class 16): does PaelsBlood override RelicModel.IsAllowed or name an RNG stream?",
+      "verdict": "faithful",
+      "rationale": "Neither. `grep -l IsAllowed` over the batch's fifteen C# relic files returns nothing, so the pool-eligibility omission recorded in .superpowers/sdd/content-relic-sweeps.md sweep B does not touch this unit, and the file draws no Rng at all. Obtainability confirmed by execution (`py tools/audit/relic_probes_b11.py pool`): Ancient rarity, offered by the ported Pael shrine (events/pael.py OPTION_POOL_3), matching Pael.cs:52-63."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
+}

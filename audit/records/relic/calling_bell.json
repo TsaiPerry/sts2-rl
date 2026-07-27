@@ -1,0 +1,66 @@
+{
+  "unit": "relic/calling_bell",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\CallingBell.cs",
+    "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\calling_bell.py",
+    "sha256": "00c527eb6a05992380bf9c6e6b14c8e9f8eee9b25faa3bbf569afeaaae614b59"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (calling_bell.py:18)",
+      "verdict": "faithful"
+    },
+    "HasUponPickupEffect": {
+      "maps_to": "has_upon_pickup_effect = True (calling_bell.py:19)",
+      "verdict": "faithful",
+      "rationale": "Matches CallingBell.cs:21. Worth noting against the same batch's relic/byrdpip, which drops the identical declaration."
+    },
+    "AfterObtained": {
+      "maps_to": "after_obtained (calling_bell.py:23-28)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The curse half is faithful; the relic half implements the source's TEST-MODE branch, so it grants three fixed relics instead of three pool pulls (G1), consumes none of the three Rewards draws those pulls cost (G2), and auto-keeps what the game offers as a skippable screen (G3)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE): the port implements CallingBell.GenerateRewards' `TestMode.IsOn` branch, not the shipping branch",
+      "verdict": "gap",
+      "issue": "MECHANISM: CallingBell.cs:34-64 has two arms. The `if (TestMode.IsOn)` arm (lines 39-52) builds three RelicRewards with FIXED models -- Anchor, Gremlin Horn, Mummified Hand. The shipping arm (53-63) builds `new RelicReward(RelicRarity.Common, Owner)`, `(RelicRarity.Uncommon, ...)` and `(RelicRarity.Rare, ...)`, each of which resolves its relic in RelicReward.Populate via `RelicFactory.PullNextRelicFromFront(Player, rarity)` (RelicReward.cs:75-96). calling_bell.py:21 hard-codes `RELICS = ('anchor', 'gremlin_horn', 'mummified_hand')` -- the test arm. TestMode.IsOn is a unit-test flag: `TestMode.TurnOnInternal` (TestMode.cs:38) is documented 'NEVER CALL THIS. Only calls should be in NetCoreRunner and CiCoreRunner' and has no caller anywhere under src/, so the shipping game always takes the second arm. REACHABILITY (LIVE, executed -- `py tools/audit/relic_probes.py batch3`): `run.add_relic('calling_bell')` yields relics ['calling_bell', 'anchor', 'gremlin_horn', 'mummified_hand'] on every seed, where the game yields one random Common, one Uncommon and one Rare from the run's grab bag. Both sides ported: Calling Bell is granted by the ported Darv shrine (events/darv.py) and the sim has a working rarity pull (`RunState.pull_relic_from_front`, run.py:559-566, used by the elite-relic reward path). This is not a dormancy question at all -- the wrong relics are granted in every run that takes the Bell."
+    },
+    {
+      "what": "G2 (LIVE): the three PullNextRelicFromFront draws are never consumed",
+      "verdict": "gap",
+      "issue": "MECHANISM: each of the shipping arm's three RelicRewards burns a pull from the player's relic grab bag when it Populates, and (per the project's own note, recorded in memory as 'Relic rarity rolls on Rewards') PullNextRelicFromFront also burns a per-player Rewards stream draw. The sim's port takes neither. EXECUTED (`py tools/audit/relic_probes.py batch3`): `grab bag 96 -> 96` across add_relic('calling_bell'). Two observables, not one: the three relics the Bell gives are wrong (G1) AND every subsequent relic pull in the run is shifted, because the pool it draws from still contains three relics the game would have removed. Filed separately from G1 because fixing G1 by granting three random relics without going through run.pull_relic_from_front would leave this half broken."
+    },
+    {
+      "what": "G3: RewardsCmd.OfferCustom is a take-or-skip reward screen; the port grants all three unconditionally",
+      "verdict": "deliberate-divergence",
+      "rationale": "CallingBell.cs:31 offers the rewards rather than granting them, so a player may decline any of the three. The sim auto-keeps, which is the house rule for non-choice relic offers -- rewards.py's combat screen likewise 'grants gold and any elite relic immediately' and leaves only the 3-card choice and the potion to the caller. Verdicted deliberate-divergence and not a gap because the divergent thing is the sim's player-choice model, not the relic's effect, and it is applied consistently across relic offers; flagged so that whoever fixes G1/G2 does not silently harden it. If a policy that ever declines a relic is added, this becomes a gap."
+    },
+    {
+      "what": "G4: `Hook.ShouldAddToDeck` is consulted by CardPileCmd.Add (CardPileCmd.cs:384) on the curse; the sim has no such hook",
+      "verdict": "waiver",
+      "rationale": "`grep -rn should_add_to_deck sts2_rl/ --include=*.py` returns ZERO hits, so the sim cannot block a card joining the deck. Waived, not filed as a dormant gap, on the same basis as batch 1's power.IsVisible finding: `grep -rn 'ShouldAddToDeck' src/Core/` outside Hook.cs and AbstractModel.cs returns exactly one line -- the dispatch site itself. There is not a single override in the game source, so the hook is dead code in C# too, not unported content. Rule 7: CardPileCmd.cs and Hook.cs are not hashed here."
+    },
+    {
+      "what": "N1: `CardPileCmd.AddCurseToDeck<CurseOfTheBell>` (CallingBell.cs:29) vs `run.add_card(make_card('curse_of_the_bell'))` (calling_bell.py:26)",
+      "verdict": "faithful",
+      "rationale": "AddCurseToDeck asserts the card is a Curse, creates it on the run, and routes it through `Add(card, PileType.Deck)` (CardPileCmd.cs:1037-1056). run.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it, which are the two deck-add hooks the sim models. The curse is ported and correct: cards/curse_of_the_bell.py is CardType.CURSE, eternal=True, max_upgrade_level 0. EXECUTED: the probe reports `curse added: ['curse_of_the_bell']`."
+    },
+    {
+      "what": "N2: the ORDER -- curse first, relics second",
+      "verdict": "faithful",
+      "rationale": "CallingBell.cs:29-31 adds the curse, waits, then offers; calling_bell.py:26-28 adds the curse then the relics. Recorded because it is load-bearing for any granted relic that reacts to the deck: Mummified Hand and Gremlin Horn do not, but a fixed G1 pulling a random Common could pull one that does (e.g. a deck-size reader), and the curse must already be in the deck when it lands."
+    },
+    {
+      "what": "N3: Cmd.Wait(0.75f), CanonicalVars('Relics', 3) and ExtraHoverTips (CallingBell.cs:23, 25, 30)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}

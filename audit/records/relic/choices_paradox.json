@@ -1,0 +1,71 @@
+{
+  "unit": "relic/choices_paradox",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\ChoicesParadox.cs",
+    "sha256": "77f50ace7c6343b92ede9d2dc37af01ca35301d3eab1cae4f9294ca4bacf023b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\choices_paradox.py",
+    "sha256": "d14a0e925e4d0d8c4117f18ef848db1eb2e152926c9c7d3c0ec9721720f99239"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (choices_paradox.py:19)",
+      "verdict": "faithful"
+    },
+    "AfterPlayerTurnStart": {
+      "maps_to": "on_player_turn_started (choices_paradox.py:23-37)",
+      "verdict": "gap",
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 5 distinct pool cards on turn 1, each given Retain, one chosen into hand -- but they are rolled on the wrong RNG stream with the wrong draw algorithm (G1), and the sim maps AfterPlayerTurnStart and AfterSideTurnStart onto one method, losing C#'s guarantee that this relic resolves before every AfterSideTurnStart listener (G2)."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (LIVE for parity): the card generation uses the legacy shared RNG and `rng.sample`, where C# names CombatCardGeneration and does an UnstableShuffle-take-first",
+      "verdict": "gap",
+      "issue": "MECHANISM: ChoicesParadox.cs:34 calls `CardFactory.GetDistinctForCombat(..., base.Owner.RunState.Rng.CombatCardGeneration)`, and GetDistinctForCombat is `FilterForCombat(cards).TakeRandom(count, rng)` (CardFactory.cs:119-129) -- one in-place UnstableShuffle of the filtered id list followed by Take(count). choices_paradox.py:29-31 calls the LEGACY helper `random_pool_cards(self.combat._rng, 5, distinct=True)`, which is `rng.sample(options, 5)` on the shared `random.Random` (cards/pool.py:157-158). Two divergences in one call: the wrong stream and a different consumption pattern. This is PROMPT.md bug class 16's second half, and unusually it is a gap the sim already knows how to close: `get_distinct_for_combat_parity(rng, count, ...)` (cards/pool.py:182-204) is the exact parity port, and the house-style branch around it is used by cards/infernal_blade.py:37-41, cards/mad_science.py:141-152, cards/stoke.py:43 and four sites in potions.py. REACHABILITY (executed -- `py tools/audit/relic_probes.py batch3`): in legacy mode `combat._rng IS card_gen -> True` (harmless), in parity mode `combat._rng IS card_gen -> False` -- the relic draws from the shared legacy generator while the game draws from CombatCardGeneration, so a string-seeded run diverges in the five cards offered AND in every later CombatCardGeneration draw, whose stream position is now wrong. LIVE for the conformance harness on any seed that takes this relic (it is granted by the ported Vakuu shrine, events/vakuu.py, confirmed by `batch3-pool`); dormant for RL training, which runs the legacy single-stream mode by design."
+    },
+    {
+      "what": "G2 (DORMANT): AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are two different C# hooks collapsed onto one sim method",
+      "verdict": "gap",
+      "issue": "PROMPT.md bug class 15 -- when the sim maps two C# hooks onto one method, list both call sites. C# fires Hook.AfterPlayerTurnStart at the end of SetupPlayerTurn, per player, immediately after that player's draw (CombatManager.cs:673-675 = audits/seam/turn_structure.json step 22), and Hook.AfterSideTurnStart only afterwards, once EVERY player's setup has finished (CombatManager.cs:520-524 = step 23). Both map to the sim's single on_player_turn_started (hooks.py:285-295), so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener becomes listener-registration order. Confirmed by execution that the sim really does have only one slot there (`py tools/audit/relic_probes.py turn-order` prints exactly one on_player_turn_started per turn). Same family as audits/seam/turn_structure.json guard G12, which flattens the VeryEarly/Early/Late SUB-phases of a single hook; this is the coarser version -- two distinct hooks, not two sub-phases -- so it is recorded here rather than folded in. DORMANT: the divergence needs an AfterSideTurnStart listener that reads the hand on turn 1, and the ported turn-1 AfterSideTurnStart content does not -- relic/candelabra and relic/chandelier gate on turns 2 and 3, and the turn-1 hand readers (relic/cloak_clasp) sit at turn END. Porting or writing any turn-1 AfterSideTurnStart effect that counts cards in hand makes it live."
+    },
+    {
+      "what": "G3: the softlock guard -- `if (list.Count == 0) { Log.Error; SentryService.CaptureException; return; }` (ChoicesParadox.cs:35-41) vs `if not options: return` (choices_paradox.py:32-33)",
+      "verdict": "faithful",
+      "rationale": "Same early return; the logging and Sentry legs are diagnostics with no model effect. Recorded because the guard exists precisely so an empty pool cannot hang a selection screen, and the sim's CombatState.select_cards would return [] rather than hang -- so the port is safe for the same reason twice over."
+    },
+    {
+      "what": "G4: the card pool -- `Character.CardPool.GetUnlockedCards(UnlockState, RunState.CardMultiplayerConstraint)` then FilterForCombat (ChoicesParadox.cs:34) vs `pool_card_ids()` over IRONCLAD_POOL (cards/pool.py:100-117 via random_pool_cards)",
+      "verdict": "faithful",
+      "rationale": "FilterForCombat is what pool_card_ids ports -- exclude Basic and Ancient rarities and anything with CanBeGeneratedInCombat false, in pool order -- and get_distinct_for_combat_parity's docstring states the equivalence. The UnlockState argument assumes full unlocks, which is the sim's global assumption (the same assumption .superpowers/sdd/content-relic-sweeps.md sweep B flags for relic/lasting_candy), and CardMultiplayerConstraint is single-player. Note the contrast with the REWARD pool, which uses the unfiltered GetUnlockedCards -- this is the combat-generation path, so the filter is correct here."
+    },
+    {
+      "what": "G5: `CardCmd.ApplyKeyword(item, CardKeyword.Retain)` on all five options (ChoicesParadox.cs:42-45) vs `card.retain = True` (choices_paradox.py:34-35)",
+      "verdict": "faithful",
+      "rationale": "cards/base.py:78 declares `retain: bool = False`, so the sim has the real keyword and the assignment sticks. Both sides apply Retain to every generated option and not only to the chosen one -- harmless, since the four unchosen cards are discarded without ever entering a pile on either side, but worth confirming it is not an off-by-one in the port."
+    },
+    {
+      "what": "G6: `CardSelectCmd.FromSimpleGrid(..., new CardSelectorPrefs(prompt, 1))` (ChoicesParadox.cs:46) vs `self.combat.select_cards('obtain', options, 1)` (choices_paradox.py:36)",
+      "verdict": "faithful",
+      "rationale": "MinSelect 1 with no MaxSelect override means exactly one card, and the C# loop over the returned set adds each to the hand -- one card. The sim asks for count 1 and adds each returned card via CardPileCmd.add_to_hand, matching AddGeneratedCardToCombat(PileType.Hand). Recorded because the grid-screen family is where min/max-select mistakes hide (relic/claws in this same batch has MinSelect 0 and MaxSelect 6)."
+    },
+    {
+      "what": "N1: `player != base.Owner` (ChoicesParadox.cs:29)",
+      "verdict": "waiver",
+      "rationale": "The `player != base.Owner` / `card.Owner != base.Owner` / `participants.Contains(base.Owner.Creature)` family is the multiplayer per-player filter on a hook the game dispatches for every player (and, for the participants form, also admits pets). The sim is single-player by construction (one RunState, one PlayerCombatState) and models no pet creature, so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
+    },
+    {
+      "what": "N2: `CardsVar(5).IntValue` (ChoicesParadox.cs:23, 34) vs `CARDS = 5` (choices_paradox.py:21)",
+      "verdict": "faithful",
+      "rationale": "5, with no AscensionHelper call in the file."
+    },
+    {
+      "what": "N3: Flash(), the L10N selection prompt and ExtraHoverTips (ChoicesParadox.cs:25, 33, 46)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
