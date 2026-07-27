@@ -1,0 +1,47 @@
+{
+  "unit": "relic/sai",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Sai.cs",
+    "sha256": "fac96aa2e31e69eb5a346e902bf0430ae1b808766728ae7eaabb18cb10cc591d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\sai.py",
+    "sha256": "ef7e1a202bbc1af427c4ad92e4428956fa000b98216ad55ed05a7e6062729cb3"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.ANCIENT (sai.py:19)",
+      "verdict": "faithful",
+      "rationale": "Matches Sai.cs:15. Obtainable: the ported Tanx shrine offers it (events/tanx.py:12)."
+    },
+    "AfterSideTurnStart": {
+      "maps_to": "on_player_turn_started (sai.py:23-28) -- the sim's single post-draw turn-start slot, executed-confirmed as the LAST of the five turn-start hooks (py tools/audit/relic_probes.py turn-order prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started)",
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4. The SLOT is right -- audits/seam/turn_structure.json step 23 maps AfterSideTurnStart (player side) to on_player_turn_started -- but the sim collapses THREE C# dispatch passes into it: step 22's Hook.AfterPlayerTurnStart, step 23's AfterSideTurnStart, and step 23's second AfterSideTurnStartLate pass. C# guarantees Sai's 7 Block lands after every AfterPlayerTurnStart listener; the sim makes that relic-registration order. That is seam guard G12, which is LIVE, and binding rule 3 requires the same verdict here. Everything else is faithful: `participants.Contains(base.Owner.Creature)` (Sai.cs:21) is structurally satisfied because on_player_turn_started is dispatched only for the player side, and CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, null) (Sai.cs:24) maps to BlockCmd.apply(hooks, player, 7, props=ValueProp.UNPOWERED) (sai.py:26-28). Rule 7: turn_structure.json, cmds.py and hooks.py are not hashed here."
+    }
+  },
+  "guards": [
+    {
+      "what": "G1 (DORMANT at this site, LIVE as a mechanism): AfterSideTurnStart is C#'s SECOND turn-start pass and the sim runs one flat walk (seam guard G12, PROMPT.md class 25)",
+      "verdict": "gap",
+      "issue": "MECHANISM: Hook.AfterSideTurnStart runs every listener's AfterSideTurnStart and then every listener's AfterSideTurnStartLate as two complete passes (Hook.cs:1163-1175), and it runs only after every player's SetupPlayerTurn -- i.e. after all of step 22's Hook.AfterPlayerTurnStart listeners. The sim's hooks.on_player_turn_started is a single listener walk, so a relic implementing the EARLIER C# hook can run after Sai. EXECUTED (py tools/audit/relic_probes_b14.py sai-seal-slot): 30 sim relics share on_player_turn_started, and 12 are C# AfterPlayerTurnStart implementers -- bellows, blood_vial, choices_paradox, emotion_chip, fake_blood_vial, festive_popper, gambling_chip, mercury_hourglass, mr_struggles, pendulum, royal_poison, vexing_puzzlebox (enumerated by grepping AfterPlayerTurnStart over src/Core/Models/Relics). DORMANT AT SAI'S SITE, checked rather than assumed: Sai only GAINS Block and reads nothing, and none of the twelve earlier-pass ports reads or writes the player's Block (their bodies upgrade hand cards, heal 2, add cards to hand, damage enemies, damage the player, discard-and-redraw, or draw). So no ordering changes Sai's 7. It goes live the moment any AfterPlayerTurnStart listener reads player Block, or an AfterSideTurnStartLate one does -- SandpitPower is already ported into the same flat pass (named by seam G12). The mechanism is LIVE and verdicted `gap` at the seam (Orichalcum x Cloak Clasp, 5 block vs 11) and binding rule 3 forbids softening it here. Rule 7: turn_structure.json, Hook.cs and hooks.py are not hashed."
+    },
+    {
+      "what": "N1: BlockVar(7m, ValueProp.Unpowered) (Sai.cs:17) read as `base.DynamicVars.Block` (Sai.cs:24) vs the sim's literal BLOCK = 7 with props=ValueProp.UNPOWERED",
+      "verdict": "faithful",
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in Sai.cs, so 7 is the pinned non-ascension value. The Unpowered prop is load-bearing and correctly carried: BlockCmd.apply only runs modify_block_additive/multiplicative for a powered attack (cmds.py:144-148), so Dexterity and Frail do not touch it. EXECUTED (relic_probes_b14.py sai-seal-slot): turn 1 gives 7 Block; with 5 Dexterity applied, turn 2 still gives 7. Rule 7: cmds.py is not hashed here."
+    },
+    {
+      "what": "N2: the relic holds no state, so PROMPT.md classes 10 and 13 cannot fire, and there is no AfterCombatEnd or BeforeCombatStart override to drop",
+      "verdict": "faithful",
+      "rationale": "Sai.cs has three members (Rarity, CanonicalVars, AfterSideTurnStart) and no fields; sai.py mirrors that with one class constant. Confirmed by reading both files, with sweep-reset's 'hold no state at all' bucket as corroboration rather than authority."
+    },
+    {
+      "what": "N3: Flash() (Sai.cs:23) and CanonicalVars (Sai.cs:17)",
+      "verdict": "waiver",
+      "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle / ForceMaxColumnsUntilEmpty are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-26"
+}
