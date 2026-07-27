@@ -1,0 +1,104 @@
+{
+  "unit": "monster/twig_slime_m",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\TwigSlimeM.cs",
+    "sha256": "002b31ac7c27430441c28af9299a900b88e5f60e3414127db97111b76658842c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\slimes.py",
+    "sha256": "0716501b51d2726000d5b74c974d1607e9581d645a83936fd11d370fe04d7d0f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
+      "sha256": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "slimes.py:113-114 min_hp = 26",
+      "verdict": "faithful",
+      "note": "TwigSlimeM.cs:23 non-ascension = 26. The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5). `py audit/tools/monster_probes.py hp` compares this pair pool-wide with 0 mismatches; re-read by hand here."
+    },
+    "MaxInitialHp": {
+      "maps_to": "slimes.py:113-114 max_hp = 28",
+      "verdict": "faithful",
+      "note": "TwigSlimeM.cs:25 non-ascension = 28. "
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: TwigSlimeM.cs:31."
+    },
+    "HasPhobiaSpineSkin (protected; not in the skeleton)": {
+      "maps_to": "no counterpart (the sim models no presentation)",
+      "verdict": "waiver",
+      "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: TwigSlimeM.cs:27."
+    },
+    "GenerateMoveStateMachine (protected; not in the skeleton)": {
+      "maps_to": "slimes.py:119-120 (_move_key + _pokey_streak) / :137-154 telegraph_next_move",
+      "verdict": "faithful",
+      "note": "TwigSlimeM.cs:33-45. THE HEADLINE ARGUMENT: line 39 is `randomBranchState.AddBranch(moveState, 2)` - overload #9 (`int maxRepeats`), which delegates :105 -> :95 -> :75 -> :62 and forces repeatType = CanRepeatXTimes with maxTimes = 2 and weight = 1f. It is NOT a weight of 2. Line 40 is `AddBranch(moveState2, MoveRepeatType.CannotRepeat)` - overload #10, weight 1f. Initial state is moveState2 = STICKY_SHOT_MOVE (line 44), which IS a MoveState, so it is logged at construction (seam step 28) and the first roll early-returns (step 30). The port reads both arguments CORRECTLY: pokey_w = 0 only when the last two logged moves were both POKEY (slimes.py:147-149), sticky_w = 0 only when the last was STICKY (:150), base weights 1 each, add order [POKEY, STICKY] matching :39-40. Executed: `py audit/tools/monster_probes_b02.py seq` builds a reference MonsterMoveStateMachine transcribed literally from the C# GenerateMoveStateMachine (every AddBranch integer placed in the role RandomBranchState.cs:46-113 gives it, per monster_state_machine step 13) and drives it against the sim port on identically seeded MonsterAi streams: 18 unit configurations x 3 seeds x 40 turns, 0 mismatches in either the emitted move sequence or the MonsterAi draw count. twig_slime_m: MATCH, 40 draws on both sides over 40 turns. Executed: `py audit/tools/monster_probes_b02.py dist` - 4000 independent combats x 12 turns (48000 moves), reference machine vs sim port, per-move frequency identical to the last printed digit. twig_slime_m: POKEY_POUNCE 57.35% / STICKY_SHOT 42.65% on both sides - note this is NOT 50/50 and NOT 2:1, which is exactly what the misread would have produced."
+    }
+  },
+  "guards": [
+    {
+      "what": "Bug class 6 / SHARED-FINDINGS section 1 (the AddBranch weight-vs-cooldown misread that made monster_state_machine G1 live): checked explicitly and NOT present here. TwigSlimeM is one of the two monsters the bug class was originally attested in ([[monster-move-weight-vs-cooldown-bug]]) and was fixed before this audit; re-verified against the overload table rather than taken on trust.",
+      "verdict": "faithful",
+      "note": "The port's own docstring (slimes.py:107-111) states the correct reading, and PROMPT.md classes 19/24 say a docstring is never the evidence - so the claim was re-derived from RandomBranchState.cs:105 -> :95 -> :75 -> :62 and then EXECUTED (dist probe). Pre-existing regression cover: test/test_monster_branch_audit.py::TestPreviouslyFixedBugClassRegression::test_twig_slime_m_draws_every_turn (grepped and read; test files are deliberately never hashed by this pipeline)."
+    },
+    {
+      "what": "CanRepeatXTimes semantics: C# `allowed = 1 if StateLog.Count < n` else scan the last n entries (RandomBranchState.cs:142-157) vs the port's _pokey_streak counter (slimes.py:147-149)",
+      "verdict": "faithful",
+      "note": "The counter is exactly 'consecutive POKEY at the tail of the log', and `>= 2` reproduces both arms including the Count < n short-circuit (a one-entry log can never have a streak of 2). The log the C# scans starts non-empty - the initial STICKY_SHOT_MOVE is logged at construction (seam step 28) - and the port's equivalent initial state is the same move, which is why the first transition is a forced POKEY on both sides. Executed leg-by-leg by the seq probe."
+    },
+    {
+      "what": "ClumpDamage (TwigSlimeM.cs:29, GetValueIfAscension(DeadlyEnemies, 12, 11)) = 11 vs slimes.py:126,134; _stickyAmount = 1 (:21) vs the single Slimed card at slimes.py:132",
+      "verdict": "faithful",
+      "note": "The C# model's own value is read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) - the LAST argument (PROMPT.md v5)."
+    },
+    {
+      "what": "TestMode.IsOff branch in StickyShotMove (TwigSlimeM.cs:57-73)",
+      "verdict": "waiver",
+      "rationale": "PROMPT.md class 18. The shipping arm is the guarded one and it only positions a Godot spit-target sprite. Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all."
+    },
+    {
+      "what": "Intent list: POKEY_POUNCE SingleAttackIntent(11), STICKY_SHOT StatusIntent(1) (TwigSlimeM.cs:36-37)",
+      "verdict": "faithful",
+      "note": "Executed: `monster_probes_b02.py intents` agrees."
+    },
+    {
+      "what": "Move-state id rename (C# POKEY_POUNCE_MOVE/STICKY_SHOT_MOVE vs sim POKEY_POUNCE/STICKY_SHOT)",
+      "verdict": "faithful",
+      "note": "SHARED-FINDINGS section 3 (MoveState ids differ between the two sides). The one cross-file reader of a sim move id is CreatureCmd.stun's next_move_key (cmds.py:216-217), which assigns straight into `target._move_key`. Executed: the only ported caller that passes a next_move_key at all is sts2_rl/monsters/overgrowth/ceremonial_beast.py:45 (next_move_key=\"BEAST_CRY\", its own id), so no cross-file reference reaches this unit's ids and the rename is unobservable."
+    },
+    {
+      "what": "Should the hand-rolled port be replaced by a MachineMonster port (the codebase's preferred convention)?",
+      "verdict": "faithful",
+      "note": "A convention question, not a fidelity one. The hand-rolled logic is behaviourally equivalent over the whole reachable state space (executed above), so there is no divergence to record; the only residual exposure is representational - a future C# change to the branch parameters has no single place to land. Flagged in the batch report, not filed as a gap."
+    },
+    {
+      "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned, skipping the clamp / MaxHp<=0 -> Kill / AfterCurrentHpChanged) - does THIS unit make it live?",
+      "verdict": "faithful",
+      "note": "No. Neither side writes max HP after construction."
+    },
+    {
+      "what": "Death != removal: does the port conflate the two?",
+      "verdict": "faithful",
+      "note": "No ShouldDie, no ShouldCreatureBeRemovedFromCombatAfterDeath and no revive on either side."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27"
+}
