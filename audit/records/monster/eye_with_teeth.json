@@ -1,0 +1,105 @@
+{
+  "unit": "monster/eye_with_teeth",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\EyeWithTeeth.cs",
+    "sha256": "72f0a276381a9eb594a3486f66059e771187ba0529cb94075028331c23279c81"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\fogmog.py",
+    "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "EyeWithTeeth.min_hp = 6 (fogmog.py:28)",
+      "verdict": "faithful",
+      "rationale": "EyeWithTeeth.cs:22 is a bare `=> 6`, no ascension branch."
+    },
+    "MaxInitialHp": {
+      "maps_to": "EyeWithTeeth.max_hp = 6 (fogmog.py:29)",
+      "verdict": "faithful",
+      "rationale": "EyeWithTeeth.cs:24 `=> MinInitialHp`."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "ShouldDisappearFromDoom": {
+      "maps_to": "no sim counterpart; DoomPower is unported",
+      "verdict": "waiver",
+      "rationale": "Same executed argument as ceremonial_beast's entry: the property's only reader in the whole game is DoomPower.cs:90, inside the private PlayVfx helper, where it selects a death animation and nothing else; and `grep -n 'class DoomPower' sts2_rl/powers.py` finds no port. Binding rule 3: one verdict for the mechanism at both of this batch's sites."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "fogmog.py:31-35",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2's pool-wide verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect (IllusionPower 1 on itself, EyeWithTeeth.cs:30-34) is applied from `__init__` (fogmog.py:31-35). The game applies it from MonsterModel.AfterAddedToRoom (MonsterModel.cs:313-316 is a no-op base, so the override is the whole effect), awaited by CombatManager.AfterCreatureAdded inside StartCombatInternal, i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three clauses SHARED-FINDINGS establishes by execution: (a) listener set -- the only ported listeners on the reachable hooks (relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40, relics/paels_legion.py:36-43) all gate on the player and a monster's starting power/block is self-applied with no card; (b) HP-roll inversion -- of the 35 constructor-applied power classes only IllusionPower mentions max_hp and only inside revive() (powers.py:1581), never at apply time; (c) roll ordering -- all 29 machine sites are sticky-no-ops (monster_probes.py roll-order). One adaptation: this creature is a MID-COMBAT spawn, so the sim's construction runs inside Fogmog's ILLUSION move and the HP-roll inversion of clause (b) is against CreatureCmd.add's `combat.assign_parity_hp(creature)` (cmds.py:249-253) rather than combat.py:152-153. The clause still holds verbatim and is the shared finding's own worked example: IllusionPower is the ONE constructor-applied power class that mentions max_hp, and only inside revive() (powers.py:1577-1581), never at apply time. Its AfterApplied side effect (MinionPower 1, IllusionPower.cs:66-72) is mirrored in the sim constructor (powers.py:1562-1564). Rule 7: the four relic files and sts2_rl/powers.py named above are NOT hashed by this record (powers.py is hashed only where this record cites it with line numbers)."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "current_intent / take_turn (fogmog.py:41-56)",
+      "verdict": "faithful",
+      "rationale": "EyeWithTeeth.cs:36-43 is a one-node machine: DISTRACT_MOVE with FollowUpState = itself, StatusIntent(3). The port has no _move_key at all -- every turn adds 3 Dazed. Executed (`py audit/tools/monster_probes_b01.py chain`): 20 turns, single-move-loop = True, intent STATUS_CARD, 0 MonsterAi draws on both sides. The extra `is_reviving` arm the port carries is the sim's expression of IllusionPower's spliced REVIVE_MOVE, verdicted in the guards."
+    }
+  },
+  "guards": [
+    {
+      "what": "LIVE GAP -- death is not removal. IllusionPower.cs overrides ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90), NOT ShouldDie; the sim ports it onto should_die (powers.py:1566-1570), so an Eye With Teeth never dies and no on_death listener ever fires for it",
+      "verdict": "gap",
+      "live": true,
+      "issue": "In the game a lethal hit on an Eye With Teeth REALLY KILLS it -- CurrentHp 0, Hook.AfterDeath dispatched with wasRemovalPrevented FALSE -- and only the REMOVAL from Enemies is vetoed; IllusionPower.AfterDeath then splices a synthetic REVIVE_MOVE via SetMoveImmediate and the creature revives on its next turn. The sim's IllusionPower.should_die returns False, so the creature is floored at 1 HP, `is_dead` stays False and hooks.on_death is never dispatched. Observable: every on_death listener silently loses a trigger. SAME MECHANISM, SAME VERDICT as relic/gremlin_horn.json guard G1 (binding rule 3) -- this record does not re-verdict it, it records that THIS unit is what makes it live, which is what SHARED-FINDINGS section 7's 'death is not removal' clause asks each batch to check. LIVE, both sides reachable on ported content (rule 6): Eye With Teeth is summoned by Fogmog's ILLUSION move (fogmog.py:93-95, Fogmog.cs:66), Fogmog is in the ported overgrowth NORMAL pool (rooms.py:99, key 'fogmog'; executed, `py audit/tools/monster_probes_b01.py reach`), and killing a 6-HP minion needs no other content. gremlin_horn G1 records the executed observation (enemy hp=1, is_dead=False, energy 3 -> 3, hand 5 -> 5). Rule 7: sts2_rl/powers.py, IllusionPower.cs and sts2_rl/rooms.py are hashed in extra_sources; audit/records/relic/gremlin_horn.json is a record, not a source, and is deliberately not hashed."
+    },
+    {
+      "what": "The REVIVE turn: C# splices a MoveState('REVIVE_MOVE', ReviveMove, HealIntent) with FollowUpStateId = StateLog.Last().Id and MustPerformOnceBeforeTransitioning (IllusionPower.cs:77-90); the sim branches inside the monster's own take_turn (fogmog.py:44-52)",
+      "verdict": "faithful",
+      "rationale": "Same observable sequence: one turn showing a heal intent that restores the creature to full, then back to DISTRACT. The two machine-level side effects of the splice are both inert here -- the FollowUpStateId resolves to DISTRACT_MOVE either way because that is the only move in the log, and the duplicate StateLog entry the splice creates cannot move any weight because EyeWithTeeth has no RandomBranchState at all (EyeWithTeeth.cs:36-43). ShouldAllowHitting (IllusionPower.cs:92-103) is mirrored at powers.py:1572-1575."
+    },
+    {
+      "what": "DistractMove adds 3 Dazed to the targets' DISCARD pile in one CardPileCmd.AddToCombatAndPreview call (EyeWithTeeth.cs:50); the port loops add_to_discard three times (fogmog.py:53-56)",
+      "verdict": "faithful",
+      "rationale": "Same pile, same count, same order (append). The sim's add_to_discard is documented as mirroring AddToCombatAndPreview (cmds.py:464-472) and fires on_card_entered_combat per card, which is what the game's per-card AbstractModel registration does; batching three into one call would change nothing a listener can see, because no ported on_card_entered_combat listener reads a count."
+    },
+    {
+      "what": "The C# StatusIntent(3) vs the sim's Intent(MoveType.STATUS_CARD) with no number",
+      "verdict": "faithful",
+      "rationale": "The intent VOCABULARY mapping is explicitly outside every seam's scope (monster_state_machine boundary hole 2) and the sim's Intent has no status-count field to carry the 3. It is a telegraph-detail loss, not a behavioural one: take_turn adds the right three cards. Recorded rather than skipped so the hole has a per-unit datum."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Powers\\IllusionPower.cs",
+      "sha256": "7461c923281077a0f9acf3647dc08ec0ff75ed04e1098406f6dc8b6fbb6fb31d",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
+      "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
+}

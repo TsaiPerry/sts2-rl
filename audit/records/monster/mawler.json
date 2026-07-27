@@ -1,0 +1,69 @@
+{
+  "unit": "monster/mawler",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Mawler.cs",
+    "sha256": "e140ac7288e26193ff71a60381376f9f6e41665bfc0a4fa3f811ad1176049f6e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\mawler.py",
+    "sha256": "58a254abfd385e61605cf7c038e514830858c60c2b8205c798d2e315851ef02f"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "Mawler.min_hp = 72 (mawler.py:29)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Mawler.cs:21 (ToughEnemies, 76, 72) -> 72."
+    },
+    "MaxInitialHp": {
+      "maps_to": "Mawler.max_hp = 72 (mawler.py:30)",
+      "verdict": "faithful",
+      "rationale": "Mawler.cs:23 `=> MinInitialHp`."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "Mawler.build_machine (mawler.py:35-51)",
+      "verdict": "faithful",
+      "rationale": "A MachineMonster port and the batch's second seam pin. Mawler.cs:29-44: three moves all pointing at one RandomBranchState 'RAND', initial state CLAW_MOVE (moveState3, the LAST declared -- another easy inversion), and three branches added with overload #5 (`MoveRepeatType, float`), so again there is no integer argument to misread: RIP_AND_TEAR/CannotRepeat/1f, ROAR/UseOnlyOnce/1f, CLAW/CannotRepeat/1f in that ADD ORDER. mawler.py:45-47 adds rip, roar, claw with the same repeat types and the default weight 1.0, and mawler.py:51 passes claw as the initial state. `py audit/tools/state_machine_probes.py mismatch` lists Mawler among the 7 EXACT matches. Executed (`py audit/tools/monster_probes_b01.py machine`, seeds b01-b03, 40 turns): identical sequences and 40/40 MonsterAi draws on both sides -- every transition goes through RAND, so the draw count is exactly the turn count."
+    }
+  },
+  "guards": [
+    {
+      "what": "The three repeat rules -- CannotRepeat on RIP and CLAW, UseOnlyOnce on ROAR",
+      "verdict": "faithful",
+      "rationale": "UseOnlyOnce blocks a branch iff the state is ANYWHERE in the log (RandomBranchState.cs:134-141), so ROAR is once per combat, and CannotRepeat blocks iff it is the LAST logged move (:142-157). The port passes MoveRepeatType.USE_ONLY_ONCE and .CANNOT_REPEAT through to the audited machinery rather than re-implementing them, so the rules themselves are monster_state_machine seed fact 2's `faithful` transliteration. Behaviour pinned by the pre-existing test/test_new_features.py::TestStateMachine::test_mawler_roar_used_at_most_once_per_combat (verified present by grep), and re-executed here by the 40-turn sequence diff, in which ROAR appears at most once."
+    },
+    {
+      "what": "Add order is observable and all three weights are EQUAL, the exact configuration in which a reversed order is invisible to a distribution check",
+      "verdict": "faithful",
+      "rationale": "Recorded deliberately: the sibling unit inklet in this batch has precisely that defect with two equal weights, and the only thing separating the two verdicts is that Mawler's order matches. Pinned by the per-draw sequence diff (not a histogram), which would disagree on the first roll if any two branches were swapped."
+    },
+    {
+      "what": "Move numerics: RipAndTearDamage 14, ClawDamage 4 x 2 hits, Roar VulnerablePower 3",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Mawler.cs:25 (DeadlyEnemies, 16, 14) -> 14 = _RIP_DMG; :27 (5, 4) -> 4 = _CLAW_DMG with `.WithHitCount(2)` (:62) = _CLAW_HITS; RoarMove applies VulnerablePower 3m to `targets` (:57) = _VULNERABLE_AMT applied to ctx.player (mawler.py:19-22, 64-67). ROAR's intent is built lazily (`self._roar_intent`, mawler.py:43, 53-56) because it names a power class; the machinery accepts a callable intent (state_machine.py:120-122)."
+    },
+    {
+      "what": "State ids differ: the port uses CLAW/RIP_AND_TEAR/ROAR where C# uses CLAW_MOVE etc.",
+      "verdict": "faithful",
+      "rationale": "SHARED-FINDINGS section 3's fixed verdict. The two places an id is load-bearing are the cooldown arm of _effective_weight (matches by string id) and CreatureCmd.stun's next_move_key -- Mawler has no cooldown on any branch and no ported caller stuns it, so the rename is unobservable and no cross-file reference uses the id."
+    },
+    {
+      "what": "Ascension gating on HP, RipAndTearDamage and ClawDamage",
+      "verdict": "waiver",
+      "rationale": "Out of scope; non-ascension branch compared (N4)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    }
+  ]
+}

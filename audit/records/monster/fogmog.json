@@ -1,0 +1,94 @@
+{
+  "unit": "monster/fogmog",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Fogmog.cs",
+    "sha256": "adb0ae07239973c167d7c35a3c36ae8b4cafd764b4bc44e7e44b04f91874d7b9"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\fogmog.py",
+    "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "Fogmog.min_hp = 74 (fogmog.py:64)",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Fogmog.cs:28 (ToughEnemies, 78, 74) -> 74."
+    },
+    "MaxInitialHp": {
+      "maps_to": "Fogmog.max_hp = 74 (fogmog.py:65)",
+      "verdict": "faithful",
+      "rationale": "Fogmog.cs:30 `=> MinInitialHp`."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateAnimator": {
+      "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
+      "verdict": "waiver",
+      "rationale": "Presentation, out of scope by the audit prompt and matching monster_state_machine guards N2/N5 and the KinPriest precedent N6 (read to the end before waiving)."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "Fogmog.build_machine (fogmog.py:70-91)",
+      "verdict": "faithful",
+      "rationale": "A MachineMonster port and one of the two seam pins in this batch, so the comparison is node by node against Fogmog.cs:38-58 and against `py audit/tools/state_machine_probes.py mismatch`, whose 12 resolved pairs list Fogmog among the 7 EXACT matches (it is not one of G1's five misreaders). Nodes: ILLUSION_MOVE (initial) -> SWIPE_MOVE -> BRANCH; SWIPE_RANDOM_MOVE -> HEADBUTT_MOVE -> SWIPE_MOVE. BRANCH is added SWIPE_RANDOM first then HEADBUTT (Fogmog.cs:46-47), both overload #6 (`MoveRepeatType, Func<float>`) so there is no integer to misread at all: CannotRepeat, weights 0.4f and 0.6f. fogmog.py:82-83 adds them in the same order with the same weights and repeat type. Executed (`py audit/tools/monster_probes_b01.py machine`, seeds b01-b03, 40 turns): identical sequences and identical MonsterAi draw counts (17/17, 18/18, 16/16) -- the draw count is below 40 precisely because SWIPE_RANDOM -> HEADBUTT -> SWIPE is a deterministic leg."
+    }
+  },
+  "guards": [
+    {
+      "what": "Add order is observable and this branch has UNEQUAL weights, so a swap would show as a 40/60 flip",
+      "verdict": "faithful",
+      "rationale": "monster_state_machine step 14: one NextFloat(total) then subtract-and-walk in add order. Recorded explicitly because the sibling unit inklet in this same batch has the reversed-order defect and the two must not be assumed to share a fate (PROMPT.md bug class 29 -- never copy a sibling's verdict). Here the executed sequence diff pins both the order and the weights."
+    },
+    {
+      "what": "SWIPE_MOVE and SWIPE_RANDOM_MOVE are two distinct ids sharing ONE delegate (Fogmog.cs:42-43, both `SwipeMove`); the port keeps them distinct (fogmog.py:75-76, both `self._swipe_move`)",
+      "verdict": "faithful",
+      "rationale": "Load-bearing, because the two nodes have different follow-ups (SWIPE -> BRANCH, SWIPE_RANDOM -> HEADBUTT) and different CannotRepeat identities inside BRANCH. Collapsing them would change the graph. monster_state_machine G8's dormancy note calls this pair 'the game's own near-miss' for duplicate state ids; the port keeps the ids distinct too, so no duplicate-key question arises."
+    },
+    {
+      "what": "IllusionMove is guarded by `base.CombatState.IsLiveCombat()` (Fogmog.cs:64) and the port summons unconditionally (fogmog.py:93-95)",
+      "verdict": "faithful",
+      "rationale": "Executed: CombatState.cs:608 `public bool IsLiveCombat() { return true; }` -- the real combat state's implementation is a constant true, and the only other implementers are ICombatState.cs's declaration and NullCombatState.cs (a mock). So the guard is a test/mock hatch, never false in a shipping combat, and the port's unconditional summon is the shipping behaviour. This is PROMPT.md bug class 18's shape checked before verdicting."
+    },
+    {
+      "what": "The summoned Eye With Teeth is added during the ENEMY side, where CombatManager.AfterCreatureAdded declines to roll a move (monster_state_machine step 48 / G9 clause b)",
+      "verdict": "faithful",
+      "rationale": "G9 clause b is the seam's dormant gap and is not re-verdicted. It cannot bite through THIS summon anyway, because EyeWithTeeth is a hand-rolled Monster with no machine and no roll on either side: executed, `py audit/tools/monster_probes_b01.py chain` shows 0 MonsterAi draws over 20 of its turns. The sim's CreatureCmd.add does roll the spawn's parity HP on the Niche stream before it joins the list (cmds.py:249-253), mirroring CreateCreature, and assigns the CombatId in attach order."
+    },
+    {
+      "what": "Move numerics: SwipeDamage 8 + StrengthPower 1, HeadbuttDamage 14, and the swipe intent's second BuffIntent",
+      "verdict": "faithful",
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Fogmog.cs:32 (DeadlyEnemies, 9, 8) -> 8 = _SWIPE_DMG; :34 (16, 14) -> 14 = _HEADBUTT_DMG (fogmog.py:19-21). SwipeMove damages then applies StrengthPower 1m (:72-76) and the port keeps that order (fogmog.py:97-101); HeadbuttMove applies nothing (:79-85 vs :103-104). Both swipe nodes telegraph SingleAttackIntent + BuffIntent and the port gives them one shared `swipe_intent` with also=(BUFF,)."
+    },
+    {
+      "what": "ShouldShowMoveInBestiary hides SWIPE_RANDOM_MOVE and HEADBUTT_MOVE (Fogmog.cs:105-112)",
+      "verdict": "waiver",
+      "rationale": "Bestiary presentation; the sim has no Bestiary (N5)."
+    },
+    {
+      "what": "Ascension gating on HP, SwipeDamage and HeadbuttDamage",
+      "verdict": "waiver",
+      "rationale": "Out of scope; non-ascension branch compared (N4)."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "side": "sim"
+    }
+  ]
+}
