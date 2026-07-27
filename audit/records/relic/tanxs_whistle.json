@@ -38,6 +38,16 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -60,8 +70,8 @@
     },
     {
       "what": "N2: Hook.ShouldAddToDeck (CardPileCmd.cs:384) has no sim counterpart",
-      "verdict": "waiver",
-      "rationale": "Cited and matched from relic/calling_bell guard G4 and relic/storybook N2 (binding rule 3): the hook has ZERO overrides anywhere in the decompiled game, so it is dead code in C# too rather than unported content, and the sim's `grep should_add_to_deck` returns nothing. Rule 7: CardPileCmd.cs and Hook.cs are not hashed here."
+      "verdict": "faithful",
+      "rationale": "VOCABULARY RULING (2026-07-26 relic fix pass), applied at every dead-in-the-source site in this tier so it stops contradicting itself. When a C# member the sim omits is DEAD IN THE GAME SOURCE ITSELF -- zero overrides, zero producers, zero callers anywhere under src/ -- the correct verdict is `faithful`, not `waiver`. PROMPT.md v6 item 3, which the relic stream itself wrote, settles the principle for the mirror-image case: 'a waiver is in-scope-adjacent and declined, and here there is no source behaviour to be faithful to.' A waiver claims something in scope was deliberately not audited; here there is nothing to decline, because the member provably cannot fire in any run of the shipping game and cannot become live by porting more content -- it would take a change to the game's own source. `faithful` also states the stronger and more useful fact: the two codebases have the SAME observable. Before this pass the relic tier split 8 waivers against 5 faithfuls on identical reasoning; these entries are now all `faithful` (binding rule 3). NOTE: this ruling does NOT touch MULTIPLAYER gates (`player != base.Owner`, `Players.Count == 1`), which stay `waiver` -- the shared contract names multiplayer as out of scope outright, and unlike a dead member a player count really can differ in the shipping game; the sim simply does not model that mode. AT THIS SITE: Cited and matched from relic/calling_bell guard G4 and relic/storybook N2 (binding rule 3): Hook.ShouldAddToDeck has ZERO overrides anywhere in the decompiled game -- `grep -rn ShouldAddToDeck src/` returns only the dispatch (CardPileCmd.cs:384), the Hook wrapper (Hook.cs:2084-2088) and the base declaration (AbstractModel.cs:2144) -- so it is dead code in C# too rather than unported content, and the sim's `grep should_add_to_deck` returns nothing. ONLY THE VERDICT CHANGES. Rule 7: CardPileCmd.cs, Hook.cs and AbstractModel.cs are not hashed here."
     },
     {
       "what": "N3: `CreateCard<Whistle>` (TanxsWhistle.cs:19) vs make_card('whistle') -- is the ported card the right one?",

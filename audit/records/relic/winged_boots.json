@@ -48,6 +48,11 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -101,7 +106,7 @@
     {
       "what": "N3: the sim charges only the FIRST relic whose should_allow_free_travel() is True and then `break`s (run.py:947-950); C# charges every AfterRoomEntered implementer independently",
       "verdict": "gap",
-      "issue": "MECHANISM: in C# the charge is each relic's own business, so two free-travel sources both react to the same non-child travel -- Winged Boots would still burn a use even if something else were already granting the travel. The sim's loop consumes exactly one charge and stops. DORMANT: Winged Boots is the ONLY sim relic implementing should_allow_free_travel (grep `def should_allow_free_travel` over sts2_rl/ returns sts2_rl/relics/base.py:255 -- the base default -- and sts2_rl/relics/winged_boots.py:24), and relics are unique within a run, so no second granter can exist. The concrete unported thing that would make it live is the `Flight` run MODIFIER (Flight.cs:5, the game's other ShouldAllowFreeTravel implementer): with Flight active, C# still decrements the Boots on every off-path travel and the sim's break would leave that to chance of ordering. No run modifiers are ported (grep for a modifiers module under sts2_rl/ finds none). Rule 7: run.py, sts2_rl/relics/base.py and Flight.cs are NOT hashed by this record."
+      "issue": "MECHANISM: in C# the charge is each relic's own business, so two free-travel sources both react to the same non-child travel -- Winged Boots would still burn a use even if something else were already granting the travel. The sim's loop consumes exactly one charge and stops. DORMANT: Winged Boots is the ONLY sim relic implementing should_allow_free_travel (grep `def should_allow_free_travel` over sts2_rl/ returns sts2_rl/relics/base.py:255 -- the base default -- and sts2_rl/relics/winged_boots.py:24), so no second granter exists. [PREMISE CORRECTED 2026-07-26 by the relic fix pass; the CONCLUSION is unchanged. The entry used to add 'and relics are unique within a run'. THAT IS FALSE OF THE SIM: `RunState.add_relic` (sts2_rl/run.py:546-553) appends unconditionally with no held-relic check, and `RunState.pull_relic_from_front` (sts2_rl/run.py:559-595) filters only on rarity and `is_allowed_in_shops` -- so a duplicate is constructible, which is exactly the hedge relic/paper_phrog guard G1 makes on the same point ('the sim's only duplicate-relic mechanism is Toy Box's wax copies'). The DORMANCY survives by a route that does not need uniqueness, and it is specific to this relic: Winged Boots is RARITY ANCIENT (sts2_rl/relics/winged_boots.py:13), so it is not in the grab bag and Toy Box's four `pull_relic_from_front` wax copies cannot be it; its only ported grant path is the Neow option list (sts2_rl/events/neow.py:41), which a run takes at most once. So two Winged Boots cannot coexist today even though the sim would happily hold two.] The concrete unported thing that would make it live is the `Flight` run MODIFIER (Flight.cs:5, the game's other ShouldAllowFreeTravel implementer): with Flight active, C# still decrements the Boots on every off-path travel and the sim's break would leave that to ordering. No run modifiers are ported (grep for a modifiers module under sts2_rl/ finds none). Rule 7: sts2_rl/run.py, sts2_rl/relics/base.py, sts2_rl/events/neow.py, audit/records/relic/paper_phrog.json and Flight.cs are NOT hashed by this record."
     },
     {
       "what": "N4: the ORDER of the charge against the room's own AfterRoomEntered pass",

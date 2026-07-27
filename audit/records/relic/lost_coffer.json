@@ -38,6 +38,96 @@
       "path": "sts2_rl/rewards.py",
       "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BlackStar.cs",
+      "sha256": "236a57f088df6306350579a36d3e9de80b705e12675eb6c9e18d82c9285c2e37",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/CallingBell.cs",
+      "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/GlassEye.cs",
+      "sha256": "1cf2c74cfc8852970e07f40e2815f605806ba8f5a0d999cbaf4f49d99fe1f011",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LavaRock.cs",
+      "sha256": "3fb81e2b172260204bf0ae6a36891480d5924467b82ac0346a9023e6c5339859",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orrery.cs",
+      "sha256": "1e14f14c3db789ac56b47053661019f25cf20ab2cde218a9ddbab2083ccfd88f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SmallCapsule.cs",
+      "sha256": "ae052e2dbcfc30eed878ec64a6132f7d130273603379c818b547605f0ef6634c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ToyBox.cs",
+      "sha256": "b96ea44d322aab9cb75e155e103fbf0077b19f215698f103a374f7efd9b4da96",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/WongosMysteryTicket.cs",
+      "sha256": "831872d73d4c25fca471afe636eb65d34677aba0a690239c471573ceb05b8cb9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/alchemical_coffer.py",
+      "sha256": "e1d39c02a3ea0907e3b4a542f5b25a7a26491b79ddf2704c206d8a0bcb608e45",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -58,14 +148,16 @@
   },
   "guards": [
     {
-      "what": "G1: `RewardsCmd.OfferCustom` (LostCoffer.cs:22) is a take-or-SKIP reward screen; the port takes one card and the potion unconditionally",
-      "verdict": "deliberate-divergence",
-      "rationale": "The card choice itself is modelled -- run.select_cards('card_reward', cards, 1) (lost_coffer.py:22) delegates to the driver's selector -- but neither the card nor the potion can be DECLINED, where the game's reward screen lets the player leave the screen with nothing. This is the same divergence and the same verdict as relic/calling_bell guard G3 (binding rule 3): the divergent thing is the sim's player-choice model, applied consistently across relic reward offers, not the relic's effect. Flagged rather than waived so that whoever adds a declining policy revisits both records; at that point it becomes a gap."
+      "what": "G1: `RewardsCmd.OfferCustom` (LostCoffer.cs:22) is a take-or-SKIP reward screen -- SCOPED TO THE POTION HALF, which the port grants unconditionally (the card half does model the decline)",
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B), and NARROWED by the 2026-07-26 fix pass. The CARD half is fine and stays faithful: sts2_rl/relics/lost_coffer.py:22 is `run.select_cards('card_reward', cards, 1)`, and 'card_reward' IS in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES, so sts2_rl/driver.py:246-249 issues a real decision with an explicit skip action and `for card in []` adds nothing (sts2_rl/run.py:384-390 also honours an empty selector return). The POTION half is the gap: sts2_rl/relics/lost_coffer.py:23 is a bare `run.add_potion(run.random_potion())` with no selection seam at all, where LostCoffer.cs:21's PotionReward is its own declinable entry on the same screen -- and declining matters, because a belt slot held open for a later pick is a real choice and the sim's belt is conformance-asserted slot-by-slot (sts2_rl/conformance/runner.py:623-631). Lost Coffer is a ported Neow positive option (sts2_rl/events/neow.py:39), so it is reachable. See guard G2 for the separate potion-STREAM gap at the same line.",
+      "live": true
     },
     {
-      "what": "G2: PotionReward (LostCoffer.cs:21) rolls `PotionFactory.CreateRandomPotionOutOfCombat(player, player.PlayerRng.Rewards)` (PotionReward.cs:54-60); the port calls run.random_potion(), which draws on the shared legacy RNG from an `in_reward_pool` approximation of the pool",
-      "verdict": "waiver",
-      "rationale": "Potions are out of scope entirely under the shared contract, and BOTH halves of the divergence are inside the potion domain: the pool identity and the RNG stream. Recorded rather than silently skipped because the stream half is PROMPT.md bug class 16's second shape -- a C# caller that names a stream reaching a sim helper on the legacy shared rng -- and it is invisible outside the conformance harness. Contrast relic/belt_buckle, where a potion-TRIGGERED divergence was filed as a gap because its observable was Dexterity; here the observable is the potion itself, so the exclusion applies. If potions are ever brought into scope this waiver must be revisited."
+      "what": "G2 (LIVE, grade A -- stream desync): PotionReward (LostCoffer.cs:21) rolls `PotionFactory.CreateRandomPotionOutOfCombat` off `Player.PlayerRng.Rewards`; the port rolls the legacy shared `random.Random`",
+      "verdict": "gap",
+      "issue": "SCOPE RULING (2026-07-26 relic fix pass, applied at every potion site in this tier). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' means POTION IS NOT AN AUDITED KIND -- there is no `potion` roster kind and no `audit/records/potion/`. It does NOT mean that potion-affecting behaviour of an AUDITED relic is invisible. The relic tier itself already reads it that way at the overwhelming majority of its sites: 45 relic gap entries across 25 records turn on potion mechanics, 27 of them tagged LIVE (relic/belt_buckle, relic/cauldron, relic/sozu, relic/delicate_frond, relic/petrified_toad, relic/tiny_mailbox, relic/white_beast_statue, relic/wongos_mystery_ticket, relic/phial_holster G1 ...), against only four records that waived on the exclusion. Binding rule 3 forces one answer and the majority is also the better-reasoned side: potions ARE ported (51 registered classes, 48 in the reward pool) and the belt is conformance-asserted -- sts2_rl/conformance/runner.py:623-631 diffs `floor_potions` slot by slot and sts2_rl/conformance/runner.py:715-717 reads `max_potions`. A divergence the conformance runner asserts on is by definition one a replay sees, which is the README's definition of a gap.\nAT THIS SITE (LIVE, grade A): `PotionReward.Populate` (src/Core/Rewards/PotionReward.cs:54-61) is `Rng rng = _rngOverride ?? base.Player.PlayerRng.Rewards;` followed by `PotionFactory.CreateRandomPotionOutOfCombat(base.Player, rng)`, and LostCoffer.cs:21 constructs the reward with no rng override -- so the game spends TWO draws on the per-player Rewards stream for this potion (`rng.NextFloat()` for the rarity band then `rng.NextItem(...)` inside it, src/Core/Factories/PotionFactory.cs:67-81). sts2_rl/relics/lost_coffer.py:23 calls `run.random_potion()`, which is `self.rng.choice(pool)` over a flat id-sorted reward pool on the LEGACY shared `random.Random` (sts2_rl/run.py:513-520) -- the wrong distribution AND the wrong stream. This is PROMPT.md bug class 16's second shape, and the class's own test (is the stream CONSUMED, not merely named?) answers yes. EXECUTED on a string-seeded run: `run.player_rng.rewards` moves 0 -> 9 across `add_relic('lost_coffer')`, and all nine belong to the card half (`create_reward_cards`); the potion contributes ZERO where the game contributes two, so every later Rewards draw in the run is off by two. Reachable with ported content: Lost Coffer is a Neow positive option (sts2_rl/events/neow.py:39), and the sibling relic with the identical C# call already does it correctly -- sts2_rl/relics/alchemical_coffer.py:24-28 branches on `run.rng_set is not None` and calls `potion_pools.generate_random_potions`, which is the line-for-line port. Same mechanism and same verdict as relic/phial_holster guard G1 (binding rule 3), which files exactly this shape as a LIVE gap on the CombatPotionGeneration stream. Re-verdicted from waiver -- see the scope ruling above. Rule 7: src/Core/Rewards/PotionReward.cs, src/Core/Factories/PotionFactory.cs, sts2_rl/run.py and sts2_rl/relics/alchemical_coffer.py are cited and not hashed here.",
+      "live": true
     },
     {
       "what": "N1: the CardCreationOptions (LostCoffer.cs:19) -- character card pool ONLY (a single-element list, no Colorless), CardCreationSource.Other, CardRarityOddsType.RegularEncounter, cardCount 3, no NoUpgradeRoll flag",

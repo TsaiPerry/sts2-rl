@@ -48,6 +48,21 @@
       "path": "sts2_rl/hooks.py",
       "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/CardSelection/CardSelectorPrefs.cs",
+      "sha256": "be907ced510772bbac02fd30e7553a360e426c4868c4436224d454d0f8177086",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -88,9 +103,10 @@
       "rationale": "cards/base.py:78 declares `retain: bool = False`, so the sim has the real keyword and the assignment sticks. Both sides apply Retain to every generated option and not only to the chosen one -- harmless, since the four unchosen cards are discarded without ever entering a pile on either side, but worth confirming it is not an off-by-one in the port."
     },
     {
-      "what": "G6: `CardSelectCmd.FromSimpleGrid(..., new CardSelectorPrefs(prompt, 1))` (ChoicesParadox.cs:46) vs `self.combat.select_cards('obtain', options, 1)` (choices_paradox.py:36)",
-      "verdict": "faithful",
-      "rationale": "MinSelect 1 with no MaxSelect override means exactly one card, and the C# loop over the returned set adds each to the hand -- one card. The sim asks for count 1 and adds each returned card via CardPileCmd.add_to_hand, matching AddGeneratedCardToCombat(PileType.Hand). Recorded because the grid-screen family is where min/max-select mistakes hide (relic/claws in this same batch has MinSelect 0 and MaxSelect 6)."
+      "what": "G6 (NEW GAP, found by the 2026-07-26 fix pass): `CardSelectCmd.FromSimpleGrid(..., new CardSelectorPrefs(prompt, 1))` (ChoicesParadox.cs:46) is MinSelect == MaxSelect == 1 and therefore FORCED, but the sim's \"obtain\" purpose is skippable",
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP-REVERSE, second site (relic/toolbox guard N4 is the other; one verdict per mechanism, binding rule 3). The COUNT half of this entry is unchanged and correct: MinSelect 1 with no MaxSelect override means exactly one card, the C# loop adds each returned card to the hand, and sts2_rl/relics/choices_paradox.py:36 asks for count 1 and adds each returned card via CardPileCmd.add_to_hand, matching AddGeneratedCardToCombat(PileType.Hand). What the previous entry missed is that `CardSelectorPrefs(prompt, 1)` is the 2-argument constructor (CardSelectorPrefs.cs:63-67 -> `this(prompt, selectCount, selectCount)`), so MinSelect is 1, NOT 0 -- the screen cannot be left empty -- while the sim passes purpose \"obtain\". THE DISCRIMINATOR, settled by the 2026-07-26 relic fix pass and applied at every relic card-selection site: the sim CAN model a decline exactly when the purpose string is in `sts2_rl/driver.py:77 SKIPPABLE_PURPOSES` (`card_reward`, `obtain`, `transform_optional`). For those, `RunDriver._card_selector` (sts2_rl/driver.py:246-267) issues a real DecisionRequest whose `legal_actions()` appends the skip index (sts2_rl/driver.py:154-158) and breaks out on it; for every other purpose it either short-circuits at sts2_rl/driver.py:249 (`count >= len(remaining)`) or runs the loop with no skip action, so exactly `count` cards come back. EXECUTED: driving `RunDriver._card_selector` with an `_ask` that raises, purpose 'gambling_chip' / candidates ['a','b','c'] / count 3 RETURNS ['a','b','c'] without ever asking, while 'card_reward', 'obtain' and 'transform_optional' each raise, i.e. each really does ask. The C# side of the test is `CardSelectorPrefs`: the 2-argument constructor (CardSelectorPrefs.cs:63-67) is `this(prompt, selectCount, selectCount)`, so MinSelect == MaxSelect and the screen is FORCED, while a MinSelect of 0 or an explicit `canSkip: true` makes it declinable (`canSkip` DEFAULTS to false, CardSelectCmd.cs:216). So the sim publishes a legal SKIP action on a screen the game forces, and a policy that takes it starts the turn with one card fewer in hand. OBSERVABLE: hand size and hand contents. LIVE, grade B -- Choices Paradox is an ordinary pool relic and the trigger is the policy choosing the skip index. FIX is the same driver change relic/toolbox N4 describes: \"obtain\" is used by one genuinely skippable site (relic/hefty_tablet) and two forced ones, so it has to be split. Rule 7: sts2_rl/driver.py, sts2_rl/run.py, src/Core/CardSelection/CardSelectorPrefs.cs and audit/records/relic/toolbox.json are cited and not all hashed here.",
+      "live": true
     },
     {
       "what": "N1: `player != base.Owner` (ChoicesParadox.cs:29)",

@@ -48,6 +48,11 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -80,7 +85,7 @@
     {
       "what": "G2: the `player != base.Owner` guards on both ModifyGoldGained (Ectoplasm.cs:20-23) and ModifyMaxEnergy (:35-38), and the ORDER in which multiple modify_gold_gained listeners chain",
       "verdict": "faithful",
-      "rationale": "The owner clauses are the multiplayer per-player filter the shared contract puts out of scope -- one player exists in the sim, so both are vacuous. The chaining order was checked because it is the classic place for a collapse to bite (PROMPT.md class 15): the sim walks run.relics in grab-bag order (run.py:329-330) while C# walks runState.IterateHookListeners, and the sim's only other ported modify_gold_gained implementer is relic/bowler_hat's x1.25. Multiplication and zeroing commute -- 0 x 1.25 and 1.25 x 0 are both 0 -- so the two orders produce the same observable and no divergence exists today. It would matter for a listener that ADDS a flat amount, which no ported relic does on this hook (relic/amethyst_aubergine's +15 is on TryModifyRewards, not here). RULE 7: run.py and relics/bowler_hat.py are not hashed here."
+      "rationale": "The owner clauses are the multiplayer per-player filter the shared contract puts out of scope -- one player exists in the sim, so both are vacuous. The chaining order was checked because it is the classic place for a collapse to bite (PROMPT.md class 15): the sim walks run.relics in grab-bag order (run.py:329-330) while C# walks runState.IterateHookListeners. [CENSUS CORRECTED 2026-07-26 by the relic fix pass. The entry used to say 'the sim's only other ported modify_gold_gained implementer is relic/bowler_hat's x1.25' and rested the verdict on 'multiplication and zeroing commute'. THAT IS FALSE: sts2_rl/relics/bowler_hat.py is a BEHAVIOURLESS STUB -- twelve lines, no method body at all, ending at the `is_allowed_in_shops = False` class attribute on line 12 -- and relic/bowler_hat's own record verdicts its ModifyGoldGained a LIVE gap for exactly that reason. The real census is EXECUTED and exhaustive: `grep -rn 'def modify_gold_gained' sts2_rl/` returns exactly TWO lines, the base default at sts2_rl/relics/base.py:212 and this relic at sts2_rl/relics/ectoplasm.py:26 -- ONE implementer. So the commutativity argument was vacuous: a one-listener chain has no order to get wrong. relic/signet_ring N2 and relic/old_coin N1 already stated the census correctly, so this was a rule-3 disagreement inside the tier.] THE `faithful` VERDICT SURVIVES, by the shorter route: with a single implementer the walk order over `run.relics` (sts2_rl/run.py:329-330) cannot change the result, and the divergence would only reappear once a SECOND listener exists -- at which point the order matters for a listener that ADDS a flat amount, since zeroing does not commute with addition. Fixing relic/bowler_hat's stub is precisely what creates that second listener; it multiplies, so 0 x 1.25 == 1.25 x 0 == 0 and the pair would still commute, but whoever fixes it should re-read this entry rather than assume it. It would matter for a listener that ADDS a flat amount, which no ported relic does on this hook (relic/amethyst_aubergine's +15 is on TryModifyRewards, not here). RULE 7: run.py and relics/bowler_hat.py are not hashed here."
     },
     {
       "what": "G3: EnergyVar(1) read as IntValue (Ectoplasm.cs:14, 39) vs ENERGY = 1 (ectoplasm.py:21), and the absence of any IsAllowed / IsAllowedAtNeow / HasUponPickupEffect override",

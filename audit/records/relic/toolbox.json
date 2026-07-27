@@ -73,6 +73,26 @@
       "path": "sts2_rl/relics/vexing_puzzlebox.py",
       "sha256": "5e65caadd45b80578a41755a1abe765a98579f0dde92e68e6f2198fefa03c6be",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/CardSelection/CardSelectorPrefs.cs",
+      "sha256": "be907ced510772bbac02fd30e7553a360e426c4868c4436224d454d0f8177086",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/HeftyTablet.cs",
+      "sha256": "80f6caa9dd2738a9dd51878ee6f5c817642e8359c907dc2d8e5e811f9bec0d1d",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -109,9 +129,10 @@
       "rationale": "FilterForCombat keeps cards with `CanBeGeneratedInCombat` and rarity not Basic, Ancient or Event, then Distinct. cards/pool.pool_card_ids (cards/pool.py:100-117) applies the same filter except for the Event-rarity clause -- EXECUTED and settled: no entry of COLORLESS_POOL is Event or Ancient or Basic rarity, and the three entries pool_card_ids does drop (alchemize, hand_of_greed, hidden_gem) are dropped by `can_be_generated_in_combat`, which is the C# clause. So the two candidate sets agree for this pool. The unlock dimension is a waiver: `grep -rn UnlockState sts2_rl/` returns nothing, the sim assumes full unlocks -- the same waiver batch 8 settled for relic/lasting_candy (binding rule 3). Also faithful: `distinct=True` matches GetDistinctForCombat rather than GetForCombat (Toolbox is the Distinct overload). Rule 7: cards/pool.py is not hashed here."
     },
     {
-      "what": "N4: `CardSelectCmd.FromChooseACardScreen(choiceContext, cards, base.Owner)` (Toolbox.cs:28) -- and whether the player may decline",
-      "verdict": "faithful",
-      "rationale": "The overload's `canSkip` parameter defaults to FALSE (CardSelectCmd.cs:216) and Toolbox does not pass it, so the screen is not skippable and exactly one of the three is taken. `if (cardModel != null)` (Toolbox.cs:29) is the softlock guard for an empty candidate list (CardSelectCmd.cs:222-226), not a skip. CombatState.select_cards (combat.py:560-581) returns min(count, len(candidates)) cards, so it takes one when there are options and none when there are not -- the same two behaviours. Contrast relic/toy_box G1 and relic/calling_bell G3, where the C# offer IS declinable and the sim's auto-keep is a recorded divergence; here there is nothing to decline, so no divergence arises. Rule 7: combat.py is not hashed here."
+      "what": "N4 (NEW GAP, found by the 2026-07-26 fix pass): `CardSelectCmd.FromChooseACardScreen(choiceContext, cards, base.Owner)` (Toolbox.cs:28) is NOT skippable, but the sim's \"obtain\" purpose IS -- the reverse of the auto-keep mechanism",
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP-REVERSE. The auto-keep cluster (relic/black_star, relic/calling_bell G3, relic/toy_box G1 ...) is the sim force-granting what C# offers. This is the same seam pointing the OTHER way: the sim offers a decline the game forbids. Toolbox.cs:28 calls the `FromChooseACardScreen(context, cards, player)` overload without `canSkip`, which DEFAULTS to false (CardSelectCmd.cs:216), so the game makes the player take exactly one of the three Colorless cards; `if (cardModel != null)` (Toolbox.cs:29) is only the softlock guard for an empty candidate list (CardSelectCmd.cs:222-226). sts2_rl/relics/toolbox.py:28 is `combat.select_cards(\"obtain\", options, 1)`. THE DISCRIMINATOR, settled by the 2026-07-26 relic fix pass and applied at every relic card-selection site: the sim CAN model a decline exactly when the purpose string is in `sts2_rl/driver.py:77 SKIPPABLE_PURPOSES` (`card_reward`, `obtain`, `transform_optional`). For those, `RunDriver._card_selector` (sts2_rl/driver.py:246-267) issues a real DecisionRequest whose `legal_actions()` appends the skip index (sts2_rl/driver.py:154-158) and breaks out on it; for every other purpose it either short-circuits at sts2_rl/driver.py:249 (`count >= len(remaining)`) or runs the loop with no skip action, so exactly `count` cards come back. EXECUTED: driving `RunDriver._card_selector` with an `_ask` that raises, purpose 'gambling_chip' / candidates ['a','b','c'] / count 3 RETURNS ['a','b','c'] without ever asking, while 'card_reward', 'obtain' and 'transform_optional' each raise, i.e. each really does ask. The C# side of the test is `CardSelectorPrefs`: the 2-argument constructor (CardSelectorPrefs.cs:63-67) is `this(prompt, selectCount, selectCount)`, so MinSelect == MaxSelect and the screen is FORCED, while a MinSelect of 0 or an explicit `canSkip: true` makes it declinable (`canSkip` DEFAULTS to false, CardSelectCmd.cs:216). The combat inherits the run's selector (`create_combat(card_selector=self.card_selector)`, sts2_rl/run.py:1154), so under the real driver this screen carries a legal SKIP action and `chosen` can come back empty -- the player starts the combat with one card fewer in hand than the game allows. OBSERVABLE: hand size and hand contents on turn 1. LIVE: Toolbox is an ordinary pool relic and the trigger is a policy simply choosing the skip index, which `legal_actions()` publishes on every Toolbox combat; no unported content is needed. Grade B (state divergence). The previous entry verdicted this faithful by reasoning about the NO-selector fallback (`CombatState.select_cards` -> `self._rng.sample`, sts2_rl/combat.py:576-581), which does always return one -- but that path is the test default, not the driver. FIX: this is a driver change, not a relic change -- \"obtain\" is overloaded across a skippable site (relic/hefty_tablet, HeftyTablet.cs:32 `canSkip: true`) and two forced ones (this and relic/choices_paradox G6), so the purposes have to be split. Rule 7: sts2_rl/driver.py, sts2_rl/run.py, sts2_rl/combat.py and src/Core/Commands/CardSelectCmd.cs are cited and not all hashed here.",
+      "live": true
     },
     {
       "what": "N5: CardsVar(3) (Toolbox.cs:20) vs CARDS = 3 (toolbox.py:16)",

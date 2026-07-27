@@ -62,11 +62,11 @@
   ],
   "hooks": {
     "Rarity": {
-      "maps_to": "rarity = RelicRarity.EVENT (lost_wisp.py:22)",
+      "maps_to": "rarity = RelicRarity.EVENT (sts2_rl/relics/lost_wisp.py:22)",
       "verdict": "faithful"
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (lost_wisp.py:26-36)",
+      "maps_to": "on_card_played (sts2_rl/relics/lost_wisp.py:26-36)",
       "verdict": "gap",
       "issue": "Rollup of guard G1 per binding rule 4. Every guard, constant, prop flag and target set matches; what does not is that C# fires Hook.AfterCardPlayed once per Replay ITERATION and the sim fires on_card_played once per play, so a replayed Power card deals 8 damage in the sim and 8 per iteration in C#."
     }
@@ -75,7 +75,7 @@
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# and once per play in the sim, so a replayed Power card triggers Lost Wisp once instead of once per replay",
       "verdict": "gap",
-      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop. LostWisp.AfterCardPlayed (LostWisp.cs:19-26) therefore runs once per iteration and deals 8 each time. The sim's _resolve_card_play runs the whole play-count loop (combat.py:477-494) and calls hooks.on_card_played only afterwards (combat.py:514), so Lost Wisp deals 8 total no matter how many times the card played. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-wisp-replay): Lost Wisp alone deals 8 from a played Power (correct); Lost Wisp + Throwing Axe still deals 8, where C# deals 8 + 8 = 16. Both sides ported: Lost Wisp is granted by the ported Lost Wisp event -- its Claim option calls run.add_relic(\"lost_wisp\") (sts2_rl/events/lost_wisp.py; cited without a line number because the citation checker resolves by BASENAME and relics/lost_wisp.py shadows it), Throwing Axe -- which makes the FIRST card of each combat play twice (relics/throwing_axe.py:30-36) -- is granted by the ported Tanx shrine (events/tanx.py), and there are 33 ported Power cards to be that first card (executed census). Two further ported replay sources reach the same combat.py:469 play-count hook: the Spiral and Glam enchantments and Hidden Gem's base_replay_count. This is the site-specific observable of audit/records/seam/hook_dispatch.json gap G4 (the per-Replay CardPlay loop) and of relic/unsettling_lamp guard G1, both of which label the mechanism LIVE -- one verdict per mechanism, binding rule 3, so this entry records Lost Wisp's number and does not re-derive the machinery. Rule 7: leans on combat.py, CardModel.cs and throwing_axe.py, none hashed here."
+      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop. LostWisp.AfterCardPlayed (LostWisp.cs:19-26) therefore runs once per iteration and deals 8 each time. The sim's _resolve_card_play runs the whole play-count loop (combat.py:477-494) and calls hooks.on_card_played only afterwards (combat.py:514), so Lost Wisp deals 8 total no matter how many times the card played. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-wisp-replay): Lost Wisp alone deals 8 from a played Power (correct); Lost Wisp + Throwing Axe still deals 8, where C# deals 8 + 8 = 16. Both sides ported: Lost Wisp is granted by the ported Lost Wisp event -- its Claim option calls run.add_relic(\"lost_wisp\") (sts2_rl/events/lost_wisp.py; cited without a line number because the citation checker resolves by BASENAME and relics/lost_wisp.py shadows it), Throwing Axe -- which makes the FIRST card of each combat play twice (relics/throwing_axe.py:30-36) -- is granted by the ported Tanx shrine (events/tanx.py), and there are 33 ported Power cards to be that first card (executed census). Two further ported replay sources reach the same combat.py:469 play-count hook: the Spiral and Glam enchantments and Hidden Gem's base_replay_count. This is the site-specific observable of audit/records/seam/hook_dispatch.json gap G4 (the per-Replay CardPlay loop) and of relic/unsettling_lamp guard G1, both of which label the mechanism LIVE -- one verdict per mechanism, binding rule 3, so this entry records Lost Wisp's number and does not re-derive the machinery. Rule 7: leans on combat.py, CardModel.cs and throwing_axe.py, none hashed here. [CITATION CORRECTED 2026-07-26 by the relic fix pass: this record's own sim-source citations were written as a bare `lost_wisp.py:NN`, which audit/tools/backfill_sources.py cannot resolve because sts2_rl/events/lost_wisp.py shadows the basename -- so the relic file was left unpinned. Every one is now spelled out as sts2_rl/relics/lost_wisp.py:NN. The entry already avoided the collision for the EVENT file by citing it without a line number; that workaround is no longer needed.]"
     },
     {
       "what": "N1: C# does NOT exclude auto-plays here -- there is no `cardPlay.IsAutoPlay` guard in LostWisp.cs:21, unlike BrilliantScarf.cs:84-87",
@@ -85,25 +85,25 @@
     {
       "what": "N2: `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (LostWisp.cs:21)",
       "verdict": "faithful",
-      "rationale": "The owner check is single-player-structural (one player, all cards are the player's). The IsInProgress check is mirrored explicitly by `self.combat is None or self.combat.is_over` (lost_wisp.py:27) -- stronger than most ports, which rely on the hook only being dispatched by a live CombatState."
+      "rationale": "The owner check is single-player-structural (one player, all cards are the player's). The IsInProgress check is mirrored explicitly by `self.combat is None or self.combat.is_over` (sts2_rl/relics/lost_wisp.py:27) -- stronger than most ports, which rely on the hook only being dispatched by a live CombatState."
     },
     {
-      "what": "N3: `cardPlay.Card.Type == CardType.Power` (LostWisp.cs:21) vs `card.card_type != CardType.POWER` (lost_wisp.py:27)",
+      "what": "N3: `cardPlay.Card.Type == CardType.Power` (LostWisp.cs:21) vs `card.card_type != CardType.POWER` (sts2_rl/relics/lost_wisp.py:27)",
       "verdict": "faithful",
       "rationale": "Same test, negated. The type is read off the CardPlay's card in C# and off the played card in the sim; both are the card that was played, and no ported effect changes a card's type mid-play."
     },
     {
-      "what": "N4: `combatState.HittableEnemies` (LostWisp.cs:24) vs Relic.living_enemies() (lost_wisp.py:31)",
+      "what": "N4: `combatState.HittableEnemies` (LostWisp.cs:24) vs Relic.living_enemies() (sts2_rl/relics/lost_wisp.py:31)",
       "verdict": "faithful",
       "rationale": "C# passes `combatState.HittableEnemies` == `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim passes Relic.living_enemies() (relics/base.py:294-297), which filters only `not e.is_gone` (dead or escaped) -- but the missing predicate IS applied, one target later, by DamageCmd.deal itself: `if not hooks.should_allow_hitting(target): return 0` (cmds.py:51-52). So for a DAMAGE call site the two sets are observationally identical (an alive-but-unhittable enemy is iterated and then takes 0). DELIBERATELY DISTINGUISHED from relic/bag_of_marbles guard G2, which records the same call-site substitution as a gap: that site routes through PowerCmd.apply, which has NO such backstop (audit/records/seam/power_cmd.json gap G6, the missing CanReceivePowers check). Same substitution, different downstream, so different verdicts -- and binding rule 3 is satisfied because the MECHANISM under verdict there is the missing PowerCmd backstop, not living_enemies() itself. The `escaped` half is also covered: an escaped creature is IsDead-or-removed in C# and is_gone in the sim."
     },
     {
       "what": "N5: `DamageVar(8m, ValueProp.Unpowered)` (LostWisp.cs:17) read as `.BaseValue` with `.Props`, dealer = Owner.Creature, cardSource = **null** (LostWisp.cs:24)",
       "verdict": "faithful",
-      "rationale": "The constant is 8 with no AscensionHelper branch anywhere in the file, so 8 is the pinned non-ascension value (lost_wisp.py:24 DAMAGE = 8). The props match EXACTLY and the detail matters: DamageVar's ctor stores the props verbatim (DamageVar.cs:16-20), so this is `ValueProp.Unpowered` with NO Move flag, and DamageProps.NON_CARD_UNPOWERED (valueprops.py:42) is also `ValueProp.UNPOWERED` alone. Consequences on both sides: is_powered_attack is False so Strength/Vulnerable/Weak do not apply, the damage IS blockable (no Unblockable flag), and it is not a 'hit' -- cmds.py:69 gates on_attacked on ValueProp.MOVE, so Curl Up does not trigger. cardSource = null is mirrored by omitting `card=` (lost_wisp.py:32-35), which also means card-keyed damage modifiers such as relic/miniature_cannon correctly do not apply."
+      "rationale": "The constant is 8 with no AscensionHelper branch anywhere in the file, so 8 is the pinned non-ascension value (sts2_rl/relics/lost_wisp.py:24 DAMAGE = 8). The props match EXACTLY and the detail matters: DamageVar's ctor stores the props verbatim (DamageVar.cs:16-20), so this is `ValueProp.Unpowered` with NO Move flag, and DamageProps.NON_CARD_UNPOWERED (valueprops.py:42) is also `ValueProp.UNPOWERED` alone. Consequences on both sides: is_powered_attack is False so Strength/Vulnerable/Weak do not apply, the damage IS blockable (no Unblockable flag), and it is not a 'hit' -- cmds.py:69 gates on_attacked on ValueProp.MOVE, so Curl Up does not trigger. cardSource = null is mirrored by omitting `card=` (sts2_rl/relics/lost_wisp.py:32-35), which also means card-keyed damage modifiers such as relic/miniature_cannon correctly do not apply."
     },
     {
-      "what": "N6: the sim adds a `self._check_win()` (lost_wisp.py:36) that has no line-for-line C# counterpart",
+      "what": "N6: the sim adds a `self._check_win()` (sts2_rl/relics/lost_wisp.py:36) that has no line-for-line C# counterpart",
       "verdict": "faithful",
       "rationale": "It stands in for the CheckWinCondition the game runs after the card-play command; without it a Lost Wisp kill would not end the fight, because relic damage fires outside play_card's own checks (Relic._check_win's docstring, relics/base.py:299-304). Recorded because the sibling relic/mr_struggles OMITS the same call and that omission is a LIVE gap in this batch -- the two ports disagree about the same compensation, which is what made it worth checking here."
     },

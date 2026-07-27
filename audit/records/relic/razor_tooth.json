@@ -46,7 +46,7 @@
     {
       "what": "N1: `(uint)(type - 1) > 1u` (RazorTooth.cs:20) is the decompiler's rendering of 'Attack or Skill'",
       "verdict": "faithful",
-      "rationale": "CardType is None=0, Attack=1, Skill=2, Power=3, Status=4, Curse=5, Quest=6 (Entities/Cards/CardType.cs:3-12), so `(uint)(type - 1) > 1` early-returns for everything except type 1 and 2. razor_tooth.py:22's `card.card_type in (CardType.ATTACK, CardType.SKILL)` is exactly that set. Recorded because the unsigned-underflow idiom is easy to read as the wrong comparison -- for type == None (0) the subtraction wraps to uint.MaxValue and correctly returns. NOTE per binding rule 7: CardType.cs is not hashed by this record."
+      "rationale": "CardType is None=0, Attack=1, Skill=2, Power=3, Status=4, Curse=5, Quest=6 (src/Core/Entities/Cards/CardType.cs:3-12), so `(uint)(type - 1) > 1` early-returns for everything except type 1 and 2. razor_tooth.py:22's `card.card_type in (CardType.ATTACK, CardType.SKILL)` is exactly that set. Recorded because the unsigned-underflow idiom is easy to read as the wrong comparison -- for type == None (0) the subtraction wraps to uint.MaxValue and correctly returns. NOTE per binding rule 7: CardType.cs is not hashed by this record."
     },
     {
       "what": "N2 (PROMPT.md bug class 14): `if (!cardPlay.Card.IsUpgradable) return;` (RazorTooth.cs:24-27) IS mirrored -- razor_tooth.py:22 checks card.is_upgradable",

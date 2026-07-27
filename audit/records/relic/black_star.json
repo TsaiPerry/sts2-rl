@@ -13,6 +13,81 @@
       "path": "sts2_rl/rewards.py",
       "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/CallingBell.cs",
+      "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/GlassEye.cs",
+      "sha256": "1cf2c74cfc8852970e07f40e2815f605806ba8f5a0d999cbaf4f49d99fe1f011",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LavaRock.cs",
+      "sha256": "3fb81e2b172260204bf0ae6a36891480d5924467b82ac0346a9023e6c5339859",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LostCoffer.cs",
+      "sha256": "96579eaef2fdec892f201d1e643f0659d589a6521025339b06e762a5be85b79e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orrery.cs",
+      "sha256": "1e14f14c3db789ac56b47053661019f25cf20ab2cde218a9ddbab2083ccfd88f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SmallCapsule.cs",
+      "sha256": "ae052e2dbcfc30eed878ec64a6132f7d130273603379c818b547605f0ef6634c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ToyBox.cs",
+      "sha256": "b96ea44d322aab9cb75e155e103fbf0077b19f215698f103a374f7efd9b4da96",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/WongosMysteryTicket.cs",
+      "sha256": "831872d73d4c25fca471afe636eb65d34677aba0a690239c471573ceb05b8cb9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -22,8 +97,9 @@
     },
     "TryModifyRewards": {
       "maps_to": "modify_combat_rewards (black_star.py:15-23)",
-      "verdict": "deliberate-divergence",
-      "rationale": "BlackStar.cs:7-19 appends a payload-less `new RelicReward(player)` to an Elite room's rewards, and the game rolls the actual relic when the player takes it off the screen. The sim pulls the relic immediately (run.pull_relic_from_front), grants it, and appends the granted object. Same observable: the sim's reward screen has no skip button for relics -- rewards.py:490-493's own elite branch grants its relic the same way, and the module comment at rewards.py:496-499 states the convention outright ('A hook that appends to rewards.relics grants them itself (run.add_relic), like the elite branch above'). So this port follows the sim's established reward architecture rather than diverging from it, and the RNG cost is the same single PullNextRelicFromFront draw on the Rewards stream. The Elite room filter matches (`room.RoomType != RoomType.Elite` vs `rewards.room_type != RoomType.ELITE`), and the relic stacks with the elite screen's own relic on both sides -- two relics from an elite, which is the point of the relic."
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B): BlackStar.cs:13-25 appends a payload-less `new RelicReward(player)` to an ELITE room's reward list, which the game offers on the elite screen beside the elite's own relic; sts2_rl/relics/black_star.py:15-23 pulls the relic and calls run.add_relic itself, so the player cannot decline and the relic's own after_obtained fires regardless. Both sides reachable: Black Star is an Ancient relic granted by a ported Neow/shrine option and the sim's elite reward screen is exercised by every conformance seed. The relic identity and the single PullNextRelicFromFront draw are correct (guard N2) -- only the take-or-skip contract diverges.",
+      "live": true
     }
   },
   "guards": [
@@ -38,6 +114,6 @@
       "rationale": "The sim generates a reward screen only when a combat actually ends in victory, and every generated screen is resolved, so there is no path where the relic is pulled and then not granted. The one consumer that could tell the difference -- the conformance runner's relic parity check -- compares the relic LIST after the screen resolves, by which time both codebases agree."
     }
   ],
-  "verdict": "deliberate-divergence",
+  "verdict": "gap",
   "audited": "2026-07-26"
 }

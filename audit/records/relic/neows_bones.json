@@ -48,6 +48,21 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Relics/CallingBell.cs",
+      "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -70,7 +85,7 @@
     {
       "what": "G2: `new RewardsSet(Owner).WithCustomRewards(...).WithSkippingDisallowed().Offer()` (NeowsBones.cs:43) is a reward SCREEN; the port grants both relics unconditionally",
       "verdict": "deliberate-divergence",
-      "rationale": "Same mechanism and same verdict as relic/calling_bell guard G3 (binding rule 3): the sim auto-keeps non-choice relic offers as a house rule and has no policy that declines a relic. Here the divergence is even narrower than at Calling Bell, because `WithSkippingDisallowed()` explicitly forbids skipping, so the player has no choice to make -- the only thing lost is the screen. Flagged so that whoever fixes G1 does not silently harden the auto-keep. Rule 7: relics/calling_bell.py is unhashed here."
+      "rationale": "STILL a deliberate-divergence after the 2026-07-26 fix pass re-verdicted the rest of the auto-keep cluster to gap, and this record is the REASON the cluster is a cluster: `grep -rn WithSkippingDisallowed src/` returns exactly two lines in the whole source -- the definition (RewardsSet.cs:115) and its single caller, NeowsBones.cs:43 -- so Neow's Bones is the ONLY non-declinable relic offer in the game. The player therefore has no choice to make here and the sim's unconditional grant reaches the same observable: the same two relics land in the same order, and no `wasPicked:false` history entry is written because RelicReward.OnSkipped (RelicReward.cs:117-123) can never run. The only thing lost is the screen. (Previously this entry justified itself by citing relic/calling_bell G3's 'house rule for non-choice relic offers'; that rationale is gone -- CallingBell.cs:31 is a plain skippable `RewardsCmd.OfferCustom` and calling_bell G3 is now a gap. The verdict here survives on `WithSkippingDisallowed` alone, which is a stronger basis than the one it replaced.) Residual, and the reason this is not simply faithful: C# runs each relic's `AfterObtained` inside `RelicReward.OnSelect` (RelicReward.cs:109-115) as the player confirms each card, whereas `run.add_relic` (sts2_rl/run.py:546-553) fires it at grant time -- with skipping disallowed both orders end at the same state. Flagged so that whoever fixes G1 does not silently harden the auto-keep. Rule 7: src/Core/Rewards/RewardsSet.cs, src/Core/Rewards/RelicReward.cs and sts2_rl/run.py are cited and not all hashed here."
     },
     {
       "what": "N1: the shuffle primitive and the Take(2) slice",

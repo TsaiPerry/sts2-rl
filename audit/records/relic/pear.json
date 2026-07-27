@@ -23,6 +23,16 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/mango.py",
+      "sha256": "d2b64598ef79c67210d82b46f7bf9c951958276525d7e06b15e2ff92f3d29d95",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -42,8 +52,9 @@
     },
     "undo_after_obtained (no C# counterpart)": {
       "maps_to": "undo_after_obtained(run) (pear.py:21-25)",
-      "verdict": "deliberate-divergence",
-      "rationale": "The sim ADDS a method the game has no counterpart for -- nothing in the game ever un-picks a relic. It exists for the conformance runner, which lets the sim grant a node's relic and then swaps it for the one the save says was really picked; without an undo, a discarded max-HP relic leaves its +MaxHp behind and DETECTOR 3's act-boundary HP assertion reads high for the rest of the run (Relic.undo_after_obtained's docstring, relics/base.py:143-150, names Pear as one of its two examples). Verdicted as a deliberate divergence rather than faithful because it is extra behaviour, and NOT as a gap because it is unreachable from play: `grep -rn undo_after_obtained sts2_rl/` shows the only caller is the conformance runner's relic resync, never the driver or the env. Its arithmetic is the correct inverse: run.lose_max_hp floors max HP at 1 and clamps current HP (run.py:316-321), and pear.py:24 re-clamps hp -- so granting then un-granting on a full-HP player returns exactly the starting state. NOTE per binding rule 7: this leans on sts2_rl/run.py and sts2_rl/relics/base.py, neither of which this record hashes."
+      "verdict": "gap",
+      "issue": "RE-VERDICTED from deliberate-divergence to gap by the 2026-07-26 relic fix pass, so that all five implementers of this mechanism agree (binding rule 3). PROMPT.md v6 item 3 already states the rule: the ABSENCE of `undo_after_obtained` is faithful everywhere, but an undo that EXISTS and CLAMPS instead of subtracting violates its own stated contract, and 'all five implementers do it'. Four of the five are already gaps -- relic/mango G1, relic/strawberry G, relic/lees_waffle N4, relic/looming_fruit N3 -- and pear was the lone dissenter. THE OLD RATIONALE IS TRUE AND IRRELEVANT: 'granting then un-granting on a FULL-HP player returns exactly the starting state' holds only for a player at full HP, and the relic is granted on a DAMAGED player in the general case. sts2_rl/relics/pear.py:21-25 is the same shape as sts2_rl/relics/mango.py:21-25 -- `run.lose_max_hp(MAX_HP)` then `run.hp = min(run.hp, run.max_hp)` -- and `RunState.lose_max_hp` (sts2_rl/run.py:315-321) only CLAMPS current HP to the new maximum; it never gives back the heal `gain_max_hp` (sts2_rl/run.py:310-313) paid out. EXECUTED at 75/80 for all five implementers: lees_waffle (75,80) -> (87,87) -> (80,80); looming_fruit (75,80) -> (106,111) -> (80,80); mango (75,80) -> (89,94) -> (80,80); pear (75,80) -> (85,90) -> (80,80); strawberry (75,80) -> (82,87) -> (80,80). Every one ends at (80,80) instead of (75,80) -- a silent +5 current HP. OBSERVABLE and LIVE where the helper runs: `undo_after_obtained` has exactly one caller, the conformance runner's relic resync (sts2_rl/conformance/runner.py:455-461), so this cannot be reached from play -- but that caller exists precisely to keep DETECTOR 3's act-boundary HP assertion honest, and the leak makes the sim read HIGH for the rest of the run, which is the assertion's whole subject. It is a gap in the tool the audit's liveness rests on, not a fidelity gap against the C# (there is no C# counterpart to diverge from) -- graded C, conformance-only. FIX: subtract the heal explicitly (`run.hp = min(run.hp, run.max_hp); run.hp -= MAX_HP` clamped at 1, or snapshot hp/max_hp at grant time), at all five sites at once. Rule 7: sts2_rl/run.py, sts2_rl/relics/mango.py and sts2_rl/conformance/runner.py are cited and not hashed by this record.",
+      "live": true
     }
   },
   "guards": [
@@ -63,6 +74,6 @@
       "rationale": "Pear.cs has exactly three members -- Rarity, HasUponPickupEffect, CanonicalVars -- plus AfterObtained, so there is no behavioural override for the port to miss. This is one of the very few genuinely complete behaviourless-beyond-pickup ports; sweep C (.superpowers/sdd/content-relic-sweeps.md) counts 2 such stubs among 37, and unlike the other 35 there is no false premise here because the port DOES implement the one hook that matters."
     }
   ],
-  "verdict": "deliberate-divergence",
+  "verdict": "gap",
   "audited": "2026-07-26"
 }

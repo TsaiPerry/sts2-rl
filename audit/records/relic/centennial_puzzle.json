@@ -55,7 +55,7 @@
     {
       "what": "N1: `CombatManager.Instance.IsInProgress` (CentennialPuzzle.cs:42)",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: on_damage_received is a combat hook, dispatched only from DamageCmd.deal inside a live CombatState (cmds.py:116-117)."
+      "rationale": "Structurally satisfied: on_damage_received is a combat hook, dispatched only from DamageCmd.deal inside a live CombatState (sts2_rl/cmds.py:121-122). [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry cited sts2_rl/cmds.py:116, which is a line of the explanatory COMMENT. The killing-blow guard is `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch `hooks.on_damage_received(target, hp_lost, dealer, card, props)` is at sts2_rl/cmds.py:122 -- which is what every other record in the tier cites.]"
     },
     {
       "what": "N2: `target == base.Owner.Creature` vs `target is self.player` (centennial_puzzle.py:32)",
@@ -65,12 +65,12 @@
     {
       "what": "N3: `result.UnblockedDamage > 0` vs `amount > 0` (centennial_puzzle.py:32)",
       "verdict": "faithful",
-      "rationale": "The sim passes `hp_lost` -- the POST-block, post-HP-loss-modifier figure -- as the hook's `amount` (cmds.py:116-117), which is what DamageResult.UnblockedDamage holds. So a hit fully absorbed by block does not draw on either side, and a Tungsten-Rod-style reduction to 0 does not either. Checked because the sim's parameter is named `amount`, which reads like the pre-block number."
+      "rationale": "The sim passes `hp_lost` -- the POST-block, post-HP-loss-modifier figure -- as the hook's `amount` (sts2_rl/cmds.py:121-122), which is what DamageResult.UnblockedDamage holds. So a hit fully absorbed by block does not draw on either side, and a Tungsten-Rod-style reduction to 0 does not either. Checked because the sim's parameter is named `amount`, which reads like the pre-block number. [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry cited sts2_rl/cmds.py:116, which is a line of the explanatory COMMENT. The killing-blow guard is `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch `hooks.on_damage_received(target, hp_lost, dealer, card, props)` is at sts2_rl/cmds.py:122 -- which is what every other record in the tier cites.]"
     },
     {
       "what": "N4: the killing-blow guard (PROMPT.md bug class 2)",
       "verdict": "faithful",
-      "rationale": "C# skips the victim's AfterDamageReceived when the hit killed it (`!WasTargetKilled || !originalTarget.IsDead`, CreatureCmd.cs:392); the sim guards the dispatch the same way (`if not target.is_dead:` before hooks.on_damage_received, cmds.py:116). Confirmed rather than assumed because this relic is exactly the shape that would expose it -- a fatal hit must not draw 3 cards. Rule 7: CreatureCmd.cs and cmds.py are not hashed here."
+      "rationale": "C# skips the victim's AfterDamageReceived when the hit killed it (`!WasTargetKilled || !originalTarget.IsDead`, CreatureCmd.cs:392); the sim guards the dispatch the same way (`if not target.is_dead:` before hooks.on_damage_received, sts2_rl/cmds.py:121). Confirmed rather than assumed because this relic is exactly the shape that would expose it -- a fatal hit must not draw 3 cards. Rule 7: CreatureCmd.cs and cmds.py are not hashed here. [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry cited sts2_rl/cmds.py:116, which is a line of the explanatory COMMENT. The killing-blow guard is `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch `hooks.on_damage_received(target, hp_lost, dealer, card, props)` is at sts2_rl/cmds.py:122 -- which is what every other record in the tier cites.]"
     },
     {
       "what": "N5: three separate `CardPileCmd.Draw(choiceContext, base.Owner)` calls (CentennialPuzzle.cs:46-49) vs one `DrawCmd.draw(player, 3)` (centennial_puzzle.py:35)",

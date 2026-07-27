@@ -58,6 +58,16 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/fuzzy_wurm_crawler.py",
+      "sha256": "4c745d79b378f4526fe11550b79bf4e3ecfdc5aa397161bfe2187ee7dc3d80b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py",
+      "sha256": "4808b860f919e0adf19c4c09be1b9848e14a79597dd08ccfaf30f02a278fe5e3",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -76,7 +86,7 @@
     {
       "what": "G1 (DORMANT): nothing observes the player's Strength in the window between C#'s AfterRoomEntered and the sim's on_combat_start, so the phase difference has no observable today",
       "verdict": "gap",
-      "issue": "MECHANISM: as above -- one full combat-setup phase separates the two positions, and it contains AfterCreatureAdded plus every enemy's opening RollMove. TWO readers could expose it and neither exists in ported content. (a) A monster whose move selection reads the PLAYER's Strength: executed census (py audit/tools/relic_probes_b17.py vajra) finds only three ported monster modules that mention strength at all -- sts2_rl/monsters/fuzzy_wurm_crawler.py, sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py and sts2_rl/monsters/glory/aeonglass.py -- and all three read or grant their OWN Strength (fuzzy_wurm_crawler.py:36-40 builds a self-buff intent, aeonglass.py:37, 85-87 tracks its own escalation). (b) A ported on_combat_start listener that reads player Strength: the six other relics that touch Strength at combat start all WRITE it and none reads it (ember_tea.py:28-33, philosophers_stone.py:28-32, red_skull.py:42-43 reads HP not Strength, sling_of_courage.py:20-28, sword_of_jade.py:22-29). The sim's registration-order dependence is real and executed: with a spy relic registered before Vajra the spy reads Strength 0 from on_combat_start, registered after it reads 1, where C# reads 1 either way because Vajra's hook belongs to an earlier phase. DORMANT; what would make it live is either porting a monster whose intent selection reads the player's Strength, or porting any BeforeCombatStart listener that does (Red Skull's C# sibling shape -- a combat-start reader -- is the obvious candidate). Filed as a gap and not a waiver because 'no ported content triggers this' is today's content, not the divergence's shape (binding rule 1). Rule 7: the six sts2_rl/relics/*.py and three sts2_rl/monsters/*.py files named here are NOT hashed by this record."
+      "issue": "MECHANISM: as above -- one full combat-setup phase separates the two positions, and it contains AfterCreatureAdded plus every enemy's opening RollMove. TWO readers could expose it and neither exists in ported content. (a) A monster whose move selection reads the PLAYER's Strength: executed census (py audit/tools/relic_probes_b17.py vajra) finds only three ported monster modules that mention strength at all -- sts2_rl/monsters/fuzzy_wurm_crawler.py, sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py and sts2_rl/monsters/glory/aeonglass.py -- and all three read or grant their OWN Strength (sts2_rl/monsters/fuzzy_wurm_crawler.py:36-40 and sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py:37-41 each build a self-buff intent, aeonglass.py:37, 85-87 tracks its own escalation). (b) A ported on_combat_start listener that reads player Strength: the six other relics that touch Strength at combat start all WRITE it and none reads it (ember_tea.py:28-33, philosophers_stone.py:28-32, red_skull.py:42-43 reads HP not Strength, sling_of_courage.py:20-28, sword_of_jade.py:22-29). The sim's registration-order dependence is real and executed: with a spy relic registered before Vajra the spy reads Strength 0 from on_combat_start, registered after it reads 1, where C# reads 1 either way because Vajra's hook belongs to an earlier phase. DORMANT; what would make it live is either porting a monster whose intent selection reads the player's Strength, or porting any BeforeCombatStart listener that does (Red Skull's C# sibling shape -- a combat-start reader -- is the obvious candidate). Filed as a gap and not a waiver because 'no ported content triggers this' is today's content, not the divergence's shape (binding rule 1). Rule 7: the six sts2_rl/relics/*.py and three sts2_rl/monsters/*.py files named here are NOT hashed by this record. [CITATION CORRECTED 2026-07-26 by the relic fix pass: the path was written as a bare basename plus line range (`fuzzy_wurm_crawler` `.py:36-40`), which audit/tools/backfill_sources.py cannot resolve -- the repo has two files of that name, and the record's own census names both -- so the citation was discarded and neither file pinned. Both are now spelled out, with the overgrowth copy's line range corrected to 37-41 (its `current_intent` body sits one line lower because of the extra package level in `from ...powers import StrengthPower`).]"
     },
     {
       "what": "N1: PowerVar<StrengthPower>(1m) (Vajra.cs:17) read as `Strength.BaseValue` at the call site (:26) vs the sim's literal 1 (vajra.py:17)",

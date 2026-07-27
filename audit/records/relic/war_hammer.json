@@ -23,6 +23,11 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -59,9 +64,10 @@
       "rationale": "A naming trap worth pinning, because RelicModel.AfterCombatEnd and RelicModel.AfterCombatVictory are DIFFERENT C# hooks (relic/vambrace in this same batch uses the first, which fires on defeat too) and the sim exposes only one run-level method for both. RunState.finish_combat guards its dispatch with `if room_type is not None and not self.is_dead`, so the sim's run-level after_combat_end is in practice an AfterCombatVictory analogue -- the only way a combat ends without victory is the player dying, which sets run.is_dead. war_hammer.py:18 then re-checks `run.is_dead` redundantly. Equivalent observable, so faithful; flagged because a future relic implementing the real AfterCombatEnd through this same method would silently lose its defeat leg. Rule 7: run.py is NOT hashed here."
     },
     {
-      "what": "N4: the ordering of the upgrades against the reward screen",
-      "verdict": "faithful",
-      "rationale": "Checked because PROMPT.md bug class 25 makes multi-pass victory dispatch an ordering question, and audit/records/seam/hook_dispatch.json's class-25 note records AfterCombatVictoryEarly as a separate earlier full pass with relic/meat_on_the_bone as its only implementer. War Hammer implements the plain AfterCombatVictory pass, and its effect (deck upgrades) is read by nothing in the victory sequence: the sim runs finish_combat before generate_combat_rewards (run.py:1206-1208 then :1210-1213), and rewards.create_reward_cards builds options from the card POOL, not the deck. So no ordering against another victory listener changes its outcome. Rule 7: run.py, rewards.py and audit/records/seam/hook_dispatch.json are NOT hashed here."
+      "what": "N4 (DORMANT): the ordering of the upgrades against the reward screen, and the flattened AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch",
+      "verdict": "gap",
+      "issue": "RE-VERDICTED from faithful to a DORMANT gap by the 2026-07-26 relic fix pass, to match its two siblings under binding rule 3. `Hook.AfterCombatVictory` (Hook.cs:340-351) makes TWO complete passes over the listeners -- every listener's `AfterCombatVictoryEarly` first, then every listener's `AfterCombatVictory`. War Hammer implements the PLAIN pass (WarHammer.cs:19), so in C# its deck upgrades are guaranteed to run after every Early listener; the sim's run-level `after_combat_end` is one flat walk in `RunState.relics` order (sts2_rl/run.py:1206-1208). That is exactly the position relic/sword_of_stone guard G1 occupies -- also a plain-pass AfterCombatVictory implementer, verdicted `gap` and marked 'DORMANT AT THIS SITE' -- and relic/meat_on_the_bone guard G1 is the same mechanism LIVE (at 38/80 the sim heals 44 where the game heals 56, because index-0 Burning Blood gets to heal first). Per the README, 'no ported content triggers this' is a DORMANT GAP, not a faithful, and dormancy describes today's content rather than the divergence's shape (binding rule 1). DORMANT AT THIS SITE, and the argument is unchanged and still good: the only ported AfterCombatVictoryEarly implementer is relic/meat_on_the_bone, whose effect is a heal, and War Hammer neither reads player HP nor is read by it; the sim runs `finish_combat` before `generate_combat_rewards` (sts2_rl/run.py:1206-1208 then :1210-1213) and `rewards.create_reward_cards` builds options from the card POOL, not the deck, so no ordering against another victory listener changes War Hammer's outcome. WHAT MAKES IT LIVE: porting any AfterCombatVictoryEarly listener that reads or rewrites the DECK, at which point the sim would run it after War Hammer's upgrades instead of before. Grade C (bookkeeping -- hook order only, no numeric effect on ported content). Rule 7: sts2_rl/run.py, sts2_rl/rewards.py, src/Core/Hooks/Hook.cs and audit/records/seam/hook_dispatch.json are NOT hashed here.",
+      "live": false
     },
     {
       "what": "N5: Flash() and CanonicalVars (WarHammer.cs:17, 25)",

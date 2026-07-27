@@ -63,6 +63,31 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/FrozenEgg.cs",
+      "sha256": "09fdd62baaf545bfb544722d07a921db4cf406726cf327e636db96706efb7ceb",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LastingCandy.cs",
+      "sha256": "66b57fa6350bd39c568093feeeb220d2be09e01826d43ea3b16f8e00e3dbb530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ToxicEgg.cs",
+      "sha256": "5199ee81e31f3273550d0fddf884df69a6d876df34c3b94f5105c5e946701d60",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationFlags.cs",
+      "sha256": "1e43d3793d138f8ede4db48e429d03ef515105f547ee8ced0dd3438cd613bc11",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -105,8 +130,8 @@
     },
     {
       "what": "G3: `if (options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades)) return false` (MoltenEgg.cs:27-30) has no counterpart in the sim, which has no card-creation flag concept",
-      "verdict": "waiver",
-      "rationale": "UNREACHABLE BECAUSE THE FLAG IS NEVER SET ANYWHERE IN THE GAME SOURCE -- dead code in C# itself, not unported content, so this is the same basis as relic/unsettling_lamp guard N1 (IsVisibleInternal) and relic/calling_bell guard G4 (ShouldAddToDeck), and the same verdict per binding rule 3. EXECUTED (py audit/tools/relic_probes_b09.py b09-molten): `CardCreationOptions.Flags` has a private setter and is writable ONLY through `WithFlags` (CardCreationOptions.cs:57, 212-214); all 29 WithFlags call sites in src/ were enumerated and tallied, and NoHookUpgrades has **0 producers and 3 readers** (the three egg relics). `CardCreationFlags.NoUpgrades` (= NoUpgradeRoll | NoHookUpgrades) and `NoModifications` (= -1), the two composite flags that would set it indirectly, likewise have 0 producers. So the guard can never be true for any caller that exists, and the sim's total omission of the flag system cannot change an outcome through THIS relic. It would take a change to the game's own source to make it live. Rule 7: leans on CardCreationOptions.cs and CardCreationFlags.cs, neither hashed here."
+      "verdict": "faithful",
+      "rationale": "MECHANISM NoHookUpgrades, one verdict at all THREE egg sites (relic/toxic_egg N1, relic/frozen_egg G2, relic/molten_egg G3) after the 2026-07-26 relic fix pass reconciled them -- they previously split two waivers against one gap on identical facts, which binding rule 3 forbids. VOCABULARY RULING (2026-07-26 relic fix pass), applied at every dead-in-the-source site in this tier so it stops contradicting itself. When a C# member the sim omits is DEAD IN THE GAME SOURCE ITSELF -- zero overrides, zero producers, zero callers anywhere under src/ -- the correct verdict is `faithful`, not `waiver`. PROMPT.md v6 item 3, which the relic stream itself wrote, settles the principle for the mirror-image case: 'a waiver is in-scope-adjacent and declined, and here there is no source behaviour to be faithful to.' A waiver claims something in scope was deliberately not audited; here there is nothing to decline, because the member provably cannot fire in any run of the shipping game and cannot become live by porting more content -- it would take a change to the game's own source. `faithful` also states the stronger and more useful fact: the two codebases have the SAME observable. Before this pass the relic tier split 8 waivers against 5 faithfuls on identical reasoning; these entries are now all `faithful` (binding rule 3). NOTE: this ruling does NOT touch MULTIPLAYER gates (`player != base.Owner`, `Players.Count == 1`), which stay `waiver` -- the shared contract names multiplayer as out of scope outright, and unlike a dead member a player count really can differ in the shipping game; the sim simply does not model that mode. AT THIS SITE the member is dead, and the grep is EXECUTED and exhaustive: `grep -rn NoHookUpgrades src/` returns exactly FOUR lines in the whole game source -- the enum member `NoHookUpgrades = 4` (src/Core/Runs/CardCreationFlags.cs:29) and the three egg relics READING it (FrozenEgg.cs:27, MoltenEgg.cs:27, ToxicEgg.cs:27). THREE READERS, ZERO PRODUCERS. The two composite flags that could set it indirectly are dead too: `grep -rn 'CardCreationFlags.NoUpgrades\\b' src/` returns NOTHING, and `grep -rn NoModifications src/` returns only its own declaration (src/Core/Runs/CardCreationFlags.cs:68). `CardCreationOptions.Flags` has a private setter and is writable only through `WithFlags` (src/Core/Runs/CardCreationOptions.cs:57, 211-215), and all 29 `WithFlags` call sites were enumerated (`py audit/tools/relic_probes_b09.py b09-molten`) with the same result. So the guard can never be true for any card creation the shipping game performs. THIS ALSO RETRACTS relic/frozen_egg G2's stated dormancy trigger, which was 'porting any C# effect that creates cards WithFlags(NoHookUpgrades) -- the shape exists in the source's card-generation callers'. IT DOES NOT: no such caller exists anywhere under src/, so there is no unported content that would make this live, which is exactly what distinguishes a dead member from a dormant gap. The genuinely live sibling flag is `NoModifyHooks`, which HAS a real producer -- LastingCandy.cs:127 builds `WithFlags(CardCreationFlags.NoModifyHooks | CardCreationFlags.NoCardPoolModifications)` and CardFactory.cs:104 gates the whole `Hook.TryModifyCardRewardOptions` dispatch on it. That is a live C# path with no sim counterpart and it belongs to relic/lasting_candy's record, not to the eggs. Rule 7: src/Core/Runs/CardCreationFlags.cs, src/Core/Runs/CardCreationOptions.cs, src/Core/Factories/CardFactory.cs and src/Core/Models/Relics/LastingCandy.cs are cited and not hashed by this record."
     },
     {
       "what": "G4 (DORMANT): the sim applies Molten Egg's already-upgraded refusal to ALL THREE paths; C# applies it ONLY to the deck-add path, because EggRelicHelper.UpgradeValidCards has no upgrade-level check",

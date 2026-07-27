@@ -133,6 +133,56 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BlackStar.cs",
+      "sha256": "236a57f088df6306350579a36d3e9de80b705e12675eb6c9e18d82c9285c2e37",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/CallingBell.cs",
+      "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/GlassEye.cs",
+      "sha256": "1cf2c74cfc8852970e07f40e2815f605806ba8f5a0d999cbaf4f49d99fe1f011",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LavaRock.cs",
+      "sha256": "3fb81e2b172260204bf0ae6a36891480d5924467b82ac0346a9023e6c5339859",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LostCoffer.cs",
+      "sha256": "96579eaef2fdec892f201d1e643f0659d589a6521025339b06e762a5be85b79e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orrery.cs",
+      "sha256": "1e14f14c3db789ac56b47053661019f25cf20ab2cde218a9ddbab2083ccfd88f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SmallCapsule.cs",
+      "sha256": "ae052e2dbcfc30eed878ec64a6132f7d130273603379c818b547605f0ef6634c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ToyBox.cs",
+      "sha256": "b96ea44d322aab9cb75e155e103fbf0077b19f215698f103a374f7efd9b4da96",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -185,8 +235,9 @@
     },
     {
       "what": "N2: RelicReward is a take-or-skip OFFER in C# (RelicReward.OnSelect, RelicReward.cs:109-115); the port grants all three unconditionally",
-      "verdict": "deliberate-divergence",
-      "rationale": "The sim auto-keeps, which is the house rule for non-choice relic offers -- rewards.py's own comment at the modify_combat_rewards dispatch (rewards.py:495-500) states that 'a hook that appends to rewards.relics grants them itself (run.add_relic), like the elite branch above', and the elite branch at rewards.py:469-479 does exactly that. Verdicted deliberate-divergence and not a gap on the same basis as audit/records/relic/calling_bell.json guard G3 and audit/records/relic/lava_rock.json guard N1 (binding rule 3, one verdict per mechanism): the divergent thing is the sim's player-choice model, applied consistently across relic offers, not this relic's effect. If a policy that ever declines a relic is added, this becomes a gap. Rule 7: sts2_rl/rewards.py, src/Core/Rewards/RelicReward.cs and the two sibling records are not hashed by this record."
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B): WongosMysteryTicket.cs:80-103 appends three payload-less RelicRewards to the 5th combat's reward screen; the sim pulls and grants all three. Wongo's Mystery Ticket is an Event-rarity relic from the ported Welcome to Wongo's event, and five combats is reachable in act 1 alone. Independent of guard G1 (the final-act early return).",
+      "live": true
     },
     {
       "what": "N3: `new RelicReward(player)` -> Populate -> `RelicFactory.PullNextRelicFromFront(player)` (RelicReward.cs:56-59, :75-96) vs `run.pull_relic_from_front()` (wongos_mystery_ticket.py:47) -- one rarity roll each, on the per-player Rewards stream",

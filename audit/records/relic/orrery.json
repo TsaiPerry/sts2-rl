@@ -33,6 +33,21 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Relics/CallingBell.cs",
+      "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -60,7 +75,8 @@
     {
       "what": "G2: `RewardsCmd.OfferCustom` (Orrery.cs:27) is SKIPPABLE -- unlike relic/neows_bones in this batch, Orrery does not call WithSkippingDisallowed",
       "verdict": "gap",
-      "issue": "Recorded separately from G1 because it changes what a correct port must do, and because the sim's auto-keep house rule is the WRONG default here. relic/calling_bell G3 verdicts auto-keep as a deliberate-divergence for offers the player cannot decline; Orrery's five screens can each be skipped, so a port that unconditionally adds five cards would add up to five cards the player would have refused -- five extra cards in a deck is a strictly worse outcome than none in many decks, so this is a gap and not the same divergence. DORMANT in the sense that nothing is added today (G1 subsumes the observable), but it is the trap waiting for the fix; the sim already has the machinery to model a decline (run.select_cards returns a list, and passing count=0 or an empty selection adds nothing, run.py:384-385). Rule 7: relics/calling_bell.py and run.py are NOT hashed by this record."
+      "issue": "Recorded separately from G1 because it changes what a correct port must do. Orrery.cs:27 offers FIVE independently skippable 3-card screens, so a port that unconditionally added five cards would add up to five cards the player would have refused -- and five extra cards in a deck is strictly worse than none in many decks. The sim already has the machinery to model the decline: `run.select_cards('card_reward', ...)` reaches sts2_rl/driver.py:246-249 with 'card_reward' in SKIPPABLE_PURPOSES (sts2_rl/driver.py:77), which issues an explicit skip action, and sts2_rl/run.py:384-390 honours an empty selector return. [CORRECTED 2026-07-26 by the relic fix pass: this entry previously said relic/calling_bell G3 verdicts auto-keep a deliberate-divergence 'for offers the player cannot decline'. That was a MISREADING of Calling Bell -- CallingBell.cs:31 is a plain skippable `RewardsCmd.OfferCustom`, and the ONLY non-declinable relic offer in the source is NeowsBones.cs:43's `.WithSkippingDisallowed()`. calling_bell G3 and the whole auto-keep cluster are now gaps too, so this entry's verdict is no longer a discriminator against them -- it is the same MECHANISM AUTO-KEEP at a card-reward site.] DORMANT in the sense that nothing is added today (G1's stub subsumes the observable); it is the trap waiting for the fix. Rule 7: relics/calling_bell.py, run.py and driver.py are NOT hashed by this record.",
+      "live": false
     },
     {
       "what": "N1: Orrery.cs declares no IsAllowed, no IsAllowedInShops and no combat hooks",

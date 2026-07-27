@@ -68,6 +68,71 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BlackStar.cs",
+      "sha256": "236a57f088df6306350579a36d3e9de80b705e12675eb6c9e18d82c9285c2e37",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/CallingBell.cs",
+      "sha256": "f986e370f212c579f9490494a816fa5a245b11e2609148693ba88de9f81b64b6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/GlassEye.cs",
+      "sha256": "1cf2c74cfc8852970e07f40e2815f605806ba8f5a0d999cbaf4f49d99fe1f011",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LavaRock.cs",
+      "sha256": "3fb81e2b172260204bf0ae6a36891480d5924467b82ac0346a9023e6c5339859",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/LostCoffer.cs",
+      "sha256": "96579eaef2fdec892f201d1e643f0659d589a6521025339b06e762a5be85b79e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/NeowsBones.cs",
+      "sha256": "0dd7a63e3689e8a10b2b280305558904ec4429433cc218c7eb1acdaa00c73bb3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Orrery.cs",
+      "sha256": "1e14f14c3db789ac56b47053661019f25cf20ab2cde218a9ddbab2083ccfd88f",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SmallCapsule.cs",
+      "sha256": "ae052e2dbcfc30eed878ec64a6132f7d130273603379c818b547605f0ef6634c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/WongosMysteryTicket.cs",
+      "sha256": "831872d73d4c25fca471afe636eb65d34677aba0a690239c471573ceb05b8cb9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -98,8 +163,9 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (toy_box.py:29-35), invoked by RunState.add_relic (run.py:552)",
-      "verdict": "deliberate-divergence",
-      "rationale": "Rollup of guards G1 and N2 per binding rule 4. The four pulls are faithful (N2, executed: grab bag 96 -> 92); the divergence is that ToyBox.cs:96 OFFERS them through RewardsCmd.OfferCustom and the port grants them outright (G1)."
+      "verdict": "gap",
+      "issue": "Rollup of guard G1 per binding rule 4: the four pulls, their order, the IsWax marking and the stream they come off are all faithful (guard N2), but the four relics are FORCE-GRANTED where ToyBox.cs:96 offers them on a skippable screen, and each granted relic's own after_obtained fires as a result. LIVE, grade B. See guard G1.",
+      "live": true
     },
     "AfterCombatEnd": {
       "maps_to": "after_combat_end (toy_box.py:37-42), dispatched by RunState.finish_combat",
@@ -110,8 +176,9 @@
   "guards": [
     {
       "what": "G1: `RewardsCmd.OfferCustom(base.Owner, list)` (ToyBox.cs:96) is a take-or-skip reward screen for four wax relics; the port grants all four unconditionally",
-      "verdict": "deliberate-divergence",
-      "rationale": "toy_box.py:29-35 pulls four relics and calls run.add_relic on each, so the player cannot decline any of them. This is the same mechanism, the same reasoning and the same verdict as audit/records/relic/calling_bell.json guard G3 (binding rule 3): the divergent thing is the sim's player-choice model, not the relic's effect, and it is applied consistently across relic offers (rewards.py 'grants gold and any elite relic immediately'). Flagged, as calling_bell's entry asks, so that whoever changes the choice model does not silently harden it -- and with one extra consequence specific to Toy Box: `run.add_relic` runs each wax relic's own `after_obtained` (run.py:552), so a wax relic with an upon-pickup effect fires it on pickup, which in the game only happens if the player TAKES that relic. EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): a seeded run obtains ['toy_box', 'toxic_egg', 'akabeko', 'potion_belt', 'planisphere'] with the last four flagged is_wax, and potion_belt's after_obtained has already run. If a policy that ever declines a relic is added, this becomes a gap. Rule 7: run.py, rewards.py and audit/records/relic/calling_bell.json are not hashed here."
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B, escalating to A): ToyBox.cs:87-97 pulls four relics, marks each IsWax and OFFERS them; sts2_rl/relics/toy_box.py:29-35 calls run.add_relic on all four. EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): a seeded run obtains ['toy_box', 'toxic_egg', 'akabeko', 'potion_belt', 'planisphere'] with the last four is_wax, and potion_belt's after_obtained has ALREADY RUN -- which in the game only happens for a relic the player takes. This is the clearest instance of observable (2) in the mechanism above. It escalates to grade A whenever a pulled wax relic's own AfterObtained consumes an RNG stream (a wax Small Capsule or Calling Bell pulls further relics), which the four-relic pull makes reachable. Toy Box is Ancient and granted by a ported shrine option, so both sides are reachable.",
+      "live": true
     },
     {
       "what": "G2 (DORMANT): `RelicCmd.Melt` leaves the relic in `Player.Relics` as an inert entry; the port removes it from run.relics entirely",

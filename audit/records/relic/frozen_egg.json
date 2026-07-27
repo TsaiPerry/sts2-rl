@@ -63,6 +63,31 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Relics/LastingCandy.cs",
+      "sha256": "66b57fa6350bd39c568093feeeb220d2be09e01826d43ea3b16f8e00e3dbb530",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MoltenEgg.cs",
+      "sha256": "b706622e797a32ba54e62bc05f71c67d7ace9f29254ba5111f49dbf14ac04571",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ToxicEgg.cs",
+      "sha256": "5199ee81e31f3273550d0fddf884df69a6d876df34c3b94f5105c5e946701d60",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationFlags.cs",
+      "sha256": "1e43d3793d138f8ede4db48e429d03ef515105f547ee8ced0dd3438cd613bc11",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/CardCreationOptions.cs",
+      "sha256": "5b63615ad2ef4d4bab8f2b4ce2ca80b555a755df955e2c6ff5a1911d7e8d3b35",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -78,7 +103,7 @@
     "TryModifyCardRewardOptionsLate": {
       "maps_to": "EggRelic.modify_card_reward_options (relics/_eggs.py:39-42), dispatched by rewards.py:298-301",
       "verdict": "gap",
-      "issue": "Rollup of guards G2 and G4 per binding rule 4. The effect matches -- EggRelicHelper.UpgradeValidCards(cardRewards, CardType.Power, this) (EggRelicHelper.cs:10-22) upgrades every reward option of the matching type that IsUpgradable, and _eggs.py:34-42 does the same through `_applies` -- but the `options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades)` bail (FrozenEgg.cs:27-30) has no sim counterpart (G2), and the Late phase is collapsed into the sim's single flat pass (G4)."
+      "issue": "Rollup of guard G4 per binding rule 4. The effect matches -- `EggRelicHelper.UpgradeValidCards(cardRewards, CardType.Power, this)` (EggRelicHelper.cs:10-22) upgrades every reward option of the matching type that IsUpgradable, and sts2_rl/relics/_eggs.py:34-42 does the same through `_applies` -- and the Late phase is collapsed into the sim's single flat pass (G4, DORMANT). [2026-07-26 fix pass: guard G2, the `CardCreationFlags.NoHookUpgrades` bail at FrozenEgg.cs:27-30, is no longer part of this rollup -- it is now `faithful`, because the flag has three readers and ZERO producers in the whole game source and so is dead code in C# itself. The two sibling eggs already read it that way; see guard G2.]"
     },
     "ModifyMerchantCardCreationResults": {
       "maps_to": "EggRelic.modify_merchant_card_results (relics/_eggs.py:44-45)",
@@ -98,9 +123,9 @@
       "issue": "Same mechanism and same verdict as audit/records/relic/amethyst_aubergine.json's IsAllowed finding (binding rule 3); confirmed here rather than re-derived. Frozen Egg is one of the SIXTEEN relics sweep B found sharing this exact predicate (`py audit/tools/relic_probes.py sweep-isallowed`; the cluster is listed in .superpowers/sdd/content-relic-sweeps.md sweep B(a)), so the fix is one base-class member plus one filter in the pull path, not sixteen relic edits. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b06.py b06-isallowed`): `'is_allowed' in dir(sts2_rl.relics.base.Relic)` is False while `is_allowed_at_neow` exists, so the concept is provably absent rather than merely unused; relic_pools.populate_relic_grab_bags (relic_pools.py:186-198) shuffles each rarity deque once at run init; the only per-pull predicates in run.pull_relic_from_front are is_allowed_in_shops (run.py:592, 614, 626); Frozen Egg is Rare in the transcribed grab bag; and RunState already tracks total_floor (run.py:976). The observable is pool composition from floor 41 on, and a wrong pull also shifts every subsequent pull, so it is not a one-relic error. NOTE per binding rule 7: relics/base.py, relic_pools.py and run.py are not hashed by this record."
     },
     {
-      "what": "G2 (DORMANT): `options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades) -> return false` (FrozenEgg.cs:27-30) has no sim counterpart",
-      "verdict": "gap",
-      "issue": "MECHANISM: the flag lets a card-creation call opt out of relic-driven upgrades; CardFactory also honours a sibling NoModifyHooks flag that skips the reward-options hooks entirely (CardFactory.cs:104). The sim has no card-creation-options object and no flags concept -- executed: `'CardCreationFlags' in dir(sts2_rl.hooks)` is False (`py audit/tools/relic_probes_b06.py b06-misc`), and rewards.py's generator passes a plain `modify_hooks` boolean instead. So a sim caller that wants un-upgraded options can suppress the whole hook loop but cannot suppress only the upgrade half. DORMANT: no ported sim call site asks for NoHookUpgrades, because the flag has no representation to ask with. Porting any C# effect that creates cards WithFlags(NoHookUpgrades) -- the shape exists in the source's card-generation callers -- makes it live, and it would land silently: the sim would upgrade a Power the game left alone. Recorded on this record and not on _eggs.py because the flag check lives in FrozenEgg.cs, not in the shared helper."
+      "what": "G2: `options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades) -> return false` (FrozenEgg.cs:27-30) has no sim counterpart",
+      "verdict": "faithful",
+      "rationale": "MECHANISM NoHookUpgrades, one verdict at all THREE egg sites (relic/toxic_egg N1, relic/frozen_egg G2, relic/molten_egg G3) after the 2026-07-26 relic fix pass reconciled them -- they previously split two waivers against one gap on identical facts, which binding rule 3 forbids. VOCABULARY RULING (2026-07-26 relic fix pass), applied at every dead-in-the-source site in this tier so it stops contradicting itself. When a C# member the sim omits is DEAD IN THE GAME SOURCE ITSELF -- zero overrides, zero producers, zero callers anywhere under src/ -- the correct verdict is `faithful`, not `waiver`. PROMPT.md v6 item 3, which the relic stream itself wrote, settles the principle for the mirror-image case: 'a waiver is in-scope-adjacent and declined, and here there is no source behaviour to be faithful to.' A waiver claims something in scope was deliberately not audited; here there is nothing to decline, because the member provably cannot fire in any run of the shipping game and cannot become live by porting more content -- it would take a change to the game's own source. `faithful` also states the stronger and more useful fact: the two codebases have the SAME observable. Before this pass the relic tier split 8 waivers against 5 faithfuls on identical reasoning; these entries are now all `faithful` (binding rule 3). NOTE: this ruling does NOT touch MULTIPLAYER gates (`player != base.Owner`, `Players.Count == 1`), which stay `waiver` -- the shared contract names multiplayer as out of scope outright, and unlike a dead member a player count really can differ in the shipping game; the sim simply does not model that mode. AT THIS SITE the member is dead, and the grep is EXECUTED and exhaustive: `grep -rn NoHookUpgrades src/` returns exactly FOUR lines in the whole game source -- the enum member `NoHookUpgrades = 4` (src/Core/Runs/CardCreationFlags.cs:29) and the three egg relics READING it (FrozenEgg.cs:27, MoltenEgg.cs:27, ToxicEgg.cs:27). THREE READERS, ZERO PRODUCERS. The two composite flags that could set it indirectly are dead too: `grep -rn 'CardCreationFlags.NoUpgrades\\b' src/` returns NOTHING, and `grep -rn NoModifications src/` returns only its own declaration (src/Core/Runs/CardCreationFlags.cs:68). `CardCreationOptions.Flags` has a private setter and is writable only through `WithFlags` (src/Core/Runs/CardCreationOptions.cs:57, 211-215), and all 29 `WithFlags` call sites were enumerated (`py audit/tools/relic_probes_b09.py b09-molten`) with the same result. So the guard can never be true for any card creation the shipping game performs. THIS ALSO RETRACTS relic/frozen_egg G2's stated dormancy trigger, which was 'porting any C# effect that creates cards WithFlags(NoHookUpgrades) -- the shape exists in the source's card-generation callers'. IT DOES NOT: no such caller exists anywhere under src/, so there is no unported content that would make this live, which is exactly what distinguishes a dead member from a dormant gap. The genuinely live sibling flag is `NoModifyHooks`, which HAS a real producer -- LastingCandy.cs:127 builds `WithFlags(CardCreationFlags.NoModifyHooks | CardCreationFlags.NoCardPoolModifications)` and CardFactory.cs:104 gates the whole `Hook.TryModifyCardRewardOptions` dispatch on it. That is a live C# path with no sim counterpart and it belongs to relic/lasting_candy's record, not to the eggs. Rule 7: src/Core/Runs/CardCreationFlags.cs, src/Core/Runs/CardCreationOptions.cs, src/Core/Factories/CardFactory.cs and src/Core/Models/Relics/LastingCandy.cs are cited and not hashed by this record."
     },
     {
       "what": "G3: the sim upgrades the ORIGINAL card object where C# substitutes an upgraded CloneCard (FrozenEgg.cs:58-59; EggRelicHelper.cs:17-19)",

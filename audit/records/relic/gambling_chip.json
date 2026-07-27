@@ -33,6 +33,11 @@
       "path": "sts2_rl/relics/base.py",
       "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -43,7 +48,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (gambling_chip.py:23-36), dispatched by HookSystem.on_player_turn_started (hooks.py:285-289) from PlayerCombatState.start_turn (player.py:183-186)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The hook SLOT is right and the turn gate matches, but CardCmd.DiscardAndDraw does two things the sim's inline loop does not: it routes each discard through CardPileCmd.Add (G2) and, after the draw, it AUTO-PLAYS every discarded card that was Sly this turn (G1). The selector's `min = 0` is also collapsed (G3)."
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The hook SLOT is right and the turn gate matches, but CardCmd.DiscardAndDraw does two things the sim's inline loop does not: it routes each discard through CardPileCmd.Add (G2) and, after the draw, it AUTO-PLAYS every discarded card that was Sly this turn (G1). The selector's `min = 0` is also collapsed (G3). [2026-07-26 fix pass: guard G3 is now also a gap -- the min-0 decline is unreachable in the sim.]"
     }
   },
   "guards": [
@@ -59,8 +64,9 @@
     },
     {
       "what": "G3: `CardSelectorPrefs(prompt, 0, 999999999)` -- minimum ZERO -- so the game lets the player keep the whole hand; the sim's default selector always discards `count` cards",
-      "verdict": "deliberate-divergence",
-      "rationale": "GamblingChip.cs:20 builds the prefs with min 0 and an effectively unbounded max, then `if (list.Count != 0)` skips the discard entirely when the player declines. gambling_chip.py:26-28 calls `combat.select_cards('gambling_chip', list(player.hand), len(player.hand))`, whose fallback when no card_selector is installed is `self._rng.sample(candidates, count)` (combat.py:575-581) -- i.e. it always returns exactly `count`, mulliganing the entire hand. Executed (`py audit/tools/relic_probes_b06.py b06-misc`): with a 20-card deck and a 3-card hand and no selector, all 3 are discarded and the hand is refilled. Verdicted a divergence rather than a gap on the same basis as audit/records/relic/calling_bell.json G3: the divergent thing is the sim's player-choice model, not the relic's effect -- select_cards IS the sim's choice seam and an installed policy can return the empty list, exactly as the C# screen can. The port's own docstring states the two policies (a scripted selector that discards only Status/Curse, the default that mulligans). Flagged so a fixer does not harden the mulligan: if a driver ever needs 'keep the hand' as the default, that is a selector change, not a relic change."
+      "verdict": "gap",
+      "issue": "MECHANISM AUTO-KEEP (see relic/black_star, relic/calling_bell G3 et al.) in its card-selection form; RE-VERDICTED from deliberate-divergence by the 2026-07-26 relic fix pass. GamblingChip.cs:20 builds `new CardSelectorPrefs(base.SelectionScreenPrompt, 0, 999999999)` -- MIN 0 -- and GamblingChip.cs:21 guards the payload with `if (list.Count != 0)`, so 'discard nothing' is a first-class outcome of the screen. The sim cannot express it. sts2_rl/relics/gambling_chip.py:26-28 calls `combat.select_cards('gambling_chip', list(player.hand), len(player.hand))`, and 'gambling_chip' is NOT in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES; sts2_rl/driver.py:246-249 then short-circuits -- `if not skippable and count >= len(remaining): return remaining` -- so the driver never even ISSUES a DecisionRequest and the whole hand is mulliganed. The no-selector fallback is the same outcome by a different route (sts2_rl/combat.py:580-581 `self._rng.sample(candidates, count)` with count == len(hand)). EXECUTED, two ways. (a) `py audit/tools/relic_probes_b06.py b06-misc`: with a 3-card hand and no selector all 3 are discarded and the hand refilled. (b) driving `RunDriver._card_selector` directly with an _ask that raises: purpose 'gambling_chip' with candidates ['a','b','c'] and count 3 RETURNS ['a','b','c'] without raising -- no DecisionRequest is ever issued -- while 'card_reward', 'obtain' and 'transform_optional' all raise, i.e. all three do ask. The old rationale claimed 'an installed policy can return the empty list, exactly as the C# screen can' -- under the real driver it is never asked, so it cannot. LIVE, grade A (stream desync): the forced discard-and-redraw of a full hand consumes N draw-pile draws every combat that the game need not consume, and Gambling Chip is a Rare relic in the live grab bag. The fix is a driver change (add 'gambling_chip' to SKIPPABLE_PURPOSES) plus letting select_cards return fewer than `count`, not a relic change.",
+      "live": true
     },
     {
       "what": "N1: the hook SLOT -- C#'s AfterPlayerTurnStart vs the sim's on_player_turn_started",
