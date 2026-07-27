@@ -27,7 +27,7 @@
     },
     {
       "what": "BoneTea / EmberTea (TeaMaster.cs:66-78): PlayerCmd.LoseGold(cost, GoldLossType.Spent) FIRST, then RelicCmd.Obtain<T>",
-      "maps_to": "events/tea_master.py:49-57 lose_gold(cost) then add_relic(id). Order preserved and observable -- a relic whose AfterObtained reads gold would see the post-payment balance in both. run.lose_gold (run.py:335-337) is exactly PlayerCmd.LoseGold's `int.Max(0, Gold - (int)amount)` (PlayerCmd.cs:198), and GoldLossType.Spent adds only the GoldSpent run-history counter (PlayerCmd.cs:185-188) -- the ordinary purchase annotation the luminous_choir record already mapped as faithful (rule 3). run.add_relic runs the relic's after_obtained (run.py:546-553), which is RelicCmd.Obtain's job; all three teas are ported (EXECUTED, `py tools/audit/event_probes_a.py reacha`).",
+      "maps_to": "events/tea_master.py:49-57 lose_gold(cost) then add_relic(id). Order preserved and observable -- a relic whose AfterObtained reads gold would see the post-payment balance in both. run.lose_gold (run.py:335-337) is exactly PlayerCmd.LoseGold's `int.Max(0, Gold - (int)amount)` (PlayerCmd.cs:198), and GoldLossType.Spent adds only the GoldSpent run-history counter (PlayerCmd.cs:185-188) -- the ordinary purchase annotation the luminous_choir record already mapped as faithful (rule 3). run.add_relic runs the relic's after_obtained (run.py:546-553), which is RelicCmd.Obtain's job; all three teas are ported (EXECUTED, `py audit/tools/event_probes_a.py reacha`).",
       "verdict": "faithful"
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "what": "this event rolls NOTHING",
-      "maps_to": "no NextItem, no NextInt, no shuffle anywhere in TeaMaster.cs, and no rng call in events/tea_master.py -- confirmed by `py tools/audit/event_probes.py eventrng`, which lists tea_master among the modules that roll nothing. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2. Note the three relics are FIXED, so unlike Ranwid there is no grab-bag pull and no Rewards draw either.",
+      "maps_to": "no NextItem, no NextInt, no shuffle anywhere in TeaMaster.cs, and no rng call in events/tea_master.py -- confirmed by `py audit/tools/event_probes.py eventrng`, which lists tea_master among the modules that roll nothing. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2. Note the three relics are FIXED, so unlike Ranwid there is no grab-bag pull and no Rewards draw either.",
       "verdict": "faithful"
     },
     {

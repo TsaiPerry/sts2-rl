@@ -20,7 +20,7 @@
   },
   "guards": [
     {
-      "what": "reachability: granted by the ported Spiraling Whirlpool event (events/spiraling_whirlpool.py:44-46). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Spiraling Whirlpool event (events/spiraling_whirlpool.py:44-46). Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {

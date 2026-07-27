@@ -21,7 +21,7 @@
   },
   "guards": [
     {
-      "what": "reachability: granted by the ported Field of Man-Sized Holes event (events/field_of_man_sized_holes.py:46-48). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Field of Man-Sized Holes event (events/field_of_man_sized_holes.py:46-48). Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {

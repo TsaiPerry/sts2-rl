@@ -25,7 +25,7 @@
       "maps_to": "combat.py:469 computes play_count once, then loops (combat.py:477)"
     },
     {
-      "what": "reachability: granted by the ported Silken Tress relic (relics/silken_tress.py:34, first card reward's options) and Glitter (relics/glitter.py:21). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Silken Tress relic (relics/silken_tress.py:34, first card reward's options) and Glitter (relics/glitter.py:21). Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {

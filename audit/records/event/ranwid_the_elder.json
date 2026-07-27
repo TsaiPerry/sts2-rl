@@ -37,7 +37,7 @@
     },
     {
       "what": "PotionCmd.Discard's Hook.AfterPotionDiscarded tail (PotionCmd.cs:55-60), which run.discard_potion does not fire",
-      "maps_to": "ALREADY EXECUTED and recorded on the stone_of_all_time record (`py tools/audit/event_probes.py potiondiscard`), rule 3: the hook has exactly ONE implementer in the whole game source, BeltBuckle.cs:72-79, whose body is gated on `CombatManager.Instance.IsInProgress`. Ranwid's discard is out of combat, so the hook resolves to a no-op here too.",
+      "maps_to": "ALREADY EXECUTED and recorded on the stone_of_all_time record (`py audit/tools/event_probes.py potiondiscard`), rule 3: the hook has exactly ONE implementer in the whole game source, BeltBuckle.cs:72-79, whose body is gated on `CombatManager.Instance.IsInProgress`. Ranwid's discard is out of combat, so the hook resolves to a no-op here too.",
       "verdict": "faithful"
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "what": "GiveRelic (RanwidTheElder.cs:126-134): RelicCmd.Remove(relic) THEN TWO PullNextRelicFromFront -> RelicCmd.Obtain pairs, interleaved",
-      "maps_to": "events/ranwid_the_elder.py:76-79 `run.relics.remove(relic)` then _obtain_grab_bag(2), whose loop is pull; add; pull; add -- the same interleave, which matters because the second pull sees the first relic already owned. The bare list-remove drops nothing: ALREADY EXECUTED on the relic_trader record (`py tools/audit/event_probes.py relictrade`), rule 3 -- RelicModel.AfterRemoved has ZERO overrides in the whole game source. list.remove is identity-based (Relic defines no __eq__), so it removes the exact instance the option named.",
+      "maps_to": "events/ranwid_the_elder.py:76-79 `run.relics.remove(relic)` then _obtain_grab_bag(2), whose loop is pull; add; pull; add -- the same interleave, which matters because the second pull sees the first relic already owned. The bare list-remove drops nothing: ALREADY EXECUTED on the relic_trader record (`py audit/tools/event_probes.py relictrade`), rule 3 -- RelicModel.AfterRemoved has ZERO overrides in the whole game source. list.remove is identity-based (Relic defines no __eq__), so it removes the exact instance the option named.",
       "verdict": "faithful"
     },
     {
@@ -56,9 +56,9 @@
       "verdict": "faithful"
     },
     {
-      "what": "EV-3: GenerateInitialOptions' two `base.Rng.NextItem` draws -- the potion (RanwidTheElder.cs:80) and the tradable relic (RanwidTheElder.cs:94) -- which events/ranwid_the_elder.py:44 and :52 take off `self.rng` via random.Random.choice. Right count, right order, right candidate lists; wrong stream. Confirmed by `py tools/audit/event_probes.py eventrng`, which lists ranwid_the_elder among the modules that roll ONLY on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "what": "EV-3: GenerateInitialOptions' two `base.Rng.NextItem` draws -- the potion (RanwidTheElder.cs:80) and the tradable relic (RanwidTheElder.cs:94) -- which events/ranwid_the_elder.py:44 and :52 take off `self.rng` via random.Random.choice. Right count, right order, right candidate lists; wrong stream. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists ranwid_the_elder among the modules that roll ONLY on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
       "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
     },
     {
       "what": "BR-relic_trader (blast radius): the grab-bag-runs-dry state. RanwidTheElder.cs:113, :121 and :131 call `RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable()` with no null check at all, so an empty bag is an NRE in the source",

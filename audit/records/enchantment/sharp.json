@@ -19,13 +19,13 @@
       "verdict": "faithful"
     },
     "EnchantDamageAdditive": {
-      "maps_to": "SharpEnchantment.modify_damage_additive (enchantments.py:404-408) -- returns `amount` for its own card, matching Sharp.cs:15-22's `base.Amount`; the `!props.IsPoweredAttack() -> 0m` guard is hoisted into the caller (cmds.py:56). The grant sets amount 2 (events/self_help_book.py:13). Additive-only, so BR-1's phase difference provably cannot bite -- this unit IS the executed control: Sharp(+2) with Strength(+3) on a base-6 Strike deals 11 in both engines (`py tools/audit/enchantment_probes.py order`).",
+      "maps_to": "SharpEnchantment.modify_damage_additive (enchantments.py:404-408) -- returns `amount` for its own card, matching Sharp.cs:15-22's `base.Amount`; the `!props.IsPoweredAttack() -> 0m` guard is hoisted into the caller (cmds.py:56). The grant sets amount 2 (events/self_help_book.py:13). Additive-only, so BR-1's phase difference provably cannot bite -- this unit IS the executed control: Sharp(+2) with Strength(+3) on a base-6 Strike deals 11 in both engines (`py audit/tools/enchantment_probes.py order`).",
       "verdict": "faithful"
     }
   },
   "guards": [
     {
-      "what": "reachability: granted by the ported Self Help Book event (events/self_help_book.py:17, READ_THE_BACK, amount 2, restricted to Attacks). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Self Help Book event (events/self_help_book.py:17, READ_THE_BACK, amount 2, restricted to Attacks). Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {

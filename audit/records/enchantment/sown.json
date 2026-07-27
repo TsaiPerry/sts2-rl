@@ -24,12 +24,12 @@
     {
       "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
       "verdict": "gap",
-      "issue": "Sown is the second of the three EnchantmentModel.OnPlay ports. The mechanism's executed proof lives on the Corrupted record (`py tools/audit/enchantment_probes.py onplay-slot replay`); Sown's own once-per-combat latch (Sown.cs:15-19) makes the replay leg inert here, leaving the position leg. Reachability of this unit proven: granted by the ported Sapphire Seed event (events/sapphire_seed.py:36-39, amount 1)."
+      "issue": "Sown is the second of the three EnchantmentModel.OnPlay ports. The mechanism's executed proof lives on the Corrupted record (`py audit/tools/enchantment_probes.py onplay-slot replay`); Sown's own once-per-combat latch (Sown.cs:15-19) makes the replay leg inert here, leaving the position leg. Reachability of this unit proven: granted by the ported Sapphire Seed event (events/sapphire_seed.py:36-39, amount 1)."
     },
     {
       "what": "EG1 scope note for Sown: is the position leg observable on its own?",
       "verdict": "faithful",
-      "maps_to": "measured, not assumed. `py tools/audit/enchantment_probes.py onplay-slot` plays a Sown-enchanted Whirlwind at 3 energy: the sim spends X before before_card_played fires, so the X capture sees the pre-gain energy in BOTH engines and this particular reading does not diverge. The position leg's proven witness is Corrupted's Rupture case; Sown's is recorded as the same mechanism rather than as an independently-proven observable."
+      "maps_to": "measured, not assumed. `py audit/tools/enchantment_probes.py onplay-slot` plays a Sown-enchanted Whirlwind at 3 energy: the sim spends X before before_card_played fires, so the X capture sees the pre-gain energy in BOTH engines and this particular reading does not diverge. The position leg's proven witness is Corrupted's Rupture case; Sown's is recorded as the same mechanism rather than as an independently-proven observable."
     },
     {
       "what": "FOUR-VERB COVERAGE (enchant / upgrade+downgrade / transform / copy) -- stated explicitly so the hole cannot reopen silently. Verb 3, TRANSFORM: CardCmd.Transform (CardCmd.cs:369-451) removes the original from its pile and adds a freshly-built replacement; it never touches Enchantment, and the destroyed original takes its enchantment with it",

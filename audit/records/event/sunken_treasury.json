@@ -27,7 +27,7 @@
     },
     {
       "what": "SecondChest's ORDER (SunkenTreasury.cs:45-52): GainGold(LargeChestGold) FIRST, THEN AddCurseToDeck<Greed>",
-      "maps_to": "events/sunken_treasury.py:43-46 gain_gold then add_card(make_card('greed')). Order preserved, and it is observable: run.add_card's AfterCardChangedPiles tail (run.py:352-353) fires for the Curse after the gold is banked, so a relic that reacts to gaining a Curse (Darkstone Periapt) sees the post-gold state in both. AddCurseToDeck routes through the same deck-add path as CardPileCmd.Add, so Hook.ModifyCardBeingAddedToDeck runs in both -- this event is in the add_card set, not creature_card_cmds G3's transform radius. The Greed curse is ported: EXECUTED (`py tools/audit/event_probes.py reach`), greed is in _CARD_CLASSES (cards/greed.py).",
+      "maps_to": "events/sunken_treasury.py:43-46 gain_gold then add_card(make_card('greed')). Order preserved, and it is observable: run.add_card's AfterCardChangedPiles tail (run.py:352-353) fires for the Curse after the gold is banked, so a relic that reacts to gaining a Curse (Darkstone Periapt) sees the post-gold state in both. AddCurseToDeck routes through the same deck-add path as CardPileCmd.Add, so Hook.ModifyCardBeingAddedToDeck runs in both -- this event is in the add_card set, not creature_card_cmds G3's transform radius. The Greed curse is ported: EXECUTED (`py audit/tools/event_probes.py reach`), greed is in _CARD_CLASSES (cards/greed.py).",
       "verdict": "faithful"
     },
     {
@@ -38,7 +38,7 @@
     {
       "what": "EV-3: CalculateVars' two draws, `base.Rng.NextInt(16)` and `base.Rng.NextInt(61)` (SunkenTreasury.cs:35-36) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
       "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py tools/audit/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
     },
     {
       "what": "the Greed card hover tip (SunkenTreasury.cs:29) and the per-character goldMonologue LocString that SecondChest splices into its result page (SunkenTreasury.cs:49-51)",

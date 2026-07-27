@@ -31,12 +31,12 @@
     },
     {
       "what": "Drink (SpiralingWhirlpool.cs:56-60): Heal(Heal.IntValue)",
-      "maps_to": "events/spiraling_whirlpool.py:49-51 `run.heal(self.heal)`. Plain CreatureCmd.Heal, which dispatches no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does NOT apply -- `py tools/audit/event_probes.py heal` lists this event under the plain-heal verb. run.heal clamps at max HP (run.py:287-291) exactly as Heal does.",
+      "maps_to": "events/spiraling_whirlpool.py:49-51 `run.heal(self.heal)`. Plain CreatureCmd.Heal, which dispatches no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does NOT apply -- `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb. run.heal clamps at max HP (run.py:287-291) exactly as Heal does.",
       "verdict": "faithful"
     },
     {
       "what": "this event rolls NOTHING",
-      "maps_to": "no NextItem / NextInt / shuffle anywhere in SpiralingWhirlpool.cs, and no rng call in events/spiraling_whirlpool.py -- confirmed by `py tools/audit/event_probes.py eventrng`, which lists spiraling_whirlpool among the modules that roll nothing. Its only 'variable' value is a pure function of max HP. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2.",
+      "maps_to": "no NextItem / NextInt / shuffle anywhere in SpiralingWhirlpool.cs, and no rng call in events/spiraling_whirlpool.py -- confirmed by `py audit/tools/event_probes.py eventrng`, which lists spiraling_whirlpool among the modules that roll nothing. Its only 'variable' value is a pure function of max HP. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2.",
       "verdict": "faithful"
     },
     {

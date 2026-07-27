@@ -37,7 +37,7 @@
     },
     {
       "what": "PricklySponge (WaterloggedScriptorium.cs:68-83): LoseGold(99) then a TWO-card enchant selection, despite the call passing `amount: 1` -- the select count comes from CardSelectorPrefs(prompt, DynamicVars.Cards.IntValue = 2), not from `amount`",
-      "maps_to": "EXECUTED (`py tools/audit/event_probes_c.py enchsel`), which quotes CardSelectorPrefs.cs:62-66 (the two-argument ctor sets MinSelect = MaxSelect = selectCount) and CardSelectCmd.cs:576-583 (the selection reads prefs.MinSelect/MaxSelect; `amount` is only forwarded to the enchant PREVIEW). Running the sim's PRICKLY_SPONGE on a 5-Strike deck with 400 gold: one selection call ('enchant', 2), 2 cards enchanted, 2 cards left holding Retain, 99 gold spent -- all matching. events/waterlogged_scriptorium.py:64-67 is correct; recorded because the `amount: 1` argument reads like a one-card screen.",
+      "maps_to": "EXECUTED (`py audit/tools/event_probes_c.py enchsel`), which quotes CardSelectorPrefs.cs:62-66 (the two-argument ctor sets MinSelect = MaxSelect = selectCount) and CardSelectCmd.cs:576-583 (the selection reads prefs.MinSelect/MaxSelect; `amount` is only forwarded to the enchant PREVIEW). Running the sim's PRICKLY_SPONGE on a 5-Strike deck with 400 gold: one selection call ('enchant', 2), 2 cards enchanted, 2 cards left holding Retain, 99 gold spent -- all matching. events/waterlogged_scriptorium.py:64-67 is correct; recorded because the `amount: 1` argument reads like a one-card screen.",
       "verdict": "faithful"
     },
     {
@@ -62,7 +62,7 @@
     },
     {
       "what": "this event consumes NO randomness on any path",
-      "maps_to": "EXECUTED (`py tools/audit/event_probes_c.py drawcount`): BLOODY_INK, TENTACLE_QUILL and PRICKLY_SPONGE each take 0 shared-rng draws and 0 event-rng draws with the card choice pinned, matching a source with no CalculateVars and no Rng call. EV-3 therefore does not apply to this unit.",
+      "maps_to": "EXECUTED (`py audit/tools/event_probes_c.py drawcount`): BLOODY_INK, TENTACLE_QUILL and PRICKLY_SPONGE each take 0 shared-rng draws and 0 event-rng draws with the card choice pinned, matching a source with no CalculateVars and no Rng call. EV-3 therefore does not apply to this unit.",
       "verdict": "faithful"
     }
   ],

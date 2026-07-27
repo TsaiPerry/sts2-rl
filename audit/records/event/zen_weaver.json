@@ -37,7 +37,7 @@
     },
     {
       "what": "this event consumes NO randomness on any path, so EV-3 does not apply",
-      "maps_to": "EXECUTED (`py tools/audit/event_probes_c.py drawcount`): BREATHING_TECHNIQUES, EMOTIONAL_AWARENESS and ARACHNID_ACUPUNCTURE each take 0 shared-rng and 0 event-rng draws with the card choice pinned, matching a source with no CalculateVars and no Rng call.",
+      "maps_to": "EXECUTED (`py audit/tools/event_probes_c.py drawcount`): BREATHING_TECHNIQUES, EMOTIONAL_AWARENESS and ARACHNID_ACUPUNCTURE each take 0 shared-rng and 0 event-rng draws with the card choice pinned, matching a source with no CalculateVars and no Rng call.",
       "verdict": "faithful"
     },
     {

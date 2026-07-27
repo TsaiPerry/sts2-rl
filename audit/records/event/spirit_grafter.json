@@ -17,7 +17,7 @@
     },
     {
       "what": "LetItIn (SpiritGrafter.cs:37-43): Heal(25) FIRST, then CreateCard<Metamorphosis>, then CardPileCmd.Add(card, PileType.Deck)",
-      "maps_to": "events/spirit_grafter.py:29-32 heal(25) then add_card(make_card('metamorphosis')). Order preserved. The card is ported -- EXECUTED (`py tools/audit/event_probes.py reach`): metamorphosis is in _CARD_CLASSES (cards/event_cards.py). run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:341-354), which is what CardPileCmd.Add runs, so this event is in the add_card set and NOT in creature_card_cmds G3's transform radius. Plain CreatureCmd.Heal -- no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does not apply; `py tools/audit/event_probes.py heal` lists this event under the plain-heal verb.",
+      "maps_to": "events/spirit_grafter.py:29-32 heal(25) then add_card(make_card('metamorphosis')). Order preserved. The card is ported -- EXECUTED (`py audit/tools/event_probes.py reach`): metamorphosis is in _CARD_CLASSES (cards/event_cards.py). run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:341-354), which is what CardPileCmd.Add runs, so this event is in the add_card set and NOT in creature_card_cmds G3's transform radius. Plain CreatureCmd.Heal -- no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does not apply; `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb.",
       "verdict": "faithful"
     },
     {
@@ -32,13 +32,13 @@
     },
     {
       "what": "this event rolls NOTHING",
-      "maps_to": "no NextItem / NextInt / shuffle anywhere in SpiritGrafter.cs, and no rng call in events/spirit_grafter.py -- confirmed by `py tools/audit/event_probes.py eventrng`, which lists spirit_grafter among the modules that roll nothing. EV-3 does not apply.",
+      "maps_to": "no NextItem / NextInt / shuffle anywhere in SpiritGrafter.cs, and no rng call in events/spirit_grafter.py -- confirmed by `py audit/tools/event_probes.py eventrng`, which lists spirit_grafter among the modules that roll nothing. EV-3 does not apply.",
       "verdict": "faithful"
     },
     {
       "what": "EV-1: Rejection's 10 HP loss (SpiritGrafter.cs:52) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
       "verdict": "gap",
-      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py tools/audit/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
     },
     {
       "what": "the Metamorphosis card hover tip and the `.ThatDoesDamage(RejectionHpLoss)` annotation (SpiritGrafter.cs:32-33)",

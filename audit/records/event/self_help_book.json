@@ -17,7 +17,7 @@
     },
     {
       "what": "the (enchantment, card type) pairing: Sharp/Attack, Nimble/Skill, Swift/Power (SelfHelpBook.cs:46-48, 83-96)",
-      "maps_to": "events/self_help_book.py:16-20 _CHOICES is that exact triple, in that order. All three enchantments are ported -- EXECUTED (`py tools/audit/event_probes.py reach`): sharp, nimble and swift are all in _ENCHANTMENT_CLASSES. This is the grant path the enchantment records cite, and it is a STRING-keyed one (make_enchantment('sharp')), which is why a grep for the class name misses it.",
+      "maps_to": "events/self_help_book.py:16-20 _CHOICES is that exact triple, in that order. All three enchantments are ported -- EXECUTED (`py audit/tools/event_probes.py reach`): sharp, nimble and swift are all in _ENCHANTMENT_CLASSES. This is the grant path the enchantment records cite, and it is a STRING-keyed one (make_enchantment('sharp')), which is why a grep for the class name misses it.",
       "verdict": "faithful"
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "what": "this event rolls NOTHING",
-      "maps_to": "no NextItem, no NextInt, no shuffle anywhere in SelfHelpBook.cs, and no rng call in events/self_help_book.py -- confirmed by `py tools/audit/event_probes.py eventrng`, which lists self_help_book among the modules that roll nothing. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2.",
+      "maps_to": "no NextItem, no NextInt, no shuffle anywhere in SelfHelpBook.cs, and no rng call in events/self_help_book.py -- confirmed by `py audit/tools/event_probes.py eventrng`, which lists self_help_book among the modules that roll nothing. EV-3 does not apply, and neither does EV-1 (no HP loss) or EV-2.",
       "verdict": "faithful"
     },
     {

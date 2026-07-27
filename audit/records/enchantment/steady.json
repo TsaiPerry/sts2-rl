@@ -26,7 +26,7 @@
       "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Steady is in the blast radius alongside Souls and Goopy: Retain is a keyword flag set at attach time, so a downgrade clears it until the next combat's reset(). See the cross-record note on the souls record for the executed bound on that window."
     },
     {
-      "what": "reachability: granted by the ported Waterlogged Scriptorium event (events/waterlogged_scriptorium.py:51-53). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Waterlogged Scriptorium event (events/waterlogged_scriptorium.py:51-53). Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {

@@ -19,7 +19,7 @@
       "verdict": "faithful"
     },
     "EnchantBlockAdditive": {
-      "maps_to": "NimbleEnchantment.modify_block_additive (enchantments.py:428-431) -- returns `amount` for its own card, matching Nimble.cs:16-19's `base.Amount`. The grant sets amount 2 (events/self_help_book.py:13 _AMOUNT = 2, matching SelfHelpBook.cs's Enchantment2Amount). Additive-only, so BR-1's phase difference cannot bite (executed control in `py tools/audit/enchantment_probes.py order`).",
+      "maps_to": "NimbleEnchantment.modify_block_additive (enchantments.py:428-431) -- returns `amount` for its own card, matching Nimble.cs:16-19's `base.Amount`. The grant sets amount 2 (events/self_help_book.py:13 _AMOUNT = 2, matching SelfHelpBook.cs's Enchantment2Amount). Additive-only, so BR-1's phase difference cannot bite (executed control in `py audit/tools/enchantment_probes.py order`).",
       "verdict": "faithful"
     }
   },
@@ -30,7 +30,7 @@
       "issue": "ALREADY RECORDED as creature_card_cmds G1, whose issue text names this exact consequence (\"The same gate also skips the source card's enchantment block modifiers, which C# applies unconditionally and FIRST\") -- rule 3, not re-verdicted. Recorded here because Nimble and Goopy are the two ported EnchantBlockAdditive implementers and so are the whole of that clause's content-side blast radius: an unpowered block gain on a Nimble-enchanted card (Entrench is the ported MOVE|UNPOWERED block card G1 uses as its witness, cards/trash_heap_cards.py:159-179) loses the +2 entirely in the sim."
     },
     {
-      "what": "reachability: granted by the ported Self Help Book event (events/self_help_book.py:18, READ_PASSAGE, amount 2, restricted to Skills). Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Self Help Book event (events/self_help_book.py:18, READ_PASSAGE, amount 2, restricted to Skills). Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {

@@ -10,7 +10,7 @@
   },
   "hooks": {
     "EnchantDamageAdditive": {
-      "maps_to": "TezcatarasEmberEnchantment.modify_damage_additive (enchantments.py:333-337) -- returns the class constant 3 for its own card, matching TezcatarasEmber.cs:21-28's `DynamicVars.Damage.BaseValue` whose canonical value is `new DamageVar(3m, ValueProp.Move)` (TezcatarasEmber.cs:13). The `!props.IsPoweredAttack() -> 0m` guard is hoisted into the caller (cmds.py:56). Additive-only, so BR-1's phase difference cannot bite (executed control in `py tools/audit/enchantment_probes.py order`).",
+      "maps_to": "TezcatarasEmberEnchantment.modify_damage_additive (enchantments.py:333-337) -- returns the class constant 3 for its own card, matching TezcatarasEmber.cs:21-28's `DynamicVars.Damage.BaseValue` whose canonical value is `new DamageVar(3m, ValueProp.Move)` (TezcatarasEmber.cs:13). The `!props.IsPoweredAttack() -> 0m` guard is hoisted into the caller (cmds.py:56). Additive-only, so BR-1's phase difference cannot bite (executed control in `py audit/tools/enchantment_probes.py order`).",
       "verdict": "faithful"
     }
   },
@@ -18,7 +18,7 @@
     {
       "what": "OnEnchant (TezcatarasEmber.cs:15-19) -- `protected override`, not enumerated by harness.list_overrides; audited here. Two effects: `EnergyCost.UpgradeBy(-EnergyCost.GetWithModifiers(CostModifiers.None))` (i.e. drive the base cost to 0) and `AddKeyword(CardKeyword.Eternal)`",
       "verdict": "faithful",
-      "maps_to": "TezcatarasEmberEnchantment.attach (enchantments.py:322-325) sets card._energy_cost = 0 and card.eternal = True; reset() (327-331) re-asserts both at every combat setup (combat.py:131). The cost zeroing is exact for the ported grant, which only ever enchants Basic Strikes (relics/nutritious_soup.py:18-26, matching NutritiousSoup.cs) -- a Strike's base cost is 1 and has no cost upgrade, so `UpgradeBy(-1)` and `= 0` coincide. Eternal is modelled at the run layer: RunState's removable-card filter reads it (run.py:362) and two ported events read it as a card filter (events/amalgamator.py:14, events/wood_carvings.py:33) -- executed, `py tools/audit/enchantment_probes.py eternal`."
+      "maps_to": "TezcatarasEmberEnchantment.attach (enchantments.py:322-325) sets card._energy_cost = 0 and card.eternal = True; reset() (327-331) re-asserts both at every combat setup (combat.py:131). The cost zeroing is exact for the ported grant, which only ever enchants Basic Strikes (relics/nutritious_soup.py:18-26, matching NutritiousSoup.cs) -- a Strike's base cost is 1 and has no cost upgrade, so `UpgradeBy(-1)` and `= 0` coincide. Eternal is modelled at the run layer: RunState's removable-card filter reads it (run.py:362) and two ported events read it as a card filter (events/amalgamator.py:14, events/wood_carvings.py:33) -- executed, `py audit/tools/enchantment_probes.py eternal`."
     },
     {
       "what": "GENERALISATION LIMIT of the cost-zeroing map: `_energy_cost = 0` is an absolute set, `UpgradeBy(-current)` is a relative adjustment to the upgrade delta. They diverge on any card whose cost later changes by upgrade",

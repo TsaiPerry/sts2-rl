@@ -15,7 +15,7 @@
       "verdict": "faithful"
     },
     {
-      "what": "reachability: granted by the ported Pael's Growth relic (relics/paels_growth.py:19-25, amount 4) and consumed by its Clone rest-site option (paels_growth.py:28-45), which is the C# consumer the Clone.cs doc-comment names. Executed: `py tools/audit/enchantment_probes.py grants`.",
+      "what": "reachability: granted by the ported Pael's Growth relic (relics/paels_growth.py:19-25, amount 4) and consumed by its Clone rest-site option (paels_growth.py:28-45), which is the C# consumer the Clone.cs doc-comment names. Executed: `py audit/tools/enchantment_probes.py grants`.",
       "verdict": "faithful"
     },
     {
