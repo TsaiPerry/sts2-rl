@@ -1,0 +1,68 @@
+{
+  "unit": "monster/haunted_ship",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\HauntedShip.cs",
+    "sha256": "5d74c0e5e9e36411a439c772c42675dd0905559287acfc02f457a106879b5998"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\haunted_ship.py",
+    "sha256": "6b869fc8e7c82b898cfe7b47d23d89e73f670c63d2fee42603930e8da1bf2f9c"
+  },
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp (haunted_ship.py:24)",
+      "verdict": "faithful"
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp (haunted_ship.py:25)",
+      "verdict": "faithful",
+      "rationale": "HauntedShip.cs:27 MaxInitialHp => MinInitialHp, so the HP roll is degenerate at 63; the sim spells it as min_hp = max_hp = 63 and rng.randint(63,63) consumes the same single draw as the game's roll."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: DamageSfxType.ArmorBig is a hit sound."
+    },
+    "GenerateAnimator": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: the Spine animation state graph."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "build_machine (haunted_ship.py:31-46)",
+      "verdict": "faithful",
+      "rationale": "HauntedShip.cs:39-54: HAUNT_MOVE -> SWIPE_MOVE, SWIPE -> STOMP, STOMP -> SWIPE, initial HAUNT_MOVE, no branch state. Sim haunted_ship.py:43-46 is identical, executed (monster_probes_b03.py graphs: HAUNT_MOVE debuff/status_card -> SWIPE_MOVE attack 13x1 -> STOMP_MOVE attack 4x3 -> SWIPE_MOVE, initial HAUNT_MOVE). Note the C# object-initialiser form on :44-47 sets HAUNT's FollowUpState to SWIPE before SWIPE's own follow-up is assigned; both are object references, so the resolution order does not matter and the final graph is the one above."
+    }
+  },
+  "guards": [
+    {
+      "what": "Numeric constants, non-ascension branch",
+      "verdict": "faithful",
+      "rationale": "HauntedShip.cs:25-35, LAST argument: MinInitialHp 63 (MaxInitialHp is defined as MinInitialHp), HauntDazed 5 (a plain `=> 5`), SwipeDamage 13, StompDamage 4, StompRepeat 3; plus the Weak 3 literal at :81. Sim haunted_ship.py:13-17, 24-25 carries all six."
+    },
+    {
+      "what": "HAUNT: Weak first, then five Dazed into the DISCARD pile",
+      "verdict": "faithful",
+      "rationale": "HauntedShip.cs:81-82 applies Weak 3 and then CardPileCmd.AddToCombatAndPreview<Dazed>(targets, PileType.Discard, 5, null). Sim haunted_ship.py:58-60: WeakPower 3, then five CardPileCmd.add_to_discard calls. Pile is Discard on both sides (PROMPT.md class 7's pile-limbo trap does not bite: nothing here is mid-OnPlay), the order Weak-then-Dazed matches, and the count is 5. The one-call-with-count-5 vs five-calls shape is a CardPileCmd-seam question, not a per-monster one; the resulting discard pile is five Dazed either way."
+    },
+    {
+      "what": "StatusIntent(5) loses its count in the sim's Intent",
+      "verdict": "waiver",
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: HauntedShip.cs:44 telegraphs `new DebuffIntent(), new StatusIntent(HauntDazed)` - the 5 is the NUMBER SHOWN on the status icon. The sim collapses the pair to Intent(DEBUFF, also=(STATUS_CARD,)) (haunted_ship.py:41) and its Intent dataclass has no status-count field (monsters/base.py:36-51). The move still adds five Dazed; only the telegraphed digit is lost. The AbstractIntent vocabulary mapping is monster_state_machine boundary hole 2 and is audited by no record; flagged here rather than silently skipped."
+    },
+    {
+      "what": "PROMPT.md bug-class sweep",
+      "verdict": "faithful",
+      "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 7 (pile limbo): the Dazed go to Discard from a monster move, never mid-OnPlay. Class 8 (append position): AddToCombat appends to the discard pile on both sides; no shuffle is involved, so no StableShuffle tie-order exposure. Class 10: HauntedShip.cs holds no per-combat state field at all. Class 21: neither kills nor is retained."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "side": "sim"
+    }
+  ]
+}
