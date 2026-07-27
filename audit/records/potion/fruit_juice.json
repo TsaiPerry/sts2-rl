@@ -1,0 +1,32 @@
+{
+  "unit": "potion/fruit_juice",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\FruitJuice.cs",
+    "sha256": "63737f83ad6ff0565a4257ab7236060b35767a176d27c841cdb832860d2106d1"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "CanBeGeneratedInCombat": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

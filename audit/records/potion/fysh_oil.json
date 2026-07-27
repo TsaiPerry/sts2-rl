@@ -1,0 +1,32 @@
+{
+  "unit": "potion/fysh_oil",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\FyshOil.cs",
+    "sha256": "f5b3a13806026b5b0f4911824d4b92c692e84a9bb9cad4055cdd459af4e5a266"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "ExtraHoverTips": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}

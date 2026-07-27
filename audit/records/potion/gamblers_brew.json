@@ -1,0 +1,28 @@
+{
+  "unit": "potion/gamblers_brew",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\GamblersBrew.cs",
+    "sha256": "4c69e0aba2eb7b8d63cced1ba3b7b269cc0f8a6459ee3b667925149fbc9fd0aa"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "hooks": {
+    "Rarity": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "Usage": {
+      "maps_to": "",
+      "verdict": ""
+    },
+    "TargetType": {
+      "maps_to": "",
+      "verdict": ""
+    }
+  },
+  "guards": [],
+  "verdict": "",
+  "audited": ""
+}
