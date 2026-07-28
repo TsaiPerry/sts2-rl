@@ -18,6 +18,16 @@
       "path": "sts2_rl/full_env.py",
       "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
       "side": "sim"
+    },
+    {
+      "path": "test/test_ironclad_cards.py",
+      "sha256": "659c3f886b44deb640d77248d0c9b7da40d92e37cd19722b8592a3d389f38d06",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_shared_enchantments.py",
+      "sha256": "8cd33315c1985186b30561d56c13fb547cf3f68a87f11df8f655a28f78ceaa14",
+      "side": "sim"
     }
   ],
   "hooks": {

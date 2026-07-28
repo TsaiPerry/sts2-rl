@@ -28,6 +28,11 @@
       "path": "sts2_rl/run.py",
       "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
       "side": "sim"
+    },
+    {
+      "path": "test/test_rng_tripwire.py",
+      "sha256": "f6bed2b1db59d7bab3be63259896987637e4f92d665c830fd7ed6fac0a80eba7",
+      "side": "sim"
     }
   ],
   "hooks": {

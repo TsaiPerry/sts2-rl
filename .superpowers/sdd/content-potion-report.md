@@ -256,8 +256,31 @@ gap" defect was wrong 2/2):
   prompt's explicit instruction, confined to one class so they are easy to move.
 - **gap-queue stream:** add `potion` to `gap_queue.py`'s kind list; the queue is
   currently missing 152 entries and 20-odd mechanisms.
-- **relic stream:** the four `PROMPT.md` lessons above, and the
-  `citation_check.py` `extra_sources` defect if that tool is theirs.
+- **relic stream:** the four `PROMPT.md` lessons above (folded into v7 on
+  2026-07-27); the four records that still assert "POTION IS NOT AN AUDITED
+  KIND" as a live premise (`alchemical_coffer`, `lost_coffer`, `phial_holster`,
+  `potion_belt` — `GAP-QUEUE.md` record inconsistency 19); and 8 records to
+  prune (below).
+- **card (18 records), relic (8), power (1): prune the `extra_sources` entries
+  under `_NEVER_HASHED`.** `backfill_sources.py` had pinned 28 hashes of
+  `test/**` and `audit/tools/**` that `citation_check.py` says must never be
+  hashed. The tool is fixed; the data change is each stream's, because they are
+  each stream's records:
+
+  ```
+  py audit/tools/backfill_sources.py --prune --no-add --kind card
+  py audit/tools/backfill_sources.py --prune --no-add --kind relic
+  py audit/tools/backfill_sources.py --prune --no-add --kind power
+  ```
+
+  Nine of the 27 are **stale right now**, all on `test/test_hook_order.py`, and
+  the potion stream is what staled them: appending `TestPotionContentPins`
+  changed that file's hash. The re-audit evidence is executed and committed —
+  `py audit/tools/potion_probes.py pin-append` proves the change is
+  **append-only** and that none of the 72 citations across those records moved
+  or changed content, which is exactly what `audit/README.md`'s staleness rule
+  asks for before a prune or a `rehash`. Full per-record table:
+  `GAP-QUEUE.md` record inconsistency 20.
 - **gap-fix stream:** the highest-value single fix in this tier is
   `PowerCmd.apply`'s missing `CanReceivePowers` guard — it clears
   `seam/power_cmd` G6, both AoE-power potion sites and whatever else applies

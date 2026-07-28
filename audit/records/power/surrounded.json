@@ -45,6 +45,11 @@
       "side": "sim"
     },
     {
+      "path": "test/test_hive.py",
+      "sha256": "29a90e9b992c8bf4892da4666d11dc716e0a5bc25af507b6bfb80d6b8b0266a0",
+      "side": "sim"
+    },
+    {
       "path": "src/Core/Models/PotionModel.cs",
       "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
       "side": "game"

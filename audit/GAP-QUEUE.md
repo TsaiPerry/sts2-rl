@@ -5005,7 +5005,37 @@ machinery's reachability from its own vantage point.
     that quote the clause as explicit "RE-VERDICTED … has been DELETED" history:
     that is correct and should stay.
 
-20. **A pin was credited to the wrong mechanism, and the queue reported coverage
+20. **28 `extra_sources` hashes should never have been written, in 27 records
+    owned by three other streams.** `citation_check.py` declares
+    `_NEVER_HASHED = ("audit/tools/", "test/")` — the pipeline's own machinery
+    and its pins are cited but not hashed, because "a broken pin fails loudly on
+    its own" — and `backfill_sources.py` had no such exclusion, so it pinned
+    them. The consequence is false staleness: a record hashing
+    `test/test_hook_order.py` goes stale whenever **any** pin is added anywhere
+    in that file, and one hashing `audit/tools/relic_probes.py` goes stale when a
+    probe is edited. Appending the four potion pins staled nine records whose own
+    cited lines had not moved by a byte. The tool is fixed; the data is a
+    hand-off, by owning stream:
+
+    | stream | records | pinned path |
+    |---|---|---|
+    | `card` (18) | `anointed`, `beat_down`, `discovery`, `distraction`, `havoc`, `hidden_gem`, `jack_of_all_trades`, `jackpot`, `metamorphosis`, `rip_and_tear`, `seeker_strike`, `splash`, `volley` | `test/test_rng_tripwire.py` |
+    | | `feel_no_pain`, `mad_science` | `test/test_shared_enchantments.py` |
+    | | `feel_no_pain` | `test/test_ironclad_cards.py` |
+    | | `apotheosis`, `entrench`, `primal_force` | `test/test_hook_order.py` — **stale** |
+    | `relic` (8) | `mystic_lighter`, `permafrost` | `audit/tools/relic_probes.py` |
+    | | `horn_cleat`, `intimidating_helmet`, `iron_club`, `joss_paper`, `orichalcum`, `pen_nib` | `test/test_hook_order.py` — **stale** |
+    | `power` (1) | `surrounded` | `test/test_hive.py` |
+
+    Each stream applies
+    `py audit/tools/backfill_sources.py --prune --no-add --kind <kind>`.
+    For the nine stale ones the re-audit evidence is already executed and
+    committed: `py audit/tools/potion_probes.py pin-append` proves the pin file
+    changed by **append only** and that none of the 72 citations across those
+    records moved or changed content, which is what `audit/README.md`'s
+    staleness rule requires before a prune or a `rehash`.
+
+21. **A pin was credited to the wrong mechanism, and the queue reported coverage
     in two places at once.** See entry 25's **pin** row: a two-headed seam guard
     (`power_cmd/G6`, "No `CombatManager.IsEnding` / `CanReceivePowers` guard
     backstop") is merged into the `IsEnding` family, so a pin citing it for its

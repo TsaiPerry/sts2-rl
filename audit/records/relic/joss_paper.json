@@ -58,6 +58,11 @@
       "path": "sts2_rl/relics/runic_pyramid.py",
       "sha256": "313c805b499bd5a3c6340b8d34b9d9b01052908585d1392e060ac75b04424399",
       "side": "sim"
+    },
+    {
+      "path": "test/test_hook_order.py",
+      "sha256": "c1deb8102e1a92975c9090d88ec4d15a463992010d2e8c906eb93b2076b62c49",
+      "side": "sim"
     }
   ],
   "hooks": {

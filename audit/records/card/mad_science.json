@@ -33,6 +33,11 @@
       "path": "sts2_rl/creatures.py",
       "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
       "side": "sim"
+    },
+    {
+      "path": "test/test_shared_enchantments.py",
+      "sha256": "8cd33315c1985186b30561d56c13fb547cf3f68a87f11df8f655a28f78ceaa14",
+      "side": "sim"
     }
   ],
   "hooks": {
