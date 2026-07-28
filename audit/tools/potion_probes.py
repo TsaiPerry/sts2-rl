@@ -477,13 +477,61 @@ def pin_append() -> None:
         print(f"    {m}")
     print(f"    (checked {sum(len(v) for v in citing.values())} citations "
           f"across {len(citing)} records)")
-    if append_only and not moved:
-        print("VERDICT: no cited line moved or changed -- every verdict resting "
-              "on this file still holds, so `py audit/tools/harness.py rehash "
+    # (3) Every test a record names by NAME still exists, is still a strict
+    #     xfail, and -- where the record also cites a line -- that line still
+    #     falls inside that test's block.  (1) and (2) prove the TEXT did not
+    #     move; this proves the CLAIM still holds, which is the part a re-audit
+    #     is actually for.
+    blocks = {}          # test name -> (first line of its decorator, last line)
+    cur_dec = None
+    for n, line in enumerate(new_lines, 1):
+        if line.strip().startswith("@pytest.mark.xfail"):
+            cur_dec = n
+        m = re.match(r"\s*def (test_\w+)", line)
+        if m:
+            start = cur_dec or n
+            end = n
+            for k in range(n + 1, len(new_lines) + 1):
+                nxt = new_lines[k - 1]
+                if (nxt.strip().startswith("@pytest.mark.")
+                        or re.match(r"\s*def test_", nxt)
+                        or re.match(r"class \w+", nxt)):
+                    break
+                end = k
+            blocks[m.group(1)] = (start, end)
+            cur_dec = None
+    strict = {name for name, (s, e) in blocks.items()
+              if any("strict=True" in ln for ln in new_lines[s - 1:e])}
+
+    bad_claims = []
+    named_re = re.compile(r"test_hook_order\.py::(?:\w+::)?(test_\w+)")
+    for path in sorted((_REPO / "audit" / "records").rglob("*.json")):
+        rec = json.loads(path.read_text(encoding="utf-8"))
+        blobtext = json.dumps(rec)
+        for name in set(named_re.findall(blobtext)):
+            if name not in blocks:
+                bad_claims.append(f"{rec['unit']} names {name}, which no longer exists")
+            elif name not in strict:
+                bad_claims.append(f"{rec['unit']} names {name}, no longer strict=True")
+        # a cited line should fall inside a test block
+        for n in sorted(citing.get(rec.get("unit", ""), ())):
+            if not any(s <= n <= e for s, e in blocks.values()):
+                bad_claims.append(
+                    f"{rec['unit']} cites :{n}, which is outside every test block")
+    print(f"(3) claims about named tests that no longer hold: {len(bad_claims)}")
+    for b in bad_claims:
+        print(f"    {b}")
+    print(f"    ({len(blocks)} tests parsed, {len(strict)} of them strict xfails)")
+
+    if append_only and not moved and not bad_claims:
+        print("VERDICT: no cited line moved or changed, and every named test "
+              "still exists and is still strict -- every verdict resting on "
+              "this file still holds, so `py audit/tools/harness.py rehash "
               "<unit>...` is the sanctioned last step of the re-audit.")
     else:
-        print("VERDICT: a cited line moved or changed -- REHASH IS NOT ENOUGH, "
-              "those records need a real re-audit.")
+        print("VERDICT: a cited line moved, changed, or a named test no longer "
+              "holds -- REHASH IS NOT ENOUGH, those records need a real "
+              "re-audit.")
 
 
 PROBES = {

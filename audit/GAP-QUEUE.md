@@ -5029,11 +5029,16 @@ machinery's reachability from its own vantage point.
 
     Each stream applies
     `py audit/tools/backfill_sources.py --prune --no-add --kind <kind>`.
-    For the nine stale ones the re-audit evidence is already executed and
-    committed: `py audit/tools/potion_probes.py pin-append` proves the pin file
-    changed by **append only** and that none of the 72 citations across those
-    records moved or changed content, which is what `audit/README.md`'s
-    staleness rule requires before a prune or a `rehash`.
+    **The nine marked stale above are already re-audited and re-pinned** (they
+    went stale when the potion pins were appended, so clearing them was the
+    potion stream's to finish). The re-audit is
+    `py audit/tools/potion_probes.py pin-append`, and it is three checks rather
+    than a hash rewrite: the pin file changed by **append only**; none of the 72
+    line citations across those records moved or changed content; and every test
+    those records name still exists and is still a `strict=True` xfail. Only
+    then `harness.py rehash`, which re-pinned exactly one `extra_sources` entry
+    per record and nothing else. The prune is still owed for all 27 — it is the
+    durable fix, because a re-pin only buys time until the next pin is added.
 
 21. **A pin was credited to the wrong mechanism, and the queue reported coverage
     in two places at once.** See entry 25's **pin** row: a two-headed seam guard

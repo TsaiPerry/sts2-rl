@@ -273,14 +273,17 @@ gap" defect was wrong 2/2):
   py audit/tools/backfill_sources.py --prune --no-add --kind power
   ```
 
-  Nine of the 27 are **stale right now**, all on `test/test_hook_order.py`, and
-  the potion stream is what staled them: appending `TestPotionContentPins`
-  changed that file's hash. The re-audit evidence is executed and committed —
-  `py audit/tools/potion_probes.py pin-append` proves the change is
-  **append-only** and that none of the 72 citations across those records moved
-  or changed content, which is exactly what `audit/README.md`'s staleness rule
-  asks for before a prune or a `rehash`. Full per-record table:
-  `GAP-QUEUE.md` record inconsistency 20.
+  Nine of the 27 went stale when `TestPotionContentPins` was appended — the
+  potion stream's doing, so the potion stream finished it: **they are
+  re-audited and re-pinned, and the ledger reads 0 stale.** The re-audit is
+  `py audit/tools/potion_probes.py pin-append`, three checks rather than a hash
+  rewrite: the change is **append-only**; none of the 72 line citations across
+  those records moved or changed content; and every test those records name
+  still exists and is still a `strict=True` xfail. `harness.py rehash` then
+  re-pinned exactly one `extra_sources` entry per record — verified against
+  `--dry-run` first. **The prune is still owed for all 27**, and it is the
+  durable fix: a re-pin only holds until the next pin is added to that file.
+  Full per-record table: `GAP-QUEUE.md` record inconsistency 20.
 - **gap-fix stream:** the highest-value single fix in this tier is
   `PowerCmd.apply`'s missing `CanReceivePowers` guard — it clears
   `seam/power_cmd` G6, both AoE-power potion sites and whatever else applies

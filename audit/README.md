@@ -22,9 +22,8 @@ they are what the tools in `tools/` do. They never judge faithfulness.
 ## Status
 
 **Audited and merged here: all 6 engine seams and all 7 content tiers — 846
-records, 0 invalid, 9 stale** (see [Staleness](#staleness) — the 9 are a known,
-queued hand-off, not a discovery). Every one has been through an independent
-review pass and a fix pass. The relic tier (258 records) merged on 2026-07-26;
+records, 0 invalid, 0 stale.** Every one has been through an independent review
+pass and a fix pass. The relic tier (258 records) merged on 2026-07-26;
 `monster` (109) and `potion` (51) merged on 2026-07-27, which completes the
 kind list. **One unit still has no record: the sim-only `card/sweep`** (see
 [Sim-only units](#sim-only-units)) — so a whole-project claim here now covers
@@ -139,15 +138,18 @@ changes whenever any other pin is added.
 > py audit/tools/backfill_sources.py --prune --no-add --kind power
 > ```
 >
-> Nine of the 27 are **stale today**, all on `test/test_hook_order.py`:
+> Nine of them went stale when the potion tier appended its pins, and have been
+> **re-audited and re-pinned** rather than left for the reader to trip over:
 > `card/{apotheosis,entrench,primal_force}` and
 > `relic/{horn_cleat,intimidating_helmet,iron_club,joss_paper,orichalcum,pen_nib}`.
-> `py audit/tools/potion_probes.py pin-append` is the re-audit evidence for
-> them: it proves the file changed by **append only** and that none of the 72
-> citations across those records moved or changed content — so pruning (or, if a
-> stream prefers, `harness.py rehash`) is the sanctioned last step rather than a
-> fresh read. The other 18 are not stale; they simply carry a hash that will
-> stale them the next time any pin, tripwire test or probe is edited.
+> The re-audit is `py audit/tools/potion_probes.py pin-append` and it is three
+> checks, not a hash rewrite: the file changed by **append only**; none of the
+> 72 line citations across those records moved or changed content; and every
+> test those records name still exists and is still a `strict=True` xfail. Only
+> then `harness.py rehash`, which re-pinned exactly one entry per record — the
+> `--dry-run` output is the receipt. The other 18 are not stale; they simply
+> carry a hash that will stale them the next time any pin, tripwire test or
+> probe is edited, which is what the prune above is for.
 
 ---
 
