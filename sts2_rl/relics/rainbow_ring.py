@@ -29,7 +29,8 @@ class RainbowRing(Relic):
     def on_player_turn_start(self, player: PlayerCombatState) -> None:
         self._attack = self._skill = self._power = self._activated = False
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if self._activated:
             return
         if card.card_type == CardType.ATTACK:

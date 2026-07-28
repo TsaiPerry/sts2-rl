@@ -29,7 +29,8 @@ class RippleBasin(Relic):
     def on_player_turn_start(self, player: PlayerCombatState) -> None:
         self._attack_this_turn = False
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type == CardType.ATTACK:
             self._attack_this_turn = True
 

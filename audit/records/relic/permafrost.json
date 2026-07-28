@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\permafrost.py",
-    "sha256": "a8ae7339a4fa74b47789b151ecb46120cd010395dcf09c3d448d00b26638aa83"
+    "sha256": "d080ae8788e908d18a6028968fad9cd43f854d65215b5b79663177ab3076f31f"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -62,21 +62,21 @@
       "rationale": "Obtainable: Uncommon in the transcribed shared grab bag (py audit/tools/relic_probes_b12.py b12-pool reports bag=Uncommon)."
     },
     "AfterRoomEntered": {
-      "maps_to": "NO COUNTERPART. `Relic.after_room_entered(run, point, room_type)` exists (relics/base.py:194-195) and run.py:983 dispatches it over every relic, but permafrost.py implements neither it nor on_combat_start",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Permafrost.cs:35-43 does exactly one thing -- `if (!(room is CombatRoom)) return; ActivatedThisCombat = false;` -- and it is the relic's whole per-combat reset. The sim drops it and provides no substitute, so `_activated` latches True for the rest of the run after the first Power card of the first combat."
+      "maps_to": "reset_for_combat (sts2_rl/relics/permafrost.py:27-29), run by Relic.attach on every new CombatState (sts2_rl/relics/base.py:192-195)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the reset has a home. Permafrost.cs:35-43's whole body is `if (!(room is CombatRoom)) return; ActivatedThisCombat = false;`, and sts2_rl/relics/permafrost.py:27-29 performs it in `reset_for_combat`, which `Relic.attach` runs on every new CombatState (sts2_rl/relics/base.py:192-195) -- the sim's single per-combat boundary. WAS: the sim dropped the reset and provided no substitute, so `_activated` latched True for the rest of the run."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (permafrost.py:27-31), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1. The condition set is otherwise faithful: Permafrost.cs:47 requires `CombatManager.Instance.IsInProgress && cardPlay.Card.Owner == base.Owner && cardPlay.Card.Type == CardType.Power && !ActivatedThisCombat`, and permafrost.py:28 keeps the Power-type test and the once-per-combat flag (see guard N1 for the other two). The gap is that the flag is never cleared, so from combat 2 onward this handler returns immediately and the relic grants nothing."
+      "maps_to": "on_card_played (sts2_rl/relics/permafrost.py:31-...), Power-type test plus the once-per-combat `_activated` flag that reset_for_combat clears",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the once-per-combat flag is now cleared at the combat boundary by `reset_for_combat` (sts2_rl/relics/permafrost.py:27-29, run from Relic.attach at sts2_rl/relics/base.py:192-195), so this handler no longer returns immediately from combat 2 onward. The rest of the condition set was already faithful. WAS: `_activated` latched True after the first Power card of the first combat and the relic granted nothing thereafter."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_activated` is reset NOWHERE in the sim, so Permafrost grants its 7 Block in the FIRST combat of a run only -- the relic/belt_buckle shape",
-      "verdict": "gap",
-      "issue": "MECHANISM: permafrost.py:25 initialises `_activated = False` in __init__ and permafrost.py:29 sets it True on the first Power card; nothing ever sets it back. Relic instances live on RunState.relics and are re-attached to each new CombatState (run.py:1153), so combat 2 enters on_card_played with `_activated` already True. C# clears it in AfterRoomEntered (Permafrost.cs:41), which for a CombatRoom fires at CombatRoom.cs:228 -- after the encounter's monsters are on the board and strictly BEFORE Hook.BeforeCombatStart (CombatManager.cs:403) -- so the game re-arms the relic on entry to every fight. PROMPT.md bug class 13 requires tracing to the first READER of the stale field: the only reader is on_card_played itself and nothing shadows it (permafrost has no turn hook, no combat hook, and the flag is not re-derived anywhere). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-permafrost): the SAME relic instance carried into a second CombatState gives block 0 -> 0 on an Inflame play where a freshly constructed instance in the identical combat gives 0 -> 7. Both sides are ported content and nothing further is needed: Permafrost is Uncommon in the transcribed grab bag, every run has more than one combat, and Power cards are ordinary Ironclad content. The fix is the one-line reset the sibling relics already carry (`def on_combat_start(self): self._activated = False`) -- compare relics/throwing_axe.py:27-28, whose C# resets in the SAME AfterRoomEntered hook and whose port does add the combat-start reset. SWEEP CORRECTION, reported in .superpowers/sdd/relic-batch-12-lessons.md: `py audit/tools/relic_probes.py sweep-reset` prints `permafrost  C# resets: NONE (may be per-run by design)` and the sweeps doc therefore left it in the 19 unexecuted candidates described as 'decent evidence the state is per-run on both sides'. That is wrong -- the sweep's C#-side census only brace-matches BeforeCombatStart / AfterCombatEnd / AfterCombatVictory / AfterCombatDefeat (relic_probes.py:735-737) and cannot see AfterRoomEntered. `py audit/tools/relic_probes_b12.py b12-roomreset` rescans all 298 C# relic files and finds 11 that assign inside AfterRoomEntered; permafrost is the only one of them whose reset lives there EXCLUSIVELY and which is also in the sweep's candidate list, which is why it is the only live victim. NOTE per binding rule 7: run.py, CombatRoom.cs, CombatManager.cs, relic_probes.py, relics/throwing_axe.py, relics/base.py and content-relic-sweeps.md are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/permafrost.py:27-29 clears `_activated` (Permafrost.cs:36-44 AfterRoomEntered(CombatRoom)). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "N1: the two conditions permafrost.py:28 drops from Permafrost.cs:47 -- `CombatManager.Instance.IsInProgress` and `cardPlay.Card.Owner == base.Owner`",
@@ -99,6 +99,6 @@
       "rationale": "RelicModel.Flash() / base.Status / CanonicalVars / ExtraHoverTips are presentation only -- the relic bar's glow and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -95,8 +95,8 @@
   "guards": [
     {
       "what": "G1 (DORMANT): BeforeSideTurnEnd is a THREE-pass dispatcher (VeryEarly -> Early -> plain) and the sim's on_player_turn_end is one flat walk that also absorbs AfterSideTurnEnd",
-      "verdict": "gap",
-      "issue": "Hook.BeforeTurnEnd runs BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then plain BeforeSideTurnEnd as three complete listener passes (Hook.cs:1238-1261). StoneCalendar implements the PLAIN pass (StoneCalendar.cs:86), so in C# its 52 damage is guaranteed to land AFTER every VeryEarly and Early listener; hooks.py has one walk per hook and no phase concept, and relics/base.py:17 maps BeforeSideTurnEnd AND AfterSideTurnEnd onto the same on_player_turn_end. This is audit/records/seam/turn_structure.json gap G12 -- which that record labels LIVE with an executed witness (Orichalcum's VeryEarly block snapshot vs Cloak Clasp's plain grant: [cloak_clasp, orichalcum] gives 5 block and [orichalcum, cloak_clasp] gives 11 where C# always gives 11) -- so per binding rule 3 this entry carries the same verdict and does not re-derive it. DORMANT AT THIS SITE: Stone Calendar's own effect neither reads nor writes anything the two earlier passes touch (it deals unpowered damage to the enemies; Orichalcum/Ripple Basin snapshot the PLAYER's block, Plating and Asleep are enemy-side, Chains of Binding and The Bomb are plain-pass like this relic). What makes it live at this site: porting a VeryEarly/Early BeforeSideTurnEnd listener that kills an enemy, grants an enemy block, or ends the combat -- any of which changes what the 52 damage lands on."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. Stone Calendar implements the PLAIN pass (StoneCalendar.cs:86) and sts2_rl/relics/stone_calendar.py stays on `on_player_turn_end`, so its damage is now guaranteed to land after every VeryEarly and Early listener -- relic/orichalcum's snapshot and relic/paels_eye's hand exhaust are both in earlier passes today."
     },
     {
       "what": "G2 (DORMANT): `combatState.HittableEnemies` (StoneCalendar.cs:96) vs the sim's living_enemies() (stone_calendar.py:27)",

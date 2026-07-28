@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\membership_card.py",
-    "sha256": "137e0c625abf37fd3dae732e3fd5cb7c8b73d0036915002f1ef922c2cfb27a1e"
+    "sha256": "ddbe5a46cdf200ed9bd16c7aa064fc9b611b9e7826fe3c58737e442cbcd9b934"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/shop.py",
-      "sha256": "46be0947df84e57ec4bc1ad757ac589a8e70dab2f294e837bcf443187193d3bd",
+      "sha256": "38009ab6fe516c265c4aee9051cc4c1a4986edb373c361801a2f6dc11f4da7f9",
       "side": "sim"
     }
   ],
@@ -42,21 +42,21 @@
       "rationale": "Matches MembershipCard.cs:16. Live rather than declarative: Shop rarity is what puts the relic in the grab bag AND on the shelf, and it sets merchant_cost 200 (relics/base.py:54-62)."
     },
     "ModifyMerchantPrice": {
-      "maps_to": "no counterpart at ALL -- neither Relic nor the shop has a price hook (`git grep modify_merchant_price sts2_rl/` returns zero hits, executed)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4: shop prices are never halved (G1), and the sim's price model could not express the discount even with the hook added, because it freezes each cost at stock time where C# recomputes it on every read (G2)."
+      "maps_to": "modify_merchant_price (sts2_rl/relics/membership_card.py:16-20), folded per read by the MerchantEntry.cost property (sts2_rl/shop.py:178-183)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: `Hook.ModifyMerchantPrice` is modelled. `MerchantEntry.cost` is now a computed PROPERTY that re-runs the chain on every read -- `price = Decimal(self._cost)` folded through every held relic's `modify_merchant_price(run, entry, price)` and truncated with `int(price)` (sts2_rl/shop.py:178-183) -- which is MerchantEntry.Cost (MerchantEntry.cs:19-29) including its `(int)` truncation. sts2_rl/relics/membership_card.py:16-20 is the relic's half. WAS: no such member existed on Relic and the port was a stub."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the port is a behaviourless stub and every shop price in the sim is double what the game charges",
-      "verdict": "gap",
-      "issue": "MECHANISM: MembershipCard.cs:18-29 returns `originalPrice * (DynamicVars['Discount'].BaseValue / 100m)` == originalPrice * 0.5, and MerchantEntry.Cost (MerchantEntry.cs:19-29) runs `Hook.ModifyMerchantPrice` over every hook listener (Hook.cs:1818-1824) on every read. The sim has no such hook anywhere: all four MerchantEntry subtypes pin `self.cost` in their own `_calc_cost` with no relic pass (shop.py:236-239 cards, :281-284 relics, :310-313 potions, :340-341 card removal). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-membership): a stocked MerchantInventory reports the IDENTICAL 14 entry costs ([78, 72, 49, 36, 78, 84, 165, 245, 182, 229, 104, 50, 73, 75]) with and without the relic, where C# halves every one. Both sides ported: Membership Card is Shop rarity in the transcribed grab bag (relic_pools.py:97) -- so it is both purchasable and pullable -- and the sim has a working shop that spends RunState.gold. This is not a dormancy question; a relic whose entire effect is halving prices does nothing in every run that takes it. .superpowers/sdd/content-relic-sweeps.md sweep C files ModifyMerchantPrice among the hooks that 'need a new base hook, so they are larger than a one-relic fix' and EXCLUDES it from its 33 fixable stubs; that classification is right for this hook (relic/the_courier is the only other implementer, so one new base hook serves two relics) and the sizing is given here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: `Hook.ModifyMerchantPrice` is modelled. `MerchantEntry.cost` is now a computed PROPERTY that re-runs the chain on every read -- `price = Decimal(self._cost)` folded through every held relic's `modify_merchant_price(run, entry, price)` and truncated with `int(price)` (sts2_rl/shop.py:178-183) -- which is MerchantEntry.Cost (MerchantEntry.cs:19-29) including its `(int)` truncation. sts2_rl/relics/membership_card.py:16-20 returns `original_price * 50 / 100` (MembershipCard.cs:18-29). WAS: the port was a behaviourless stub and all four MerchantEntry subtypes pinned `self.cost` at stock time with no relic pass, so every shop price was double what the game charges."
     },
     {
       "what": "G2 (LIVE, same rollup): `MerchantEntry.Cost` is a computed PROPERTY that re-runs the hook on every read and only while the current room is a MerchantRoom; the sim's `cost` is a field frozen at stock time",
-      "verdict": "gap",
-      "issue": "MECHANISM: MerchantEntry.cs:19-29 recomputes `Cost` per read, guarded by `if (_player.RunState.CurrentRoom is MerchantRoom)`, and truncates with `(int)num`. Two consequences the sim cannot reproduce even if the hook were added to Relic. (a) RETROACTIVITY: buying (or being granted) Membership Card inside a shop immediately halves the rest of THAT shop's shelf in C#, because every subsequent price read goes through the hook; the sim's costs were computed in MerchantInventory.create (shop.py:374-383) and never revisited. (b) ROUNDING: the discount is applied as a decimal and then truncated by the `(int)` cast, so an odd price rounds DOWN (175 -> 87, not 88) -- a fix must not use round(), which the sim's own _calc_cost methods do use for the shop's jitter. REACHABILITY (LIVE): both halves are reachable the moment the relic is -- a relic entry for Membership Card can sit on the same shelf as the cards it would discount, and Shop rarity puts it there. Filed separately from G1 because fixing G1 by multiplying `self.cost` in _calc_cost would leave (a) broken and get (b) wrong. Rule 7: leans on shop.py and MerchantEntry.cs, neither hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: `Hook.ModifyMerchantPrice` is modelled. `MerchantEntry.cost` is now a computed PROPERTY that re-runs the chain on every read -- `price = Decimal(self._cost)` folded through every held relic's `modify_merchant_price(run, entry, price)` and truncated with `int(price)` (sts2_rl/shop.py:178-183) -- which is MerchantEntry.Cost (MerchantEntry.cs:19-29) including its `(int)` truncation. Both consequences the entry named are covered: (a) RETROACTIVITY -- because `cost` is a property, acquiring the relic inside a shop halves the rest of that shelf on the next read, as C#'s per-read hook does; (b) ROUNDING -- the fold runs in `Decimal` and `int(price)` truncates, so 175 -> 87, not 88. WAS: `cost` was a field frozen at stock time and rounded with round()."
     },
     {
       "what": "N1: `player != base.Owner` and `!LocalContext.IsMe(base.Owner)` (MembershipCard.cs:20-27)",
@@ -69,6 +69,6 @@
       "rationale": "50 is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file -- so the multiplier is exactly 0.5. Recorded because the port pins no constant at all (it is a pure stub), so 50 is the number a fix must use, and because the var is a discount PERCENTAGE rather than a multiplier, which is the easy thing for a fix to get inverted."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

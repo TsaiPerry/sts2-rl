@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\brilliant_scarf.py",
-    "sha256": "831b8c3eb42f1650125d12e6938c7b294b01128b2065647ebf84027f3d8356d9"
+    "sha256": "017a33b28d3702ee813c43a6d0dd25aad84de3d0bab8f19ac691f8ca952b3847"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],
@@ -53,7 +53,7 @@
     "TryModifyEnergyCostInCombatLate": {
       "maps_to": "modify_card_energy_cost (brilliant_scarf.py:29-32)",
       "verdict": "gap",
-      "issue": "Rollup of guards G2 and G3 per binding rule 4. The trigger arithmetic matches -- cost 0 when CardsPlayedThisTurn == CardsVar(5) - 1, i.e. the fifth card of the turn -- but the sim drops the Late PHASE (G2) and both of ShouldModifyCost's remaining clauses, the owner check and the Hand/Play pile check (G3)."
+      "issue": "NARROWED 2026-07-27. The phase half (G2) is CLOSED: the port now overrides `modify_card_energy_cost_late` (sts2_rl/relics/brilliant_scarf.py:29-33) and HookSystem._each runs the Late pass as its own complete walk (sts2_rl/hooks.py:36-38, 153-180). WHAT REMAINS is guard G3: ShouldModifyCost's other two clauses (BrilliantScarf.cs:102-132) -- the card's owner must be the relic's owner, and the card must currently be in the Hand or Play pile -- are still absent; the port checks only the counter, so the relic would zero the displayed cost of a draw-, discard- or exhaust-pile card. DORMANT: no ported effect reads a non-hand card's cost on the fifth-card turn."
     },
     "TryModifyStarCost": {
       "maps_to": "no counterpart",
@@ -66,9 +66,9 @@
       "rationale": "C#'s hook is turn_structure step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed to sit at step ~19, after the block clear and the energy reset (py audit/tools/relic_probes.py turn-order). Only a counter RESET happens here, and no card can be played between the two points -- the play phase opens at step 28 -- so CardsPlayedThisTurn is 0 at every moment either codebase can observe it. Same reasoning and same verdict as relic/beating_remnant's BeforeSideTurnStart in batch 1; recorded as a divergence rather than faithful because the slot genuinely differs and a future effect placed in that window would expose it."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (brilliant_scarf.py:34-35)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4 -- the sim counts auto-plays that C# explicitly excludes."
+      "maps_to": "on_card_played (sts2_rl/relics/brilliant_scarf.py:35-42) -- increments cards_played_this_turn, skipping auto-plays",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the rollup's only gap was G1, the counted auto-plays. sts2_rl/relics/brilliant_scarf.py:35-42 opens `if is_auto_play: return` (BrilliantScarf.cs:84-87) and CombatState._resolve_card_play passes the flag through to on_card_played (sts2_rl/combat.py:597-600)."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart; on_player_turn_start (brilliant_scarf.py:37-38) is the only reset",
@@ -79,13 +79,13 @@
   "guards": [
     {
       "what": "G1 (LIVE): C#'s AfterCardPlayed skips auto-plays (`if (cardPlay.IsAutoPlay) return;`, BrilliantScarf.cs:84-87); the sim's on_card_played counts every play",
-      "verdict": "gap",
-      "issue": "MECHANISM: an auto-played card is free and is not a 'card you played' for this relic's purposes, so C# does not advance the counter; brilliant_scarf.py:34-35 increments unconditionally. Every auto-play therefore shifts which card gets the free cost, by one, for the rest of the turn. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py batch2): one auto_play_card leaves cards_played_this_turn at 1 where C# leaves it at 0. Both sides are ported content: the sim routes auto-plays through CombatState.auto_play_card (combat.py:516), and three ported cards call it from inside their own on_play -- cards/cascade.py:58 and cards/colorless_skills.py:117 and :164 -- plus powers.py:713, :1041 and :3583 and potions.py:987. Brilliant Scarf is obtainable (Ancient; the hook_dispatch seam record already cites relics/brilliant_scarf.py as a ported witness for its own gaps G2/G3)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: auto-plays are excluded. `HookSystem.on_card_played` carries an `is_auto_play` argument that CombatState._resolve_card_play passes through (sts2_rl/combat.py:599-600), and sts2_rl/relics/brilliant_scarf.py:35-42 opens `if is_auto_play: return` -- BrilliantScarf.cs:84-87's `if (cardPlay.IsAutoPlay) return;`. The comment there also pins PROMPT.md class 29: rainbow_ring and razor_tooth deliberately DO count auto-plays and must not copy this. WAS: the counter incremented unconditionally, so every auto-play shifted which card got the free cost for the rest of the turn."
     },
     {
       "what": "G2 (DORMANT): the hook is TryModifyEnergyCostInCombat**Late** and the sim's modify_card_energy_cost is a single flat pass with no phase structure",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/hook_dispatch.json's gap G3 at the site that record already names: it cites Relics/BrilliantScarf.cs (56-63) and sts2_rl/relics/brilliant_scarf.py as the ported Late-phase witness that makes G2/G3 LIVE, and labels the mechanism a gap. One verdict per mechanism, binding rule 3 -- so this entry does not re-derive it, and the seam owns the machinery while this record owns the relic's observable. The Late phase is load-bearing for a cost-ZEROING modifier specifically: running last guarantees the 0 is final rather than being re-raised by a plain-phase listener that runs after it. DORMANT AT THIS SITE: the sim's other ported modify_card_energy_cost implementers (powers.py:597, 1147, 1486, 2883 -- Tangled, FreeAttack, Curious, and Spiked Gauntlets' relic counterpart) either also zero the cost or adjust it additively, and hook_dispatch's own analysis found no ordering that changes the final number with today's content. Porting a plain-phase listener that RAISES a cost makes it live."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic sits on the LATE pass. sts2_rl/relics/brilliant_scarf.py:29-33 overrides `modify_card_energy_cost_late` (BrilliantScarf.cs:57's TryModifyEnergyCostInCombatLate), and HookSystem._each runs the phase passes -- very_early, early, plain, late -- as COMPLETE separate listener walks whenever any listener declares a variant (sts2_rl/hooks.py:36-38, 153-180). Running last is what guarantees the 0 is final rather than re-raised by a plain-phase listener. WAS: the port implemented the plain `modify_card_energy_cost` and the sim had no phase structure at all."
     },
     {
       "what": "G3 (DORMANT): the sim's modify_card_energy_cost drops ShouldModifyCost's owner check and its Hand/Play pile check (BrilliantScarf.cs:102-132)",

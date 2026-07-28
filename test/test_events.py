@@ -83,8 +83,12 @@ def test_max_hp_changes():
     assert (run.hp, run.max_hp) == (57, 87)
     run.lose_max_hp(60)     # current HP clamps to the new max
     assert (run.hp, run.max_hp) == (27, 27)
-    run.lose_max_hp(100)    # max HP floors at 1
-    assert (run.hp, run.max_hp) == (1, 1)
+    # CreatureCmd.LoseMaxHp (CreatureCmd.cs:815-825) damages the overflow
+    # against the UNFLOORED new max (27 - 100 = -73, so 100 damage) and only
+    # then floors max HP at 1 — losing more max HP than you have KILLS you.
+    run.lose_max_hp(100)
+    assert (run.hp, run.max_hp) == (0, 1)
+    assert run.is_dead
 
 
 def test_transform_replaces_in_place_with_pool_card():

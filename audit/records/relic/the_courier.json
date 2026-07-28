@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\the_courier.py",
-    "sha256": "5ddf4592392cfd96b4e68af97f22415ad4c19a05e07ba7cd951ac9dd06648781"
+    "sha256": "69ed328ffb553b77c27afd6f8c906a5ac7adf04a50e3df11d01749b644e1754c"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/shop.py",
-      "sha256": "46be0947df84e57ec4bc1ad757ac589a8e70dab2f294e837bcf443187193d3bd",
+      "sha256": "38009ab6fe516c265c4aee9051cc4c1a4986edb373c361801a2f6dc11f4da7f9",
       "side": "sim"
     }
   ],
@@ -47,26 +47,26 @@
       "rationale": "TheCourier.cs:15. The flag exists on the sim's Relic base (relics/base.py:90) and shop.py's relic stocking filters on it, so this declaration is honoured rather than merely recorded. Rule 7: relics/base.py and shop.py are not hashed here."
     },
     "ModifyMerchantPrice": {
-      "maps_to": "no counterpart -- `Relic` declares no modify_merchant_price and shop.py has no dispatch site",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4 (LIVE)."
+      "maps_to": "modify_merchant_price (sts2_rl/relics/the_courier.py:18-22), folded per read by the MerchantEntry.cost property (sts2_rl/shop.py:178-183)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: `Hook.ModifyMerchantPrice` is modelled. `MerchantEntry.cost` is now a computed PROPERTY that re-runs the chain on every read -- `price = Decimal(self._cost)` folded through every held relic's `modify_merchant_price(run, entry, price)` and truncated with `int(price)` (sts2_rl/shop.py:178-183) -- which is MerchantEntry.Cost (MerchantEntry.cs:19-29) including its `(int)` truncation. sts2_rl/relics/the_courier.py:18-22 is the relic's half."
     },
     "ShouldRefillMerchantEntry": {
-      "maps_to": "no counterpart -- `Relic` declares no should_refill_merchant_entry and MerchantEntry.purchase has no restock branch",
-      "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4 (LIVE)."
+      "maps_to": "should_refill_merchant_entry (sts2_rl/relics/the_courier.py:24-28), dispatched by MerchantEntry._should_refill (sts2_rl/shop.py:223-229) after a successful purchase",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: sts2_rl/relics/the_courier.py:24-28 implements it and MerchantEntry._should_refill (sts2_rl/shop.py:223-229) dispatches it after every successful purchase, restocking the slot instead of clearing it (MerchantEntry.cs:81-89). WAS: neither the member nor the dispatch existed."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): shop prices are not discounted at all -- the 20% off is missing",
-      "verdict": "gap",
-      "issue": "MECHANISM: MerchantEntry.Cost (MerchantEntry.cs:19-30) recomputes `Hook.ModifyMerchantPrice(RunState, player, this, _cost)` on EVERY read while the current room is a MerchantRoom, then truncates to int; TheCourier.cs:19-26 returns `originalPrice * (1 - 20/100)`. The sim's Relic base declares no such member (executed: `hasattr(Relic, 'modify_merchant_price')` is False) and shop.py's MerchantEntry.cost is a plain attribute assigned once at stocking time (e.g. shop.py:284 for the relic entry). REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b16.py courier-price`): the same seeded shop stocks entry costs [50, 37, 74, 78, 79, 84, 181, 194, 201, 208, 49, 48, 51, 75] with the relic, without it, and with membership_card -- byte-identical. Both sides ported: the relic is Rare in the transcribed grab bag and the sim has a fully stocked merchant with gold, prices and purchases (shop.py, driver's Shop room). The observable is every price the player pays for the rest of the run. THIS IS THE LARGER FIX Sweep C flagged: `ModifyMerchantPrice` needs a new base hook plus a dispatch site, so it is not a one-relic change -- and rule 3 binds the fix to cover MembershipCard.cs:18-29 (50% off, relics/membership_card.py is the same stub) at the same time, because it is the same mechanism at a second site. Rule 7: relics/base.py and shop.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: `Hook.ModifyMerchantPrice` is modelled. `MerchantEntry.cost` is now a computed PROPERTY that re-runs the chain on every read -- `price = Decimal(self._cost)` folded through every held relic's `modify_merchant_price(run, entry, price)` and truncated with `int(price)` (sts2_rl/shop.py:178-183) -- which is MerchantEntry.Cost (MerchantEntry.cs:19-29) including its `(int)` truncation. sts2_rl/relics/the_courier.py:18-22 returns `original_price * (100 - 20) / 100` (TheCourier.cs:20-26). WAS: the port was a stub and no shop price moved."
     },
     {
       "what": "G2 (LIVE): a purchased shop slot never restocks",
-      "verdict": "gap",
-      "issue": "MECHANISM: MerchantEntry.OnTryPurchaseWrapper (MerchantEntry.cs:81-89) asks `Hook.ShouldRefillMerchantEntry` after a successful purchase and calls RestockAfterPurchase instead of ClearAfterPurchase when any listener says yes; TheCourier.cs:28-31 says yes for its owner, which is the relic's second printed effect. The sim's Relic base declares no should_refill_merchant_entry (executed: False) and shop.py's own module docstring names the omission outright -- 'The Courier's restock-after-purchase is not modeled (entries clear when bought)' (shop.py:30-31). REACHABILITY (LIVE, executed -- same probe): after buying one entry with the relic held, `entry.is_stocked` is False, where the game restocks the slot. That is a whole printed relic effect missing, and it compounds with G1 (a discounted, infinitely restocking shop is the relic's actual power level). Filed as a gap and NOT a waiver even though shop.py documents the deviation: a documented omission is still a divergence, and 'the sim does not model it' is exactly what binding rule 1 says is a dormant-or-live gap rather than a waiver -- here it is live. Rule 7: relics/base.py and shop.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the restock is modelled. `MerchantEntry._should_refill` (sts2_rl/shop.py:223-229) asks every held relic's `should_refill_merchant_entry(run, entry)` after a successful purchase and calls `_restock` (shop.py:231-...) instead of clearing the slot -- MerchantEntry.OnTryPurchaseWrapper's Hook.ShouldRefillMerchantEntry branch (MerchantEntry.cs:81-89) -- and sts2_rl/relics/the_courier.py:24-28 returns True for the owner (TheCourier.cs:28-31). WAS: no such member existed on Relic and shop.py's own docstring said the restock was not modelled."
     },
     {
       "what": "N1: `player != base.Owner` on both hooks (TheCourier.cs:21-24, :30)",
@@ -89,6 +89,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

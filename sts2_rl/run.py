@@ -170,6 +170,9 @@ class RunState:
         self.potions: list[Potion | None] = [None] * self.max_potions
         for i, p in enumerate(list(potions or [])[: self.max_potions]):
             self.potions[i] = p
+        # NMerchantRoom.FoulPotionThrown: a Foul Potion thrown at the merchant
+        # drives him off (FoulPotion.cs:79-88), closing his stall for good.
+        self.merchant_driven_off = False
         # Out-of-combat card chooser with the same signature as
         # CombatState.card_selector: (purpose, candidates, count) -> cards.
         # None = uniform random with the run RNG.
@@ -285,6 +288,13 @@ class RunState:
     def is_dead(self) -> bool:
         return self.hp <= 0
 
+    @property
+    def side(self) -> str:
+        """Creature.Side for the out-of-combat player. The run state stands in
+        for the player's Creature in the run-level hook pass below (the belt's
+        `should_die` is written against a Creature and asks for its side)."""
+        return "player"
+
     def heal(self, amount: int) -> int:
         """Heal up to amount, capped at max HP. Returns HP restored."""
         healed = max(0, min(int(amount), self.max_hp - self.hp))
@@ -299,14 +309,54 @@ class RunState:
         loss = int(amount)
         for relic in list(self.relics):
             loss = relic.modify_run_hp_loss(self, loss)
-        self.hp -= max(0, int(loss))
+        # Creature.LoseHpInternal (Creature.cs:450): `CurrentHp =
+        # Max(CurrentHp - n, 0)` — HP never goes negative.
+        self.hp = max(0, self.hp - max(0, int(loss)))
+        if self.is_dead:
+            self._resolve_death()
+
+    def _resolve_death(self, recursion: int = 0) -> None:
+        """CreatureCmd.Damage's `Kill(killedCreatures)` tail
+        (CreatureCmd.cs:409) for an out-of-combat HP loss, i.e.
+        KillWithoutCheckingWinCondition's death-prevention arms
+        (CreatureCmd.cs:504-570): `Hook.ShouldDie` runs over
+        `RunState.IterateHookListeners(null)`, and a listener that answers
+        False becomes the `preventer` handed to `Hook.AfterPreventingDeath`.
+
+        The game's run-level listener walk (RunState.cs:545-596) yields the
+        deck, the relics, the modifiers/badges AND the **potion belt**; the
+        belt is the only one of them with a ported death listener (Fairy in a
+        Bottle), so the pass iterates the belt alone.
+        """
+        preventer = None
+        for listener in self.held_potions:
+            should_die = getattr(listener, "should_die", None)
+            if should_die is not None and not should_die(self):
+                preventer = listener
+                break
+        if preventer is None:
+            return
+        after = getattr(preventer, "after_preventing_death", None)
+        if after is not None:
+            after(self)
+        # CreatureCmd.cs:568-571 — a preventer that did not actually heal the
+        # creature gets re-killed (the game throws at 10 recursions).
+        if self.is_dead and recursion < 10:
+            self._resolve_death(recursion + 1)
 
     def kill(self) -> None:
         self.hp = 0
 
     def rest_site_heal_amount(self) -> int:
-        """HealRestSiteOption.GetBaseHealAmount: 30% of max HP, truncated."""
-        return self.max_hp * 3 // 10
+        """HealRestSiteOption.GetHealAmount (HealRestSiteOption.cs:60-63):
+        GetBaseHealAmount (30% of max HP, truncated) run through
+        Hook.ModifyRestSiteHealAmount over the run's listeners — Regal
+        Pillow's +15. MendRestSiteOption.cs:58 chains the same hook over the
+        same base."""
+        amount = self.max_hp * 3 // 10
+        for relic in list(self.relics):
+            amount = relic.modify_rest_site_heal_amount(self, amount)
+        return amount
 
     def gain_max_hp(self, amount: int) -> None:
         """CreatureCmd.GainMaxHp: raise max HP, then heal the same amount."""
@@ -314,11 +364,20 @@ class RunState:
         self.heal(int(amount))
 
     def lose_max_hp(self, amount: int) -> None:
-        """CreatureCmd.LoseMaxHp: max HP floors at 1; current HP above the new
-        max is lost as unblockable damage (i.e. clamped)."""
-        new_max = max(1, self.max_hp - int(amount))
-        self.max_hp = new_max
-        self.hp = min(self.hp, new_max)
+        """CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-826).
+
+        The new max is computed UNFLOORED, the overflow above it is dealt as
+        real (Unblockable | Unpowered) damage — so the HP-loss hooks run and a
+        max-HP loss bigger than the player's HP genuinely kills — and only then
+        is max HP set to `Max(1, newMaxHp)`. `SetMaxHp` ends in
+        Creature.SetMaxHpInternal (Creature.cs:493-501), whose
+        `CurrentHp = Min(CurrentHp, MaxHp)` is what actually clamps.
+        """
+        new_max = self.max_hp - int(amount)
+        if new_max < self.hp:
+            self.lose_hp(self.hp - new_max)
+        self.max_hp = max(1, new_max)
+        self.hp = min(self.hp, self.max_hp)
 
     # ── Gold ─────────────────────────────────────────────────────────────
 
@@ -362,8 +421,18 @@ class RunState:
         return [c for c in self.deck if not c.eternal]
 
     def transformable_cards(self) -> list[Card]:
-        """CardModel.IsTransformable: in the deck this equals IsRemovable."""
-        return self.removable_cards()
+        """The transform SCREEN's pool. CardSelectCmd.FromDeckForTransformation
+        (CardSelectCmd.cs:487) filters `c.Type != CardType.Quest &&
+        c.IsTransformable`, and for a card sitting in the Deck pile
+        `IsTransformable` is just `IsRemovable` (`!Eternal`,
+        CardModel.cs:739-750) — so the screen is the removal pool MINUS the
+        Quest cards.
+
+        A gate that counts `IsTransformable` directly (MorphicGrove.cs:26) has
+        no Quest clause and must use `removable_cards` instead."""
+        from .cards import CardType
+        return [c for c in self.deck
+                if c.card_type != CardType.QUEST and not c.eternal]
 
     def upgradable_cards(self) -> list[Card]:
         return [c for c in self.deck if c.is_upgradable]
@@ -402,6 +471,39 @@ class RunState:
             if 0 <= idx < count:
                 return idx
         return self.rng.randrange(count)
+
+    def offer_relic(self, relic: Relic | str) -> Relic | None:
+        """RewardsCmd.OfferCustom with a RelicReward — a take-or-SKIP screen.
+
+        `WithSkippingDisallowed` (RewardsSet.cs:115) has exactly one caller in
+        the whole source, NeowsBones.cs:43, so every other relic offer is
+        declinable. RelicReward.Populate has already run by then — a declined
+        relic still LEAVES the grab bag — and only RelicReward.OnSelect
+        (RelicReward.cs:109-115) reaches RelicCmd.Obtain, so a declined relic
+        never joins the list and never runs its AfterObtained; OnSkipped
+        (RelicReward.cs:117-123) records `wasPicked: false` instead.
+
+        Delegates to self.reward_selector — a callable (kind, item) -> bool —
+        when installed (the driver surfaces it as a REWARD_RELIC decision).
+        With no selector attached there is nobody to decline, so the offer
+        resolves as a take. Returns the obtained relic, or None if declined.
+        """
+        if isinstance(relic, str):
+            relic = make_relic(relic)
+        selector = getattr(self, "reward_selector", None)
+        if selector is not None and not selector("relic", relic):
+            return None
+        return self.add_relic(relic)
+
+    def offer_potion(self, potion: Potion) -> bool:
+        """RewardsCmd.OfferCustom with a PotionReward — the same take-or-skip
+        screen for a potion (PotionReward.OnSelect / OnSkipped). Returns
+        whether it was kept; add_potion can still refuse it (Sozu, full
+        belt)."""
+        selector = getattr(self, "reward_selector", None)
+        if selector is not None and not selector("potion", potion):
+            return False
+        return self.add_potion(potion)
 
     def transform_card(
         self, card: Card, into: Card | None = None, *, pick_rng=None
@@ -456,6 +558,16 @@ class RunState:
                 into = make_card(pick_rng.next_item(options))
             else:
                 into = make_card(self.rng.choice(options))
+        # A Deck-pile transform IS a deck entry: CardCmd.Transform runs the same
+        # two hooks CardPileCmd.Add does — Hook.ModifyCardBeingAddedToDeck
+        # before the insert (CardCmd.cs:430; the egg relics hand back an
+        # upgraded replacement) and Hook.AfterCardChangedPiles after it
+        # (CardCmd.cs:447; Bing Bong, Book of Five Rings, Darkstone Periapt,
+        # Lucky Fysh).
+        for relic in list(self.relics):
+            replacement = relic.modify_card_being_added_to_deck(self, into)
+            if replacement is not None:
+                into = replacement
         if self.rng_set is not None:
             # Parity: remove the original (by identity — duplicate basics compare
             # equal) and append the replacement at the deck's end.
@@ -467,6 +579,8 @@ class RunState:
         else:
             idx = self.deck.index(card)
             self.deck[idx] = into
+        for relic in list(self.relics):
+            relic.after_card_added_to_deck(self, into)
         return into
 
     # ── Potions ──────────────────────────────────────────────────────────
@@ -488,6 +602,32 @@ class RunState:
         """Null the potion's belt slot (Player.cs DiscardPotionInternal) — the
         other slots keep their positions; the belt is never compacted."""
         self.potions[self.potions.index(potion)] = None
+
+    def use_potion(self, slot: int) -> bool:
+        """Drink the belt potion in `slot` OUTSIDE combat. Returns whether it
+        was used.
+
+        `PotionUsage.AnyTime` (Blood Potion, Entropic Brew, Foul Potion, Fruit
+        Juice) leaves the Use button live on the map, and `OnUseWrapper` is
+        written for it — `PotionModel.cs:294,298,334,336` all null-check the
+        combat state. So the wrapper reduces out of combat to :293
+        `RemoveBeforeUse` and :327 `OnUse`: the History entry (:336) is
+        combat-scoped, and both `AfterPotionUsed` implementers open with
+        `CombatManager.Instance.IsInProgress` (BeltBuckle.cs:79-85,
+        ReptileTrinket.cs:22-30), so the dispatch has no ported listener here.
+        The in-combat path is CombatState.use_potion.
+        """
+        if slot < 0 or slot >= len(self.potions):
+            return False
+        potion = self.potions[slot]
+        if potion is None:
+            return False
+        from .potions import USAGE_ANY_TIME
+        if potion.usage != USAGE_ANY_TIME:
+            return False
+        self.potions[slot] = None               # RemoveBeforeUse
+        potion.use_out_of_combat(self)
+        return True
 
     def add_potion_slots(self, count: int) -> None:
         """Grow the belt by `count` null slots (Player.cs
@@ -582,6 +722,13 @@ class RunState:
         `State.Rng.TreasureRoomRelics`). `rewards_rng` is itself the legacy
         shared run RNG when there is no parity rng_set, so the RL path is
         unchanged."""
+        # RelicGrabBag.GetAvailableDeque calls RemoveDisallowedRelicsFromDeques
+        # before every pull (RelicGrabBag.cs:218-270), which drops the relics
+        # RelicModel.IsAllowed rejects PERMANENTLY from the deques. Without it
+        # every floor-gated relic stayed offerable at every floor — at
+        # total_floor 60 the bag still yielded toxic_egg, which the game stops
+        # offering after floor 40.
+        self._drop_disallowed_from_grab_bag()
         if not self.relic_grab_bag:
             return None
         if rarity is None:
@@ -602,6 +749,7 @@ class RunState:
         grab bag), skipping ids in `blacklist`. Used by the merchant; a pulled
         relic never reappears this run. None if the matching bag is empty."""
         blacklist = blacklist or set()
+        self._drop_disallowed_from_grab_bag()
         bag = (
             self._get_shop_relic_bag()
             if rarity == RelicRarity.SHOP
@@ -618,12 +766,22 @@ class RunState:
                 return make_relic(relic_id)
         return None
 
+    def _drop_disallowed_from_grab_bag(self) -> None:
+        """RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270)
+        — run before every pull, and PERMANENT: a relic whose
+        `RelicModel.IsAllowed` is false is removed from the deque, not skipped.
+        """
+        self.relic_grab_bag[:] = [
+            rid for rid in self.relic_grab_bag if ALL_RELICS[rid].is_allowed(self)
+        ]
+
     def _get_shop_relic_bag(self) -> list[str]:
         """The shuffled Shop-rarity relic bag, built on first use."""
         if self._shop_relic_bag is None:
             self._shop_relic_bag = [
                 relic_id for relic_id, cls in ALL_RELICS.items()
                 if cls.rarity == RelicRarity.SHOP and cls.is_allowed_in_shops
+                and cls.is_allowed(self)
             ]
             self.rng.shuffle(self._shop_relic_bag)
         return self._shop_relic_bag
@@ -1194,6 +1352,13 @@ class RunState:
         # into each combat, so the removal is reconciled here through the
         # deck_card_origins map. Source: src/Core/Models/Powers/SwipePower.cs
         # (Steal / BeforeDeath).
+        # A DEAD hopper no longer carries its SwipePower: the power is stripped
+        # on death like any other (Creature.RemoveAllPowersAfterDeath), so it
+        # hands its origins to the combat from `on_removed` instead. An ESCAPED
+        # hopper keeps the power, and is still found by the walk below.
+        for origin in combat.stolen_deck_origins:
+            if origin in self.deck:
+                self.deck.remove(origin)
         for enemy in combat.enemies:
             swipe = enemy.powers.get("swipe")
             for stolen in getattr(swipe, "stolen_cards", ()):
@@ -1204,6 +1369,14 @@ class RunState:
         # the run for generate_combat_rewards to surface.
         self.pending_reward_extras.extend(combat.pending_reward_extras)
         if room_type is not None and not self.is_dead:
+            # Hook.AfterCombatVictory (Hook.cs:340-352) makes TWO complete
+            # passes over the listeners — AfterCombatVictoryEarly over all of
+            # them, then AfterCombatVictory over all of them. MeatOnTheBone.cs
+            # :47 is the source's only Early implementer and rides the
+            # combat-level dispatch (on_combat_end_early), but the run-level
+            # walk mirrors the same two phases.
+            for relic in list(self.relics):
+                relic.after_combat_end_early(self, room_type)
             for relic in list(self.relics):
                 relic.after_combat_end(self, room_type)
 

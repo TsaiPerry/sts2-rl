@@ -61,7 +61,10 @@ class FakeMerchant(Event):
         from ..relics import make_relic
 
         stock = list(_INVENTORY)
-        self.rng.shuffle(stock)                      # UnstableShuffle
+        # `_inventoryRelics.ToList().UnstableShuffle(base.Rng)` — no sort, and
+        # the event's own Rng (FakeMerchant.cs:116).
+        er = self.event_rng
+        (er if er is not None else self.rng).shuffle(stock)
         self.stock: list[Relic] = [make_relic(r) for r in stock[:_STOCK]]
 
     def _page_options(self) -> list[EventOption]:

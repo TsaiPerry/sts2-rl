@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\new_leaf.py",
-    "sha256": "a0bb19d5ce5928c2f010e4a0f806c7a137a7c810aba5e1ef6ac9f8332177a923"
+    "sha256": "24ccf4b235ec124c5df6b5e7ebdda11319bf00c0f9d3d825a53ad931e606d3da"
   },
   "extra_sources": [
     {
@@ -36,42 +36,42 @@
     },
     {
       "path": "sts2_rl/events/endless_conveyor.py",
-      "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5",
+      "sha256": "f1f3376a63944caa95f66a03937f6f4fff6535a0be0911e15d8bd96868be0bd9",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/morphic_grove.py",
-      "sha256": "ce535850554ab449755eae4274e742dcb077e5424734e14dcf5d628e9a58c049",
+      "sha256": "0d9a837427dfc9aa49e41c562695d67da2bb4149e636bafbe79b6ea94ee5648c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/neow.py",
-      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "sha256": "32be19d527d887b8085c5106696635b65271f2974d6c65d1e4ac842ea4862114",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/symbiote.py",
-      "sha256": "daaf188ec9417d2628e75b104aec39089db1ac3489db9388cec5799d643203d3",
+      "sha256": "ab2dd7cf1cc9764c6d5d019b2e71e15370e4b490665533ed7cf456e7d7191e0d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/the_lantern_key.py",
-      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "sha256": "29c60d6b668ae35eeab1aa04a606ff574b5a318c63e0bf815c114cc13972a8f5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/the_legends_were_true.py",
-      "sha256": "f86d70924caa9fc588f54dcdbad9e363f9795a709a9c8f8e6debad92bce9ad5c",
+      "sha256": "f50bd77603852d4a0091b735fd9d9ee731ee1bb844bfa7854c54dc8bb7f53df6",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/trial.py",
-      "sha256": "3d435d5a33c144a8a91f5771516376a0257b059a7c083db920f1dc399e4f5568",
+      "sha256": "874efbc1186317f8c47464e9109f6ae030886af0f1221ac45d3cd25524f05aea",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/whispering_hollow.py",
-      "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749",
+      "sha256": "04b2c3e7caab86cf89d71dadf156bee510718119b751382f3310f525b48ba4ee",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -104,8 +104,8 @@
   "guards": [
     {
       "what": "N1 (LIVE for RNG parity): C# names `Rng.Niche` and the stream IS consumed; run.transform_card is called with no pick_rng, so the sim silently falls back to the legacy shared random.Random",
-      "verdict": "gap",
-      "issue": "MECHANISM: NewLeaf.cs:27 is `await CardCmd.TransformToRandom(item, base.Owner.RunState.Rng.Niche)`. TransformToRandom builds `new CardTransformation(original)` with NO explicit Replacement (CardCmd.cs:323-326), so GetReplacement(rng) reaches CardFactory.CreateRandomCardForTransform (CardTransformation.cs:71) and the Niche stream IS drawn -- this is the half PROMPT.md bug class 16 warns to check, and unlike relic/claws (which passes an explicit Replacement and therefore draws nothing) this call really consumes. new_leaf.py:17 calls `run.transform_card(card)` with no pick_rng, and run.py:430-435 documents that None 'keeps the shared-rng choice' for callers 'not yet parity-wired'. EXECUTED (py audit/tools/relic_probes_b10.py new-leaf): on a string-seeded run, add_relic('new_leaf') transforms a deck card while the Niche stream's draw counter stays at 0 -> 0, where C# takes one draw. Same mechanism and same verdict as relic/astrolabe N1 (binding rule 3), and the fix is the same one line the sibling relic/pandoras_box already has (`run.transform_card(card, pick_rng=niche)`, pandoras_box.py:32). LIVE for RNG parity -- New Leaf is a ported Neow positive option (events/neow.py:37-42) so any parity seed that takes it diverges in both the replacement card and every later Niche draw -- and dormant for RL play, where the shared rng is the convention. Rule 7: CardCmd.cs, CardTransformation.cs, CardFactory.cs, run.py, relics/astrolabe.py and relics/pandoras_box.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the port now draws on the named stream. sts2_rl/relics/new_leaf.py:20-22 resolves `niche = run.rng_set.niche` and passes `pick_rng=niche` to run.transform_card, which is CardCmd.TransformToRandom(item, RunState.Rng.Niche) (NewLeaf.cs:27) reaching CreateRandomCardForTransform; the legacy RL path keeps the shared rng by convention. WAS: the call went to the legacy shared random.Random, so the stream was never advanced and every later draw off it read at the wrong position."
     },
     {
       "what": "G1 (DORMANT): CardSelectCmd.FromDeckForTransformation also excludes Quest cards; run.transformable_cards() filters only Eternal",

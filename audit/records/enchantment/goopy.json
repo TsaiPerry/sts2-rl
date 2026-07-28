@@ -6,9 +6,14 @@
   },
   "sim_source": {
     "path": "sts2_rl\\enchantments.py",
-    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+    "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31"
   },
   "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
     {
       "path": "src/Core/Commands/CardCmd.cs",
       "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
@@ -51,42 +56,42 @@
     },
     {
       "path": "sts2_rl/cards/anger.py",
-      "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618",
+      "sha256": "cbd924bb34688bb59491756f54e935a9d271beabd69625b0fb563752057fc043",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/trash_heap.py",
-      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "sha256": "39c4119afdeb8fd3addebd7c7344966c2f68b2b4203ed7fa77cb619bc94cbdb3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -96,12 +101,12 @@
     },
     {
       "path": "sts2_rl/relics/burning_sticks.py",
-      "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db",
+      "sha256": "36aa5127b899f310a0392368e2da08fe5430207374cbc6513caad28ce1bea68d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
       "side": "sim"
     },
     {
@@ -116,7 +121,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -135,21 +140,21 @@
       "verdict": "faithful"
     },
     "AfterCardPlayed": {
-      "maps_to": "GoopyEnchantment.on_card_played (enchantments.py:303-305) -- `amount += 1` for its own card, matching Goopy.cs:30-42's `base.Amount++`. The C# line the sim has no counterpart for, `base.Card.DeckVersion.Enchantment.Amount++` (Goopy.cs:37-40), is a no-op for the sim: the sim has ONE Enchantment object shared by the run and the combat, so the growth already persists (executed: `py audit/tools/enchantment_probes.py goopy` -- Amount is 2 after one play and survives reset())",
-      "verdict": "gap",
-      "issue": "Per-replay firing. See guard EG1: C# runs AfterCardPlayed once per Replay iteration, the sim's on_card_played once per card play. EXECUTED (`py audit/tools/enchantment_probes.py replay`): Goopy(1) on a Defend played twice by the ported Throwing Axe relic leaves Amount at 2 in the sim and 3 in the game, and the player gains 10 block instead of 11 (game: 5 on the first play, then Amount becomes 2 so 5 + 1 = 6 on the second)."
+      "maps_to": "GoopyEnchantment.on_card_played (enchantments.py:349-352) -- `amount += 1` for its own card, matching Goopy.cs:30-42's `base.Amount++`, and now dispatched once per replay iteration from inside combat._resolve_card_play's loop (combat.py:600). The C# line the sim has no counterpart for, `base.Card.DeckVersion.Enchantment.Amount++` (Goopy.cs:37-40), is a no-op for the sim: the sim has ONE Enchantment object shared by the run and the combat, so the growth already persists (executed: `py audit/tools/enchantment_probes.py goopy` -- Amount is 2 after one play and survives reset())",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: Hook.AfterCardPlayed now fires once per replay iteration -- `self.hooks.on_card_played(card, is_auto_play)` sits INSIDE combat._resolve_card_play's `for play_index in range(play_count)` loop (combat.py:574, 600), matching CardModel.cs:1957-1959. WAS: on_card_played fired once per card play, outside the loop. EXECUTED 2026-07-28 (`py audit/tools/enchantment_probes.py replay`): Goopy(1) on a Defend played twice by Throwing Axe leaves Amount at sim=3 C#=3 and gains sim=11 C#=11 block (was 2 and 10)."
     }
   },
   "guards": [
     {
       "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
-      "verdict": "gap",
-      "issue": "Goopy's AfterCardPlayed leg, executed above. Both sides reachable with ported content: Goopy comes from the ported Pael's Claw relic (relics/paels_claw.py:20-24) and Throwing Axe is a ported Ancient relic. LIVE."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: combat._resolve_card_play now has the per-replay slot. `for play_index in range(play_count)` (combat.py:574) runs the card's own on_play (:584/:589), then calls `card.enchantment.on_play(card, played_target)` DIRECTLY (:595-596), then Hook.AfterCardPlayed via `self.hooks.on_card_played` (:600) -- the same order and the same nesting as CardModel.cs:1904 / :1931 / :1937-1945 / :1959. WAS: the OnPlay ports hung off before_card_played / on_card_played, which fired once per card play, outside the replay loop. EXECUTED 2026-07-28 on this unit (`py audit/tools/enchantment_probes.py replay`): Goopy(1) + Throwing Axe leaves Amount at sim=3 C#=3 and gains sim=11 C#=11 block (was 2 and 10)."
     },
     {
       "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as hook_dispatch G4 (rule 3, same verdict, not re-verdicted). Recorded here because this unit's port rides on one of those two hooks, so G4's once-per-play shape is what makes EG1's replay leg observable. {extra}",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: combat._resolve_card_play fires Hook.BeforeCardPlayed (combat.py:576) AND Hook.AfterCardPlayed (combat.py:600) INSIDE the `for play_index in range(play_count)` loop (combat.py:574), one pair per replay iteration, and stamps `card.current_play_index` (:575) -- matching the fresh CardPlay per iteration at CardModel.cs:1919-1964. EXECUTED 2026-07-28 (`py audit/tools/enchantment_probes.py replay`): Corrupted+Throwing Axe self-damage sim=4 C#=4; Vigorous(8)+Throwing Axe total damage sim=20 C#=20; Goopy(1)+Throwing Axe Amount sim=3 C#=3 and block sim=11 C#=11 -- all MATCH (they read 2 / 28 / 2 / 10 before). Cross-record: seam/hook_dispatch G4 itself should be re-verdicted by its owner.",
       "extra": "Goopy's Amount++ is one of the three per-replay witnesses."
     },
     {
@@ -159,8 +164,8 @@
     },
     {
       "what": "BR-3 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- CardModel.DowngradeInternal re-runs `Enchantment?.ModifyCard()` (CardModel.cs:2145) and the sim's Card.downgrade (cards/base.py:150-165) does not, so a keyword an enchantment removed or added comes back",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Goopy is in the blast radius: its Exhaust is a keyword set at attach time. CROSS-RECORD NOTE for that record's owner: step 52's stated witness stops one step early. Executed (`py audit/tools/enchantment_probes.py souls-reset`, the Souls twin of this case): exhausts is False after attach, True after upgrade()+downgrade() -- and False again after the next combat's Enchantment.reset() (enchantments.py:293-296 / 214-216, called from combat.py:131). So the sim's divergence window is bounded by the next combat setup, which matters because the only ported in-combat downgrade is Dampen (powers.py:3149-3183) and the only out-of-combat one is the Reflections event (events/reflections.py:36-41) -- the latter self-heals before the card is ever played again. The finding stands for the in-combat leg; the out-of-combat leg named in step 52's rationale does not reach the player."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: Card.downgrade re-runs the enchantment's modification after rebuilding the printed numbers from _init_vars -- `if self.enchantment is not None: self.enchantment.modify_card()` (cards/base.py:194-206) -- which is the port of DowngradeInternal's `Enchantment?.ModifyCard()` (CardModel.cs:2145). EXECUTED 2026-07-28, attach vs upgrade()+downgrade(): souls exhausts False/False, steady retain True/True, goopy exhausts True/True, tezcataras_ember cost 0/0; `py audit/tools/enchantment_probes.py souls-reset` now prints 'after attach=False, after upgrade+downgrade=False, after the next combat's reset()=False'. Cross-record: seam/creature_card_cmds step 52 should be re-verdicted by its owner. For Goopy specifically: the Exhaust keyword it sets at attach time now survives a downgrade (executed 2026-07-28: exhausts True after attach, True after upgrade()+downgrade())."
     },
     {
       "what": "FOUR-VERB COVERAGE (enchant / upgrade+downgrade / transform / copy) -- stated explicitly so the hole cannot reopen silently. Verb 3, TRANSFORM: CardCmd.Transform (CardCmd.cs:369-451) removes the original from its pile and adds a freshly-built replacement; it never touches Enchantment, and the destroyed original takes its enchantment with it",
@@ -170,9 +175,9 @@
     {
       "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
       "verdict": "gap",
-      "issue": "MECHANISM EG2, one verdict at every site (rule 3). FIVE ported sim copy sites drop the enchantment, each a `type(card)()` / `make_card(card.id)` rebuild plus a re-upgrade loop with no `card.enchantment` carry: cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, DualWield.cs:35), powers.py:827-830 (JugglingPower.cs:48), relics/music_box.py:46-48 (MusicBox.cs:78), cards/anger.py:36-38 (Anger.cs:27) and relics/burning_sticks.py:30-32 (BurningSticks.cs:49). All five map to a C# `CreateClone()` call, so all five are the same defect. The sim's OTHER copy paths are correct and are what makes this a bug rather than a design choice: relics/bing_bong.py:37 and events/reflections.py:52 use `copy.deepcopy` (the enchantment rides along), relics/paels_growth.py:39-46 re-attaches Clone by hand, and the per-combat deck copy (run.py:1136 `copy.deepcopy`) carries it too. EXECUTED, this unit: `py -c \"import sys;sys.path.insert(0,'.');from sts2_rl.cards import make_card;from sts2_rl.cards.trash_heap_cards import _clone;from sts2_rl.enchantments import make_enchantment;c=make_card('defend');e=make_enchantment('goopy');e.amount=2;e.attach(c);print(type(c.enchantment).__name__, _clone(c).enchantment)\"` -> `GoopyEnchantment None`. The same one-liner run over all 17 ids prints `None` for every one of the 16 that any probe card accepts (souls needs an Exhaust card, so it was run against fiend_fire). RULE 6, both legs -- reachability of the copy site for THIS unit: SKILL-only and further Defend-TAGGED (Goopy.cs:16-21 `card.Tags.Contains(CardTag.Defend)`; executed matrix A/P/S = False/False/True), so Dual Wield CANNOT reach it -- the reachable site is relics/burning_sticks.py:30-32 (the first SKILL exhausted each combat), and it is a tight fit rather than a coincidence: Goopy is the enchantment that ADDS Exhaust to the Defend (enchantments.py:289-291), so the enchanted card is exactly the card Burning Sticks fires on. Every one of the five sites is ported and reachable (Dual Wield from the ported Trash Heap event pool, events/trash_heap.py:17; Anger from the Ironclad common pool; Juggling from cards/juggling.py; Music Box and Burning Sticks are ported relics). LIVENESS: LIVE. The game's Burning Sticks copy of a Goopy'd Defend keeps Goopy -- it exhausts and carries the grown block bonus; the sim's copy is a plain Defend that neither exhausts nor blocks extra. Grant path is the ported Pael's Claw relic (relics/paels_claw.py). SECONDARY (false docstring): `_clone`'s docstring claims it \"mirrors CreateClone for the sim's needs\". It does not -- CreateClone carries the enchantment AND the affliction; `_clone` carries neither. Fifth entry in this stream's false-docstring list."
+      "issue": "Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: the Exhaust keyword and the block bonus at clone time both ride along now (executed 2026-07-28: a `create_clone` copy of a Goopy(2) Defend has exhausts=True and gains 6 block = 5 + (Amount-1)), but the growth leg is `on_card_played` (enchantments.py:349-352), a HOOK the copy's enchantment never receives. EXECUTED 2026-07-28: the copy's Amount is still 2 after it is played; Goopy.cs:36-40 makes C#'s copy 3. LIVE."
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-07-28"
 }

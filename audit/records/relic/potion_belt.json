@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\potion_belt.py",
-    "sha256": "25a54927ed9449f47d51bed46318f485d0eac90b9877387e7efcf0ea761bcddc"
+    "sha256": "0ef869f24d57b89b06b6124678c6bedf6f79f06ac932b91df70458da749d7f73"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     }
   ],
@@ -42,18 +42,16 @@
       "rationale": "Matches PotionBelt.cs:15, and it is load-bearing here in a way it is not for the batch's Ancient relics: Potion Belt is COMMON, so without this flag Relic.is_tradable would return True and a spent Potion Belt would be offerable to the trade events. The flag is the only thing stopping that, and the port has it."
     },
     "AfterObtained": {
-      "maps_to": "no counterpart. `Relic.after_obtained(run)` exists (relics/base.py:138-141) and RunState.add_relic dispatches it (run.py:552); potion_belt.py implements nothing",
-      "verdict": "gap",
-      "issue": "SCOPE RULING (2026-07-26 relic fix pass, applied at every potion site in this tier). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' means POTION IS NOT AN AUDITED KIND -- there is no `potion` roster kind and no `audit/records/potion/`. It does NOT mean that potion-affecting behaviour of an AUDITED relic is invisible. The relic tier itself already reads it that way at the overwhelming majority of its sites: 45 relic gap entries across 25 records turn on potion mechanics, 27 of them tagged LIVE (relic/belt_buckle, relic/cauldron, relic/sozu, relic/delicate_frond, relic/petrified_toad, relic/tiny_mailbox, relic/white_beast_statue, relic/wongos_mystery_ticket, relic/phial_holster G1 ...), against only four records that waived on the exclusion. Binding rule 3 forces one answer and the majority is also the better-reasoned side: potions ARE ported (51 registered classes, 48 in the reward pool) and the belt is conformance-asserted -- sts2_rl/conformance/runner.py:623-631 diffs `floor_potions` slot by slot and sts2_rl/conformance/runner.py:715-717 reads `max_potions`. A divergence the conformance runner asserts on is by definition one a replay sees, which is the README's definition of a gap.\nAT THIS SITE (LIVE, grade B): PotionBelt.cs:19-22 is a single `PlayerCmd.GainMaxPotionCount(DynamicVars['PotionSlots'].IntValue, Owner)` with PotionSlots = 2 (PotionBelt.cs:17, no AscensionHelper branch in the file), so the game's belt grows 3 -> 5. The port has no `after_obtained` at all. EXECUTED (`py audit/tools/relic_probes_b12.py b12-potionbelt`): `relic=potion_belt  max_potions 3 -> 3`, against `phial_holster 3 -> 4` and `alchemical_coffer 3 -> 7`, both of which call the helper this relic needs. LIVE and cheap to reach: Potion Belt is COMMON and sits in the transcribed shared grab bag (`b12-pool` reports bag=Common), so any combat or elite reward can hand it over. The observable is the belt itself -- two slots the player never gets -- and `sts2_rl/conformance/runner.py:715-717` reads `max_potions` while `runner.py:623-631` diffs the slots. Rollup of guard N1 per binding rule 4. Re-verdicted from waiver; see guard N2 for the fix recipe.",
-      "live": true
+      "maps_to": "after_obtained (sts2_rl/relics/potion_belt.py) -- run.add_potion_slots(2), the port of Player.SetMaxPotionCountInternal's grow path",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/potion_belt.py's `after_obtained` calls `run.add_potion_slots(2)` -- PotionBelt.cs's PlayerCmd.GainMaxPotionCount over IntVar 'PotionSlots' = 2 -- through the same RunState helper relics/phial_holster.py already used. WAS: a behaviourless stub calling itself 'an out-of-combat capacity change'."
     }
   },
   "guards": [
     {
       "what": "N1 (Sweep C, premise FALSE): the stub's docstring calls this 'an out-of-combat capacity change, so this is a no-op stub' -- the sim has both the hook and the verb, and a sibling relic uses them",
-      "verdict": "gap",
-      "issue": "SCOPE RULING (2026-07-26 relic fix pass, applied at every potion site in this tier). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' means POTION IS NOT AN AUDITED KIND -- there is no `potion` roster kind and no `audit/records/potion/`. It does NOT mean that potion-affecting behaviour of an AUDITED relic is invisible. The relic tier itself already reads it that way at the overwhelming majority of its sites: 45 relic gap entries across 25 records turn on potion mechanics, 27 of them tagged LIVE (relic/belt_buckle, relic/cauldron, relic/sozu, relic/delicate_frond, relic/petrified_toad, relic/tiny_mailbox, relic/white_beast_statue, relic/wongos_mystery_ticket, relic/phial_holster G1 ...), against only four records that waived on the exclusion. Binding rule 3 forces one answer and the majority is also the better-reasoned side: potions ARE ported (51 registered classes, 48 in the reward pool) and the belt is conformance-asserted -- sts2_rl/conformance/runner.py:623-631 diffs `floor_potions` slot by slot and sts2_rl/conformance/runner.py:715-717 reads `max_potions`. A divergence the conformance runner asserts on is by definition one a replay sees, which is the README's definition of a gap.\nAT THIS SITE: the previous entry's stub-premise finding stands and is worth keeping -- PROMPT.md bug class 12 says check the premise rather than accept it, and this port's is false in both halves. `Relic.after_obtained` is a real hook dispatched by `RunState.add_relic` for every relic in the run (sts2_rl/run.py:552), and `RunState.add_potion_slots` (sts2_rl/run.py:492-498) is a direct port of Player.cs's SetMaxPotionCountInternal grow path; sts2_rl/relics/phial_holster.py:18 calls exactly that helper for exactly this C# call. So the relic does nothing because of a one-line omission, not because the sim cannot express it. What CHANGES with the 2026-07-26 fix pass is only the verdict: the old entry was careful to say the waiver rested on the contract's potion exclusion rather than on 'the sim has no such system' (binding rule 1), and the scope ruling above removes that ground. LIVE, grade B -- see the AfterObtained entry for the executed numbers.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/potion_belt.py's `after_obtained` calls `run.add_potion_slots(2)` -- PotionBelt.cs's PlayerCmd.GainMaxPotionCount over IntVar 'PotionSlots' = 2 -- through the same RunState helper relics/phial_holster.py already used. WAS: a behaviourless stub calling itself 'an out-of-combat capacity change'."
     },
     {
       "what": "N2: the fix recipe for N1, and the EXECUTED NEGATIVE that the two missing slots cannot reach a combat number by any ported chain",
@@ -66,6 +64,6 @@
       "rationale": "PotionBelt.cs is 23 lines and overrides exactly Rarity, HasUponPickupEffect, CanonicalVars and AfterObtained. There is no combat behaviour, no counter and no ascension branch, so accepting the thin port costs nothing beyond the one waived call -- which is the check the relic-stream brief asks for before a stub is accepted. Confirmed against the harness's own hook enumeration for this unit, which lists exactly those three non-declarative members."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\bowler_hat.py",
-    "sha256": "c838638340322643318c8f09ef4a60f32566f097b2e9b0016c7a0c982f0cdcae"
+    "sha256": "b5e1d3964dd978b1743b4b2d19fe9b2c801c0f918fda085178929ceda6ed9c39"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -35,14 +35,14 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "no counterpart in the sim",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456) is `runState.TotalFloor < 41` in single-player, i.e. the relic stops spawning from the Act 3 treasure chest onward. The sim's Relic base (sts2_rl/relics/base.py) declares NO is_allowed member at all, and relic_pools.populate_relic_grab_bags shuffles the whole transcribed pool once at run init with no per-pull eligibility filter, so the relic stays pullable for the entire run. REACHABILITY (LIVE): the relic is in the transcribed shared pool, the sim tracks RunState.total_floor already (event gates use it), and runs reach floor 41. The observable is pool composition -- a late pull hands out a relic the game would have filtered, which also shifts every subsequent pull. CLUSTER (executed: py audit/tools/relic_probes.py sweep-isallowed): TWENTY ported relics override IsAllowed and SIXTEEN share this exact gate -- amethyst_aubergine, book_of_five_rings, bowler_hat, dragon_fruit, frozen_egg, girya, juzu_bracelet, lucky_fysh, meal_ticket, molten_egg, old_coin, planisphere, shovel, toxic_egg, white_beast_statue, white_star. One base-class member plus one filter in the pull path closes all sixteen; see .superpowers/sdd/content-relic-sweeps.md."
+      "maps_to": "is_allowed (sts2_rl/relics/bowler_hat.py:22) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/bowler_hat.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "ModifyGoldGained": {
-      "maps_to": "no counterpart; Relic.modify_gold_gained (relics/base.py:212) is the hook it would map to, and the sim's port implements nothing at all",
-      "verdict": "gap",
-      "issue": "MECHANISM: BowlerHat.cs:18-25 multiplies every gold gain by DynamicVar('GoldIncrease', 1.25m).BaseValue. The sim registers the relic as a behaviourless stub whose docstring says 'out-of-combat only (no gold system), stub' -- and that premise is FALSE. RunState has gold, RunState.gain_gold (run.py:325-333) is the grant path, and it already runs the modify_gold_gained chain over the run's relics -- the exact hook this port needs. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py batch2): gain_gold(100) grants +100 both with and without the relic, where C# grants +125. The relic is Uncommon in the transcribed shared grab bag (relic_pools.py:'RELIC.BOWLER_HAT') and every combat reward screen pays gold. CLUSTER: one of 30 behaviourless ports whose dropped hooks all have a live dispatch site -- py audit/tools/relic_probes.py sweep-stub-premises."
+      "maps_to": "modify_gold_gained (sts2_rl/relics/bowler_hat.py), folded by RunState.gain_gold (sts2_rl/run.py:384-392)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/bowler_hat.py's `modify_gold_gained` returns `amount * 1.25` (BowlerHat.cs:18-25's DynamicVar 'GoldIncrease'), and RunState.gain_gold folds the chain over every relic and truncates the product with `int(amount)` (sts2_rl/run.py:384-392), like PlayerCmd.GainGold. WAS: a behaviourless stub whose docstring claimed the sim has no gold system."
     },
     "AfterModifyingGoldGained": {
       "maps_to": "no counterpart (Flash() only)",
@@ -53,8 +53,8 @@
   "guards": [
     {
       "what": "N1: the multiplier is 1.25m DECIMAL and gold is an integer quantity -- rounding is unspecified by this file",
-      "verdict": "gap",
-      "issue": "C# multiplies in decimal and the result flows into PlayerCmd's gold path; the sim's gain_gold takes a float (run.py:325) and RunState.gold is an int. A fix that writes `int(amount * 1.25)` picks a rounding rule this record cannot confirm, and a 1-gold drift compounds across a run and is visible to the conformance gold check. Flagged so the fix settles the rounding against the C# gold-gain path rather than guessing; carries ModifyGoldGained's LIVE label because it is part of the same unported body. NOTE per binding rule 7: settling it needs PlayerCmd.cs / the gold path, which this record does not hash."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/bowler_hat.py's `modify_gold_gained` returns `amount * 1.25` (BowlerHat.cs:18-25's DynamicVar 'GoldIncrease'), and RunState.gain_gold folds the chain over every relic and truncates the product with `int(amount)` (sts2_rl/run.py:384-392), like PlayerCmd.GainGold. WAS: a behaviourless stub whose docstring claimed the sim has no gold system."
     },
     {
       "what": "N2: `player != base.Owner` (BowlerHat.cs:20-23)",
@@ -62,6 +62,6 @@
       "rationale": "The `player != base.Owner` / `shuffler == base.Owner` / `cardPlay.Card.Owner != base.Owner` family is the multiplayer per-player filter on a hook the game dispatches for every player. The sim is single-player by construction (one RunState, one PlayerCombatState), so the filter is structurally satisfied. Multiplayer-only paths are out of scope under the shared contract."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

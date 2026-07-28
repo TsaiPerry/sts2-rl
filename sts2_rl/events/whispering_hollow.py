@@ -54,8 +54,17 @@ class WhisperingHollow(Event):
 
     def _gold(self) -> None:
         self.run.lose_gold(self.gold_cost)
+        # Two bare `PotionReward(Owner)` (WhisperingHollow.cs:53-57); each
+        # Populate is PotionFactory.CreateRandomPotionOutOfCombat on
+        # PlayerRng.Rewards — a NextFloat rarity roll then a NextItem pick.
+        # Both ride one RewardsCmd.OfferCustom screen: take-or-skip each.
         for _ in range(2):
-            self.run.add_potion(self.run.random_potion())
+            if self.run.rng_set is not None:
+                from ..potion_pools import generate_random_potion
+                potion = generate_random_potion(self.run.rewards_rng)
+            else:
+                potion = self.run.random_potion()
+            self.offer_potion(potion)
         self._finish("GOLD")
 
     def _hug(self) -> None:

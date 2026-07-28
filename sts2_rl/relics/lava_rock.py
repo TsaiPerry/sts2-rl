@@ -30,6 +30,7 @@ class LavaRock(Relic):
             relic = run.pull_relic_from_front()
             if relic is None:
                 break
-            run.add_relic(relic)
+            # RelicReward is take-or-skip (RelicReward.cs:109-123).
+            run.offer_relic(relic)
             rewards.relics.append(relic)
         self.has_triggered = True

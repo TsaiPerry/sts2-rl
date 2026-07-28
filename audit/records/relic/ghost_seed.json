@@ -26,37 +26,37 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/knights.py",
-      "sha256": "a8e6338a1079a8084d37fd82252dca99a64c7647e4755b0aa5b1cfc959f7cefc",
+      "sha256": "6a095775bb36c20f59234a35a2885a456613f46c41b390ef0212df45c6a4854e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],

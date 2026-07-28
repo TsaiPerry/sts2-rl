@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/relics/fragrant_mushroom.py",
-      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "sha256": "6469eba7f4965bde73d51c15665adbc6906c6251e8cd03f2598470af95d245b3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -39,7 +39,7 @@
     },
     {
       "what": "FragrantMushroom's pickup effect reaches the player through the relic, as in the source",
-      "maps_to": "relics/fragrant_mushroom.py:26-42 implements after_obtained (15 HP loss then 2 StableShuffle'd upgrades on the Niche stream), so it fires from any grant path. That is the faithful shape, and it uses actmap.stable_shuffle with an explicit ModelId key -- the pattern EV-5 says the event sites should have followed.",
+      "maps_to": "relics/fragrant_mushroom.py:24-41 implements after_obtained (15 HP loss then 2 StableShuffle'd upgrades on the Niche stream), so it fires from any grant path. That is the faithful shape, and it uses actmap.stable_shuffle with an explicit ModelId key -- the pattern EV-5 says the event sites should have followed.",
       "verdict": "faithful"
     },
     {

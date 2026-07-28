@@ -42,7 +42,8 @@ class HowlFromBeyondCard(Card):
 
     # ── Card-level hook: replays itself from the exhaust pile ─────────────
 
-    def on_player_turn_end(self, player: PlayerCombatState) -> None:
+    def after_auto_post_play_phase_entered(self, player: PlayerCombatState) -> None:
+        # HowlFromBeyond.cs:32 is AfterAutoPostPlayPhaseEntered.
         # The end-of-turn auto-play phase (same phase Stampede triggers in).
         if self.combat is None:
             return

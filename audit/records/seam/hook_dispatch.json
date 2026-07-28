@@ -113,35 +113,35 @@
   "sim_sources": [
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd"
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963"
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0"
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d"
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
     },
     {
       "path": "sts2_rl/history.py",
-      "sha256": "d7ea1066594e18f4da4bf10f280b10fdcebe3f733989c02a5cd7113964cad782"
+      "sha256": "1316e36e8662c05fabd3ecbe6e13d4548e61a47af966568b46016e036744d25e"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2"
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676"
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f"
     },
     {
       "path": "sts2_rl/afflictions.py",
@@ -153,11 +153,11 @@
     },
     {
       "path": "sts2_rl/relics/brilliant_scarf.py",
-      "sha256": "831b8c3eb42f1650125d12e6938c7b294b01128b2065647ebf84027f3d8356d9"
+      "sha256": "017a33b28d3702ee813c43a6d0dd25aad84de3d0bab8f19ac691f8ca952b3847"
     },
     {
       "path": "sts2_rl/relics/pen_nib.py",
-      "sha256": "7458fb6e6cf67ec60a5a24617a44887d20dc352b4153ef62794934097ee0395e"
+      "sha256": "4caec40e7abbd569a8bf3e141c9360011d5fe2fd0e3533911c603dad5240de1a"
     },
     {
       "path": "sts2_rl/relics/throwing_axe.py",
@@ -169,7 +169,7 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/vine_shambler.py",
-      "sha256": "bacc1fe6cf182b5bd924cf06429fa25de71f20ba213ea9d29e14b4465c44fe36"
+      "sha256": "50453eb9dfae1c9f0f8b6e36a4b8f4f8a8401a4579b77b3992f0354cb872a9df"
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
@@ -181,15 +181,15 @@
     },
     {
       "path": "sts2_rl/relics/daughter_of_the_wind.py",
-      "sha256": "e9d41987759b115003d1dcc2653b5cfb4b4c88dc40d287f31a9c394cfdc64e6b"
+      "sha256": "cb1e959da2e7115dbbf253f5e0fc8ab4400f2da8a4982c135a2c4abe6fb287e5"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e"
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c"
     },
     {
       "path": "sts2_rl/previews.py",
-      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236"
+      "sha256": "610483acf1c40cde7a8d62fd94e9dc4991efe5244494c612527686dc961839d5"
     },
     {
       "path": "sts2_rl/env.py",
@@ -197,15 +197,15 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883"
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b"
     },
     {
       "path": "sts2_rl/relics/paels_eye.py",
-      "sha256": "f56a124736de6ad63266a47e71ab2e16b27e40b3eb513aa3eea51dade6eb73fc"
+      "sha256": "404484e5433027a2742642c9bae296d7ac6533fe9567f2e38bc571ac9db8956b"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31"
     },
     {
       "path": "sts2_rl/events/tinker_time.py",
@@ -221,11 +221,11 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/shrinker_beetle.py",
-      "sha256": "c2268b7ba399aa5578d3e61521d8d276b6317d7272a332436c99c52f5567bca9"
+      "sha256": "37bf6cdde5a527615bbb931c083ecd1c8c65cff8573a6096a78806e08d90f57e"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
     },
     {
       "path": "sts2_rl/cards/whirlwind.py",
@@ -239,13 +239,13 @@
   "steps": [
     {
       "what": "1. CombatState.IterateHookListeners walks _allies then _enemies as one index space; allies (players) always precede enemies (CombatState.cs:412-415)",
-      "verdict": "gap",
-      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0. Rule-6 co-occurrence is explicit, not implied: Mad Science is granted by the ported Act-3 (Glory) event Tinker Time (events/tinker_time.py:74; 'tinker_time' is in GLORY_EVENTS, events/__init__.py:99-107) and Spiked Gauntlets by the ported Act-3 Glory Ancient Tanx (events/tanx.py:13). Same act, different node types (a '?' room and the Ancient node), and the Mad Science card persists in the deck once added -- so one run can hold both, and the witness is reachable rather than merely constructible."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: HookSystem._ordered() (sts2_rl/hooks.py) sorts the registration list into the game's derived walk before every dispatch, keyed on (creature rank, listener category, registration index). The player/ally side ranks 0 and the enemies rank 1..N in combat-list order, so allies always precede enemies exactly as CombatState.cs:412-415 iterates _allies then _enemies as one index space. The result is cached and invalidated on listener-list or enemy-order change rather than re-derived per dispatch, which is the same order by construction. WAS: one flat registration-order list with no creature grouping."
     },
     {
       "what": "2. Per creature, list.AddRange(creature.Powers) FIRST -- a creature's powers precede its relics, potions, orbs and cards (CombatState.cs:416)",
-      "verdict": "gap",
-      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0. Rule-6 co-occurrence is explicit, not implied: Mad Science is granted by the ported Act-3 (Glory) event Tinker Time (events/tinker_time.py:74; 'tinker_time' is in GLORY_EVENTS, events/__init__.py:99-107) and Spiked Gauntlets by the ported Act-3 Glory Ancient Tanx (events/tanx.py:13). Same act, different node types (a '?' room and the Ancient node), and the Mad Science card persists in the deck once added -- so one run can hold both, and the witness is reachable rather than merely constructible."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: listener classes declare a `hook_category` and _ordered() sorts on it -- CAT_POWER(0) -> CAT_RELIC(1) -> CAT_POTION(2) -> CAT_CARD(3) within one creature (sts2_rl/hooks.py), so a creature's powers now precede its relics, potions and cards as CombatState.cs:416-467 walks them. The recorded witness inverts with it: with CuriousPower and Spiked Gauntlets both held, Hook.ModifyEnergyCostInCombat now runs the power first. CombatHistory is a sim-only listener (note N3) at CAT_HISTORY(-1), ahead of the walk. WAS: the sim's effective category order was History -> Cards -> Relics -> Potions -> Powers, powers LAST where the game runs them first."
     },
     {
       "what": "3. creature.Player == null -> list.Add(creature.Monster): the MonsterModel itself is a listener (CombatState.cs:417-421; MonsterModel.cs:51)",
@@ -259,13 +259,13 @@
     },
     {
       "what": "5. Player's relics in player.Relics order, skipping IsMelted ones (CombatState.cs:428-435); sim: relics/base.py:153-155 registers them AFTER the cards",
-      "verdict": "gap",
-      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0. Rule-6 co-occurrence is explicit, not implied: Mad Science is granted by the ported Act-3 (Glory) event Tinker Time (events/tinker_time.py:74; 'tinker_time' is in GLORY_EVENTS, events/__init__.py:99-107) and Spiked Gauntlets by the ported Act-3 Glory Ancient Tanx (events/tanx.py:13). Same act, different node types (a '?' room and the Ancient node), and the Mad Science card persists in the deck once added -- so one run can hold both, and the witness is reachable rather than merely constructible."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: relics carry hook_category = CAT_RELIC and _ordered() places them after that player's powers and before its potions and cards (sts2_rl/hooks.py), which is CombatState.cs:428-435's slot; the sort is stable, so within the category they keep run-relic order, matching the player.Relics walk. The IsMelted filter has no sim analogue because a melted relic is unregistered rather than skipped. WAS: relics registered after the cards and so dispatched after them."
     },
     {
       "what": "6. Player's PotionSlots in slot order, skipping null slots (CombatState.cs:436-443); sim: combat.py:164-166 registers held_potions at setup but player.py:120 APPENDS a mid-combat potion at the list tail regardless of its slot",
       "verdict": "gap",
-      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0. Rule-6 co-occurrence is explicit, not implied: Mad Science is granted by the ported Act-3 (Glory) event Tinker Time (events/tinker_time.py:74; 'tinker_time' is in GLORY_EVENTS, events/__init__.py:99-107) and Spiked Gauntlets by the ported Act-3 Glory Ancient Tanx (events/tanx.py:13). Same act, different node types (a '?' room and the Ancient node), and the Mad Science card persists in the deck once added -- so one run can hold both, and the witness is reachable rather than merely constructible."
+      "issue": "NARROWED 2026-07-27: the CATEGORY half is closed -- potions declare hook_category = CAT_POTION and _ordered() places them after the player's powers and relics and before its cards (sts2_rl/hooks.py), which is CombatState.cs:436-443's slot. WHAT REMAINS is the SLOT half: within the potion category the sim ties on REGISTRATION index, and PlayerCombatState.add_potion registers a mid-combat potion at the list tail while assigning it the first empty belt slot (sts2_rl/player.py). So a potion procured into slot 0 after slot 0 was emptied dispatches AFTER the potion still sitting in slot 1, where CombatState.cs:436-443 walks _potionSlots in slot order. Dormant only while at most one held potion implements a hook at a time. ORIGINAL: potions were dispatched in the flat registration order with no category at all."
     },
     {
       "what": "7. Guard: player.PlayerCombatState == null -> continue; out of combat a player contributes only relics and potions (CombatState.cs:444-447)",
@@ -369,28 +369,28 @@
     },
     {
       "what": "27. 24 of the 147 dispatchers run more than one COMPLETE listener pass -- 20 run two, and AfterPlayerTurnStart (882-908), AfterAutoPrePlayPhaseEntered (928-958), BeforeTurnEnd (1232-1265) and ModifyHpLost (1717-1769) run three or four",
-      "verdict": "gap",
-      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: HookSystem._each runs the multi-pass shape. _PHASES = (_very_early, _early, '', _late) and for any hook some current listener phases, _each re-walks the whole ordered listener list once per suffix in that order (sts2_rl/hooks.py) -- the shape Hook.AfterPlayerTurnStart (Early/plain/Late, Hook.cs:882-908) and Hook.ModifyEnergyCostInCombat (plain/Late, Hook.cs:1574-1590) have. Hooks nobody phases stay a single walk, which is behaviourally identical to running empty passes. The recorded witness is wired: FreeAttackPower implements modify_card_energy_cost_late (sts2_rl/powers.py) against TangledPower's plain one, so the game's always-0 answer no longer depends on application order. WAS: hooks.py had one walk per hook and no phase concept at all."
     },
     {
       "what": "28. AbstractModel.cs declares 27 phase-suffixed hooks; nine belong to dispatchers this record owns -- AfterCardChangedPilesLate (359), AfterCardDrawnEarly (384), AfterCardPlayedLate (474), ModifyCardRewardCreationOptionsLate (1525), ModifyGeneratedMapLate (1627), TryModifyCardBeingAddedToDeckLate (1951), TryModifyCardRewardOptionsLate (1988), TryModifyEnergyCostInCombatLate (2016), TryModifyRewardsLate (2122)",
-      "verdict": "gap",
-      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase suffixes are the sim's dispatch contract. A listener opts into a pass by defining <hook>_very_early / <hook>_early / <hook>_late alongside <hook>, and _phase_hooks() memoises which base names any registered listener phases (sts2_rl/hooks.py). Ports of the nine this record owns exist across the tree -- on_card_drawn_early (AfterCardDrawnEarly), modify_card_energy_cost_late (TryModifyEnergyCostInCombatLate), modify_card_reward_options_late (TryModifyCardRewardOptionsLate), modify_combat_rewards_late (TryModifyRewardsLate), modify_generated_map_late (ModifyGeneratedMapLate) -- so the declaration is expressible rather than merely dispatchable. WAS: no phase concept, so every phase-suffixed hook collapsed onto its plain sibling."
     },
     {
       "what": "29. The phases are load-bearing, not cosmetic: BufferPower.cs:17-19 states 'We use Late because other effects may reduce damage taken to 0 too, and it's more player-friendly for them to trigger first so that this power doesn't have to decrement'",
       "verdict": "gap",
-      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+      "issue": "NARROWED 2026-07-27: the MACHINERY is in -- _each runs VeryEarly/Early/plain/Late as separate complete passes (sts2_rl/hooks.py), so a Late listener now has a guaranteed position. WHAT REMAINS is this step's own exemplar: the sim's BufferPower implements the PLAIN `modify_hp_lost`, not a `_late` variant, where BufferPower.cs is deliberately ModifyHpLostAfterOstyLate for the reason its source comment gives ('we use Late because other effects may reduce damage taken to 0 too, and it's more player-friendly for them to trigger first so that this power doesn't have to decrement'). With Buffer on the plain pass it can reduce the amount to 0 ahead of another reducer, land in the `modifiers` list and spend a stack the game would not have spent. Six other modify_hp_lost listeners are ported (Intangible, Torii-shaped caps, Tungsten Rod, The Boot, Beating Remnant, Hardened Shell), so the contention is representable. ORIGINAL: no phase concept existed at all."
     },
     {
       "what": "30. Each pass re-enumerates the listener list from scratch, so pass N+1 sees listeners added or removed during pass N (subject to steps 11-12 and 19)",
       "verdict": "gap",
-      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+      "issue": "NARROWED 2026-07-27: the PASSES now exist (guard G3's machinery, sts2_rl/hooks.py _each). WHAT REMAINS is this step's own claim: the passes do NOT re-enumerate. _each binds `order = self._ordered()` ONCE and iterates that same cached list for every suffix, so a listener registered or unregistered during the VeryEarly pass is still absent from / present in the Late pass, where CombatState.IterateHookListeners is re-invoked per pass in C# and rebuilds the list from the creatures each time (CombatState.cs:410-493). Same family as guard G7 (the snapshot walk), one level up. ORIGINAL: there were no passes to re-enumerate."
     },
     {
       "what": "31. Additive (num += item.ModifyXAdditive(target, num, ...)) and multiplicative (num *= item.ModifyXMultiplicative(target, num, ...)) are SEQUENTIAL chains in which each listener receives the RUNNING value and the dispatcher folds the result in immediately, in decimal (Hook.cs:1320-1337 ModifyBlock, 2515-2538 ModifyDamageInternal)",
-      "verdict": "gap",
-      "issue": "gap G9 (parallel sum/product vs sequential running-value chain). The sim hands EVERY additive/multiplicative listener the same pre-step base and aggregates the returns afterwards (hooks.py:52-64 sum, 66-78 product, 98-109, 111-122), then the caller applies the aggregate once (cmds.py:57-58 damage, 145-147 block). SETTLED ON THE MERITS BY EXECUTION in the fix pass, in three parts. (1) The base-vs-running ARGUMENT is inert: no implementation on either side reads the value the dispatcher hands it -- `py audit/tools/dormancy_probes.py cs-running-value` finds 0 of the 46 C# ModifyDamage/BlockAdditive/Multiplicative overrides (and 0 of the 9 Enchant* ones) reading their running-value parameter, and `sim-running-value` finds 0 of the sim's 31 implementations reading theirs. (2) For the ADDITIVE family the two shapes are therefore exactly equal: base + sum(a_i) == (((base + a1) + a2) + ...) over integers, 0 mismatches in an exhaustive sweep. (3) For the MULTIPLICATIVE family they are NOT equal as the sim implements them, because the sim multiplies the factors together in float FIRST and applies the product once, while C# folds each factor into the running decimal. LIVE and executed: with Shrink (x0.7, dealer-side, applied by the ported Act-1 Shrinker Beetle monsters/overgrowth/shrinker_beetle.py:39-40 and by the Shrink Potion potions.py:718-722, powers.py:1366-1387) on the player and Vulnerable (x1.5, target-side, powers.py:403-417) on the enemy, a 20-damage powered attack deals 20 in the sim and 21 in the game (sim: 1.5*0.7 = 1.0499999999999998, 20 * that = 20.999999999999996, int -> 20; game: 20m*1.5m = 30m, 30m*0.7m = 21m). Base 40 diverges the same way. A control run that keeps the sim's float arithmetic but threads it sequentially returns 21, so the divergence is the AGGREGATION SHAPE, not float-vs-decimal representation. Because the outcome can and does differ, this is a gap, not a deliberate-divergence. SAME MECHANISM, SAME VERDICT AT EVERY SITE (rule 3): audit/records/seam/damage_pipeline.json guard N3 is the damage site and was raised from deliberate-divergence to gap in this same pass with the same evidence; the BLOCK site (Hook.cs:1320-1337 vs hooks.py:98-122 + cmds.py:145-147) is creature_card_cmds' step 13, AMENDED (fix pass 2): it carries the identical gap, but is DORMANT there -- all five ported block multipliers return only {0.0, 0.75, 2.0}, every one dyadic, and an exhaustive sweep of 15 ordered subsets x bases 0-999 found 0 mismatches between the sim's product and C#'s sequential decimal. A non-dyadic block multiplier would make it live; the only one in the source is MultiplayerScalingModel.cs:52-68, waived under N1.md's cross-seam section. Pinned here by test/test_hook_order.py::TestHookDispatchOrder::test_multiplicative_damage_modifiers_chain_sequentially (strict xfail)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27 for the MULTIPLICATIVE family, which was the divergent one. hooks.modify_damage_multiplicative and hooks.modify_block_multiplicative now fold each listener's factor into the running amount and return the new amount, matching ModifyDamageInternal (Hook.cs:2515-2538) and ModifyBlock (Hook.cs:1310-1340); the callers (DamageCmd.deal, BlockCmd.apply) apply the returned value directly instead of an aggregate. The recorded witness now agrees: Shrink x0.7 with Vulnerable x1.5 on 20 gives 21. The strict xfail that pinned this is gone from test/test_hook_order.py. The additive family still hands every listener the same pre-step base rather than the running total, which is exactly equal over integers (base + sum(a_i) == the sequential fold) and was settled on the merits by execution in the earlier fix pass. Same verdict now carried at the other two sites: damage_pipeline guard N3 and creature_card_cmds step 13. WAS: parallel sum/product applied once, giving 20 where the game gives 21."
     },
     {
       "what": "32. Chain family: x = item.ModifyX(..., x), a plain fold with no change-tracking. The 20 dispatchers this record owns with that shape, complete (census: `py audit/tools/dormancy_probes.py hook-buckets` for the 147, minus the 53 the other four seams claim by name, then classify each of the remaining 94 off its brace-matched body): ModifyAttackHitCount (1297), ModifyCardPlayCount (1372), ModifyCardRewardCreationOptions (1429), ModifyCardRewardUpgradeOdds (1473), ModifyEnergyGain (1606), ModifyGoldGained (1626), ModifyExtraRestSiteHealText (1646), ModifyGeneratedMap (1658), ModifyGeneratedMapLate (1671), ModifyMerchantCardPool (1794), ModifyMerchantCardRarity (1806), ModifyMerchantPrice (1818), ModifyNextEvent (1830), ModifyOddsIncreaseForUnrolledRoomType (1843), ModifyOrbPassiveTriggerCount (1855, chain + notification list, see step 38), ModifyOrbValue (1874), ModifyRestSiteHealAmount (1936), ModifySummonAmount (2032), ModifyUnknownMapPointRoomTypes (2061), ModifyXValue (2071). FIX-PASS CORRECTIONS: ModifyCardRewardUpgradeOdds and ModifyOrbPassiveTriggerCount were missing; ModifyStarCost (2015) was listed here and is a try-chain (step 34). Full family census of the 94 this record owns: 46 event, 20 chain, 9 try-chain, 14 predicate-AND, 3 predicate-OR-short-circuit, 2 predicate-OR-no-short-circuit -- so coverage is established BY FAMILY, and the event bucket is the one deliberately not enumerated by name (step 40).",
@@ -439,8 +439,8 @@
     },
     {
       "what": "41. Sim registry: HookSystem.__init__ holds one flat self._listeners list plus a self.combat back-reference (hooks.py:37-41)",
-      "verdict": "gap",
-      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0. Rule-6 co-occurrence is explicit, not implied: Mad Science is granted by the ported Act-3 (Glory) event Tinker Time (events/tinker_time.py:74; 'tinker_time' is in GLORY_EVENTS, events/__init__.py:99-107) and Spiked Gauntlets by the ported Act-3 Glory Ancient Tanx (events/tanx.py:13). Same act, different node types (a '?' room and the Ancient node), and the Mad Science card persists in the deck once added -- so one run can hold both, and the witness is reachable rather than merely constructible."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the flat list is still the STORE, but it is no longer the dispatch ORDER. HookSystem gained _ordered(), which sorts the registration list into the game's derived per-creature walk -- allies then enemies, and per creature Powers -> Relics -> Potions -> Cards -- before every dispatch, with the result cached against (listener-list epoch, enemy order) (sts2_rl/hooks.py). That is the same sequence CombatState.IterateHookListeners produces at CombatState.cs:413-467. WAS: dispatch walked the raw registration list, whose category order was the mirror image of the game's."
     },
     {
       "what": "42. Sim registry: register() appends, unregister() is list.remove (identity, since no sim model defines __eq__) and raises ValueError when absent, which every caller wraps -- cmds.py:341-345, cmds.py:445-448, player.py:130-134, powers.py:89-92 (hooks.py:43-47)",
@@ -449,8 +449,8 @@
     },
     {
       "what": "43. Sim registration order in CombatState.__init__: history (combat.py:112) -> every card in player.all_cards with its enchantment right after it (124-133) -> relics via Relic.attach (158-159, relics/base.py:153-155) -> belt potions (164-166); powers join later as applied (cmds.py:326), mid-combat cards at cmds.py:460, mid-combat potions at player.py:120, monsters never",
-      "verdict": "gap",
-      "issue": "gap G2 (cross-listener order): CombatState.cs:413-467 groups listeners PER CREATURE, allies before enemies, and within a player walks Powers -> Relics -> PotionSlots -> Orbs -> cards. The sim keeps one flat registration-order list (hooks.py:38,43-44) whose category order is History -> Cards -> Relics -> Potions -> Powers (combat.py:106-166, cmds.py:326) -- powers first in the game and LAST in the sim, cards last in the game and FIRST in the sim. LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31, ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0. Rule-6 co-occurrence is explicit, not implied: Mad Science is granted by the ported Act-3 (Glory) event Tinker Time (events/tinker_time.py:74; 'tinker_time' is in GLORY_EVENTS, events/__init__.py:99-107) and Spiked Gauntlets by the ported Act-3 Glory Ancient Tanx (events/tanx.py:13). Same act, different node types (a '?' room and the Ancient node), and the Mad Science card persists in the deck once added -- so one run can hold both, and the witness is reachable rather than merely constructible."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: registration order no longer decides dispatch order. The registration sequence described here is unchanged, but _ordered() re-sorts it into the game's walk on every dispatch (sts2_rl/hooks.py), keyed on the owning creature and the listener's hook_category, so history stays ahead of the walk and powers precede relics precede potions precede cards per creature, as CombatState.cs:413-467 does. The 'monsters never' clause of this step is a separate finding and stays open as gap G5 (step 3): sts2_rl/monsters/base.py still never calls hooks.register, and two ported monsters (Queen, Slumbering Beetle) hand-roll a stand-in listener that declares CAT_POWER + 1 precisely to occupy the slot CombatState.cs:420 gives a MonsterModel. WAS: dispatch order WAS registration order."
     },
     {
       "what": "44. player.all_cards is hand + draw_pile + discard_pile + exhaust_pile (player.py:100-103), evaluated ONCE at combat start, so the card listener order is frozen for the combat",
@@ -465,7 +465,7 @@
     {
       "what": "46. The sim has no phase concept, no preventer for most predicates, no Contains re-check, no IsOverOrEnding gate, no per-listener choice context, and no run-level HookSystem (hooks.py in full)",
       "verdict": "gap",
-      "issue": "gap G3 (missing Early/VeryEarly/Late phase passes): 24 of Hook.cs's 147 dispatchers run 2-4 complete listener passes and AbstractModel.cs declares 27 phase-suffixed hooks; hooks.py has one walk per hook and no phase concept at all (hooks.py:673-680 says so). BufferPower.cs:17-19 carries a source comment stating the Late phase is load-bearing. LIVE and executed: TangledPower's TryModifyEnergyCostInCombat (EARLY, powers.py:1486-1502, applied by the ported Vine Shambler, monsters/overgrowth/vine_shambler.py:42-43) and FreeAttackPower's TryModifyEnergyCostInCombatLate (LATE, FreeAttackPower.cs:14-40, powers.py:1133-1155, applied by the ported card Unrelenting, cards/unrelenting.py:40) both target Attacks -- the game always ends at cost 0, the sim ends at 1 when Free Attack was applied first and 0 when Tangled was."
+      "issue": "NARROWED 2026-07-27. Two of the six clauses are closed: the sim HAS a phase concept (_PHASES / _each, guard G3) and it HAS preventer out-params on the predicates that need one -- hooks.should_die takes `preventer` and hooks.should_clear_block takes `preventer` with a companion after_preventing_block_clear (sts2_rl/hooks.py), which is what Sturdy Clamp's port now keys on. WHAT REMAINS: no Contains re-check (guard G7), no IsOverOrEnding dispatch gate (guard G8, still pinned by two strict xfails), no per-listener choice context (waived under N1), and no run-level HookSystem (guard N5). ORIGINAL: all six were absent."
     }
   ],
   "guards": [
@@ -506,8 +506,8 @@
     },
     {
       "what": "G4 -- the per-CardPlay bracket: CardModel.cs:1904-1965 loops `for (i = 0; i < playCount; i++)`, builds a FRESH CardPlay with PlayIndex = i each iteration (1919-1928) and fires Hook.BeforeCardPlayed (1929) AND Hook.AfterCardPlayed (1959) INSIDE the loop. Recorded as a guard in the fix pass: the doc and the pin table both carry G4, and the record carried no entry for it at all.",
-      "verdict": "gap",
-      "issue": "gap G4 (one dispatch per logical play instead of one per CardPlay). combat.py:466 fires before_card_played ONCE before the `for _ in range(play_count)` loop (477-494) and combat.py:514 fires on_card_played ONCE after it, so a replayed card brackets the whole replay rather than each iteration. LIVE and executed with two ported relics: Throwing Axe (ThrowingAxe.cs, relics/throwing_axe.py:30-36, granted by the ported Tanx shrine events/tanx.py:13) makes the first card of a combat play twice, and Pen Nib (PenNib.cs, relics/pen_nib.py:30-35) counts Attack plays in before_card_played and doubles every 10th -- one Throwing-Axe-doubled Strike advances the sim's counter by 1 where the game advances it by 2, so from the first combat on the sim doubles a DIFFERENT attack. The 4 ported replay sources widen it (enchantments.py:167, enchantments.py:232, powers.py:966 One-Two Punch, powers.py:3919 Duplication), as does every one of the sim's 48 on_card_played listeners. Pinned: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (strict xfail)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: CombatState._resolve_card_play now fires before_card_played AND on_card_played INSIDE the `for play_index in range(play_count)` loop and stamps card.current_play_index each iteration (sts2_rl/combat.py), which is CardModel.cs:1904-1965's shape -- a fresh CardPlay with PlayIndex = i per iteration, Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1959, the latter gated on the combat still being in progress. The recorded witness follows: a Throwing-Axe-doubled Strike advances Pen Nib's counter by 2. The enchantment's OnPlay is also a direct in-loop call after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1937-1945). The strict xfail that pinned this (test_before_card_played_fires_once_per_replay_iteration) is gone from test/test_hook_order.py. WAS: one bracket per logical play, wrapping the whole replay."
     },
     {
       "what": "G6 -- AfflictionModel is not a sim listener: CombatState.cs:458-461 adds cardModel.Affliction to the listener list immediately after its card (and its Enchantment after that) and AfflictionModel.cs:146 declares ShouldReceiveCombatHooks => true; combat.py:124-133 registers the card and its enchantment and never the affliction. Recorded as a guard in the fix pass: the doc carried G6, the record carried no entry.",

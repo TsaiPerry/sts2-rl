@@ -39,9 +39,15 @@ class RanwidTheElder(Event):
 
     def initial_options(self) -> list[EventOption]:
         options: list[EventOption] = []
-        # Same roll order as GenerateInitialOptions: potion, then relic.
+        # Same roll order as GenerateInitialOptions: potion, then relic. Both
+        # are `base.Rng.NextItem` on the event's own Rng
+        # (RanwidTheElder.cs:80/94).
+        er = self.event_rng
         held = self.run.held_potions
-        potion = self.rng.choice(held) if held else None
+        if er is not None:
+            potion = er.next_item(held)
+        else:
+            potion = self.rng.choice(held) if held else None
         if potion is not None:
             options.append(EventOption(
                 "POTION", lambda p=potion: self._give_potion(p)))
@@ -49,7 +55,10 @@ class RanwidTheElder(Event):
             options.append(EventOption("POTION_LOCKED", None))
         options.append(EventOption("GOLD", self._give_gold))
         tradable = [r for r in self.run.relics if r.is_tradable]
-        relic = self.rng.choice(tradable) if tradable else None
+        if er is not None:
+            relic = er.next_item(tradable)
+        else:
+            relic = self.rng.choice(tradable) if tradable else None
         if relic is not None:
             options.append(EventOption(
                 "RELIC", lambda r=relic: self._give_relic(r)))

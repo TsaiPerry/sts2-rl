@@ -19,7 +19,7 @@ same observable deck state.
 """
 from __future__ import annotations
 
-from .base import Relic, RelicRarity
+from .base import Relic, RelicRarity, is_before_act3_treasure_chest
 
 
 class EggRelic(Relic):
@@ -31,18 +31,25 @@ class EggRelic(Relic):
     # multi-upgrade Attack stops at +1 from the egg); Toxic/Frozen do not.
     ONLY_UNUPGRADED = False
 
+    @classmethod
+    def is_allowed(cls, run) -> bool:
+        """All three eggs override IsAllowed identically (ToxicEgg.cs:16-19,
+        FrozenEgg.cs:16-19, MoltenEgg.cs:16-19): IsBeforeAct3TreasureChest, so
+        they leave the pools from floor 41."""
+        return is_before_act3_treasure_chest(run)
+
     def _applies(self, card) -> bool:
         if card.card_type != self.CARD_TYPE or not card.is_upgradable:
             return False
         return not (self.ONLY_UNUPGRADED and card.upgrade_level >= 1)
 
-    def modify_card_reward_options(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards) -> None:
         for card in cards:
             if self._applies(card):
                 card.upgrade()
 
     def modify_merchant_card_results(self, run, cards) -> None:
-        self.modify_card_reward_options(run, cards)
+        self.modify_card_reward_options_late(run, cards)
 
     def modify_card_being_added_to_deck(self, run, card):
         if not self._applies(card):

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
-    "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01"
+    "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
   },
   "hooks": {
     "AfterAddedToRoom": {
@@ -36,9 +36,8 @@
     },
     "GenerateMoveStateMachine": {
       "maps_to": "inherited FlailKnight.build_machine (flail_knight.py:40-56)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "MysteriousKnight overrides no move machine, so it INHERITS FlailKnight's - including the misread branch arguments. FlailKnight.cs:50-51's AddBranch(FLAIL, 2) / AddBranch(RAM, 2) are maxRepeats 2 with weight 1f (overload #9); the inherited flail_knight.py:51-52 read them as weight 2.0 with CAN_REPEAT_FOREVER. Same bug class as monster_state_machine G1 (the seam owns G1 itself; this entry is the unit-level consequence and does not re-verdict it). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and NEVER a weight (seam seed fact 1 / step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts weight there. Observable: the same distribution shift the seam measured for FlailKnight, on a monster with 6 Strength and 6 Plating. LIVE and on a SECOND reachable path from the seam's: MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER is the fight in The Lantern Key (events/the_lantern_key.py:41), a ported Hive event - so fixing G1 must fix this unit too. Rule 3: same mechanism, same verdict as monster/flail_knight."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. the inherited FlailKnight.build_machine (flail_knight.py:53-58) now reads FlailKnight.cs:50-51's AddBranch(moveState2, 2) / AddBranch(moveState3, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session -- MysteriousKnight (flail_knight.py:82-94) still overrides no move machine, so the corrected parent machine is what The Lantern Key's encounter now gets; `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
     }
   },
   "guards": [
@@ -53,7 +52,7 @@
       "rationale": "MysteriousKnight.cs is 16 lines: one AfterAddedToRoom override and nothing else. `harness.py validate --strict-inherited` enumerates the four inherited public overrides (MinInitialHp, MaxInitialHp, TakeDamageSfxType, GenerateAnimator); all four carry verdicts above, plus the protected GenerateMoveStateMachine added by hand."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -63,7 +62,7 @@
     },
     {
       "path": "sts2_rl\\events\\the_lantern_key.py",
-      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "sha256": "29c60d6b668ae35eeab1aa04a606ff574b5a318c63e0bf815c114cc13972a8f5",
       "side": "sim"
     }
   ]

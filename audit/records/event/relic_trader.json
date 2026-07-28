@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\relic_trader.py",
-    "sha256": "abfda521b0b2ee7b4a8d8f2c7a832d7221efc653f64af4bcbbe4ed3070a7abbb"
+    "sha256": "0aad9bd118e2ebc907b3035b8b5ff8886a568b525649d93847240c4c4186c4e7"
   },
   "extra_sources": [
     {
@@ -41,17 +41,22 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     }
   ],
@@ -78,13 +83,13 @@
     },
     {
       "what": "EV-7: OwnedRelics' `GetValidRelics(Owner).ToList().StableShuffle(base.Rng).Take(3)` (RelicTrader.cs:51-52), ported at events/relic_trader.py:39-40 as `stable_shuffle(owned, self.rng, key=lambda r: r.id)[:3]`, which sorts on the sim's LOWERCASE id. ListExtensions.StableShuffle sorts with the element's natural IComparable order first (ListExtensions.cs:22-31); for an AbstractModel that is AbstractModel.CompareTo -> Id.CompareTo (AbstractModel.cs:87-98), i.e. string.Compare(ModelId.Entry, ..., StringComparison.Ordinal) (ModelId.cs:42-50) over the UPPERCASE slug ModelId.SlugifyCategory / StringHelper.Slugify produces",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-7, one verdict at every stable_shuffle site (rule 3). '_' is 0x5F: ABOVE 'A'-'Z' (0x41-0x5A) and BELOW 'a'-'z' (0x61-0x7A). So for two ids sharing a prefix where one continues with '_', the uppercase ordinal order and the lowercase ordinal order are OPPOSITE, and StableShuffle's whole point is that the sorted order fixes the permutation Fisher-Yates then produces -- a different input order gives a different pick from the same draws. EXECUTED (`py audit/tools/event_probes.py sortkey`): over the sim's 258 relic ids, 8 land at a different index than the game's sort would put them, in 4 clashing pairs -- (pen_nib, pendulum), (sea_glass, seal_of_gold), (wing_charm, winged_boots), (wongo_customer_appreciation_badge, wongos_mystery_ticket). Over the 85 Ironclad card ids, 2 move: (blood_wall, bloodletting). The fix is a `key=str.upper`-equivalent at each call site. LIVE for parity: the divergence needs only that the shuffled list contain one of those pairs, which for a whole-collection shuffle it always does, and for a subset shuffle (Relic Trader's tradables) is ordinary run state. Invisible in legacy mode only because legacy runs are graded against themselves. Distinct from EV-3 (which stream) -- this is which ORDER the stream is applied to; Relic Trader carries both."
+      "maps_to": "Closed 2026-07-28: events/relic_trader.py:46 now sorts on `r.id.upper()`, so stable_shuffle's stabilizing sort is the game's ordinal compare over the UPPERCASE ModelId entry (AbstractModel.CompareTo -> ModelId.cs:42-50) instead of the sim's lowercase slug. The four clashing relic pairs the probe found (pen_nib/pendulum, sea_glass/seal_of_gold, wing_charm/winged_boots, wongo_customer_appreciation_badge/wongos_mystery_ticket) now sort the same way on both sides. The card-side twin of the same key is player._compare_to_key (player.py:23-34), used by the two card StableShuffle sites (battleworn_dummy, doors_of_light_and_dark).",
+      "verdict": "faithful"
     },
     {
       "what": "EV-3: OwnedRelics' StableShuffle (RelicTrader.cs:51) -- the sim passes `self.rng`, the shared run RNG, where the source passes the per-event `base.Rng`. Note this is the ONLY draw group on this event that is on the wrong stream; the three grab-bag pulls are correct rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- OwnedRelics' StableShuffle runs on `self.event_rng` (events/relic_trader.py:43-46), matching `base.Rng` (RelicTrader.cs:51). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "GenerateInitialOptions gates each option on `OwnedRelics.Count` ALONE (RelicTrader.cs:79-90), and Trade then indexes NewRelics at the same position (RelicTrader.cs:148-149)",

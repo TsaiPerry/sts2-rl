@@ -93,7 +93,10 @@ from .vocab import capacity as vocab_capacity, frozen_ids
 # v4: run.boss.identity + run.map.grid/meta (the act boss and the whole act
 # map, matching what the game shows the player all act) — v3 checkpoints
 # migrate losslessly via migrate_ckpt.py (checkpoints.migrate_checkpoint).
-RUN_OBS_SCHEMA_VERSION = 4
+# v5: DecisionKind gained REWARD_RELIC (the take-or-skip relic offer,
+# relic/_auto_keep), so PHASES = list(DecisionKind) is one wider and every run-
+# obs index after the leading ("phase", N_PHASES) segment shifts.
+RUN_OBS_SCHEMA_VERSION = 5
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
 # Potion belt headroom: base 3 slots + Phial Holster's +1.
@@ -146,6 +149,11 @@ PURPOSE_IDS: list[str] = frozen_ids("purposes", [
     "bundle", "card_reward", "curse_of_knowledge", "duplicate", "enchant",
     "exhaust", "from_discard", "from_draw", "gambling_chip", "obtain",
     "remove", "to_draw_top", "transform", "upgrade", "_unknown",
+    # Non-declinable selection screens (Toolbox.cs:28, ChoicesParadox.cs:46):
+    # the sim expresses "not skippable" as membership in
+    # driver.SKIPPABLE_PURPOSES, so these needed their own purpose rather than
+    # reusing "obtain". Appended, never reordered — the registry is frozen.
+    "choose_a_card",
 ])
 PURPOSE_INDEX: dict[str, int] = {p: i for i, p in enumerate(PURPOSE_IDS)}
 N_PURPOSES = vocab_capacity("purposes")

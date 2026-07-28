@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\sand_castle.py",
-    "sha256": "1b36925c2ea3a5c1c74e57b4f33aa291044f67df01d74e398fc528e24827577e"
+    "sha256": "be88049162dc7a67c0ebdfd4760307b31cf431558adb83a485e7c33c2626f3a1"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/fragrant_mushroom.py",
-      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "sha256": "6469eba7f4965bde73d51c15665adbc6906c6251e8cd03f2598470af95d245b3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -42,21 +42,21 @@
       "rationale": "Matches SandCastle.cs:18. Load-bearing beyond display: Relic.is_tradable (relics/base.py:132) excludes upon-pickup relics from the trade events, and Ancient rarity excludes it a second time. Rule 7: relics/base.py is not hashed here."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (sand_castle.py:15-18), dispatched by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and N2 per binding rule 4. SandCastle.cs:22-32 upgrades exactly `base.DynamicVars.Cards.IntValue` == CardsVar(6) == SIX cards, chosen by StableShuffle over Rng.Niche; sand_castle.py:16-18 loops the whole deck. Wrong count (G1, LIVE) and an unconsumed named RNG stream (G2)."
+      "maps_to": "after_obtained (sts2_rl/relics/sand_castle.py) -- upgradable deck cards, stable_shuffle over run.rng_set.niche with _compare_to_key, first CardsVar(6) upgraded",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: sts2_rl/relics/sand_castle.py's `after_obtained` takes `count = min(self.CARDS, len(upgradable))` with `CARDS = 6` (SandCastle.cs:20's `new CardsVar(6)`, no AscensionHelper branch in the file) and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- SandCastle.cs:24-25's `Where(IsUpgradable).StableShuffle(Rng.Niche).Take(Cards.IntValue)`. "
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the port drops C#'s `.Take(CardsVar(6).IntValue)` and upgrades EVERY upgradable deck card",
-      "verdict": "gap",
-      "issue": "MECHANISM: SandCastle.cs:24-25 is `PileType.Deck.GetPile(Owner).Cards.Where(c => c?.IsUpgradable ?? false).ToList().StableShuffle(Owner.RunState.Rng.Niche).Take(base.DynamicVars.Cards.IntValue)`, and CanonicalVars pins `new CardsVar(6)` (SandCastle.cs:20) with no AscensionHelper branch anywhere in the file, so the non-ascension count is 6. sand_castle.py:16-18 is `for card in run.deck: if card.is_upgradable: card.upgrade()` -- no count, no shuffle, no stream. Its own docstring (sand_castle.py:8) states the wrong rule outright: 'upgrade ALL upgradable cards in the deck'. PROMPT.md bug class 19 in its purest form -- a wrong constant hidden behind a confident docstring, except here the constant is missing entirely. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py sand-castle): the Ironclad starting deck is 10 cards and all 10 are upgradable, so `run.add_relic('sand_castle')` upgrades 10 where the game upgrades 6; the printed deck is [('bash', 1), ('defend', 1), ('strike', 1)]. Both sides ported and nothing further is needed: Sand Castle is one of the three OPTION_POOL_1 relics at the ported Orobas shrine (events/orobas.py:20), and every run reaches Orobas in act 2 with more than six upgradable cards. The divergence grows with deck size and is permanent -- the upgrades are on the run deck, and conformance/runner.py compares the deck as (id, upgrade_level) pairs. The sibling relics/fragrant_mushroom.py:24-40 implements the identical C# idiom correctly, which is why this is a defect and not a house style (PROMPT.md class 12's 'check whether a sibling already does the thing'). Rule 7: relics/fragrant_mushroom.py, run.py and conformance/runner.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: sts2_rl/relics/sand_castle.py's `after_obtained` takes `count = min(self.CARDS, len(upgradable))` with `CARDS = 6` (SandCastle.cs:20's `new CardsVar(6)`, no AscensionHelper branch in the file) and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- SandCastle.cs:24-25's `Where(IsUpgradable).StableShuffle(Rng.Niche).Take(Cards.IntValue)`. WAS: the port looped the whole deck with no count, no shuffle and no stream, and its docstring stated 'upgrade ALL upgradable cards in the deck' as if that were the source's rule."
     },
     {
       "what": "G2: `Rng.Niche` is named in C# and the sim consumes nothing (PROMPT.md bug class 16)",
-      "verdict": "gap",
-      "issue": "MECHANISM: the choice of WHICH six cards comes from `StableShuffle(base.Owner.RunState.Rng.Niche)` (SandCastle.cs:24) -- a real draw, unlike the CardTransformation case class 16 warns about, because StableShuffle consumes one swap per element. sand_castle.py touches no RNG at all. EXECUTED (relic_probes_b14.py sand-castle): with a parity rng_set attached, the Niche counter goes 0 -> 0 across add_relic('sand_castle'), while the sibling fragrant_mushroom moves it 0 -> 9 for its own StableShuffle. LIVE for RNG parity (any recorded seed that takes Sand Castle diverges both in the cards upgraded and in every later Niche draw -- monster unique-HP rolls, Fishing Rod, Neow's Bones curses), DORMANT for RL play, which is the same live/dormant split relic/astrolabe N1 recorded for the same mechanism. Filed separately from G1 because fixing the count without wiring the stream leaves this half broken. Rule 7: relics/fragrant_mushroom.py, actmap.py (stable_shuffle) and rng.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: sts2_rl/relics/sand_castle.py's `after_obtained` takes `count = min(self.CARDS, len(upgradable))` with `CARDS = 6` (SandCastle.cs:20's `new CardsVar(6)`, no AscensionHelper branch in the file) and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- SandCastle.cs:24-25's `Where(IsUpgradable).StableShuffle(Rng.Niche).Take(Cards.IntValue)`. Closed 2026-07-27: the port performs C#'s StableShuffle over the named stream. `actmap.stable_shuffle(items, rng, key)` (sts2_rl/actmap.py:193-201) is ListExtensions.StableShuffle -- `items.sort(key=...)` then the Fisher-Yates -- and the key is `sts2_rl/player.py:23-34 _compare_to_key`, `(card.id.upper(), card.upgrade_level)`, which is CardModel.CompareTo's ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel (CardModel.cs:2242-2264 -> AbstractModel.cs:87-98 -> ModelId.cs:42-50). WAS: sand_castle.py touched no RNG at all, so the Niche counter did not move across add_relic('sand_castle')."
     },
     {
       "what": "N1: `CardCmd.Upgrade(item, CardPreviewStyle.GridLayout)` (SandCastle.cs:29) vs the sim's bare `card.upgrade()` -- PROMPT.md bug class 14",
@@ -79,6 +79,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle / ForceMaxColumnsUntilEmpty are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -1,80 +1,79 @@
 {
- "unit": "monster/spectral_knight",
- "game_source": {
-  "path": "src\\Core\\Models\\Monsters\\SpectralKnight.cs",
-  "sha256": "59bfaa4848cade56697b267e1a5bb41b96269310d5cad56766de06ae1cfd60a6"
- },
- "sim_source": {
-  "path": "sts2_rl\\monsters\\glory\\knights.py",
-  "sha256": "a8e6338a1079a8084d37fd82252dca99a64c7647e4755b0aa5b1cfc959f7cefc"
- },
- "hooks": {
-  "MinInitialHp": {
-   "maps_to": "min_hp = 93 (knights.py:94)",
-   "verdict": "faithful",
-   "rationale": "SpectralKnight.cs:32 GetValueIfAscension(ToughEnemies, 97, 93) -> non-ascension 93."
+  "unit": "monster/spectral_knight",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\SpectralKnight.cs",
+    "sha256": "59bfaa4848cade56697b267e1a5bb41b96269310d5cad56766de06ae1cfd60a6"
   },
-  "MaxInitialHp": {
-   "maps_to": "max_hp = 93 (knights.py:95)",
-   "verdict": "faithful",
-   "rationale": "SpectralKnight.cs:34 `MaxInitialHp => MinInitialHp` = 93."
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\knights.py",
+    "sha256": "6a095775bb36c20f59234a35a2885a456613f46c41b390ef0212df45c6a4854e"
   },
-  "TakeDamageSfxType": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp = 93 (knights.py:94)",
+      "verdict": "faithful",
+      "rationale": "SpectralKnight.cs:32 GetValueIfAscension(ToughEnemies, 97, 93) -> non-ascension 93."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp = 93 (knights.py:95)",
+      "verdict": "faithful",
+      "rationale": "SpectralKnight.cs:34 `MaxInitialHp => MinInitialHp` = 93."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "SpectralKnight.build_machine (knights.py:97-115)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. knights.py:111-116 now reads SpectralKnight.cs:52's AddBranch(moveState2, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session (the HEX->SOUL_SLASH->RAND chain, the SOUL_SLASH-then-SOUL_FLAME add order, the CannotRepeat second branch and the HEX initial state were already faithful and still are); `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
+    }
   },
-  "GenerateAnimator": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  },
-  "GenerateMoveStateMachine": {
-   "maps_to": "SpectralKnight.build_machine (knights.py:97-115)",
-   "verdict": "gap",
-   "issue": "monster_state_machine G1 (LIVE) at this unit's site -- recorded here at the unit level with the seam's verdict and NOT re-verdicted (governing rule 3). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and is NEVER a weight (seam seed fact 1, the 10-overload table at monster_state_machine.md step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts WEIGHT there. AT THIS UNIT: SpectralKnight.cs:52 is `randomBranchState.AddBranch(moveState2, 2)` -- overload #9 (`int maxRepeats`, RandomBranchState.cs:105), so the branch holds weight 1, MoveRepeatType.CanRepeatXTimes and maxTimes 2. knights.py:111 is `branch.add_branch(soul_slash, weight=2.0)`, i.e. weight 2 with the CAN_REPEAT_FOREVER default and no repeat limit. Re-verified this session with `py audit/tools/state_machine_probes.py mismatch`, whose current output names sts2_rl/monsters/glory/knights.py <- SpectralKnight.cs:52-53 among its 5 misreads and prints `SOUL_SLASH C#(w=1.0 CAN_REPEAT_X_TIMES max=2 cd=0) sim:111(w=2.0 CAN_REPEAT_FOREVER max=0 cd=0)`; the seam's description of this site is accurate as written. Observable, from the seam's executed `distribution` run (100000 rolls, seed 7): sim SOUL_SLASH 75.1% / SOUL_FLAME 24.9% versus the game's 60.0% / 40.0%. LIVE: SpectralKnight is exported from a ported encounter module (monsters/glory/__init__.py:30) and KNIGHTS_ELITE is 'knights' in Glory's elite_keys (rooms.py:194). EVERYTHING ELSE IN THE GRAPH IS FAITHFUL and was checked node by node against SpectralKnight.cs:42-59: three MoveStates with matching ids (HEX / SOUL_SLASH / SOUL_FLAME), one RandomBranchState 'RAND', the chain HEX -> SOUL_SLASH -> RAND and SOUL_FLAME -> RAND (:49-51 vs knights.py:108-110), INITIAL state HEX (:58 vs :114), branch ADD ORDER SOUL_SLASH then SOUL_FLAME on both (:52-53 vs :111-112) -- which is observable because RandomBranchState.GetNextState walks branches in add order and resolves ties toward the earlier one -- and the SECOND branch's arguments read CORRECTLY (`AddBranch(moveState3, MoveRepeatType.CannotRepeat)` = overload #10, weight 1 / CannotRepeat, ported as repeat_type=CANNOT_REPEAT with add_branch's weight default). Intents match: DebuffIntent -> DEBUFF; SingleAttackIntent(15) -> ATTACK 15; MultiAttackIntent(3, 3) -> ATTACK damage=3 hits=3.",
-   "live": true
-  }
- },
- "guards": [
-  {
-   "what": "Attack and debuff numerics",
-   "verdict": "faithful",
-   "rationale": "SoulSlashDamage GetValueIfAscension(DeadlyEnemies, 17, 15) -> 15 = _SOUL_SLASH_DMG; SoulFlameDamage (..., 4, 3) -> 3 with WithHitCount(3) = _SOUL_FLAME_DMG 3 x _SOUL_FLAME_HITS 3; HexMove applies HexPower 2m per target = _HEX_AMOUNT 2 (knights.py:24-27). The `_soulFlameRepeat = 3` const (SpectralKnight.cs:20) agrees with the intent's hit count."
-  },
-  {
-   "what": "Rule 29 -- SpectralKnight and MagiKnight share knights.py but are not a family",
-   "verdict": "faithful",
-   "rationale": "Read independently rather than inherited: MagiKnight's machine is a pure deterministic chain with no RandomBranchState and is therefore untouched by G1, while SpectralKnight's single branch is the G1 site. Their HP, their intents and their starting powers (MagiKnight has none, SpectralKnight has none either -- unlike their file-mate FlailKnight) also differ. Copying either verdict across would have been wrong in both directions."
-  },
-  {
-   "what": "G4 (the stun/Whistle route) touches this unit's file",
-   "verdict": "faithful",
-   "rationale": "monster_state_machine G4's executed liveness route names `glory/knights.py:131` -- the KNIGHTS_ELITE encounter -- as one of the four Glory machines whose weights read the state log and can therefore be moved by a stun's missing log duplicate. That is the SEAM's finding, is LIVE there, and is NOT re-verdicted here; this record neither restates nor contradicts it. Cross-referenced so the unit-level reader can find it."
-  }
- ],
- "verdict": "gap",
- "audited": "2026-07-27",
- "extra_sources": [
-  {
-   "path": "src\\Core\\Models\\Encounters\\KnightsElite.cs",
-   "sha256": "59ccd1ec5cddfbf3fb5310e1d43fed93ab08110e0e4c8f15d8f5a5fa88f785b6",
-   "side": "game"
-  },
-  {
-   "path": "sts2_rl\\monsters\\state_machine.py",
-   "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\cmds.py",
-   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\rooms.py",
-   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
-   "side": "sim"
-  }
- ]
+  "guards": [
+    {
+      "what": "Attack and debuff numerics",
+      "verdict": "faithful",
+      "rationale": "SoulSlashDamage GetValueIfAscension(DeadlyEnemies, 17, 15) -> 15 = _SOUL_SLASH_DMG; SoulFlameDamage (..., 4, 3) -> 3 with WithHitCount(3) = _SOUL_FLAME_DMG 3 x _SOUL_FLAME_HITS 3; HexMove applies HexPower 2m per target = _HEX_AMOUNT 2 (knights.py:24-27). The `_soulFlameRepeat = 3` const (SpectralKnight.cs:20) agrees with the intent's hit count."
+    },
+    {
+      "what": "Rule 29 -- SpectralKnight and MagiKnight share knights.py but are not a family",
+      "verdict": "faithful",
+      "rationale": "Read independently rather than inherited: MagiKnight's machine is a pure deterministic chain with no RandomBranchState and is therefore untouched by G1, while SpectralKnight's single branch is the G1 site. Their HP, their intents and their starting powers (MagiKnight has none, SpectralKnight has none either -- unlike their file-mate FlailKnight) also differ. Copying either verdict across would have been wrong in both directions."
+    },
+    {
+      "what": "G4 (the stun/Whistle route) touches this unit's file",
+      "verdict": "faithful",
+      "rationale": "monster_state_machine G4's executed liveness route names `glory/knights.py:131` -- the KNIGHTS_ELITE encounter -- as one of the four Glory machines whose weights read the state log and can therefore be moved by a stun's missing log duplicate. That is the SEAM's finding, is LIVE there, and is NOT re-verdicted here; this record neither restates nor contradicts it. Cross-referenced so the unit-level reader can find it."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Encounters\\KnightsElite.cs",
+      "sha256": "59ccd1ec5cddfbf3fb5310e1d43fed93ab08110e0e4c8f15d8f5a5fa88f785b6",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
 }

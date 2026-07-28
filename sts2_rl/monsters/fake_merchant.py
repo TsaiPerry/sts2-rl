@@ -31,15 +31,14 @@ _SPEW_HITS = 8
 _THROW_DMG = 9
 _THROW_FRAIL = 1
 _ENRAGE_STRENGTH = 2
-_ENRAGE_WEIGHT = 3.0
 _GOLD_REWARD = 300
 
 
 class FakeMerchantMonster(MachineMonster):
     """Opens with SWIPE (13), then each turn picks among SWIPE, SPEW_COINS
-    (2x8), THROW_RELIC (9 + 1 Frail) and ENRAGE (+2 Strength, weight 3) —
-    all cannot-repeat. After THROW_RELIC he picks from the attacks only
-    (RAND_ATTACK_MOVE has no Enrage branch).
+    (2x8), THROW_RELIC (9 + 1 Frail) and ENRAGE (+2 Strength, cooldown 3) —
+    all weight 1, all cannot-repeat. After THROW_RELIC he picks from the
+    attacks only (RAND_ATTACK_MOVE has no Enrage branch).
 
     Source: FakeMerchantMonster.cs (non-ascension values)."""
     name = "The Merchant???"
@@ -69,9 +68,11 @@ class FakeMerchantMonster(MachineMonster):
         rand_move.add_branch(swipe, repeat_type=MoveRepeatType.CANNOT_REPEAT)
         rand_move.add_branch(spew, repeat_type=MoveRepeatType.CANNOT_REPEAT)
         rand_move.add_branch(throw, repeat_type=MoveRepeatType.CANNOT_REPEAT)
+        # FakeMerchantMonster.cs:58 AddBranch(state, 3, CannotRepeat) is the
+        # (state, int cooldown, MoveRepeatType) overload — a cooldown, not a
+        # weight.
         rand_move.add_branch(
-            enrage, weight=_ENRAGE_WEIGHT,
-            repeat_type=MoveRepeatType.CANNOT_REPEAT,
+            enrage, repeat_type=MoveRepeatType.CANNOT_REPEAT, cooldown=3,
         )
 
         rand_attack = RandomBranchState("RAND_ATTACK_MOVE")

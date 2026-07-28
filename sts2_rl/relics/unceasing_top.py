@@ -18,7 +18,8 @@ class UnceasingTop(Relic):
     name = "Unceasing Top"
     rarity = RelicRarity.RARE
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if (
             not self.combat.is_over
             and self.combat.current_side == "player"

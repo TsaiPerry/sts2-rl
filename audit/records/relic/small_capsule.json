@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\small_capsule.py",
-    "sha256": "92c185028bcd1bf834ea328157c982941f82f445119c696753823c787cad8bd8"
+    "sha256": "bf324a9d59265e272786a4ae3d33a111d4b2deb52e6aa4fe4ac97dab2801debd"
   },
   "extra_sources": [
     {
@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     }
   ],
@@ -102,18 +102,16 @@
       "rationale": "SmallCapsule.cs:11 is RelicRarity.Ancient. Ancient means it is never grab-bag or shop stock: executed (py audit/tools/relic_probes_b15.py b15-pool) the relic is absent from the 126-relic transcribed grab bag and its only ported grant path is events/neow.py -- which is also the C# situation (SmallCapsule is a Neow option). Ancient also makes Relic.is_tradable False (relics/base.py:132-136), matching RelicModel.IsTradable's Ancient exclusion."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (small_capsule.py:15-16) -> run.obtain_relic_from_grab_bag (run.py:631-636) -> run.pull_relic_from_front (run.py:559-595) + run.add_relic (run.py:546-553)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. The RELIC the sim pulls and the stream draw it burns are both correct (N1); the divergence is that `RewardsCmd.OfferCustom` is a take-or-skip screen and the port auto-keeps -- see guard G1 for the mechanism and the evidence. LIVE, grade B.",
-      "live": true
+      "maps_to": "after_obtained (sts2_rl/relics/small_capsule.py:16-19) -- one PullNextRelicFromFront offered through RunState.offer_relic",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/small_capsule.py:18-19 pulls and offers through `run.offer_relic`. WAS: the pulled relic was granted unconditionally."
     }
   },
   "guards": [
     {
       "what": "G1: `RewardsCmd.OfferCustom(Owner, [new RelicReward(Owner)])` (SmallCapsule.cs:15-18) is a reward SCREEN the player may decline; after_obtained grants the pulled relic unconditionally",
-      "verdict": "gap",
-      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B): SmallCapsule.cs:13-19 offers exactly one RelicReward; sts2_rl/relics/small_capsule.py:15-16 calls run.obtain_relic_from_grab_bag, which pulls AND adds. EXECUTED (py audit/tools/relic_probes_b15.py b15-misc): `run.add_relic('small_capsule')` yields relics ['burning_blood', 'small_capsule', 'blood_vial'] and moves the grab bag 96 -> 95 -- the C# TAKE branch. The SKIP branch (relic not added, bag still 95, blood_vial's after_obtained not run, a wasPicked:false history entry written) is unreachable in the sim. Small Capsule is a ported Neow option (sts2_rl/events/neow.py), so both sides are reachable. Note the pull itself is correct and must stay: a declined Small Capsule relic still LEAVES the bag in C#, because Populate ran before OnSkipped.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/small_capsule.py:18-19 pulls and offers through `run.offer_relic`. WAS: the pulled relic was granted unconditionally."
     },
     {
       "what": "N1: `new RelicReward(base.Owner)` -- the no-rarity constructor -- and which RNG stream its rarity roll comes off",
@@ -126,6 +124,6 @@
       "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. OPERATIONAL CONSEQUENCE worth flagging (a tooling defect, not a fidelity gap): the conformance runner grants a node's relic and then swaps it for the one the save says was really picked (sts2_rl/conformance/runner.py:461, 694 -- verified by grep per binding rule 8), and a discarded Small Capsule leaves BOTH the free relic in run.relics AND the burned grab-bag pull behind, which shifts every later relic pull in the run. Distinct from the mango/strawberry family (PROMPT.md v6 item 3's second half), whose undo EXISTS and clamps; here there is none at all. Rule 7: leans on relics/base.py:143-150 and conformance/runner.py, neither hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

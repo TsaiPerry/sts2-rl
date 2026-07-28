@@ -26,27 +26,27 @@
     },
     {
       "path": "sts2_rl/cards/howl_from_beyond.py",
-      "sha256": "3b489bebe90570b2054bcebc8a28f67a9832a4d8d4a762e5e7bf90b1160856f1",
+      "sha256": "e67d62791f714719eab2ca0c388936841b5417d47546dd900040c92e001b024f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],
@@ -64,8 +64,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the BeforeSideTurnEndVeryEarly / Early / plain sub-phases are flattened into one listener walk, and Cloak Clasp is the named witness",
-      "verdict": "gap",
-      "issue": "audit/records/seam/turn_structure.json guard G12 owns this mechanism and verdicts it a gap; binding rule 3 means it is cited and matched, not re-derived. C# guarantees ordering by running three complete passes -- BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then BeforeSideTurnEnd (Hook.cs:1238-1261) -- and CloakClasp.cs:24 sits in the LAST of the three. The sim's hooks.on_player_turn_end (hooks.py:297-301) is a single `for l in list(self._listeners)` pass, so the guaranteed position becomes registration order. The seam's executed evidence is this relic's: with a 5-card hand, '[cloak_clasp, orichalcum] gives 5 block and [orichalcum, cloak_clasp] gives 11; C# always gives 11 because the VeryEarly snapshot runs before ANY plain listener'. Both sides ported -- Orichalcum is an Uncommon relic whose C# implementation is deliberately two-phase (Orichalcum.cs:44-56 snapshots `Block > 0` in VeryEarly), Fake Orichalcum and Ripple Basin are the same shape, and Cloak Clasp is Rare in the transcribed grab bag (confirmed by `py audit/tools/relic_probes.py batch3-pool`). Pinned there by test_orichalcum_snapshots_block_before_other_turn_end_listeners."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. The witness this entry names is settled at its own site: relic/orichalcum now snapshots `Block > 0` from `on_player_turn_end_very_early`, a complete pass that precedes every plain-phase listener, so Cloak Clasp's plain-phase block grant can no longer beat it to the read. WAS: one flat pass, so [cloak_clasp, orichalcum] gave 5 Block and the reverse order 11."
     },
     {
       "what": "G2 (LIVE): the AutoPostPlay phase does not exist, so end-of-turn auto-plays that C# runs BEFORE this relic can run after it",

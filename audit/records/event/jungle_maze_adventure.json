@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\jungle_maze_adventure.py",
-    "sha256": "3ecd10d0e822daefe580ab38b140158248c545b46747c09126dc942205cb88c0"
+    "sha256": "0c337aec424fb2f075cde021c914c7ff843ef019737a7c13ec966d160483f14b"
   },
   "extra_sources": [
     {
@@ -21,28 +21,33 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -73,8 +78,8 @@
     },
     {
       "what": "EV-3: CalculateVars' two `base.Rng.NextFloat(-15f, 15f)` draws (JungleMazeAdventure.cs:54-55) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' two NextFloat draws run on `self.event_rng` (events/jungle_maze_adventure.py:34-41), matching `base.Rng` (JungleMazeAdventure.cs:54-55). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "EV-3 (third site in this record): the `_fx.ToList().StableShuffle(base.Rng)` inside DontNeedHelp's three-step VFX loop (JungleMazeAdventure.cs:60) is a `base.Rng` draw the sim never takes. The loop's other contents -- the CustomScaledWait pauses and the 'hey.mp3' cue (JungleMazeAdventure.cs:27-32, 58-73, 81-82) -- are presentation, but this guard aggregates them with the shuffle and so carries max(verdict) of the two",
@@ -84,7 +89,7 @@
     {
       "what": "EV-1: SOLO_QUEST's 18 HP loss (JungleMazeAdventure.cs:74) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
       "verdict": "gap",
-      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     }
   ],
   "verdict": "gap",

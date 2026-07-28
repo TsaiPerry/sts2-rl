@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/ruined_helmet.py",
-      "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9",
+      "sha256": "379bd9ed7f301d2bf5b9aa011e275661326b0ae133805956c699150610542f0c",
       "side": "sim"
     }
   ],
@@ -53,7 +53,7 @@
     "AfterSideTurnStart": {
       "maps_to": "powers.py:3692-3695 on_player_turn_started -> PowerCmd.apply(VigorPower) (player.py:186)",
       "verdict": "gap",
-      "issue": "The slot is right -- Hook.AfterSideTurnStart (CombatManager.cs:522) and the sim's on_player_turn_started (player.py:186) are both post-draw, which matters because Hellraiser-style auto-plays that fire DURING the draw (CardPileCmd.Draw at :673) must NOT see this Vigor, and on both sides they do not. The amount is right too (base.Amount, PrepTimePower.cs:22 vs powers.py:3695) and neither side ever removes the power, so it grants Vigor every turn for the rest of the combat. The gap is the phase collapse: PHASE COLLAPSE. The sim's on_player_turn_started (player.py:186) is a single slot serving THREE distinct C# phases that the game runs in a fixed order: Hook.AfterPlayerTurnStart (CombatManager.cs:675, inside the SetupPlayerTurn task launched at :514), then Hook.AfterSideTurnStart (:522), then Hook.AfterAutoPrePlayPhaseEntered (:568 -> RunAutoPrePlayPhase, :613-619). Collapsing them makes the relative order of this power and every other turn-start power a function of hook-REGISTRATION order, i.e. of which card the player happened to play first. Same shape as hook_dispatch's G3 (the Early/Late phase passes do not exist) one level up, and the AutoPrePlay/AutoPostPlay half of it is turn_structure's G8; neither is re-verdicted here per binding rule 3, but see this record's Mayhem guard for the executed consequence."
+      "issue": "NARROWED 2026-07-27. ONE of the three collapsed phases has been split out: Hook.AfterAutoPrePlayPhaseEntered now has its own sim dispatch, `hooks.after_auto_pre_play_phase_entered` (hooks.py:480-486), fired at player.py:221 strictly after `on_player_turn_started` (:218), and MayhemPower moved onto it (powers.py:3763) -- so the executed Mayhem witnesses this entry pointed at are resolved. WHAT REMAINS is the other half of the collapse: `on_player_turn_started` (player.py:218) is still ONE slot serving BOTH Hook.AfterPlayerTurnStart (CombatManager.cs:675) and Hook.AfterSideTurnStart (:522), which the game runs in that fixed order, so the relative order of two powers on opposite sides of that boundary is still hook-registration order. VERIFIED by reading hooks.py, player.py and powers.py."
     }
   },
   "guards": [
@@ -69,8 +69,8 @@
     },
     {
       "what": "Registration-order contention with Mayhem in the collapsed slot",
-      "verdict": "gap",
-      "issue": "LIVE, and it widens turn_structure's G8. MayhemPower is C#'s third ported AfterAutoPrePlayPhaseEntered implementer (MayhemPower.cs, applied by the ported Colorless power card Mayhem -- cards/colorless_powers.py:157-174) and G8 does not name it: G8 calls its AutoPrePlay half DORMANT on the grounds that 'the two ported users' effects (play cards / auto-play one Skill) do not read any other turn-start listener's output', naming only Whispering Earring and the Imbued enchantment. Mayhem does read another turn-start listener's output, and the pair is executed below. In the game Mayhem's auto-plays run at CombatManager.cs:568, strictly AFTER Hook.AfterSideTurnStart (:522) and after SetupPlayerTurn's Hook.AfterPlayerTurnStart (:675); in the sim MayhemPower.on_player_turn_started (powers.py:3572-3583) sits in the same dispatch as this power, so the order is registration order. EXECUTED with PrepTimePower 3 + MayhemPower 1 and one Strike on top of the draw pile: applying Prep Time FIRST makes the Mayhem-auto-played Strike deal 9 (6 + Vigor 3, Vigor consumed); applying Mayhem first makes it deal 6 and leaves Vigor(3) unspent. The game always deals 9. Both cards are ported Colorless power cards, so a single run can hold both -- binding rule 6 satisfied on both halves."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: MayhemPower moved to the sim's new AutoPrePlay phase -- `after_auto_pre_play_phase_entered` (powers.py:3763), dispatched at player.py:221 strictly AFTER `on_player_turn_started` (:218) -- so it no longer shares a dispatch with this power and the order is fixed rather than registration order. That mirrors CombatManager.cs:568's RunAutoPrePlayPhase running after Hook.AfterSideTurnStart (:522) and Hook.AfterPlayerTurnStart (:675), so the executed witness this guard carried now resolves the way the game does. VERIFIED 2026-07-27 by reading hooks.py:480-486, player.py:218-221 and powers.py."
     }
   ],
   "verdict": "gap",

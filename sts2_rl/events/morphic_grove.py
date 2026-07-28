@@ -41,7 +41,9 @@ class MorphicGrove(Event):
             "transform", self.run.transformable_cards(), _TRANSFORMS
         )
         for card in chosen:
-            self.run.transform_card(card)
+            # CardCmd.TransformToRandom(item, base.Rng) — the event's own Rng
+            # (MorphicGrove.cs:50).
+            self.run.transform_card(card, pick_rng=self.event_rng)
         self._finish("GROUP")
 
     def _loner(self) -> None:

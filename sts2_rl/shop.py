@@ -27,12 +27,12 @@ Inventory (single player):
 Deliberate deviations from the source (documented per the repo convention):
   - one shared run RNG instead of the game's per-player `PlayerRng.Shops`
     stream (the repo's one-RNG convention);
-  - purchases resolve immediately (no reservation / UI); The Courier's
-    restock-after-purchase is not modeled (entries clear when bought).
+  - purchases resolve immediately (no reservation / UI).
 """
 from __future__ import annotations
 
 import random
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from .cards import CardRarity, CardType
@@ -160,7 +160,27 @@ class MerchantEntry:
 
     def __init__(self, run: "RunState") -> None:
         self.run = run
-        self.cost = 0
+        self._cost = 0
+        # The MerchantInventory this slot belongs to (MerchantEntry's
+        # `_inventory`): restocking dedupes against its sibling slots.
+        self.inventory: "MerchantInventory | None" = None
+
+    @property
+    def cost(self) -> int:
+        """MerchantEntry.Cost (MerchantEntry.cs:19-29) — a COMPUTED property:
+        `Hook.ModifyMerchantPrice` runs on every read (so a Membership Card
+        bought mid-shop discounts the rest of that shelf), then the decimal is
+        truncated by the `(int)` cast, which rounds an odd half DOWN: 175 → 87.
+
+        C# also gates the hook on `CurrentRoom is MerchantRoom`; a
+        MerchantInventory only exists for the duration of one Shop room here,
+        so there is no non-merchant read to gate."""
+        price = Decimal(self._cost)
+        for relic in list(self.run.relics):
+            modify = getattr(relic, "modify_merchant_price", None)
+            if modify is not None:
+                price = modify(self.run, self, price)
+        return int(price)
 
     @property
     def is_stocked(self) -> bool:
@@ -178,21 +198,41 @@ class MerchantEntry:
         if not self.is_stocked or (not ignore_cost and not self.enough_gold):
             return False
         gold_spent = 0 if ignore_cost else self.cost
-        saved_cost = self.cost
+        saved_cost = self._cost
         if ignore_cost:
-            self.cost = 0
+            self._cost = 0
         try:
             bought = self._buy()
         finally:
-            self.cost = saved_cost
+            self._cost = saved_cost
         if not bought:
             return False
+        # Hook.ShouldRefillMerchantEntry (MerchantEntry.cs:84-91): The Courier
+        # restocks the slot instead of clearing it. `_buy` already cleared, so
+        # the refill just re-fills the slot — and it runs BEFORE
+        # AfterItemPurchased, as in the source.
+        if self._should_refill():
+            self._restock()
         # Hook.AfterItemPurchased (MerchantEntry.OnTryPurchaseWrapper): fires
         # for every successful purchase with the gold actually spent (Maw
         # Bank deactivates the first time this is > 0).
         for relic in list(self.run.relics):
             relic.after_item_purchased(self.run, self, gold_spent)
         return True
+
+    def _should_refill(self) -> bool:
+        """Hook.ShouldRefillMerchantEntry — true when any held relic says so."""
+        for relic in list(self.run.relics):
+            should = getattr(relic, "should_refill_merchant_entry", None)
+            if should is not None and should(self.run, self):
+                return True
+        return False
+
+    def _restock(self) -> None:
+        """MerchantEntry.RestockAfterPurchase — re-fill the bought slot.
+
+        The default is the card-removal entry's no-op
+        (MerchantCardRemovalEntry.cs:75-77)."""
 
     def _buy(self) -> bool:
         raise NotImplementedError
@@ -207,6 +247,7 @@ class MerchantCardEntry(MerchantEntry):
         self, run: "RunState", card_type: CardType, exclude_ids: set[str]
     ) -> None:
         super().__init__(run)
+        self.card_type = card_type
         self.card: "Card | None" = _apply_merchant_card_hooks(
             run, _create_merchant_card(run, card_type, exclude_ids))
         self.on_sale = False
@@ -218,6 +259,24 @@ class MerchantCardEntry(MerchantEntry):
 
     def set_on_sale(self) -> None:
         self.on_sale = True
+        self._calc_cost()
+
+    def _stocked_card_ids(self) -> set[str]:
+        """MerchantCardEntry.Populate's dedupe set: every card the inventory
+        still has on the shelf (the just-bought slot is already empty)."""
+        if self.inventory is None:
+            return set()
+        return {e.card.id for e in self.inventory.card_entries
+                if e.card is not None}
+
+    def _restock(self) -> None:
+        # MerchantCardEntry.RestockAfterPurchase: IsOnSale = false, Populate()
+        # — a fresh CreateForMerchant roll, the creation hooks, then CalcCost.
+        self.on_sale = False
+        self.card = _apply_merchant_card_hooks(
+            self.run,
+            _create_merchant_card(self.run, self.card_type,
+                                  self._stocked_card_ids()))
         self._calc_cost()
 
     @staticmethod
@@ -236,9 +295,9 @@ class MerchantCardEntry(MerchantEntry):
     def _calc_cost(self) -> None:
         if self.card is None:
             return
-        self.cost = round(self._base_cost(self.card) * _next_float(self.run.shops_rng, 0.95, 1.05))
+        self._cost = round(self._base_cost(self.card) * _next_float(self.run.shops_rng, 0.95, 1.05))
         if self.on_sale:
-            self.cost //= 2
+            self._cost //= 2
 
     def _buy(self) -> bool:
         self.run.lose_gold(self.cost)
@@ -257,9 +316,19 @@ class MerchantColorlessCardEntry(MerchantCardEntry):
         self, run: "RunState", rarity: CardRarity, exclude_ids: set[str]
     ) -> None:
         MerchantEntry.__init__(self, run)
+        self.card_rarity = rarity
         self.card: "Card | None" = _apply_merchant_card_hooks(
             run, _create_merchant_colorless_card(run, rarity, exclude_ids))
         self.on_sale = False
+        self._calc_cost()
+
+    def _restock(self) -> None:
+        # The rarity overload of MerchantCardEntry.Populate.
+        self.on_sale = False
+        self.card = _apply_merchant_card_hooks(
+            self.run,
+            _create_merchant_colorless_card(self.run, self.card_rarity,
+                                            self._stocked_card_ids()))
         self._calc_cost()
 
 
@@ -278,10 +347,23 @@ class MerchantRelicEntry(MerchantEntry):
     def is_stocked(self) -> bool:
         return self.relic is not None
 
+    def _restock(self) -> None:
+        # MerchantRelicEntry.RestockAfterPurchase: FillSlot(RollRarity(player),
+        # the inventory's other stocked relics as the blacklist).
+        from .run import roll_relic_rarity
+
+        blacklist = set()
+        if self.inventory is not None:
+            blacklist = {e.relic.id for e in self.inventory.relic_entries
+                         if e.relic is not None}
+        self.relic = self.run.pull_relic_from_back(
+            roll_relic_rarity(self.run.rewards_rng), blacklist)
+        self._calc_cost()
+
     def _calc_cost(self) -> None:
         if self.relic is None:
             return
-        self.cost = round(self.relic.merchant_cost * _next_float(self.run.shops_rng, 0.85, 1.15))
+        self._cost = round(self.relic.merchant_cost * _next_float(self.run.shops_rng, 0.85, 1.15))
 
     def _buy(self) -> bool:
         self.run.lose_gold(self.cost)
@@ -307,10 +389,23 @@ class MerchantPotionEntry(MerchantEntry):
     def _base_cost(potion: "Potion") -> int:
         return {"rare": 100, "uncommon": 75}.get(potion.rarity, 50)
 
+    def _restock(self) -> None:
+        # MerchantPotionEntry.RestockAfterPurchase: FillSlot with an EMPTY
+        # blacklist (MerchantPotionEntry.cs:100-104 computes one and discards
+        # it) — CreateRandomPotionOutOfCombat on the Shops stream.
+        if self.run.rng_set is not None:
+            from .potion_pools import generate_random_potions
+
+            potions = generate_random_potions(self.run.shops_rng, 1)
+        else:
+            potions = self.run.random_potions(1)
+        self.potion = potions[0] if potions else None
+        self._calc_cost()
+
     def _calc_cost(self) -> None:
         if self.potion is None:
             return
-        self.cost = round(self._base_cost(self.potion) * _next_float(self.run.shops_rng, 0.95, 1.05))
+        self._cost = round(self._base_cost(self.potion) * _next_float(self.run.shops_rng, 0.95, 1.05))
 
     def _buy(self) -> bool:
         # PotionCmd.TryToProcure fails when the potion belt is full.
@@ -338,7 +433,7 @@ class MerchantCardRemovalEntry(MerchantEntry):
         return not self.used
 
     def _calc_cost(self) -> None:
-        self.cost = self.BASE_COST + self.PRICE_INCREASE * self.run.card_shop_removals_used
+        self._cost = self.BASE_COST + self.PRICE_INCREASE * self.run.card_shop_removals_used
 
     def _buy(self) -> bool:
         removable = self.run.removable_cards()
@@ -380,6 +475,10 @@ class MerchantInventory:
         inv._populate_relics()
         inv._populate_potions()
         inv.card_removal_entry = MerchantCardRemovalEntry(run)
+        # MerchantEntry's `_inventory` — a restocked slot dedupes against its
+        # siblings (MerchantCardEntry.Populate / MerchantRelicEntry.FillSlot).
+        for entry in inv.all_entries:
+            entry.inventory = inv
         return inv
 
     @property

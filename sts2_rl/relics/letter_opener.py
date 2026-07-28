@@ -30,7 +30,8 @@ class LetterOpener(Relic):
     def on_player_turn_start(self, player: PlayerCombatState) -> None:
         self._skills_this_turn = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.SKILL:
             return
         self._skills_this_turn += 1

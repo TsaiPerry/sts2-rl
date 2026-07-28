@@ -17,15 +17,18 @@ _MIN_FLOOR = 6  # IsAllowed: TotalFloor >= 6
 
 class _PunchOffEncounter(Encounter):
     """PunchOffEventEncounter.cs: two Punch Constructs — the left one opens with
-    Fast Punch — each with its starting HP cut by NextInt(2, 10) (2..9)."""
+    Fast Punch — each with its starting HP cut by NextInt(2, 10) (2..9).
+
+    PunchConstruct.AfterAddedToRoom (PunchConstruct.cs:75-78) spends the
+    reduction as SetCurrentHpInternal(Max(1, CurrentHp - reduction)): only
+    CURRENT HP drops, MaxHp stays at the model's 55."""
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         monsters = []
         for i in range(2):
             m = PunchConstruct(hooks, rng, starts_with_fast_punch=(i == 0))
             reduction = rng.randint(2, 9)  # NextInt(2, 10)
-            m.max_hp = max(1, m.max_hp - reduction)
-            m.hp = min(m.hp, m.max_hp)
+            m.hp = max(1, m.hp - reduction)
             monsters.append(m)
         return monsters
 
@@ -52,6 +55,12 @@ class PunchOff(Event):
     id = "punch_off"
     name = "Punch-Off"
 
+    # PunchOff.cs:33-35 — a Combat-layout event, so the two constructs (and
+    # their HP rolls) are generated when the room is entered, not when FIGHT is
+    # chosen.
+    is_combat_layout = True
+    canonical_encounter = PUNCH_OFF_EVENT_ENCOUNTER
+
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:
         return run.total_floor >= _MIN_FLOOR
@@ -76,7 +85,9 @@ class PunchOff(Event):
 
     def _fight(self) -> None:
         from ..rewards import RewardExtra
-        self.pending_encounter = PUNCH_OFF_EVENT_ENCOUNTER
+        # EnterCombatWithoutExitingEvent reuses the state built at room entry
+        # (ShouldCreateCombat = LayoutType != Combat, EventModel.cs:624-628).
+        self.pending_encounter = self.internal_combat_encounter()
         # PunchOff.cs Fight(): RelicReward + PotionReward ride the fight's
         # reward screen (both rolled at screen time).
         self.pending_reward_extras = [RewardExtra.of_relic(), RewardExtra.of_potion()]

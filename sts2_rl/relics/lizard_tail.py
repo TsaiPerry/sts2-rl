@@ -32,22 +32,30 @@ class LizardTail(Relic):
     def is_used_up(self) -> bool:   # IsUsedUp => _wasUsed
         return self._used
 
-    def should_die(self, creature: Creature) -> bool:
+    def should_die_late(self, creature: Creature) -> bool:
+        # LizardTail.cs is the source's ONLY ShouldDieLate implementer,
+        # and Hook.ShouldDie (Hook.cs:2229-2249) runs a COMPLETE
+        # ShouldDie pass over every listener before it starts the Late
+        # one. That ordering is the whole of damage_pipeline/N4: a
+        # Fairy in a Bottle (a plain ShouldDie) must always be spent
+        # before the Tail, and with one flat pass the sim spent
+        # whichever happened to be registered first.
         if creature is self.player and not self._used:
             self._used = True
             self._heal_pending = True
             return False
         return True
 
-    def on_damage_received(
-        self,
-        target: Creature,
-        amount: int,
-        dealer: Creature | None,
-        card: Card | None,
-        props: ValueProp,
-    ) -> None:
-        if self._heal_pending and target is self.player:
-            self._heal_pending = False
-            from ..cmds import CreatureCmd
-            CreatureCmd.heal(self.hooks, self.player, max(1, self.player.max_hp * self.HEAL_PCT // 100))
+    def after_preventing_death(self, creature: Creature) -> None:
+        # LizardTail.cs:53-59 heals from AfterPreventingDeath, which
+        # CreatureCmd.cs:567 dispatches to the vetoing listener on the
+        # prevented-death arm. The sim hung the heal on on_damage_received,
+        # which worked only while a prevented death was floored at 1 HP: now
+        # that the corpse is left at 0 (CreatureCmd.cs:565) the killing-blow
+        # guard skips AfterDamageReceived and the heal never ran.
+        if creature is not self.player or not self._heal_pending:
+            return
+        self._heal_pending = False
+        from ..cmds import CreatureCmd
+        CreatureCmd.heal(self.hooks, self.player,
+                         max(1, self.player.max_hp * self.HEAL_PCT // 100))

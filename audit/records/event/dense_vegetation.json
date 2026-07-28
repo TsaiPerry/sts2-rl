@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\dense_vegetation.py",
-    "sha256": "7e27f63c6f33dce521f958257f0e09446b61e531316661b95aaa821896fffac4"
+    "sha256": "b5921eba858cdd9bcc301e1287c28edf86b3fe89aa5308b8ff9a624c744e4ff9"
   },
   "extra_sources": [
     {
@@ -31,27 +31,37 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/driver.py",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/dream_catcher.py",
+      "sha256": "141dbc25ea89fffa0ad2bc118e1fda19ac29406d7331b76c6ff75b90c4af6e95",
       "side": "sim"
     }
   ],
@@ -63,7 +73,7 @@
     "CalculateVars": {
       "maps_to": "DenseVegetation.calculate_vars (events/dense_vegetation.py:51-52) ports the Gold roll as `self.rng.randint(61, 99)`, matching `Rng.NextInt(61, 100)`'s exclusive upper bound",
       "verdict": "gap",
-      "issue": "Two problems. (1) The roll is on the shared run RNG, not the per-event Rng -- see guard EV-3. (2) The second var is not ported at all: DenseVegetation.cs:38 sets `Heal.BaseValue = HealRestSiteOption.GetHealAmount(Owner)`, which CALLS Hook.ModifyRestSiteHealAmount (HealRestSiteOption.cs:60-63) at CalculateVars time. The sim computes the heal only later, inside _rest, and without the hook -- see guard BR-38a."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP. Problem (2) is CLOSED: `_rest` (events/dense_vegetation.py:70-77) now calls RunState.rest_heal (run.py:1247-1253) and RunState.rest_heal_rewards (run.py:1255-1268), and rest_heal's amount comes from RunState.rest_site_heal_amount (run.py:350-359), which dispatches Hook.ModifyRestSiteHealAmount over the relics -- the HealRestSiteOption.GetHealAmount pass (HealRestSiteOption.cs:60-63) the Heal var needs. Problem (1) REMAINS: calculate_vars still rolls `self.rng.randint(61, 99)` (events/dense_vegetation.py:57) on the shared run rng where DenseVegetation.cs:37 rolls `base.Rng.NextInt(61, 100)`; dense_vegetation is one of only four modules `py audit/tools/event_probes.py eventrng` still flags shared-rng-only on 2026-07-28. See this record's EV-3 guard. Secondary and unobservable: the heal is computed inside _rest rather than at CalculateVars time, but nothing mutates the run between those two points."
     },
     "IsAllowed": {
       "maps_to": "DenseVegetation.cs:41-55 short-circuits to true for a one-player run (`if (runState.Players.Count == 1) return true;`) and only then checks each player's HP against HpLoss. The sim has no is_allowed override, inheriting the base `return True` (events/base.py:103-107) -- which is exactly the single-player branch. The multiplayer branch is waived below.",
@@ -89,7 +99,7 @@
     {
       "what": "BR-38a (blast radius): audit/records/seam/turn_structure.json step 38a -- a bare run.heal() skips the Hook.AfterRestSiteHeal + Hook.ModifyRestSiteHealRewards + RewardsCmd.OfferCustom tail that HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113) runs",
       "verdict": "gap",
-      "issue": "ALREADY RECORDED as turn_structure step 38a, which names events/dense_vegetation.py:67 explicitly (rule 3, not re-verdicted). Recorded here with the fact that BOUNDS it: EXECUTED (`py audit/tools/event_probes.py heal`), this is the ONLY event in the sim that heals through the rest-site verb -- the other 10 run.heal() call sites are plain CreatureCmd.Heal equivalents, and CreatureCmd.Heal (CreatureCmd.cs:691-703) dispatches no hooks in C# either, so they are faithful. Dense Vegetation is 100% of step 38a's event-side blast radius."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP. Two of the tail's three steps landed: events/dense_vegetation.py:75-76 now calls RunState.rest_heal (run.py:1247-1253 -- the heal plus the Hook.AfterRestSiteHeal pass) and RunState.rest_heal_rewards (run.py:1255-1268 -- the Hook.ModifyRestSiteHealRewards pass), parking the built screen on `self.pending_rewards`. What REMAINS is the RewardsCmd.OfferCustom that HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113) runs on that screen: NOTHING consumes `event.pending_rewards`. Verified 2026-07-28 by grep -- the only readers are test/test_event_gate_precision.py:105-114; driver._run_event (driver.py:439-464) never offers it, while the real rest site does (driver.py:558, `self._offer_rewards(run.rest_heal_rewards())`). Dream Catcher is ported and implements modify_rest_site_heal_rewards (relics/dream_catcher.py:22), so the live observable is a 3-card screen the game shows and the sim silently drops. Dense Vegetation is still 100% of step 38a's event-side blast radius."
     },
     {
       "what": "EV-3: CalculateVars' `Gold = base.Rng.NextInt(61, 100)` (DenseVegetation.cs:37) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
@@ -109,7 +119,7 @@
     {
       "what": "EV-1: TRUDGE_ON's 8 HP loss (DenseVegetation.cs:83) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
       "verdict": "gap",
-      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     }
   ],
   "verdict": "gap",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\juzu_bracelet.py",
-    "sha256": "be6b566f75df6cddaeba10e62cec181b9d182efada7dc550cd277090d7410aa4"
+    "sha256": "7330824b23fdc0b515f5ef7df612ce0e8de42ff8af9b2fa62fb37a2c47e058fc"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -36,9 +36,9 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "no counterpart; sts2_rl.relics.base.Relic declares no is_allowed member at all",
-      "verdict": "gap",
-      "issue": "MECHANISM: JuzuBracelet.cs:12-15 returns RelicModel.IsBeforeAct3TreasureChest(runState), which is `runState.TotalFloor < 41` in single player (RelicModel.cs:452-456; the 38 arm is the multiplayer one). The relic therefore stops being offered from the Act 3 treasure chest onward. The sim's Relic base has NO is_allowed member -- executed: `py audit/tools/relic_probes.py sweep-isallowed` prints 'sim Relic base defines is_allowed: False' -- and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. LIVE, not dormant: Juzu Bracelet is Common in the transcribed shared grab bag (executed by probe `pool`: bag=Common), the sim already tracks RunState.total_floor, and every run reaches floor 41, so the sim keeps offering a relic the game has withdrawn -- and because a wrong pull consumes the front of the grab bag, it shifts EVERY later relic pull in the run. This is one member of the 16-relic single-fix cluster .superpowers/sdd/content-relic-sweeps.md Sweep B (a) identified, and the same verdict amethyst_aubergine's IsAllowed carries in batch 1 (binding rule 3) -- confirmed here, not re-derived. Rule 7: RelicModel.cs, relics/base.py, relic_pools.py and the sweeps file are not hashed by this record."
+      "maps_to": "is_allowed (sts2_rl/relics/juzu_bracelet.py:14) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/juzu_bracelet.py:14), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "ModifyUnknownMapPointRoomTypes": {
       "maps_to": "no counterpart; the port implements nothing (juzu_bracelet.py:5-10) and inherits Relic.modify_unknown_map_point_room_types's identity default (relics/base.py:276-278)",

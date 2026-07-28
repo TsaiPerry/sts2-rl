@@ -101,32 +101,32 @@
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/silken_tress.py",
-      "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee",
+      "sha256": "ae34c594c5c9502ded4b0cf86cb7921cdcde004b1d80c81532ab3ee7dcbabcdf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/silver_crucible.py",
-      "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d",
+      "sha256": "9a8147346c7c1fa77a0ebb3b1a61402e0e67663fd7686345e6f31fb0686641eb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/shop.py",
-      "sha256": "46be0947df84e57ec4bc1ad757ac589a8e70dab2f294e837bcf443187193d3bd",
+      "sha256": "38009ab6fe516c265c4aee9051cc4c1a4986edb373c361801a2f6dc11f4da7f9",
       "side": "sim"
     }
   ],
@@ -137,14 +137,14 @@
       "rationale": "ToxicEgg.cs:14. Executed: Rare in the transcribed grab bag (relic_pools.py:144 'RELIC.TOXIC_EGG'), `py audit/tools/relic_probes_b16.py pool`. Rule 7: relics/_eggs.py is the shared base this port's whole behaviour lives in and it is NOT hashed by this record -- every hook entry below leans on it."
     },
     "IsAllowed": {
-      "maps_to": "no counterpart -- `Relic` declares no is_allowed member at all",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4 (LIVE, and one of sweep B's 17-relic single-fix cluster)."
+      "maps_to": "is_allowed (sts2_rl/relics/_eggs.py:35) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "TryModifyCardRewardOptionsLate": {
-      "maps_to": "EggRelic.modify_card_reward_options (_eggs.py:39-42), dispatched from rewards.py over run.relics",
-      "verdict": "gap",
-      "issue": "Rollup of guards G2 and N1 per binding rule 4. The effect is right -- every upgradable Skill in the offer arrives upgraded -- but the sim has no LATE phase (G2, dormant) and drops the CardCreationFlags gate (N1, waived as dead C# code)."
+      "maps_to": "modify_card_reward_options_late (sts2_rl/relics/_eggs.py:41-44) via `_applies`, dispatched in the second complete pass of rewards.create_reward_cards (sts2_rl/rewards.py:314-315)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the rollup's only remaining gap was G2, the collapsed Late phase (N1 was already waived as dead C# code). Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     "ModifyMerchantCardCreationResults": {
       "maps_to": "EggRelic.modify_merchant_card_results (_eggs.py:44-45), dispatched from shop.py:87",
@@ -160,13 +160,13 @@
   "guards": [
     {
       "what": "G1 (LIVE): `IsAllowed => IsBeforeAct3TreasureChest(runState)` (TotalFloor < 41) is entirely unmodelled, so the relic stays pullable for the whole run",
-      "verdict": "gap",
-      "issue": "MECHANISM: ToxicEgg.cs:16-19 overrides RelicModel.IsAllowed with RelicModel.IsBeforeAct3TreasureChest(runState), which is `runState.TotalFloor < 41` (RelicModel.cs:452-456), so from the Act 3 treasure chest onward the game stops offering it. The sim's `Relic` base declares no is_allowed member (EXECUTED: `hasattr(Relic, 'is_allowed')` is False) and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b16.py egg-floor`): at `run.total_floor = 60` the grab bag still yields toxic_egg. The sim already tracks RunState.total_floor. Both sides ported: Rare in the transcribed grab bag, and the observable is pool composition -- a wrong pull also shifts every subsequent pull, so it is not a one-relic error. This is sweep B cluster (a) at this unit's own site: 17 relics share the identical predicate (`py audit/tools/relic_probes.py sweep-isallowed`; the count was corrected from 16 to 17 by batch 8 after the sweep's first version read only the first line of each IsAllowed body), and audit/records/relic/amethyst_aubergine.json already verdicts the mechanism `gap` -- matched, not re-derived (binding rule 3). TWO NOTES FOR THE FIX, both from PROMPT.md v6: (i) RelicModel.IsAllowedAtNeow DEFAULTS to IsAllowed(player.RunState) (RelicModel.cs:443-446), so whoever adds `Relic.is_allowed(run)` must make `is_allowed_at_neow` delegate to it or Neow keeps using the stale flag; (ii) toxic_egg does not override IsAllowedAtNeow itself, so it is one of the relics that would silently change behaviour at Neow once (i) lands. Rule 7: relics/base.py, relic_pools.py, run.py and audit/records/relic/amethyst_aubergine.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G2 (DORMANT): the hook is TryModifyCardRewardOptions**Late** and the sim's modify_card_reward_options is a single flat pass with no phase structure",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.TryModifyCardRewardOptions (Hook.cs:1445-1465) runs `TryModifyCardRewardOptions` over every listener and THEN `TryModifyCardRewardOptionsLate` over every listener -- two complete passes -- and Toxic Egg is a Late implementer, so in the game its upgrade is applied after every plain-phase reward modifier has finished choosing WHICH cards are offered. The sim has one walk over run.relics and no phase concept. This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes), which PROMPT.md bug class 25 already names as 'card rewards are the same shape but dormant' -- one verdict per mechanism, binding rule 3, so this entry does not re-derive it. DORMANT AT THIS SITE, checked rather than assumed: `grep -rn 'def modify_card_reward_options' sts2_rl/` gives four ported implementers besides the eggs -- relics/glitter.py:16, relics/silken_tress.py:27, relics/silver_crucible.py:28 and _eggs.py:39 itself -- and none of them REMOVES or REPLACES a card in the offer, so no ordering can change which cards the egg sees. (Silver Crucible upgrades, Silken Tress enchants, Glitter mutates in place.) Porting a plain-phase implementer that swaps a card into the offer -- LastingCandy.cs:127 and PrismaticGem are the C# shapes -- makes it live. Rule 7: audit/records/seam/hook_dispatch.json and the four relic files are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     {
       "what": "N1: `options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades)` (ToxicEgg.cs:27-30) -- the sim's hook signature carries no options at all",
@@ -194,6 +194,6 @@
       "rationale": "ToxicEgg.cs:31 and :39 both pass CardType.Skill and toxic_egg.py:13 sets CARD_TYPE = CardType.SKILL. Recorded because the sts1 mapping is different and _eggs.py:2-5 flags the trap explicitly (Toxic=Skill, Frozen=Power, Molten=Attack). Also faithful: EggRelic.ONLY_UNUPGRADED defaults to False (_eggs.py:32) and ToxicEgg.cs has no already-upgraded clause -- only MoltenEgg.cs:58 does -- so a Skill+ offered by a reward goes to Skill++ here, on both sides."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

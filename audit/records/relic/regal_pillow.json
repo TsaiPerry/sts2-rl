@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\regal_pillow.py",
-    "sha256": "b77df903e610124c078d82399f61d9decb96ba8142bebe2e9b9800ba5601bd88"
+    "sha256": "d72312269aa318fc6c986bdb07ac5daa8ca1b1aeba9411d2147ae473ea26fade"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -52,14 +52,14 @@
       "rationale": "Matches RegalPillow.cs:15. In the transcribed shared grab bag as Common (relic_pools.py:125), executed by `py audit/tools/relic_probes_b13.py pool`."
     },
     "CanonicalVars": {
-      "maps_to": "no counterpart (the port has no constant)",
-      "verdict": "gap",
-      "issue": "RegalPillow.cs:17 pins `new HealVar(15m)` and ModifyRestSiteHealAmount returns `amount + DynamicVars.Heal.BaseValue` (RegalPillow.cs:25). No AscensionHelper.GetValueIfAscension in the file, so 15 is the non-ascension value; the port carries nothing because it implements nothing. Recorded so a fix does not have to re-derive the constant. Part of guard G1."
+      "maps_to": "HEAL = 15 (sts2_rl/relics/regal_pillow.py:22) = HealVar(15m) (RegalPillow.cs:17)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the port now pins the constant. `RegalPillow.HEAL = 15` (sts2_rl/relics/regal_pillow.py:22) is `new HealVar(15m)` (RegalPillow.cs:17), and modify_rest_site_heal_amount returns `amount + self.HEAL` (regal_pillow.py:24-25) = `amount + DynamicVars.Heal.BaseValue` (RegalPillow.cs:25). No AscensionHelper.GetValueIfAscension appears in the C# file, so 15 is the whole non-ascension value. WAS: the port carried no constant at all because it implemented nothing."
     },
     "ModifyRestSiteHealAmount": {
-      "maps_to": "NO SIM HOOK EXISTS -- `hasattr(Relic, 'modify_rest_site_heal_amount')` is False (executed) and RunState.rest_site_heal_amount (run.py:307-309) returns `max_hp * 3 // 10` with no listener loop",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4 -- the LIVE gap, and the ONLY behavioural hook this relic has."
+      "maps_to": "modify_rest_site_heal_amount (sts2_rl/relics/regal_pillow.py:24-25), declared on the base at sts2_rl/relics/base.py:306-311 and folded over run.relics by RunState.rest_site_heal_amount (sts2_rl/run.py:350-359)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook exists and is dispatched. `Relic.modify_rest_site_heal_amount(run, amount)` is declared on the base (sts2_rl/relics/base.py:306-311) and RunState.rest_site_heal_amount (sts2_rl/run.py:350-359) now folds it over every relic in the run on top of the `max_hp * 3 // 10` base, which is Hook.ModifyRestSiteHealAmount over GetBaseHealAmount (HealRestSiteOption.cs:60-63, 90-93) and covers MendRestSiteOption.cs:58 through the same helper. Regal Pillow implements it as `amount + 15` (sts2_rl/relics/regal_pillow.py:22-25 = RegalPillow.cs:19-26). WAS: RunState.rest_site_heal_amount was a bare `max_hp * 3 // 10` with no hook loop and `Relic` declared no modify_rest_site_heal_amount member, so a rest with the relic healed 24 where C# healed 39."
     },
     "AfterRestSiteHeal": {
       "maps_to": "after_rest_site_heal (relics/base.py) exists and RunState.rest_heal dispatches it (run.py:1094), but the port does not implement it",
@@ -80,13 +80,13 @@
   "guards": [
     {
       "what": "G1 (LIVE): the +15 rest-site heal is not merely unimplemented -- there is no sim hook it could live in",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# computes the heal as `Hook.ModifyRestSiteHealAmount(runState, creature, GetBaseHealAmount(creature))` where the base is `MaxHp * 0.3m` (HealRestSiteOption.cs:60-63, 90-93), dispatches it over the whole run's listeners (Hook.cs:1936-1944), and only then calls CreatureCmd.Heal with the result (HealRestSiteOption.cs:106-113). RegalPillow.cs:19-26 adds 15 in that chain. The sim's RunState.rest_site_heal_amount (run.py:307-309) is a bare `max_hp * 3 // 10` with no hook loop, and `Relic` declares no modify_rest_site_heal_amount member -- so this is a BASE-CLASS omission, like the is_allowed gate sweep B found, not a one-relic stub. REACHABILITY (LIVE, both sides ported, executed -- `py audit/tools/relic_probes_b13.py regal-pillow`): with the relic held, `rest_site_heal_amount()` is 24 and `rest_heal()` heals 24, identical to a run with no relics, where C# heals 24 + 15 = 39. Regal Pillow is Common in the transcribed shared grab bag and the rest-site heal path is fully ported and driven (RunState.rest_heal, run.py:1089-1095, called from driver.py:518), so nothing further is needed. SECOND CALLER worth knowing for the fix: MendRestSiteOption.cs:58 runs the same hook over the same base, so a fix placed in RunState.rest_site_heal_amount covers both. TRUNCATION NOTE: C# adds 15 to the untruncated `MaxHp * 0.3m` and the sim truncates first; for an integer +15 the two coincide at every max HP, so the fix does not need to move the floor. NOTE per binding rule 7: run.py, driver.py, HealRestSiteOption.cs, MendRestSiteOption.cs and Hook.cs are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook exists and is dispatched. `Relic.modify_rest_site_heal_amount(run, amount)` is declared on the base (sts2_rl/relics/base.py:306-311) and RunState.rest_site_heal_amount (sts2_rl/run.py:350-359) now folds it over every relic in the run on top of the `max_hp * 3 // 10` base, which is Hook.ModifyRestSiteHealAmount over GetBaseHealAmount (HealRestSiteOption.cs:60-63, 90-93) and covers MendRestSiteOption.cs:58 through the same helper. Regal Pillow implements it as `amount + 15` (sts2_rl/relics/regal_pillow.py:22-25 = RegalPillow.cs:19-26). WAS: RunState.rest_site_heal_amount was a bare `max_hp * 3 // 10` with no hook loop and `Relic` declared no modify_rest_site_heal_amount member, so a rest with the relic healed 24 where C# healed 39."
     },
     {
       "what": "N1: the port's stated premise -- 'an out-of-combat rest-site effect, so this is a no-op stub' (regal_pillow.py:8-9)",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 12 says to check the claim, and the claim is HALF false. The sim does have an out-of-combat rest site: RunState.rest_heal, rest_upgrade, rest_site_options and rest_heal_rewards all exist and the driver surfaces them (driver.py:512-521), and two of Relic's rest-site hooks are dispatched today (after_rest_site_heal at run.py:1094, modify_rest_site_options at run.py:1062-1073 -- relic/pumpkin_candle in this same batch uses the latter). What is genuinely absent is the ONE hook this relic needs. So the stub is not defensible as 'the sim has no rest site', and it is not a waiver under binding rule 1 either; it is the dormant-vs-live question G1 settles by execution. Carries G1's verdict."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the stub is gone. sts2_rl/relics/regal_pillow.py now implements modify_rest_site_heal_amount (:24-25) and its docstring (:8-16) cites HealRestSiteOption.cs:60-63/90-93 and MendRestSiteOption.cs:58 instead of claiming the sim has no rest site. The one hook the premise said was absent -- Hook.ModifyRestSiteHealAmount -- is declared at sts2_rl/relics/base.py:306-311 and dispatched by RunState.rest_site_heal_amount (sts2_rl/run.py:350-359)."
     },
     {
       "what": "N2: `creature.Player != base.Owner && creature.PetOwner != base.Owner` (RegalPillow.cs:21-24) -- the heal hook is per-CREATURE, not per-player",
@@ -99,6 +99,6 @@
       "rationale": "RegalPillow.cs has no fields; `py audit/tools/relic_probes.py sweep-reset` puts regal_pillow in the 'relics holding no state at all' bucket, so PROMPT.md bug class 13 has nothing to bite. Recorded so the absence is visibly a source property. Also checked and absent: no IsAllowed override (so sweep B's 17-relic TotalFloor < 41 cluster does not include it) and no upon-pickup effect, which keeps the relic tradable on both sides."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

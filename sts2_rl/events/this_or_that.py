@@ -26,7 +26,11 @@ class ThisOrThat(Event):
     name = "This or That"
 
     def calculate_vars(self) -> None:
-        self._gold = self.rng.randint(_GOLD_MIN, _GOLD_MAX)
+        # `base.Rng.NextInt(41, 69)` — the event's own Rng (ThisOrThat.cs:25).
+        er = self.event_rng
+        self._gold = (er.next_int_range(_GOLD_MIN, _GOLD_MAX + 1)
+                      if er is not None
+                      else self.rng.randint(_GOLD_MIN, _GOLD_MAX))
 
     def initial_options(self) -> list[EventOption]:
         return [

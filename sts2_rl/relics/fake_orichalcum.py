@@ -22,9 +22,25 @@ class FakeOrichalcum(Relic):
 
     BLOCK = 3
 
-    def on_player_turn_end(self, player: PlayerCombatState) -> None:
-        if player.block == 0:
-            from ..cmds import BlockCmd
+    def __init__(self) -> None:
+        super().__init__()
+        self._should_trigger = False
 
-            BlockCmd.apply(
-                self.hooks, player, self.BLOCK, props=ValueProp.UNPOWERED)
+    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+        self._should_trigger = False
+
+    def on_player_turn_end_very_early(self, player: PlayerCombatState) -> None:
+        # FakeOrichalcum.cs:46 is BeforeSideTurnEndVeryEarly, the identical
+        # two-phase shape as the real Orichalcum: snapshot `Block > 0` before
+        # Plating can grant block, then grant in the plain pass (:60).
+        if player is self.player and player.block == 0:
+            self._should_trigger = True
+
+    def on_player_turn_end(self, player: PlayerCombatState) -> None:
+        if not self._should_trigger:
+            return
+        self._should_trigger = False
+        from ..cmds import BlockCmd
+
+        BlockCmd.apply(
+            self.hooks, player, self.BLOCK, props=ValueProp.UNPOWERED)

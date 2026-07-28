@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\fake_merchant.py",
-    "sha256": "73183c9c6c5cf62323231050e8cc10be476224de23b7a6d643760ea7044229e4"
+    "sha256": "1d4cab807ce57957942d4521f122dd008158f1f2fdc25336530aa2ab03c74f97"
   },
   "extra_sources": [
     {
@@ -26,17 +26,22 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/doll_room.py",
-      "sha256": "e39f43c0a512e4b6443e5591c60117e9093425c7d96c70a7e65ed0b8223916c9",
+      "sha256": "06552655259f416fbe436f369dc04bc69ab9211a00e239b50f93cee0e331ff2d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/fragrant_mushroom.py",
-      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "sha256": "6469eba7f4965bde73d51c15665adbc6906c6251e8cd03f2598470af95d245b3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     }
   ],
@@ -83,8 +88,8 @@
     },
     {
       "what": "EV-5: BeforeEventStarted's `_inventoryRelics.ToList().UnstableShuffle(base.Rng).Take(6)` (FakeMerchant.cs:116-117) -- note this one is UnstableShuffle, so only the STREAM is wrong, not the shape is `...ToList().StableShuffle(base.Rng).Take(n)`; the sim uses `self.rng.shuffle(stock)` then `[:6]` (events/fake_merchant.py:63-65), which IS the right shape for UnstableShuffle",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-5, one verdict at every site (rule 3). StableShuffle is SORT-then-Fisher-Yates (ListExtensions; actmap.stable_shuffle, actmap.py:193-201, is the sim's faithful port and IS used elsewhere -- events/doll_room.py:53 and relics/fragrant_mushroom.py:31-36). The sort is the point: it makes the pick independent of the pile's incidental order, so two runs whose decks hold the same cards in a different order pick the same ones. Both substitutes drop it -- `random.sample` is a different algorithm entirely (it does not even consume the stream the same way) and a bare `shuffle` keeps the incidental order as its input. Compounded by EV-3's wrong stream. LIVE: every site is an ordinary event branch, and a deck whose card order differs from its sorted order is the normal case after any add/transform."
+      "maps_to": "Closed 2026-07-28: this site was only ever wrong on the STREAM (the source is UnstableShuffle, FakeMerchant.cs:116-117), and events/fake_merchant.py:66-67 now shuffles on `self.event_rng` -- right shape, right stream. actmap.stable_shuffle (actmap.py:193-201) is sort-then-Fisher-Yates, the port of ListExtensions.StableShuffle, and the sort key is now the game's -- player._compare_to_key (player.py:23-34) is CardModel.CompareTo, i.e. the UPPERCASE ModelId entry then the upgrade level. Was: `random.sample` / a bare `shuffle`, which drop the stabilizing sort.",
+      "verdict": "faithful"
     },
     {
       "what": "where the stock roll happens in the lifecycle",
@@ -93,8 +98,8 @@
     },
     {
       "what": "EV-3: the stock UnstableShuffle (FakeMerchant.cs:116) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- the stock UnstableShuffle runs on `self.event_rng` (events/fake_merchant.py:66-67), matching `base.Rng` (FakeMerchant.cs:116). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "the MerchantDialogueSet built from the loc table (FakeMerchant.cs:47-61) and the NFakeMerchant potion-throw animation (FakeMerchant.cs:128-131)",

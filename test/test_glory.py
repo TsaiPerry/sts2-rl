@@ -551,6 +551,28 @@ class TestQueen:
         assert cs.player.powers["weak"].amount == 99
         assert cs.player.powers["vulnerable"].amount == 99
 
+    def test_amalgam_death_re_telegraphs_burn_bright_as_enrage(self):
+        # Queen.cs:221-234 AfterDeath: the amalgam's death immediately replaces
+        # a telegraphed Burn Bright with Enrage (SetMoveImmediate(EnragedState)
+        # = NextMove = state + ForceCurrentState, MonsterModel.cs:420-432), so
+        # the player never sees Burn Bright resolve as Enrage.
+        cs = fresh_encounter(QUEEN_BOSS)
+        queen = cs.enemies[1]
+        cs.end_turn()  # PUPPET_STRINGS
+        cs.end_turn()  # YOU_ARE_MINE -> branch telegraphs BURN_BRIGHT
+        assert queen._current_move.id == "BURN_BRIGHT_FOR_ME_MOVE"
+        log_before = list(queen.machine.state_log)
+        kill(cs, cs.enemies[0])  # amalgam dies mid-player-turn
+        assert queen._current_move.id == "ENRAGE_MOVE"
+        assert queen.current_intent.move_type == MoveType.BUFF
+        assert queen.current_intent.also == ()  # no DEFEND leg any more
+        # ForceCurrentState does not log.
+        assert list(queen.machine.state_log) == log_before
+        cs.end_turn()  # ENRAGE: +2 Strength, no block
+        assert queen.strength == 2
+        assert queen.block == 0
+        assert queen._current_move.id == "OFF_WITH_YOUR_HEAD_MOVE"
+
     def test_queen_switches_to_attacks_when_amalgam_dead(self):
         cs = fresh_encounter(QUEEN_BOSS)
         queen = cs.enemies[1]

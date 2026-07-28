@@ -25,7 +25,7 @@ class SilverCrucible(Relic):
         return (self.times_used >= self.CARD_REWARDS
                 and self.treasure_rooms_entered > 0)
 
-    def modify_card_reward_options(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards) -> None:
         if self.times_used >= self.CARD_REWARDS:
             return
         for card in cards:

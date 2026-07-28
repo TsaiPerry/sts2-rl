@@ -17,15 +17,15 @@
   "sim_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0"
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd"
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
     }
   ],
   "steps": [
@@ -36,8 +36,8 @@
     },
     {
       "what": "2. Apply<T>: guard !target.CanReceivePowers -> return null (PowerCmd.cs:73-76; CanReceivePowers = CombatState!=null && Hook.ShouldAllowHitting, Creature.cs:308-322)",
-      "verdict": "gap",
-      "issue": "PowerCmd.apply has no CanReceivePowers/should_allow_hitting guard; should_allow_hitting is wired into the sim's damage pipeline but not the power pipeline. See guard G6."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: PowerCmd.apply now opens with `if not hooks.should_allow_hitting(target): return` (sts2_rl/cmds.py), which is PowerCmd.cs:73-76's guard -- CanReceivePowers is Hook.ShouldAllowHitting (Creature.cs:308-322), the same predicate the damage pipeline already used. A debuff no longer lands where damage would not: Vulnerable does not stick to a reviving Test Subject and the AoE power potions skip an Eye With Teeth mid-Illusion revival, matching C#'s HittableEnemies. NOTE: the mid-pipeline re-check at PowerCmd.cs:133 (step 16) and the IsEnding half (steps 1, 6, 24) are still absent -- guard G6."
     },
     {
       "what": "3. FindExistingInstanceForStacking dispatches on power.InstanceType: Instanced->always null, InstancedPerApplier->match by Applier, None->match by power id only (PowerCmd.cs:77-78,165-174; PowerModel.cs:144)",
@@ -57,7 +57,7 @@
     {
       "what": "6. Apply(power,...): guard IsEnding || amount==0m || !target.CanReceivePowers -> return (PowerCmd.cs:103-106)",
       "verdict": "gap",
-      "issue": "cmds.py has no explicit early-return on amount==0/IsEnding/CanReceivePowers at this point. No IsEnding or CanReceivePowers guard at all (see guard G6 for the IsEnding/CanReceivePowers half). THE amount==0 HALF IS OWNED BY THIS STEP and is the one every other zero-amount observation in this record refers back to. Verified by execution against the current sim: `PowerCmd.apply(cs.hooks, cs.enemy, StrengthPower, 0)` -> `{'strength': Strength(0)}` and `PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 0)` -> `{'vulnerable': Vulnerable(0)}`, where C# (PowerCmd.cs:103, `amount == 0m` -> return) registers nothing at all in either case; a 0-amount debuff on the PLAYER additionally lands with skip_next_tick=True. The sim's Artifact block (cmds.py:299-306) provides no unreachability guarantee here -- it never fires for buffs at all, and for debuffs only when the target already holds Artifact. C# content actively DEPENDS on the 0-amount no-op: TheAdversaryMkOne.cs:32 applies ArtifactPower with a literal `0m` (`PowerCmd.Apply<ArtifactPower>(..., base.Creature, 0m, base.Creature, null)`), so porting that monster would hand the sim a live `Artifact(0)` power where C# registers none (confirmed by execution: `PowerCmd.apply(..., ArtifactPower, 0)` -> `{'artifact': Artifact(0)}`). Currently DORMANT in the sim: the two variable-amount call sites that could reach zero both hand-guard with `> 0` before calling -- sts2_rl/cards/colorless_skills.py:492 (Prolong, guarded by `if ctx.player.block > 0`) and sts2_rl/powers.py:1708 (Surprise granting HeistPower, guarded by `if thievery is not None and thievery.gold_stolen > 0`)."
+      "issue": "NARROWED 2026-07-27: the CanReceivePowers half is closed -- PowerCmd.apply now returns early on `not hooks.should_allow_hitting(target)` (sts2_rl/cmds.py), PowerCmd.cs:105's third disjunct. WHAT REMAINS, re-verified against today's code: neither the `IsEnding` nor the `amount == 0m` disjunct has any sim counterpart, and the amount==0 half is the one this record's other zero-amount observations refer back to -- `PowerCmd.apply(hooks, enemy, StrengthPower, 0)` still creates a Strength(0) instance and registers it as a listener, where PowerCmd.cs:103 returns without applying. ORIGINAL: none of the three disjuncts had a counterpart."
     },
     {
       "what": "7. Apply(power,...): guard combatState==null -> return (PowerCmd.cs:107-111)",
@@ -107,7 +107,7 @@
     {
       "what": "16. Guard target.CanReceivePowers (re-checked) (PowerCmd.cs:133)",
       "verdict": "gap",
-      "issue": "No equivalent re-check in the sim; folded into guard G6 (the sim has no CanReceivePowers concept in the power pipeline at any point, entry or mid-pipeline)."
+      "issue": "NARROWED 2026-07-27: the parenthetical claim is no longer true -- the sim DOES have a CanReceivePowers concept in the power pipeline now, at the ENTRY (PowerCmd.apply's opening `if not hooks.should_allow_hitting(target): return`, sts2_rl/cmds.py; see step 2). WHAT REMAINS is this step's own subject: there is no MID-PIPELINE re-check. C# re-tests target.CanReceivePowers at PowerCmd.cs:133, after the given/received modifier chains have run and after any listener they invoked could have changed the target's hittability; the sim tests it once, before hooks.modify_power_amount. Guard G6."
     },
     {
       "what": "17. power.ApplyInternal(target, modifiedAmount, silent): complete no-op if modifiedAmount==0m (power never registered, Owner never set); otherwise sets Owner, SetAmount, registers via Owner.ApplyPowerInternal (PowerCmd.cs:135; PowerModel.cs:564-573)",
@@ -126,8 +126,8 @@
     },
     {
       "what": "20. Guard target.Side==Player && power.Type==Debuff: power.SkipNextDurationTick=true, unconditional on modifiedAmount (PowerCmd.cs:144-147)",
-      "verdict": "gap",
-      "issue": "NOT faithful even given a nonzero amount (verdict corrected in fix pass 1; the previous rationale asserted the sim's flag 'runs only in the else (new-power) branch', which is factually wrong). cmds.py:331-332 `if target.side == \"player\" and power_cls.power_type == PowerType.DEBUFF: power.skip_next_tick = True` sits at function scope AFTER the new-vs-stacking if/else (cmds.py:308-329), on the shared `power` variable that the stacking branch rebinds to `existing` -- so the sim sets skip_next_tick on RE-STACKING too. C# sets SkipNextDurationTick only in the new-power Apply path (PowerCmd.cs:146); ModifyAmount (PowerCmd.cs:215-271) never touches it (a full-source grep for SkipNextDurationTick returns exactly PowerCmd.cs:146 set, PowerCmd.cs:192-194 consume, PowerModel.cs:246 declare, plus the two explicit card-level sets Doubt.cs:35 and Shame.cs:37). LIVE AND REACHABLE on ported content: any enemy re-applying Vulnerable/Weak/Frail (the three sim powers that use _tick_duration -- powers.py:420,442,463) to a player who already holds it, after the first application's skip was consumed, grants an EXTRA skipped duration tick in the sim, i.e. the debuff lasts one turn longer than in the game. Verified by execution: apply Vulnerable 2 to the player (skip_next_tick=True), clear the flag as the first tick would, then re-stack Vulnerable 1 -> amount 3 with skip_next_tick=True again, where C#'s ModifyAmount would have left it False. The 0-amount half of this step (C# sets the flag even on a fully-blocked/zero-amount application, on a power object that is discarded anyway per step 5's waiver) is owned by step 6 and is not the basis of this verdict. Pinned with a strict xfail in test/test_hook_order.py::TestPowerCmdOrder::test_restacking_a_player_debuff_does_not_rearm_skip_next_tick."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the skip_next_tick assignment moved INSIDE the new-power branch of PowerCmd.apply's if/else (sts2_rl/cmds.py), so it can no longer be re-armed on the `existing` instance when a debuff re-stacks. That matches C#, which sets SkipNextDurationTick only in Apply (PowerCmd.cs:144-147) and never in ModifyAmount (PowerCmd.cs:215-271). A second Vulnerable or Weak stack applied in the same turn no longer skips a tick it should take, so the debuff expires on time. Pinned by test_restacking_a_player_debuff_does_not_rearm_skip_next_tick, which now passes. WAS: the assignment sat at function scope after the branch, on the shared `power` variable."
     },
     {
       "what": "21. Guard givenModifiers!=null: await Hook.AfterModifyingPowerAmountGiven(combatState, givenModifiers, power) (PowerCmd.cs:148-150; Hook.cs:796-809)",
@@ -264,7 +264,7 @@
     {
       "what": "G6: No CombatManager.IsEnding / CanReceivePowers guard backstop anywhere in PowerCmd.apply",
       "verdict": "gap",
-      "issue": "C#'s Apply<T> refuses to act once combat is ending (PowerCmd.cs:69-72, spec step 1) or against a creature CanReceivePowers says no to (PowerCmd.cs:73-76, spec step 2 -- CanReceivePowers reuses Hook.ShouldAllowHitting, Creature.cs:308-322, the SAME predicate damage_pipeline's guard N1 covers for the damage path), both as hard backstops independent of caller discipline; ModifyAmount separately re-checks IsEnding (PowerCmd.cs:217-220, step 24). The sim's PowerCmd.apply (cmds.py:270-332) has none of these guards at any point in its single code path. should_allow_hitting IS wired into the sim's damage pipeline (DamageCmd.deal, per damage_pipeline's N1) but not into PowerCmd.apply -- so a currently-unhittable creature (e.g. a mid-revival Decimillipede segment) could still receive a power application in the sim where C# would refuse it outright. No concrete broken interaction is demonstrated (spot-checked callers apply powers only to already-resolved targets), matching the same defense-in-depth-absence pattern as damage_pipeline's guard G5."
+      "issue": "NARROWED 2026-07-27: the CanReceivePowers ENTRY guard now exists. PowerCmd.apply opens with `if not hooks.should_allow_hitting(target): return` (sts2_rl/cmds.py), reproducing PowerCmd.cs:73-76 (spec step 2) with the same predicate damage_pipeline's note N1 covers for the damage path. WHAT REMAINS: (a) no IsEnding guard anywhere in the sim's single code path -- neither Apply<T>'s (PowerCmd.cs:69-72, step 1), nor Apply's (PowerCmd.cs:103, step 6), nor ModifyAmount's separate re-check (PowerCmd.cs:217-220, step 24); (b) no mid-pipeline CanReceivePowers re-check (PowerCmd.cs:133, step 16). The IsEnding half belongs to the same family as hook_dispatch's guard G8, which is still pinned by two strict xfails. ORIGINAL: none of these guards existed at any point in PowerCmd.apply."
     },
     {
       "what": "N1: IsVisible is entirely absent from the sim's Power model; C#'s power.IsVisible gate (UnsettlingLamp.cs:93, ArtifactPower.cs:29-33) provably never varies",

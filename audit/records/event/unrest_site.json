@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\unrest_site.py",
-    "sha256": "e70c4bbb254a09ae0930b1954a5f7365e5242f5f2a932459525990e7206d887f"
+    "sha256": "9ca7985a65b811b608ccbb966bf6bee1322a1fce57bfe184556e575c03783ca0"
   },
   "extra_sources": [
     {
@@ -41,15 +41,19 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
     }
   ],
   "hooks": {
     "IsAllowed": {
-      "maps_to": "events/unrest_site.py:30 `run.hp <= run.max_hp * 0.70` -- binary float, where UnrestSite.cs:26-29 is `(decimal)p.Creature.CurrentHp <= (decimal)p.Creature.MaxHp * 0.70m`, exact base-10 decimal",
-      "verdict": "gap",
-      "issue": "UNIT GAP: the representation moves the gate. Binary float cannot represent 0.70, so `max_hp * 0.70` lands just BELOW the true 70% for some max HP values and the sim refuses an event the game allows. EXECUTED (`py audit/tools/event_probes_b.py gate`), sweeping every (max_hp, hp) pair with max_hp <= 400: 7 disagreements, all in the same direction (sim False / game True) and all at hp exactly 70% of max -- max_hp/hp = 90/63, 170/119, 180/126, 330/231, 340/238, 350/245, 360/252. LIVE and easily reached: an Ironclad starts at 80 max HP and 90 is one Max-HP relic away, so a 90/63 run is ordinary state, and the consequence is that the node the game would serve as an Unrest Site is filtered out of the sim's event pool -- which then shifts every later event pick, not just this one -- a consequence that is now EXECUTED rather than asserted, see the eventsVisited guard below. The shared contract's 'numeric constants are checked against the non-ascension branch' rule makes 0.70m the canonical value; the defect is the arithmetic, not the constant. Note this is the SAME bug class the damage_pipeline N3 record calls out for Shrink x Vulnerable -- decimal-vs-float -- but at an event GATE rather than in the damage pipeline, so it is a separate site and not that record's blast radius."
+      "maps_to": "events/unrest_site.py:28-34 `run.hp * 100 <= run.max_hp * 70`. CLOSED 2026-07-28: the decimal gate is cross-multiplied into exact integer arithmetic, so it now reproduces `(decimal)CurrentHp <= (decimal)MaxHp * 0.70m` (UnrestSite.cs:26-29) at every max HP. The seven executed counter-examples all pass -- 90/63 is 6300 <= 6300 True on both sides, where `run.max_hp * 0.70` in binary float gave 62.99999999999999 and refused the event. Was: the float representation moved the gate and filtered an Unrest Site node out of the sim's event pool.",
+      "verdict": "faithful"
     },
     "CalculateVars": {
       "maps_to": "UnrestSite.cs:40-43 sets Heal.BaseValue = MaxHp - CurrentHp at BeginEvent time, and Rest() (:47) heals that stored amount. events/unrest_site.py:39 computes `run.max_hp - run.hp` at choose time instead. Same value: an event page offers no action that can change HP or Max HP between BeginEvent and the first choice, and REST is a first-page option, so the two evaluation points cannot disagree. HealVar(0m) is the placeholder CalculateVars overwrites.",
@@ -69,8 +73,8 @@
     },
     {
       "what": "EV-2: Kill (UnrestSite.cs:52-54) via `CreatureCmd.LoseMaxHp(new ThrowingPlayerChoiceContext(), Owner.Creature, MaxHpLoss = 8, isFromCard: false)`; events/unrest_site.py:44 run.lose_max_hp(8) calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+      "maps_to": "Closed 2026-07-28: RunState.lose_max_hp (run.py:366-380) now has the shape of CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-828) -- `new_max = max_hp - amount` UNFLOORED, then `if new_max < hp: lose_hp(hp - new_max)` so the overflow is real HP loss that runs the relic ModifyHpLost pass and the death pass, and only then `max_hp = max(1, new_max)` followed by SetMaxHpInternal's clamp `hp = min(hp, max_hp)` (Creature.cs:493-501). Leg (2) now MATCHes: 80/80 losing 100 max HP kills the player on both sides (`py audit/tools/event_probes.py maxhp`). Leg (1)'s witness does not survive re-reading the source: the probe's hardcoded `C#=71` ignores SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)`, which pulls the GAME back to 70 as well, so Tungsten Rod's -1 is unobservable through HP at any max-HP-loss amount (the overflow can never leave current HP above the new max). Both sides read on 2026-07-28; the sim's 70/70 is correct.",
+      "verdict": "faithful"
     },
     {
       "what": "Kill's ordering (UnrestSite.cs:54-56): LoseMaxHp FIRST, then RelicFactory.PullNextRelicFromFront(base.Owner) -> RelicCmd.Obtain",
@@ -98,6 +102,6 @@
       "verdict": "faithful"
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

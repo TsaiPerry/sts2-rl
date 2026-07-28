@@ -261,7 +261,9 @@ def test_punch_off_encounter_two_constructs():
     combat = CombatState(rng=random.Random(2), encounter=PUNCH_OFF_EVENT_ENCOUNTER)
     assert len(combat.enemies) == 2
     for e in combat.enemies:
-        assert e.max_hp < 55  # each loses NextInt(2, 10)
+        # PunchConstruct.cs:75-78 cuts CURRENT hp only; MaxHp stays 55.
+        assert e.max_hp == 55
+        assert e.hp < 55  # each loses NextInt(2, 10)
     # The left construct opens with Fast Punch (a multi-hit attack).
     assert combat.enemies[0].current_intent.move_type == MoveType.ATTACK
     assert combat.enemies[0].current_intent.hits == 2

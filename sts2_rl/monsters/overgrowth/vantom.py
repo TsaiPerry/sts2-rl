@@ -42,7 +42,9 @@ class Vantom(Monster):
         if self._move_key == "INKY_LANCE":
             return Intent(MoveType.ATTACK, damage=_INKY_LANCE_DMG, hits=_INKY_LANCE_HITS)
         if self._move_key == "DISMEMBER":
-            return Intent(MoveType.ATTACK, damage=_DISMEMBER_DMG)
+            # Vantom.cs:119 — SingleAttackIntent(26) AND StatusIntent(3).
+            return Intent(MoveType.ATTACK, damage=_DISMEMBER_DMG,
+                          also=(MoveType.STATUS_CARD,))
         from ...powers import StrengthPower
         return Intent(MoveType.BUFF, buffs=[(StrengthPower, _PREPARE_STR)])
 

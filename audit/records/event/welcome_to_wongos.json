@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\welcome_to_wongos.py",
-    "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190"
+    "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
@@ -56,12 +56,12 @@
     },
     {
       "path": "sts2_rl/relics/wongos_mystery_ticket.py",
-      "sha256": "07c8b5f673135fecf9c15596ac7f8985a542fef6307448acd923822ddd1f67f3",
+      "sha256": "96609ff5af7c63884e18e3f6e1c5d743ab042272110858a0b283ee60dae96325",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -94,8 +94,8 @@
     },
     {
       "what": "EV-3: Leave's `base.Rng.NextItem(Deck.Cards.Where(IsUpgraded))` (WelcomeToWongos.cs:158) -- events/welcome_to_wongos.py:90 uses self.rng.choice, so this event's single random draw rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Leave's downgrade pick runs on `self.event_rng` (events/welcome_to_wongos.py:91-97), matching `base.Rng` (WelcomeToWongos.cs:158). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "BR-52 (blast radius): WelcomeToWongos.Leave calls CardCmd.Downgrade (WelcomeToWongos.cs:161, CardCmd.cs:212-222), and card.downgrade() is the sim's port. audit/records/seam/creature_card_cmds.json step 52 records that the sim's downgrade skips the Enchantment.ModifyCard() re-apply the game runs",

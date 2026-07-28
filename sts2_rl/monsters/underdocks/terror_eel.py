@@ -58,11 +58,11 @@ class TerrorEel(MachineMonster):
     def trigger_terror(self) -> None:
         """Called by ShriekPower: the eel loses its next turn and screams
         TERROR after (mirrors CreatureCmd.Stun(owner, TerrorState.StateId))."""
-        terror = self.machine.states["TERROR_MOVE"]
-        self.machine.force_current_state(terror)
-        self._current_move = terror
+        # ShriekPower.cs:30 — CreatureCmd.Stun(Owner, TerrorState.StateId):
+        # the id is the stun's FollowUpStateId, so TERROR is the move performed
+        # on the turn AFTER the stunned one.
         from ...cmds import CreatureCmd
-        CreatureCmd.stun(self._hooks, self)
+        CreatureCmd.stun(self._hooks, self, next_move_key="TERROR_MOVE")
 
     def _crash(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _CRASH_DMG, 1)

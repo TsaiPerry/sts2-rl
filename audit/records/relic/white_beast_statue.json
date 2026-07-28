@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\white_beast_statue.py",
-    "sha256": "35dea0d97a2b85eb0e8d5eca5fba5f3b70083a2558dc1ee22711ab9c0b6da6e4"
+    "sha256": "c1956e68087384f3d374821e44c95ef44018ab8428b69659d286352db938d7bc"
   },
   "extra_sources": [
     {
@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -52,26 +52,26 @@
       "rationale": "WhiteBeastStatue.cs:10. Rare in the transcribed grab bag (py audit/tools/relic_probes_b17.py pool -> bag=Rare), so it is obtainable from any Rare pull."
     },
     "IsAllowed": {
-      "maps_to": "NO COUNTERPART -- sts2_rl.relics.base.Relic declares no `is_allowed` member at all (executed: hasattr(Relic, 'is_allowed') is False)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4. WhiteBeastStatue.cs:12-15 returns RelicModel.IsBeforeAct3TreasureChest(runState), which in single-player is `runState.TotalFloor < 41` (RelicModel.cs:452-456); the sim has no pool-eligibility concept and keeps the relic pullable for the whole run."
+      "maps_to": "is_allowed (sts2_rl/relics/white_beast_statue.py:21) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/white_beast_statue.py:21), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "ShouldForcePotionReward": {
-      "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (white_beast_statue.py has no methods at all), although Relic.should_force_potion_reward is a real base hook (sts2_rl/relics/base.py:164-166) dispatched at rewards.py:447-451",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. WhiteBeastStatue.cs:17-27 returns true for the owner on any combat room, forcing a potion into that room's reward screen; the port forces nothing."
+      "maps_to": "should_force_potion_reward (sts2_rl/relics/white_beast_statue.py), read by rewards.generate_combat_rewards to force the potion roll",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/white_beast_statue.py's `should_force_potion_reward` returns True for RoomType.MONSTER/ELITE/BOSS -- WhiteBeastStatue.cs's `RoomType.IsCombatRoom()` gate -- and rewards.generate_combat_rewards already computed `force = any(relic.should_force_potion_reward(run, room_type) ...)` and fed it to PotionRewardOdds.roll, whose `hit = force or ...` still applies the pity step. WAS: the port declared only id/name/rarity, so the potion was never forced."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the potion is never forced, and the premise behind the stub is false -- should_force_potion_reward IS dispatched and the sim's potion roll already accepts a `force` argument",
-      "verdict": "gap",
-      "issue": "MECHANISM: white_beast_statue.py declares only id/name/rarity and its docstring justifies that with 'an out-of-combat reward modifier, so this is a no-op stub'. PROMPT.md bug class 12 applied: the premise is false in two independent ways. (a) The hook is dispatched -- rewards.py:447-451 computes `force = any(relic.should_force_potion_reward(run, room_type) for relic in run.relics)` on every combat reward screen. (b) The downstream machinery is already built for it -- PotionRewardOdds.roll takes `force: bool` and short-circuits the threshold test with `hit = force or ...` while still applying the pity step (rewards.py:200-206), which is what C# does too. So the only missing piece is this relic's four-line method. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py rewardstubs): over 20 seeds a MONSTER reward screen carries a potion 8/20 times WITH the relic and 8/20 times WITHOUT it; C# gives 20/20 with it. Both sides ported: Rare in the transcribed grab bag, and the combat reward screen is a first-class sim object that rolls and returns potions. Note the divergence is not only 'fewer potions': because the forced hit consumes a pity step, every subsequent potion roll in the run is shifted as well, so this changes reward composition for the whole run, and on the parity path the Rewards stream position too. SCOPE NOTE: the shared contract defers potions, but the divergent observable here is the CONTENTS of a reward screen (and the pity/stream state behind it), which is reward-composition machinery the audit does cover -- exactly the reasoning audit/records/relic/belt_buckle.json applies to its AfterPotionProcured entry, where the potion is only the trigger. Rule 7: rewards.py, sts2_rl/relics/base.py, .superpowers/sdd/content-relic-sweeps.md and audit/records/relic/belt_buckle.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/white_beast_statue.py's `should_force_potion_reward` returns True for RoomType.MONSTER/ELITE/BOSS -- WhiteBeastStatue.cs's `RoomType.IsCombatRoom()` gate -- and rewards.generate_combat_rewards already computed `force = any(relic.should_force_potion_reward(run, room_type) ...)` and fed it to PotionRewardOdds.roll, whose `hit = force or ...` still applies the pity step. WAS: the port declared only id/name/rarity, so the potion was never forced."
     },
     {
       "what": "G2 (LIVE): the IsAllowed floor gate is entirely unmodelled, so the relic stays offerable past floor 41",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsAllowed is virtual and defaults to true (RelicModel.cs:434-437); this relic overrides it with IsBeforeAct3TreasureChest, `TotalFloor < 41` in single-player (RelicModel.cs:452-456). The sim's Relic base has no `is_allowed` member and relic_pools.py:186 populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py isallowed): `hasattr(Relic, 'is_allowed')` is False; at `run.total_floor = 60` the grab bag still contains white_beast_statue and white_star, and pulling Rare relics at that floor yields white_beast_statue after 13 pulls. Both sides ported: the sim already tracks RunState.total_floor (it is incremented at run.py:976 and event gates read it), so nothing is missing but the member and the filter. RULE 3: this is the SAME mechanism as audit/records/relic/amethyst_aubergine.json's IsAllowed entry (batch 1, LIVE) and audit/records/relic/lasting_candy.json's floor clause (batch 8, executed at total_floor=60), and .superpowers/sdd/content-relic-sweeps.md sweep B lists this unit in the 17-relic IsBeforeAct3TreasureChest cluster -- corrected from 16 by batch 8. Same verdict, cited not re-derived. A wrong pull also shifts every subsequent pull, so it is not a one-relic error. FIX-ORDERING CONSTRAINT (PROMPT.md v6 binding item 2): RelicModel.IsAllowedAtNeow DEFAULTS to IsAllowed(player.RunState) (RelicModel.cs:443-446) while the sim models `is_allowed_at_neow` as an independent class flag (sts2_rl/relics/base.py:159), so whoever adds `is_allowed` must make is_allowed_at_neow delegate to it or Neow keeps reading a stale True. Harmless for THIS relic in practice (Neow is floor 0, where the gate is satisfied anyway) but not for the cluster. Rule 7: RelicModel.cs, sts2_rl/relics/base.py, relic_pools.py, run.py, audit/records/relic/amethyst_aubergine.json, audit/records/relic/lasting_candy.json and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/white_beast_statue.py:21), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "N1: `!roomType.IsCombatRoom()` (WhiteBeastStatue.cs:23) -- which room types the force applies to",

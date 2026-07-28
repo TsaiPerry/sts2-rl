@@ -255,6 +255,17 @@ class _ForceWinDriver(RunDriver):
             return self._answer_reward_card(request, legal)
         if kind == DecisionKind.SHOP:
             return self._answer_shop(request, legal)
+        if kind == DecisionKind.REWARD_RELIC:
+            # RelicReward is take-or-skip in the game and now in the sim too
+            # (RunState.offer_relic), but the recording does not carry a
+            # per-offer command: the pick is in the SAVE, as the node's
+            # relic_choices/was_picked entries. Keep taking (legal[0] == 0)
+            # and let `_reconcile_node_relics` correct the node afterwards —
+            # it already has to, because the sim's grab-bag identities are not
+            # draw-order-faithful yet, so answering the offer from the save
+            # here would fix only which relics were KEPT, not which were
+            # OFFERED. Wiring the save into this answer is the follow-up.
+            return 0
         if kind == DecisionKind.SELECT_CARDS and self._combat is None:
             # An OUT-OF-COMBAT card-grid selection (rest-site SMITH, and the
             # upgrade/transform/remove events). Follow the recording's grid

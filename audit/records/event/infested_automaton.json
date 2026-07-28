@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\infested_automaton.py",
-    "sha256": "8df91026a4d79d5bb0b7df9eaa7367e2556794981fd3289508b967b74ba2933b"
+    "sha256": "c09ba320f962fb2454daa7a388234eca55ea9be87ca7da19dfbb29d91843e678"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -59,15 +59,15 @@
     },
     {
       "what": "EV-6: both InfestedAutomaton branches (InfestedAutomaton.cs:31, 46) calls `CardFactory.CreateForReward(owner, n, CardCreationOptions.ForNonCombatWithDefaultOdds(pool, filter))`; the sim uses `random_pool_cards` (cards/pool.py:136-161), which is the port of a DIFFERENT factory",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-6, one verdict at every site (rule 3). `random_pool_cards`' own docstring says what it is: \"Mirrors CardFactory.GetForCombat (uniform, with replacement)\" (cards/pool.py:146-147) -- the in-combat generator used by Infernal Blade and Stoke. `CreateForReward` is a different function and the sim HAS a faithful port of it: `rewards.create_reward_cards` (rewards.py:235-275), which does the rarity roll with escalation, the act-scaled upgrade draw, the distinct-card constraint, the `GetUnlockedCards` reward pool, and draws on `run.rewards_rng` -- the per-player Rewards stream (rewards.py:255-257). Three observables where GetForCombat is used instead: (1) NO RARITY ODDS -- every card in the pool is equally likely, so Rares appear at pool frequency instead of the non-combat default odds; (2) NO UPGRADE DRAW -- the act-scaled chance for the offered card to arrive upgraded is never rolled; (3) the wrong stream (compounds EV-3). The sibling site events/brain_leech.py:44-47, 60-64 already calls `create_reward_cards` for exactly this shape, so this is an inconsistency inside the sim, not a missing capability. LIVE at every site listed -- all are ordinary event branches."
+      "maps_to": "Closed 2026-07-28: both branches now call rewards.create_reward_cards (events/infested_automaton.py:36-43), the faithful CardFactory.CreateForReward port -- rarity roll with escalation off the non-mutating base odds (`mutate_pity=False`, the CardCreationSource.Other path), the act-scaled upgrade draw, the distinct-card constraint, the GetUnlockedCards pool, and `run.rewards_rng` (rewards.py:242-316). Was: `random_pool_cards`, the port of CardFactory.GetForCombat, so all three observables held -- no rarity odds, no upgrade draw, wrong stream (InfestedAutomaton.cs:30-31, 41-46).",
+      "verdict": "faithful"
     },
     {
       "what": "EV-3: TOUCH_CORE's uniform pick (events/infested_automaton.py:38) and STUDY's (via random_pool_cards' rng argument); the source draws these on the per-player Rewards stream inside CreateForReward rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both branches go through rewards.create_reward_cards, which draws on `run.rewards_rng` (rewards.py:262-264) -- the per-player Rewards stream CreateForReward uses, matching `base.Rng` (InfestedAutomaton.cs:30-31, 41-46). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\potions.py",
-    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+    "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
   },
   "extra_sources": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     },
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -86,22 +86,22 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],
@@ -124,8 +124,8 @@
     "OnUse (protected override, SkillPotion.cs:21-32)": {
       "maps_to": "SkillPotion.use (potions.py:445-459)",
       "verdict": "gap",
-      "live": true,
-      "issue": "Rollup of guards G1 and N per binding rule 4. The generation half is right -- the Ironclad pool filtered to Type == Skill, three distinct cards off Rng.CombatCardGeneration -- and the parity arm defers the pick to the recording; the legacy arm skips the choose-a-card screen entirely (G1) and the shared FilterForCombat port is missing its Event-rarity clause (N)."
+      "live": false,
+      "issue": "Rollup per binding rule 4, NARROWED 2026-07-27. The generation half was already right, and guard G1 -- the screen the legacy arm used to skip -- is now CLOSED: potions.py:1332-1349 offers the screen on both arms and resolves the legacy one through select_cards, skip included (executed). What remains of this rollup is only guard N, the shared FilterForCombat port missing its Event-rarity clause (cards/pool.py:108-117), which is dormant and belongs to the card tier."
     }
   },
   "guards": [
@@ -135,10 +135,10 @@
       "rationale": "GetDistinctForCombat is `FilterForCombat(cards).TakeRandom(count, rng)` (CardFactory.cs:119-129), TakeRandom being an UnstableShuffle of the filtered list then Take(n); cards/pool.py:182-204's get_distinct_for_combat_parity does exactly that through the GameRandomAdapter's top-down Fisher-Yates. Same draw count, same stream (Rng.CombatCardGeneration vs combat.combat_rng.card_gen), so no grade-A desync. The port's own docstring flags that this potion was 'an inert placeholder before', which is the kind of claim PROMPT.md class 12 says to check -- checked: the generation and both arms are really implemented today."
     },
     {
-      "what": "G1 (LIVE): outside a parity replay the sim never offers the choose-a-card screen -- it silently takes the FIRST generated card and cannot skip",
+      "what": "G1 (was LIVE -- NARROWED 2026-07-27, still open 2026-07-28): outside a parity replay the sim never offers the choose-a-card screen -- it silently takes the FIRST generated card and cannot skip",
       "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: the C# hands the three generated cards to `CardSelectCmd.FromChooseACardScreen(choiceContext, cards, Owner, canSkip: true)` and adds the RESULT, which may be null (the player skipped) -- CardSelectCmd.cs:216-261, and the caller's `if (cardModel != null)` guard. The sim forks on `combat.combat_rng.is_parity`: the parity arm defers correctly to CombatState.offer_screen_selection (combat.py:618-637), which the recording's `SelectCardFromScreen` resolves and whose non-numeric 'skip' arg is honoured (conformance/combat_driver.py:290-295); the LEGACY arm takes `cards[0]` unconditionally. Both the RL env and every non-parity test take the legacy arm (full_env.py:788 constructs the env without an rng_set), so in training the potion is deterministic in the generated order and the other two candidates and the skip option do not exist. LIVE: all four screen potions are ported and in the reward pool, and the divergence is a different CARD entering the hand, which the observation encoder sees. Shared mechanism across attack_potion, skill_potion, power_potion and colorless_potion."
+      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28: the SCREEN now exists, the rest of the sentence this guard is named for -- \"takes the FIRST generated card and cannot skip\" -- does not. CLOSED: the four screen potions share `_choose_a_card_screen` (potions.py:1332-1349), which calls CombatState.offer_screen_selection UNCONDITIONALLY, so the three candidates exist on the legacy arm too, and the parity arm defers the pick to the recording's SelectCardFromScreen. STILL OPEN (a), the SKIP: potions.py:1348 is `combat.select_cards('choose_a_card', cards, 1)` with NO `min_select`, so combat.py:693 sets `floor = count = 1` and the selectorless branch at combat.py:699-705 can only return exactly one card. The C# screen is MinSelect 0 -- CardSelectCmd.cs:230 `Selector.GetSelectedCards(cards, 0, 1)` and :239 ShowScreen(..., canSkip: true), which is the `if (cardModel != null)` null this guard cites. EXECUTED 2026-07-28 with `card_selector=None` (CombatState's own default and full_env.py:788's documented option), 200 seeds: hand deltas {1} -- never 0. STILL OPEN (b), the FIRST CARD: 'choose_a_card' is not one of the purposes selectors.py:71-89 handles, so `scripted_card_selector` -- the env default at full_env.py:788 -- falls through to selectors.py:90 `keyed[:count]` and returns candidates[0]. EXECUTED 2026-07-28 with that selector: seeds 0-3 add 'expect_a_fight', 'bloodletting', 'battle_trance' and 'dominate', each the first of its three candidates -- the first candidate on every seed, hand 5 -> 6 every time, which is byte-for-byte the pre-fix `cards[0]`, and a different card entering the hand is exactly the observable this guard was verdicted LIVE on. Neither production selector configuration can decline the screen or take the 2nd/3rd option. SAME MECHANISM, SAME VERDICT (binding rule 3) as potion/ashwater G1 and potion/gamblers_brew G1, which the same pass kept at `gap` for the identical residual (\"no call site anywhere passes min_select\"): dormant rather than LIVE, because no production path is selectorless, and the fix is `min_select=0` at potions.py:1348 plus a 'choose_a_card' arm in scripted_card_selector. WAS: the legacy arm took `cards[0]` unconditionally, so the other two candidates did not exist at all. This potion enters the helper at potions.py:506 (SkillPotion). Rule 7: sts2_rl/selectors.py is not hashed by this record.",
+      "live": false
     },
     {
       "what": "N: CardFactory.FilterForCombat drops three rarities and the sim's pool_card_ids drops only two",
@@ -155,7 +155,7 @@
       "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
       "verdict": "gap",
       "live": true,
-      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+      "issue": "NARROWED 2026-07-27 (re-derived from today's code, not from the fix log). HALF of this mechanism is closed and half is not. Order re-read against src/Core/Models/PotionModel.cs:291-342 and against CombatState.use_potion (sts2_rl/combat.py:707-745): :293 RemoveBeforeUse -> combat.py:729-730 (slot nulled, listener detached); :297 Hook.BeforePotionUsed -> combat.py:736, BEFORE the effect at :737; :327 OnUse -> :737; :336 History.PotionUsed (presentation only, still no sim entry); :338 Hook.AfterPotionUsed -> combat.py:738; :340 CheckForEmptyHand -> combat.py:739. CLOSED half (1): BeforePotionUsed now has a real dispatcher (hooks.py:779-790) and its single C# implementer is ported -- powers.py:2741-2744's SurroundedPower.before_potion_used runs the same _update_direction the card path runs, so the Kaiser Crab facing flip happens BEFORE the potion lands instead of a phase late. STILL OPEN half (2): CheckForEmptyHand now has a sim counterpart too -- CombatState._check_for_empty_hand (combat.py:747-758) mirrors CombatManager.cs:887-893's IsInProgress + empty-hand test and is a SECOND on_hand_emptied call site beside the end-of-turn flush at player.py:240 -- but nothing downstream reaches Unceasing Top from it: the sole C# AfterHandEmptied implementer is still wired to on_card_played in the sim, and CombatState.use_potion does not fire on_card_played. EXECUTED WITNESS (2026-07-27): a fresh combat holding Unceasing Top, hand emptied, use_potion(0) on a Block Potion -- hand 0 -> 0 cards, where CombatManager.cs:887-893 runs AfterHandEmptied and draws 1. Rollup stays `gap` per binding rule 4 and matches audit/records/relic/unceasing_top.json G1 (still `gap`) per binding rule 3. LIVE for the reason it always was: the check is reachable from EVERY one of the 51 potions, not only the hand-emptying ones, because C# tests the hand AFTER the use. NOTE the queue's title for this mechanism ('BeforePotionUsed and CheckForEmptyHand are never dispatched') is now half stale; the tool table is not this record's to edit."
     },
     {
       "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",

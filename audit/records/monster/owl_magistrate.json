@@ -1,94 +1,94 @@
 {
- "unit": "monster/owl_magistrate",
- "game_source": {
-  "path": "src\\Core\\Models\\Monsters\\OwlMagistrate.cs",
-  "sha256": "4f9f445bfdaeb4ead3fd8876a2037266f3df55f20ceec87362065ac85e8b3537"
- },
- "sim_source": {
-  "path": "sts2_rl\\monsters\\glory\\owl_magistrate.py",
-  "sha256": "76d916ae1b0cc220a763ab8c3c1d0eaa47b7de38e30664d9e8650e5be6cc739f"
- },
- "hooks": {
-  "MinInitialHp": {
-   "maps_to": "min_hp = 231 (owl_magistrate.py:28)",
-   "verdict": "faithful",
-   "rationale": "OwlMagistrate.cs:35 GetValueIfAscension(ToughEnemies, 247, 231) -> non-ascension 231."
+  "unit": "monster/owl_magistrate",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\OwlMagistrate.cs",
+    "sha256": "4f9f445bfdaeb4ead3fd8876a2037266f3df55f20ceec87362065ac85e8b3537"
   },
-  "MaxInitialHp": {
-   "maps_to": "max_hp = 231 (owl_magistrate.py:29)",
-   "verdict": "faithful",
-   "rationale": "OwlMagistrate.cs:37 `MaxInitialHp => MinInitialHp` = 231."
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\owl_magistrate.py",
+    "sha256": "76d916ae1b0cc220a763ab8c3c1d0eaa47b7de38e30664d9e8650e5be6cc739f"
   },
-  "TakeDamageSfxType": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp = 231 (owl_magistrate.py:28)",
+      "verdict": "faithful",
+      "rationale": "OwlMagistrate.cs:35 GetValueIfAscension(ToughEnemies, 247, 231) -> non-ascension 231."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp = 231 (owl_magistrate.py:29)",
+      "verdict": "faithful",
+      "rationale": "OwlMagistrate.cs:37 `MaxInitialHp => MinInitialHp` = 231."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+    },
+    "HurtSfx": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The IsFlying fork (OwlMagistrate.cs:47-57) picks between two FMOD event paths and nothing else."
+    },
+    "DeathSfx": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Same IsFlying fork over two FMOD paths (OwlMagistrate.cs:59-69)."
+    },
+    "BeforeRemovedFromRoom": {
+      "maps_to": "(no sim analogue)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The whole override is `if (IsFlying) SfxCmd.StopLoop(Creature, \"...fly_loop\")` (OwlMagistrate.cs:84-90) -- stopping a looping sound effect. Read to the end first (KinPriest N6): there is no mechanical statement in it."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "OwlMagistrate.build_machine (owl_magistrate.py:31-49)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against OwlMagistrate.cs:92-108: four MoveStates with matching ids (MAGISTRATE_SCRUTINY / PECK_ASSAULT / JUDICIAL_FLIGHT / VERDICT) forming one closed four-cycle SCRUTINY -> PECK -> FLIGHT -> VERDICT -> SCRUTINY (:99-102 vs owl_magistrate.py:45-48), INITIAL state MAGISTRATE_SCRUTINY on both (:107 vs :49). No branch state, so no AddBranch integer and no MonsterAi draw. Intents match: SingleAttackIntent(16) -> ATTACK 16; MultiAttackIntent(4, 6) -> ATTACK damage=4 hits=6; BuffIntent -> BUFF; SingleAttackIntent(33)+DebuffIntent -> ATTACK 33 also=(DEBUFF,)."
+    }
   },
-  "HurtSfx": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The IsFlying fork (OwlMagistrate.cs:47-57) picks between two FMOD event paths and nothing else."
-  },
-  "DeathSfx": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Same IsFlying fork over two FMOD paths (OwlMagistrate.cs:59-69)."
-  },
-  "BeforeRemovedFromRoom": {
-   "maps_to": "(no sim analogue)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The whole override is `if (IsFlying) SfxCmd.StopLoop(Creature, \"...fly_loop\")` (OwlMagistrate.cs:84-90) -- stopping a looping sound effect. Read to the end first (KinPriest N6): there is no mechanical statement in it."
-  },
-  "GenerateAnimator": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  },
-  "GenerateMoveStateMachine": {
-   "maps_to": "OwlMagistrate.build_machine (owl_magistrate.py:31-49)",
-   "verdict": "faithful",
-   "rationale": "Node-by-node against OwlMagistrate.cs:92-108: four MoveStates with matching ids (MAGISTRATE_SCRUTINY / PECK_ASSAULT / JUDICIAL_FLIGHT / VERDICT) forming one closed four-cycle SCRUTINY -> PECK -> FLIGHT -> VERDICT -> SCRUTINY (:99-102 vs owl_magistrate.py:45-48), INITIAL state MAGISTRATE_SCRUTINY on both (:107 vs :49). No branch state, so no AddBranch integer and no MonsterAi draw. Intents match: SingleAttackIntent(16) -> ATTACK 16; MultiAttackIntent(4, 6) -> ATTACK damage=4 hits=6; BuffIntent -> BUFF; SingleAttackIntent(33)+DebuffIntent -> ATTACK 33 also=(DEBUFF,)."
-  }
- },
- "guards": [
-  {
-   "what": "Move numerics",
-   "verdict": "faithful",
-   "rationale": "ScrutinyDamage GetValueIfAscension(DeadlyEnemies, 17, 16) -> 16; PeckAssaultDamage (..., 4, 4) -> 4 with WithHitCount(6) (and the `_peckAssaultRepeat = 6` const at OwlMagistrate.cs:19 agrees); VerdictDamage (..., 36, 33) -> 33; JudicialFlight applies SoarPower 1m to itself; Verdict applies VulnerablePower 4m to the targets. All match owl_magistrate.py:13-17 and the handlers at :51-67."
-  },
-  {
-   "what": "VerdictMove's three-step order: damage, Vulnerable, then REMOVE Soar (OwlMagistrate.cs:138-148 vs owl_magistrate.py:62-67)",
-   "verdict": "faithful",
-   "rationale": "The order is load-bearing and matches: the 33 damage is dealt while the Owl still holds Soar (so any Soar-conditioned modifier still applies to the attacker), the player's Vulnerable 4 lands next, and `PowerCmd.Remove<SoarPower>(base.Creature)` is last. The sim's PowerCmd.remove(ctx.hooks, self, \"soar\") removes by power id rather than by class, which resolves to the same single power. `IsFlying = false` at :140 is the presentation flag and is the sim's only omission here."
-  },
-  {
-   "what": "IsFlying (OwlMagistrate.cs:33, 71-82) is dropped by the port",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Read to the END before deciding (KinPriest N6): the flag is set true in JudicialFlight and false in Verdict, and its only readers are HurtSfx, DeathSfx, BeforeRemovedFromRoom and the animator -- all sound and sprite. The MECHANICAL half of the same state, SoarPower, is ported and is applied and removed at exactly the same two points, so nothing that gates on 'is the owl flying' changes."
-  },
-  {
-   "what": "Reachability",
-   "verdict": "faithful",
-   "rationale": "'owl_magistrate' is in Glory's normal_keys (rooms.py:190) and OWL_MAGISTRATE_NORMAL (owl_magistrate.py:70-73) is a one-monster encounter, matching the C# side."
-  }
- ],
- "verdict": "waiver",
- "audited": "2026-07-27",
- "extra_sources": [
-  {
-   "path": "sts2_rl\\cmds.py",
-   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\powers.py",
-   "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\rooms.py",
-   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
-   "side": "sim"
-  }
- ]
+  "guards": [
+    {
+      "what": "Move numerics",
+      "verdict": "faithful",
+      "rationale": "ScrutinyDamage GetValueIfAscension(DeadlyEnemies, 17, 16) -> 16; PeckAssaultDamage (..., 4, 4) -> 4 with WithHitCount(6) (and the `_peckAssaultRepeat = 6` const at OwlMagistrate.cs:19 agrees); VerdictDamage (..., 36, 33) -> 33; JudicialFlight applies SoarPower 1m to itself; Verdict applies VulnerablePower 4m to the targets. All match owl_magistrate.py:13-17 and the handlers at :51-67."
+    },
+    {
+      "what": "VerdictMove's three-step order: damage, Vulnerable, then REMOVE Soar (OwlMagistrate.cs:138-148 vs owl_magistrate.py:62-67)",
+      "verdict": "faithful",
+      "rationale": "The order is load-bearing and matches: the 33 damage is dealt while the Owl still holds Soar (so any Soar-conditioned modifier still applies to the attacker), the player's Vulnerable 4 lands next, and `PowerCmd.Remove<SoarPower>(base.Creature)` is last. The sim's PowerCmd.remove(ctx.hooks, self, \"soar\") removes by power id rather than by class, which resolves to the same single power. `IsFlying = false` at :140 is the presentation flag and is the sim's only omission here."
+    },
+    {
+      "what": "IsFlying (OwlMagistrate.cs:33, 71-82) is dropped by the port",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Read to the END before deciding (KinPriest N6): the flag is set true in JudicialFlight and false in Verdict, and its only readers are HurtSfx, DeathSfx, BeforeRemovedFromRoom and the animator -- all sound and sprite. The MECHANICAL half of the same state, SoarPower, is ported and is applied and removed at exactly the same two points, so nothing that gates on 'is the owl flying' changes."
+    },
+    {
+      "what": "Reachability",
+      "verdict": "faithful",
+      "rationale": "'owl_magistrate' is in Glory's normal_keys (rooms.py:190) and OWL_MAGISTRATE_NORMAL (owl_magistrate.py:70-73) is a one-monster encounter, matching the C# side."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
 }

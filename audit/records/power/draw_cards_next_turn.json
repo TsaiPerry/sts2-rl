@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     }
   ],
@@ -68,7 +68,7 @@
     "AfterSideTurnStart": {
       "maps_to": "powers.py:2751-2754 on_player_turn_started -> Power._expire (player.py:186)",
       "verdict": "gap",
-      "issue": "Right slot, wrong condition, and the wrongness is reachable. DrawCardsNextTurnPower.cs:37 removes the power only when participants.Contains(base.Owner) AND base.AmountOnTurnStart != 0; powers.py:2753-2754 expires it whenever the owner's turn starts, with no AmountOnTurnStart test. PowerModel.AmountOnTurnStart has NO sim counterpart -- grep -rn amount_on_turn_start sts2_rl/ returns nothing. C# snapshots every power's Amount into it in Creature.BeforeTurnStart (Creature.cs:673-679), called at CombatManager.cs:453 before any other turn-start hook, and its documented purpose (PowerModel.cs:199-205) is exactly 'preventing same-turn activation when applied mid-turn (e.g., via auto-play effects)'. Only three ported powers read it -- this one, HelloWorldPower and SummonNextTurnPower (unported) -- so it is a small but load-bearing field. LIVE, and it widens turn_structure's G8. MayhemPower is C#'s third ported AfterAutoPrePlayPhaseEntered implementer (MayhemPower.cs, applied by the ported Colorless power card Mayhem -- cards/colorless_powers.py:157-174) and G8 does not name it: G8 calls its AutoPrePlay half DORMANT on the grounds that 'the two ported users' effects (play cards / auto-play one Skill) do not read any other turn-start listener's output', naming only Whispering Earring and the Imbued enchantment. Mayhem does read another turn-start listener's output, and the pair is executed below. In the game Mayhem's auto-plays run at CombatManager.cs:568, strictly AFTER Hook.AfterSideTurnStart (:522) and after SetupPlayerTurn's Hook.AfterPlayerTurnStart (:675); in the sim MayhemPower.on_player_turn_started (powers.py:3572-3583) sits in the same dispatch as this power, so the order is registration order. EXECUTED with DrawCardsNextTurnPower 2 (from the ported card Relax, cards/relax.py:38-46) + MayhemPower 1 and Relax on top of the draw pile: applying the power FIRST expires it, Mayhem then plays Relax and the fresh Draw Cards Next Turn(2) survives to next turn -- which is the GAME's answer, because the game removes the old instance at :522 and only reaches Mayhem at :568. Applying Mayhem first makes Relax stack onto the live instance (2 -> 4) and the expiry then deletes the whole thing, so the player loses TWO bonus draws the game grants. Also note the sim uses _expire (powers.py:86-92) where C# uses PowerCmd.Remove (PowerCmd.cs:287-295): the sim skips power.AfterRemoved (PowerCmd.cs:293), which this power does not implement, so that half is inert -- same finding and same treatment as the _expire entries in audit/records/power/duplication.json and audit/records/power/flame_barrier.json."
+      "issue": "NARROWED 2026-07-27. The Mayhem-ordering half is CLOSED: MayhemPower moved to the sim's new AutoPrePlay phase, `after_auto_pre_play_phase_entered` (powers.py:3763), dispatched at player.py:221 strictly AFTER `on_player_turn_started` (:218), which is CombatManager.cs:568's RunAutoPrePlayPhase running after Hook.AfterSideTurnStart (:522). So the executed Relax + Mayhem witness now resolves the way the game does, deterministically. WHAT REMAINS is this record's own primary finding, unchanged: RIGHT SLOT, WRONG CONDITION. DrawCardsNextTurnPower.cs:37 removes the power only when participants.Contains(base.Owner) AND `base.AmountOnTurnStart != 0`; powers.py:2917-2920 expires it whenever the owner's turn starts, with no such test, and PowerModel.AmountOnTurnStart (snapshotted in Creature.BeforeTurnStart, Creature.cs:673-679, for exactly this 'prevent same-turn activation when applied mid-turn' purpose) still has NO sim counterpart -- executed grep for `amount_on_turn_start` across sts2_rl/ returns nothing."
     }
   },
   "guards": [

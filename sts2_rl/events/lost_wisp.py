@@ -25,7 +25,11 @@ class LostWisp(Event):
         self.gold = _BASE_GOLD
 
     def calculate_vars(self) -> None:
-        self.gold = _BASE_GOLD + self.rng.randint(-15, 15)  # NextInt(-15, 16)
+        # `base.Rng.NextInt(-15, 16)` — the event's own Rng (LostWisp.cs:44).
+        er = self.event_rng
+        variance = (er.next_int_range(-15, 16) if er is not None
+                    else self.rng.randint(-15, 15))
+        self.gold = _BASE_GOLD + variance
 
     def initial_options(self) -> list[EventOption]:
         return [

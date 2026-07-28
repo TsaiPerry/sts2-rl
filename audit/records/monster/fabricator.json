@@ -1,160 +1,159 @@
 {
- "unit": "monster/fabricator",
- "game_source": {
-  "path": "src\\Core\\Models\\Monsters\\Fabricator.cs",
-  "sha256": "bf9982c8be0fabe16e2f9377123f8cb7616beb4d2aa59ef5775aa57342d82556"
- },
- "sim_source": {
-  "path": "sts2_rl\\monsters\\glory\\fabricator.py",
-  "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15"
- },
- "hooks": {
-  "HurtSfx": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Fabricator.cs:39 is an FMOD event path."
+  "unit": "monster/fabricator",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Fabricator.cs",
+    "sha256": "bf9982c8be0fabe16e2f9377123f8cb7616beb4d2aa59ef5775aa57342d82556"
   },
-  "MinInitialHp": {
-   "maps_to": "min_hp = 150 (fabricator.py:129)",
-   "verdict": "faithful",
-   "rationale": "Fabricator.cs:41 AscensionHelper.GetValueIfAscension(ToughEnemies, 155, 150) -- the NON-ascension value is the LAST argument (PROMPT.md v5), so 150. Matches."
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\fabricator.py",
+    "sha256": "fbbb6a395caf6cbecfec4090e9870ba56967a6a8014ce8f5c2b3a973da8506e3"
   },
-  "MaxInitialHp": {
-   "maps_to": "max_hp = 150 (fabricator.py:130)",
-   "verdict": "faithful",
-   "rationale": "Fabricator.cs:43 `MaxInitialHp => MinInitialHp` = 150. Matches, so the Niche unique-HP roll has a degenerate one-value range on both sides."
+  "hooks": {
+    "HurtSfx": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Fabricator.cs:39 is an FMOD event path."
+    },
+    "MinInitialHp": {
+      "maps_to": "min_hp = 150 (fabricator.py:129)",
+      "verdict": "faithful",
+      "rationale": "Fabricator.cs:41 AscensionHelper.GetValueIfAscension(ToughEnemies, 155, 150) -- the NON-ascension value is the LAST argument (PROMPT.md v5), so 150. Matches."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp = 150 (fabricator.py:130)",
+      "verdict": "faithful",
+      "rationale": "Fabricator.cs:43 `MaxInitialHp => MinInitialHp` = 150. Matches, so the Niche unique-HP roll has a degenerate one-value range on both sides."
+    },
+    "ShouldFadeAfterDeath": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Executed: `grep -rn ShouldFadeAfterDeath src/` outside Models/Monsters returns exactly one reader, NCreature.cs:697 (`monster.ShouldFadeAfterDeath && Body.IsVisibleInTree()`), a corpse-sprite fade. Nothing mechanical gates on it."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "Fabricator.build_machine (fabricator.py:148-169)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against Fabricator.cs:53-74. Three MoveStates with identical ids (FABRICATE_MOVE / FABRICATING_STRIKE_MOVE / DISINTEGRATE_MOVE), a RandomBranchState 'RAND' and a ConditionalBranchState 'fabricateBranch'; all three moves' FollowUpState is the conditional branch on both sides (Fabricator.cs:65-67 vs fabricator.py:164-166); the state list and the INITIAL state (the conditional branch, not a move) match (Fabricator.cs:68-73 vs fabricator.py:167-169). Branch arguments: Fabricator.cs:60-61 are AddBranch(state, MoveRepeatType.CanRepeatForever, () => 1f) = overload #6, i.e. weight 1 / CanRepeatForever / no cooldown / no maxRepeats, and fabricator.py:159-160 pass weight=1.0 with add_branch's CAN_REPEAT_FOREVER default -- EXACT match, confirmed by `py audit/tools/state_machine_probes.py mismatch`, which lists this pair among its 7 exact matches and NOT among the 5 misreads. Intents match: SummonIntent -> Intent(SUMMON); SingleAttackIntent(18)+SummonIntent -> Intent(ATTACK, damage=18, also=(SUMMON,)); SingleAttackIntent(11) -> Intent(ATTACK, damage=11)."
+    }
   },
-  "ShouldFadeAfterDeath": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Executed: `grep -rn ShouldFadeAfterDeath src/` outside Models/Monsters returns exactly one reader, NCreature.cs:697 (`monster.ShouldFadeAfterDeath && Body.IsVisibleInTree()`), a corpse-sprite fade. Nothing mechanical gates on it."
-  },
-  "GenerateAnimator": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  },
-  "GenerateMoveStateMachine": {
-   "maps_to": "Fabricator.build_machine (fabricator.py:148-169)",
-   "verdict": "faithful",
-   "rationale": "Node-by-node against Fabricator.cs:53-74. Three MoveStates with identical ids (FABRICATE_MOVE / FABRICATING_STRIKE_MOVE / DISINTEGRATE_MOVE), a RandomBranchState 'RAND' and a ConditionalBranchState 'fabricateBranch'; all three moves' FollowUpState is the conditional branch on both sides (Fabricator.cs:65-67 vs fabricator.py:164-166); the state list and the INITIAL state (the conditional branch, not a move) match (Fabricator.cs:68-73 vs fabricator.py:167-169). Branch arguments: Fabricator.cs:60-61 are AddBranch(state, MoveRepeatType.CanRepeatForever, () => 1f) = overload #6, i.e. weight 1 / CanRepeatForever / no cooldown / no maxRepeats, and fabricator.py:159-160 pass weight=1.0 with add_branch's CAN_REPEAT_FOREVER default -- EXACT match, confirmed by `py audit/tools/state_machine_probes.py mismatch`, which lists this pair among its 7 exact matches and NOT among the 5 misreads. Intents match: SummonIntent -> Intent(SUMMON); SingleAttackIntent(18)+SummonIntent -> Intent(ATTACK, damage=18, also=(SUMMON,)); SingleAttackIntent(11) -> Intent(ATTACK, damage=11)."
-  }
- },
- "guards": [
-  {
-   "what": "Fabricator._spawn_bot draws its bot class from the SHARED combat rng; Fabricator.cs:115 draws from RunRng.MonsterAi",
-   "verdict": "gap",
-   "issue": "Fabricator.cs:115 is `base.RunRng.MonsterAi.NextItem(items)` -- the dedicated MonsterAi stream, the same stream MonsterModel.RollMove names. fabricator.py:176 is `ctx.hooks.combat._rng.choice(choices)` -- the SHARED legacy combat random.Random. Executed (`py audit/tools/monster_probes_b07.py spawn-rng`): in a legacy CombatRng the two are the same object (`combat._rng is combat_rng.monster_ai -> True`), but in a parity CombatRng (CombatRng.parity, combat_rng.py:41-46) monster_ai is a GameRandomAdapter over a separate RunRngSet stream, so they are DIFFERENT streams; one _spawn_bot burns 2 shared-rng draws (the class choice plus the spawn's HP roll) and 0 MonsterAi draws, where the game burns exactly 1 MonsterAi draw for the choice (Rng.NextItem -> NextInt(0, count), Rng.cs:255-266) and 0 shared draws. Observable: a different bot is summoned and both streams' counters desynchronise for the rest of the run. This is the SAME BUG CLASS as monster_state_machine G6 but a DIFFERENT site -- G6 is powers.py:2233's roll_move; this is a content-level NextItem the seam's `move-rng` probe cannot see because it only scans roll_move call sites. Not re-verdicting G6. LIVE (rule 6): 'fabricator' is in Glory's normal_keys (rooms.py:189) so FABRICATOR_NORMAL is reachable, the spawn path runs on the Fabricator's first move (executed: `spawn-content`), and the parity CombatRng is the shipped conformance-runner mode.",
-   "live": true
-  },
-  {
-   "what": "CanFabricate (Fabricator.cs:51) vs Fabricator._alive_count / _can_fabricate (fabricator.py:136-146), including the opening roll's missing enemies list",
-   "verdict": "faithful",
-   "rationale": "C#: `CombatState.GetTeammatesOf(Creature).Count(c => c.IsAlive) < 4`. GetTeammatesOf returns GetCreaturesOnSide(creature.Side) and its own doc comment says it INCLUDES the creature itself (CombatState.cs:394-400), so the threshold counts the Fabricator plus its live bots -- the sim's `sum(1 for c in combat.enemies if not c.is_gone) < 4` is the same population and the same threshold. `is_gone` is `is_dead or escaped` (creatures.py:43-46), and nothing in this encounter escapes, so it equals `!IsAlive` here; the sim's enemies list retains corpses where C#'s Enemies does not, which is exactly why the filter is needed. The interesting part is the OPENING roll: unlike every other unit in this batch the Fabricator's initial state is the ConditionalBranchState, so monster_state_machine step 30's sticky early return does NOT fire and the first roll really walks the branch. Executed (`monster_probes_b07.py fab-open`): `initial state: fabricateBranch  is MoveState -> False`, `opening move rolled: FABRICATE_MOVE`, `state_log after construction: ['FABRICATE_MOVE']`. At that moment combat.enemies has not been assigned (combat.py:134 is still evaluating its right-hand side), so _alive_count takes its documented fallback and returns 1 -- which is the TRUE count, because FabricatorNormal.GenerateMonsters yields exactly one monster (FabricatorNormal.cs:44-47) and it is the game's only Fabricator encounter (`grep -rln Fabricator src/Core/Models/Encounters/` returns FabricatorNormal.cs alone). Both sides therefore compute 1 < 4 and draw one branch roll. The fallback would diverge only in a multi-monster Fabricator encounter, which exists in neither tree."
-  },
-  {
-   "what": "ConditionalBranchState first-true-wins order (Fabricator.cs:63-64 vs fabricator.py:162-163)",
-   "verdict": "faithful",
-   "rationale": "ConditionalBranchState.GetNextState returns the FIRST branch whose Evaluate() > 0 and THROWS if none match (ConditionalBranchState.cs:44-54); the sim is identical including the raise (state_machine.py:228-232). Add order is therefore observable, and it matches: executed (`monster_probes_b07.py branch-order`) `Fabricator.fabricateBranch: first-true-wins order ['RAND', 'DISINTEGRATE_MOVE']` vs C#'s AddState(randomBranchState, () => CanFabricate) then AddState(moveState3, () => !CanFabricate). The two conditions are exact complements on both sides, so the throw arm is unreachable on both."
-  },
-  {
-   "what": "what the spawn actually produces: which bot, the _lastSpawned filter, MinionPower, and list position",
-   "verdict": "faithful",
-   "rationale": "Fabricator.cs:110-118: `options.Where(m => m != _lastSpawned)`, one _lastSpawned field SHARED between the defensive and aggressive pools, then MinionPower 1 with the Fabricator as applier. fabricator.py:171-182 reproduces all of it: one `self._last_spawned` field, the same filter, `PowerCmd.apply(..., MinionPower, 1, applier=self)`. Pool membership and ORDER match -- C#'s HashSets are {Zapbot, Stabbot} (aggro, Fabricator.cs:25-29) and {Guardbot, Noisebot} (defense, :31-35), the sim's lists are [Zapbot, Stabbot] and [Guardbot, Noisebot] (fabricator.py:115-116). FabricateMove spawns defensive THEN aggressive (Fabricator.cs:79-80 vs fabricator.py:185-186); FabricatingStrikeMove attacks then spawns one aggressive bot (:89 vs :190). Executed (`monster_probes_b07.py spawn-content`, seeds 0-3): the shared _lastSpawned makes two consecutive aggressive spawns always differ (`['Fabricator','Guardbot','Zapbot','Stabbot','Zapbot']` at seed 0), every spawn carries `minion`, and net_ids run 1..5 in attach order. The DEATH-vs-REMOVAL trap does not bite here: the sim never removes a dead bot from combat.enemies, and the C# side only ever reads the pool through _lastSpawned, never through the enemy list."
-  },
-  {
-   "what": "Encounter.GetNextSlot placement (Fabricator.cs:115) has no sim analogue",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. FabricatorNormal.Slots is [bot1, bot2, fabricator, bot3, bot4] and GetNextSlot returns the first entry no live enemy occupies (EncounterModel.cs:245-248), so bots visually fill around the Fabricator. It is NOT a list-order mechanism: CombatState.AddCreature appends to _enemies regardless of the slot (CombatState.cs:534-547), which is what the sim's `combat.enemies.append` (cmds.py:262-265) reproduces. GetNextSlot's mechanical use elsewhere -- TwoTailedRat.cs:204 gating a summon on the slots being full -- is not used by the Fabricator, which gates on CanFabricate instead, and the two gates coincide (max 4 bots = 4 bot slots)."
-  },
-  {
-   "what": "`if (base.CombatState.IsLiveCombat())` (Fabricator.cs:112) vs `if combat is None: return` (fabricator.py:172-174)",
-   "verdict": "faithful",
-   "rationale": "IsLiveCombat() is `return true` on the real CombatState (CombatState.cs:608-611) and `return false` on NullCombatState (NullCombatState.cs:146-149), i.e. it is exactly the 'am I attached to a real combat' predicate the sim spells as `combat is None`. NullCombatState.cs is cited by NAME only and is not hashed."
-  },
-  {
-   "what": "FabricatingStrikeDamage / DisintegrateDamage constants",
-   "verdict": "faithful",
-   "rationale": "Fabricator.cs:45 GetValueIfAscension(DeadlyEnemies, 21, 18) -> 18 = _STRIKE_DMG (fabricator.py:19); :47 GetValueIfAscension(DeadlyEnemies, 13, 11) -> 11 = _DISINTEGRATE_DMG (:20). Both moves are one-hit attacks on both sides (DamageCmd.Attack(...).Execute vs _execute_attack(ctx, dmg, 1))."
-  },
-  {
-   "what": "ShouldShowMoveInBestiary (Fabricator.cs:143-146)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. It hides FABRICATING_STRIKE_MOVE from the bestiary move list; monster_state_machine boundary item 3 puts GenerateBestiaryMoveList in the presentation bucket and the sim has no bestiary."
-  },
-  {
-   "what": "The sim's own docstring (fabricator.py:125-127) claims 'The game rolls the two fabricate moves from a dedicated MonsterAi RNG; the sim uses the shared combat RNG'",
-   "verdict": "faithful",
-   "rationale": "PROMPT.md bug class 24 -- a docstring that misdescribes the PORT and points at a FALSE gap. It is stale: MachineMonster._move_rng returns `self._hooks.combat.combat_rng.monster_ai` (state_machine.py:306-312), so the MOVE roll is already on the right stream (monster_state_machine seed fact 3, which marks this exact claim STALE). Verdicting the code, not the comment: the move roll is faithful. The real off-stream draw is the BOT SELECTION, which the docstring does not mention and which is this record's LIVE gap."
-  }
- ],
- "verdict": "gap",
- "audited": "2026-07-27",
- "extra_sources": [
-  {
-   "path": "src\\Core\\Combat\\CombatState.cs",
-   "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Models\\EncounterModel.cs",
-   "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Models\\Encounters\\FabricatorNormal.cs",
-   "sha256": "fa62a116ba3cc8338da0e81b67a72b8016bffb73af57c6f907cd517d68a0ba7a",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Random\\Rng.cs",
-   "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Commands\\CreatureCmd.cs",
-   "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Nodes\\Combat\\NCreature.cs",
-   "sha256": "905d28a4ca154006d145cf33e967d34c945770eb5c29462ff28160419e52de11",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
-   "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Models\\Powers\\MinionPower.cs",
-   "sha256": "10ed71ca328a4cc2325a7424ea67df54ca93e73562f22ca7dcb3964962c05537",
-   "side": "game"
-  },
-  {
-   "path": "sts2_rl\\cmds.py",
-   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\combat.py",
-   "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\combat_rng.py",
-   "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\rooms.py",
-   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\monsters\\state_machine.py",
-   "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
-   "side": "sim"
-  }
- ]
+  "guards": [
+    {
+      "what": "Fabricator._spawn_bot draws its bot class from the SHARED combat rng; Fabricator.cs:115 draws from RunRng.MonsterAi",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: Fabricator._spawn_bot (fabricator.py:178) is now `combat.combat_rng.monster_ai.choice(choices)` -- the sim's accessor for the game's MonsterAi stream -- matching Fabricator.cs:115's `base.RunRng.MonsterAi.NextItem(items)`. Executed: `py audit/tools/monster_probes_b07.py spawn-rng` now reports 'one _spawn_bot(defense): MonsterAi draws=1' against the game's one. WAS: `ctx.hooks.combat._rng.choice(...)`, the shared legacy random.Random, which in a parity CombatRng is a DIFFERENT stream, so a different bot was summoned and MonsterAi desynchronised. The one shared-rng draw the probe still counts is Monster.__init__'s legacy HP roll inside `cls(ctx.hooks, combat._rng)`, which CreatureCmd.add immediately overwrites via CombatState.assign_parity_hp on the Niche stream (combat.py:280-288, the port of CombatState.CreateCreature -> SetUniqueMonsterHpValue) -- that is the sim's universal monster-construction pattern, not a Fabricator-specific draw, and it is not a modelled game stream."
+    },
+    {
+      "what": "CanFabricate (Fabricator.cs:51) vs Fabricator._alive_count / _can_fabricate (fabricator.py:136-146), including the opening roll's missing enemies list",
+      "verdict": "faithful",
+      "rationale": "C#: `CombatState.GetTeammatesOf(Creature).Count(c => c.IsAlive) < 4`. GetTeammatesOf returns GetCreaturesOnSide(creature.Side) and its own doc comment says it INCLUDES the creature itself (CombatState.cs:394-400), so the threshold counts the Fabricator plus its live bots -- the sim's `sum(1 for c in combat.enemies if not c.is_gone) < 4` is the same population and the same threshold. `is_gone` is `is_dead or escaped` (creatures.py:43-46), and nothing in this encounter escapes, so it equals `!IsAlive` here; the sim's enemies list retains corpses where C#'s Enemies does not, which is exactly why the filter is needed. The interesting part is the OPENING roll: unlike every other unit in this batch the Fabricator's initial state is the ConditionalBranchState, so monster_state_machine step 30's sticky early return does NOT fire and the first roll really walks the branch. Executed (`monster_probes_b07.py fab-open`): `initial state: fabricateBranch  is MoveState -> False`, `opening move rolled: FABRICATE_MOVE`, `state_log after construction: ['FABRICATE_MOVE']`. At that moment combat.enemies has not been assigned (combat.py:134 is still evaluating its right-hand side), so _alive_count takes its documented fallback and returns 1 -- which is the TRUE count, because FabricatorNormal.GenerateMonsters yields exactly one monster (FabricatorNormal.cs:44-47) and it is the game's only Fabricator encounter (`grep -rln Fabricator src/Core/Models/Encounters/` returns FabricatorNormal.cs alone). Both sides therefore compute 1 < 4 and draw one branch roll. The fallback would diverge only in a multi-monster Fabricator encounter, which exists in neither tree."
+    },
+    {
+      "what": "ConditionalBranchState first-true-wins order (Fabricator.cs:63-64 vs fabricator.py:162-163)",
+      "verdict": "faithful",
+      "rationale": "ConditionalBranchState.GetNextState returns the FIRST branch whose Evaluate() > 0 and THROWS if none match (ConditionalBranchState.cs:44-54); the sim is identical including the raise (state_machine.py:228-232). Add order is therefore observable, and it matches: executed (`monster_probes_b07.py branch-order`) `Fabricator.fabricateBranch: first-true-wins order ['RAND', 'DISINTEGRATE_MOVE']` vs C#'s AddState(randomBranchState, () => CanFabricate) then AddState(moveState3, () => !CanFabricate). The two conditions are exact complements on both sides, so the throw arm is unreachable on both."
+    },
+    {
+      "what": "what the spawn actually produces: which bot, the _lastSpawned filter, MinionPower, and list position",
+      "verdict": "faithful",
+      "rationale": "Fabricator.cs:110-118: `options.Where(m => m != _lastSpawned)`, one _lastSpawned field SHARED between the defensive and aggressive pools, then MinionPower 1 with the Fabricator as applier. fabricator.py:171-182 reproduces all of it: one `self._last_spawned` field, the same filter, `PowerCmd.apply(..., MinionPower, 1, applier=self)`. Pool membership and ORDER match -- C#'s HashSets are {Zapbot, Stabbot} (aggro, Fabricator.cs:25-29) and {Guardbot, Noisebot} (defense, :31-35), the sim's lists are [Zapbot, Stabbot] and [Guardbot, Noisebot] (fabricator.py:115-116). FabricateMove spawns defensive THEN aggressive (Fabricator.cs:79-80 vs fabricator.py:185-186); FabricatingStrikeMove attacks then spawns one aggressive bot (:89 vs :190). Executed (`monster_probes_b07.py spawn-content`, seeds 0-3): the shared _lastSpawned makes two consecutive aggressive spawns always differ (`['Fabricator','Guardbot','Zapbot','Stabbot','Zapbot']` at seed 0), every spawn carries `minion`, and net_ids run 1..5 in attach order. The DEATH-vs-REMOVAL trap does not bite here: the sim never removes a dead bot from combat.enemies, and the C# side only ever reads the pool through _lastSpawned, never through the enemy list."
+    },
+    {
+      "what": "Encounter.GetNextSlot placement (Fabricator.cs:115) has no sim analogue -- and it IS a list-order mechanism, so the spawned bots land on the wrong side of the Fabricator",
+      "verdict": "gap",
+      "issue": "RE-OPENED 2026-07-28. This guard's old rationale rested on a claim that is false: \"It is NOT a list-order mechanism: CombatState.AddCreature appends to _enemies regardless of the slot.\" CombatState.AddCreature (CombatState.cs:534-547) does append -- but CreatureCmd.cs:68-69 calls it and THEN calls CombatManager.AddCreature, which runs `_state.SortEnemiesBySlotName()` whenever `creature.SlotName != null` (CombatManager.cs:841-851), and CombatState.SortEnemiesBySlotName (CombatState.cs:495-501) sorts _enemies by `Encounter.Slots.IndexOf`. That is the very mechanism the same pass used to CLOSE monster/living_fog.json and monster/ovicopter.json. FabricatorNormal.cs:19 declares Slots = [bot1, bot2, fabricator, bot3, bot4] and FabricatorNormal.cs:46-49 seats the Fabricator in \"fabricator\" (index 2), while EncounterModel.cs:245-248 makes GetNextSlot `Slots.FirstOrDefault(unoccupied)` -- so the first two bots take bot1 and bot2 and the game's Enemies after the opening FABRICATE is [Guardbot, Stabbot, Fabricator]. sts2_rl/monsters/glory/fabricator.py:183 is still a bare `CreatureCmd.add(ctx.hooks, bot)` with no index, and CreatureCmd.add appends (sts2_rl/cmds.py). EXECUTED 2026-07-28 (CombatState(encounter=FABRICATOR_NORMAL, rng=random.Random(3)) then Fabricator._fabricate): sim enemies = ['Fabricator', 'Guardbot', 'Stabbot'] -- the Fabricator FIRST, the exact reversal monster/living_fog.json is verdicted live for. LIVE: FABRICATE is the fight's opening move and fabricator_normal is in Glory's normal pool, and the observables are index-addressed targeting, enemy turn order and the obs vector's enemy order. It also arms a second divergence: with the bots seated BEFORE the Fabricator, audit/records/seam/turn_structure.json steps[13] (the sim clears each enemy's block inside the per-enemy turn loop instead of in a separate pass over the whole side) becomes live, because Guardbot's GUARD grants block to a creature LATER in the list. The RNG half of this record (guard on the shared-rng bot draw) IS genuinely fixed -- fabricator.py:178 now uses combat.combat_rng.monster_ai. The gate-coincidence point stands and is unaffected: GetNextSlot's OTHER mechanical use (TwoTailedRat.cs:204 gating a summon on the slots being full) is not used here, because the Fabricator gates on CanFabricate and the two gates coincide at 4 bots. Rule 7: src/Core/Combat/CombatManager.cs and src/Core/Models/Monsters/TwoTailedRat.cs are cited without being hashed by this record."
+    },
+    {
+      "what": "`if (base.CombatState.IsLiveCombat())` (Fabricator.cs:112) vs `if combat is None: return` (fabricator.py:172-174)",
+      "verdict": "faithful",
+      "rationale": "IsLiveCombat() is `return true` on the real CombatState (CombatState.cs:608-611) and `return false` on NullCombatState (NullCombatState.cs:146-149), i.e. it is exactly the 'am I attached to a real combat' predicate the sim spells as `combat is None`. NullCombatState.cs is cited by NAME only and is not hashed."
+    },
+    {
+      "what": "FabricatingStrikeDamage / DisintegrateDamage constants",
+      "verdict": "faithful",
+      "rationale": "Fabricator.cs:45 GetValueIfAscension(DeadlyEnemies, 21, 18) -> 18 = _STRIKE_DMG (fabricator.py:19); :47 GetValueIfAscension(DeadlyEnemies, 13, 11) -> 11 = _DISINTEGRATE_DMG (:20). Both moves are one-hit attacks on both sides (DamageCmd.Attack(...).Execute vs _execute_attack(ctx, dmg, 1))."
+    },
+    {
+      "what": "ShouldShowMoveInBestiary (Fabricator.cs:143-146)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. It hides FABRICATING_STRIKE_MOVE from the bestiary move list; monster_state_machine boundary item 3 puts GenerateBestiaryMoveList in the presentation bucket and the sim has no bestiary."
+    },
+    {
+      "what": "The sim's own docstring (fabricator.py:125-127) claims 'The game rolls the two fabricate moves from a dedicated MonsterAi RNG; the sim uses the shared combat RNG'",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 24 -- a docstring that misdescribes the PORT and points at a FALSE gap. It is stale: MachineMonster._move_rng returns `self._hooks.combat.combat_rng.monster_ai` (state_machine.py:306-312), so the MOVE roll is already on the right stream (monster_state_machine seed fact 3, which marks this exact claim STALE). Verdicting the code, not the comment: the move roll is faithful. The real off-stream draw is the BOT SELECTION, which the docstring does not mention and which is this record's LIVE gap."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Encounters\\FabricatorNormal.cs",
+      "sha256": "fa62a116ba3cc8338da0e81b67a72b8016bffb73af57c6f907cd517d68a0ba7a",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Random\\Rng.cs",
+      "sha256": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Commands\\CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Nodes\\Combat\\NCreature.cs",
+      "sha256": "905d28a4ca154006d145cf33e967d34c945770eb5c29462ff28160419e52de11",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
+      "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\MinionPower.cs",
+      "sha256": "10ed71ca328a4cc2325a7424ea67df54ca93e73562f22ca7dcb3964962c05537",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
+      "side": "sim"
+    }
+  ]
 }

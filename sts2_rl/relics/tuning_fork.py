@@ -26,7 +26,8 @@ class TuningFork(Relic):
         super().__init__()
         self._skills_played = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.SKILL:
             return
         self._skills_played += 1

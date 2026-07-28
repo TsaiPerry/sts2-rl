@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..valueprops import ValueProp, is_powered_attack
 from .base import Relic, RelicRarity, register_relic
 
 if TYPE_CHECKING:
@@ -26,7 +27,10 @@ class StrikeDummy(Relic):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> int:
+        if not is_powered_attack(props):   # StrikeDummy.cs
+            return 0
         if card is not None and "strike" in card.tags and dealer is self.player:
             return self.EXTRA_DAMAGE
         return 0

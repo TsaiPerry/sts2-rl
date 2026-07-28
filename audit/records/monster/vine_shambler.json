@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\vine_shambler.py",
-    "sha256": "bacc1fe6cf182b5bd924cf06429fa25de71f20ba213ea9d29e14b4465c44fe36"
+    "sha256": "50453eb9dfae1c9f0f8b6e36a4b8f4f8a8401a4579b77b3992f0354cb872a9df"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
       "side": "sim"
     },
     {
@@ -75,9 +75,8 @@
   "guards": [
     {
       "what": "GRASPING_VINES_MOVE is constructed with TWO intents - `new SingleAttackIntent(GraspingVinesDamage)` AND `new CardDebuffIntent()` (VineShambler.cs:47) - but the port telegraphs only `Intent(MoveType.ATTACK, damage=8)` (vine_shambler.py:32-33), with an empty `also`",
-      "verdict": "gap",
-      "live": true,
-      "issue": "The Grasping Vines turn is telegraphed as a plain attack where the game shows attack + card-debuff. The TangledPower IS applied (vine_shambler.py:43), so only the telegraph is wrong - but the telegraph is what the player and the policy act on. The dropped intent is observable, not cosmetic: the sim's own observation builders call Intent.has() for exactly this type (env.py:163-167, full_env.py:568-571), so the feature reads 0 where the game shows the second intent icon, and a human player sees one icon instead of two. Executed: `py audit/tools/monster_probes_b02.py intents` reports exactly two mismatches over the batch's 45 moves, this one and vantom/DISMEMBER. LIVE on ported content (rule 6): `vine_shambler` is in the act-1 normal encounter pool (rooms.py:104) and GRASPING_VINES is the second move of every fight (executed by the seq probe). Counter-evidence that this is a port slip: MoveType.CARD_DEBUFF exists in the sim's vocabulary (monsters/base.py:31) and is read by env.py:165 / full_env.py:569; nothing else in the sim ever sets it."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: GRASPING_VINES now telegraphs BOTH intents. vine_shambler.py:33-36 returns `Intent(MoveType.ATTACK, damage=8, also=(MoveType.CARD_DEBUFF,))`, matching VineShambler.cs:47's `new MoveState(\"GRASPING_VINES_MOVE\", GraspingVinesMove, new SingleAttackIntent(GraspingVinesDamage), new CardDebuffIntent())`. MoveType.CARD_DEBUFF (monsters/base.py) is read by env.py:165 / full_env.py:569, so the observation feature now fires. WAS: a bare ATTACK intent with an empty `also`, and nothing in the sim ever set CARD_DEBUFF."
     },
     {
       "what": "GraspingVinesDamage / SwipeDamage x _swipeRepeat / ChompDamage (VineShambler.cs:38,40,42 and :20 - GetValueIfAscension(DeadlyEnemies, 9, 8), (7, 6), (18, 16); repeat const 2) vs vine_shambler.py:13-16 (8 / 6 x 2 / 16)",
@@ -124,6 +123,6 @@
       "note": "No ShouldDie, no ShouldCreatureBeRemovedFromCombatAfterDeath and no revive on either side."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27"
 }

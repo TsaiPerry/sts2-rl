@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\battleworn_dummy.py",
-    "sha256": "850d27050c4f39057ffb93a9124e5d0fd307db16f1a8320abc19c8a1109c2f42"
+    "sha256": "cc1545e1ac262bafecb6470815af630de426180d215c78e558f250294bf979a4"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -26,16 +26,15 @@
       "verdict": "faithful"
     },
     "Resume": {
-      "maps_to": "BattlewornDummy.resume_after_combat (events/battleworn_dummy.py:62-82). The RanOutOfTime -> DEFEAT branch maps to `dummy.escaped` and grants nothing, matching BattlewornDummy.cs:74-78; the three reward branches map one for one",
-      "verdict": "gap",
-      "issue": "All three reward branches diverge on the RNG stream and two on the selection shape. (1) Setting1: C# draws `base.Owner.PlayerRng.Rewards.NextItem(character pool + shared pool)` (BattlewornDummy.cs:84-85), the sim calls run.random_potion() (run.py:513-520), which is rng.choice over `in_reward_pool` -- a different stream AND a different population. (2) Setting2: C# is `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (BattlewornDummy.cs:97-98) -- a SORT then Fisher-Yates on the event stream; the sim is `self.rng.shuffle(upgradable)` (events/battleworn_dummy.py:75), an unsorted Fisher-Yates on the shared stream, so even given the same stream the pick differs whenever the deck's incidental order differs from the sorted order. (3) Setting3: PullNextRelicFromFront burns a per-player Rewards draw; run.obtain_relic_from_grab_bag (run.py:631-636) is called with rarity_rng=None so pull_relic_from_front rolls the rarity on the shared rng. See guard EV-3 for the stream mechanism; the StableShuffle shape is this unit's own divergence."
+      "maps_to": "BattlewornDummy.resume_after_combat (events/battleworn_dummy.py:62-94). CLOSED 2026-07-28 -- all three reward branches now match. (1) Setting1's potion is ONE `run.rewards_rng.next_item(POTION_POOL)` via Event.offer_pool_potion (events/battleworn_dummy.py:75, events/base.py:132-146): the stream AND the population of BattlewornDummy.cs:84-85, surfaced take-or-skip. (2) Setting2 is `stable_shuffle(upgradable_cards(), event_rng, key=_compare_to_key)[:2]` (events/battleworn_dummy.py:81-89) -- sort-then-Fisher-Yates on the UPPERCASE ModelId key, i.e. `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (BattlewornDummy.cs:97-98). (3) Setting3's PullNextRelicFromFront rarity roll now defaults to `run.rewards_rng` (run.py:734-736), the stream RollRarity(player) uses. Was: a different stream at all three, plus an unsorted Fisher-Yates and a different potion population.",
+      "verdict": "faithful"
     }
   },
   "guards": [
     {
       "what": "EV-3: Resume's Setting1 potion draw, Setting2 upgrade shuffle and Setting3 relic-rarity roll (BattlewornDummy.cs:85, 97, 109) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Setting1's potion is one `run.rewards_rng` draw via Event.offer_pool_potion (events/battleworn_dummy.py:75), Setting2's shuffle runs on `self.event_rng` (events/battleworn_dummy.py:84-87), and Setting3's relic-rarity roll now defaults to `run.rewards_rng` (run.py:734-736), the stream RollRarity(player) uses, matching `base.Rng` (BattlewornDummy.cs:85, 97, 109). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "StartCombat (BattlewornDummy.cs:118-123): EnterCombatWithoutExitingEvent(encounter, no extra rewards, shouldResumeAfterCombat: TRUE)",
@@ -53,6 +52,6 @@
       "rationale": "C# wraps it in RewardsCmd.OfferCustom (BattlewornDummy.cs:88-92), a take-or-skip screen. The sim's resume_after_combat RETURNS the potion list rather than adding it (events/battleworn_dummy.py:72), and the base class documents that contract as 'potions to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122) -- so the skip is modelled at the driver, and the observable is the same. Same shape at every OfferCustom potion site."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

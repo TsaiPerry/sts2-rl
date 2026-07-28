@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\reflections.py",
-    "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f"
+    "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05"
   },
   "extra_sources": [
     {
@@ -31,27 +31,32 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     }
   ],
@@ -100,13 +105,13 @@
     },
     {
       "what": "EV-3: all six of TouchAMirror's `base.Rng.NextItem` draws (Reflections.cs:41, :54), which events/reflections.py:38 and :45 take off `self.rng` via random.Random.choice. Right count on every path (EXECUTED, `py audit/tools/event_probes_a.py reflect`), right candidate lists, wrong stream. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists reflections among the modules that roll ONLY on the shared rng. Shatter rolls nothing on either side rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- all six TouchAMirror picks run on `self.event_rng` (events/reflections.py:36-52), matching `base.Rng` (Reflections.cs:41, 54). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "BR-step52 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- CardCmd.Downgrade skips the Enchantment.ModifyCard() re-apply, and step 52's rationale names events/reflections.py:36-41 (TouchAMirror's downgrade loop) as one of its two legs",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted). Recorded here with a MEASUREMENT THAT NARROWS IT, which the stream report also surfaces as a cross-record note: EXECUTED (`py audit/tools/event_probes_a.py reflect`), a Souls-enchanted Discovery reads exhausts=False after attach, True after Reflections' downgrade -- and False AGAIN after the next combat's Enchantment.reset() (enchantments.py:214-216, called from combat.py:131 for every deck card). The game reads False at all three points. So the sim's window on THIS leg closes at the next combat setup, before the card can be played; step 52 stays LIVE on its in-combat Dampen leg (powers.py:3149-3183) but the out-of-combat Reflections leg self-heals. Recommendation for step 52's owner: narrow the liveness argument to the in-combat downgrade. No verdict change."
+      "maps_to": "Closed 2026-07-28: Card.downgrade (cards/base.py:185-206) now ends in `if self.enchantment is not None: self.enchantment.modify_card()`, the port of CardModel.DowngradeInternal's `Enchantment?.ModifyCard()` (CardModel.cs:2145) that runs right after the card is re-derived from canonical. Was: the rebuild wiped the enchantment's edits and nothing re-applied them, so TouchAMirror's downgrade loop (events/reflections.py:38-44) left a Souls-enchanted card reading exhausts=False until the next combat's Enchantment.reset().",
+      "verdict": "faithful"
     },
     {
       "what": "HoverTipFactory.FromCardWithCardHoverTips<BadLuck> (Reflections.cs:28), CardCmd.Preview / CardCmd.PreviewCardPileAdd with CardPreviewStyle.MessyLayout (Reflections.cs:44, :56, :69) and the five Cmd.CustomScaledWait pauses (Reflections.cs:45, :57, :59, :70, :72)",
@@ -114,6 +119,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

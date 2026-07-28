@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\strawberry.py",
-    "sha256": "dd38eab48ed48c9837fcd87403cd188f864a0f1910d7df9ee3d2556c7177e933"
+    "sha256": "13b5aa25bcc4d52cca476607a1704aa2b77f75da66cc2eaac8b4c081d84f650d"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -55,8 +55,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): `undo_after_obtained` (strawberry.py:21-25) CLAMPS instead of subtracting, so an un-granted Strawberry leaves up to 7 current HP behind -- contradicting its own comment",
-      "verdict": "gap",
-      "issue": "MECHANISM: after_obtained calls run.gain_max_hp(7), which raises max HP by 7 AND heals 7 (run.py:311-314). The undo calls run.lose_max_hp(7) -- whose own body is `new_max = max(1, max_hp - 7); hp = min(hp, new_max)` (run.py:316-321) -- and then repeats the clamp with `run.hp = min(run.hp, run.max_hp)` (strawberry.py:25). A clamp, not a subtraction: whenever the post-heal HP is at or below the restored max, the healed HP survives, and strawberry.py:22-23's comment claims it gives back 'the max HP and the heal that came with it'. EXECUTED (py audit/tools/relic_probes_b15.py b15-strawberry): from 40/80 the grant gives 47/87 and the undo leaves 47/80, i.e. 7 HP too high; from 50/80 -> 57/87 -> 57/80, same 7; only from 80/80 (where the heal was capped away) is the undo exact. SAME MECHANISM AND SAME VERDICT as relic/mango guard G1, which reached it by execution and whose issue text explicitly enumerates `strawberry.py:24-25 (7)` in its pool-wide list of all five implementers (binding rule 3, and PROMPT.md v6 item 3's second half: an undo_after_obtained that EXISTS and clamps violates its own stated contract and is a gap, distinct from the faithful ABSENCE of one). REACHABILITY (LIVE): the helper has no C# counterpart, but it is not dead code -- the conformance runner grants a node's relic and then swaps it for the one the save says was really picked, and it really calls it (verified by grep per binding rule 8: sts2_rl/conformance/runner.py:461 and :694), and relics/base.py:143-150's docstring names exactly this failure. Strawberry is Common in the grab bag, so any recorded run whose relic node offered it and did not take it reads 7 HP high for the rest of the run -- which is what DETECTOR 3's act-boundary HP assertion reports. Rule 7: leans on run.py, relics/base.py and conformance/runner.py, none hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the undo SUBTRACTS the heal instead of clamping. sts2_rl/relics/strawberry.py's after_obtained (MAX_HP 7) records the HP the grant actually healed in `_healed` and `undo_after_obtained` does `run.hp = max(1, run.hp - self._healed)` BEFORE `run.lose_max_hp(...)`, so the pair is exact from a damaged player as well as a full one. WAS: the undo called lose_max_hp and then re-clamped `run.hp = min(run.hp, run.max_hp)`, which gives back nothing whenever the post-heal HP is at or below the restored maximum -- the common case -- leaving the conformance runner's relic resync reading high for the rest of the run."
     },
     {
       "what": "N1: no per-combat or per-run state, no combat hooks at all",
@@ -69,6 +69,6 @@
       "rationale": "PROMPT.md bug class 16's first half checked directly: Strawberry.cs (read in full) declares no IsAllowed override, so this relic is NOT in sweep B's 17-relic IsBeforeAct3TreasureChest cluster and the sim's missing `is_allowed` member costs nothing here. Its is_allowed_at_neow correctly stays at the base True (relics/base.py:159), matching RelicModel.IsAllowedAtNeow's default -- which, per PROMPT.md v6 item 2, DELEGATES to IsAllowed(runState) (RelicModel.cs:443-446), so with no IsAllowed override the two agree on both sides."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

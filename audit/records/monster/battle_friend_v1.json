@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],

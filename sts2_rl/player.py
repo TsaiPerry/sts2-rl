@@ -154,9 +154,25 @@ class PlayerCombatState(Creature):
         for card in self.all_cards:
             card.reset_turn_cost_modifiers()
 
-        if self._hooks.should_clear_block(self):
-            self.block = 0
-            self._hooks.on_block_cleared(self)
+        # Creature.AfterTurnStart (Creature.cs:681-692) returns BEFORE
+        # ClearBlock for a player whose TurnNumber == 1 — that is what lets
+        # Hook.BeforeCombatStart grant block that survives into the first enemy
+        # turn, and why Anchor's real hook is BeforeCombatStart rather than the
+        # on_block_cleared the sim had to rewire it onto.
+        if not self._first_turn:
+            preventer: list = []
+            if self._hooks.should_clear_block(self, preventer):
+                self.block = 0
+            else:
+                # Creature.cs:726 — the else-arm names the vetoing listener.
+                self._hooks.after_preventing_block_clear(preventer, self)
+        # CombatManager.cs:492-507 runs the block clear and its event in TWO
+        # loops: `foreach AfterTurnStart` then `foreach Hook.AfterBlockCleared`.
+        # So the event fires for every participant — one with no block, one
+        # whose clear a ShouldClearBlock listener prevented, and a turn-1 player
+        # whose AfterTurnStart returned early. Fusing it into the `if` arm meant
+        # a Barricaded player never re-armed Anchor or Fake Anchor.
+        self._hooks.on_block_cleared(self)
 
         # Energy reset — or add-to-current when a listener vetoes the reset
         # (mirrors ShouldPlayerResetEnergy → ResetEnergy / AddMaxEnergyToCurrent).
@@ -174,7 +190,23 @@ class PlayerCombatState(Creature):
             # Innate cards move to the top of the draw pile and the first-turn
             # draw is raised to include all of them (mirrors CombatManager's
             # combat-start innate handling: MoveToTop + handDraw = max(...)).
-            innates = [c for c in self.draw_pile if c.innate]
+            # CombatManager.cs:657-672 runs TWO pile moves before the turn-1
+            # draw, in this order: first every card whose enchantment sets
+            # ShouldStartAtBottomOfDrawPile goes to the BOTTOM, then every
+            # Innate card `.Except(list)` goes to the top. The sim ported only
+            # the Innate half, so an Imbued card (Imbued.cs:11 is the hook's
+            # only implementer in the whole game, granted by Electric Shrymp)
+            # kept occupying an opening-hand slot the game never gives it.
+            sinking = [c for c in self.draw_pile
+                       if c.enchantment is not None
+                       and getattr(c.enchantment,
+                                   "should_start_at_bottom_of_draw_pile", False)]
+            for card in sinking:
+                self.draw_pile.remove(card)
+            # index 0 = bottom of the pile (the end of the list is the top).
+            self.draw_pile[:0] = sinking
+            innates = [c for c in self.draw_pile
+                       if c.innate and c not in sinking]
             if innates:
                 for card in innates:
                     self.draw_pile.remove(card)
@@ -184,16 +216,27 @@ class PlayerCombatState(Creature):
         # Post-draw turn-start slot (the game's AfterPlayerTurnStart /
         # player-side AfterSideTurnStart, both of which run after the draw).
         self._hooks.on_player_turn_started(self)
+        # PlayerTurnPhase.AutoPrePlay (CombatManager.cs:556-572): entered
+        # strictly AFTER Hook.AfterSideTurnStart and the orb queue.
+        self._hooks.after_auto_pre_play_phase_entered(self)
 
-    def discard_hand(self) -> None:
-        """Discard the hand to the discard pile at end of turn, firing per-card
-        hooks. Retain cards stay in hand (mirrors the end-of-turn flush in
-        CombatManager skipping ShouldRetainThisTurn cards)."""
-        flushed = [c for c in self.hand if not c.retain]
+    def discard_hand(self, flush: bool = True) -> None:
+        """FlushPlayerHand (CombatManager.cs:1327-1346).
+
+        Retain cards stay in hand (ShouldRetainThisTurn). `flush=False` is
+        Hook.ShouldFlush returning false, which C# treats as "every card is
+        retained": `cardsToFlush` is empty and the batched Add is skipped, but
+        the TAIL — Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup —
+        still runs. The sim used to skip the whole call, which dropped the
+        `on_hand_emptied` that Joss Paper credits its deferred Ethereal
+        exhausts from.
+        """
+        flushed = [c for c in self.hand if not c.retain] if flush else []
         for card in flushed:
             self._hooks.on_card_discarded(card)
         self.discard_pile.extend(flushed)
-        self.hand = [c for c in self.hand if c.retain]
+        if flush:
+            self.hand = [c for c in self.hand if c.retain]
         self._hooks.on_hand_emptied(self)
 
     def reshuffle_discard_into_draw(self) -> None:

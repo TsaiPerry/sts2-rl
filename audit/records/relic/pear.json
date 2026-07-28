@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\pear.py",
-    "sha256": "06adb82a0e4e00582ec8b2a823a662c1f5f9cf44b7c8c4b4fb27007196f12acb"
+    "sha256": "a4c32ee53e4f58438ef2ff39d609ffd98199d307e4e45f0c2aeb855ff83e79f2"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/mango.py",
-      "sha256": "d2b64598ef79c67210d82b46f7bf9c951958276525d7e06b15e2ff92f3d29d95",
+      "sha256": "26d8339038f627f1b6d96bdeb5cd445ee1c8b19bc990804cb1a2924cb2b6aca7",
       "side": "sim"
     }
   ],
@@ -51,10 +51,9 @@
       "rationale": "Pear.cs:17-20 is `await CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)`. CanonicalVars is `new MaxHpVar(10m)` (line 15) with no AscensionHelper.GetValueIfAscension anywhere in the file, so MAX_HP = 10 (pear.py:16) is the pinned non-ascension value. GainMaxHp is SetMaxHp followed by `Heal(num)` for the same amount (CreatureCmd.cs:786-799), and run.gain_max_hp is `self.max_hp += amount; self.heal(amount)` (run.py:311-314) -- so the +10 max HP AND the accompanying +10 heal both land, which is the half a port easily drops. The MapPointHistoryEntry bookkeeping at CreatureCmd.cs:793-797 is a run-history statistic with no sim counterpart and no effect on play. IMPORTANT CONTRAST checked deliberately: audit/records/relic/big_mushroom.json records a LIVE gap for a max-HP relic whose port implements NO after_obtained at all, so the +20 lived only in the event that granted it; Pear does implement it, and `run.add_relic` really does invoke it (run.py:550-552), so the same defect is not present here."
     },
     "undo_after_obtained (no C# counterpart)": {
-      "maps_to": "undo_after_obtained(run) (pear.py:21-25)",
-      "verdict": "gap",
-      "issue": "RE-VERDICTED from deliberate-divergence to gap by the 2026-07-26 relic fix pass, so that all five implementers of this mechanism agree (binding rule 3). PROMPT.md v6 item 3 already states the rule: the ABSENCE of `undo_after_obtained` is faithful everywhere, but an undo that EXISTS and CLAMPS instead of subtracting violates its own stated contract, and 'all five implementers do it'. Four of the five are already gaps -- relic/mango G1, relic/strawberry G, relic/lees_waffle N4, relic/looming_fruit N3 -- and pear was the lone dissenter. THE OLD RATIONALE IS TRUE AND IRRELEVANT: 'granting then un-granting on a FULL-HP player returns exactly the starting state' holds only for a player at full HP, and the relic is granted on a DAMAGED player in the general case. sts2_rl/relics/pear.py:21-25 is the same shape as sts2_rl/relics/mango.py:21-25 -- `run.lose_max_hp(MAX_HP)` then `run.hp = min(run.hp, run.max_hp)` -- and `RunState.lose_max_hp` (sts2_rl/run.py:315-321) only CLAMPS current HP to the new maximum; it never gives back the heal `gain_max_hp` (sts2_rl/run.py:310-313) paid out. EXECUTED at 75/80 for all five implementers: lees_waffle (75,80) -> (87,87) -> (80,80); looming_fruit (75,80) -> (106,111) -> (80,80); mango (75,80) -> (89,94) -> (80,80); pear (75,80) -> (85,90) -> (80,80); strawberry (75,80) -> (82,87) -> (80,80). Every one ends at (80,80) instead of (75,80) -- a silent +5 current HP. OBSERVABLE and LIVE where the helper runs: `undo_after_obtained` has exactly one caller, the conformance runner's relic resync (sts2_rl/conformance/runner.py:455-461), so this cannot be reached from play -- but that caller exists precisely to keep DETECTOR 3's act-boundary HP assertion honest, and the leak makes the sim read HIGH for the rest of the run, which is the assertion's whole subject. It is a gap in the tool the audit's liveness rests on, not a fidelity gap against the C# (there is no C# counterpart to diverge from) -- graded C, conformance-only. FIX: subtract the heal explicitly (`run.hp = min(run.hp, run.max_hp); run.hp -= MAX_HP` clamped at 1, or snapshot hp/max_hp at grant time), at all five sites at once. Rule 7: sts2_rl/run.py, sts2_rl/relics/mango.py and sts2_rl/conformance/runner.py are cited and not hashed by this record.",
-      "live": true
+      "maps_to": "undo_after_obtained (sts2_rl/relics/pear.py) -- sim-only, for the conformance runner's relic resync; subtracts the recorded `_healed` then calls run.lose_max_hp(10)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the undo SUBTRACTS the heal instead of clamping. sts2_rl/relics/pear.py's after_obtained (MAX_HP 10) records the HP the grant actually healed in `_healed` and `undo_after_obtained` does `run.hp = max(1, run.hp - self._healed)` BEFORE `run.lose_max_hp(...)`, so the pair is exact from a damaged player as well as a full one. WAS: the undo called lose_max_hp and then re-clamped `run.hp = min(run.hp, run.max_hp)`, which gives back nothing whenever the post-heal HP is at or below the restored maximum -- the common case -- leaving the conformance runner's relic resync reading high for the rest of the run."
     }
   },
   "guards": [
@@ -74,6 +73,6 @@
       "rationale": "Pear.cs has exactly three members -- Rarity, HasUponPickupEffect, CanonicalVars -- plus AfterObtained, so there is no behavioural override for the port to miss. This is one of the very few genuinely complete behaviourless-beyond-pickup ports; sweep C (.superpowers/sdd/content-relic-sweeps.md) counts 2 such stubs among 37, and unlike the other 35 there is no false premise here because the port DOES implement the one hook that matters."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

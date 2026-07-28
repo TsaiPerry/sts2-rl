@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\dragon_fruit.py",
-    "sha256": "77051f1860e876ea7786c53e4e042eec456a423171671258e9ef1e0020ff1bdf"
+    "sha256": "e6c88e40afa142b524577ffeabd11f273aff76ab3a40f4b496a4eccd781d2f9c"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -36,9 +36,9 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "no counterpart -- the sim's Relic base declares no is_allowed member of any kind (executed: `hasattr(Relic, 'is_allowed')` is False).",
-      "verdict": "gap",
-      "issue": "Carries guard G2's LIVE label: the relic stays pullable for the whole run where the game stops offering it from the act-3 treasure chest onward, which also shifts every subsequent relic pull."
+      "maps_to": "is_allowed (sts2_rl/relics/dragon_fruit.py:14) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/dragon_fruit.py:14), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterGoldGained": {
       "maps_to": "no counterpart. dragon_fruit.py is a behaviourless port -- id, name and rarity (dragon_fruit.py:6-11) -- justified by the docstring 'no gold system, stub'.",
@@ -54,8 +54,8 @@
     },
     {
       "what": "G2 (LIVE): `IsAllowed(runState) => RelicModel.IsBeforeAct3TreasureChest(runState)` (DragonFruit.cs:17-20) -- a pool-eligibility concept the sim does not model at all (PROMPT.md bug class 16)",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsBeforeAct3TreasureChest is `TotalFloor < 41`, so the game stops offering Dragon Fruit from the act-3 treasure chest onward. The sim's Relic base defines is_allowed_at_neow but no is_allowed member, and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. This is one of the SIXTEEN relics in the single-fix cluster that .superpowers/sdd/content-relic-sweeps.md sweep B identified by execution, and it is the same mechanism audit/records/relic/amethyst_aubergine.json verdicts as a gap at its own site -- cited and matched, not re-derived (binding rule 3). REACHABILITY (LIVE): the divergent observable is pool composition, and a wrong pull also shifts every later pull, so it is not a one-relic error. Nothing unported is needed -- executed, RunState.total_floor already exists (`hasattr(run, 'total_floor')` is True), which is why sweep B calls this 'one base-class member plus one filter in the pull path' and the highest-leverage relic fix it found. RULE 7: relic_pools.py, relics/base.py, run.py and RelicModel.cs are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/dragon_fruit.py:14), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "N1: MaxHpVar(1m) read as BaseValue (DragonFruit.cs:15, 27) and the `player == base.Owner` guard (:24)",

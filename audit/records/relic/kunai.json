@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kunai.py",
-    "sha256": "e78b3da66a811fd5deda740a9a810a536503742aaac6dcd40a06050e105ceaf6"
+    "sha256": "f8319728a23908e6e495c8edbda924aa82ebf43b75acc72d070ffbb2f74a07b3"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
       "side": "sim"
     }
   ],
@@ -76,9 +76,9 @@
       "issue": "C#'s Hook.BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 -- it fires for BOTH sides BEFORE any block is cleared. The sim has no such slot; `py audit/tools/relic_probes.py turn-order` shows on_player_turn_start executes AFTER on_block_cleared and on_energy_reset, i.e. step ~18. That record's step 9 verdicts the mechanism a gap, lists **Kunai by name** among the 26 ported implementers, and labels the player-side half DORMANT because every ported one is a per-turn counter reset that reads neither block nor energy. One verdict per mechanism (binding rule 3), so this entry reproduces it rather than re-deriving it. Kunai's body here is exactly that shape: `AttacksPlayedThisTurn = 0` plus a Status write. DORMANT: porting a relic or power whose BeforeSideTurnStart reads block or energy, or an ENEMY-side listener (turn_structure guard G5), makes it live. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied -- on_player_turn_start is only fired for the player side (hooks.py:279-283). Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (kunai.py:29-38)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N4 per binding rule 4. The arithmetic is right -- `Type == Attack`, `++`, `% CardsVar(3) == 0`, then PowerCmd.Apply<DexterityPower>(BaseValue 1) on the owner with applier = owner and no cardSource -- but the counter advances once per PLAY where C# advances it once per Replay ITERATION (G1, LIVE)."
+      "maps_to": "on_card_played (sts2_rl/relics/kunai.py), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The arithmetic (Attack filter, increment, `% 3 == 0`, Dexterity 1 on the owner) already matched."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart; on_player_turn_start (kunai.py:26-27) is the only reset",
@@ -89,8 +89,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed Attack advances Kunai's counter by 1 instead of 2",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop, so a REPLAYED card advances this relic's per-turn counter once per iteration. The sim's _resolve_card_play runs the whole play-count loop (combat.py:477-494) and calls hooks.on_card_played once, after it (combat.py:514), so a doubled card advances the counter by ONE. This is audit/records/seam/hook_dispatch.json gap G4 -- one verdict per mechanism, binding rule 3, and that record already labels it LIVE -- observed at this relic's own site; the seam owns the machinery, this record owns the observable. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-replay): with Throwing Axe held, two Strike plays leave _attacks_this_turn=2 and Dexterity 0, where C# counts 3 and grants +1 Dexterity. Throwing Axe makes the first card of each combat play twice (relics/throwing_axe.py:30-36) and is granted by the ported Tanx shrine (events/tanx.py); the Spiral and Glam enchantments (enchantments.py:167, 232), One-Two Punch (powers.py:966) and Duplication (powers.py:3919) reach the same combat.py:469 play-count hook. Rule 7: CardModel.cs, combat.py, relics/throwing_axe.py, events/tanx.py, enchantments.py and powers.py are not hashed by this record. The observable is not a rounding detail: because the trigger is `count % 3 == 0`, a DIFFERENT card fires the relic, and every subsequent trigger in the turn is shifted by one play."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1: C#'s AfterCardPlayed has NO `cardPlay.IsAutoPlay` exclusion (Kunai.cs:101-113), unlike BrilliantScarf.cs:84-87",

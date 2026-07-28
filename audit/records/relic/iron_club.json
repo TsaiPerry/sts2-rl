@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\iron_club.py",
-    "sha256": "605c03f161c057e152f13e83adb677e4467e21ae1efecf80d9fcbaa67f6d4cc8"
+    "sha256": "140fe3471fb2b3c875806f8df2edaec72566b2a3fa9491f0aa32da83f011b03a"
   },
   "extra_sources": [
     {
@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "afb8d4f859d69bf03e953f4f7bc8f7bce3265a01ab5dd1f7fb125cb1755f8449",
+      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
       "side": "sim"
     }
   ],
@@ -68,7 +68,7 @@
     "AfterCardPlayed": {
       "maps_to": "on_card_played (iron_club.py:26-31), dispatched once per logical card play by CombatState._resolve_card_play (combat.py:514)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The structure of the port is right -- increment a run-scoped counter on every play by the owner, draw 1 when it hits a multiple of CardsVar (IronClub.cs:83-95 vs iron_club.py:29-31) -- but the THRESHOLD IS WRONG (G1: 6 in the sim, 4 in the source) and the counter advances once per play where C# advances it once per Replay iteration (G2)."
+      "issue": "NARROWED 2026-07-27. The per-Replay half (G2) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600), so a replayed card advances the counter once per iteration as CardModel.cs:1904-1961 does. WHAT REMAINS is guard G1, the THRESHOLD: IronClub.cs:38 declares `new CardsVar(4)` and :87-93 draws when `CardsPlayed % Cards.IntValue == 0`, while sts2_rl/relics/iron_club.py still pins `CARDS = 6` and its docstring still says 'every 6th card'. No AscensionHelper branch anywhere in IronClub.cs, so 4 is the whole non-ascension value."
     }
   },
   "guards": [
@@ -79,8 +79,8 @@
     },
     {
       "what": "G2 (LIVE): C# fires Hook.AfterCardPlayed INSIDE the play-count loop, so a replayed card advances CardsPlayed once per iteration; the sim fires on_card_played once for the whole play",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/hook_dispatch.json gap G4 -- the per-CardPlay bracket -- at a new ported site. CardModel.cs:1904-1961 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1957 within it; combat.py:514 fires on_card_played once, after the loop. hook_dispatch G4 labels the mechanism LIVE and lists Throwing Axe and Pen Nib as its witnesses while noting it widens to 'every one of the sim's 48 on_card_played listeners' -- Iron Club is one of them, and it is the arithmetically loudest because its counter is the relic's entire behaviour. One verdict per mechanism, binding rule 3: matched, not re-derived. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b07.py club-replay): with relics=[iron_club, throwing_axe] one Strike played (twice) leaves cards_played = 1 where C# leaves 2. Both relics come from the SAME ported Tanx shrine, so a single event can hand the player both. Four further ported replay sources reach the same play-count hook per hook_dispatch G4 (the Spiral and Glam enchantments, One-Two Punch, Duplication). Pinned by the strict xfail hook_dispatch G4 names: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (verified present at test/test_hook_order.py:1143). Rule 7: audit/records/seam/hook_dispatch.json, CardModel.cs, sts2_rl/combat.py, relics/throwing_axe.py and test/test_hook_order.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1: `CardsPlayed` is a [SavedProperty] (IronClub.cs:54-67) with NO combat-boundary reset, and the port's cards_played is likewise never reset -- so both carry across combats for the whole run",

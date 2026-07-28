@@ -36,27 +36,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/doll_room.py",
-      "sha256": "e39f43c0a512e4b6443e5591c60117e9093425c7d96c70a7e65ed0b8223916c9",
+      "sha256": "06552655259f416fbe436f369dc04bc69ab9211a00e239b50f93cee0e331ff2d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/relics/paels_eye.py",
-      "sha256": "f56a124736de6ad63266a47e71ab2e16b27e40b3eb513aa3eea51dade6eb73fc",
+      "sha256": "404484e5433027a2742642c9bae296d7ac6533fe9567f2e38bc571ac9db8956b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -89,8 +89,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): mr_struggles.py omits the `self._check_win()` that relic/mercury_hourglass -- the same hook, the same AoE shape -- performs, so a lethal turn-start tick leaves the sim in Phase.PLAYER_TURN with every enemy dead",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# runs `await CheckWinCondition()` immediately after the player's turn setup and the auto-pre-play phase (CombatManager.cs:573), so a turn-start tick that kills the last enemy ends the fight there. The sim has NO such check on two paths: turn-1 construction (combat.py:208-209 is on_combat_start then start_turn, followed by nothing) and the EXTRA-TURN path (combat.py:648-652 is `turn += 1; player.start_turn(); return`). Two ported relics compensate by hand-rolling Relic._check_win() -- relics/mercury_hourglass.py:29 and relics/festive_popper.py -- and mr_struggles.py:26-31 does not, so the two ports of the same hook behave differently. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-struggles): on the extra-turn path with the last enemy at 2 HP, mercury_hourglass ends the combat (phase=COMBAT_OVER, result=player_won=True, turns_taken=2) and mr_struggles does NOT (phase=PLAYER_TURN, result=None) even though all_enemies_dead() is True -- the agent is handed a turn against a dead board, draws a hand, and the fight only ends at the next end_turn, so the recorded turn count and every per-turn counter diverge. Both sides ported and obtainable: Mr Struggles is granted by the ported Doll Room event (events/doll_room.py:15) and the extra turn by relic/paels_eye (Ancient, the ported Pael shrine, relics/paels_eye.py:36-40). SCOPE, stated honestly: a CONTROL row in the same probe shows the ORDINARY end_turn path is covered for both relics by combat.py:681-685, and the turn-1 window needs an enemy already below the tick (the lowest ported enemy max HP is 6, EyeWithTeeth), so the extra-turn window is the reachable one. This is the site-specific observable of audit/records/seam/turn_structure.json guard G13, which labels the mechanism LIVE and names `mr_struggles.py:22` in its own issue text; one verdict per mechanism, binding rule 3 -- the seam owns the missing CheckWinCondition and this record owns the sibling-inconsistency observable. Rule 7: leans on combat.py, relics/base.py, mercury_hourglass.py, paels_eye.py and the seam record, none hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:413-426) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:230), after the extra-turn setup (sts2_rl/combat.py:830) and after each ordinary turn's setup (sts2_rl/combat.py:841-847), which is CombatManager.cs:573. Both paths the entry named are covered -- turn-1 construction (sts2_rl/combat.py:222-230) and the extra-turn path (sts2_rl/combat.py:829-830) -- so Mr Struggles no longer leaves the sim in Phase.PLAYER_TURN with every enemy dead, and it no longer matters that the relic does not hand-roll `_check_win` the way relic/mercury_hourglass does. WAS: neither path checked, and the agent was handed a turn against a dead board."
     },
     {
       "what": "G2: the sim collapses C#'s two ordered turn-start passes (AfterPlayerTurnStart, step 22; AfterSideTurnStart, step 23) into one flat on_player_turn_started pass in relic order",

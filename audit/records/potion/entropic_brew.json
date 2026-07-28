@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\potions.py",
-    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+    "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
   },
   "extra_sources": [
     {
@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
@@ -76,22 +76,22 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -115,7 +115,7 @@
       "maps_to": "no counterpart -- the sim has no out-of-combat potion use at all; CombatState.use_potion (combat.py:583) is the only entry point",
       "verdict": "gap",
       "live": true,
-      "issue": "MECHANISM: PotionUsage.AnyTime means the game's Use button is live outside combat as well as in it, and PotionModel.OnUseWrapper is written for it -- `ICombatState combatState = Owner.Creature.CombatState` may legally be null and every later step null-checks it (PotionModel.cs:294, 298, 334, 336). The sim models no `usage` attribute and has exactly one use path, on CombatState: `py audit/tools/potion_probes.py sweep-usage` finds one `def use_potion` in sts2_rl/, and the conformance layer treats UsePotion as a combat-only command in both the driver and the runner (conformance/combat_driver.py:16, conformance/runner.py:147-150). So the whole out-of-combat arm of this potion is unreachable in the sim: there is no action for it in the env and no replay path for it in the runner. LIVE, and it is one of the four AnyTime potions (blood_potion, entropic_brew, foul_potion, fruit_juice) -- all four are ported, registered and reachable, so a recorded run that drinks one on the map, at a rest site or at a shop cannot be replayed; the UsePotion command falls to the _ROOM_BOUNDARY branch (conformance/runner.py:147-150) rather than being executed, so the belt and the HP the save asserts both drift. Filed as a gap, not a waiver: 'the sim has no path here' is today's content, not the shape of the divergence (binding rule 1)."
+      "issue": "NARROWED 2026-07-27: partly closed. The ENGINE half is done. PotionUsage.AnyTime is now modelled: potions.py:17-20 declares USAGE_COMBAT_ONLY / USAGE_ANY_TIME / USAGE_AUTOMATIC, Potion.usage carries it (potions.py:49-54), this unit sets USAGE_ANY_TIME, and RunState.use_potion is a real out-of-combat entry point that reduces OnUseWrapper to its two non-combat steps -- RemoveBeforeUse, then a per-potion `use_out_of_combat` (potions.py:70-74) -- exactly as PotionModel.cs:294,298,334,336's null-checks allow. EXECUTED (2026-07-27), each of the four AnyTime potions drunk from a bare RunState: Blood Potion resolves, Fruit Juice 80 -> 85 max HP, Foul Potion 99 -> 199 gold, Entropic Brew refills the belt, and a CombatOnly potion (Fire Potion) is refused. WHAT REMAINS: nothing DRIVES that path, so the observable this entry was filed for is unchanged. The RL env still exposes a potion action only inside its combat block, whose potion branch calls CombatState.use_potion; and the conformance layer is untouched -- `_COMBAT_CMDS = {'PlayCard', 'EndTurn', 'UsePotion'}` (conformance/combat_driver.py:16) and the only UsePotion handler is still the in-combat one at conformance/combat_driver.py:263-289. An executed `grep -rn '.use_potion(' sts2_rl/` finds exactly two production callers, both CombatState's. So a recorded run that drinks one of these four on the map, at a rest site or at a shop STILL has no replay path and the belt and the asserted HP still drift. Stays LIVE on that reachability. NOTE the queue's title for this mechanism ('the sim has no out-of-combat potion use at all') is now wrong; the tool table is not this record's to edit."
     },
     "TargetType": {
       "maps_to": "no attribute -- `targeted` stays False, so CombatState.use_potion passes target=None (combat.py:608) and the potion applies to ctx.player (potions.py:1207-1218)",
@@ -124,23 +124,20 @@
     },
     "OnUse (protected override, EntropicBrew.cs:19-29)": {
       "maps_to": "EntropicBrew.use (potions.py:1207-1218)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The loop shape is right -- `while (Owner.HasOpenPotionSlots)` generate one potion and procure it, stopping when procurement fails (EntropicBrew.cs:21-28) vs `while player.has_open_potion_slot` at potions.py:1210-1218 -- and the parity generator is exactly right (G3). What is wrong is the procure VERB (G1: the sim goes through PlayerCombatState.add_potion, which runs neither Hook.ShouldProcurePotion nor Hook.AfterPotionProcured) and the legacy generator (G2: it filters out the three potions CanBeGeneratedInCombat excludes, where the source deliberately calls the OUT-of-combat factory here and does not)."
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27 with guards G1 and G2. The loop shape was already right -- `while (Owner.HasOpenPotionSlots)` generate one potion and procure it, stopping when procurement fails (EntropicBrew.cs:21-28) vs `while player.has_open_potion_slot` at potions.py:1265-1271 -- and both halves that were wrong are fixed: the procure verb is now potions.py's try_to_procure (potions.py:1352-1375, PotionCmd.cs:28-53's ShouldProcurePotion + AfterPotionProcured), and the legacy generator is now the OUT-of-combat factory (potion_pools.py:135-147, PotionFactory.cs:31-34). See the guards for the executed witnesses."
     }
   },
   "guards": [
     {
-      "what": "G1 (LIVE): the brew procures through PlayerCombatState.add_potion instead of PotionCmd.TryToProcure, dropping both of that verb's hooks",
-      "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: EntropicBrew.cs:24 calls `PotionCmd.TryToProcure(potion, Owner)`, which opens with `if (!Hook.ShouldProcurePotion(...)) return NotAllowed;` and fires `await Hook.AfterPotionProcured(...)` on success (PotionCmd.cs:28-53). potions.py:1217 calls `player.add_potion(potion)`, whose own docstring states the omission (player.py:112-115: 'Combat-side procurement (Alchemize, Delicate Frond, Petrified Toad) does not run the Hook.ShouldProcurePotion gate today'). SAME MECHANISM as audit/records/relic/petrified_toad.json G1 and G2, both LIVE with executed witnesses, so this entry matches them per binding rule 3 and contributes a fourth trigger. What Entropic Brew adds is that it is the WORST trigger of the four: it procures up to three potions in one action, so a run holding Sozu (relics/sozu.py:26-27 returns False from should_procure_potion; granted by the ported Darv shrine) fills the whole belt in the sim where the game fills none, and a run holding Belt Buckle keeps 2 Dexterity it should have lost on the first potion. Both relics and this potion are ported and in their pools (potion_pools.py:48), and this is the only one of the 51 potions that procures."
+      "what": "G1 (was LIVE -- CLOSED 2026-07-27): the brew procures through PlayerCombatState.add_potion instead of PotionCmd.TryToProcure, dropping both of that verb's hooks",
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the brew's in-combat arm procures through the ported verb. potions.py:1258-1271's loop calls `try_to_procure(ctx.hooks, player, potion)` (potions.py:1352-1375), which runs the `should_procure_potion` pass first and dispatches `after_potion_procured` on success -- PotionCmd.cs:28-53's two hooks, in that order. EXECUTED (2026-07-27): a combat holding Sozu (relics/sozu.py) and drinking an Entropic Brew ends with an EMPTY belt, which is the game's behaviour; the same combat without Sozu fills all three slots. WAS: potions.py called PlayerCombatState.add_potion, which ran neither hook, so Sozu was ignored and Belt Buckle kept 2 Dexterity it should have lost. The out-of-combat arm added alongside it goes through RunState.add_potion, which runs the same ShouldProcurePotion gate but not AfterPotionProcured -- harmless, because an executed `grep -rn 'override.*Task AfterPotionProcured' src/` returns exactly one implementer (Belt Buckle) whose body is guarded by `CombatManager.Instance.IsInProgress` and is a no-op outside a fight."
     },
     {
-      "what": "G2 (LIVE): the LEGACY generator is the wrong factory -- it applies the in-combat exclusion the source deliberately avoids here, and rolls uniformly instead of by rarity",
-      "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: the source calls `PotionFactory.CreateRandomPotionOutOfCombat(Owner, RunState.Rng.CombatPotionGeneration)` (EntropicBrew.cs:23) -- the OUT-of-combat form, on purpose, even though the potion is usually drunk in a fight -- so Fairy in a Bottle, Fruit Juice and Regen Potion ARE reachable from Entropic Brew even though CreateRandomPotionInCombat would exclude them (PotionFactory.cs:31-34 vs :60-65). potions.py:1211-1216 forks on `rng_set is not None`: the parity arm calls potion_pools.generate_random_potion, which is the correct out-of-combat form (G3); the legacy arm calls potions.random_potion (potions.py:1262-1277), which filters `c.id not in NOT_GENERATED_IN_COMBAT` -- exactly the three potions that should still be reachable -- AND picks uniformly over the id-sorted implemented pool instead of rolling a rarity first. LIVE for the RL env, which never constructs an rng_set (full_env.py:788 and the CombatState default at combat.py:76): in training this potion can never produce a Fairy in a Bottle, and produces Rares at 1/48 each where the game produces the whole Rare bucket at 10%. The observation encoder reads the belt, so the divergence is observed. The parity path is unaffected, which is why this is grade B and not a stream desync."
+      "what": "G2 (was LIVE -- CLOSED 2026-07-27): the LEGACY generator is the wrong factory -- it applies the in-combat exclusion the source deliberately avoids here, and rolls uniformly instead of by rarity",
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the legacy arm uses the OUT-of-combat factory the source asks for. potions.py:1258-1269 now forks only on which stream the roll runs against -- parity takes potion_pools.generate_random_potion (potion_pools.py:150-156), legacy takes potion_pools.legacy_random_potion_out_of_combat (potion_pools.py:135-147) -- and BOTH roll a rarity first and then pick inside that rarity's bucket over the WHOLE pool, with no CanBeGeneratedInCombat exclusion. That is PotionFactory.cs:31-34's CreateRandomPotionOutOfCombat, which EntropicBrew.cs:23 calls on purpose even mid-combat, so Fairy in a Bottle, Fruit Juice and Regen Potion are reachable from the brew again. WAS: the legacy arm called potions.random_potion, which filtered exactly those three (the in-combat form, PotionFactory.cs:60-65) and picked uniformly over the id-sorted pool instead of rolling a rarity. EXECUTED (2026-07-27): a legacy combat brew fills all three slots off the full pool."
     },
     {
       "what": "G3: the PARITY generator is right -- rarity roll then NextItem, on Rng.CombatPotionGeneration, over the unfiltered pool",
@@ -154,15 +151,14 @@
     },
     {
       "what": "N2: the belt is 3 slots in the sim and grows to 5 in the game, so this potion's yield differs whenever the growth relics are held",
-      "verdict": "gap",
-      "live": true,
-      "issue": "Recorded here because Entropic Brew is the potion whose OUTPUT is the belt size -- it fills every empty slot, so a wrong slot count is a wrong number of potions, not just a wrong capacity. The mechanism itself is already owned: audit/records/relic/potion_belt.json and audit/records/relic/alchemical_coffer.json, and PlayerCombatState.MAX_POTIONS = 3 (player.py:57) with RunState.add_potion_slots (run.py:492) as the growth path. This entry matches those verdicts per binding rule 3 and contributes the amplification: one Entropic Brew with Potion Belt held yields a different NUMBER of potions on the two sides, and each of those potions is a further CombatPotionGeneration draw pair -- so the divergence compounds into the RNG stream rather than staying a state difference."
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the belt grows. RunState.add_potion_slots (run.py:632-638) is implemented and all three growth relics call it on pickup; RunState.max_potions is handed to every CombatState the run builds (run.py:1304-1322) and finish_combat copies the fixed-length belt back 1:1 (run.py:1328-1340). EXECUTED (2026-07-27): a fresh RunState reports max_potions 3, and after Potion Belt's after_obtained it reports 5 with five null slots. So one Entropic Brew now yields the same NUMBER of potions on both sides, and therefore the same number of CombatPotionGeneration draw pairs -- which is the compounding this entry was filed for. WAS: PlayerCombatState.MAX_POTIONS = 3 with no growth path. The mechanism's owners (audit/records/relic/potion_belt.json, audit/records/relic/alchemical_coffer.json) are matched per binding rule 3; potion_belt's own 'no-op stub' premise is likewise stale in today's code."
     },
     {
       "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
       "verdict": "gap",
       "live": true,
-      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+      "issue": "NARROWED 2026-07-27 (re-derived from today's code, not from the fix log). HALF of this mechanism is closed and half is not. Order re-read against src/Core/Models/PotionModel.cs:291-342 and against CombatState.use_potion (sts2_rl/combat.py:707-745): :293 RemoveBeforeUse -> combat.py:729-730 (slot nulled, listener detached); :297 Hook.BeforePotionUsed -> combat.py:736, BEFORE the effect at :737; :327 OnUse -> :737; :336 History.PotionUsed (presentation only, still no sim entry); :338 Hook.AfterPotionUsed -> combat.py:738; :340 CheckForEmptyHand -> combat.py:739. CLOSED half (1): BeforePotionUsed now has a real dispatcher (hooks.py:779-790) and its single C# implementer is ported -- powers.py:2741-2744's SurroundedPower.before_potion_used runs the same _update_direction the card path runs, so the Kaiser Crab facing flip happens BEFORE the potion lands instead of a phase late. STILL OPEN half (2): CheckForEmptyHand now has a sim counterpart too -- CombatState._check_for_empty_hand (combat.py:747-758) mirrors CombatManager.cs:887-893's IsInProgress + empty-hand test and is a SECOND on_hand_emptied call site beside the end-of-turn flush at player.py:240 -- but nothing downstream reaches Unceasing Top from it: the sole C# AfterHandEmptied implementer is still wired to on_card_played in the sim, and CombatState.use_potion does not fire on_card_played. EXECUTED WITNESS (2026-07-27): a fresh combat holding Unceasing Top, hand emptied, use_potion(0) on a Block Potion -- hand 0 -> 0 cards, where CombatManager.cs:887-893 runs AfterHandEmptied and draws 1. Rollup stays `gap` per binding rule 4 and matches audit/records/relic/unceasing_top.json G1 (still `gap`) per binding rule 3. LIVE for the reason it always was: the check is reachable from EVERY one of the 51 potions, not only the hand-emptying ones, because C# tests the hand AFTER the use. NOTE the queue's title for this mechanism ('BeforePotionUsed and CheckForEmptyHand are never dispatched') is now half stale; the tool table is not this record's to edit."
     },
     {
       "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",

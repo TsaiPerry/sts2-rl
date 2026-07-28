@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\ovicopter.py",
-    "sha256": "79189b0410ab49908dad8328810cb95e4beed347b0d1025dac48c2befb12e0c5"
+    "sha256": "2b4e8702585fdf867b6714e5d6c9790c423c49023794d33bd22a1c7b3d073e26"
   },
   "hooks": {
     "Title": {
@@ -64,9 +64,8 @@
     },
     {
       "what": "the hatchling HP roll's exclusive upper bound",
-      "verdict": "gap",
-      "live": true,
-      "issue": "ToughEgg.cs:172 rolls base.RunRng.Niche.NextInt(HatchlingMinHp, HatchlingMaxHp) = NextInt(19, 22), and Rng.cs:95-109 documents and implements the second argument as maxEXCLUSIVE (`1 higher than the maximum allowed number`), so the game's hatchling has 19, 20 or 21 HP - never 22. ovicopter.py:74-79 gets this right on the parity branch (next_int_range(19, 22)) and WRONG on the legacy branch, where self._rng.randint(19, 22) is inclusive and can return 22. Executed: `py audit/tools/monster_probes_b05.py ovicopter-hp` runs 2000 legacy hatches and reports max=22. LIVE: legacy is the default and the RL path (CombatRng is only parity when a rng_set is passed, combat.py:95; RunState leaves rng_set None without a string seed, run.py:140-144), and the ovicopter encounter is in the Hive normal pool (rooms.py:162, executed by the `reach` probe). Observable: a hatchling that takes one more hit to kill than it can in the game, roughly one hatchling in four. Rng.cs is in extra_sources; rule 7: leans on sts2_rl/combat.py, sts2_rl/run.py and sts2_rl/rooms.py, unhashed."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: the legacy hatch roll is exclusive on the upper bound. ToughEgg._hatch (ovicopter.py:74-84) is now `self._rng.randrange(self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)` on the legacy branch (parity keeps `_niche.next_int_range(19, 22)`), matching ToughEgg.cs:172's `base.RunRng.Niche.NextInt(HatchlingMinHp, HatchlingMaxHp)` where Rng.cs:95-109 documents and implements the second argument as max-EXCLUSIVE. EXECUTED: `py audit/tools/monster_probes_b05.py ovicopter-hp` over 2000 legacy hatches now reports min=19 max=21. WAS: `randint(19, 22)`, inclusive, so roughly one hatchling in four had a 22 HP the game cannot roll."
     },
     {
       "what": "HatchMove strips every power except Minion, then rolls HP",

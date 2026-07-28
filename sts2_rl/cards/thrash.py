@@ -42,9 +42,10 @@ class ThrashCard(Card):
         else:
             amount = getattr(victim, "_damage", 0)
         props = DamageProps.CARD_UNPOWERED if victim.is_unpowered else DamageProps.CARD
-        if is_powered_attack(props):
-            amount = amount + ctx.hooks.modify_damage_additive(None, amount, ctx.player, victim)
-            amount = int(amount * ctx.hooks.modify_damage_multiplicative(None, amount, ctx.player, victim))
+        amount = amount + ctx.hooks.modify_damage_additive(
+            None, amount, ctx.player, victim, None, props)
+        amount = int(ctx.hooks.modify_damage_multiplicative(
+            None, amount, ctx.player, victim, None, props))
         return max(0, amount)
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:

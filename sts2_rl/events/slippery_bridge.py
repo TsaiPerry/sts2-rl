@@ -55,7 +55,11 @@ class SlipperyBridge(Event):
             ]
         if not candidates:
             candidates = removable
-        self.shown_card = self.rng.choice(candidates)
+        # `base.Rng.NextItem(list)` — the event's own Rng
+        # (SlipperyBridge.cs:127).
+        er = self.event_rng
+        self.shown_card = (er.next_item(candidates) if er is not None
+                           else self.rng.choice(candidates))
 
     def _suffix(self, holds: int) -> str:
         # GetHoldOnSuffix: numbered pages/options cap at LOOP after 7.

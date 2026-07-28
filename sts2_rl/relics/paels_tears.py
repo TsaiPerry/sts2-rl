@@ -24,6 +24,11 @@ class PaelsTears(Relic):
         super().__init__()
         self.had_leftover_energy = False
 
+    def reset_for_combat(self) -> None:
+        # PaelsTears.AfterCombatEnd (:60-64) — without it combat 2 opens with
+        # the previous fight's leftover energy still latched.
+        self.had_leftover_energy = False
+
     def on_player_turn_end(self, player: PlayerCombatState) -> None:
         self.had_leftover_energy = player.energy > 0
 

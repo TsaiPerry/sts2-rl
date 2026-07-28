@@ -832,7 +832,11 @@ class TestPotionPowers:
         from sts2_rl.powers import DuplicationPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, DuplicationPower, 2)
+        # These powers are AfterSideTurnEnd in C# (power/_side_turn_slot),
+        # so they moved off the sim's BeforeTurnEnd slot onto
+        # after_player_turn_end. end_turn fires both in order.
         cs.hooks.on_player_turn_end(cs.player)
+        cs.hooks.after_player_turn_end(cs.player)
         assert "duplication" not in cs.player.powers
 
     def test_gigantification_triples_the_next_attack_card(self):

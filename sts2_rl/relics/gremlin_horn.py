@@ -15,7 +15,8 @@ class GremlinHorn(Relic):
     name = "Gremlin Horn"
     rarity = RelicRarity.UNCOMMON
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature.side != self.player.side:
             from ..cmds import DrawCmd, EnergyCmd
             EnergyCmd.gain(self.hooks, self.player, 1)

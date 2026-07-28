@@ -16,7 +16,8 @@ class GamePiece(Relic):
     name = "Game Piece"
     rarity = RelicRarity.RARE
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type == CardType.POWER:
             from ..cmds import DrawCmd
             DrawCmd.draw(self.player, 1)

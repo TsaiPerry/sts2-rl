@@ -46,7 +46,6 @@ class SlitheringStrangler(Monster):
             BlockCmd.apply(ctx.hooks, self, _THWACK_BLOCK)
         else:
             self._execute_attack(ctx, _LASH_DMG, 1)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         if self._move_key == "CONSTRICT":
@@ -66,14 +65,24 @@ class SlitheringStranglerEncounter(Encounter):
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         from .slimes import LeafSlimeM, LeafSlimeS, TwigSlimeM, TwigSlimeS
         from .snapping_jaxfruit import SnappingJaxfruit
-        kind = rng.choice(["jaxfruit", "medium_slime", "small_slimes"])
+        # Parity (SlitheringStranglerNormal.cs:57,77,88,90): every pick is a
+        # `base.Rng.NextItem` on the PER-ENCOUNTER Rng — one over the
+        # SecondaryEnemyType enum in declaration order, then 0/1/2 more over
+        # _mediumSlimes / _smallSlimes ([Leaf, Twig] in both). The small-slime
+        # pair is drawn WITH replacement. Legacy keeps the shared-rng picks.
+        def pick(items):
+            if selection_rng is not None:
+                return selection_rng.next_item(items)
+            return rng.choice(items)
+
+        kind = pick(["jaxfruit", "medium_slime", "small_slimes"])
         if kind == "jaxfruit":
             secondary = [SnappingJaxfruit(hooks, rng)]
         elif kind == "medium_slime":
-            secondary = [rng.choice([LeafSlimeM, TwigSlimeM])(hooks, rng)]
+            secondary = [pick([LeafSlimeM, TwigSlimeM])(hooks, rng)]
         else:
             smalls = [LeafSlimeS, TwigSlimeS]
-            secondary = [rng.choice(smalls)(hooks, rng), rng.choice(smalls)(hooks, rng)]
+            secondary = [pick(smalls)(hooks, rng), pick(smalls)(hooks, rng)]
         return secondary + [SlitheringStrangler(hooks, rng)]
 
 

@@ -11,4 +11,10 @@ class MassiveScroll(Relic):
     id = "massive_scroll"
     name = "Massive Scroll"
     rarity = RelicRarity.ANCIENT
-    is_allowed_at_neow = False
+
+    @classmethod
+    def is_allowed(cls, run) -> bool:
+        """MassiveScroll.cs:19-22 — `runState.Players.Count > 1`. The gate is
+        IsAllowed, not IsAllowedAtNeow, so it keeps the relic out of every
+        pool, not just Neow's. Always False in the single-player sim."""
+        return False

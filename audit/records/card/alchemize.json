@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174"
+    "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
@@ -81,12 +81,12 @@
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/belt_buckle.py",
-      "sha256": "6ded9da9910f07db43c3554b5bc11ce71183f48ce6ff8286449da10fefaaf806",
+      "sha256": "58183b20722a852a92ddf11297e096314d6a7d522f06883e78ad19f6bd949d1c",
       "side": "sim"
     },
     {
@@ -101,7 +101,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     }
   ],
@@ -122,10 +127,9 @@
       "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Alchemize.cs:16-19) == cost 1 / SKILL / RARE / SELF."
     },
     "OnPlay": {
-      "maps_to": "AlchemizeCard.on_play (colorless_skills.py:37-53)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "SCOPE RE-RULING (2026-07-26, potion-scope re-verdict pass). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"); `potion` is now an ordinary audit kind (51 sim units, harness.py roster potion) that is UNAUDITED, exactly like `monster`. A potion may no longer be the reason for a waiver. This record's OnPlay verdict was the single largest casualty of the old clause: the WHOLE card was waived because its whole body is potion procurement. Re-derived below. It is also a binding-rule-3 correction -- the relic tier already filed this exact mechanism as a LIVE gap at audit/records/relic/sozu.json (guard G1, whose text names Alchemize by name), audit/records/relic/delicate_frond.json (G2, G3) and audit/records/relic/belt_buckle.json (AfterPotionProcured), while this record waived it -- one mechanism, two answers.\nROLLUP of guards G1 and G2 (both LIVE) per binding rule 4. Alchemize.cs:24 is ONE statement with two halves: `PotionCmd.TryToProcure(PotionFactory.CreateRandomPotionInCombat(Owner, Owner.RunState.Rng.CombatPotionGeneration).ToMutable(), Owner)`. The GENERATION half is faithful and is verdicted at guard N1. The PROCURE half is not: PotionCmd.TryToProcure (src/Core/Commands/PotionCmd.cs:28-53) is a command with a gate (Hook.ShouldProcurePotion, PotionCmd.cs:31) and an event (Hook.AfterPotionProcured, PotionCmd.cs:46) around Player.AddPotionInternal (PotionCmd.cs:40), and sts2_rl/cards/colorless_skills.py:53 calls the bare belt write `player.add_potion(potion)` (sts2_rl/player.py:107-121) instead -- which runs neither. Alchemize.cs:23's CreatureCmd.TriggerAnim is presentation."
+      "maps_to": "AlchemizeCard.on_play (colorless_skills.py:37-56)",
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the PROCURE half now goes through the command, not the bare belt write. `AlchemizeCard.on_play` calls `try_to_procure(ctx.hooks, player, potion)` (sts2_rl/cards/colorless_skills.py:56) and `sts2_rl/potions.py:1352-1375` is PotionCmd.TryToProcure's shape exactly -- the `Hook.ShouldProcurePotion` pass first (PotionCmd.cs:31), `Player.AddPotionInternal` (PotionCmd.cs:40) via `player.add_potion`, and `Hook.AfterPotionProcured` (PotionCmd.cs:46) only on success. The GENERATION half was already faithful (guard N1) and is untouched: the potion is still built before the call, so a refused potion still spends its two CombatPotionGeneration draws, which is Alchemize.cs:24's argument-evaluation order. EXECUTED WITNESS: one Alchemize play on a fresh CombatState leaves the belt ['explosive_ampoule', None, None] with relics=[], [None, None, None] with relics=['sozu'], and with relics=['belt_buckle'] fills the belt AND drops Dexterity 2 -> 0. Both guards G1 and G2 are closed with it. HISTORY -- WHAT THE DIVERGENCE WAS: SCOPE RE-RULING (2026-07-26, potion-scope re-verdict pass). The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"); `potion` is now an ordinary audit kind (51 sim units, harness.py roster potion) that is UNAUDITED, exactly like `monster`. A potion may no longer be the reason for a waiver. This record's OnPlay verdict was the single largest casualty of the old clause: the WHOLE card was waived because its whole body is potion procurement. Re-derived below. It is also a binding-rule-3 correction -- the relic tier already filed this exact mechanism as a LIVE gap at audit/records/relic/sozu.json (guard G1, whose text names Alchemize by name), audit/records/relic/delicate_frond.json (G2, G3) and audit/records/relic/belt_buckle.json (AfterPotionProcured), while this record waived it -- one mechanism, two answers.\nROLLUP of guards G1 and G2 (both LIVE) per binding rule 4. Alchemize.cs:24 is ONE statement with two halves: `PotionCmd.TryToProcure(PotionFactory.CreateRandomPotionInCombat(Owner, Owner.RunState.Rng.CombatPotionGeneration).ToMutable(), Owner)`. The GENERATION half is faithful and is verdicted at guard N1. The PROCURE half is not: PotionCmd.TryToProcure (src/Core/Commands/PotionCmd.cs:28-53) is a command with a gate (Hook.ShouldProcurePotion, PotionCmd.cs:31) and an event (Hook.AfterPotionProcured, PotionCmd.cs:46) around Player.AddPotionInternal (PotionCmd.cs:40), and sts2_rl/cards/colorless_skills.py:53 calls the bare belt write `player.add_potion(potion)` (sts2_rl/player.py:107-121) instead -- which runs neither. Alchemize.cs:23's CreatureCmd.TriggerAnim is presentation."
     },
     "OnUpgrade": {
       "maps_to": "AlchemizeCard._on_upgrade (colorless_skills.py:34-35)",
@@ -141,15 +145,13 @@
     },
     {
       "what": "G1 (LIVE, grade B): Alchemize procures through PotionCmd.TryToProcure, whose FIRST statement is the Hook.ShouldProcurePotion gate (PotionCmd.cs:31); the sim calls PlayerCombatState.add_potion, which does not run it -- so a Sozu owner gets a potion the game refuses",
-      "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: C# has exactly one procure entry point and it is gated. Sozu is the only ShouldProcurePotion implementer in the source (src/Core/Models/Relics/Sozu.cs:17-20; an executed grep of src/ for ShouldProcurePotion returns Hook.cs:2408, AbstractModel.cs:2344 and Sozu.cs and nothing else). The sim SPLITS the operation: RunState.add_potion runs the gate (sts2_rl/run.py:480), PlayerCombatState.add_potion does not, and its own docstring concedes it while citing the now-deleted clause -- sts2_rl/player.py:112-115 reads '... does not run the Hook.ShouldProcurePotion gate today ... unchanged by this fix, out of scope.' The gate itself is ported and works (sts2_rl/relics/sozu.py:26-27). REACHABILITY (LIVE, executed): a fresh CombatState with relics=[] and with relics=['sozu'] both end with belt ['explosive_ampoule', None, None] after one Alchemize play, where C# leaves the Sozu owner's belt EMPTY. Both sides ported: Alchemize is in sts2_rl/cards/pool.py:46's COLORLESS_POOL and is obtainable from the Brain Leech event (sts2_rl/events/brain_leech.py:53-66) and from Lead Paperweight (sts2_rl/relics/lead_paperweight.py:16-31); Sozu is granted by the ported Darv shrine per audit/records/relic/sozu.json. ONE VERDICT AT EVERY SITE (rule 3): identical finding and verdict at audit/records/relic/sozu.json guard G1 -- which already names Alchemize as a trigger -- and audit/records/relic/delicate_frond.json guard G2. Grade B, not A: the generation draws are spent before the gate on both sides, so the stream stays aligned; what diverges is the belt."
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the sim no longer splits the operation. `sts2_rl/potions.py:1352-1375` (`try_to_procure`) runs the `should_procure_potion` pass before `player.add_potion` and returns False when any listener refuses, which is PotionCmd.TryToProcure's first statement (PotionCmd.cs:31 -> Sozu.cs:17-20). Alchemize calls it at sts2_rl/cards/colorless_skills.py:56. EXECUTED: one Alchemize play on a fresh CombatState leaves the belt ['explosive_ampoule', None, None] with relics=[] and [None, None, None] with relics=['sozu'] -- the Sozu owner's belt is now empty, as in C#. HISTORY -- WHAT THE DIVERGENCE WAS: MECHANISM: C# has exactly one procure entry point and it is gated. Sozu is the only ShouldProcurePotion implementer in the source (src/Core/Models/Relics/Sozu.cs:17-20; an executed grep of src/ for ShouldProcurePotion returns Hook.cs:2408, AbstractModel.cs:2344 and Sozu.cs and nothing else). The sim SPLITS the operation: RunState.add_potion runs the gate (sts2_rl/run.py:480), PlayerCombatState.add_potion does not, and its own docstring concedes it while citing the now-deleted clause -- sts2_rl/player.py:112-115 reads '... does not run the Hook.ShouldProcurePotion gate today ... unchanged by this fix, out of scope.' The gate itself is ported and works (sts2_rl/relics/sozu.py:26-27). REACHABILITY (LIVE, executed): a fresh CombatState with relics=[] and with relics=['sozu'] both end with belt ['explosive_ampoule', None, None] after one Alchemize play, where C# leaves the Sozu owner's belt EMPTY. Both sides ported: Alchemize is in sts2_rl/cards/pool.py:46's COLORLESS_POOL and is obtainable from the Brain Leech event (sts2_rl/events/brain_leech.py:53-66) and from Lead Paperweight (sts2_rl/relics/lead_paperweight.py:16-31); Sozu is granted by the ported Darv shrine per audit/records/relic/sozu.json. ONE VERDICT AT EVERY SITE (rule 3): identical finding and verdict at audit/records/relic/sozu.json guard G1 -- which already names Alchemize as a trigger -- and audit/records/relic/delicate_frond.json guard G2. Grade B, not A: the generation draws are spent before the gate on both sides, so the stream stays aligned; what diverges is the belt."
     },
     {
       "what": "G2 (LIVE, grade B): TryToProcure fires Hook.AfterPotionProcured on success (PotionCmd.cs:46); the sim's add_potion fires nothing, so Belt Buckle keeps the 2 Dexterity that Alchemize should have taken away",
-      "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: the same substitution as G1, on the success branch. BeltBuckle.cs:63-70 removes its 2 Dexterity the moment a potion is procured mid-combat -- it is the half of 'while you have no potions' that enforces the 'no'. The sim's port implements only on_potion_used (sts2_rl/relics/belt_buckle.py:32-33) and no procure analogue, and sts2_rl/player.py:107-121 dispatches no hook at all. REACHABILITY (LIVE, executed): a CombatState with relics=['belt_buckle'] starts at powers [('dexterity', 2)] with an empty belt; after ONE Alchemize play the belt is ['attack_potion', None, None] and Dexterity is still 2, where C# leaves 0. Both sides ported and independently obtainable (Belt Buckle is Shop rarity in the transcribed grab bag per audit/records/relic/belt_buckle.json; Alchemize's obtainability is in G1). Dexterity changes every Block number for the rest of the fight, so the observable is not a potion-system detail. ONE VERDICT AT EVERY SITE (rule 3): the missing hook is already recorded at audit/records/relic/belt_buckle.json (AfterPotionProcured) and audit/records/relic/delicate_frond.json guard G3, both LIVE; what this entry adds is that a CARD is a ported trigger for it, needing no second relic."
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27, with G1. `try_to_procure` (sts2_rl/potions.py:1373-1374) dispatches `after_potion_procured` to every listener on the success branch only, which is PotionCmd.cs:46 inside `if (result.success)`. EXECUTED: a CombatState with relics=['belt_buckle'] starts at powers [('dexterity', 2)]; after ONE Alchemize play the belt is ['explosive_ampoule', None, None] and the power list is EMPTY -- Belt Buckle's 2 Dexterity is gone, as in BeltBuckle.cs:63-70. HISTORY -- WHAT THE DIVERGENCE WAS: MECHANISM: the same substitution as G1, on the success branch. BeltBuckle.cs:63-70 removes its 2 Dexterity the moment a potion is procured mid-combat -- it is the half of 'while you have no potions' that enforces the 'no'. The sim's port implements only on_potion_used (sts2_rl/relics/belt_buckle.py:32-33) and no procure analogue, and sts2_rl/player.py:107-121 dispatches no hook at all. REACHABILITY (LIVE, executed): a CombatState with relics=['belt_buckle'] starts at powers [('dexterity', 2)] with an empty belt; after ONE Alchemize play the belt is ['attack_potion', None, None] and Dexterity is still 2, where C# leaves 0. Both sides ported and independently obtainable (Belt Buckle is Shop rarity in the transcribed grab bag per audit/records/relic/belt_buckle.json; Alchemize's obtainability is in G1). Dexterity changes every Block number for the rest of the fight, so the observable is not a potion-system detail. ONE VERDICT AT EVERY SITE (rule 3): the missing hook is already recorded at audit/records/relic/belt_buckle.json (AfterPotionProcured) and audit/records/relic/delicate_frond.json guard G3, both LIVE; what this entry adds is that a CARD is a ported trigger for it, needing no second relic."
     },
     {
       "what": "N1: the GENERATION half -- PotionFactory.CreateRandomPotionInCombat on the NAMED Rng.CombatPotionGeneration stream (Alchemize.cs:24)",
@@ -157,6 +159,6 @@
       "rationale": "PROMPT.md bug class 16 (a named C# stream reaching a sim helper that silently falls back to the shared random.Random) does NOT bite here, and this is the pattern audit/records/card/infernal_blade.json holds up as correct. Three checks, all made against the source rather than the port's docstring. (1) STREAM: sts2_rl/cards/colorless_skills.py:42-48 branches on `rng_set is not None` and calls generate_random_potion_in_combat(rng_set.combat_potion_generation), the same stream C# names; the shared-rng arm at sts2_rl/cards/colorless_skills.py:49-52 is the non-parity RL path only (RunState.rng_set is None exactly when no string seed was given, sts2_rl/run.py:138-143), which is the same two-branch shape audit/records/relic/alchemical_coffer.json and audit/records/card/infernal_blade.json both verdict as the correct one. (2) DRAW COUNT: src/Core/Factories/PotionFactory.cs:67-81 is one rng.NextFloat() for the rarity band (Rare <= 0.1, Uncommon <= 0.35, else Common) then one rng.NextItem() inside that band; sts2_rl/potion_pools.py:118-145 is the same two draws over a non-empty bucket. EXECUTED: one Alchemize play on RunRngSet('89U21BV1TZ') advances combat_potion_generation by exactly 2, on a full belt as well as an open one. (3) THE IN-COMBAT FILTER SET: src/Core/Factories/PotionFactory.cs:62-64 keeps only `p.CanBeGeneratedInCombat`, whose base is true (src/Core/Models/PotionModel.cs:153) and which EXACTLY THREE potions override -- src/Core/Models/Potions/FairyInABottle.cs:19, src/Core/Models/Potions/FruitJuice.cs:20, src/Core/Models/Potions/RegenPotion.cs:22 (executed: grep -rn CanBeGeneratedInCombat over src/Core/Models/Potions/ returns those three lines and nothing else). sts2_rl/potion_pools.py:75-77's NOT_GENERATED_IN_COMBAT is exactly that set. Re-derived rather than inherited: the old waiver asserted the stream was right without executing the draw count and never checked the filter set at all."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-07-27"
 }

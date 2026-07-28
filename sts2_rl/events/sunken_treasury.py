@@ -27,8 +27,13 @@ class SunkenTreasury(Event):
         self.large_gold = _LARGE_CHEST_GOLD
 
     def calculate_vars(self) -> None:
-        self.small_gold = _SMALL_CHEST_GOLD + (self.rng.randrange(16) - 8)
-        self.large_gold = _LARGE_CHEST_GOLD + (self.rng.randrange(61) - 30)
+        # `base.Rng.NextInt(16)` / `NextInt(61)` — the event's own Rng
+        # (SunkenTreasury.cs:35-36).
+        er = self.event_rng
+        small = er.next_int(16) if er is not None else self.rng.randrange(16)
+        large = er.next_int(61) if er is not None else self.rng.randrange(61)
+        self.small_gold = _SMALL_CHEST_GOLD + (small - 8)
+        self.large_gold = _LARGE_CHEST_GOLD + (large - 30)
 
     def initial_options(self) -> list[EventOption]:
         return [

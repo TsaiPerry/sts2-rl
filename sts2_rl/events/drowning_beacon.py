@@ -25,7 +25,9 @@ class DrowningBeacon(Event):
         ]
 
     def _bottle(self) -> None:
-        self.run.add_potion(make_potion("glowwater"))
+        # RewardsCmd.OfferCustom(PotionReward) — a take-or-skip screen, not a
+        # grant (DrowningBeacon.cs:39-46).
+        self.offer_potion(make_potion("glowwater"))
         self._finish("BOTTLE")
 
     def _climb(self) -> None:

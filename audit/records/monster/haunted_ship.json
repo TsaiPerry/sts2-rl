@@ -61,7 +61,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
       "side": "sim"
     }
   ]

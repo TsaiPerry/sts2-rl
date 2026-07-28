@@ -22,6 +22,7 @@ implement, and the belt resync must still be able to rebuild that slot.
 """
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
 from .potions import Potion, _POTION_CLASSES
@@ -115,15 +116,35 @@ def make_pool_potion(potion_id: str) -> Potion:
     return _make(potion_id, _POOL_RARITY.get(potion_id, "common"))
 
 
-def roll_potion_rarity(rng: Rng) -> str:
-    """PotionFactory.CreateRandomPotion rarity roll: one NextFloat, Rare <= 0.1,
+def _rarity_for_roll(num: float) -> str:
+    """PotionFactory.CreateRandomPotion's rarity thresholds: Rare <= 0.1,
     Uncommon <= 0.35, else Common."""
-    num = rng.next_float()
     if num <= 0.1:
         return "rare"
     if num <= 0.35:
         return "uncommon"
     return "common"
+
+
+def roll_potion_rarity(rng: Rng) -> str:
+    """PotionFactory.CreateRandomPotion rarity roll: one NextFloat, Rare <= 0.1,
+    Uncommon <= 0.35, else Common."""
+    return _rarity_for_roll(rng.next_float())
+
+
+def legacy_random_potion_out_of_combat(rng: random.Random) -> Potion:
+    """`CreateRandomPotionOutOfCombat` on the legacy shared rng (the RL path,
+    which never builds a parity rng_set).
+
+    Same two rolls as the parity generator — a rarity, then a pick inside that
+    rarity's bucket — over the WHOLE pool, including the three
+    `CanBeGeneratedInCombat=false` potions. Entropic Brew calls the
+    out-of-combat factory on purpose (EntropicBrew.cs:23), and its legacy arm
+    used to reach for the in-combat one, which filters exactly those three and
+    picks uniformly over the pool instead of rolling a rarity."""
+    rarity = _rarity_for_roll(rng.random())
+    options = [pid for pid, r in POTION_POOL if r == rarity]
+    return _make(rng.choice(options), rarity)
 
 
 def generate_random_potion(rng: Rng, blacklist: "set[str] | None" = None) -> Potion:

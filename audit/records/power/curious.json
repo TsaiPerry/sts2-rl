@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     }
   ],
@@ -42,8 +42,8 @@
     },
     "TryModifyEnergyCostInCombat": {
       "maps_to": "powers.py:2883-2887 CuriousPower.modify_card_energy_cost (hooks.py:196-201)",
-      "verdict": "gap",
-      "issue": "The arithmetic is exact -- originalCost - Amount floored at 0, with the Power-card and cost > 0 gates (CuriousPower.cs:19-31 vs powers.py:2885-2887). What is wrong is everything about HOW it is dispatched, and this power is already the executed witness for two committed seam gaps, so neither is re-verdicted here (binding rule 3): (a) hook_dispatch's G2 (cross-listener order) is LIVE with THIS POWER as its witness -- Curious at 2 stacks on a 1-cost Power card versus the ported relic Spiked Gauntlets (+1): the game runs powers before relics and computes max(0, 1-2) = 0 then +1 = 1, and the sim runs relics before powers and computes 1+1 = 2 then max(0, 2-2) = 0, so the sim charges 0 where the game charges 1. (b) hook_dispatch's G3 (the missing Early/Late phase passes): C#'s TryModifyEnergyCostInCombat is the EARLY pass and TryModifyEnergyCostInCombatLate is a separate later one, which is why power/free_attack and the ported relic Brilliant Scarf are guaranteed to run after Curious in the game and are a coin flip in the sim. Recorded as a gap on this unit because the observable cost of a card is wrong, not merely the ordering."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: both dispatch defects this entry rested on are fixed. (a) hook_dispatch G2 -- `HookSystem._ordered` (hooks.py:107-151) now sorts listeners into CombatState.IterateHookListeners order, powers (CAT_POWER = 0) before relics (CAT_RELIC = 1) within a creature, so Curious 2 on a 1-cost Power card held with Spiked Gauntlets computes max(0, 1-2) = 0 then +1 = 1, which is the game's answer. (b) hook_dispatch G3 -- the phase passes exist (`_PHASES` = very_early/early/plain/late, hooks.py:36, resolved per dispatch by `_each`) and the Late implementers really use them: FreeAttackPower and CorruptionPower are on `modify_card_energy_cost_late` (powers.py:1221, :648), so both are guaranteed to run after this plain-pass listener. VERIFIED 2026-07-27 by reading hooks.py:20-200 and powers.py."
     }
   },
   "guards": [

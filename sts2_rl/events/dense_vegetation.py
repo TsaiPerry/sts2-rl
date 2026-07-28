@@ -9,6 +9,7 @@ from .base import Event, EventOption, register_event
 
 if TYPE_CHECKING:
     from ..hooks import HookSystem
+    from ..rewards import CombatRewards
 
 _HP_LOSS = 8  # HpLossVar(8)
 
@@ -47,6 +48,10 @@ class DenseVegetation(Event):
     def __init__(self, run) -> None:
         super().__init__(run)
         self.gold = 0
+        # The rest-site heal's reward screen (HealRestSiteOption.
+        # ExecuteRestSiteHeal's RewardsCmd.OfferCustom — Dream Catcher's
+        # 3-card choice). Set by REST; the driver offers it.
+        self.pending_rewards: "CombatRewards | None" = None
 
     def calculate_vars(self) -> None:
         self.gold = self.rng.randint(61, 99)  # Rng.NextInt(61, 100)
@@ -63,8 +68,12 @@ class DenseVegetation(Event):
         self._finish("TRUDGE_ON")
 
     def _rest(self) -> None:
-        # PlayerCmd.MimicRestSiteHeal → HealRestSiteOption.ExecuteRestSiteHeal
-        self.run.heal(self.run.rest_site_heal_amount())
+        # PlayerCmd.MimicRestSiteHeal → HealRestSiteOption.ExecuteRestSiteHeal:
+        # heal, fire Hook.AfterRestSiteHeal (Stone Humidifier's +5 Max HP),
+        # then Hook.ModifyRestSiteHealRewards and offer what it built
+        # (Dream Catcher's 3-card choice) — the same pair a real rest takes.
+        self.run.rest_heal()
+        self.pending_rewards = self.run.rest_heal_rewards()
         self._set_state("REST", [EventOption("FIGHT", self._fight)])
 
     def _fight(self) -> None:

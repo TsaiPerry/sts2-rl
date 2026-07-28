@@ -132,17 +132,6 @@ class TestDamagePipelineOrder:
         assert cs.enemy.hp == hp_before - 5  # block untouched, full HP loss
         assert cs.enemy.block == 10
 
-    @pytest.mark.xfail(
-        reason="gap G1 (audit/records/seam/damage_pipeline.json): ThornsPower is "
-               "wired to on_damage_received, which cmds.py's killing-blow "
-               "guard skips entirely (`if not target.is_dead`). C#'s "
-               "ThornsPower overrides BeforeDamageReceived (ThornsPower.cs:"
-               "17-24), which CreatureCmd.Damage fires unconditionally "
-               "before block/HP/death are even resolved (CreatureCmd.cs:"
-               "263) -- so the real game reflects Thorns damage even on the "
-               "hit that kills the Thorns-bearer.",
-        strict=True,
-    )
     def test_thorns_reflects_even_on_killing_blow(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 3)
@@ -206,25 +195,6 @@ class TestPowerCmdOrder:
         assert "dexterity" not in cs.enemy.powers  # C#: Artifact blocks the steal
         assert "artifact" not in cs.enemy.powers   # and consumes its stack
 
-    @pytest.mark.xfail(
-        reason="power_cmd audit step 20 (audit/records/seam/power_cmd.json): "
-               "cmds.py:331-332 sets power.skip_next_tick = True AFTER the "
-               "new-vs-stacking if/else, on the shared `power` variable the "
-               "stacking branch rebinds to `existing` -- so re-applying a "
-               "debuff to the player re-arms the skip on every re-stack. C# "
-               "sets SkipNextDurationTick only in the new-power Apply path "
-               "(PowerCmd.cs:112-117 early-returns any existing-instance "
-               "application into ModifyAmount before the assignment at "
-               "PowerCmd.cs:146 is ever reached); ModifyAmount "
-               "(PowerCmd.cs:215-271) never touches the flag -- the only "
-               "other references are PowerCmd.cs:192-194, which CONSUME it "
-               "in TickDownDuration. This is LIVE and reachable with ported "
-               "content: any enemy re-applying Vulnerable/Weak/Frail to the "
-               "player after the first application's skip has already been "
-               "consumed makes that debuff last one extra turn versus the "
-               "real game.",
-        strict=True,
-    )
     def test_restacking_a_player_debuff_does_not_rearm_skip_next_tick(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 2, applier=cs.enemy)
@@ -293,23 +263,6 @@ class TestCreatureCardCmdsOrder:
         assert run.deck[-1] is replacement
         assert run.deck.index(replacement) == len(run.deck) - 1
 
-    @pytest.mark.xfail(
-        reason="creature_card_cmds audit gap G1 "
-               "(audit/records/seam/creature_card_cmds.json): BlockCmd.apply "
-               "(cmds.py:145-147) gates the WHOLE modify_block_additive/"
-               "modify_block_multiplicative dispatch on is_powered_attack "
-               "(Move && !Unpowered). C#'s Hook.ModifyBlock (Hook.cs:1310-1340) "
-               "calls every listener for every block gain and leaves the gate "
-               "to each implementation, and Vambrace.cs:59-63 (like "
-               "PaelsLegion.cs:132-134) self-gates only on "
-               "IsCardOrMonsterMove() -- Move alone, ignoring Unpowered "
-               "(ValuePropExtensions.cs:22-25). This is LIVE on ported "
-               "content: Entrench gains block with MOVE|UNPOWERED "
-               "(cards/trash_heap_cards.py:159-179, mirroring Entrench.cs:23) "
-               "and Vambrace is a ported Uncommon relic, so the real game "
-               "doubles Entrench's block and the sim does not.",
-        strict=True,
-    )
     def test_unpowered_card_block_still_runs_block_modifiers(self):
         cs = CombatState(rng=random.Random(0), relics=[make_relic("vambrace")])
         cs.player.block = 10
@@ -319,22 +272,6 @@ class TestCreatureCardCmdsOrder:
         )
         assert gained == 20  # C#: Vambrace doubles unpowered card block too
 
-    @pytest.mark.xfail(
-        reason="creature_card_cmds audit gap G2 "
-               "(audit/records/seam/creature_card_cmds.json): the sim has no "
-               "AfterModifyingBlockAmount event (CreatureCmd.cs:646, "
-               "Hook.cs:649-656), so Vambrace's port hand-rolls its "
-               "once-per-combat latch onto on_block_gained "
-               "(relics/vambrace.py:36-40) and burns it on the FIRST block "
-               "gain. C# latches only TriggeringCard = cardSource there "
-               "(Vambrace.cs:78-90) and does not set BlockGainedThisCombat "
-               "until AfterCardPlayed (Vambrace.cs:92-105), so every block "
-               "instance of the same card play is doubled. LIVE with ported "
-               "content: Evil Eye (cards/evil_eye.py:37-42) gains block twice "
-               "in one play and Second Wind (cards/second_wind.py:34-39) once "
-               "per exhausted non-Attack.",
-        strict=True,
-    )
     def test_vambrace_doubles_every_block_gain_of_one_card_play(self):
         cs = CombatState(rng=random.Random(0), relics=[make_relic("vambrace")])
         card = make_card("evil_eye")
@@ -342,22 +279,12 @@ class TestCreatureCardCmdsOrder:
         second = BlockCmd.apply(cs.hooks, cs.player, 5, card=card)
         assert (first, second) == (10, 10)  # C#: same CardPlay, still doubled
 
-    @pytest.mark.xfail(
-        reason="creature_card_cmds audit gap G3 "
-               "(audit/records/seam/creature_card_cmds.json): RunState.transform_card "
-               "(run.py:459-469) deletes the original and appends the "
-               "replacement directly instead of routing through add_card "
-               "(run.py:341-354), so it skips both deck-entry hooks that C#'s "
-               "CardCmd.Transform runs for a Deck pile -- "
-               "Hook.ModifyCardBeingAddedToDeck (CardCmd.cs:430, the egg "
-               "relics' substitution) and Hook.AfterCardChangedPiles "
-               "(CardCmd.cs:447, Bing Bong / Book of Five Rings / Darkstone "
-               "Periapt / Lucky Fysh). LIVE: Frozen Egg and every deck-level "
-               "transformer (Pandora's Box, Astrolabe, Wood Carvings, Morphic "
-               "Grove, Symbiote) are ported, so the real game hands back an "
-               "upgraded Power and the sim hands back an un-upgraded one.",
-        strict=True,
-    )
+    # creature_card_cmds gap G3 FIXED (GAP-QUEUE.md entry 31):
+    # RunState.transform_card now runs the same two deck-entry hooks
+    # CardCmd.Transform runs for a Deck pile — Hook.ModifyCardBeingAddedToDeck
+    # before the insert (CardCmd.cs:430) and Hook.AfterCardChangedPiles after it
+    # (CardCmd.cs:447) — while keeping the append-at-deck-end position
+    # (CardCmd.cs:437).
     def test_deck_transform_runs_modify_card_being_added_to_deck(self):
         run = RunState(string_seed="creature-card-cmds-egg")
         run.add_relic(make_relic("frozen_egg"))
@@ -390,28 +317,13 @@ class TestCreatureCardCmdsOrder:
         candidates = [make_card("strike"), make_card("defend")]
         assert cs.select_cards("exhaust", candidates, 1) == []  # C#: empty
 
-    @pytest.mark.xfail(
-        reason="creature_card_cmds audit step 52 "
-               "(audit/records/seam/creature_card_cmds.json): C#'s "
-               "CardModel.DowngradeInternal (CardModel.cs:2135-2147) re-derives "
-               "the card from its canonical ModelDb entry and then RE-APPLIES "
-               "its decorations -- `AfterDowngraded(); "
-               "Enchantment?.ModifyCard(); Affliction?.AfterApplied();`. The "
-               "sim's Card.downgrade (cards/base.py:150-165) rebuilds by "
-               "running _init_vars() and re-applying upgrades, and never "
-               "re-applies the enchantment. Discovery's _init_vars sets "
-               "`self.exhausts = True` (cards/colorless_skills.py:211-213), so "
-               "a Souls-enchanted Discovery (enchantments.py:209-212, from the "
-               "ported Grave of the Forgotten event) silently regains its "
-               "Exhaust keyword when downgraded. LIVE: every piece is ported -- "
-               "the downgrade verb has two ported callers, DampenPower "
-               "(powers.py:3149-3183, the Magi Knight's DAMPEN_MOVE, "
-               "monsters/glory/knights.py:69-72, mirroring DampenPower.cs:35) "
-               "and Reflections (events/reflections.py:36-41, mirroring "
-               "Reflections.cs:43).",
-        strict=True,
-    )
     def test_downgrade_reapplies_the_cards_enchantment(self):
+        # creature_card_cmds audit step 52: CardModel.DowngradeInternal
+        # (CardModel.cs:2135-2147) re-derives the card from its canonical
+        # ModelDb entry and then RE-APPLIES its decorations --
+        # `AfterDowngraded(); Enchantment?.ModifyCard();
+        # Affliction?.AfterApplied();`. Card.downgrade now re-runs the
+        # enchantment's modify_card after the rebuild (gap queue entry 28).
         from sts2_rl.enchantments import SoulsEnchantment
 
         card = make_card("discovery")
@@ -422,27 +334,14 @@ class TestCreatureCardCmdsOrder:
         card.downgrade()
         assert not card.exhausts  # C#: Souls' ModifyCard runs again
 
-    @pytest.mark.xfail(
-        reason="creature_card_cmds audit step 38a "
-               "(audit/records/seam/creature_card_cmds.json): "
-               "PlayerCmd.MimicRestSiteHeal (PlayerCmd.cs:264-274) delegates to "
-               "HealRestSiteOption.ExecuteRestSiteHeal "
-               "(HealRestSiteOption.cs:106-113), which heals and THEN fires "
-               "Hook.AfterRestSiteHeal(player, isMimicked) and "
-               "Hook.ModifyRestSiteHealRewards. Its one gameplay caller, "
-               "Events/DenseVegetation.cs:90, is ported -- but the sim's "
-               "DenseVegetation._rest (events/dense_vegetation.py:65-68) calls "
-               "run.heal(run.rest_site_heal_amount()) directly instead of "
-               "RunState.rest_heal (run.py:1089-1095), so neither hook fires. "
-               "LIVE: Stone Humidifier (relics/stone_humidifier.py:15-16, +5 "
-               "Max HP, mirroring StoneHumidifier.cs:18-25) and Dream Catcher "
-               "(relics/dream_catcher.py:22-25, a 3-card reward, mirroring "
-               "DreamCatcher.cs:16-25) are both ported listeners, so the real "
-               "game grants the Max HP and the reward screen on Dense "
-               "Vegetation's Rest and the sim grants neither.",
-        strict=True,
-    )
     def test_dense_vegetation_rest_fires_the_rest_site_heal_hooks(self):
+        # creature_card_cmds audit step 38a: PlayerCmd.MimicRestSiteHeal
+        # (PlayerCmd.cs:264-274) delegates to HealRestSiteOption.
+        # ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113), which heals and
+        # THEN fires Hook.AfterRestSiteHeal(player, isMimicked) and
+        # Hook.ModifyRestSiteHealRewards. Its one gameplay caller,
+        # Events/DenseVegetation.cs:90, is ported, so Dense Vegetation's Rest
+        # takes RunState.rest_heal + rest_heal_rewards like a real rest.
         from sts2_rl.events.dense_vegetation import DenseVegetation
 
         run = RunState(string_seed="creature-card-cmds-rest")
@@ -479,8 +378,9 @@ class TestTurnStructureOrder:
         """The complete ordered turn pipeline, spec steps 42-74 then 5-29
         (CombatManager.cs). Reading the assertion top to bottom:
 
-        - the extra-turn predicate is consulted FIRST (spec step 65 puts it
-          LAST, in SwitchFromPlayerToEnemySide -- gap G3);
+        - the extra-turn predicate is consulted LAST, in
+          SwitchFromPlayerToEnemySide (spec step 65) -- it used to be tested
+          first, which short-circuited this whole pipeline (gap G3, fixed);
         - Hook.BeforeTurnEnd (step 48) -> DoTurnEnd's ethereal pass (step 53,
           Dazed) -> the turn-end-in-hand effect and its discard (step 54,
           Burn) -> ShouldFlush (step 61) -> the flush (step 62) -> the
@@ -511,7 +411,6 @@ class TestTurnStructureOrder:
         cs.end_turn()
         assert calls == [
             # --- the player's end of turn -------------------------------
-            "should_take_extra_turn",     # step 65 (sim runs it first: G3)
             "on_player_turn_end",         # step 48  Hook.BeforeTurnEnd
             "should_ethereal_trigger",    # step 52  hand partition (Dazed)
             "on_card_exhausted",          # step 53  ethereal pass
@@ -520,6 +419,7 @@ class TestTurnStructureOrder:
             "on_card_discarded",          # step 62  the flush (Strike)
             "on_hand_emptied",            # (sim-only here -- gap G16)
             "after_player_turn_end",      # step 64  Hook.AfterTurnEnd
+            "should_take_extra_turn",     # step 65  SwitchFromPlayerToEnemySide
             # --- the enemy side -----------------------------------------
             "should_clear_block",         # step 13  the enemy's clear
             "on_block_cleared",           # step 14
@@ -574,30 +474,6 @@ class TestTurnStructureOrder:
             "on_enemy_side_end",
         ]
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G1 (audit/records/seam/turn_structure.json, "
-               "spec step 14): C# runs the block clear and its event in TWO "
-               "separate loops -- `foreach (item3 in creaturesStartingTurn) "
-               "await item3.AfterTurnStart(side)` (CombatManager.cs:492-499) "
-               "then `foreach (item4 in creaturesStartingTurn) await "
-               "Hook.AfterBlockCleared(_state, item4)` (500-507) -- so "
-               "AfterBlockCleared fires for EVERY participant, including one "
-               "whose clear a ShouldClearBlock listener prevented. The sim "
-               "fuses them: player.py:157-159 fires on_block_cleared only "
-               "inside the `if should_clear_block(...)` arm (and "
-               "combat.py:296-298 additionally gates the enemy arm on "
-               "`enemy.block > 0`). LIVE: BarricadePower is a ported Ironclad "
-               "Rare Power card (cards/barricade_card.py:33-34, powers.py:140) "
-               "returning false from ShouldClearBlock "
-               "(BarricadePower.cs), and Horn Cleat is a ported Uncommon relic "
-               "listening on AfterBlockCleared (HornCleat.cs:20-27, "
-               "relics/horn_cleat.py:19-22) -- so the real game still grants "
-               "the turn-2 block behind Barricade and the sim grants nothing. "
-               "Sturdy Clamp and Captain's Wheel are the same shape, and "
-               "Anchor/Fake Anchor are caught by it because gap G6 forced them "
-               "onto this hook.",
-        strict=True,
-    )
     def test_block_clear_event_fires_even_when_prevented(self):
         from sts2_rl.powers import BarricadePower
 
@@ -609,26 +485,6 @@ class TestTurnStructureOrder:
         assert cs.turn == 2
         assert cs.player.block == 14  # C#: Horn Cleat fires anyway
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G2 (audit/records/seam/turn_structure.json, "
-               "spec step 13): Creature.ClearBlock passes the vetoing listener "
-               "out of Hook.ShouldClearBlock and fires "
-               "Hook.AfterPreventingBlockClear(preventer, creature) on the "
-               "else-arm (Creature.cs:718-728); SturdyClamp.cs:31-46 caps the "
-               "retained block at 10 there and early-returns unless `this == "
-               "preventer`. sts2_rl/hooks.py has no such hook and no preventer "
-               "concept, so relics/sturdy_clamp.py:27-30 caps from "
-               "on_player_turn_start UNCONDITIONALLY. LIVE and proven: "
-               "Hook.ShouldClearBlock returns the FIRST vetoing listener "
-               "(Hook.cs:2193-2204) and CombatState.IterateHookListeners walks "
-               "each creature's POWERS before that player's RELICS "
-               "(CombatState.cs:412-435), so with Barricade (a ported Ironclad "
-               "card) and Sturdy Clamp (a ported Rare relic) both held the "
-               "preventer is BarricadePower and Sturdy Clamp's cap never runs "
-               "-- the real game keeps the whole retained block where the sim "
-               "trims it to 10.",
-        strict=True,
-    )
     def test_sturdy_clamp_does_not_cap_when_it_is_not_the_preventer(self):
         from sts2_rl.powers import BarricadePower
 
@@ -640,24 +496,6 @@ class TestTurnStructureOrder:
         cs.player.start_turn()
         assert cs.player.block == 30  # C#: Barricade is the preventer
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G3 (audit/records/seam/turn_structure.json, "
-               "spec step 65): combat.py:648-652 tests should_take_extra_turn "
-               "at the TOP of end_turn and, on success, runs only "
-               "on_extra_turn, `turn += 1` and start_turn(). C# evaluates "
-               "Hook.ShouldTakeExtraTurn in SwitchFromPlayerToEnemySide "
-               "(CombatManager.cs:1360-1373), i.e. AFTER "
-               "EndPlayerTurnPhaseOneInternal (auto-post-play, BeforeTurnEnd, "
-               "DoTurnEnd, BeforeFlush) and AFTER EndPlayerTurnPhaseTwoInternal "
-               "(FlushPlayerHand, AfterFlush, EndOfTurnCleanup, AfterTurnEnd); "
-               "only the ENEMY SIDE is skipped. LIVE: Pael's Eye is a ported "
-               "Ancient relic granted by the Pael shrine (events/pael.py:53, "
-               "PaelsEye.cs:108-137, relics/paels_eye.py:36-47), and the sim "
-               "has dozens of on_player_turn_end listeners plus Parrying "
-               "Shield on after_player_turn_end -- every one of which the "
-               "real game still runs on an extra-turn round.",
-        strict=True,
-    )
     def test_extra_turn_still_runs_the_turn_end_pipeline(self):
         cs = CombatState(rng=random.Random(0),
                          relics=[make_relic("paels_eye")])
@@ -666,33 +504,19 @@ class TestTurnStructureOrder:
                                  "after_player_turn_end"])
         cs.end_turn()
         assert calls == [
-            "should_take_extra_turn",
             "on_player_turn_end",     # C#: Hook.BeforeTurnEnd still runs
             "should_flush_hand",      # C#: FlushPlayerHand still runs
             "after_player_turn_end",  # C#: Hook.AfterTurnEnd still runs
+            # The predicate is evaluated inside SwitchFromPlayerToEnemySide
+            # (CombatManager.cs:1364-1368), i.e. AFTER both end-turn phases --
+            # not before them. This pin originally listed it first, which was
+            # the sim's old position rather than the game's; the gap entry's own
+            # text ("after both end-turn phases have run") is the authority and
+            # the source agrees.
+            "should_take_extra_turn",
             "on_extra_turn",          # C#: AfterTakingExtraTurn, last
         ]
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G4 (audit/records/seam/turn_structure.json, "
-               "spec steps 61-63): C#'s FlushPlayerHand treats ShouldFlush == "
-               "false as 'every card is retained' and STILL runs "
-               "Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup "
-               "unconditionally (CombatManager.cs:1327-1346). The sim gates "
-               "the whole thing -- `if self.hooks.should_flush_hand(): "
-               "self.player.discard_hand()` (combat.py:661-662) -- so a false "
-               "result also skips on_hand_emptied, which player.py:197 fires "
-               "from inside discard_hand. LIVE through Joss Paper: its port "
-               "defers Ethereal-caused exhausts and credits them from "
-               "on_hand_emptied (relics/joss_paper.py:41-45), where the real "
-               "Joss Paper credits them from AfterSideTurnEnd "
-               "(JossPaper.cs:116), which fires whatever ShouldFlush returned. "
-               "With Runic Pyramid (ported Ancient relic from the Darv shrine, "
-               "events/darv.py:33, relics/runic_pyramid.py:16-17) the sim "
-               "strands the credit forever and the Joss Paper draw never "
-               "happens. See also gap G16 for the on_hand_emptied site itself.",
-        strict=True,
-    )
     def test_no_flush_still_credits_the_end_of_turn_hand_events(self):
         cs = CombatState(rng=random.Random(1),
                          relics=[make_relic("joss_paper"),
@@ -708,21 +532,6 @@ class TestTurnStructureOrder:
         # Joss Paper draws its 1 card, and the next hand is 5 + 1.
         assert len(p.hand) == 6
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G6 (audit/records/seam/turn_structure.json, "
-               "spec step 12): Creature.AfterTurnStart returns BEFORE "
-               "ClearBlock for a player whose PlayerCombatState.TurnNumber == "
-               "1 (Creature.cs:681-692) -- which is what lets "
-               "Hook.BeforeCombatStart grant block that survives into the "
-               "first enemy turn. player.py:157-159 has no turn-1 arm. LIVE "
-               "and already load-bearing: Anchor's real hook is "
-               "BeforeCombatStart (Anchor.cs:19-23) and the sim had to re-wire "
-               "it onto on_block_cleared to compensate "
-               "(relics/anchor.py:21-24, whose docstring says so outright), as "
-               "did Fake Anchor (relics/fake_anchor.py:24-29) -- and that "
-               "workaround is what makes gap G1 bite both of them.",
-        strict=True,
-    )
     def test_player_block_is_not_cleared_on_turn_one(self):
         cs = fresh()
         cs.player.block = 10
@@ -732,27 +541,19 @@ class TestTurnStructureOrder:
         cs.player.start_turn()
         assert cs.player.block == 10  # C#: turn 1 never clears
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G8 (audit/records/seam/turn_structure.json, "
-               "spec step 47): C# gives end-of-turn auto-plays their own "
-               "phase -- Phase = AutoPostPlay, "
-               "Hook.AfterAutoPostPlayPhaseEntered, Phase = End -- entered "
-               "strictly BEFORE Hook.BeforeTurnEnd "
-               "(CombatManager.cs:1160-1180). The sim has neither the phase "
-               "nor the hook, so StampedePower's port fires from "
-               "on_player_turn_end (powers.py:1025), the sim's BeforeTurnEnd "
-               "slot, and lands in listener-registration order. LIVE: "
-               "StampedePower and Cloak Clasp (a ported Rare relic gaining 1 "
-               "Block per card in hand from plain BeforeSideTurnEnd, "
-               "CloakClasp.cs:24, relics/cloak_clasp.py:19-24) contend "
-               "directly -- the real game ALWAYS auto-plays first and lets "
-               "Cloak Clasp count the reduced hand, while the sim registers "
-               "relics before powers and counts the full one. The ported Howl "
-               "From Beyond card (cards/howl_from_beyond.py:45) is the same "
-               "shape.",
-        strict=True,
-    )
     def test_end_of_turn_auto_plays_run_before_turn_end_hooks(self):
+        """turn_structure gap G8's observable, which now holds -- but only
+        because gap G2 was closed and powers dispatch before relics, so
+        Stampede's auto-plays land before Cloak Clasp counts the hand.
+
+        C#'s guarantee is stronger and does not depend on listener order:
+        end-of-turn auto-plays get their own phase (Phase = AutoPostPlay,
+        Hook.AfterAutoPostPlayPhaseEntered, Phase = End) entered strictly
+        before Hook.BeforeTurnEnd (CombatManager.cs:1160-1180). The sim still
+        has neither phase, so a *relic* that auto-played and a *power* that
+        counted the hand would still come out wrong. G8's mechanism is open;
+        this assertion is its observable, not its proof.
+        """
         from sts2_rl.powers import StampedePower
 
         cs = CombatState(rng=random.Random(0),
@@ -760,34 +561,15 @@ class TestTurnStructureOrder:
         PowerCmd.apply(cs.hooks, cs.player, StampedePower, 2,
                        applier=cs.player)
         assert len(cs.player.hand) == 5
-        # combat.py:654 -- the sim's Hook.BeforeTurnEnd slot.
+        # AutoPostPlay is a real STEP now, entered strictly before BeforeTurnEnd
+        # (CombatManager.cs:1160-1176), so the guarantee no longer depends on
+        # which listener category each of the two happens to be.
+        cs.hooks.after_auto_post_play_phase_entered(cs.player)
+        assert len(cs.player.hand) == 3     # the phase drained the auto-plays
         cs.hooks.on_player_turn_end(cs.player)
-        # C#: Stampede's 2 auto-plays land in AutoPostPlay first, so Cloak
-        # Clasp counts the 3 cards left.
+        # Cloak Clasp counts the 3 cards left.
         assert cs.player.block == 3
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G12 (audit/records/seam/turn_structure.json, "
-               "spec step 48): Hook.BeforeTurnEnd runs THREE complete listener "
-               "passes in order -- BeforeSideTurnEndVeryEarly, then "
-               "BeforeSideTurnEndEarly, then BeforeSideTurnEnd "
-               "(Hook.cs:1238-1261) -- and Orichalcum depends on it: "
-               "BeforeSideTurnEndVeryEarly snapshots `Block > 0` into "
-               "ShouldTrigger (Orichalcum.cs:44-56) and BeforeSideTurnEnd then "
-               "grants the 6 Block. The sim's hooks.on_player_turn_end "
-               "(hooks.py:297-301) is a single listener walk, so "
-               "relics/orichalcum.py:22-26 reads `player.block == 0` at "
-               "whatever point registration order puts it. LIVE: Cloak Clasp "
-               "is a ported Rare relic granting 1 Block per card in hand from "
-               "plain BeforeSideTurnEnd (CloakClasp.cs:24, "
-               "relics/cloak_clasp.py:19-24), so acquiring it before "
-               "Orichalcum silently switches Orichalcum off; the real game "
-               "always grants both. Fake Orichalcum and Ripple Basin are the "
-               "same shape, as are the ported SandpitPower "
-               "(AfterSideTurnStartLate) and DisintegrationPower "
-               "(AfterSideTurnEndLate).",
-        strict=True,
-    )
     def test_orichalcum_snapshots_block_before_other_turn_end_listeners(self):
         cs = CombatState(rng=random.Random(0),
                          relics=[make_relic("cloak_clasp"),
@@ -798,27 +580,6 @@ class TestTurnStructureOrder:
         # C#: Orichalcum latched "no block" before Cloak Clasp ran.
         assert cs.player.block == hand + 6
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G13 (audit/records/seam/turn_structure.json, "
-               "spec step 27): CombatManager.cs:573 runs `await "
-               "CheckWinCondition()` immediately after SetupPlayerTurn (which "
-               "ends with Hook.AfterPlayerTurnStart at 675) and after the "
-               "auto-pre-play phase. The sim's turn-1 setup -- "
-               "`self.hooks.on_combat_start(); self.player.start_turn()` at "
-               "combat.py:208-209 -- is followed by NOTHING; the only "
-               "post-setup check is combat.py:681-685, on the end_turn path. "
-               "LIVE: Royal Poison is a ported Event relic from the Round Tea "
-               "Party event (events/round_tea_party.py:40) that deals 4 "
-               "unblockable HP loss on turn 1 (RoyalPoison.cs:18-25 -> "
-               "relics/royal_poison.py:25-31), so entering a combat at 4 HP or "
-               "less leaves the sim in Phase.PLAYER_TURN with a dead player "
-               "and a full hand of legal actions, where the real game "
-               "processes the pending loss on the spot. Festive Popper and "
-               "Mercury Hourglass already hand-roll a `_check_win()` call for "
-               "the all-enemies-dead half of the same missing check; neither "
-               "covers player death.",
-        strict=True,
-    )
     def test_turn_one_setup_death_ends_the_combat(self):
         cs = CombatState(rng=random.Random(0),
                          relics=[make_relic("royal_poison")],
@@ -826,27 +587,6 @@ class TestTurnStructureOrder:
         assert cs.player.is_dead      # the 4 HP loss landed
         assert cs.is_over             # C#: CheckWinCondition ends it here
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G14 (audit/records/seam/turn_structure.json, "
-               "spec step 21): on turn 1 CombatManager.cs:657-672 runs TWO "
-               "pile moves before the draw -- every card whose enchantment "
-               "sets ShouldStartAtBottomOfDrawPile goes to the BOTTOM, then "
-               "every Innate card not already moved goes to the TOP. "
-               "player.py:172-182 ports only the Innate half. LIVE: "
-               "ShouldStartAtBottomOfDrawPile has exactly one implementer in "
-               "the whole decompiled game, Imbued.cs:11, and Imbued is ported "
-               "(enchantments.py:243-267) and obtainable -- Electric Shrymp is "
-               "a ported relic that enchants a deck Skill with it "
-               "(relics/electric_shrymp.py:17-21). The bottom-move exists so "
-               "the self-auto-playing Imbued card does not occupy an "
-               "opening-hand slot; without it the sim draws it like any other "
-               "card and the opening hand is one card short (observed on 17 of "
-               "30 seeds with a 9-Strike + 1-Imbued-Defend deck). Knock-on: "
-               "the sim's Imbued only fires `if self.card in player.hand` "
-               "(enchantments.py:261-266), so on the seeds where it is NOT "
-               "drawn the sim never auto-plays it at all.",
-        strict=True,
-    )
     def test_imbued_card_starts_at_the_bottom_of_the_draw_pile(self):
         from sts2_rl.enchantments import make_enchantment
 
@@ -859,29 +599,6 @@ class TestTurnStructureOrder:
         # the auto-play comes out of the draw pile.
         assert len(cs.player.hand) == 5
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G17 (audit/records/seam/turn_structure.json, "
-               "spec step 53): C# passes the CAUSE of an exhaust to the hook -- "
-               "AfterCardExhausted(ctx, card, bool causedByEthereal) "
-               "(JossPaper.cs:102-114, dispatched from CardCmd.cs:237-244) -- "
-               "and `causedByEthereal: true` is passed from exactly two "
-               "turn-end sites in the whole game (CombatManager.cs:1240 and "
-               "CardModel.cs:1692). The play-time exhaust of an Exhaust-keyword "
-               "card passes FALSE (CardModel.cs:1985). relics/joss_paper.py:36 "
-               "has no cause parameter and branches on `card.is_ethereal`, a "
-               "property of the card, so it defers the credit for ANY mid-turn "
-               "exhaust of an Ethereal card. LIVE: Apparition is a ported "
-               "1-cost Ancient Skill with both Exhaust and Ethereal "
-               "(cards/apparition.py:12-38), granted by the ported relic "
-               "Distinguished Cape (relics/distinguished_cape.py:25), and Joss "
-               "Paper is a ported Uncommon relic -- so the real game draws the "
-               "5th-exhaust card immediately, mid-turn and still playable, "
-               "where the sim withholds it until on_hand_emptied fires from "
-               "the flush (and its card then survives into the next turn, "
-               "making the next hand 6 instead of 5). Distinct from G4: there "
-               "the credit is stranded, here it is merely late.",
-        strict=True,
-    )
     def test_joss_paper_credits_a_mid_turn_ethereal_exhaust_at_once(self):
         from sts2_rl.cmds import ExhaustCmd
 
@@ -905,30 +622,6 @@ class TestTurnStructureOrder:
         cs.play_card(p.hand.index(app))
         assert len(p.hand) == 1  # C#: the Joss Paper draw landed this turn
 
-    @pytest.mark.xfail(
-        reason="turn_structure audit gap G18 (audit/records/seam/turn_structure.json, "
-               "spec step 65): PaelsEye.AnyCardsPlayedThisTurn "
-               "(PaelsEye.cs:149-156) has two clauses the sim's "
-               "relics/paels_eye.py:27-34 has neither of -- the turn-1 "
-               "short-circuit `if (TurnNumber == 1 && Owner.Relics.Any(r => r "
-               "is WhisperingEarring)) return true` (PaelsEye.cs:152) and the "
-               "auto-play exclusion `&& !e.CardPlay.IsAutoPlay` "
-               "(PaelsEye.cs:155). The sim scans history unfiltered, and "
-               "history.py:80-81 records a CardPlayedEntry for every play "
-               "including auto-plays (relics/whispering_earring.py:36 names "
-               "the missing auto flag as a known divergence). The two "
-               "omissions cancel whenever Whispering Earring actually plays a "
-               "card and diverge otherwise. LIVE on the auto-play leg with two "
-               "ported relics: Imbued, granted by Electric Shrymp "
-               "(relics/electric_shrymp.py:17-21), auto-plays on turn 1, so a "
-               "player holding Pael's Eye who ends turn 1 without playing "
-               "anything gets the extra turn in the real game and does NOT get "
-               "it in the sim. (The other leg: with [whispering_earring, "
-               "paels_eye] and an opening hand where nothing is playable, the "
-               "Earring plays nothing and the sim grants an extra turn "
-               "PaelsEye.cs:152 withholds.)",
-        strict=True,
-    )
     def test_paels_eye_ignores_auto_plays(self):
         cs = CombatState(rng=random.Random(0),
                          relics=[make_relic("paels_eye")])
@@ -942,11 +635,11 @@ class TestTurnStructureOrder:
 def listener_categories(hooks):
     """The category of every listener on `hooks`, in dispatch order.
 
-    Every HookSystem dispatcher walks `list(self._listeners)` in order
-    (hooks.py:61 and the same line in all 66 of them), so this list IS the
-    sim's cross-listener ordering rule made visible. Categories mirror the
-    five kinds C#'s CombatState.IterateHookListeners walks, plus the sim-only
-    CombatHistory (hook_dispatch note N3).
+    Every HookSystem dispatcher walks `self._each(...)`, which walks
+    `_ordered()` (hooks.py), so that list IS the sim's cross-listener ordering
+    rule made visible. Categories mirror the five kinds C#'s
+    CombatState.IterateHookListeners walks, plus the sim-only CombatHistory
+    (hook_dispatch note N3).
     """
     from sts2_rl.cards.base import Card
     from sts2_rl.enchantments import Enchantment
@@ -959,7 +652,7 @@ def listener_categories(hooks):
              (Card, "card"), (Relic, "relic"), (Potion, "potion"),
              (Power, "power")]
     out = []
-    for listener in hooks._listeners:
+    for listener in hooks._ordered():
         out.append(next((name for cls, name in kinds
                          if isinstance(listener, cls)),
                         type(listener).__name__))
@@ -994,25 +687,23 @@ class TestHookDispatchOrder:
             setattr(listener, hook_name, rec)
         return seen
 
-    def test_dispatch_order_is_registration_order_grouped_by_category(self):
-        """Spec steps 41-44 and gap G2. The sim's listener list is built once,
-        by appending, in CombatState.__init__ order: the combat history first
-        (combat.py:112), then every deck card with its enchantment right after
-        it (124-133), then relics (158-159), then belt potions (164-166); a
-        power joins only when it is applied (cmds.py:326), so powers are always
-        LAST among the listeners that exist at that moment.
+    def test_dispatch_order_is_the_games_derived_per_creature_walk(self):
+        """Spec steps 41-44 and gap G2, now closed.
 
-        Both halves are asserted: the composition of `_listeners`, and that a
-        real dispatch visits exactly that sequence -- the second is what makes
-        this a pin on dispatch rather than on a data structure.
+        `CombatState.IterateHookListeners` (CombatState.cs:410-493) builds no
+        list: it re-derives the listeners per dispatch from the creatures
+        themselves, allies before enemies, and within a player walks Powers
+        (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448) ->
+        the cards of AllPiles (449-467). `HookSystem._ordered` sorts the
+        registration-order `_listeners` into exactly that, with registration
+        order as the tie-break inside one (creature, category) pair -- which is
+        what keeps an enchantment immediately after its own card. The sim-only
+        CombatHistory (note N3) has no C# counterpart and stays ahead of the
+        walk, so an entry exists when anything reacts to it.
 
-        C# builds no such list. `CombatState.IterateHookListeners`
-        (CombatState.cs:410-493) re-derives the listeners per dispatch from the
-        creatures themselves, allies before enemies, and within a player walks
-        Powers (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448)
-        -> the cards of AllPiles (449-467). Powers first, cards last: almost
-        the mirror image of the assertion below. If a future change reorders
-        registration or replaces `_listeners`, this test is where it surfaces.
+        Both halves are asserted: the derived composition, and that a real
+        dispatch visits exactly that sequence -- the second is what makes this
+        a pin on dispatch rather than on a data structure.
         """
         from sts2_rl.potions import make_potion
 
@@ -1027,44 +718,29 @@ class TestHookDispatchOrder:
         PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2,
                        applier=cs.player)
 
-        expected = (["history"] + ["card"] * 9 + ["relic"] * 2 + ["potion"]
-                    + ["power"] * 2)
+        # Registration order is unchanged -- it is the tie-break input, not the
+        # dispatch rule.
+        assert [type(l).__name__ for l in cs.hooks._listeners][:1] == \
+            ["CombatHistory"]
+
+        # The player's whole walk (powers, relics, potions, cards), then the
+        # enemy's.
+        expected = (["history", "power", "relic", "relic", "potion"]
+                    + ["card"] * 9 + ["power"])
         assert listener_categories(cs.hooks) == expected
 
         # ...and a dispatch really does visit them in that order.
         visited = self._probe(cs.hooks, "on_combat_start")
         cs.hooks.on_combat_start()
-        assert visited == list(cs.hooks._listeners)
+        assert visited == cs.hooks._ordered()
 
-        # The enemy's Vulnerable is the LAST listener even though C# would put
-        # every enemy power after the player's block but before nothing at all
-        # -- enemies come after allies there, powers first within each.
+        # The enemy's Vulnerable is last: enemies come after allies, and it is
+        # the only listener that enemy owns.
         from sts2_rl.powers import Power
-        assert isinstance(cs.hooks._listeners[-1], Power)
-        assert cs.hooks._listeners[-1].owner is cs.enemy
+        last = cs.hooks._ordered()[-1]
+        assert isinstance(last, Power)
+        assert last.owner is cs.enemy
 
-    @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G2 (audit/records/seam/hook_dispatch.json, "
-               "spec steps 1-6, 41-43): CombatState.IterateHookListeners walks "
-               "each creature's POWERS (CombatState.cs:416) before that "
-               "player's RELICS (428-435), while the sim appends relics at "
-               "combat setup (combat.py:158-159) and powers only when applied "
-               "(cmds.py:326), so relics always run first. LIVE on "
-               "Hook.ModifyEnergyCostInCombat (Hook.cs:1574-1590), a "
-               "dispatcher this record owns: CuriousPower reduces a Power "
-               "card's cost with a floor of 0 (CuriousPower.cs:12-32 -> "
-               "powers.py:2883-2889, applied by the ported Mad Science card, "
-               "cards/mad_science.py:174-177) and Spiked Gauntlets raises a "
-               "Power card's cost by 1 (SpikedGauntlets.cs:27-39 -> "
-               "relics/spiked_gauntlets.py:26-32, from the ported Tanx shrine, "
-               "events/tanx.py:13). Both are early-phase, so listener order is "
-               "the only thing that decides the result: on a 1-cost Power card "
-               "with 2 Curious stacks the game computes max(0, 1-2) = 0 then "
-               "+1 = 1, and the sim computes 1+1 = 2 then max(0, 2-2) = 0 -- "
-               "the sim hands the player a free Power card the real game "
-               "charges 1 energy for.",
-        strict=True,
-    )
     def test_powers_modify_energy_cost_before_relics_do(self):
         from sts2_rl.powers import CuriousPower
 
@@ -1077,30 +753,6 @@ class TestHookDispatchOrder:
                                                 power_card.energy_cost)
         assert cost == 1  # C#: Curious floors at 0 first, then Gauntlets +1
 
-    @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G3 (audit/records/seam/hook_dispatch.json, "
-               "spec steps 27-30): Hook.ModifyEnergyCostInCombat runs TWO "
-               "complete listener passes -- every TryModifyEnergyCostInCombat, "
-               "then every TryModifyEnergyCostInCombatLate "
-               "(Hook.cs:1574-1590) -- and 24 of Hook.cs's 147 dispatchers are "
-               "multi-pass while AbstractModel.cs declares 27 phase-suffixed "
-               "hooks. hooks.py:196-201 is a single flat walk with no phase "
-               "concept (hooks.py:673-680 says so outright). LIVE with two "
-               "ported powers that both target Attacks: TangledPower is EARLY "
-               "(TangledPower.cs's TryModifyEnergyCostInCombat -> "
-               "powers.py:1486-1502, applied by the ported Act-1 monster Vine "
-               "Shambler, monsters/overgrowth/vine_shambler.py:42-43) and adds "
-               "1 to an Entangled Attack's cost, while FreeAttackPower is LATE "
-               "(FreeAttackPower.cs:14-40 -> powers.py:1133-1155, applied by "
-               "the ported Ironclad card Unrelenting, cards/unrelenting.py:40) "
-               "and sets an Attack's cost to 0. The game always runs Tangled "
-               "first and Free Attack last, so the next Attack is free; the "
-               "sim's answer depends on which power landed first -- applying "
-               "Free Attack before the Vine Shambler's Tangle leaves the "
-               "Strike at 1. BufferPower.cs:17-19 is the source's own "
-               "statement that Late is load-bearing.",
-        strict=True,
-    )
     def test_late_energy_cost_modifiers_run_after_early_ones(self):
         from sts2_rl.powers import FreeAttackPower, TangledPower
 
@@ -1116,30 +768,32 @@ class TestHookDispatchOrder:
         cost = cs.hooks.modify_card_energy_cost(strike, strike.energy_cost)
         assert cost == 0  # C#: the Late pass zeroes it whatever Tangled did
 
-    @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G4 (audit/records/seam/hook_dispatch.json, "
-               "spec seed fact 3): CardModel.cs:1904-1965 loops `for (int i = "
-               "0; i < playCount; i++)`, builds a FRESH CardPlay each "
-               "iteration (1919-1928, PlayIndex = i) and fires "
-               "Hook.BeforeCardPlayed at 1929 and Hook.AfterCardPlayed at 1959 "
-               "INSIDE that loop. combat.py:466 fires before_card_played once "
-               "BEFORE the `for _ in range(play_count)` loop (477-494) and "
-               "combat.py:514 fires on_card_played once AFTER it, so a replayed "
-               "card brackets its whole multi-play with one pair of events. "
-               "LIVE with two ported relics: Throwing Axe plays the first card "
-               "of each combat twice (ThrowingAxe.cs -> "
-               "relics/throwing_axe.py:30-36, from the ported Tanx shrine, "
-               "events/tanx.py:13) and Pen Nib counts Attack plays in "
-               "before_card_played and doubles every 10th (PenNib.cs -> "
-               "relics/pen_nib.py:30-35). The real game counts the doubled "
-               "Strike as two Attacks and the sim counts one, so from the "
-               "first combat onward the sim doubles a different Attack. The "
-               "four other ported replay sources (enchantments.py:167, "
-               "enchantments.py:232, powers.py:966 One-Two Punch, "
-               "powers.py:3919 Duplication) widen it, as does every one of the "
-               "sim's 48 on_card_played listeners.",
-        strict=True,
-    )
+    def test_free_attack_makes_a_three_cost_attack_playable(self):
+        """The Late pass's observable in a real recorded run, not a synthetic
+        pair.
+
+        In 89U21BV1TZ/floor_18 the game plays UNRELENTING (command 200) and
+        then BLUDGEON on the very next command (201, Vantom 101 -> 80).
+        Bludgeon costs 3 and the player does not have 3 energy left: the play
+        is only legal because FreeAttackPower is
+        TryModifyEnergyCostInCombatLate (FreeAttackPower.cs:14) and zeroes the
+        Attack's cost after every plain modifier has run. Without the Late pass
+        the sim could not afford it and played a Strike instead, which is what
+        made a whole conformance replay take a different trajectory.
+        """
+        from sts2_rl.powers import FreeAttackPower
+
+        cs = CombatState(rng=random.Random(0))
+        bludgeon = make_card("bludgeon")
+        assert bludgeon.energy_cost == 3
+        cs.player.hand.clear()
+        cs.player.hand.append(bludgeon)
+        cs.player.energy = 1                      # cannot pay the printed cost
+        PowerCmd.apply(cs.hooks, cs.player, FreeAttackPower, 1,
+                       applier=cs.player)
+        assert cs.hooks.modify_card_energy_cost(bludgeon, bludgeon.energy_cost) == 0
+        assert cs.play_card(0, target_idx=0)      # and so it is playable
+
     def test_before_card_played_fires_once_per_replay_iteration(self):
         cs = CombatState(rng=random.Random(0),
                          relics=[make_relic("pen_nib"),
@@ -1186,33 +840,6 @@ class TestHookDispatchOrder:
         assert cs._all_enemies_dead()
         assert cs.player.block == block_before  # C#: nobody was dispatched to
 
-    @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G9 (audit/records/seam/hook_dispatch.json "
-               "step 31; the same mechanism as damage_pipeline's guard N3, "
-               "raised to gap in the same pass): Hook.ModifyDamageInternal "
-               "(Hook.cs:2515-2538) threads a RUNNING decimal through the "
-               "listeners -- `num *= item.ModifyDamageMultiplicative(target, "
-               "num, ...)` folds each factor in immediately -- while "
-               "hooks.py:66-78 multiplies every listener's factor together in "
-               "FLOAT and cmds.py:58 applies the product once, "
-               "`amount = int(amount * hooks.modify_damage_multiplicative"
-               "(...))`. No implementation on either side reads the value it "
-               "is handed (0 of 46 C# overrides, 0 of 31 sim ones -- "
-               "audit/tools/dormancy_probes.py cs-running-value / "
-               "sim-running-value), so the divergence is the aggregation "
-               "SHAPE, not the argument: 1.5 * 0.7 is 1.0499999999999998 in "
-               "float, so 20 * that truncates to 20, where 20m * 1.5m * 0.7m "
-               "is exactly 21m. LIVE: Shrink (x0.7 on the dealer, "
-               "powers.py:1366-1387, applied by the ported Act-1 Shrinker "
-               "Beetle at monsters/overgrowth/shrinker_beetle.py:39-40 and by "
-               "the Shrink Potion at potions.py:718-722) plus Vulnerable "
-               "(x1.5 on the target, powers.py:403-417, applied by the ported "
-               "Bash) on a 20-damage powered attack: the sim deals 20 where "
-               "the game deals 21. A control that keeps float arithmetic but "
-               "threads it sequentially returns 21, so this is not "
-               "float-vs-decimal representation.",
-        strict=True,
-    )
     def test_multiplicative_damage_modifiers_chain_sequentially(self):
         from sts2_rl.powers import ShrinkPower
 
@@ -1336,41 +963,18 @@ class TestMonsterStateMachineOrder:
         assert len(spawn.machine.state_log) == 1
         assert spawn._current_move.id == spawn.machine.current.id
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G1 (audit/records/seam/"
-               "monster_state_machine.json step 13), LIVE. C#'s "
-               "RandomBranchState.AddBranch puts cooldown-or-maxRepeats in "
-               "positional slot 2 and NEVER a weight -- every weight is a "
-               "float or Func<float> defaulting to 1f (RandomBranchState.cs:"
-               "46-113) -- while the sim's add_branch puts WEIGHT there "
-               "(monsters/state_machine.py:160-167), so a positional port "
-               "turns a repeat limit into a weight. This is the shipped "
-               "TwigSlimeM/Flyconid bug class, still present in FIVE ported "
-               "monsters (audit/tools/state_machine_probes.py mismatch): "
-               "FlailKnight.cs:50,51 AddBranch(FLAIL, 2) / AddBranch(RAM, 2) "
-               "= maxRepeats 2 weight 1, ported at "
-               "monsters/hive/flail_knight.py:51-52 as weight=2.0 "
-               "CAN_REPEAT_FOREVER; HunterKiller.cs:43 -> "
-               "monsters/hive/hunter_killer.py:45; ScrollOfBiting.cs:90 -> "
-               "monsters/glory/scroll_of_biting.py:65; SpectralKnight.cs:52 "
-               "-> monsters/glory/knights.py:111; and "
-               "FakeMerchantMonster.cs:58 AddBranch(ENRAGE, 3, CannotRepeat) "
-               "= COOLDOWN 3 -> monsters/fake_merchant.py:72-75 "
-               "weight=_ENRAGE_WEIGHT (3.0). Observable, executed over "
-               "100000 rolls (probe `distribution`): FlailKnight telegraphs "
-               "FLAIL/RAM/WAR_CHANT at 41.6/41.6/16.8% where the game gives "
-               "36.2/36.4/27.4%, and the game's CanRepeatXTimes(2) bar on "
-               "three FLAILs in a row is gone entirely. All five are in "
-               "ported encounter pools (monsters/hive/__init__.py:26,31, "
-               "monsters/glory/__init__.py:30,35, "
-               "monsters/fake_merchant.py:117-120), so a player sees the "
-               "wrong intent and a replay records the wrong MonsterAi draw. "
-               "FossilStalker.cs:58-60 and TwoTailedRat.cs:127 read the same "
-               "argument shapes CORRECTLY, so this is a port defect, not a "
-               "machinery one.",
-        strict=True,
-    )
     def test_addbranch_int_args_are_repeat_limits_not_weights(self):
+        """monster_state_machine audit gap G1, FIXED. C#'s
+        RandomBranchState.AddBranch puts cooldown-or-maxRepeats in positional
+        slot 2 and NEVER a weight -- every weight is a float or Func<float>
+        defaulting to 1f (RandomBranchState.cs:46-113) -- while the sim's
+        add_branch puts WEIGHT there (monsters/state_machine.py:160-167), so a
+        positional port turned a repeat limit into a weight in five monsters
+        (FlailKnight, HunterKiller, ScrollOfBiting, SpectralKnight,
+        FakeMerchantMonster). All five are re-expressed against the C# overload
+        table; the per-monster pins live in
+        test/test_monster_branch_audit.py::TestAddBranchIntArgsAreRepeatLimits
+        and audit/tools/state_machine_probes.py mismatch now reports 0."""
         from sts2_rl.monsters.hive.flail_knight import FlailKnight
         from sts2_rl.monsters.state_machine import MoveRepeatType
 
@@ -1384,52 +988,48 @@ class TestMonsterStateMachineOrder:
             assert b["repeat_type"] is MoveRepeatType.CAN_REPEAT_X_TIMES
             assert b["max_times"] == 2
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G4 (audit/records/seam/"
-               "monster_state_machine.json steps 39, 40, 44), LIVE. "
-               "Creature.StunInternal (Creature.cs:524-544) makes the stun a "
-               "REAL move: it builds MoveState('STUNNED', stunMove, new "
-               "StunIntent()) with FollowUpStateId = StateLog.Last().Id and "
-               "MustPerformOnceBeforeTransitioning = true, and force-sets it "
-               "(MonsterModel.cs:420-432). The sim's CreatureCmd.stun "
-               "(cmds.py:208-218) sets a boolean, combat.py:313-329 skips "
-               "the turn, and state_machine.py:315-318 special-cases the "
-               "intent -- machine.current, machine.state_log and "
-               "_current_move are all untouched (executed: probe "
-               "stun-machine). Observable: because the game's post-stun roll "
-               "transitions STUNNED -> the deferred move id, it APPENDS that "
-               "id to StateLog a second time "
-               "(MonsterMoveStateMachine.cs:76-79), which by "
-               "RandomBranchState.cs:142-157 blocks that move's "
-               "CanRepeatXTimes/CannotRepeat branch on the FOLLOWING roll "
-               "while the sim still offers it -- a different enemy intent. "
-               "LIVE, on the one route that closes end to end (probes "
-               "stun-sites, whistle-route, stun-machine): of the sim's 8 "
-               "CreatureCmd.stun call sites exactly one takes an EXTERNAL "
-               "target, cards/whistle.py:38 (the ported Tanx Ancient Attack, "
-               "CreatureCmd.stun with no next move); Whistle comes only from "
-               "Tanx's Whistle (relics/tanxs_whistle.py:17) and `tanx` is in "
-               "GLORY's ancient pool and no other act's (rooms.py:206), and "
-               "Glory is the LAST act (run._ACTS_BY_INDEX), so the "
-               "stun-reachable population is Glory's pools -- in which four "
-               "RandomBranchState machines read the state log: ScrollOfBiting "
-               "(scrolls_of_biting_*), FlailKnight and SpectralKnight "
-               "(glory/knights.py:131) and SoulNexus. THIS TEST USES "
-               "ScrollOfBiting, whose C# CHEW branch is CanRepeatXTimes(2) "
-               "(ScrollOfBiting.cs:90) -- exactly the rule the duplicate "
-               "fills. Executed consequence (probe stun-machine, 100000 "
-               "rolls, seed 7): after a Whistle stun on a CHEW telegraph the "
-               "game's next-but-one intent is CHOMP 100% of the time and the "
-               "sim's is CHEW 66.5% / CHOMP 33.5%. The three monsters an "
-               "earlier pass cited here -- SlumberingBeetle, "
-               "LagavulinMatriarch, TerrorEel -- CANNOT show this observable: "
-               "the first two branch on ConditionalBranchState (reads "
-               "self.powers, never state_log) and TerrorEel has no branch "
-               "state at all, and all three are in earlier acts than the "
-               "Whistle.",
-        strict=True,
-    )
     def test_stun_makes_the_stun_a_move_and_relogs_the_deferred_one(self):
+        """monster_state_machine audit gap G4 (audit/records/seam/
+        monster_state_machine.json steps 39, 40, 44), FIXED.
+
+        Creature.StunInternal (Creature.cs:524-544) makes the stun a REAL
+        move: it builds MoveState('STUNNED', stunMove, new StunIntent()) with
+        FollowUpStateId = StateLog.Last().Id and
+        MustPerformOnceBeforeTransitioning = true, and force-sets it
+        (MonsterModel.cs:420-432). The sim's CreatureCmd.stun set a boolean,
+        combat.py skipped the turn, and MachineMonster.current_intent
+        special-cased it -- machine.current, machine.state_log and
+        _current_move were all untouched (executed: probe stun-machine).
+        Observable: because the game's post-stun roll transitions STUNNED ->
+        the deferred move id, it APPENDS that id to StateLog a second time
+        (MonsterMoveStateMachine.cs:76-79), which by
+        RandomBranchState.cs:142-157 blocks that move's
+        CanRepeatXTimes/CannotRepeat branch on the FOLLOWING roll while the
+        sim still offered it -- a different enemy intent. LIVE, on the one
+        route that closes end to end (probes stun-sites, whistle-route,
+        stun-machine): of the sim's 8 CreatureCmd.stun call sites exactly one
+        takes an EXTERNAL target, cards/whistle.py:38 (the ported Tanx Ancient
+        Attack, CreatureCmd.stun with no next move); Whistle comes only from
+        Tanx's Whistle (relics/tanxs_whistle.py:17) and `tanx` is in GLORY's
+        ancient pool and no other act's (rooms.py:206), and Glory is the LAST
+        act (run._ACTS_BY_INDEX), so the stun-reachable population is Glory's
+        pools -- in which four RandomBranchState machines read the state log:
+        ScrollOfBiting (scrolls_of_biting_*), FlailKnight and SpectralKnight
+        (glory/knights.py:131) and SoulNexus. THIS TEST USES ScrollOfBiting,
+        whose C# CHEW branch is CanRepeatXTimes(2) (ScrollOfBiting.cs:90) --
+        exactly the rule the duplicate fills. Executed consequence (probe
+        stun-machine, 100000 rolls, seed 7): after a Whistle stun on a CHEW
+        telegraph the game's next-but-one intent is CHOMP 100% of the time and
+        the sim's was CHEW 66.5% / CHOMP 33.5%. The three monsters an earlier
+        pass cited here -- SlumberingBeetle, LagavulinMatriarch, TerrorEel --
+        CANNOT show this observable: the first two branch on
+        ConditionalBranchState (reads self.powers, never state_log) and
+        TerrorEel has no branch state at all, and all three are in earlier acts
+        than the Whistle.
+
+        Fixed by MonsterMoveStateMachine.stun (state_machine.py), which
+        CreatureCmd.stun now calls for a MachineMonster.
+        """
         from sts2_rl.cmds import CreatureCmd
         from sts2_rl.monsters import Encounter
         from sts2_rl.monsters.glory.scroll_of_biting import ScrollOfBiting
@@ -1448,35 +1048,40 @@ class TestMonsterStateMachineOrder:
         mon.machine.roll_move(mon, mon._move_rng)
         assert [s.id for s in mon.machine.state_log] == log_before + [deferred]
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G5 (audit/records/seam/"
-               "monster_state_machine.json step 36), DORMANT. "
-               "CreatureCmd.stun's next_move_key override is gated on "
-               "hasattr(target, '_move_key') (cmds.py:216-217) -- _move_key "
-               "is the HAND-ROLLED monsters' field -- so for a "
-               "MachineMonster the caller's explicit next move evaporates "
-               "with no error (executed: probe stun-machine reports "
-               "next_move_key='LASH_MOVE' SILENTLY DROPPED). C# threads it "
-               "into the synthetic stun state's FollowUpStateId "
-               "(Creature.cs:532-541), so the monster resumes on exactly "
-               "that move. DORMANT: executed, probe stun-sites enumerates all "
-               "8 sim CreatureCmd.stun call sites and reports exactly one "
-               "passing next_move_key -- monsters/overgrowth/"
-               "ceremonial_beast.py:45 -- and CeremonialBeast is a "
-               "hand-rolled Monster (ceremonial_beast.py:32) that does have "
-               "_move_key, while the other three monster self-stunners "
-               "(SlumberingBeetle, LagavulinMatriarch, TerrorEel) are "
-               "MachineMonsters that pass none. Named "
-               "trigger: porting CeremonialBeast -- or DecimillipedeSegment "
-               "/ TestSubject / WaterfallGiant, the other "
-               "MustPerformOnceBeforeTransitioning users "
-               "(CeremonialBeast.cs:150, DecimillipedeSegment.cs:155, "
-               "TestSubject.cs:194, WaterfallGiant.cs:202) -- onto "
-               "MachineMonster, or stunning any existing MachineMonster with "
-               "an explicit next move.",
-        strict=True,
-    )
     def test_stun_next_move_key_reaches_a_machine_monster(self):
+        """monster_state_machine audit gap G5 (audit/records/seam/
+        monster_state_machine.json step 36), FIXED.
+
+        CreatureCmd.stun's next_move_key override was gated on
+        hasattr(target, '_move_key') -- _move_key is the HAND-ROLLED monsters'
+        field -- so for a MachineMonster the caller's explicit next move
+        evaporated with no error (executed: probe stun-machine reported
+        next_move_key='LASH_MOVE' SILENTLY DROPPED). C# threads it into the
+        synthetic stun state's FollowUpStateId (Creature.cs:532-541), so the
+        monster resumes on exactly that move. DORMANT when audited: probe
+        stun-sites enumerates all 8 sim CreatureCmd.stun call sites and
+        reports exactly one passing next_move_key --
+        monsters/overgrowth/ceremonial_beast.py:45 -- and CeremonialBeast is a
+        hand-rolled Monster (ceremonial_beast.py:32) that does have _move_key,
+        while the other three monster self-stunners (SlumberingBeetle,
+        LagavulinMatriarch, TerrorEel) are MachineMonsters that passed none --
+        they hand-forced the machine instead. Fixing G4 made those three pass
+        the key their C# sources pass (SlumberPower.cs:29 "ROLL_OUT_MOVE",
+        AsleepPower.cs:33 "SLASH_MOVE", ShriekPower.cs:30 TerrorState.StateId),
+        so this is now live, ported code. Named trigger for the rest: porting
+        CeremonialBeast -- or DecimillipedeSegment / TestSubject /
+        WaterfallGiant, the other MustPerformOnceBeforeTransitioning users
+        (CeremonialBeast.cs:150, DecimillipedeSegment.cs:155,
+        TestSubject.cs:194, WaterfallGiant.cs:202) -- onto MachineMonster.
+
+        ASSERTION UPDATED with the fix. The pin originally read
+        `mon._current_move.id == "LASH_MOVE"` straight after the stun, which
+        is the eager splice the sim used to do and NOT what C# does: the key
+        is the SYNTHETIC state's FollowUpStateId, and SetMoveImmediate makes
+        NextMove the STUNNED move itself (MonsterModel.cs:420-432). LASH_MOVE
+        is "the move performed on the turn after the stunned one", exactly as
+        the pin's own comment said -- which is what is asserted below.
+        """
         from sts2_rl.cmds import CreatureCmd
         from sts2_rl.monsters import Encounter
         from sts2_rl.monsters.underdocks.fossil_stalker import FossilStalker
@@ -1484,51 +1089,62 @@ class TestMonsterStateMachineOrder:
         enc = Encounter(id="pin_stun_key", monster_classes=[FossilStalker])
         cs = CombatState(rng=random.Random(3), encounter=enc)
         mon = cs.enemies[0]
+        assert mon._current_move.id == "LATCH_MOVE"     # the machine's opener
         CreatureCmd.stun(cs.hooks, mon, next_move_key="LASH_MOVE")
-        # C#: the stun's FollowUpStateId is LASH_MOVE, so that is the move
-        # performed on the turn after the stunned one.
-        assert mon._current_move.id == "LASH_MOVE"
+        # C#: NextMove and the machine's current state are both the synthetic
+        # stun move; the key is its FollowUpStateId.
+        assert mon._current_move.id == "STUNNED"
+        assert mon.machine.current.id == "STUNNED"
+        # The stunned turn performs it (MonsterModel.PerformMove), and the next
+        # player-turn-start roll resumes on exactly the key that was passed --
+        # a branch draw would have picked among TACKLE/LATCH/LASH instead.
+        mon.machine.on_move_performed(mon.machine.current)
+        assert mon.machine.roll_move(mon, mon._move_rng).id == "LASH_MOVE"
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G6 (audit/records/seam/"
-               "monster_state_machine.json steps 35, 41), DORMANT -- see the "
-               "demotion below. The machine "
-               "itself is already on the right stream -- "
-               "MachineMonster._move_rng is combat_rng.monster_ai "
-               "(monsters/state_machine.py:306-312), matching "
-               "MonsterModel.cs:417's RunRng.MonsterAi, so the brief's seed "
-               "fact 'the sim uses the shared combat stream' is STALE. One "
-               "site is not: FlutterPower's stun splice calls "
-               "machine.roll_move(self.owner, self.owner._rng) "
-               "(powers.py:2226-2235), the SHARED combat random.Random -- "
-               "executed, it is the only one of the sim's three "
-               "machine.roll_move call sites that is off-stream (probe "
-               "move-rng). Worse, roll_move walks all the way to a MoveState "
-               "and so CONSUMES a branch draw, where FlutterPower.cs:47 "
-               "calls StateLog.Last().GetNextState(...), which by "
-               "MoveState.cs:67-70 is DETERMINISTIC and consumes nothing -- "
-               "the game defers the branch to the post-stun roll. DORMANT, "
-               "and this label CORRECTS a first-pass LIVE claim that this "
-               "very pin refuted by XPASSing: FlutterPower has exactly one "
-               "applier on each side, ThievingHopper "
-               "(monsters/hive/thieving_hopper.py:113-114; in C# only "
-               "ThievingHopper.cs), and its machine is a pure deterministic "
-               "CHAIN with no RandomBranchState on either side "
-               "(thieving_hopper.py:61-65 THIEVERY->FLUTTER->HAT_TRICK->NAB"
-               "->ESCAPE, matching ThievingHopper.cs's FollowUpState "
-               "assignments), so a chain roll consumes no draw from any "
-               "stream and neither clause is observable today. Named "
-               "trigger: a FlutterPower user whose current move's follow-up "
-               "is a RandomBranchState -- any of the 12 resolved ported "
-               "branch ports would do (probe mismatch). "
-               "THIS TEST CONSTRUCTS THAT TRIGGER, "
-               "splicing a branch behind FLUTTER_MOVE so the splice must "
-               "draw, and then asserts the draw did not come off the shared "
-               "stream. Cross-referenced to turn_structure's G9, which owns "
-               "WHEN the roll happens and is a different mechanism.",
-        strict=True,
-    )
     def test_flutter_stun_splice_consumes_no_shared_stream_draw(self):
+        """monster_state_machine audit gap G6 (audit/records/seam/
+        monster_state_machine.json steps 35, 41), FIXED.
+
+        The machine itself was already on the right stream --
+        MachineMonster._move_rng is combat_rng.monster_ai, matching
+        MonsterModel.cs:417's RunRng.MonsterAi, so the brief's seed fact 'the
+        sim uses the shared combat stream' is STALE. One site was not:
+        FlutterPower's stun splice called machine.roll_move(self.owner,
+        self.owner._rng), the SHARED combat random.Random -- executed, it was
+        the only one of the sim's three machine.roll_move call sites that was
+        off-stream (probe move-rng). Worse, roll_move walks all the way to a
+        MoveState and so CONSUMED a branch draw, where FlutterPower.cs:47
+        calls StateLog.Last().GetNextState(...), which by MoveState.cs:67-70
+        is DETERMINISTIC and consumes nothing -- the game defers the branch to
+        the post-stun roll. DORMANT when audited, a label that CORRECTS a
+        first-pass LIVE claim that this very pin refuted by XPASSing:
+        FlutterPower has exactly one applier on each side, ThievingHopper
+        (monsters/hive/thieving_hopper.py:113-114; in C# only
+        ThievingHopper.cs), and its machine is a pure deterministic CHAIN with
+        no RandomBranchState on either side (thieving_hopper.py:61-65
+        THIEVERY->FLUTTER->HAT_TRICK->NAB->ESCAPE, matching ThievingHopper.cs's
+        FollowUpState assignments), so a chain roll consumes no draw from any
+        stream and neither clause was observable today. Named trigger: a
+        FlutterPower user whose current move's follow-up is a
+        RandomBranchState -- any of the 12 resolved ported branch ports would
+        do (probe mismatch). THIS TEST CONSTRUCTS THAT TRIGGER, splicing a
+        branch behind FLUTTER_MOVE so the splice would have to draw, and then
+        asserts it draws nothing. Cross-referenced to turn_structure's G9,
+        which owns WHEN the roll happens and is a different mechanism.
+
+        SETUP AND ASSERTIONS UPDATED with the fix, for two reasons the pin's
+        own reason text names:
+          - ForceCurrentState does not touch StateLog (a move is logged when a
+            roll lands on it, MonsterMoveStateMachine.cs:76-79), so a bare
+            force left StateLog.Last() == THIEVERY_MOVE and FlutterPower.cs:47
+            would never have reached the spliced branch at all. The log entry
+            below is what actually constructs the named trigger.
+          - `_current_move.id in (HAT_TRICK, NAB)` immediately after the
+            splice IS the eager walk this gap is about; in legacy mode
+            CombatRng maps every accessor to the ONE shared random.Random
+            (combat_rng.py:38-40), so no walk here can avoid the counted draw.
+            The branch is asserted where C# resolves it: the post-stun roll.
+        """
         from sts2_rl.monsters import Encounter
         from sts2_rl.monsters.hive.thieving_hopper import ThievingHopper
         from sts2_rl.monsters.state_machine import RandomBranchState
@@ -1561,6 +1177,10 @@ class TestMonsterStateMachineOrder:
         machine.states["FLUTTER_MOVE"].follow_up = branch
         machine._performed_first_move = True
         machine.force_current_state(machine.states["FLUTTER_MOVE"])
+        # ...and log it, as a roll onto FLUTTER_MOVE would have: FlutterPower
+        # .cs:47 reads StateLog.Last(), not the current state.
+        machine.state_log.append(machine.states["FLUTTER_MOVE"])
+        hopper._current_move = machine.states["FLUTTER_MOVE"]
 
         PowerCmd.apply(cs.hooks, hopper, FlutterPower, 1, applier=cs.player)
         before = rng.floats
@@ -1568,10 +1188,16 @@ class TestMonsterStateMachineOrder:
         # on_damage_received's amount > 0 guard to consume the last stack.
         DamageCmd.deal(cs.hooks, hopper, 10, dealer=cs.player,
                        card=StrikeCard(), props=ValueProp.MOVE)
-        assert hopper._current_move.id in ("HAT_TRICK_MOVE", "NAB_MOVE")
-        # C#: FlutterPower.cs:47 draws off RunRng.MonsterAi, never the shared
-        # combat stream.
+        # C#: FlutterPower.cs:47's StateLog.Last().GetNextState(...) resolves
+        # through MoveState.GetNextState, which is deterministic -- the splice
+        # draws nothing, off the shared stream or any other, and NextMove
+        # becomes the synthetic stun move.
         assert rng.floats == before
+        assert hopper._current_move.id == "STUNNED"
+        # The spliced branch is resolved by the POST-STUN roll, on MonsterAi.
+        hopper.machine.on_move_performed(hopper.machine.current)
+        assert hopper.machine.roll_move(
+            hopper, hopper._move_rng).id in ("HAT_TRICK_MOVE", "NAB_MOVE")
 
     @pytest.mark.xfail(
         reason="monster_state_machine audit gap G7 clause (a) (audit/records/seam/"
@@ -1743,28 +1369,6 @@ class TestPotionContentPins:
         enemy.powers["illusion"].is_reviving = True
         return cs, enemy
 
-    @pytest.mark.xfail(
-        reason="potion audit gap G(AoE-power) (audit/records/potion/"
-               "potion_of_binding.json and audit/records/potion/"
-               "shackling_potion.json), LIVE. It is seam/power_cmd guard G6 at "
-               "a content site: C# walks CombatState.HittableEnemies "
-               "(CombatState.cs:142 = Enemies.Where(IsHittable), and "
-               "IsHittable is !IsDead && Hook.ShouldAllowHitting, "
-               "Creature.cs:285-299) and PowerCmd.Apply additionally refuses "
-               "!target.CanReceivePowers (PowerCmd.cs:103). The sim filters on "
-               "`not is_gone` (potions.py:747, creatures.py:44-46) and "
-               "cmds.py:270-332's PowerCmd.apply has no CanReceivePowers "
-               "guard at any point. LIVE and executed (py audit/tools/"
-               "potion_probes.py aoe-power): an Eye with Teeth mid-Illusion-"
-               "revival (powers.py:1566-1575; summoned by Fogmog, "
-               "monsters/overgrowth/fogmog.py:95, Parafright/The Obscura the "
-               "Hive twin) sits at 1 HP, so the sim keeps it and lands "
-               "weak 1 + vulnerable 1 where the game applies nothing at all. "
-               "The DAMAGE AoE potions are NOT affected -- DamageCmd.deal "
-               "applies should_allow_hitting itself (cmds.py:51-52) -- so the "
-               "fix belongs in PowerCmd.apply, not in the potions.",
-        strict=True,
-    )
     def test_aoe_power_potion_skips_an_unhittable_enemy(self):
         from sts2_rl.potions import PotionOfBinding
 
@@ -1773,29 +1377,6 @@ class TestPotionContentPins:
         assert "weak" not in enemy.powers
         assert "vulnerable" not in enemy.powers
 
-    @pytest.mark.xfail(
-        reason="potion audit gap G1 (audit/records/potion/"
-               "touch_of_insanity.json), LIVE. TouchOfInsanity.cs:22 filters "
-               "the hand with `c.CostsEnergyOrStars(includeGlobalModifiers: "
-               "false) || c.CostsEnergyOrStars(includeGlobalModifiers: true)` "
-               "-- an OR over CostModifiers.Local and CostModifiers.All "
-               "(CardModel.cs:1578-1595). The sim tests `not c.energy_cost_x "
-               "and c.energy_cost > 0` (potions.py:166-169) and "
-               "Card.energy_cost (cards/base.py:222-232) is the LOCAL cost "
-               "only, so the `true` arm is dropped. LIVE and executed (py "
-               "audit/tools/potion_probes.py touch-of-insanity): with Spiked "
-               "Gauntlets held (relics/spiked_gauntlets.py:26-31, +1 to Power "
-               "cards, a TryModifyEnergyCostInCombat global modifier) and a "
-               "Power card made free this turn, local cost is 0 and global "
-               "cost is 1, so the game offers the card and the sim's candidate "
-               "list is empty -- the potion does nothing (potions.py:170-171) "
-               "where the game hands the player a permanent 0-cost card. All "
-               "three components ported: Spiked Gauntlets from the Glory Tanx "
-               "shrine (events/tanx.py:13), a free Power card from Power "
-               "Potion or Orobic Acid, Touch of Insanity a pooled Uncommon "
-               "(potion_pools.py:63).",
-        strict=True,
-    )
     def test_touch_of_insanity_offers_a_globally_costed_card(self):
         from sts2_rl.potions import TouchOfInsanity
 
@@ -1811,26 +1392,6 @@ class TestPotionContentPins:
         # SetToFreeThisCombat == EnergyCost.SetThisCombat(0).
         assert card._cost_this_combat == 0
 
-    @pytest.mark.xfail(
-        reason="potion audit gap G1 (audit/records/potion/"
-               "fairy_in_a_bottle.json), LIVE. FairyInABottle.cs:42-45's "
-               "AfterPreventingDeath runs the FULL use pipeline -- `await "
-               "OnUseWrapper(new ThrowingPlayerChoiceContext(), creature)` -- "
-               "so PotionModel.cs:338's Hook.AfterPotionUsed fires when the "
-               "fairy pops. The sim's after_preventing_death "
-               "(potions.py:1245-1250) calls discard_potion and then "
-               "potion.use directly, and the ONLY on_potion_used dispatch site "
-               "in sts2_rl/ is combat.py:610 inside CombatState.use_potion -- "
-               "which this path does not go through. LIVE: both C# "
-               "AfterPotionUsed implementers are ported and working at their "
-               "own sites -- ReptileTrinket.cs:22 -> "
-               "relics/reptile_trinket.py:23-29 (3 temporary Strength, "
-               "verdicted faithful by audit/records/relic/"
-               "reptile_trinket.json) and BeltBuckle.cs:81 -> "
-               "relics/belt_buckle.py:32-33. Observable: the game grants 3 "
-               "Strength when the fairy saves you and the sim grants none.",
-        strict=True,
-    )
     def test_fairy_in_a_bottle_fires_after_potion_used(self):
         from sts2_rl.potions import FairyInABottle
 
@@ -1848,24 +1409,6 @@ class TestPotionContentPins:
         # ...and the use should have been an AfterPotionUsed for the trinket.
         assert "reptile_trinket" in cs.player.powers
 
-    @pytest.mark.xfail(
-        reason="potion audit gap G2 (audit/records/potion/foul_potion.json), "
-               "LIVE. FoulPotion.cs:77 damages `CombatState.Creatures.Where(c "
-               "=> !c.IsPet)` and Creatures is `_allies.Concat(_enemies)` "
-               "(CombatState.cs:70) -- the ALLIES first, i.e. the thrower "
-               "before the enemies. potions.py:418 builds `[*ctx.enemies, "
-               "ctx.player]` -- the player LAST. Same set (the sim has no "
-               "pets), opposite order. LIVE: Potion Courier grants three Foul "
-               "Potions (events/potion_courier.py:47-48) and it is usable in "
-               "any combat. Observable at its sharpest with the player and "
-               "the last living enemy both on <= 12 HP: the game damages the "
-               "player first and the run ends, while the sim kills the enemy "
-               "first and CombatState.use_potion then tests "
-               "_all_enemies_dead() BEFORE player.is_dead (combat.py:612-615) "
-               "and calls _end_combat(player_won=True) -- the sim wins the "
-               "fight the game loses.",
-        strict=True,
-    )
     def test_foul_potion_damages_the_thrower_first(self):
         from sts2_rl.potions import FoulPotion
 

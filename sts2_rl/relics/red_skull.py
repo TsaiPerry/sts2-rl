@@ -39,6 +39,12 @@ class RedSkull(Relic):
         from ..powers import StrengthPower
         PowerCmd.apply(self.hooks, self.player, StrengthPower, amount, applier=self.player)
 
+    def reset_for_combat(self) -> None:
+        # RedSkull.AfterCombatEnd (:52-57) clears StrengthApplied; without it
+        # combat 2 either never re-applies the +3 or opens by removing a
+        # Strength the fresh CombatState never granted (-3).
+        self._applied = False
+
     def on_combat_start(self) -> None:
         self._update()
 

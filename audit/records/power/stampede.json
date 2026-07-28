@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     }
   ],
@@ -57,8 +57,8 @@
     },
     "AfterAutoPostPlayPhaseEntered": {
       "maps_to": "powers.py:1025-1041 StampedePower.on_player_turn_end (hooks.py:297-301, combat.py:654)",
-      "verdict": "gap",
-      "issue": "WRONG PHASE. This is turn_structure's G8 -- the AutoPrePlay and AutoPostPlay phases do not exist in the sim and their two hooks are hand-rolled onto neighbouring slots. Not re-verdicted here (binding rule 3); the verdict is gap on both sides. on its AutoPostPlay side, which G8 already labels LIVE with a Cloak Clasp witness. C# fires Hook.AfterAutoPostPlayPhaseEntered at CombatManager.cs:1167, strictly BEFORE Hook.BeforeTurnEnd (:1179), CheckWinCondition (:1181), DoTurnEnd (:1191), FlushPlayerHand (:1296) and Hook.AfterTurnEnd (:1307). The sim puts the auto-plays INSIDE on_player_turn_end (combat.py:654), i.e. inside the BeforeTurnEnd dispatch itself, so their order relative to every other turn-end power is registration order. A SECOND EXECUTED WITNESS beyond G8's, on the other side of the turn-end sequence: SetupStrikePower 2 (a TemporaryStrengthPower, whose C# hook is AfterSideTurnEnd at :1307) + Stampede 1 with one Strike in hand -- applying Setup Strike first makes the auto-played Strike deal 6 (its +2 Strength has already been reverted), applying Stampede first makes it deal 8. The game always deals 8. So Stampede's phase error compounds with the player-side AfterSideTurnEnd slot error (the main report's section 4 item 11): moving the AfterSideTurnEnd group to after_player_turn_end (combat.py:665) fixes THIS witness, but Stampede still needs its own pre-BeforeTurnEnd phase for G8's Cloak Clasp witness, which is a plain BeforeSideTurnEnd relic. Both fixes are required."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the sim now has a real AutoPostPlay phase. `hooks.after_auto_post_play_phase_entered` (hooks.py:488-496) is dispatched at combat.py:789, the FIRST statement of `end_turn` and strictly before `on_player_turn_end` (:793), mirroring CombatManager.cs:1160-1176 entering the phase before Hook.BeforeTurnEnd (:1179); StampedePower implements it (powers.py:1089). VERIFIED 2026-07-27 by reading hooks.py, combat.py:781-812 and powers.py. WAS: the auto-plays ran from inside the BeforeTurnEnd dispatch itself."
     }
   },
   "guards": [
@@ -69,8 +69,8 @@
     },
     {
       "what": "StampedePower.cs:28 Rng.Shuffle.NextItem(items)",
-      "verdict": "gap",
-      "issue": "WRONG RNG STREAM. C# picks the Attack to auto-play off base.Owner.Player.RunState.Rng.Shuffle -- the SHUFFLE stream, which is surprising but is what the source says -- and the sim uses combat._rng.choice(candidates) (powers.py:1041), the SHARED unseeded random.Random (combat.py:88). combat.combat_rng.shuffle (combat_rng.py:18,48) is the matching accessor and exists. Same defect as the one already recorded LIVE on power/aggression (main report section 4 item 8) and on power/hello_world and power/entropy in half A's batch 1, and live for the same reason: under seed parity a Stampede play both picks a different Attack and perturbs every later draw off the shared rng. Stampede is a ported Ironclad card (cards/stampede.py:36). Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the pick is now `combat.combat_rng.shuffle.choice(candidates)` (powers.py:1111) -- the dedicated Shuffle accessor (combat_rng.py), a GameRandomAdapter over the matching RunRngSet stream in a parity run -- mirroring StampedePower.cs:28's `RunState.Rng.Shuffle.NextItem(items)`. VERIFIED 2026-07-27 by reading powers.py; an executed grep shows it is the ONLY `combat_rng` use in powers.py, the rest still being the legacy shared `combat._rng`. WAS: the legacy shared unseeded random.Random."
     },
     {
       "what": "StampedePower.cs:27 the candidate filter",
@@ -88,6 +88,6 @@
       "rationale": "combat.auto_play_card with target_idx None resolves the target at combat.py:540-546 via combat_rng.targets.choice(living), citing CardCmd.cs:77's Rng.CombatTargets.NextItem(HittableEnemies) -- and that one IS on the right per-purpose stream, unlike the candidate pick above."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

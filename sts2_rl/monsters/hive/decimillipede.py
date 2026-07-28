@@ -150,7 +150,13 @@ class DecimillipedeEncounter(Encounter):
     monster_classes: list = field(default_factory=list)
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
-        start = rng.randrange(3)
+        # Parity (DecimillipedeElite.cs:40): one `base.Rng.NextInt(3)` on the
+        # PER-ENCOUNTER Rng staggers the three segments. Legacy keeps the
+        # shared-rng draw.
+        if selection_rng is not None:
+            start = selection_rng.next_int(3)
+        else:
+            start = rng.randrange(3)
         segments: list[Monster] = [
             DecimillipedeSegmentFront(hooks, rng, starter_move_idx=start),
             DecimillipedeSegmentMiddle(hooks, rng, starter_move_idx=(start + 1) % 3),

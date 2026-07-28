@@ -21,13 +21,17 @@ class BurningSticks(Relic):
         super().__init__()
         self._used_this_combat = False
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def reset_for_combat(self) -> None:
+        # BurningSticks.AfterRoomEntered(CombatRoom) (:37-45) and
+        # AfterCombatEnd (:60-65).
+        self._used_this_combat = False
+
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         if self._used_this_combat or card.card_type != CardType.SKILL:
             return
-        from ..cards import make_card
+        from ..cards.base import create_clone
         from ..cmds import CardPileCmd
         self._used_this_combat = True
-        clone = make_card(card.id)
-        for _ in range(card.upgrade_level):
-            clone.upgrade()
+        clone = create_clone(card)
         CardPileCmd.add_to_hand(self.hooks, self.player, clone)

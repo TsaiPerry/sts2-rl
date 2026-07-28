@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\anger.py",
-    "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618"
+    "sha256": "cbd924bb34688bb59491756f54e935a9d271beabd69625b0fb563752057fc043"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
@@ -41,7 +41,17 @@
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     }
   ],
@@ -57,9 +67,9 @@
       "rationale": "`new DamageVar(6m, ValueProp.Move)` (Anger.cs:14) == `_damage = 6` dealt through `DamageCmd.deal(..., card=self)`, whose default props are `DamageProps.CARD == ValueProp.MOVE` (valueprops.py:34). Powered (no Unpowered), so this card is NOT in gap G1's blast radius and IS boosted by Strength/Vulnerable/Weak on both sides."
     },
     "OnPlay": {
-      "maps_to": "AngerCard.on_play (anger.py:33-39)",
+      "maps_to": "AngerCard.on_play (anger.py:35-39)",
       "verdict": "gap",
-      "issue": "The damage half is faithful (`DamageCmd.Attack(DynamicVars.Damage.BaseValue).FromCard(this).Targeting(cardPlay.Target)`, Anger.cs:24-26, == `DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)`), and the destination pile is faithful (`CardPileCmd.AddGeneratedCardToCombat(card, PileType.Discard, Owner)`, Anger.cs:28, == `CardPileCmd.add_to_discard`, cmds.py:464-472, which appends and runs `_enter_combat`). THE COPY IS NOT A CLONE. C# `CreateClone()` (Anger.cs:27 -> CardModel.cs:2168-2181 -> RunState.CloneCard:394-399 -> AbstractModel.MutableClone:162-169) is a MemberwiseClone plus `CardModel.DeepCloneFields` (CardModel.cs:1193-1216), which carries over the live keyword set, the cloned `_energyCost` object (so `SetThisCombat` / `AddThisTurn` / free-this-turn overrides survive), `base_replay_count`, AND deep-clones the card's Enchantment (1204-1209) and Affliction (1210-1214) onto the copy. The sim instead constructs a bare `AngerCard()` and replays `upgrade()` `upgrade_level` times (anger.py:36-38), so the copy loses the enchantment, the affliction, and every cost override. Observable: play a Spiral-enchanted Anger -- in the game the discarded copy is also Spiral-enchanted and replays when played; in the sim the copy is vanilla. LIVE: `enchantments.py:372-375` (Spiral) accepts any ATTACK card, and `events/spiraling_whirlpool.py:46` attaches it to a player-chosen deck card; `events/self_help_book.py:71` and `events/grave_of_the_forgotten.py:47` are two more ported attach sites. RATIONALE CITES THIRD FILES (rule 7): CardModel.cs, RunState.cs, AbstractModel.cs, cmds.py, enchantments.py and the three event modules are not hashed by this record. Presentation, folded in: the generated card is wrapped in CardCmd.PreviewCardPileAdd(..., 2.2f) (Anger.cs:28), a pile-add tween with no state effect."
+      "issue": "NARROWED 2026-07-27 (partly closed). CLOSED: the enchantment and affliction halves. `anger.py:38` now builds the copy with `create_clone(self)` (cards/base.py:57-83), which re-attaches a `clone_preserving_mutability()` copy of the source's enchantment and a fresh copy of its affliction at the same amount -- CardModel.DeepCloneFields' two blocks (CardModel.cs:1204-1215, read today: `Enchantment.ClonePreservingMutability()` then `EnchantInternal(..., Amount)`, and the same for Affliction). The record's headline observable -- play a Spiral-enchanted Anger and the discarded copy is vanilla -- is gone. STILL OPEN, and this is what the gap now is: `create_clone` REBUILDS the card from its class (`type(card)()` plus replayed upgrades, cards/base.py:74-76) where C#'s `CardModel.CreateClone` (CardModel.cs:2168-2181) is `CardScope.CloneCard` -> `AbstractModel.MutableClone` = a MEMBERWISE copy first, then DeepCloneFields. Three memberwise-carried pieces of state are therefore still lost: (1) the cloned `_energyCost` object (`_energyCost = _energyCost?.Clone(this)`, CardModel.cs:1202), so SetThisCombat / AddThisTurn / free-this-turn overrides survive on the game's copy and not on the sim's; (2) `BaseReplayCount`, which Hidden Gem raises (sts2_rl/cards/colorless_skills.py:325); (3) the live keyword set, which DeepCloneFields rebuilds from `GetKeywordsWithSources(KeywordSources.Local)` (CardModel.cs:1195-1200). EXECUTED WITNESS: a Spiral-enchanted card with `base_replay_count = 3` and `set_cost_this_combat(0)` clones to enchantment `spiral` (closed) but `base_replay_count` 3 -> 0 and cost 0 -> 1 (open). HISTORY -- WHAT THE DIVERGENCE WAS: The damage half is faithful (`DamageCmd.Attack(DynamicVars.Damage.BaseValue).FromCard(this).Targeting(cardPlay.Target)`, Anger.cs:24-26, == `DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)`), and the destination pile is faithful (`CardPileCmd.AddGeneratedCardToCombat(card, PileType.Discard, Owner)`, Anger.cs:28, == `CardPileCmd.add_to_discard`, cmds.py:464-472, which appends and runs `_enter_combat`). THE COPY IS NOT A CLONE. C# `CreateClone()` (Anger.cs:27 -> CardModel.cs:2168-2181 -> RunState.CloneCard:394-399 -> AbstractModel.MutableClone:162-169) is a MemberwiseClone plus `CardModel.DeepCloneFields` (CardModel.cs:1193-1216), which carries over the live keyword set, the cloned `_energyCost` object (so `SetThisCombat` / `AddThisTurn` / free-this-turn overrides survive), `base_replay_count`, AND deep-clones the card's Enchantment (1204-1209) and Affliction (1210-1214) onto the copy. The sim instead constructs a bare `AngerCard()` and replays `upgrade()` `upgrade_level` times (anger.py:36-38), so the copy loses the enchantment, the affliction, and every cost override. Observable: play a Spiral-enchanted Anger -- in the game the discarded copy is also Spiral-enchanted and replays when played; in the sim the copy is vanilla. LIVE: `enchantments.py:372-375` (Spiral) accepts any ATTACK card, and `events/spiraling_whirlpool.py:46` attaches it to a player-chosen deck card; `events/self_help_book.py:71` and `events/grave_of_the_forgotten.py:47` are two more ported attach sites. RATIONALE CITES THIRD FILES (rule 7): CardModel.cs, RunState.cs, AbstractModel.cs, cmds.py, enchantments.py and the three event modules are not hashed by this record. Presentation, folded in: the generated card is wrapped in CardCmd.PreviewCardPileAdd(..., 2.2f) (Anger.cs:28), a pile-add tween with no state effect."
     },
     "OnUpgrade": {
       "maps_to": "AngerCard._on_upgrade (anger.py:30-31)",
@@ -75,5 +85,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-07-27"
 }

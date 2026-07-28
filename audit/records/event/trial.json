@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\trial.py",
-    "sha256": "3d435d5a33c144a8a91f5771516376a0257b059a7c083db920f1dc399e4f5568"
+    "sha256": "874efbc1186317f8c47464e9109f6ae030886af0f1221ac45d3cd25524f05aea"
   },
   "extra_sources": [
     {
@@ -61,12 +61,12 @@
     },
     {
       "path": "sts2_rl/events/aroma_of_chaos.py",
-      "sha256": "65eed9d483c599eab68132983c68b8823a0d01a74ad268296abe6ef2cd801fd2",
+      "sha256": "71c966ee5e77f1b3813b17a5c15dab743a4e7e91f4f4767def3659f47c9fcaf9",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
@@ -81,32 +81,32 @@
     },
     {
       "path": "sts2_rl/events/endless_conveyor.py",
-      "sha256": "3b35d13e167ea279c2d5338fc853a073989d4a1a45c433b6449561cae90468c5",
+      "sha256": "f1f3376a63944caa95f66a03937f6f4fff6535a0be0911e15d8bd96868be0bd9",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/morphic_grove.py",
-      "sha256": "ce535850554ab449755eae4274e742dcb077e5424734e14dcf5d628e9a58c049",
+      "sha256": "0d9a837427dfc9aa49e41c562695d67da2bb4149e636bafbe79b6ea94ee5648c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/symbiote.py",
-      "sha256": "daaf188ec9417d2628e75b104aec39089db1ac3489db9388cec5799d643203d3",
+      "sha256": "ab2dd7cf1cc9764c6d5d019b2e71e15370e4b490665533ed7cf456e7d7191e0d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/the_lantern_key.py",
-      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "sha256": "29c60d6b668ae35eeab1aa04a606ff574b5a318c63e0bf815c114cc13972a8f5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/the_legends_were_true.py",
-      "sha256": "f86d70924caa9fc588f54dcdbad9e363f9795a709a9c8f8e6debad92bce9ad5c",
+      "sha256": "f50bd77603852d4a0091b735fd9d9ee731ee1bb844bfa7854c54dc8bb7f53df6",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/whispering_hollow.py",
-      "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749",
+      "sha256": "04b2c3e7caab86cf89d71dadf156bee510718119b751382f3310f525b48ba4ee",
       "side": "sim"
     },
     {
@@ -116,23 +116,28 @@
     },
     {
       "path": "sts2_rl/relics/astrolabe.py",
-      "sha256": "3d81571fbd58e9427aad66ed84f8517df0aa5cdda9c46c76b0157539aaae3abd",
+      "sha256": "53783efec80e451fcbad1278da4218f539cef8a85fdffd519ec6a9501bf99856",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/new_leaf.py",
-      "sha256": "a0bb19d5ce5928c2f010e4a0f806c7a137a7c810aba5e1ef6ac9f8332177a923",
+      "sha256": "24ccf4b235ec124c5df6b5e7ebdda11319bf00c0f9d3d825a53ad931e606d3da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -160,8 +165,8 @@
     },
     {
       "what": "EV-3: Accept's NextInt(3) trial roll (events/trial.py:40) AND NondescriptInnocent's `CardCmd.TransformToRandom(item, base.Rng, ...)` (Trial.cs:195), whose replacement pick events/trial.py:99 leaves on the shared rng by passing no `pick_rng` (run.py:455-459). EXECUTED (`py audit/tools/event_probes_b.py rng5b`): trial has no event_rng branch at all rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Accept's NextInt(3) runs on `self.event_rng` (events/trial.py:40-41) and NondescriptInnocent passes `pick_rng=self.event_rng` into run.transform_card (events/trial.py:101), matching `base.Rng` (Trial.cs:73, 195). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "MerchantGuilty (Trial.cs:144-152): AddCurseToDeck<Regret>, then TWO RelicFactory.PullNextRelicFromFront(base.Owner) -> RelicCmd.Obtain",
@@ -195,13 +200,13 @@
     },
     {
       "what": "EV-10: events/trial.py:97's NONDESCRIPT_INNOCENT transform screen (Trial.cs:192) builds its candidate list from RunState.transformable_cards (run.py:364-366), which returns removable_cards() -- 'not Eternal'. CardSelectCmd.FromDeckForTransformation filters `c.Type != CardType.Quest && c.IsTransformable` (CardSelectCmd.cs:485-489); the sim drops the QUEST clause",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-10, one verdict at every transformable_cards() site (rule 3). Half of the sim's comment is right: for a card sitting in the Deck pile, CardModel.IsTransformable really does reduce to IsRemovable (CardModel.cs:737-750 -- the extra clause only fires for an Eternal card that is NOT in the deck), and CardSelectCmd.FromDeckForRemoval (CardSelectCmd.cs:621-625) genuinely has no Quest clause, so removable_cards() itself is correct. The defect is that the TRANSFORM screen adds one and the sim's helper reuses the removal predicate. EXECUTED (`py audit/tools/event_probes_b.py quest`): three Quest cards are ported -- byrdonis_egg, lantern_key, spoils_map -- and a deck of [strike, spoils_map, lantern_key] offers all three on the sim's transform screen where the game offers only strike; transforming spoils_map turns it into a Colorless card (the probe rolled `calamity`) and the Quest card is gone from the deck for good. LIVE, both sides proven reachable with ported content (rule 6): the grant paths are events/the_legends_were_true.py:41 (Spoils Map, act 1 NAB_THE_MAP), events/the_lantern_key.py:44 (Lantern Key, the fight's SpecialCardReward) and events/byrdonis_nest.py:45 (Byrdoni's Egg), and every transform site is an ordinary event branch. RADIUS BEYOND THIS RECORD (not re-verdicted, rule 3): events/aroma_of_chaos.py:25, events/endless_conveyor.py:96, events/morphic_grove.py:41, events/symbiote.py:50, events/whispering_hollow.py:62, events/wood_carvings.py:38, plus relics/astrolabe.py:21 and relics/new_leaf.py:16 (the relic stream's). CORRECTED IN THE REVIEW FIX PASS -- the earlier text here claimed \"events/morphic_grove.py:30 is the sharpest case: its IsAllowed gates on `len(run.transformable_cards()) >= 2`, so a Quest card can make the sim OFFER an event node the game would not.\" That is FALSE and is now disproven by execution rather than merely withdrawn. The game's gate is `p.Deck.Cards.Count(c => c.IsTransformable) >= 2` (MorphicGrove.cs:26), and IsTransformable (CardModel.cs:739-750) reduces to `!Eternal` for a card in the Deck pile -- it has NO Quest clause. The Quest clause lives only on the transform SCREEN (CardSelectCmd.cs:487, `c.Type != CardType.Quest && c.IsTransformable`), which is this mechanism. EXECUTED (ad-hoc, repo root): deck [strike, spoils_map], gold 100 -- sim `MorphicGroveEvent.is_allowed` True, game `Count(c => c.IsTransformable) >= 2` True (count 2). Both engines OFFER the event; the gates agree. The real divergence is one step later and is still LIVE, so EV-10's verdict is unaffected: the sim's screen offers ['strike','spoils_map'] where the game's offers ['strike'], and because MorphicGrove passes `new CardSelectorPrefs(prompt, 2)` -- MinSelect == MaxSelect == 2, so RequireManualConfirmation is false (CardSelectorPrefs.cs:68-78) -- the game's one-card list is auto-taken whole (CardSelectCmd.cs:493-495) and it transforms ONE card, while the sim transforms TWO and destroys the Quest card. Recorded on event/morphic_grove as well."
+      "maps_to": "Closed 2026-07-28 at THIS site: RunState.transformable_cards (run.py:423-435) now filters `card_type != CardType.QUEST` on top of `not eternal`, which is CardSelectCmd.FromDeckForTransformation's `c.Type != CardType.Quest && c.IsTransformable` (CardSelectCmd.cs:485-489). EXECUTED 2026-07-28: a deck of [strike, spoils_map] returns transformable_cards() == ['strike'] where removable_cards() still returns both, so events/trial.py:98's NONDESCRIPT_INNOCENT screen offers what the game offers and the three ported Quest cards can no longer be destroyed. WARNING for this mechanism's readers: the fix introduced a NEW divergence at the one site that must NOT use this helper -- events/morphic_grove.py:30's IsAllowed gate counts IsTransformable, which has no Quest clause. That is re-narrowed on event/morphic_grove and is still a gap.",
+      "verdict": "faithful"
     },
     {
       "what": "BR-G3 (blast radius): NondescriptInnocent (events/trial.py:99) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as audit/records/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py audit/tools/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "verdict": "faithful"
     },
     {
       "what": "DoubleDown (Trial.cs:128-132) opens NAbandonRunConfirmPopup, whose Yes button calls RunManager.Instance.Abandon() (NAbandonRunConfirmPopup.cs:69-74); events/trial.py:63-65 calls run.kill() -- hp = 0 -- immediately and unconditionally",

@@ -26,7 +26,8 @@ class Pocketwatch(Relic):
         self._played_this_turn = 0
         self._played_last_turn = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         self._played_this_turn += 1
 
     def on_player_turn_start(self, player: PlayerCombatState) -> None:

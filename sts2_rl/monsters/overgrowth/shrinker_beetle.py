@@ -42,7 +42,6 @@ class ShrinkerBeetle(Monster):
             self._execute_attack(ctx, _STOMP_DMG, 1)
         else:
             self._execute_attack(ctx, _CHOMP_DMG, 1)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         self._move_key = _TRANSITIONS[self._move_key]

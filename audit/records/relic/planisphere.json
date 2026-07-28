@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\planisphere.py",
-    "sha256": "c3f31a37b201b6714ff64508e616c6d34d8ac4d36e9f6cfe3477fd3686a79549"
+    "sha256": "151a63f1d3abb046a2d2b8af1b6872e92695e15a78d8e58abe6d05ff1e5761a7"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -27,26 +27,26 @@
       "rationale": "Obtainable: Uncommon in the transcribed shared grab bag (py audit/tools/relic_probes_b12.py b12-pool reports bag=Uncommon)."
     },
     "IsAllowed": {
-      "maps_to": "no counterpart -- `Relic` declares no `is_allowed` member at all",
-      "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4. Planisphere.cs:18-21 returns RelicModel.IsBeforeAct3TreasureChest(runState), i.e. TotalFloor < 41, so the game stops offering the relic from the Act 3 treasure chest onward; the sim's pool has no per-pull filter and keeps offering it for the whole run."
+      "maps_to": "is_allowed (sts2_rl/relics/planisphere.py:27) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/planisphere.py:27), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterRoomEntered": {
-      "maps_to": "no counterpart. `Relic.after_room_entered(run, point, room_type)` EXISTS (relics/base.py:194-195) and run.py:983 dispatches it over every relic with the map point in hand; planisphere.py implements nothing at all",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Planisphere.cs:23-34 heals HealVar(5) whenever the owner is alive and the CURRENT map point's PointType is Unknown -- the relic's entire effect -- and the port is a behaviourless stub."
+      "maps_to": "after_room_entered (sts2_rl/relics/planisphere.py) -- gates on point.point_type == MapPointType.UNKNOWN, dispatched over run.relics on every room entry",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/planisphere.py's `after_room_entered` heals HEAL = 5 when `point.point_type == MapPointType.UNKNOWN` and the owner is alive -- Planisphere.cs:23-34, which tests the MAP POINT's type and not the room the '?' resolved into, exactly as the port's docstring now records. RunState dispatches after_room_entered with the point and the resolved room type for every room. WAS: the port declared only id/name/rarity and called itself an out-of-combat map effect."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the 5 HP heal on a '?' node never happens, and the stub's stated premise ('an out-of-combat map effect, so this is a no-op stub') is false",
-      "verdict": "gap",
-      "issue": "MECHANISM: Planisphere.cs:23-34 is `if (!Owner.Creature.IsDead) { var p = Owner.RunState.CurrentMapPoint; if (p != null && p.PointType == MapPointType.Unknown) { Flash(); await CreatureCmd.Heal(Owner.Creature, Heal.BaseValue); } }`. planisphere.py:1-13 declares only id/name/rarity. PROMPT.md bug class 12 says check the stub's premise rather than accept it, and this one is false in the strongest form: the sim has the hook (Relic.after_room_entered, relics/base.py:194-195), dispatches it for EVERY room from RunState.enter_point (run.py:981-983, before the room's contents resolve), passes exactly the two things the port needs (`point`, whose point_type is the MapPointType the C# reads, and the resolved `room_type`), and has the heal verb (RunState.heal, run.py:288-292, capped at max HP like CreatureCmd.Heal). Six other relics already implement after_room_entered. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-planisphere): walking a real generated act to a '?' node leaves HP at 50/80 where the game gives 55, and the probe confirms after_room_entered fired 3 times with the last call carrying point_type=UNKNOWN (the node resolved to an EVENT room, which is exactly why the C# tests the POINT type and not the resolved room type -- a '?' that becomes a Monster room still heals). Both sides ported and needing nothing further: the relic is Uncommon in the transcribed grab bag and every generated act carries 12-13 Unknown points (counted across four seeds). This is one of the 30 Sweep C stubs whose dropped hook has a live sim dispatch site; .superpowers/sdd/content-relic-sweeps.md lists it under 'map-only effect' alongside juzu_bracelet. NOTE per binding rule 7: relics/base.py, run.py and content-relic-sweeps.md are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/planisphere.py's `after_room_entered` heals HEAL = 5 when `point.point_type == MapPointType.UNKNOWN` and the owner is alive -- Planisphere.cs:23-34, which tests the MAP POINT's type and not the room the '?' resolved into, exactly as the port's docstring now records. RunState dispatches after_room_entered with the point and the resolved room type for every room. WAS: the port declared only id/name/rarity and called itself an out-of-combat map effect."
     },
     {
       "what": "G2 (LIVE): `IsAllowed` pool eligibility has no sim concept -- Planisphere stays pullable past floor 41",
-      "verdict": "gap",
-      "issue": "MECHANISM: Planisphere.cs:18-21 overrides RelicModel.IsAllowed to return IsBeforeAct3TreasureChest(runState) = `TotalFloor < 41`. The sim's Relic base declares is_allowed_at_neow but no `is_allowed` member (executed: `hasattr(Relic, 'is_allowed')` is False, b12-planisphere), and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. The sim already tracks RunState.total_floor (run.py:976 increments it on every room entry, and event gates read it), so the missing piece is one base-class member plus one filter in the pull path. REACHABILITY (LIVE, executed -- b12-planisphere): with total_floor forced to 60 the grab bag still yields planisphere. The observable is pool COMPOSITION, and a wrong pull also shifts every subsequent pull, so it is not a one-relic error. This is the 17-relic IsBeforeAct3TreasureChest cluster of .superpowers/sdd/content-relic-sweeps.md sweep B -- planisphere is named in that list -- first recorded as relic/amethyst_aubergine's IsAllowed gap in batch 1 and settled again for relic/lasting_candy in batch 8; one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it. NOTE per binding rule 7: relics/base.py, relic_pools.py, run.py, content-relic-sweeps.md, amethyst_aubergine.json and lasting_candy.json are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/planisphere.py:27), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "N1: `if (!base.Owner.Creature.IsDead)` (Planisphere.cs:25) and `currentMapPoint != null` (Planisphere.cs:28)",
@@ -64,6 +64,6 @@
       "rationale": "RelicModel.Flash() / base.Status / CanonicalVars are presentation only -- the relic bar's glow and hover text. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

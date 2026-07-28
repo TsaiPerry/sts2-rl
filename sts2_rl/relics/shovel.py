@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from .base import Relic, RelicRarity, RestSiteOption, register_relic
+from .base import (
+    Relic,
+    RelicRarity,
+    RestSiteOption,
+    is_before_act3_treasure_chest,
+    register_relic,
+)
 
 
 @register_relic
@@ -20,3 +26,9 @@ class Shovel(Relic):
         options.append(
             RestSiteOption("DIG", lambda run: run.obtain_relic_from_grab_bag())
         )
+
+    @classmethod
+    def is_allowed(cls, run) -> bool:
+        """Shovel.cs:13-16: IsBeforeAct3TreasureChest — the relic leaves the
+        pools from floor 41."""
+        return is_before_act3_treasure_chest(run)

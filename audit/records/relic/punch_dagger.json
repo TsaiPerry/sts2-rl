@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\punch_dagger.py",
-    "sha256": "7b20898e1d45c48b2e9bef0f7de78ef792d0c656d6d05730b376b3ef8c1e160a"
+    "sha256": "475a7d4c54a4879f98e9c8c3d0edbf2320a8b3617a78348e4c26d155ece7040b"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -44,12 +44,12 @@
     "CanonicalVars": {
       "maps_to": "no counterpart (the port has no amount to carry)",
       "verdict": "gap",
-      "issue": "PunchDagger.cs:18 pins `new DynamicVar('Momentum', 5m)` and AfterObtained reads it TWICE -- as the enchantment amount passed to CardSelectCmd.FromDeckForEnchantment and as the amount passed to CardCmd.Enchant (PunchDagger.cs:28, 30). The port carries no constant at all because it implements nothing; the 5 is part of guard G1's missing behaviour and is recorded here so a fix does not have to re-derive it."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/punch_dagger.py's docstring now names the real blocker: the sim DOES have enchantments and a deck-card selection screen, but the **Momentum enchantment itself** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing for `CardSelectCmd.FromDeckForEnchantment` (PunchDagger.cs:24-33) to attach. Porting Momentum makes this live immediately and the fix is then a five-line after_obtained copied from relics/beautiful_bracelet.py."
     },
     "AfterObtained": {
       "maps_to": "no counterpart -- the class body is a docstring plus four class attributes (punch_dagger.py:1-14)",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. PunchDagger.cs:24-33 enchants one deck card with Momentum 5 on pickup; the port does nothing."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/punch_dagger.py's docstring now names the real blocker: the sim DOES have enchantments and a deck-card selection screen, but the **Momentum enchantment itself** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing for `CardSelectCmd.FromDeckForEnchantment` (PunchDagger.cs:24-33) to attach. Porting Momentum makes this live immediately and the fix is then a five-line after_obtained copied from relics/beautiful_bracelet.py."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -61,7 +61,7 @@
     {
       "what": "G1 (DORMANT, and the port's stated premise is FALSE): 'the sim has no enchantments, so this is a no-op stub' (punch_dagger.py:8-9)",
       "verdict": "gap",
-      "issue": "MECHANISM: PunchDagger.cs:24-33 builds a CardSelectorPrefs for one card, resolves the canonical Momentum enchantment, awaits CardSelectCmd.FromDeckForEnchantment(Owner, Momentum, 5, prefs) and then CardCmd.Enchant(Momentum.ToMutable(), card, 5) on each returned card. THE PREMISE IS FALSE, confirmed by execution (`py audit/tools/relic_probes_b13.py stub-premises`): sts2_rl/enchantments.py ports 17 enchantments ['clone','corrupted','glam','goopy','imbued','instinct','nimble','perfect_fit','sharp','slither','souls','sown','spiral','steady','swift','tezcataras_ember','vigorous'], and a SIBLING RELIC already performs this exact pickup shape -- relics/beautiful_bracelet.py:23-29 filters the deck by `Enchantment.can_enchant`, calls run.select_cards('enchant', ...) and attaches the enchantment with an amount. So the machinery, the selector and the precedent all exist (PROMPT.md bug class 12: check the claim the stub rests on). Sweep C independently reached the same conclusion for this unit ('AfterObtained dispatched; no enchantments is FALSE'), and this record confirms rather than re-derives it. WHAT IS ACTUALLY MISSING (rule 6, DORMANT with the unported thing NAMED): the Momentum ENCHANTMENT MODEL itself -- `'momentum' in ALL_ENCHANTMENTS` is False. Porting Momentum makes this live immediately, and the fix is then a five-line after_obtained copied from beautiful_bracelet. Filed as a gap and not a waiver because 'the sim has no such content yet' is today's content, not the divergence's shape (binding rule 1). EXECUTED baseline for the fix: `run.add_relic('punch_dagger')` leaves every deck card's enchantment unchanged."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/punch_dagger.py's docstring now names the real blocker: the sim DOES have enchantments and a deck-card selection screen, but the **Momentum enchantment itself** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing for `CardSelectCmd.FromDeckForEnchantment` (PunchDagger.cs:24-33) to attach. Porting Momentum makes this live immediately and the fix is then a five-line after_obtained copied from relics/beautiful_bracelet.py."
     },
     {
       "what": "N1: CardSelectCmd.FromDeckForEnchantment is a PLAYER CHOICE, and it draws no RNG",

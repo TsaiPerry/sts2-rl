@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lava_rock.py",
-    "sha256": "416e64377c7676aa70c94a6199ac9458b880de0fa2f46551dca2d17bf3628e42"
+    "sha256": "bb3fe861db8b65fbc7a74e5dc601f53fc1f83a612b1d1e961456839abb6414b8"
   },
   "extra_sources": [
     {
@@ -31,27 +31,27 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/black_star.py",
-      "sha256": "827347f3ab55418fcbd2d482eaef272e2c1d3635cf607c6936ac7456fb5221dd",
+      "sha256": "4bdc2f6cd45203104534a13d45096b23ac06761b441573da9c6d8d2e1ccb6ea3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/driftwood.py",
-      "sha256": "f1414c00ce2deab22b5f204d53850d56d38ab2bce3e2346e49dbd33358badc64",
+      "sha256": "9cec68bc3f83de97430a84b3ea7c0c2a8ffeced8ad8314ac55e134724bf249fb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -106,12 +106,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     }
   ],
@@ -126,18 +126,16 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / HasDisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / DoActivateVisuals / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Note LavaRock.cs:19 overrides ShowCounter to FALSE, i.e. it suppresses UI the base class would show -- still presentation."
     },
     "TryModifyRewards": {
-      "maps_to": "modify_combat_rewards (lava_rock.py:20-35), dispatched over run.relics at rewards.py:497-500",
-      "verdict": "gap",
-      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B): LavaRock.cs:38-64 appends two payload-less RelicRewards to the act-0 BOSS reward screen; sts2_rl/relics/lava_rock.py:20-35 pulls both and calls run.add_relic on each (executed, `py audit/tools/relic_probes_b08.py b08-lavarock`: run.relics 2 -> 4, grab bag 96 -> 94), so neither can be declined and each one's after_obtained fires. Everything else about the port is faithful -- the three guards, both pulls, the latch and the stream are all verified in guards N2/N5/N7. Rolls up with guard N1 (same mechanism) and N4 (the dormant Late-pass collapse).",
-      "live": true
+      "maps_to": "modify_combat_rewards (sts2_rl/relics/lava_rock.py) -- appends the act-1 boss RelicRewards and offers each through RunState.offer_relic",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/lava_rock.py:30 pulls and then offers through `run.offer_relic`. WAS: the port granted the relics itself."
     }
   },
   "guards": [
     {
       "what": "N1: RelicReward is a take-or-skip offer; the port grants both relics unconditionally",
-      "verdict": "gap",
-      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE: see the TryModifyRewards hook entry -- N1 is that hook's auto-keep half stated on its own. LIVE, grade B.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/lava_rock.py:30-33 pulls each of the two and calls `run.offer_relic(relic)` before appending it to rewards.relics. WAS: both relics were granted unconditionally."
     },
     {
       "what": "N2: `new RelicReward(player)` -> Populate -> `RelicFactory.PullNextRelicFromFront(player)` (RelicReward.cs:75-96) vs `run.pull_relic_from_front()` (lava_rock.py:30)",
@@ -151,8 +149,8 @@
     },
     {
       "what": "N4 (DORMANT): the sim's single `modify_combat_rewards` collapses C#'s TryModifyRewards and TryModifyRewardsLate passes (Hook.cs:1981-1999)",
-      "verdict": "gap",
-      "issue": "Hook.ModifyRewards runs every listener's TryModifyRewards in a first full pass and every listener's TryModifyRewardsLate in a second; rewards.py:497-500 is one flat loop. Lava Rock is an EARLY implementer. DORMANT, and the argument is a domain check rather than a population count: the only ported Late implementer is relic/driftwood (Driftwood.cs:14, relics/driftwood.py:17-19), whose whole body is `if rewards.cards: rewards.can_reroll = True` -- it reads rewards.cards and writes a flag, while Lava Rock reads room_type/act_index and writes rewards.relics. Disjoint, so no ordering of the two changes any observable. (The other two C# Late implementers, Midas and Vintage, are run Modifiers and unported.) Porting any TryModifyRewardsLate relic that reads or rewrites rewards.relics makes it live. Same mechanism as the card-reward phase collapse audit/records/relic/lasting_candy.json guard G4 records, one verdict per mechanism (binding rule 3). Rule 7: src/Core/Hooks/Hook.cs, rewards.py and relics/driftwood.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: Hook.ModifyRewards' TWO complete passes are modelled. `Relic.modify_combat_rewards` and `Relic.modify_combat_rewards_late` are separate members (sts2_rl/relics/base.py:231-239) and rewards.generate_combat_rewards runs a full plain pass over run.relics and then a full Late pass (sts2_rl/rewards.py:526-529), which is Hook.cs:1981-1999. WAS: one flat loop, so an EARLY implementer's additions were not guaranteed to be visible to a Late one."
     },
     {
       "what": "N5: HasTriggered is [SavedProperty] and per-RUN; the sim's has_triggered is set in __init__ and never reset",
@@ -175,6 +173,6 @@
       "rationale": "The player comparison is the multiplayer filter, in maps_to per the contract. The double bookkeeping is NOT a double grant: rewards.relics is the screen's display list and run.add_relic is the grant, exactly as the elite branch at rewards.py:474-478/491-494 does it, and the executed run.relics 2 -> 4 (not 6) confirms each relic is added once. Rule 7: rewards.py are not hashed by this record."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

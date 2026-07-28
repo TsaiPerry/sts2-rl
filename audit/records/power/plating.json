@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
@@ -66,22 +66,22 @@
     },
     {
       "path": "sts2_rl/monsters/hive/flail_knight.py",
-      "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01",
+      "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/hive/slumbering_beetle.py",
-      "sha256": "e30a1fa656232c5772290c730657ec3bd4d1b00d72b1fa9aba15f290242b6dc3",
+      "sha256": "3626d45cbc1eb2ba4a3452cf72e041f25be036f7b78c80459adfdb96220c5ec4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/slithering_strangler.py",
-      "sha256": "966738a2e28b66f6ac06d4d3b72b7e7521180ab3daa659fb3cf49056c3b3d98b",
+      "sha256": "8e0893bdecbd3aa8f7e314ae9657fe3dfa61f1b140f217299d10c12b504891ed",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/underdocks/lagavulin_matriarch.py",
-      "sha256": "f827be87be0028436a888d358e883c0b67ce850dc4b96c03fefa9c15fe251aa9",
+      "sha256": "7a3bec9a56c64841929695621deb017a0f3a8c7b8d04b9a9f5a061b4e82be11d",
       "side": "sim"
     },
     {
@@ -91,12 +91,12 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
@@ -138,7 +138,7 @@
     "BeforeSideTurnEndEarly": {
       "maps_to": "powers.py:1068-1070 on_player_turn_end / :1076-1078 on_enemy_turn_end -> _gain_block (combat.py:654 / combat.py:~330)",
       "verdict": "gap",
-      "issue": "PHASE, and LIVE with an executed witness. C# is BeforeSideTurnEndEarly -- the EARLY pass of Hook.BeforeTurnEnd (CombatManager.cs:1179) -- and PlatingPower.cs:58-60 says why in as many words: 'We do this in early so that it triggers before end-of-turn damage effects.' The sim has no phase passes at all (hook_dispatch's G3) and fires this from the plain on_player_turn_end dispatch, so the block's position relative to end-of-turn damage is registration order. EXECUTED: Plating 4 on the player plus Constrict 6 (ported -- monsters/overgrowth/slithering_strangler.py:43 applies it to the player, and Constrict's player-owner leg is also on_player_turn_end). Applying Constrict FIRST costs the player 6 HP and leaves 4 unused block; applying Plating first costs 2 HP. The game always costs 2, because Plating's Early pass strictly precedes both the plain BeforeTurnEnd pass and Constrict's own AfterSideTurnEnd at :1307. So the sim can lose up to a full Plating stack of HP every turn on a coin flip. Player-side Plating is reachable four ways: the ported Ironclad card Stone Armor (cards/stone_armor.py:38), the ported relic Gorget (relics/gorget.py:17), a ported Colorless power card (cards/colorless_powers.py:121) and a ported potion (potions.py:592); the Slithering Strangler is a ported Act-1 monster. Binding rule 6 satisfied on both halves. Also note the ENEMY leg uses the per-creature on_enemy_turn_end rather than a side-scoped slot, which is turn_structure's G5 and is not re-verdicted here."
+      "issue": "NARROWED 2026-07-27. THE SIM NOW HAS PHASE PASSES -- `_PHASES` = very_early/early/plain/late (hooks.py:36), resolved per dispatch by `_each`, and relics really use them (relics/orichalcum.py:30 `on_player_turn_end_very_early`, relics/paels_eye.py:61 `on_player_turn_end_early`). PlatingPower did NOT move: powers.py:1138 is still the plain `on_player_turn_end`, where PlatingPower.cs:58-60 is BeforeSideTurnEndEarly and says why in as many words ('so that it triggers before end-of-turn damage effects'). The executed Constrict witness this entry carried is GONE -- ConstrictPower moved to `after_player_turn_end` (powers.py:1531), strictly after the whole BeforeTurnEnd pass -- so what remains is the phase itself, and any plain-pass turn-end damage effect still races this block on registration order. Both halves verified against today's code."
     },
     "AfterSideTurnStart": {
       "maps_to": "powers.py:1072-1074 on_player_turn_start / :1080-1082 on_enemy_turn_start -> _decay (player.py:169 / combat.py:~300)",

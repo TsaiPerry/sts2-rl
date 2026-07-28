@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     }
   ],
@@ -53,7 +53,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2118-2124 on_player_turn_end restores the drained stats",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), before _process_turn_end_cards (combat.py:658) and before the flush (:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. The concrete route for this whole group: StampedePower (powers.py:1025-1041) auto-plays Attacks from ITS on_player_turn_end, so in the game every turn-end auto-play happens while this power is still on the creature and in the sim that depends on registration order. Reproduce with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. LIVE for this unit: Tender restores Strength and Dexterity at turn end, and Stampede's turn-end auto-plays are Attack plays whose damage scales off Strength. In the game the restore happens AFTER them, so those attacks are still Tenderised; in the sim it happens in the same dispatch, so whether they are depends on registration order between Tender and Stampede. The restore also uses the same applier-less PowerCmd.apply as the drain, so it cannot be credited either."
+      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28: the SLOT fix landed, the APPLIER defect this entry used to carry verbatim did not, and the flip dropped its text. CLOSED (the slot): the player-side leg moved off the sim's Hook.BeforeTurnEnd slot (`on_player_turn_end`) onto `after_player_turn_end`, which combat.py:809 dispatches AFTER _process_turn_end_cards and the hand flush -- the sim's port of Hook.AfterTurnEnd (CombatManager.cs:1307), the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292). The registration-order witness is gone too: StampedePower moved to after_auto_post_play_phase_entered (powers.py:1089), which combat.py:789 fires strictly before this slot. STILL OPEN (the applier): the restore uses the same applier-less PowerCmd.apply as the drain, so it cannot be credited either. powers.py:2240-2242 is `PowerCmd.apply(self.hooks, self.owner, StrengthPower, self._cards_played_this_turn)` and the Dexterity twin, with the `applier` parameter left None, where TenderPower.cs:59-60 is `PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, CardsPlayedThisTurn, base.Applier, null, silent: true)`. The applier is load-bearing in the sim: PowerCmd.apply threads it into hooks.modify_power_amount (cmds.py:407), hooks.on_power_amount_changed (cmds.py:422-423) and hooks.on_power_applied (cmds.py:437), and stores it on the power (cmds.py:434). DORMANT with the same real route as the drain leg: PossessStrengthPower / PossessSpeedPower (powers.py:3302, :3315) credit stat loss BY APPLIER (`applier is self.owner`, powers.py:3271), so a monster that applied Tender and holds a Possess power hands the Tender swing back in the game and not in the sim. Same mechanism and therefore the same verdict as this record's AfterCardPlayed entry (binding rule 3). WAS: the effect additionally ran inside Hook.BeforeTurnEnd. Rule 7: sts2_rl/cmds.py is not hashed by this record."
     }
   },
   "guards": [

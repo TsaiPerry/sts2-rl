@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\choices_paradox.py",
-    "sha256": "d14a0e925e4d0d8c4117f18ef848db1eb2e152926c9c7d3c0ec9721720f99239"
+    "sha256": "4ae0d6178e1998af122e15fa80b1723cc597bdefd42d87c1226059730abb704b"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     }
   ],
@@ -79,8 +79,8 @@
   "guards": [
     {
       "what": "G1 (LIVE for parity): the card generation uses the legacy shared RNG and `rng.sample`, where C# names CombatCardGeneration and does an UnstableShuffle-take-first",
-      "verdict": "gap",
-      "issue": "MECHANISM: ChoicesParadox.cs:34 calls `CardFactory.GetDistinctForCombat(..., base.Owner.RunState.Rng.CombatCardGeneration)`, and GetDistinctForCombat is `FilterForCombat(cards).TakeRandom(count, rng)` (CardFactory.cs:119-129) -- one in-place UnstableShuffle of the filtered id list followed by Take(count). choices_paradox.py:29-31 calls the LEGACY helper `random_pool_cards(self.combat._rng, 5, distinct=True)`, which is `rng.sample(options, 5)` on the shared `random.Random` (cards/pool.py:157-158). Two divergences in one call: the wrong stream and a different consumption pattern. This is PROMPT.md bug class 16's second half, and unusually it is a gap the sim already knows how to close: `get_distinct_for_combat_parity(rng, count, ...)` (cards/pool.py:182-204) is the exact parity port, and the house-style branch around it is used by cards/infernal_blade.py:37-41, cards/mad_science.py:141-152, cards/stoke.py:43 and four sites in potions.py. REACHABILITY (executed -- `py audit/tools/relic_probes.py batch3`): in legacy mode `combat._rng IS card_gen -> True` (harmless), in parity mode `combat._rng IS card_gen -> False` -- the relic draws from the shared legacy generator while the game draws from CombatCardGeneration, so a string-seeded run diverges in the five cards offered AND in every later CombatCardGeneration draw, whose stream position is now wrong. LIVE for the conformance harness on any seed that takes this relic (it is granted by the ported Vakuu shrine, events/vakuu.py, confirmed by `batch3-pool`); dormant for RL training, which runs the legacy single-stream mode by design."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the port now draws on the named stream. sts2_rl/relics/choices_paradox.py:32-38 branches on `crng.is_parity` into `get_distinct_for_combat_parity(crng.card_gen, 5)`, the UnstableShuffle-then-Take port over CombatCardGeneration that ChoicesParadox.cs:34 passes to CardFactory.GetDistinctForCombat; legacy keeps random_pool_cards on the shared Random. WAS: the call went to the legacy shared random.Random, so the stream was never advanced and every later draw off it read at the wrong position."
     },
     {
       "what": "G2 (DORMANT): AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are two different C# hooks collapsed onto one sim method",
@@ -104,9 +104,8 @@
     },
     {
       "what": "G6 (NEW GAP, found by the 2026-07-26 fix pass): `CardSelectCmd.FromSimpleGrid(..., new CardSelectorPrefs(prompt, 1))` (ChoicesParadox.cs:46) is MinSelect == MaxSelect == 1 and therefore FORCED, but the sim's \"obtain\" purpose is skippable",
-      "verdict": "gap",
-      "issue": "MECHANISM AUTO-KEEP-REVERSE, second site (relic/toolbox guard N4 is the other; one verdict per mechanism, binding rule 3). The COUNT half of this entry is unchanged and correct: MinSelect 1 with no MaxSelect override means exactly one card, the C# loop adds each returned card to the hand, and sts2_rl/relics/choices_paradox.py:36 asks for count 1 and adds each returned card via CardPileCmd.add_to_hand, matching AddGeneratedCardToCombat(PileType.Hand). What the previous entry missed is that `CardSelectorPrefs(prompt, 1)` is the 2-argument constructor (CardSelectorPrefs.cs:63-67 -> `this(prompt, selectCount, selectCount)`), so MinSelect is 1, NOT 0 -- the screen cannot be left empty -- while the sim passes purpose \"obtain\". THE DISCRIMINATOR, settled by the 2026-07-26 relic fix pass and applied at every relic card-selection site: the sim CAN model a decline exactly when the purpose string is in `sts2_rl/driver.py:77 SKIPPABLE_PURPOSES` (`card_reward`, `obtain`, `transform_optional`). For those, `RunDriver._card_selector` (sts2_rl/driver.py:246-267) issues a real DecisionRequest whose `legal_actions()` appends the skip index (sts2_rl/driver.py:154-158) and breaks out on it; for every other purpose it either short-circuits at sts2_rl/driver.py:249 (`count >= len(remaining)`) or runs the loop with no skip action, so exactly `count` cards come back. EXECUTED: driving `RunDriver._card_selector` with an `_ask` that raises, purpose 'gambling_chip' / candidates ['a','b','c'] / count 3 RETURNS ['a','b','c'] without ever asking, while 'card_reward', 'obtain' and 'transform_optional' each raise, i.e. each really does ask. The C# side of the test is `CardSelectorPrefs`: the 2-argument constructor (CardSelectorPrefs.cs:63-67) is `this(prompt, selectCount, selectCount)`, so MinSelect == MaxSelect and the screen is FORCED, while a MinSelect of 0 or an explicit `canSkip: true` makes it declinable (`canSkip` DEFAULTS to false, CardSelectCmd.cs:216). So the sim publishes a legal SKIP action on a screen the game forces, and a policy that takes it starts the turn with one card fewer in hand. OBSERVABLE: hand size and hand contents. LIVE, grade B -- Choices Paradox is an ordinary pool relic and the trigger is the policy choosing the skip index. FIX is the same driver change relic/toolbox N4 describes: \"obtain\" is used by one genuinely skippable site (relic/hefty_tablet) and two forced ones, so it has to be split. Rule 7: sts2_rl/driver.py, sts2_rl/run.py, src/Core/CardSelection/CardSelectorPrefs.cs and audit/records/relic/toolbox.json are cited and not all hashed here.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the screen is no longer skippable. sts2_rl/relics/choices_paradox.py:48 now asks with purpose 'choose_a_card', which is NOT in sts2_rl/driver.py:87-89 SKIPPABLE_PURPOSES, so RunDriver._card_selector publishes no skip action and exactly one card comes back -- matching `CardSelectorPrefs(prompt, 1)`, the 2-argument constructor (CardSelectorPrefs.cs:63-67) whose MinSelect == MaxSelect == 1 (ChoicesParadox.cs:46). The comment at choices_paradox.py:43-47 records the reasoning. WAS: the port passed purpose 'obtain', which IS skippable, so a policy could decline a screen the game forces."
     },
     {
       "what": "N1: `player != base.Owner` (ChoicesParadox.cs:29)",

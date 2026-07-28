@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\mummified_hand.py",
-    "sha256": "acb22d4b40504b16b50da120a32cf82292d2b9e7a17f350ce18f6d3f658a67a3"
+    "sha256": "73fdb3d2362a0a0c5ac005722a4bdec0e7e0bbcd20473b079dd58c00266d02b4"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -89,8 +89,8 @@
     },
     {
       "what": "G3 (LIVE): AfterCardPlayed fires once per Replay iteration in C# and once per play in the sim, so a DOUBLED Power card frees two cards in the game and one in the sim",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/hook_dispatch.json gap G4 observed at this relic's own site -- CardModel.cs:1904-1965 builds a fresh CardPlay per iteration and fires Hook.AfterCardPlayed at :1959 INSIDE the loop, while combat.py:466 and :514 bracket the WHOLE play-count loop (combat.py:477-494). One verdict per mechanism, binding rule 3: G4 is a gap and is already labelled LIVE there, so this entry does not re-derive it. EXECUTED at this site (relic_probes_b10.py mummified-hand): with relic/throwing_axe (granted by the ported Tanx shrine, events/tanx.py) doubling the first play of the combat and Inflame as that first card, the sim frees ONE hand card where C# frees two -- and burns one CombatCardSelection draw instead of two. Rule 7: CardModel.cs, combat.py, relics/throwing_axe.py, events/tanx.py and the hook_dispatch seam record are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1: `!CombatManager.Instance.IsInProgress` (MummifiedHand.cs:18-21)",

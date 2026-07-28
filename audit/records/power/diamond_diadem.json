@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/diamond_diadem.py",
-      "sha256": "bbf7d768cc0b4033712c0f1652bfad73a5583b759a502e0b1b0e8343bb273f70",
+      "sha256": "bdd0b639a720959987f0129aa41b7f457958607c76db7a86de5c910ba384acdf",
       "side": "sim"
     }
   ],
@@ -69,8 +69,8 @@
   "guards": [
     {
       "what": "The applier's own condition (DiamondDiadem.cs) -- BLOCKED ON THE RELIC TIER",
-      "verdict": "gap",
-      "issue": "RE-VERDICTED 2026-07-26 (review fix pass): `waiver` -> `gap`. The old rationale delegated the applier's condition to `audit/records/relic/diamond_diadem`, WHICH DOES NOT EXIST -- the relic tier is 0 of 258 audited -- so under binding rule 4 (a guard carries max(verdict) of what it aggregates) it was waiving an unaudited verdict, and `waiver` is reserved for genuinely out-of-scope material in any case. Re-verdicted on this record's own evidence, because whether the applier fires when the game's does IS this power's reachability. C# (DiamondDiadem.cs) does three things: counts plays in AfterCardPlayed behind `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (:43-56); grants the power from BeforeSideTurnEnd when `CardsPlayedThisTurn <= CardThreshold` (2) and then zeroes the counter (:58-70); and **zeroes the counter again in AfterCombatEnd (:78-84)**. The sim's relic (relics/diamond_diadem.py:28-39) reproduces the first two -- `on_player_turn_end` IS the Hook.BeforeSideTurnEnd slot (combat.py:654; same finding as this stream's power/the_bomb BeforeSideTurnEnd entry), the threshold is 2 and the turn-end reset is there -- but it has NO combat-end reset. **EXECUTED 2026-07-26:** play two harmless cards, then kill the last enemy with a third. The combat ends inside play_card (combat.py:417-418), so `on_player_turn_end` never runs and the relic instance keeps `cards_played_this_turn == 3`; carried into the next combat, turn 1 of that fight grants NO Diamond Diadem power (3 > 2) where the game grants it, because AfterCombatEnd had reset the counter. So the POWER silently fails to appear for a turn of a later fight -- reachability, which is exactly what this guard is for. OWNERSHIP: the FIX belongs to the relic tier (`audit/records/relic/diamond_diadem`, unwritten), so this entry is the explicit blocked-on-relic-tier marker and cannot be closed from here. Seen and NOT part of the gap: `cardPlay.Card.Owner != base.Owner` is the multiplayer card-owner test, and ShowCounter / DisplayAmount / RefreshCounter / Status are presentation. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the applier relic now has the combat-boundary reset. `DiamondDiadem.reset_for_combat` (relics/diamond_diadem.py:28-33) zeroes `cards_played_this_turn`, and `Relic.attach` calls it whenever the relic meets a new CombatState (relics/base.py:192-195) -- the sim's single expression of DiamondDiadem.AfterCombatEnd (:78-84). So a combat that ends inside `play_card`, never reaching `on_player_turn_end`, no longer carries a stale count into the next fight, and turn 1 of that fight grants the power again. VERIFIED 2026-07-27 by reading relics/diamond_diadem.py and relics/base.py:177-195. The blocked-on-relic-tier marker is discharged."
     },
     {
       "what": "Halving on a MULTI-HIT attack",
@@ -78,6 +78,6 @@
       "rationale": "Neither side latches a command the way power/gigantification does, so the 0.5 applies to every hit of a multi-hit attack independently, and integer truncation happens per hit on both sides (C# rounds the decimal at the damage site, the sim at cmds.py:58's int()). Same observable for the ported content."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

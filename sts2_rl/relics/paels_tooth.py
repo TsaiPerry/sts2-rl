@@ -25,7 +25,14 @@ class PaelsTooth(Relic):
 
     def after_obtained(self, run) -> None:
         candidates = run.removable_cards()
-        for card in run.select_cards("remove", candidates, self.CARDS):
+        # PaelsTooth.cs:83 ends the selection in
+        # `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)` and stores in that
+        # order — and AfterCombatEnd's PlayerRng.Rewards.NextItem indexes into
+        # the store, so the order is load-bearing. Ordinal is byte order over
+        # the game's UPPERCASE entry, so sort the uppercased id.
+        chosen = sorted(run.select_cards("remove", candidates, self.CARDS),
+                        key=lambda c: c.id.upper())
+        for card in chosen:
             run.deck.remove(card)
             self.stored_cards.append(card)
 

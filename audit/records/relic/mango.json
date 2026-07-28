@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\mango.py",
-    "sha256": "d2b64598ef79c67210d82b46f7bf9c951958276525d7e06b15e2ff92f3d29d95"
+    "sha256": "26d8339038f627f1b6d96bdeb5cd445ee1c8b19bc990804cb1a2924cb2b6aca7"
   },
   "extra_sources": [
     {
@@ -16,37 +16,37 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/lees_waffle.py",
-      "sha256": "d8b2419a81cb7f20bfc3c657be20d8d4c9cb37240611f138b2760a892b639c53",
+      "sha256": "922faf5a6288be1f96345e8f9bce2f3aad0a31b2ec0d26950677f4518051d80e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/looming_fruit.py",
-      "sha256": "e3c359b66d6825a3c15214ce258047e8a1ee93969b354b7b59a1b0e03279a92a",
+      "sha256": "087378e649ff72a3bfa03e6dddaaf9e7fb252012a34116a84e75095b236d620c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/pear.py",
-      "sha256": "06adb82a0e4e00582ec8b2a823a662c1f5f9cf44b7c8c4b4fb27007196f12acb",
+      "sha256": "a4c32ee53e4f58438ef2ff39d609ffd98199d307e4e45f0c2aeb855ff83e79f2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/strawberry.py",
-      "sha256": "dd38eab48ed48c9837fcd87403cd188f864a0f1910d7df9ee3d2556c7177e933",
+      "sha256": "13b5aa25bcc4d52cca476607a1704aa2b77f75da66cc2eaac8b4c081d84f650d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -69,8 +69,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): `undo_after_obtained` (mango.py:21-25) does NOT give back the heal, contradicting its own comment, so a speculatively-granted-then-dropped Mango leaves up to 14 HP behind",
-      "verdict": "gap",
-      "issue": "MECHANISM: after_obtained calls run.gain_max_hp(14), which raises max HP by 14 AND heals 14 (run.py:311-314, mirroring CreatureCmd.cs:786-799). The undo calls run.lose_max_hp(14) and then `run.hp = min(run.hp, run.max_hp)` -- a CLAMP, not a subtraction -- so the healed HP survives whenever the post-heal HP is at or below the restored max, which is the common case. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): from 50/80, granting Mango gives 64/94 and undoing gives 64/80 -- 14 HP too high; the comment at mango.py:22-23 says it gives back \"the heal that came with it\". REACHABILITY (LIVE): undo_after_obtained has no C# counterpart -- nothing in the game un-picks a relic -- but it exists solely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was picked, and the runner really does call it (verified by grep per binding rule 8: conformance/runner.py:461 and :694). Its own base docstring names Mango as a motivating case (relics/base.py:143-150). The observable is therefore a player-state parity failure of up to 14 HP on any recorded run whose relic node offered Mango and was not taken -- precisely what DETECTOR 3's act-boundary HP assertion reports. POOL-WIDE: this is not a Mango-only slip. All FIVE relics with an undo use the identical clamp -- mango.py:24-25, pear.py:24-25 (10), strawberry.py:24-25 (7), looming_fruit.py:24-25 (31) and lees_waffle.py:24-25 (7, which also heals to full in after_obtained and so leaks even more) -- so the fix is one shared helper and four other records will meet it. Only mango is in this batch, so only mango is verdicted; the shape is reported in .superpowers/sdd/relic-batch-09-lessons.md. Rule 7: leans on run.py, relics/base.py, conformance/runner.py and the four sibling relic files, none hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the undo SUBTRACTS the heal instead of clamping. sts2_rl/relics/mango.py's after_obtained (MAX_HP 14) records the HP the grant actually healed in `_healed` and `undo_after_obtained` does `run.hp = max(1, run.hp - self._healed)` BEFORE `run.lose_max_hp(...)`, so the pair is exact from a damaged player as well as a full one. WAS: the undo called lose_max_hp and then re-clamped `run.hp = min(run.hp, run.max_hp)`, which gives back nothing whenever the post-heal HP is at or below the restored maximum -- the common case -- leaving the conformance runner's relic resync reading high for the rest of the run."
     },
     {
       "what": "N1: `CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)` (Mango.cs:19) with `MaxHpVar(14m)` (Mango.cs:15)",

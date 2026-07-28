@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\prayer_wheel.py",
-    "sha256": "d262eaa90b102fd8a340b770b35e6bc2e441826ea29c7bf164fca5effe4c6aac"
+    "sha256": "73712c69abe500185ce075943da1e19afca6e883a655dea30ef135fcbff848d4"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     }
   ],
@@ -29,14 +29,14 @@
     "TryModifyRewards": {
       "maps_to": "no counterpart. `Relic.modify_combat_rewards(run, rewards)` exists (relics/base.py:168-170) and rewards.py:499-500 dispatches it over the run's relics; prayer_wheel.py implements nothing",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. PrayerWheel.cs:14-26 appends `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3, player)` to every Monster room's reward list -- the relic's entire effect -- and the port is a behaviourless stub."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/prayer_wheel.py's docstring now says so: PrayerWheel.cs's `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3)` is a SECOND pick-one-of-3 group and rewards.CombatRewards models one `cards` group plus independent `special_cards` singles, so there is no field to hold it and no driver action to offer it. A Monster room still offers ONE card choice where the game offers two."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): normal-enemy combats offer ONE card choice instead of two, and the stub's stated premise ('an out-of-combat reward modifier, so this is a no-op stub') is false",
       "verdict": "gap",
-      "issue": "MECHANISM: TryModifyRewards is the reward-list mutator, and the relic adds a SECOND independent 3-card reward to Monster rooms. The sim has the hook and calls it: rewards.py:499-500 runs `relic.modify_combat_rewards(run, rewards)` over every relic after the screen is generated, and five other relics already implement it (Lava Rock adds relic rewards to the act-1 boss screen through this very hook). PROMPT.md bug class 12 requires checking the premise before accepting a stub, and the premise is false -- 'out-of-combat' is true and irrelevant, since the sim models the out-of-combat reward screen. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-prayer): a MONSTER screen yields cards=['second_wind','vicious','colossus'] and special_cards=0 both with and without the relic; the game yields those three PLUS another three. Both sides ported and nothing further needed: Prayer Wheel is Rare in the transcribed grab bag and every normal-enemy fight produces a reward screen. IMPLEMENTATION NOTES for the fix, because a naive one is wrong twice: (a) rewards.CombatRewards models the card choice as a single `cards` list plus `special_cards`, which the record's own comment describes as INDEPENDENT take-or-skip single-card offers (rewards.py:381-385) -- Prayer Wheel needs a second pick-one-of-THREE group, which the dataclass cannot express today, so this is a field addition and not a one-liner like the other stubs; (b) the second CardReward Populates through the same creation path, so it consumes card-creation draws on the Rewards stream -- an implementation that appends pre-made cards would fix the offer and leave RNG parity broken, and `create_reward_cards` is the function that must be called again. The room filter must stay: `room.RoomType != RoomType.Monster` returns false (PrayerWheel.cs:20-23), and the probe confirms an ELITE screen is unchanged in the game. This is one of the 30 Sweep C stubs whose dropped hook has a live sim dispatch site; .superpowers/sdd/content-relic-sweeps.md lists prayer_wheel first under the 'out-of-combat reward modifier' family. NOTE per binding rule 7: relics/base.py, rewards.py and content-relic-sweeps.md are NOT hashed by this record."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. The premise half is settled: rewards.py:526-527 dispatches `modify_combat_rewards` over every relic and five other relics use it. WHAT REMAINS is the structural blocker the port now names -- a second pick-one-of-THREE reward group that rewards.CombatRewards cannot express -- plus the note that the second CardReward must go through create_reward_cards so it consumes the same Rewards-stream draws."
     },
     {
       "what": "N1: `if (player != base.Owner) return false;` (PrayerWheel.cs:16-19) and the bool return",

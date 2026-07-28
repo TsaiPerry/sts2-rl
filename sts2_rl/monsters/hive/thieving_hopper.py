@@ -67,12 +67,22 @@ class ThievingHopper(MachineMonster):
 
     @staticmethod
     def _steal_priorities():
+        """ThievingHopper.cs:31-69 — the four `_stealPriorities` predicates, in
+        order. The first three all require the card NOT to be Imbued; the
+        fourth is the only tier an Imbued card can land in."""
         from ...cards import CardRarity
+        from ...enchantments import ImbuedEnchantment
+
+        def imbued(c) -> bool:
+            return isinstance(c.enchantment, ImbuedEnchantment)
+
         return (
-            lambda c: c.rarity == CardRarity.UNCOMMON,
-            lambda c: c.rarity in (CardRarity.COMMON, CardRarity.RARE),
-            lambda c: c.rarity == CardRarity.BASIC,
-            lambda c: c.rarity == CardRarity.ANCIENT,
+            lambda c: not imbued(c) and c.rarity == CardRarity.UNCOMMON,
+            lambda c: not imbued(c) and c.rarity in (
+                CardRarity.COMMON, CardRarity.RARE, CardRarity.EVENT),
+            lambda c: not imbued(c) and c.rarity in (
+                CardRarity.BASIC, CardRarity.QUEST),
+            lambda c: c.rarity == CardRarity.ANCIENT or imbued(c),
         )
 
     def _thievery(self, ctx: CombatCtx) -> None:
@@ -91,7 +101,9 @@ class ThievingHopper(MachineMonster):
                 candidates = subset
                 break
         if candidates:
-            card = ctx.combat._rng.choice(candidates)
+            # ThievingHopper.cs:222 —
+            # base.RunRng.CombatCardGeneration.NextItem(enumerable).
+            card = ctx.combat.combat_rng.card_gen.choice(candidates)
             for pile in (player.draw_pile, player.discard_pile):
                 if card in pile:
                     pile.remove(card)

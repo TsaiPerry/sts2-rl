@@ -85,6 +85,15 @@ class Monster(Creature):
         # survive enemy-list reordering (e.g. Ovicopter egg slots). None until
         # the creature joins a combat.
         self.net_id: int | None = None
+        # MonsterMoveStateMachine._performedFirstMove, tracked at the combat
+        # level so the player-turn-start intent pass can honour
+        # FindNextMoveState's `!_performedFirstMove && IsMove -> return` guard
+        # (MonsterMoveStateMachine.cs:60-63) for the hand-rolled monsters too:
+        # they have no machine, so nothing else would stop the pass advancing a
+        # monster that has not acted yet (a turn-1 enemy, or a mid-combat
+        # spawn). Set by CombatState._run_enemy_turns, which is where
+        # MonsterModel.PerformMove calls OnMovePerformed.
+        self.performed_first_move = False
 
     @property
     def current_intent(self) -> Intent:
@@ -98,10 +107,11 @@ class Monster(Creature):
 
         Mirrors Creature.PrepareForNextTurn, which the game calls for every
         enemy at player-turn-start unconditionally — including one that was
-        stunned and skipped its own turn (MonsterModel.RollMove always runs;
-        stun only suppresses PerformMove). Monsters with a next-move roll
+        stunned this round (its synthetic STUNNED move is performed like any
+        other, so the roll still happens). Monsters with a next-move roll
         override this; the default is a no-op for monsters with nothing to
-        advance (fixed single-move loops, etc.)."""
+        advance (fixed single-move loops, etc.). The only caller is
+        CombatState._roll_enemy_intents."""
         pass
 
     def _execute_attack(self, ctx: CombatCtx, damage: int, hits: int) -> None:

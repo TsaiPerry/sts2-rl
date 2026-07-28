@@ -6,22 +6,22 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\whetstone.py",
-    "sha256": "cdd9cf1f8af10e2b5196773db396d3c63f42252c65195938f1157d2871a936d5"
+    "sha256": "ae447d349006e98d8b70ad10f92f326905826dc22882ff09c8baff91cd9346fd"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -47,26 +47,26 @@
       "rationale": "Matches Whetstone.cs:16. Load-bearing beyond display: Relic.is_tradable (sts2_rl/relics/base.py:126-136) excludes has_upon_pickup_effect relics, mirroring RelicModel.IsTradable, so Whetstone is correctly barred from the trade events even though its pickup effect is not implemented."
     },
     "AfterObtained": {
-      "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (whetstone.py has no methods at all)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. Whetstone.cs:20-29 upgrades CardsVar(2) randomly chosen upgradable ATTACKS in the deck; the port upgrades nothing and consumes no Niche draw."
+      "maps_to": "after_obtained (sts2_rl/relics/whetstone.py) -- deck Attacks filtered by is_upgradable, stable_shuffle over run.rng_set.niche with _compare_to_key, first 2 upgraded",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the pickup effect is implemented. sts2_rl/relics/whetstone.py's `after_obtained` filters the deck to `card_type == CardType.ATTACK and c.is_upgradable`, takes `count = min(2, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` before upgrading each -- Whetstone.cs:22-27's `Where(Type == Attack && IsUpgradable).StableShuffle(Rng.Niche).Take(CardsVar(2))`. "
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the port implements no pickup effect at all, and the premise behind the stub is false -- after_obtained IS dispatched",
-      "verdict": "gap",
-      "issue": "MECHANISM: Whetstone.cs:22-27 is `Deck.Cards.Where(c => c != null && c.Type == CardType.Attack && c.IsUpgradable).ToList().StableShuffle(Rng.Niche).Take(Cards.IntValue)` then CardCmd.Upgrade on each -- two random upgraded Attacks, permanently. whetstone.py declares only id/name/rarity/has_upon_pickup_effect and its docstring justifies that with 'an out-of-combat deck edit, so this is a no-op stub'. PROMPT.md bug class 12 applied: the premise is false. Relic.after_obtained is a real base hook (sts2_rl/relics/base.py:138-141) and RunState.add_relic calls it on EVERY granted relic (run.py:552); .superpowers/sdd/content-relic-sweeps.md's sweep C lists this unit in the 'out-of-combat pickup effect, stub' family and reports a LIVE dispatch site for it. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py upgradestubs): `run.add_relic('whetstone')` changes 0 deck cards, where C# would upgrade 2 Attacks (the Ironclad starting deck holds 5 Strikes and a Bash, all Attacks and all upgradable, so the effect is available from floor 0). The CONTROL in the same probe is decisive: `run.add_relic('neows_talisman')` upgrades 2 deck cards through the same run.py:552 dispatch (sts2_rl/relics/neows_talisman.py:29-33) -- and one of the two is a Strike, i.e. exactly a card Whetstone would have taken -- so the pipeline is not merely present but already used by a ported relic to do this. Both sides ported: Common in the grab bag, and the deck is a first-class run object. Observable in RL play (2 permanently upgraded Attacks) and in conformance (sts2_rl/conformance/runner.py:618 compares the deck as (id, upgrade_level) pairs). PROMPT.md bug class 29 checked, not assumed: this relic and war_paint are NOT the same unit with a swapped constant -- they differ in the card TYPE filter (Attack vs Skill) and both are audited on their own merits here, with the same verdict because both ports are equally empty. Rule 7: sts2_rl/relics/base.py, run.py, sts2_rl/relics/neows_talisman.py, sts2_rl/conformance/runner.py and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the pickup effect is implemented. sts2_rl/relics/whetstone.py's `after_obtained` filters the deck to `card_type == CardType.ATTACK and c.is_upgradable`, takes `count = min(2, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` before upgrading each -- Whetstone.cs:22-27's `Where(Type == Attack && IsUpgradable).StableShuffle(Rng.Niche).Take(CardsVar(2))`. WAS: the port declared only id/name/rarity/pickup-flag and justified it with 'an out-of-combat deck edit, so this is a no-op stub', a premise Relic.after_obtained and RunState.add_relic already falsified."
     },
     {
       "what": "N1 (LIVE for RNG parity, dormant for RL): `StableShuffle(Rng.Niche)` names an explicit stream and the stub consumes none",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 16's second half, and the same mechanism this batch records at relic/war_hammer N2 and relic/war_paint N1 -- one verdict per mechanism (binding rule 3). The shuffle is genuinely CONSUMED in C# (StableShuffle always draws, unlike the `claws` case class 16 warns about), so a run that picks up Whetstone shifts every later Niche consumer's position. Distinct from G1: an implementation that upgraded the first two Attacks in deck order would close G1 and leave this open. Rule 7: audit/records/relic/war_hammer.json and audit/records/relic/war_paint.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the pickup effect is implemented. sts2_rl/relics/whetstone.py's `after_obtained` filters the deck to `card_type == CardType.ATTACK and c.is_upgradable`, takes `count = min(2, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` before upgrading each -- Whetstone.cs:22-27's `Where(Type == Attack && IsUpgradable).StableShuffle(Rng.Niche).Take(CardsVar(2))`. Closed 2026-07-27: the port performs C#'s StableShuffle over the named stream. `actmap.stable_shuffle(items, rng, key)` (sts2_rl/actmap.py:193-201) is ListExtensions.StableShuffle -- `items.sort(key=...)` then the Fisher-Yates -- and the key is `sts2_rl/player.py:23-34 _compare_to_key`, `(card.id.upper(), card.upgrade_level)`, which is CardModel.CompareTo's ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel (CardModel.cs:2242-2264 -> AbstractModel.cs:87-98 -> ModelId.cs:42-50). WAS: the stub consumed no Rng.Niche draw at all, so every later Niche consumer in the run read at the wrong position."
     },
     {
       "what": "N2: `c.Type == CardType.Attack && c.IsUpgradable` and the `c != null` null-guard (Whetstone.cs:22)",
-      "verdict": "gap",
-      "issue": "Recorded so a fix does not lose the filter. `IsUpgradable` is what keeps PROMPT.md bug class 14 from firing -- the sim's Card.upgrade() is a bare `upgrade_level += 1` (sts2_rl/cards/base.py:146-147) with no guard, and 18 ported Curses and 14 Statuses have max_upgrade_level 0. The Attack type filter alone would already exclude Curses and Statuses, but a fix that filtered on type and forgot IsUpgradable would still be wrong for any Attack already at its max upgrade level -- and unlike War Paint's Skill filter, Attacks are the type the sim's own transform and reward paths generate most, so the upgraded-Attack case is common. Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: sts2_rl/cards/base.py is NOT hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the pickup effect is implemented. sts2_rl/relics/whetstone.py's `after_obtained` filters the deck to `card_type == CardType.ATTACK and c.is_upgradable`, takes `count = min(2, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` before upgrading each -- Whetstone.cs:22-27's `Where(Type == Attack && IsUpgradable).StableShuffle(Rng.Niche).Take(CardsVar(2))`. The filter is preserved in full: the card-type test AND `c.is_upgradable`, so a Attack already at its max upgrade level is excluded, which is what keeps the sim's unguarded Card.upgrade() safe here."
     },
     {
       "what": "N3: CanonicalVars = CardsVar(2) (Whetstone.cs:18)",
@@ -79,6 +79,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so a port lacking it is not diverging from the source. Same operational constraint on the fix as relic/war_paint N4: once G1 is implemented the pickup mutates the deck permanently, and the conformance runner's relic swap calls undo_after_obtained on a dropped relic (sts2_rl/conformance/runner.py:461, :694), which cannot un-upgrade a card. A tooling constraint on the fix, not a fidelity gap. Rule 7: sts2_rl/conformance/runner.py is NOT hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

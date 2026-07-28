@@ -15,4 +15,7 @@ class Kaleidoscope(Relic):
     name = "Kaleidoscope"
     rarity = RelicRarity.ANCIENT
     has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
-    is_allowed_at_neow = False
+    @classmethod
+    def is_allowed_at_neow(cls, run) -> bool:
+        # Kaleidoscope needs other characters' card pools.
+        return False

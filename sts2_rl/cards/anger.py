@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .base import Card, CardRarity, CardType, TargetType, register_card
+from .base import (
+    Card, CardRarity, CardType, TargetType, create_clone, register_card,
+)
 
 if TYPE_CHECKING:
     from ..combat import CombatCtx
@@ -33,7 +35,5 @@ class AngerCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import CardPileCmd, DamageCmd
         DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)
-        clone = AngerCard()
-        for _ in range(self.upgrade_level):
-            clone.upgrade()
+        clone = create_clone(self)
         CardPileCmd.add_to_discard(ctx.hooks, ctx.player, clone)

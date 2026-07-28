@@ -19,5 +19,10 @@ class Astrolabe(Relic):
     def after_obtained(self, run) -> None:
         chosen = run.select_cards(
             "transform", run.transformable_cards(), self.CARDS)
+        # Astrolabe.cs:25 rolls each replacement on the Niche stream
+        # (CreateRandomCardForTransform(item, isInCombat: false,
+        # RunState.Rng.Niche)), one NextItem per transformed card. Legacy runs
+        # keep the shared rng.
+        niche = run.rng_set.niche if run.rng_set is not None else None
         for card in chosen:
-            run.transform_card(card).upgrade()
+            run.transform_card(card, pick_rng=niche).upgrade()

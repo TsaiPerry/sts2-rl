@@ -25,7 +25,8 @@ _GOOP_TENDER = 1
 class HunterKiller(MachineMonster):
     """Opens with TENDERIZING_GOOP (Tender 1: each card played costs the
     player 1 Strength and 1 Dexterity until end of turn), then rolls BITE (17,
-    never twice in a row, weight 1) or PUNCTURE (7x3, weight 2)."""
+    never twice in a row) or PUNCTURE (7x3, at most twice in a row) — both
+    weight 1."""
     name = "Hunter Killer"
 
     min_hp = 121
@@ -42,7 +43,11 @@ class HunterKiller(MachineMonster):
         )
         rand = RandomBranchState("RAND")
         rand.add_branch(bite, 1.0, MoveRepeatType.CANNOT_REPEAT)
-        rand.add_branch(puncture, 2.0)
+        # HunterKiller.cs:43 AddBranch(state, 2) is the (state, int maxRepeats)
+        # overload — a repeat limit, not a weight.
+        rand.add_branch(
+            puncture, repeat_type=MoveRepeatType.CAN_REPEAT_X_TIMES, max_times=2
+        )
         goop.follow_up = rand
         bite.follow_up = rand
         puncture.follow_up = rand

@@ -21,4 +21,17 @@ class LostCoffer(Relic):
         )
         for card in run.select_cards("card_reward", cards, 1):
             run.add_card(card)
-        run.add_potion(run.random_potion())
+        # PotionReward.Populate (PotionReward.cs:54-61) is
+        # `PotionFactory.CreateRandomPotionOutOfCombat(player, rng)` with
+        # `rng = _rngOverride ?? Player.PlayerRng.Rewards`, and LostCoffer.cs:21
+        # passes no override — two Rewards draws (the rarity NextFloat then the
+        # NextItem inside that band). Legacy keeps the uniform helper.
+        # The PotionReward is its own declinable entry on the same screen
+        # (PotionReward.OnSelect / OnSkipped), so it goes through offer_potion.
+        if run.rng_set is not None:
+            from ..potion_pools import generate_random_potions
+
+            for potion in generate_random_potions(run.player_rng.rewards, 1):
+                run.offer_potion(potion)
+        else:
+            run.offer_potion(run.random_potion())

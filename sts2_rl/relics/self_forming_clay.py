@@ -26,6 +26,13 @@ class SelfFormingClay(Relic):
         super().__init__()
         self._pending_block = 0
 
+    def reset_for_combat(self) -> None:
+        # C# has no relic-side counter: SelfFormingClay.cs:29 applies a
+        # SelfFormingClayPower and powers do not survive a combat, so the
+        # pending Block cannot leak into the next fight. Clearing it here is
+        # the sim's equivalent boundary.
+        self._pending_block = 0
+
     def on_damage_received(
         self,
         target: Creature,

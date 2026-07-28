@@ -37,7 +37,8 @@ class Trial(Event):
     # ── Accept: roll a trial ─────────────────────────────────────────────
 
     def _accept(self) -> None:
-        roll = self.rng.randrange(3)  # base.Rng.NextInt(3)
+        er = self.event_rng          # base.Rng.NextInt(3) — Trial.cs:73
+        roll = er.next_int(3) if er is not None else self.rng.randrange(3)
         if roll == 0:
             self._set_state("MERCHANT", [
                 EventOption("GUILTY", self._merchant_guilty),
@@ -96,5 +97,6 @@ class Trial(Event):
         self.run.add_card(make_card("doubt"))
         chosen = self.run.select_cards("transform", self.run.transformable_cards(), _TRANSFORMS)
         for card in chosen:
-            self.run.transform_card(card)
+            # CardCmd.TransformToRandom(item, base.Rng) — Trial.cs:195.
+            self.run.transform_card(card, pick_rng=self.event_rng)
         self._finish("NONDESCRIPT_INNOCENT")

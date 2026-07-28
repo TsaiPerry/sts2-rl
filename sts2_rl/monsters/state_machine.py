@@ -60,6 +60,18 @@ def weighted_branch_pick(rng: random.Random, items: list, weights: list[float]):
     return items[-1]
 
 
+# Creature.StunInternal (Creature.cs:535) names the synthetic stun move
+# "STUNNED"; the combat loop and CreatureCmd.stun both recognise it by this id.
+STUN_STATE_ID = "STUNNED"
+
+
+def _stunned_move(ctx) -> None:
+    """Body of the synthetic stun move. `CreatureCmd.Stun`'s `stunMove`
+    argument (CreatureCmd.cs:884) is the caller's; every sim stun site passes
+    none, so the perform body is empty — the point of performing it at all is
+    MoveState.PerformMove setting `_performedAtLeastOnce`."""
+
+
 class MoveRepeatType(Enum):
     CAN_REPEAT_FOREVER = "can_repeat_forever"
     CAN_REPEAT_X_TIMES = "can_repeat_x_times"
@@ -256,7 +268,39 @@ class MonsterMoveStateMachine:
         """Externally override the current state (used by stuns/phase changes)."""
         self._set_current_state(state)
 
-    def on_move_performed(self, _move: MoveState) -> None:
+    def stun(self, next_move_id: str | None = None) -> MoveState:
+        """Port of Creature.StunInternal (Creature.cs:524-544).
+
+        A stun is a REAL move, not a flag: the game builds
+        `new MoveState("STUNNED", stunMove, new StunIntent())` with
+        `FollowUpStateId = nextMoveId` and
+        `MustPerformOnceBeforeTransitioning = true` and force-sets it through
+        SetMoveImmediate (MonsterModel.cs:420-432). `nextMoveId` defaults to
+        `StateLog.Last().Id` — the last move the creature was telegraphing —
+        so by default it REPEATS that move after the stunned turn, and the
+        post-stun roll re-logs it (MonsterMoveStateMachine.cs:76-79).
+
+        The synthetic state is deliberately not registered in `states`:
+        ForceCurrentState does not call RegisterStates either.
+        """
+        if not next_move_id:
+            next_move_id = self.state_log[-1].id
+        state = MoveState(
+            STUN_STATE_ID, _stunned_move, Intent(MoveType.STUN),
+            must_perform_once_before_transitioning=True,
+        )
+        state.follow_up = self.states[next_move_id]
+        self.force_current_state(state)
+        return state
+
+    def on_move_performed(self, move: MoveState) -> None:
+        # MonsterModel.PerformMove (MonsterModel.cs:434-445) awaits
+        # MoveState.PerformMove — which sets _performedAtLeastOnce, lifting a
+        # MustPerformOnceBeforeTransitioning pin — and only then calls
+        # OnMovePerformed, so the two always land together. Marking it here as
+        # well keeps the machine's own bookkeeping complete for callers that
+        # report a performed move without routing through MoveState.perform.
+        move._performed_at_least_once = True
         self._performed_first_move = True
 
     def _find_next_move_state(self, owner: MachineMonster, rng: random.Random) -> None:
@@ -289,9 +333,12 @@ class MachineMonster(Monster):
     """Monster driven by a MonsterMoveStateMachine instead of hand-rolled
     _move_key logic. Subclasses implement build_machine().
 
-    The next move is rolled immediately after the current one is performed —
-    the sim's equivalent of the game rolling at intent-display time, since no
-    player action can intervene between the two points.
+    The next move is NOT rolled when the current one is performed: the game
+    rolls every enemy's move in one pass at the top of the player's turn
+    (CombatManager.cs:478-484 -> Creature.PrepareForNextTurn), which
+    CombatState._roll_enemy_intents mirrors. The only roll outside that pass
+    is the one CombatManager.AfterCreatureAdded (CombatManager.cs:860-867)
+    makes when the creature joins the combat — this class's __init__.
     """
 
     def __init__(self, hooks: HookSystem, rng: random.Random) -> None:
@@ -321,10 +368,9 @@ class MachineMonster(Monster):
         move = self._current_move
         move.perform(ctx)
         self.machine.on_move_performed(move)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
-        """Roll the next move now (mirrors Creature.PrepareForNextTurn, which
-        the game calls for every enemy at player-turn-start regardless of
-        whether that enemy acted — including one stunned this round)."""
+        """Roll the next move (mirrors Creature.PrepareForNextTurn ->
+        MonsterModel.RollMove). Called only from
+        CombatState._roll_enemy_intents, the player-turn-start pass."""
         self._current_move = self.machine.roll_move(self, self._move_rng)

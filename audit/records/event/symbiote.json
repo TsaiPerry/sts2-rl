@@ -6,23 +6,28 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\symbiote.py",
-    "sha256": "daaf188ec9417d2628e75b104aec39089db1ac3489db9388cec5799d643203d3"
+    "sha256": "ab2dd7cf1cc9764c6d5d019b2e71e15370e4b490665533ed7cf456e7d7191e0d"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -54,13 +59,13 @@
     },
     {
       "what": "BR-G3 (blast radius): Symbiote's KILL_WITH_FIRE (Symbiote.cs:72) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as audit/records/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py audit/tools/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "verdict": "faithful"
     },
     {
       "what": "EV-3: KillWithFire's `CardCmd.TransformToRandom(item, base.Rng, ...)` (Symbiote.cs:72) -- events/symbiote.py:52 calls run.transform_card with no pick_rng, so run.py:457-458 falls back to `self.rng.choice` rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- KillWithFire passes `pick_rng=self.event_rng` into run.transform_card (events/symbiote.py:54), matching `base.Rng` (Symbiote.cs:72). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "the Corrupted StringVar and hover tip and the Transform static hover tip (Symbiote.cs:27, 39-40), plus NCardEnchantVfx and the CardPreviewStyle.EventLayout argument (Symbiote.cs:58-62, 72)",
@@ -68,6 +73,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -32,7 +32,8 @@ class VelvetChoker(Relic):
     def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
         return self.cards_played_this_turn < self.CARDS_PER_TURN
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         self.cards_played_this_turn += 1
 
     def on_player_turn_start(self, player: PlayerCombatState) -> None:

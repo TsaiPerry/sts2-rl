@@ -18,6 +18,7 @@ class RazorTooth(Relic):
     name = "Razor Tooth"
     rarity = RelicRarity.RARE
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type in (CardType.ATTACK, CardType.SKILL) and card.is_upgradable:
             card.upgrade()

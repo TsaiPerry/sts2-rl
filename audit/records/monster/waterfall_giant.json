@@ -78,9 +78,8 @@
   "guards": [
     {
       "what": "killing the giant fires no on_death in the sim",
-      "verdict": "gap",
-      "live": true,
-      "issue": "In C# the Waterfall Giant REALLY DIES on the killing blow: SteamEruptionPower.ShouldCreatureBeRemovedFromCombatAfterDeath returns false for its owner (SteamEruptionPower.cs:28-35), so the death stands, Hook.AfterDeath dispatches to every listener, the corpse stays in Enemies, and SteamEruptionPower.AfterDeath (:15-21) then calls TriggerAboutToBlowState, which revives it at 999999999 HP. The sim instead ports the mechanic onto `should_die` (powers.py:2016-2020), which VETOES the death, so `hooks.on_death` never runs for that blow (cmds.py:96-110 only dispatches on_death inside the `should_die` true arm). Observable, executed (monster_probes_b04.py giant-blow) with a ported Gremlin Horn attached: on the killing blow the sim reports `on_death dispatches so far: []` and Gremlin Horn moves energy 3->3 and hand 5->5, where the game would fire AfterDeath and pay +1 energy and +1 card. The sim fires on_death exactly once for the whole fight (at EXPLODE's CreatureCmd.kill, once the power is gone -- verified in the same run: energy 3->4, hand 5->6); the game fires it TWICE. LIVE on both sides (governing rule 6): the Waterfall Giant is in the ported Underdocks boss pool (rooms.py, boss_keys; executed, probe `pools`) and Gremlin Horn is a ported, obtainable Uncommon relic with a real on_death listener (relics/gremlin_horn.py:18-22) -- sixteen other on_death listeners exist in powers.py. This entry records the MONSTER-LEVEL consequence only; the mechanism itself is PROMPT.md bug class 21 (death is not removal), which already names SteamEruptionPower and powers.py:2016 and belongs to the power tier. Not re-verdicted here, and no engine code was touched. Contrast decimillipede_segment, whose ReattachPower ports the same C# member onto `should_remove_from_combat_after_death` (powers.py:2338-2341, hooks.py:603-610) and is correct."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: SteamEruptionPower is no longer ported onto `should_die`. powers.py:2115-2152 now implements should_remove_from_combat_after_death (`creature is not self.owner`, SteamEruptionPower.cs:28-35), should_stop_combat_from_ending (:23-26) and should_power_be_removed_after_owner_death (:37-40), and hangs the ABOUT_TO_BLOW trigger on `on_death(creature, was_removal_prevented)` guarded by `if was_removal_prevented or creature is not self.owner: return` -- the shape of SteamEruptionPower.cs:15-21, which overrides no ShouldDie. cmds.py:30-65's `_resolve_death` now mirrors CreatureCmd.KillWithoutCheckingWinCondition's two arms (CreatureCmd.cs:506-570) and dispatches Hook.AfterDeath on both. EXECUTED with a spy on a real WATERFALL_GIANT_BOSS combat, giant holding SteamEruption 30 and a player-applied Vulnerable 3: the killing blow fires on_death exactly once with was_removal_prevented=False at hp=0, retained_after_death=True, the corpse is stripped of Vulnerable and keeps SteamEruption (the port of Creature.RemoveAllPowersAfterDeath, Creature.cs:668-671), and the move is forced to ABOUT_TO_BLOW_MOVE. So every on_death listener -- Gremlin Horn included -- now gets the trigger the game gives it. WAS: `should_die` vetoed the death, so hooks.on_death never ran for that blow and the sim fired it once per fight where the game fires twice."
     },
     {
       "what": "SIPHON heal, and its multiplayer factor",
@@ -108,7 +107,7 @@
       "rationale": "Executed (monster_probes_b04.py branches): waterfall_giant builds no RandomBranchState on either side. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -138,22 +137,22 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\relics\\gremlin_horn.py",
-      "sha256": "d056b799eb6625767ab63dd52b23d6bd9984624bb3de91a87406c4fdbf1b74d9",
+      "sha256": "de5871f094733c2b80a069680ef27d2d68bc3ef069a3ee2218ed445447b7e4ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     }
   ]

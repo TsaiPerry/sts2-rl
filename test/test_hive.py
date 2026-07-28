@@ -65,6 +65,14 @@ def fresh_encounter(enc: Encounter, seed: int = 0) -> CombatState:
     return CombatState(rng=random.Random(seed), encounter=enc)
 
 
+class _AlwaysTopOfPile:
+    """Stands in for the legacy shared rng with every CardPilePosition.Random
+    roll pinned to index 0 — CardPile.AddInternal's "top of the pile"."""
+
+    def randrange(self, n: int) -> int:
+        return 0
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Bowlbugs
 # ═════════════════════════════════════════════════════════════════════════
@@ -357,6 +365,24 @@ class TestOvicopter:
             assert egg.powers["hatch"].amount == 2
             assert egg.current_intent.move_type == MoveType.SUMMON
 
+    def test_eggs_fill_their_slots_backwards_ahead_of_the_ovicopter(self):
+        """Ovicopter.cs:87 takes `Encounter.Slots.LastOrDefault(unoccupied)`
+        against OvicopterNormal.Slots = [egg1..egg5, ovicopter], so eggs fill
+        egg5, egg4, egg3 -- BACKWARDS -- and CombatManager.AddCreature's
+        SortEnemiesBySlotName then orders Enemies [egg3, egg4, egg5,
+        ovicopter]: newest egg first, the Ovicopter (slot index 5) last. The
+        default/RL (legacy) path used to append instead."""
+        cs = fresh_with(Ovicopter)
+        ovi = cs.enemies[0]
+        ovi._lay_eggs(cs._ctx())
+        assert [type(e).__name__ for e in cs.enemies] == [
+            "ToughEgg", "ToughEgg", "ToughEgg", "Ovicopter"]
+        first_lay = list(cs.enemies[:3])
+        ovi._lay_eggs(cs._ctx())  # 2 more: egg2 then egg1, ahead of the rest
+        assert [type(e).__name__ for e in cs.enemies] == [
+            "ToughEgg"] * 5 + ["Ovicopter"]
+        assert list(cs.enemies[2:5]) == first_lay
+
     def test_eggs_hatch_then_nibble(self):
         cs = fresh_with(Ovicopter)
         cs.end_turn()  # LAY_EGGS
@@ -370,6 +396,21 @@ class TestOvicopter:
             assert "hatch" not in egg.powers
             assert "minion" in egg.powers  # Minion survives the hatch
             assert egg.current_intent.move_type == MoveType.ATTACK
+
+    def test_hatchling_hp_never_hits_the_exclusive_max(self):
+        # ToughEgg.cs:172 rolls Niche.NextInt(HatchlingMinHp, HatchlingMaxHp)
+        # = NextInt(19, 22), and Rng.cs:95-109 makes the second argument
+        # max-EXCLUSIVE — 22 is a roll the game cannot produce.
+        seen = set()
+        for seed in range(60):
+            cs = fresh_with(Ovicopter, seed)
+            cs.end_turn()  # LAY_EGGS
+            eggs = [e for e in cs.enemies if isinstance(e, ToughEgg)]
+            cs.end_turn()  # SMASH; eggs hatch
+            for egg in eggs:
+                assert egg.hp == egg.max_hp
+                seen.add(egg.max_hp)
+        assert seen == {19, 20, 21}
 
     def test_paste_while_eggs_alive_lay_after_they_die(self):
         cs = fresh_with(Ovicopter)
@@ -387,8 +428,9 @@ class TestOvicopter:
 
     def test_minion_eggs_do_not_prolong_combat(self):
         cs = fresh_with(Ovicopter)
-        cs.end_turn()  # LAY_EGGS
-        DamageCmd.deal(cs.hooks, cs.enemies[0], 999, dealer=cs.player)
+        ovi = cs.enemies[0]
+        cs.end_turn()  # LAY_EGGS (the eggs take the slots ahead of the Ovicopter)
+        DamageCmd.deal(cs.hooks, ovi, 999, dealer=cs.player)
         assert cs._all_enemies_dead()
 
 
@@ -438,14 +480,34 @@ class TestSlumberingBeetle:
         DamageCmd.deal(cs.hooks, beetle, 5, dealer=cs.player)
         DamageCmd.deal(cs.hooks, beetle, 5, dealer=cs.player)
         assert "slumber" not in beetle.powers
-        assert beetle.is_awake
-        assert "plating" not in beetle.powers
         assert beetle.stunned
         assert beetle.current_intent.move_type == MoveType.STUN
-        cs.end_turn()  # wake-up turn: nothing
+        cs.end_turn()  # wake-up turn: the stun move only wakes it
+        assert beetle.is_awake
+        assert "plating" not in beetle.powers
         assert cs.player.hp == 80
         cs.end_turn()  # ROLL_OUT 16
         assert cs.player.hp == 80 - 16
+
+    def test_damage_wake_defers_the_wake_body_to_the_stunned_turn(self):
+        # SlumberPower.cs:22-32 hands WakeUpMove to
+        # CreatureCmd.Stun(Owner, WakeUpMove, "ROLL_OUT_MOVE"), and
+        # CreatureCmd.cs:884-904 + Creature.cs:524-544 make that delegate the
+        # STUNNED move's perform body — so IsAwake and the Plating removal land
+        # on the beetle's own stunned turn, not at damage time.
+        cs = fresh_with(SlumberingBeetle)
+        beetle = cs.enemy
+        DamageCmd.deal(cs.hooks, beetle, 20, dealer=cs.player)  # 15 blocked, 5 in
+        DamageCmd.deal(cs.hooks, beetle, 5, dealer=cs.player)
+        DamageCmd.deal(cs.hooks, beetle, 5, dealer=cs.player)
+        assert "slumber" not in beetle.powers
+        assert beetle.stunned
+        # Still plated and still asleep for the rest of the player's turn.
+        assert not beetle.is_awake
+        assert beetle.powers["plating"].amount == 15
+        cs.end_turn()  # the stunned turn runs the wake body
+        assert beetle.is_awake
+        assert "plating" not in beetle.powers
 
     def test_fully_blocked_hits_do_not_count(self):
         cs = fresh_with(SlumberingBeetle)
@@ -562,6 +624,54 @@ class TestThievingHopper:
         cs.hooks.register(prize)
         cs.end_turn()
         assert cs.enemy.powers["swipe"].stolen_cards == [prize]
+
+    def test_steal_priorities_keep_every_clause(self):
+        # ThievingHopper.cs:31-69 — four predicates: Uncommon, then
+        # Common/Rare/EVENT, then Basic/QUEST, each excluding an Imbued card;
+        # the fourth is Ancient OR Imbued.
+        from sts2_rl.enchantments import ImbuedEnchantment
+        p1, p2, p3, p4 = ThievingHopper._steal_priorities()
+
+        def card(rarity, imbued: bool = False):
+            c = make_card("strike")
+            c.rarity = rarity  # shadow the class attr
+            c.enchantment = ImbuedEnchantment() if imbued else None
+            return c
+
+        assert p1(card(CardRarity.UNCOMMON))
+        assert not p1(card(CardRarity.UNCOMMON, imbued=True))
+        for rarity in (CardRarity.COMMON, CardRarity.RARE, CardRarity.EVENT):
+            assert p2(card(rarity))
+            assert not p2(card(rarity, imbued=True))
+        for rarity in (CardRarity.BASIC, CardRarity.QUEST):
+            assert p3(card(rarity))
+            assert not p3(card(rarity, imbued=True))
+        assert p4(card(CardRarity.ANCIENT))
+        assert p4(card(CardRarity.COMMON, imbued=True))
+        assert not p4(card(CardRarity.COMMON))
+
+    def test_steal_prefers_an_event_card_over_the_basic_deck(self):
+        # Event sits in tier 2 alongside Common/Rare, ahead of the Basic tier.
+        cs = fresh_with(ThievingHopper)
+        prize = make_card("strike")
+        prize.rarity = CardRarity.EVENT
+        cs.player.discard_pile.append(prize)
+        cs.hooks.register(prize)
+        cs.end_turn()  # THIEVERY
+        assert cs.enemy.powers["swipe"].stolen_cards == [prize]
+
+    def test_steal_leaves_an_imbued_card_for_last(self):
+        # Tiers 1-3 all exclude Imbued, so the Basic starter deck outranks an
+        # Imbued Uncommon.
+        from sts2_rl.enchantments import ImbuedEnchantment
+        cs = fresh_with(ThievingHopper)
+        charmed = make_card("strike")
+        charmed.rarity = CardRarity.UNCOMMON
+        charmed.enchantment = ImbuedEnchantment()
+        cs.player.discard_pile.append(charmed)
+        cs.hooks.register(charmed)
+        cs.end_turn()  # THIEVERY
+        assert cs.enemy.powers["swipe"].stolen_cards != [charmed]
 
     def test_full_route_ends_in_escape(self):
         cs = fresh_with(ThievingHopper)
@@ -1104,6 +1214,38 @@ class TestTheInsatiable:
         assert boss.powers["sandpit"].amount == 4
         escapes = [c for c in cs.player.all_cards if c.id == "frantic_escape"]
         assert len(escapes) == 6
+
+    def test_liquify_takes_six_shuffle_draws_not_three(self):
+        """TheInsatiable.cs:130-137 loops i in [0, 6) adding a Frantic Escape
+        with `CardPilePosition.Random` to PileType.Draw (i < 3) then
+        PileType.Discard, and CardPileCmd.cs:512-514 resolves Random to
+        `Rng.Shuffle.NextInt(Cards.Count + 1)` for EVERY pile type — so
+        LIQUIFY_GROUND takes SIX Shuffle draws, not the three the discarded
+        half used to skip by appending."""
+        from sts2_rl.rng import RunRngSet
+        rs = RunRngSet("insatiable-liquify")
+        cs = CombatState(rng_set=rs, encounter=THE_INSATIABLE_BOSS)
+        boss = cs.enemy
+        before = rs.shuffle.counter
+        boss._liquify(cs._ctx())
+        assert rs.shuffle.counter - before == 6
+        assert sum(1 for c in cs.player.draw_pile if c.id == "frantic_escape") == 3
+        assert sum(1 for c in cs.player.discard_pile if c.id == "frantic_escape") == 3
+
+    def test_liquify_places_the_discarded_escapes_instead_of_appending(self):
+        """The discarded half is positioned by the same Random roll, so with
+        the roll pinned to 0 (CardPilePosition index 0 = the top of the pile,
+        CardPile.AddInternal) all three land at the FRONT of the discard pile
+        rather than behind what is already there."""
+        cs = fresh_encounter(THE_INSATIABLE_BOSS)
+        boss = cs.enemy
+        already = [make_card("strike") for _ in range(3)]
+        cs.player.discard_pile.extend(already)
+        cs._rng = _AlwaysTopOfPile()
+        boss._liquify(cs._ctx())
+        pile = cs.player.discard_pile
+        assert [c.id for c in pile] == ["frantic_escape"] * 3 + ["strike"] * 3
+        assert pile[3:] == already
 
     def test_devoured_when_the_timer_runs_out(self):
         cs = fresh_encounter(THE_INSATIABLE_BOSS)

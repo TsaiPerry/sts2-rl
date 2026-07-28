@@ -29,8 +29,16 @@ class JungleMazeAdventure(Event):
         self.join_forces_gold: float = _JOIN_GOLD
 
     def calculate_vars(self) -> None:
-        self.solo_gold = _SOLO_GOLD + self.rng.uniform(-_GOLD_VARIANCE, _GOLD_VARIANCE)
-        self.join_forces_gold = _JOIN_GOLD + self.rng.uniform(-_GOLD_VARIANCE, _GOLD_VARIANCE)
+        # `base.Rng.NextFloat(-15f, 15f)` twice — the event's own Rng
+        # (JungleMazeAdventure.cs:54-55).
+        er = self.event_rng
+        self.solo_gold = _SOLO_GOLD + self._variance(er)
+        self.join_forces_gold = _JOIN_GOLD + self._variance(er)
+
+    def _variance(self, er) -> float:
+        if er is not None:
+            return er.next_float(-_GOLD_VARIANCE, _GOLD_VARIANCE)
+        return self.rng.uniform(-_GOLD_VARIANCE, _GOLD_VARIANCE)
 
     def initial_options(self) -> list[EventOption]:
         return [

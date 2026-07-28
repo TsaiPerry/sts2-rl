@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\toolbox.py",
-    "sha256": "1cef69936219c458872c8ddaed702258eaf72a4bf0d99c9d37aa61a4f349646a"
+    "sha256": "ded1eb5c48fffbb12d177a756f21b13c77cbc804fc8755e56403ca9fe7af6ad9"
   },
   "extra_sources": [
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -86,12 +86,12 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -102,16 +102,16 @@
       "rationale": "Toolbox.cs:18. Executed: Shop rarity in the transcribed grab bag (relic_pools.py:143 'RELIC.TOOLBOX'), `py audit/tools/relic_probes_b16.py pool`."
     },
     "BeforeHandDraw": {
-      "maps_to": "on_player_turn_start (toolbox.py:18-30)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The effect is complete and correct -- three distinct Colorless options on turn 1, pick one, into the hand -- but the generation runs on the legacy shared Random with no parity branch, where Toolbox.cs:27 names `RunState.Rng.CombatCardGeneration` (G1, live for RNG parity)."
+      "maps_to": "on_player_turn_start, gated on `combat.turn != 1` (sts2_rl/relics/toolbox.py:18-46) -- the sim's pre-draw turn-start slot; the three Colorless options come off get_distinct_for_combat_parity on CombatCardGeneration",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the rollup's only gap was G1 (the wrong RNG stream). sts2_rl/relics/toolbox.py:30-38 now branches on `crng.is_parity` into `get_distinct_for_combat_parity(crng.card_gen, 3, pool=COLORLESS_POOL)`, the CombatCardGeneration stream Toolbox.cs:27 names. The effect itself was already correct."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE for RNG parity): the three Colorless options are drawn from the legacy shared Random and the CombatCardGeneration stream never advances -- and a sibling relic already does it correctly",
-      "verdict": "gap",
-      "issue": "MECHANISM: Toolbox.cs:27 passes `base.Owner.RunState.Rng.CombatCardGeneration` to CardFactory.GetDistinctForCombat, whose randomness is `TakeRandom(count, rng)` = `list.UnstableShuffle(rng).Take(count)` (IEnumerableExtensions.cs:17-20) -- one shuffle of the filtered pool, then the first three. toolbox.py:25-27 calls `random_pool_cards(combat._rng, self.CARDS, distinct=True, pool=COLORLESS_POOL)`, i.e. the legacy shared `random.Random` via `rng.sample` (cards/pool.py:157-158), with NO `is_parity` branch at all. The sim HAS the correct helper and the correct stream: `get_distinct_for_combat_parity(rng, count, ...)` (cards/pool.py:182-204) reproduces UnstableShuffle-then-take over the CombatCardGeneration accessor, and `CombatRng.card_gen` is that accessor (combat_rng.py:20, 50). This is PROMPT.md bug class 16's second half -- a named C# stream reaching a sim helper that silently falls back to the shared RNG -- and class 12's 'check whether a sibling already does the thing': relics/vexing_puzzlebox.py:29-33 is a ported RARE relic that generates ONE pool card at turn start and branches `if crng.is_parity: get_distinct_for_combat_parity(crng.card_gen, 1) else: random_pool_cards(self.combat._rng, 1)`. EXECUTED (`py audit/tools/relic_probes_b16.py toolbox-stream`): toolbox's source contains no 'is_parity' and no 'card_gen'; vexing_puzzlebox's contains both. Seven further ported sites use the parity helper (cards/infernal_blade.py:41, cards/mad_science.py:152, potions.py:453/482/1101/1134/1167), so this is a one-site omission, not a house convention. REACHABILITY: live on the conformance/parity path -- any seed that buys Toolbox diverges both in WHICH three Colorless cards are offered and in the position of the CombatCardGeneration stream, which then shifts every later draw off it (Infernal Blade, Mad Science, four potions and Vexing Puzzlebox). DORMANT for RL play, where the shared Random is the intended source. Same live/dormant split and same verdict as audit/records/relic/astrolabe.json N1 (binding rule 3). Rule 7: cards/pool.py, combat_rng.py, relics/vexing_puzzlebox.py and audit/records/relic/astrolabe.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the port now draws on the named stream. sts2_rl/relics/toolbox.py:30-38 branches on `crng.is_parity` and calls `get_distinct_for_combat_parity(crng.card_gen, 3, pool=COLORLESS_POOL)` -- the UnstableShuffle-then-Take port over the CombatCardGeneration accessor, which is what Toolbox.cs:27 passes to CardFactory.GetDistinctForCombat; legacy keeps random_pool_cards on the shared Random. WAS: the call went to the legacy shared random.Random, so the stream was never advanced and every later draw off it read at the wrong position."
     },
     {
       "what": "N1: the hook slot -- C#'s BeforeHandDraw vs the sim's on_player_turn_start",
@@ -130,9 +130,8 @@
     },
     {
       "what": "N4 (NEW GAP, found by the 2026-07-26 fix pass): `CardSelectCmd.FromChooseACardScreen(choiceContext, cards, base.Owner)` (Toolbox.cs:28) is NOT skippable, but the sim's \"obtain\" purpose IS -- the reverse of the auto-keep mechanism",
-      "verdict": "gap",
-      "issue": "MECHANISM AUTO-KEEP-REVERSE. The auto-keep cluster (relic/black_star, relic/calling_bell G3, relic/toy_box G1 ...) is the sim force-granting what C# offers. This is the same seam pointing the OTHER way: the sim offers a decline the game forbids. Toolbox.cs:28 calls the `FromChooseACardScreen(context, cards, player)` overload without `canSkip`, which DEFAULTS to false (CardSelectCmd.cs:216), so the game makes the player take exactly one of the three Colorless cards; `if (cardModel != null)` (Toolbox.cs:29) is only the softlock guard for an empty candidate list (CardSelectCmd.cs:222-226). sts2_rl/relics/toolbox.py:28 is `combat.select_cards(\"obtain\", options, 1)`. THE DISCRIMINATOR, settled by the 2026-07-26 relic fix pass and applied at every relic card-selection site: the sim CAN model a decline exactly when the purpose string is in `sts2_rl/driver.py:77 SKIPPABLE_PURPOSES` (`card_reward`, `obtain`, `transform_optional`). For those, `RunDriver._card_selector` (sts2_rl/driver.py:246-267) issues a real DecisionRequest whose `legal_actions()` appends the skip index (sts2_rl/driver.py:154-158) and breaks out on it; for every other purpose it either short-circuits at sts2_rl/driver.py:249 (`count >= len(remaining)`) or runs the loop with no skip action, so exactly `count` cards come back. EXECUTED: driving `RunDriver._card_selector` with an `_ask` that raises, purpose 'gambling_chip' / candidates ['a','b','c'] / count 3 RETURNS ['a','b','c'] without ever asking, while 'card_reward', 'obtain' and 'transform_optional' each raise, i.e. each really does ask. The C# side of the test is `CardSelectorPrefs`: the 2-argument constructor (CardSelectorPrefs.cs:63-67) is `this(prompt, selectCount, selectCount)`, so MinSelect == MaxSelect and the screen is FORCED, while a MinSelect of 0 or an explicit `canSkip: true` makes it declinable (`canSkip` DEFAULTS to false, CardSelectCmd.cs:216). The combat inherits the run's selector (`create_combat(card_selector=self.card_selector)`, sts2_rl/run.py:1154), so under the real driver this screen carries a legal SKIP action and `chosen` can come back empty -- the player starts the combat with one card fewer in hand than the game allows. OBSERVABLE: hand size and hand contents on turn 1. LIVE: Toolbox is an ordinary pool relic and the trigger is a policy simply choosing the skip index, which `legal_actions()` publishes on every Toolbox combat; no unported content is needed. Grade B (state divergence). The previous entry verdicted this faithful by reasoning about the NO-selector fallback (`CombatState.select_cards` -> `self._rng.sample`, sts2_rl/combat.py:576-581), which does always return one -- but that path is the test default, not the driver. FIX: this is a driver change, not a relic change -- \"obtain\" is overloaded across a skippable site (relic/hefty_tablet, HeftyTablet.cs:32 `canSkip: true`) and two forced ones (this and relic/choices_paradox G6), so the purposes have to be split. Rule 7: sts2_rl/driver.py, sts2_rl/run.py, sts2_rl/combat.py and src/Core/Commands/CardSelectCmd.cs are cited and not all hashed here.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the screen is no longer skippable. sts2_rl/relics/toolbox.py:44 now asks with purpose 'choose_a_card', which is NOT in sts2_rl/driver.py:87-89 SKIPPABLE_PURPOSES, so the driver publishes no skip action and the player must take one of the three -- matching Toolbox.cs:28's `FromChooseACardScreen(context, cards, player)` overload, whose `canSkip` defaults to false (CardSelectCmd.cs:216). The comment at toolbox.py:39-43 records it. WAS: the port passed 'obtain', which IS skippable."
     },
     {
       "what": "N5: CardsVar(3) (Toolbox.cs:20) vs CARDS = 3 (toolbox.py:16)",
@@ -155,6 +154,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

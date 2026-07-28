@@ -16,13 +16,18 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -49,8 +54,8 @@
     },
     {
       "what": "BR-G3 (blast radius): Bird's and Torus's CardCmd.TransformTo<T> (WoodCarvings.cs:58, :83) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as audit/records/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py audit/tools/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "verdict": "faithful"
     },
     {
       "what": "this event consumes NO randomness on any path, so EV-3 does not apply",
@@ -68,6 +73,6 @@
       "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -26,27 +26,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/fabricator.py",
-      "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15",
+      "sha256": "fbbb6a395caf6cbecfec4090e9870ba56967a6a8014ce8f5c2b3a973da8506e3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/queen.py",
-      "sha256": "aa3e8fec081e81e448f6885eb0cf1af86a36eb1e27c705a1ae1b2f33d1aa1ad8",
+      "sha256": "9ea33801e77b1b03811245b9d8d9f8921d4ed36b2c8d05beb66ae23b7d440cc0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/hive/ovicopter.py",
-      "sha256": "79189b0410ab49908dad8328810cb95e4beed347b0d1025dac48c2befb12e0c5",
+      "sha256": "2b4e8702585fdf867b6714e5d6c9790c423c49023794d33bd22a1c7b3d073e26",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterator, TypeVar
 
+from .hooks import CAT_HISTORY
 from .valueprops import ValueProp
 
 if TYPE_CHECKING:
@@ -38,6 +39,11 @@ class CardPlayedEntry(HistoryEntry):
     played twice by One-Two Punch is a single play and a single entry."""
 
     card: Card
+    # CardPlay.IsAutoPlay. Pael's Eye filters on it (PaelsEye.cs:155's
+    # `&& !e.CardPlay.IsAutoPlay`) and Brilliant Scarf early-returns on it
+    # (BrilliantScarf.cs:84-87), while Rainbow Ring and Razor Tooth
+    # deliberately DO count auto-plays.
+    is_auto_play: bool = False
 
 
 @dataclass
@@ -71,16 +77,23 @@ class CombatHistory:
     combat" conditionals (Evil Eye, Spite, Tear Asunder, Stomp, ...).
     """
 
+    # Sim-only listener with no C# counterpart (hook_dispatch note N3): it
+    # sits ahead of the creature walk so an entry already exists when
+    # anything reacts to the event that produced it.
+    hook_category = CAT_HISTORY
+
     def __init__(self, combat: CombatState) -> None:
         self.combat = combat
         self.entries: list[HistoryEntry] = []
 
     # ── Recorders (hook listeners) ───────────────────────────────────────
 
-    def on_card_played(self, card: Card) -> None:
-        self.entries.append(CardPlayedEntry(self.combat.turn, card))
+    def on_card_played(self, card: Card, is_auto_play: bool = False) -> None:
+        self.entries.append(
+            CardPlayedEntry(self.combat.turn, card, is_auto_play))
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         self.entries.append(CardExhaustedEntry(self.combat.turn, card))
 
     def on_damage_received(

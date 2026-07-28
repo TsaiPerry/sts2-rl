@@ -1,136 +1,135 @@
 {
- "unit": "monster/queen",
- "game_source": {
-  "path": "src\\Core\\Models\\Monsters\\Queen.cs",
-  "sha256": "b2ce74a24c26e3e45020bac9941f5dc34abf8dc173afe3fab159ba3ac695c0d6"
- },
- "sim_source": {
-  "path": "sts2_rl\\monsters\\glory\\queen.py",
-  "sha256": "aa3e8fec081e81e448f6885eb0cf1af86a36eb1e27c705a1ae1b2f33d1aa1ad8"
- },
- "hooks": {
-  "AssetPaths": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Queen.cs:48 concatenates the TorchHeadAmalgam's asset paths onto her own so the amalgam's art preloads with hers."
+  "unit": "monster/queen",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\Queen.cs",
+    "sha256": "b2ce74a24c26e3e45020bac9941f5dc34abf8dc173afe3fab159ba3ac695c0d6"
   },
-  "MinInitialHp": {
-   "maps_to": "min_hp = 400 (queen.py:99)",
-   "verdict": "faithful",
-   "rationale": "Queen.cs:50 GetValueIfAscension(ToughEnemies, 419, 400) -> non-ascension 400."
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\queen.py",
+    "sha256": "9ea33801e77b1b03811245b9d8d9f8921d4ed36b2c8d05beb66ae23b7d440cc0"
   },
-  "MaxInitialHp": {
-   "maps_to": "max_hp = 400 (queen.py:100)",
-   "verdict": "faithful",
-   "rationale": "Queen.cs:52 `MaxInitialHp => MinInitialHp` = 400."
+  "hooks": {
+    "AssetPaths": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Queen.cs:48 concatenates the TorchHeadAmalgam's asset paths onto her own so the amalgam's art preloads with hers."
+    },
+    "MinInitialHp": {
+      "maps_to": "min_hp = 400 (queen.py:99)",
+      "verdict": "faithful",
+      "rationale": "Queen.cs:50 GetValueIfAscension(ToughEnemies, 419, 400) -> non-ascension 400."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp = 400 (queen.py:100)",
+      "verdict": "faithful",
+      "rationale": "Queen.cs:52 `MaxInitialHp => MinInitialHp` = 400."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+    },
+    "SetupSkins": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Queen.cs:112-115 starts a looping 'tracks/writhe' spine animation. Unlike ScrollOfBiting's SetupSkins it does not even draw an Rng."
+    },
+    "BeforeRemovedFromRoom": {
+      "maps_to": "(no sim analogue)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Queen.cs:117-123 sets the spine track to 'tracks/empty' unless the run is over. Read to the end (KinPriest N6): pure animation."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "Queen._amalgam() live lookup (queen.py:102-109)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Queen.cs:125-130 does exactly two things: caches `Amalgam = CombatState.Enemies.First(c => c.Monster is TorchHeadAmalgam)` and sets the 'queen_progress' music parameter to 1f. The music half is presentation (SHARED-FINDINGS section 4 waives NRunMusicController). The cache half is DEAD STATE in the source: `Amalgam` is written at Queen.cs:128 and nulled at :227 and is READ NOWHERE in the file -- every decision goes through HasAmalgamDied instead. The sim drops the field and resolves the amalgam live in _amalgam() whenever a condition needs it, which is the same observable. Note this is NOT the shared constructor-power finding: the Queen applies no starting power, so SHARED-FINDINGS section 2 does not apply and this entry stands on its own reading. One divergence the live lookup introduces and the cache does not: C#'s `.First(...)` THROWS if the encounter contains no amalgam, while the sim's loop returns None and _amalgam_died() then reports True, sending the Queen straight to OFF_WITH_YOUR_HEAD. Dormant on both sides -- QUEEN_BOSS is the Queen's only encounter and always pairs her with a TorchHeadAmalgam (queen.py:193-196), matching the C# boss."
+    },
+    "AfterDeath": {
+      "maps_to": "_AmalgamDeathListener.on_death -> Queen.on_amalgam_died (queen.py:88-107, 127-137)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: the Queen now has a real AfterDeath listener. queen.py:88-107 registers `_AmalgamDeathListener` in the hook_category CAT_POWER+1 slot CombatState.IterateHookListeners gives a monster; its on_death fires Queen.on_amalgam_died, which -- when the pending move is BURN_BRIGHT_FOR_ME_MOVE -- runs `machine.force_current_state(ENRAGE_MOVE)` plus `_current_move = enraged`, i.e. exactly Queen.cs:230-232's `SetMoveImmediate(EnragedState)` (NextMove = state AND MoveStateMachine.ForceCurrentState(state), MonsterModel.cs:420-432, which does not append to the state log). The resolution-time substitution inside _burn_bright is gone. EXECUTED on a real QUEEN_BOSS combat: with the Queen telegraphing BURN_BRIGHT_FOR_ME_MOVE, killing the Torch Head Amalgam flips the telegraph to ENRAGE_MOVE (intent BUFF) on the spot. WAS: no listener at all, so the Queen kept showing a Defend intent she would not perform. HasAmalgamDied / Amalgam = null stay derived state (_amalgam_died reads the combat), and the three presentation statements (the 'queen_progress' music parameter, the amalgamDeathSpeakLine bark, the spine track reset) stay out of scope by this record's own presentation waivers."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "Queen.build_machine (queen.py:115-152)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against Queen.cs:132-162. Six MoveStates with matching ids (PUPPET_STRINGS_MOVE / YOU_ARE_MINE_MOVE / BURN_BRIGHT_FOR_ME_MOVE / OFF_WITH_YOUR_HEAD_MOVE / EXECUTION_MOVE / ENRAGE_MOVE) and TWO ConditionalBranchStates with matching ids (YOURE_MINE_NOW_BRANCH, BURN_BRIGHT_FOR_ME_BRANCH). Wiring matches exactly: PUPPET -> YOU_ARE_MINE -> mine_branch; BURN_BRIGHT -> burn_branch; OFF_WITH_YOUR_HEAD -> EXECUTION -> ENRAGE -> OFF_WITH_YOUR_HEAD (Queen.cs:143-152 vs queen.py:138-147). Both branches carry the SAME two arms in the SAME order -- BURN_BRIGHT when the amalgam lives, OFF_WITH_YOUR_HEAD when it has died (Queen.cs:145-149 vs queen.py:140-144) -- and the duplication is deliberate on both sides. INITIAL state PUPPET_STRINGS_MOVE (Queen.cs:161 vs queen.py:151). No RandomBranchState anywhere, so there is no AddBranch integer to misread and the Queen draws no MonsterAi entropy. Intents match: CardDebuffIntent -> CARD_DEBUFF; DebuffIntent -> DEBUFF; BuffIntent + DefendIntent -> BUFF also=(DEFEND,); MultiAttackIntent(3, 5) -> ATTACK damage=3 hits=5; SingleAttackIntent(15) -> ATTACK 15; BuffIntent -> BUFF."
+    }
   },
-  "TakeDamageSfxType": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
-  },
-  "SetupSkins": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Queen.cs:112-115 starts a looping 'tracks/writhe' spine animation. Unlike ScrollOfBiting's SetupSkins it does not even draw an Rng."
-  },
-  "BeforeRemovedFromRoom": {
-   "maps_to": "(no sim analogue)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Queen.cs:117-123 sets the spine track to 'tracks/empty' unless the run is over. Read to the end (KinPriest N6): pure animation."
-  },
-  "AfterAddedToRoom": {
-   "maps_to": "Queen._amalgam() live lookup (queen.py:102-109)",
-   "verdict": "deliberate-divergence",
-   "rationale": "Queen.cs:125-130 does exactly two things: caches `Amalgam = CombatState.Enemies.First(c => c.Monster is TorchHeadAmalgam)` and sets the 'queen_progress' music parameter to 1f. The music half is presentation (SHARED-FINDINGS section 4 waives NRunMusicController). The cache half is DEAD STATE in the source: `Amalgam` is written at Queen.cs:128 and nulled at :227 and is READ NOWHERE in the file -- every decision goes through HasAmalgamDied instead. The sim drops the field and resolves the amalgam live in _amalgam() whenever a condition needs it, which is the same observable. Note this is NOT the shared constructor-power finding: the Queen applies no starting power, so SHARED-FINDINGS section 2 does not apply and this entry stands on its own reading. One divergence the live lookup introduces and the cache does not: C#'s `.First(...)` THROWS if the encounter contains no amalgam, while the sim's loop returns None and _amalgam_died() then reports True, sending the Queen straight to OFF_WITH_YOUR_HEAD. Dormant on both sides -- QUEEN_BOSS is the Queen's only encounter and always pairs her with a TorchHeadAmalgam (queen.py:193-196), matching the C# boss."
-  },
-  "AfterDeath": {
-   "maps_to": "Queen._burn_bright's substitution check (queen.py:166-179); there is no sim AfterDeath listener at all",
-   "verdict": "gap",
-   "issue": "THE UNCLAIMED HOOK OVERRIDE handed to the content tier by monster_state_machine boundary hole 5. Read to the END first, per the KinPriest N6 precedent, and it is NOT all presentation: Queen.cs:221-241 has a presentation shell (two NRunMusicController 'queen_progress' updates, a QUEEN.amalgamDeathSpeakLine TalkCmd bark, and a spine track reset) wrapped around three mechanical statements -- `HasAmalgamDied = true`, `Amalgam = null`, and `if (base.NextMove == BurnBrightForMeState) SetMoveImmediate(EnragedState)` (:230-232). The third is the divergence. C#'s SetMoveImmediate replaces the TELEGRAPHED move immediately: NextMove = EnragedState and MoveStateMachine.ForceCurrentState(EnragedState) (MonsterModel.cs:420-432), so the instant the amalgam dies the Queen's on-screen intent changes from Burn Bright For Me (BuffIntent + DefendIntent) to Enrage (BuffIntent) for the rest of that player turn. The sim has no listener for it (the sim has no MonsterModel listener category at all -- hook_dispatch G5, dormant, monsters/base.py:78-81, NOT re-verdicted here) and instead re-checks at RESOLUTION time inside the Burn Bright handler: `if self._amalgam_died(): self._enrage(ctx); return` (queen.py:169-171). Executed (`py audit/tools/monster_probes_b07.py queen-death`): with the Queen parked telegraphing Burn Bright and the amalgam then set to 0 HP, `queen STILL telegraphs: BURN_BRIGHT_FOR_ME_MOVE  intent=MoveType.BUFF` where the game would show ENRAGE_MOVE. The player therefore plans against a Defend intent the Queen will not perform, and a replay records the wrong move id for that turn. EVERYTHING DOWNSTREAM MATCHES, which is why this is an intent gap and not a whole broken phase: the same probe shows the resolved effect is Enrage's +2 Strength with 0 block, and the next telegraph is OFF_WITH_YOUR_HEAD_MOVE on both sides -- C# because ForceCurrentState parks the machine on ENRAGE_MOVE whose follow-up is OFF_WITH_YOUR_HEAD_MOVE, the sim because the machine is still on BURN_BRIGHT whose follow-up branch now takes its amalgam-dead arm. The state_log agrees too, because ForceCurrentState does not log (monster_state_machine step 34). LIVE (rule 6): 'queen' is in Glory's boss_keys (rooms.py:194), QUEEN_BOSS pairs the ported TorchHeadAmalgam with the Queen (queen.py:193-196), Burn Bright is the move she telegraphs on every turn the amalgam is alive, and killing the amalgam during the player's turn is the ordinary way the fight progresses -- both sides of the trigger are ported and the path is the fight's main line. Guarded correctly on the C# side and not needed on the sim's: SetMoveImmediate is gated on NextMove.CanTransitionAway (MonsterModel.cs:422), and BurnBrightForMeState sets no MustPerformOnceBeforeTransitioning, so the override always applies here.",
-   "live": true
-  },
-  "GenerateMoveStateMachine": {
-   "maps_to": "Queen.build_machine (queen.py:115-152)",
-   "verdict": "faithful",
-   "rationale": "Node-by-node against Queen.cs:132-162. Six MoveStates with matching ids (PUPPET_STRINGS_MOVE / YOU_ARE_MINE_MOVE / BURN_BRIGHT_FOR_ME_MOVE / OFF_WITH_YOUR_HEAD_MOVE / EXECUTION_MOVE / ENRAGE_MOVE) and TWO ConditionalBranchStates with matching ids (YOURE_MINE_NOW_BRANCH, BURN_BRIGHT_FOR_ME_BRANCH). Wiring matches exactly: PUPPET -> YOU_ARE_MINE -> mine_branch; BURN_BRIGHT -> burn_branch; OFF_WITH_YOUR_HEAD -> EXECUTION -> ENRAGE -> OFF_WITH_YOUR_HEAD (Queen.cs:143-152 vs queen.py:138-147). Both branches carry the SAME two arms in the SAME order -- BURN_BRIGHT when the amalgam lives, OFF_WITH_YOUR_HEAD when it has died (Queen.cs:145-149 vs queen.py:140-144) -- and the duplication is deliberate on both sides. INITIAL state PUPPET_STRINGS_MOVE (Queen.cs:161 vs queen.py:151). No RandomBranchState anywhere, so there is no AddBranch integer to misread and the Queen draws no MonsterAi entropy. Intents match: CardDebuffIntent -> CARD_DEBUFF; DebuffIntent -> DEBUFF; BuffIntent + DefendIntent -> BUFF also=(DEFEND,); MultiAttackIntent(3, 5) -> ATTACK damage=3 hits=5; SingleAttackIntent(15) -> ATTACK 15; BuffIntent -> BUFF."
-  }
- },
- "guards": [
-  {
-   "what": "HasAmalgamDied is a LATCHED flag in C# (Queen.cs:38, 60-71, 226) and a live RECOMPUTE in the sim (queen.py:111-113)",
-   "verdict": "deliberate-divergence",
-   "rationale": "C# sets the flag once, from AfterDeath, and never clears it; the sim asks `amalgam is None or amalgam.is_gone` every time a branch evaluates. Same observable in every reachable state, and the two ways they could differ were checked rather than assumed. (1) A REVIVE would unlatch the sim and not the game: the sim's three should_die implementers are IllusionPower, SteamEruptionPower and AdaptablePower and no Glory monster applies any of them to the amalgam, so no ported path takes a dead amalgam back to alive. (2) A REMOVED-BUT-ALIVE amalgam would latch the sim and not the game: `is_gone` is `is_dead or escaped` (creatures.py:43-46) and nothing in this fight escapes. C#'s own guard `base.Creature.IsAlive` at Queen.cs:223 only suppresses the latch when the Queen is already dead, which ends the combat on both sides. Concrete trigger that would make this a gap: any ported revive or escape reaching a TorchHeadAmalgam."
-  },
-  {
-   "what": "BurnBrightForMeMove's teammate loop: C# iterates GetTeammatesOf with NO IsAlive filter (Queen.cs:187-191), the sim filters `not enemy.is_gone` (queen.py:176-178)",
-   "verdict": "gap",
-   "issue": "Queen.cs:187-188 is `CombatState.GetTeammatesOf(Creature).ToList().Where(t => t != Creature)` -- membership of the enemy side is the only test. A creature whose removal was vetoed (the death-is-not-removal case) stays on the side at 0 HP and would still be handed +1 Strength. The sim's enemies list retains every corpse, so the port must filter, and it filters on `is_gone`, which also excludes the retained corpse C# would include. SAME MECHANISM and same verdict as monster/guardbot's GuardMove target-set guard (governing rule 3). DORMANT with the trigger named: no ported power sets `retained_after_death` on a TorchHeadAmalgam, and the branch only reaches Burn Bright while the amalgam is alive anyway, so the filter cannot fire on a corpse today. The self-exclusion `t != Creature` matches the sim's `enemy is not self`.",
-   "live": false
-  },
-  {
-   "what": "BurnBrightForMeMove numerics and order (Queen.cs:182-193 vs queen.py:166-179)",
-   "verdict": "faithful",
-   "rationale": "strengthAmount = GetValueIfAscension(DeadlyEnemies, 1, 1) -> 1 = _BURN_BRIGHT_ALLY_STR; then CreatureCmd.GainBlock(Creature, 20m, ValueProp.Move) = _BURN_BRIGHT_BLOCK 20 with props=ValueProp.MOVE. The strength-to-allies loop runs BEFORE the self-block on both sides."
-  },
-  {
-   "what": "The remaining move numerics",
-   "verdict": "faithful",
-   "rationale": "PuppetStrings applies ChainsOfBindingPower 3m to the targets = _PUPPET_CHAINS 3; YoureMine applies FrailPower / WeakPower / VulnerablePower 99m each, in that order (Queen.cs:177-179 vs queen.py:162-164) = _MINE_DEBUFF 99; OffWithYourHeadDamage GetValueIfAscension(DeadlyEnemies, 4, 3) -> 3 with WithHitCount(5) (and `_offWithYourHeadRepeat = 5` at Queen.cs:36 agrees) = 3 x 5; ExecutionDamage (..., 18, 15) -> 15; Enrage applies StrengthPower 2m to itself = _ENRAGE_STR 2. The three-debuff ORDER matters because each is Artifact-interceptable in turn (cmds.py:299-306) and it is preserved."
-  },
-  {
-   "what": "ShouldShowMoveInBestiary (Queen.cs:243-250)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Hides four move ids from the bestiary list."
-  }
- ],
- "verdict": "gap",
- "audited": "2026-07-27",
- "extra_sources": [
-  {
-   "path": "src\\Core\\Models\\MonsterModel.cs",
-   "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
-   "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\Combat\\CombatState.cs",
-   "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
-   "side": "game"
-  },
-  {
-   "path": "sts2_rl\\monsters\\state_machine.py",
-   "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\monsters\\base.py",
-   "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\creatures.py",
-   "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\cmds.py",
-   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\powers.py",
-   "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\rooms.py",
-   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
-   "side": "sim"
-  }
- ]
+  "guards": [
+    {
+      "what": "HasAmalgamDied is a LATCHED flag in C# (Queen.cs:38, 60-71, 226) and a live RECOMPUTE in the sim (queen.py:111-113)",
+      "verdict": "deliberate-divergence",
+      "rationale": "C# sets the flag once, from AfterDeath, and never clears it; the sim asks `amalgam is None or amalgam.is_gone` every time a branch evaluates. Same observable in every reachable state, and the two ways they could differ were checked rather than assumed. (1) A REVIVE would unlatch the sim and not the game: the sim's three should_die implementers are IllusionPower, SteamEruptionPower and AdaptablePower and no Glory monster applies any of them to the amalgam, so no ported path takes a dead amalgam back to alive. (2) A REMOVED-BUT-ALIVE amalgam would latch the sim and not the game: `is_gone` is `is_dead or escaped` (creatures.py:43-46) and nothing in this fight escapes. C#'s own guard `base.Creature.IsAlive` at Queen.cs:223 only suppresses the latch when the Queen is already dead, which ends the combat on both sides. Concrete trigger that would make this a gap: any ported revive or escape reaching a TorchHeadAmalgam."
+    },
+    {
+      "what": "BurnBrightForMeMove's teammate loop: C# iterates GetTeammatesOf with NO IsAlive filter (Queen.cs:187-191), the sim filters `not enemy.is_gone` (queen.py:176-178)",
+      "verdict": "gap",
+      "issue": "Queen.cs:187-188 is `CombatState.GetTeammatesOf(Creature).ToList().Where(t => t != Creature)` -- membership of the enemy side is the only test. A creature whose removal was vetoed (the death-is-not-removal case) stays on the side at 0 HP and would still be handed +1 Strength. The sim's enemies list retains every corpse, so the port must filter, and it filters on `is_gone`, which also excludes the retained corpse C# would include. SAME MECHANISM and same verdict as monster/guardbot's GuardMove target-set guard (governing rule 3). DORMANT with the trigger named: no ported power sets `retained_after_death` on a TorchHeadAmalgam, and the branch only reaches Burn Bright while the amalgam is alive anyway, so the filter cannot fire on a corpse today. The self-exclusion `t != Creature` matches the sim's `enemy is not self`.",
+      "live": false
+    },
+    {
+      "what": "BurnBrightForMeMove numerics and order (Queen.cs:182-193 vs queen.py:166-179)",
+      "verdict": "faithful",
+      "rationale": "strengthAmount = GetValueIfAscension(DeadlyEnemies, 1, 1) -> 1 = _BURN_BRIGHT_ALLY_STR; then CreatureCmd.GainBlock(Creature, 20m, ValueProp.Move) = _BURN_BRIGHT_BLOCK 20 with props=ValueProp.MOVE. The strength-to-allies loop runs BEFORE the self-block on both sides."
+    },
+    {
+      "what": "The remaining move numerics",
+      "verdict": "faithful",
+      "rationale": "PuppetStrings applies ChainsOfBindingPower 3m to the targets = _PUPPET_CHAINS 3; YoureMine applies FrailPower / WeakPower / VulnerablePower 99m each, in that order (Queen.cs:177-179 vs queen.py:162-164) = _MINE_DEBUFF 99; OffWithYourHeadDamage GetValueIfAscension(DeadlyEnemies, 4, 3) -> 3 with WithHitCount(5) (and `_offWithYourHeadRepeat = 5` at Queen.cs:36 agrees) = 3 x 5; ExecutionDamage (..., 18, 15) -> 15; Enrage applies StrengthPower 2m to itself = _ENRAGE_STR 2. The three-debuff ORDER matters because each is Artifact-interceptable in turn (cmds.py:299-306) and it is preserved."
+    },
+    {
+      "what": "ShouldShowMoveInBestiary (Queen.cs:243-250)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Hides four move ids from the bestiary list."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
+      "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\creatures.py",
+      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
 }

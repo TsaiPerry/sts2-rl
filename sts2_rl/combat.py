@@ -23,6 +23,7 @@ from .cmds import DamageCmd
 from .history import CombatHistory
 from .hooks import HookSystem
 from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
+from .monsters.state_machine import STUN_STATE_ID
 from .player import PlayerCombatState
 from .potions import Potion
 
@@ -194,6 +195,14 @@ class CombatState:
         # ExtraRewards). RunState.finish_combat drains these into the run.
         # First consumer: Thieving Hopper's returned card (SwipePower).
         self.pending_reward_extras: list["RewardExtra"] = []
+        # Run-deck cards a Thieving Hopper stole this combat, recorded
+        # here rather than read back off the surviving SwipePower:
+        # SwipePower is stripped on its owner's death like any other
+        # power (Creature.RemoveAllPowersAfterDeath), so the power is
+        # gone by the time RunState.finish_combat runs. C# does the
+        # deck removal at STEAL time (SwipePower.cs:75) for the same
+        # reason. RunState.finish_combat drains this.
+        self.stolen_deck_origins: list["Card"] = []
         # id(combat card) -> the run-deck card it was deep-copied from; the
         # sim's analogue of CardModel.DeckVersion. Populated by
         # RunState.create_combat; empty for room-less/standalone combats
@@ -206,7 +215,19 @@ class CombatState:
         self._pending_screen_cards: Optional[list["Card"]] = None
 
         self.hooks.on_combat_start()
+        # CombatManager.StartCombat ends in StartTurn (CombatManager.cs:418),
+        # so turn 1 runs the enemy-intent pass like every other player turn.
+        # Nothing has performed a move yet, so it is a no-op — the enemies'
+        # opening intents come from AfterCreatureAdded's roll.
+        self._roll_enemy_intents()
         self.player.start_turn()
+        # CombatManager.cs:573 calls CheckWinCondition immediately after
+        # SetupPlayerTurn. The sim checked after each enemy move, after the
+        # enemy side and after the NEXT player turn's setup, but nothing
+        # followed the combat-start setup — so a player killed during turn-1
+        # setup by an on_combat_start / on_player_turn_start(ed) listener was
+        # left in Phase.PLAYER_TURN at 0 HP with a legal action set.
+        self._check_win_condition()
 
     @property
     def enemy(self) -> Monster:
@@ -274,7 +295,45 @@ class CombatState:
         # is won once every primary enemy is dead or escaped, even if minions
         # survive.
         primaries = [e for e in self.enemies if "minion" not in e.powers]
-        return all(e.is_gone for e in (primaries or self.enemies))
+        if not all(e.is_gone for e in (primaries or self.enemies)):
+            return False
+        # CombatManager.cs:196 — the last gate before the combat is won: a
+        # power may hold the fight open around a creature that is dead at 0 HP
+        # and about to revive (AdaptablePower, InfestedPower).
+        return not self.hooks.should_stop_combat_from_ending()
+
+    def _roll_enemy_intents(self) -> None:
+        """CombatManager.StartTurn's player-turn-start pass
+        (CombatManager.cs:478-484):
+
+            if (!isExtraPlayerTurn)
+                foreach (Creature enemy in _state.Enemies)
+                    enemy.PrepareForNextTurn(_state.PlayerCreatures);
+
+        ONE pass over the enemy list, in list order, at the top of every
+        player turn — not one roll tacked onto the end of each enemy's move.
+        The distinction is observable in the MonsterAi stream: an enemy that
+        did not act because it was stunned still rolls here (the game performs
+        its synthetic STUNNED move, so the machine is free to transition),
+        where per-move rolling skipped it and desynced the stream by one draw
+        for the rest of the combat. An EXTRA player turn skips the pass
+        entirely, and a mid-combat spawn's single roll stays where
+        CombatManager.AfterCreatureAdded puts it (MachineMonster.__init__).
+
+        `_state.Enemies` holds the creatures still in the combat, so a corpse
+        combat kept (a withered Decimillipede segment) is included and a dead
+        or escaped creature that was removed is not. The
+        `performed_first_move` guard is FindNextMoveState's
+        `!_performedFirstMove && _currentState.IsMove -> return`
+        (MonsterMoveStateMachine.cs:60-63): until a monster has performed a
+        move its telegraphed one is sticky.
+        """
+        for enemy in list(self.enemies):
+            if enemy.is_gone and not enemy.retained_after_death:
+                continue
+            if not enemy.performed_first_move:
+                continue
+            enemy.telegraph_next_move()
 
     def _execute_enemy_turn(self) -> None:
         self.current_side = "enemy"
@@ -292,10 +351,16 @@ class CombatState:
             if enemy.is_gone and not enemy.retained_after_death:
                 continue
 
-            # Clear block at the start of this enemy's turn.
-            if enemy.block > 0 and self.hooks.should_clear_block(enemy):
+            # Clear block at the start of this enemy's turn. Two loops in C#
+            # (CombatManager.cs:492-507): the clear, then AfterBlockCleared
+            # UNCONDITIONALLY — the sim additionally gated the event on
+            # `enemy.block > 0`, which the game does not.
+            preventer: list = []
+            if self.hooks.should_clear_block(enemy, preventer):
                 enemy.block = 0
-                self.hooks.on_block_cleared(enemy)
+            else:
+                self.hooks.after_preventing_block_clear(preventer, enemy)
+            self.hooks.on_block_cleared(enemy)
 
             # Turn-start events (Poison, DemonForm, etc. can fire here).
             self.hooks.on_enemy_turn_start(enemy)
@@ -309,26 +374,27 @@ class CombatState:
                 self._end_combat(player_won=False)
                 return
 
-            # Execute the enemy's move, or skip it if stunned (turn-start and
-            # turn-end effects like Poison still fire on a stunned turn).
+            # Execute the enemy's move. A stunned creature's "skipped" turn is
+            # not really skipped in C#: Creature.StunInternal
+            # (Creature.cs:524-544) REPLACED its move with the synthetic
+            # STUNNED MoveState, and MonsterModel.PerformMove performs that one
+            # like any other — MoveState.PerformMove then
+            # MoveStateMachine.OnMovePerformed. Performing it is what lifts the
+            # stun's MustPerformOnceBeforeTransitioning pin so the next
+            # player-turn-start roll can transition STUNNED -> the deferred
+            # move (and re-log it). Turn-start and turn-end effects like Poison
+            # fire on a stunned turn either way.
             if enemy.stunned:
                 enemy.stunned = False
-                # NOTE (SP3 Task 6): the game's Creature.PrepareForNextTurn
-                # rolls every enemy's next move here unconditionally, even one
-                # stunned this round (MonsterModel.RollMove always runs; stun
-                # only suppresses PerformMove). We do NOT replicate that here:
-                # some stun sources (e.g. FlutterPower) already pre-roll and
-                # splice in the follow-up move inline via
-                # MachineMonster.telegraph_next_move() at the moment they stun
-                # the creature (mirroring Creature.StunInternal's
-                # FollowUpStateId), and unconditionally re-rolling here would
-                # double-advance those. A monster whose ONLY roll site is the
-                # normal telegraph-after-perform path (no custom stun hook)
-                # will miss one MonsterAi draw while stunned; see task-6-report
-                # for the specific monsters this could affect and why it's
-                # deferred rather than fixed here.
+                move = getattr(enemy, "_current_move", None)
+                if move is not None and move.id == STUN_STATE_ID:
+                    enemy.take_turn(self._ctx())
             else:
                 enemy.take_turn(self._ctx())
+            # MonsterModel.PerformMove -> MoveStateMachine.OnMovePerformed:
+            # from here on the monster's telegraphed move is no longer sticky,
+            # so the player-turn-start pass rolls it.
+            enemy.performed_first_move = True
             if self.player.is_dead:
                 self.phase = Phase.COMBAT_OVER
                 self.result = CombatResult(player_won=False, turns_taken=self.turn)
@@ -344,6 +410,21 @@ class CombatState:
         if self.phase != Phase.COMBAT_OVER:
             self.hooks.on_enemy_side_end()
 
+    def _check_win_condition(self) -> None:
+        """CombatManager.CheckWinCondition — RECOMPUTE whether the combat is
+        over and end it if so.
+
+        Distinct from reading `self.phase`: the sim's other three "checks"
+        (the flag-reads around end_turn) only test the cached COMBAT_OVER
+        value, so nothing recomputed the condition outside the enemy loop.
+        """
+        if self.phase == Phase.COMBAT_OVER:
+            return
+        if self.player.is_dead:
+            self._end_combat(player_won=False)
+        elif self._all_enemies_dead():
+            self._end_combat(player_won=True)
+
     def _end_combat(self, player_won: bool) -> None:
         self.phase = Phase.COMBAT_OVER
         self.result = CombatResult(player_won=player_won, turns_taken=self.turn)
@@ -358,7 +439,9 @@ class CombatState:
             if self.hooks.should_ethereal_trigger(card):
                 self.player.hand.remove(card)
                 self.player.exhaust_pile.append(card)
-                self.hooks.on_card_exhausted(card)
+                # CombatManager.cs:1240 — one of the only two
+                # `causedByEthereal: true` sites in the game.
+                self.hooks.on_card_exhausted(card, caused_by_ethereal=True)
 
         # Cards with a turn-end effect: fire the effect, then exhaust or discard.
         for card in [c for c in self.player.hand if c.has_turn_end_in_hand_effect]:
@@ -369,7 +452,8 @@ class CombatState:
                 return
             if card.is_ethereal and self.hooks.should_ethereal_trigger(card):
                 self.player.exhaust_pile.append(card)
-                self.hooks.on_card_exhausted(card)
+                # CardModel.cs:1692 — the other one.
+                self.hooks.on_card_exhausted(card, caused_by_ethereal=True)
             else:
                 self.player.discard_pile.append(card)
                 self.hooks.on_card_discarded(card)
@@ -431,14 +515,15 @@ class CombatState:
             return False
         if card in self.player.hand:
             self.player.hand.remove(card)
-        self._resolve_card_play(card, target_idx)
+        self._resolve_card_play(card, target_idx, is_auto_play=True)
         if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=True)
         elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=False)
         return True
 
-    def _resolve_card_play(self, card: Card, target_idx: int | None) -> None:
+    def _resolve_card_play(self, card: Card, target_idx: int | None,
+                           is_auto_play: bool = False) -> None:
         """Shared card-play resolution: result pile placement, play-count loop,
         exhaust-keyword move, and the played hook. The card must already be
         removed from the hand (or whichever pile it was played from)."""
@@ -463,7 +548,6 @@ class CombatState:
             if card.target_type == TargetType.ANY_ENEMY
             else None
         )
-        self.hooks.before_card_played(card, played_target)
         # BaseReplayCount (Hidden Gem) seeds the play count; enchantment
         # replays (Spiral/Glam) stack on top via the hook.
         play_count = self.hooks.modify_card_play_count(
@@ -474,7 +558,22 @@ class CombatState:
         # powers on the player (Vigor from Akabeko) consume their stacks after
         # one full multi-hit attack.
         is_attack = card.card_type == CardType.ATTACK
-        for _ in range(play_count):
+        # ModifyCardPlayResultPileTypeAndPosition is consulted ONCE, when
+        # `resultPileType` is computed for the CardPlay (CardModel.cs:1922) —
+        # i.e. BEFORE the loop and before any CardPlayStarted entry for this
+        # card exists. Nostalgia counts CardPlaysStarted this turn, so it must
+        # not see the play it is deciding about. The MOVE still happens after
+        # the loop, in the finally.
+        result_pile = self.hooks.modify_card_play_result_pile(card, "discard")
+        # CardModel.cs:1904-1965 builds a FRESH CardPlay each iteration
+        # (PlayIndex = i, :1919-1928) and fires Hook.BeforeCardPlayed (:1929)
+        # AND Hook.AfterCardPlayed (:1959) INSIDE the loop. The sim fired each
+        # once per logical play, so a Throwing-Axe-doubled Strike advanced Pen
+        # Nib's counter by 1 where the game advances it by 2 — from the first
+        # combat of a run, the two engines doubled a different attack.
+        for play_index in range(play_count):
+            card.current_play_index = play_index
+            self.hooks.before_card_played(card, played_target)
             if is_attack:
                 self.hooks.before_attack(self.player, card)
             if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
@@ -490,6 +589,15 @@ class CombatState:
                 card.on_play(self._ctx(), target_idx)
             if is_attack:
                 self.hooks.after_attack(self.player, card)
+            # EnchantmentModel.OnPlay is a DIRECT in-loop call, not a hook
+            # (CardModel.cs:1937-1945) — after the card's own OnPlay and before
+            # Hook.AfterCardPlayed.
+            if card.enchantment is not None:
+                card.enchantment.on_play(card, played_target)
+            # Hook.AfterCardPlayed, per iteration and gated on the combat still
+            # being in progress (CardModel.cs:1957-1959).
+            if not self.is_over:
+                self.hooks.on_card_played(card, is_auto_play)
             if self._all_enemies_dead() or self.player.is_dead:
                 break
 
@@ -506,12 +614,9 @@ class CombatState:
         # Result-pile redirect (ModifyCardPlayResultPileTypeAndPosition):
         # Nostalgia sends the first Attack/Skill plays of the turn to the top
         # of the draw pile instead of the discard pile.
-        if card in self.player.discard_pile:
-            if self.hooks.modify_card_play_result_pile(card, "discard") == "draw_top":
-                self.player.discard_pile.remove(card)
-                self.player.draw_pile.append(card)  # end of list = top of pile
-
-        self.hooks.on_card_played(card)
+        if card in self.player.discard_pile and result_pile == "draw_top":
+            self.player.discard_pile.remove(card)
+            self.player.draw_pile.append(card)  # end of list = top of pile
 
     def auto_play_card(self, card: Card, target_idx: int | None = None) -> None:
         """Play a card for free (mirrors CardCmd.AutoPlay): no energy is spent.
@@ -550,7 +655,7 @@ class CombatState:
         # BeforeCardPlayed fires for auto-plays too (0 energy spent) — powers
         # like Free Attack consume their stacks here.
         self.hooks.on_energy_spent(card, 0)
-        self._resolve_card_play(card, target_idx)
+        self._resolve_card_play(card, target_idx, is_auto_play=True)
 
         if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=True)
@@ -562,6 +667,7 @@ class CombatState:
         purpose: str,
         candidates: list[Card],
         count: int = 1,
+        min_select: int | None = None,
     ) -> list[Card]:
         """In-combat card selection (mirrors CardSelectCmd's selection screens).
 
@@ -571,13 +677,31 @@ class CombatState:
         (purpose, candidates, count) -> list[Card] — when one is installed
         (by tests, the env, or an agent); otherwise up to count cards are
         picked uniformly at random with the combat RNG.
+
+        `min_select` is CardSelectorPrefs.MinSelect, which the sim previously
+        did not model at all: it clamped `count` and returned exactly that
+        many. Ashwater and Gambler's Brew both build
+        `CardSelectorPrefs(prompt, 0, 999999999)` and Gambling Chip the same,
+        and `FromHand`'s auto-resolve shortcut is `list.Count <= MinSelect`
+        (CardSelectCmd.cs:708-711) — false for any non-empty hand at MinSelect
+        0, so the screen is always shown and confirming NONE is a first-class
+        outcome. Defaults to `count`, i.e. the old exactly-N behaviour.
         """
-        if count <= 0 or not candidates:
+        if not candidates:
             return []
         count = min(count, len(candidates))
+        floor = count if min_select is None else min(min_select, len(candidates))
+        if count <= 0 and floor <= 0:
+            return []
         if self.card_selector is not None:
             chosen = list(self.card_selector(purpose, list(candidates), count))[:count]
             return [c for c in chosen if c in candidates]
+        if floor < count:
+            # With a real minimum below the maximum the selectorless path must
+            # be able to return fewer than `count` — including none at all.
+            count = self._rng.randint(floor, count)
+        if count <= 0:
+            return []
         return self._rng.sample(candidates, count)
 
     def use_potion(self, slot: int, target_idx: int | None = None) -> bool:
@@ -606,14 +730,32 @@ class CombatState:
         self.player.detach_potion(potion)
         ctx = self._ctx()
         target = ctx.resolve_target(target_idx) if potion.targeted else None
+        # PotionModel.OnUseWrapper's order (PotionModel.cs:291-342):
+        # :293 RemoveBeforeUse (above), :297 BeforePotionUsed, :327 OnUse,
+        # :338 AfterPotionUsed, :340 CheckForEmptyHand.
+        self.hooks.before_potion_used(potion, target)
         potion.use(ctx, target)
         self.hooks.on_potion_used(potion, target)
+        self._check_for_empty_hand()
 
         if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=True)
         elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
             self._end_combat(player_won=False)
         return True
+
+    def _check_for_empty_hand(self) -> None:
+        """CombatManager.CheckForEmptyHand (CombatManager.cs:887-893).
+
+        Two callers: CardModel.cs:1992 and PotionModel.cs:340 — so the game
+        tests the hand after every card play AND every potion use, which is
+        what makes Unceasing Top's draw reachable from all 51 potions. The
+        end-of-turn flush (CombatManager.cs:880-883) explicitly EXCLUDES it.
+        """
+        if self.phase == Phase.COMBAT_OVER:
+            return
+        if not self.player.hand:
+            self.hooks.on_hand_emptied(self.player)
 
     def offer_screen_selection(self, cards: list[Card]) -> None:
         """Present a choose-a-card screen (mirrors CardSelectCmd.FromChooseA-
@@ -641,25 +783,27 @@ class CombatState:
         if self.phase != Phase.PLAYER_TURN:
             return
 
-        # Hook.ShouldTakeExtraTurn (Pael's Eye): a listener may claim an extra
-        # player turn — the enemy side is skipped entirely and a fresh player
-        # turn starts (block clear → energy → hooks → draw). on_extra_turn
-        # lets the granter do its bookkeeping (exhaust the hand, mark used).
-        if self.hooks.should_take_extra_turn(self.player):
-            self.hooks.on_extra_turn(self.player)
-            self.turn += 1
-            self.player.start_turn()
+        # PlayerTurnPhase.AutoPostPlay (CombatManager.cs:1160-1176): the
+        # end-of-turn auto-plays drain in their own phase, entered STRICTLY
+        # before Hook.BeforeTurnEnd.
+        self.hooks.after_auto_post_play_phase_entered(self.player)
+        if self.phase == Phase.COMBAT_OVER:
             return
 
         self.hooks.on_player_turn_end(self.player)
         if self.phase == Phase.COMBAT_OVER:
-            # Turn-end effects (e.g. Stampede auto-plays) can end the fight.
+            # Turn-end effects can end the fight.
             return
         self._process_turn_end_cards()
         if self.phase == Phase.COMBAT_OVER:
             return
-        if self.hooks.should_flush_hand():
-            self.player.discard_hand()
+        # FlushPlayerHand (CombatManager.cs:1327-1346) treats ShouldFlush ==
+        # false as "every card is retained": cardsToFlush is empty and the
+        # batched Add is skipped, but the TAIL still runs — Hook.AfterFlush and
+        # PlayerCombatState.EndOfTurnCleanup. The sim guarded the whole thing,
+        # so a retain effect suppressing the flush silently dropped Joss
+        # Paper's deferred Ethereal-exhaust credit with it.
+        self.player.discard_hand(flush=self.hooks.should_flush_hand())
         # Hook.AfterTurnEnd for the player side (CombatManager.cs:1307): after
         # DoTurnEnd and FlushPlayerHand, still on the player's block.
         self.hooks.after_player_turn_end(self.player)
@@ -668,10 +812,32 @@ class CombatState:
         if self._all_enemies_dead():
             self._end_combat(player_won=True)
             return
+
+        # Hook.ShouldTakeExtraTurn is evaluated in SwitchFromPlayerToEnemySide
+        # (CombatManager.cs:1360-1373) — AFTER both end-turn phases have run —
+        # and skips only the ENEMY SIDE. Testing it at the top of end_turn
+        # short-circuited the entire turn-end pipeline: with Pael's Eye held
+        # and no card played, a full hook trace recorded should_take_extra_turn
+        # and nothing else — no on_player_turn_end, no flush, no
+        # after_player_turn_end, though the sim has dozens of listeners on them.
+        if self.hooks.should_take_extra_turn(self.player):
+            self.hooks.on_extra_turn(self.player)
+            self.turn += 1
+            # No _roll_enemy_intents here: CombatManager.cs:478 gates the pass
+            # on `!isExtraPlayerTurn`, so an extra player turn faces the same
+            # intents (and takes no MonsterAi draw).
+            self.player.start_turn()
+            self._check_win_condition()
+            return
+
         self._execute_enemy_turn()
 
         if self.phase != Phase.COMBAT_OVER:
             self.turn += 1
+            # The enemy-intent pass runs inside StartTurn, before the player's
+            # own turn setup draws anything (CombatManager.cs:478-484 precedes
+            # SetupPlayerTurn at :510-523).
+            self._roll_enemy_intents()
             self.player.start_turn()
             # CheckWinCondition right after the player's turn setup /
             # auto-pre-play phase (CombatManager.cs:573). A turn-start effect

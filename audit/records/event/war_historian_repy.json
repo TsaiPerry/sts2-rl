@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/events/the_lantern_key.py",
-      "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec",
+      "sha256": "29c60d6b668ae35eeab1aa04a606ff574b5a318c63e0bf815c114cc13972a8f5",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],

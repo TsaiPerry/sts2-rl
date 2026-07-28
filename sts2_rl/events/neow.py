@@ -69,7 +69,7 @@ def neow_relic_pool(run: "RunState") -> list[str]:
         + list(POSITIVE_RELICS)
         + [*_LAVA_ROCK_PAIR, *_OYSTER_PAIR, *_TALISMAN_PAIR]
     )
-    return [rid for rid in ids if ALL_RELICS[rid].is_allowed_at_neow]
+    return [rid for rid in ids if ALL_RELICS[rid].is_allowed_at_neow(run)]
 
 
 @register_event
@@ -84,7 +84,8 @@ class NeowEvent(AncientEvent):
         # then UnstableShuffle(positives).Take(2) + the curse. Legacy keeps the
         # shared run rng byte-for-byte.
         er = self.event_rng
-        curses = [rid for rid in CURSE_RELICS if ALL_RELICS[rid].is_allowed_at_neow]
+        curses = [rid for rid in CURSE_RELICS
+                  if ALL_RELICS[rid].is_allowed_at_neow(self.run)]
         curse = er.next_item(curses) if er is not None else self.rng.choice(curses)
 
         def coin() -> bool:                       # Rng.NextBool()
@@ -98,7 +99,8 @@ class NeowEvent(AncientEvent):
         positives.append(_OYSTER_PAIR[0 if coin() else 1])
         positives.append(_TALISMAN_PAIR[0 if coin() else 1])
         positives = [
-            rid for rid in positives if ALL_RELICS[rid].is_allowed_at_neow
+            rid for rid in positives
+            if ALL_RELICS[rid].is_allowed_at_neow(self.run)
         ]
         if er is not None:
             er.shuffle(positives)

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\centennial_puzzle.py",
-    "sha256": "fa3de18b57282f95eb03dadd6d706ebffa9e7371f06e502acdbd5dbd8dbe3a10"
+    "sha256": "191041d573527a7b82fbf5c3cf5643e56d1a0e9c91ed77db2c9a118afb8e94c9"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     }
   ],
@@ -36,21 +36,21 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "AfterDamageReceived": {
-      "maps_to": "on_damage_received (centennial_puzzle.py:24-35)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Every clause of the trigger is faithful -- owner, unblocked damage > 0, not-yet-used, draw 3 -- but the not-yet-used flag is never cleared, so the whole hook is dead from the second combat of the run onward."
+      "maps_to": "on_damage_received (sts2_rl/relics/centennial_puzzle.py) -- owner, unblocked damage > 0, not-yet-used, draw 3; the flag is cleared by reset_for_combat",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat`, so the trigger -- every clause of which was already faithful -- is live again from combat 2 onward. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "AfterCombatEnd": {
-      "maps_to": "no counterpart",
-      "verdict": "gap",
-      "issue": "CentennialPuzzle.cs:53-57 exists for one reason: to clear UsedThisCombat. The sim implements neither this nor any other reset. This is the entire content of guard G1 and carries its LIVE label."
+      "maps_to": "reset_for_combat (sts2_rl/relics/centennial_puzzle.py:24-26)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat` (CentennialPuzzle.cs:53-57, whose only purpose is that reset). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_used_this_combat` is never reset, so the relic draws 3 cards in the first combat of a run and never again",
-      "verdict": "gap",
-      "issue": "MECHANISM: centennial_puzzle.py:22 sets the flag False in __init__ -- which runs ONCE PER RUN, when RunState.add_relic constructs the relic -- and :34 sets it True on the first HP loss. C# clears it in AfterCombatEnd (CentennialPuzzle.cs:53-57). Sim relic instances live on RunState.relics and are re-attached to every new CombatState, so combat 2 enters on_damage_received with the flag already True and returns. REACHABILITY (LIVE, executed twice by two independent probes): `py audit/tools/relic_probes.py sweep-reset-exec` found this unit pool-wide (`_used_this_combat: False -> True` at combat-2 start, one of exactly three confirmed carriers), and `py audit/tools/relic_probes.py batch3` reproduces the observable directly -- `combat 1: _used_this_combat=True hand 5 -> 8` then `combat 2: _used_this_combat=True hand 5 -> 5`, where C# draws 3 in both. Both sides ported: Centennial Puzzle is COMMON in the transcribed grab bag (confirmed by `batch3-pool`), which makes it one of the most frequently offered relics in the game, and taking unblocked damage is the single most ordinary event in a fight. This was pre-diagnosed in .superpowers/sdd/content-relic-sweeps.md sweep A and is confirmed here, not rediscovered. Cheapest possible fix and shared with relic/belt_buckle, relic/burning_sticks and relic/paels_eye: clear the flag in on_combat_start."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat` (CentennialPuzzle.cs:53-57 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "N1: `CombatManager.Instance.IsInProgress` (CentennialPuzzle.cs:42)",
@@ -88,6 +88,6 @@
       "rationale": "A save-system mutability assertion with no gameplay reading; the sim assigns the field directly. Recorded because it is the same field guard G1 is about and a reader might mistake the setter for a guard."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

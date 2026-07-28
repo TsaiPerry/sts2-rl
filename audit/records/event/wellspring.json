@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\wellspring.py",
-    "sha256": "ae14d334d1ee68f6dbf31763a80dc691926ea0e526f3edcfa8fe8cd138f3fc5b"
+    "sha256": "cf866e28d7830ceb7b25b047a613ac3680d33799a62f598e31a4c8a6f2d5a734"
   },
   "extra_sources": [
     {
@@ -26,13 +26,18 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
     }
   ],
   "hooks": {},
@@ -59,13 +64,13 @@
     },
     {
       "what": "EV-9: Bottle (Wellspring.cs:30-42) -- events/wellspring.py:30 calls run.random_potion() (run.py:513-520), a single `self.rng.choice` on the SHARED run rng over every potion class flagged in_reward_pool. C# here is a BARE `base.Owner.PlayerRng.Rewards.NextItem(items)` over `Character.PotionPool.GetUnlockedPotions(UnlockState).Concat(SharedPotionPool.GetUnlockedPotions(UnlockState))` (Wellspring.cs:32-33), wrapped in the two-argument PotionReward ctor (PotionReward.cs:45-50), so PotionReward.Populate does NOT re-roll: the rarity-tier leg of EV-9 does not apply and this site is exactly the endless_conveyor SUSPICIOUS_CONDIMENT shape -- one draw, wrong stream, wrong population. EXECUTED (`py audit/tools/event_probes_c.py drawcount`): BOTTLE takes exactly 1 draw and it is on the shared run rng.",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-9, one verdict at every random-potion site (rule 3). ALREADY RECORDED as a gap at event/battleworn_dummy (Setting1) and event/endless_conveyor (SUSPICIOUS_CONDIMENT) -- named here so the mechanism has an id, because it is NOT EV-3: EV-3 is 'the sim uses the shared run rng where C# uses the per-event base.Rng', and the stream C# uses here is the per-player PlayerRng.Rewards, which the sim already exposes as run.rewards_rng (run.py:270-274). endless_conveyor's guard labels its own instance '(EV-3)'; that label is imprecise and should be narrowed. EXECUTED (`py audit/tools/event_probes_c.py potionroll`): the sim's reward pool is 48 potion classes split 16 common / 16 uncommon / 16 rare, so a uniform choice gives P(rare) = 0.3333 where the game's PotionFactory tier gives 0.10 (and 0.25 / 0.65 for uncommon / common). Three observables at every site: the wrong stream, the wrong population (in_reward_pool is not the character-pool + SharedPotionPool union the source composes), and no rarity tier. LIVE for parity and, because the rarity tier is a distribution change, for the RL path too."
+      "maps_to": "Closed 2026-07-28: BOTTLE is now events/wellspring.py:32. `Event.offer_pool_potion` (events/base.py:132-146) is the verbatim source idiom -- ONE `run.rewards_rng.next_item(POTION_POOL)` over the Character.PotionPool + SharedPotionPool transcription, with no rarity tier -- and `run.rewards_rng` (run.py:273-277) is `player_rng.rewards`. Verified 2026-07-28: potion_pools.POTION_POOL and the `in_reward_pool` set are the same 48 ids, so the legacy fallback draws the same population. Was: `run.random_potion()`'s uniform `self.rng.choice` on the shared run rng over a different population.",
+      "verdict": "faithful"
     },
     {
       "what": "EV-4: Bottle's PotionReward (Wellspring.cs:36-40) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3); the owning records are event/drowning_beacon (BOTTLE), event/brain_leech (RIP) and event/endless_conveyor (SUSPICIOUS_CONDIMENT). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all ordinary event branches with no exotic gate."
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/wellspring.py:32 (`self.offer_potion(self.offer_pool_potion())`) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "verdict": "faithful"
     },
     {
       "what": "the belt rules on the taken path",
@@ -78,6 +83,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

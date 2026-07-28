@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\potion_courier.py",
-    "sha256": "8cd18b6a03397127ffffee5343b3c60f0896c7f641742e7580886ef4b5135276"
+    "sha256": "d3c14c7d840fb61065fcc62fdc302162682b98ba77f9e8015e5081eddc4634a3"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -79,8 +79,8 @@
     },
     {
       "what": "EV-4: GrabPotions' three PotionRewards (PotionCourier.cs:38-43) and Ransack's one (PotionCourier.cs:55-58) is wrapped in RewardsCmd.OfferCustom in the source (RewardsCmd.cs:47-50 -> new RewardsSet(player).WithCustomRewards(rewards).Offer()), a TAKE-OR-SKIP screen; events/potion_courier.py:47-48 and :57 call run.add_potion directly. Two observables beyond the missing decline: (a) the sim cannot leave a Foul Potion on the screen to keep a belt slot free, and (b) run.add_potion silently returns False when the belt is full (run.py:474-486), so the 3rd Foul Potion is DROPPED where the game leaves it unclaimed on a screen the player can still work through. EXECUTED (`py audit/tools/event_probes_a.py ransack`): GRAB_POTIONS on a default run fills all three belt slots with FoulPotion with no choice offered.",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a card reward can be a card the player does not want in the deck, and a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` on its grid pick (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all of which are reachable event branches with no exotic gate."
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/potion_courier.py:49 (each of the three Foul Potions) and :60/:67 (Ransack) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "verdict": "faithful"
     },
     {
       "what": "HoverTipFactory.FromPotion<FoulPotion> on the GRAB_POTIONS option (PotionCourier.cs:26) and the two SetEventFinished description lookups (PotionCourier.cs:44, :60)",
@@ -88,6 +88,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

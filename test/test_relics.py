@@ -778,25 +778,44 @@ class TestCumulativeCounters:
         assert cs.player.block == 7
 
     def test_pen_nib_tenth_attack_doubled(self):
+        # PenNib.cs:108 self-gates on props.IsPoweredAttack(); the pipeline no
+        # longer gates for it (damage_pipeline/G3), so props is a real argument.
+        from sts2_rl.valueprops import DamageProps
+        powered = DamageProps.CARD
+
         relic = PenNib()
         cs = fresh(relics=[relic])
         cards = [make_card("strike") for _ in range(10)]
         for c in cards[:9]:
             relic.before_card_played(c)
-            assert relic.modify_damage_multiplicative(cs.enemy, 6, cs.player, c) == 1.0
+            assert relic.modify_damage_multiplicative(
+                cs.enemy, 6, cs.player, c, powered) == 1.0
             relic.on_card_played(c)
         relic.before_card_played(cards[9])
-        assert relic.modify_damage_multiplicative(cs.enemy, 6, cs.player, cards[9]) == 2.0
-        assert relic.modify_damage_multiplicative(cs.enemy, 6, cs.player, cards[0]) == 1.0
+        assert relic.modify_damage_multiplicative(
+            cs.enemy, 6, cs.player, cards[9], powered) == 2.0
+        assert relic.modify_damage_multiplicative(
+            cs.enemy, 6, cs.player, cards[0], powered) == 1.0
+        # ...and it does NOT double an UNPOWERED attack, which the pipeline used
+        # to hide by never dispatching at all.
+        relic.before_card_played(cards[9])
+        assert relic.modify_damage_multiplicative(
+            cs.enemy, 6, cs.player, cards[9], DamageProps.CARD_UNPOWERED) == 1.0
         relic.on_card_played(cards[9])
-        assert relic.modify_damage_multiplicative(cs.enemy, 6, cs.player, cards[9]) == 1.0
+        assert relic.modify_damage_multiplicative(
+            cs.enemy, 6, cs.player, cards[9], powered) == 1.0
 
 
 class TestTurnEndRelics:
     def test_orichalcum_block_when_bare(self):
+        # Orichalcum is deliberately TWO-PHASE in the source: the
+        # BeforeSideTurnEndVeryEarly pass snapshots `Block > 0` into
+        # ShouldTrigger (Orichalcum.cs:45-56) and the plain BeforeSideTurnEnd
+        # pass then grants the block (:58-66). Both must be driven.
         relic = Orichalcum()
         cs = fresh(relics=[relic])
         cs.player.block = 0
+        relic.on_player_turn_end_very_early(cs.player)
         relic.on_player_turn_end(cs.player)
         assert cs.player.block == 6
 
@@ -896,7 +915,11 @@ class TestDefensiveRelics:
         cs.player.block = 0
         DamageCmd.deal(cs.hooks, cs.player, 200, dealer=cs.enemy)
         assert not cs.player.is_dead
-        assert cs.player.hp == 41  # reset to 1, then healed 50% of 80
+        # LizardTail.cs:57 heals max(1, MaxHp * 50%) from AfterPreventingDeath,
+        # and CreatureCmd.cs:565 leaves the prevented creature at 0 -- so 0 + 40.
+        # This asserted 41 while the sim floored a prevented death at 1 HP
+        # (power/_death_prevention_branch); that floor is gone.
+        assert cs.player.hp == 40
         DamageCmd.deal(cs.hooks, cs.player, 200, dealer=cs.enemy)
         assert cs.player.is_dead
 
@@ -920,12 +943,14 @@ class TestDefensiveRelics:
     def test_sturdy_clamp_caps_retained_block(self):
         relic = SturdyClamp()
         cs = fresh(relics=[relic])
+        # SturdyClamp.cs caps from AfterPreventingBlockClear, not from the
+        # turn-start slot the sim used to use (turn_structure/G2).
         assert relic.should_clear_block(cs.player) is False
         cs.player.block = 25
-        relic.on_player_turn_start(cs.player)
+        relic.after_preventing_block_clear(cs.player)
         assert cs.player.block == 10
         cs.player.block = 6
-        relic.on_player_turn_start(cs.player)
+        relic.after_preventing_block_clear(cs.player)
         assert cs.player.block == 6
 
     def test_the_abacus_block_on_shuffle(self):
@@ -1244,3 +1269,151 @@ class TestPantograph:
         cs2 = fresh(relics=[make_relic("pantograph")],
                     room_type=RoomType.MONSTER, max_hp=80, current_hp=40)
         assert cs2.player.hp == 40
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# GAP-QUEUE 52 — relic/_stable_shuffle: orientation, UPPERCASE key, Take(N)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestStableShuffleRelics:
+    """The `.Take(N)` half of `relic/_stable_shuffle` pins deterministically:
+    the COUNT is a plain constant from CanonicalVars and does not depend on
+    which stream the shuffle runs on."""
+
+    @staticmethod
+    def _run(seed: int = 0):
+        import random as _random
+        from sts2_rl.run import RunState
+        return RunState(rng=_random.Random(seed))
+
+    def test_sand_castle_upgrades_exactly_six(self):
+        # SandCastle.cs:20 pins CardsVar(6) and :24-25 ends in .Take(6); the
+        # 10-card Ironclad starting deck is fully upgradable, so the port that
+        # upgraded ALL of it upgraded 10.
+        run = self._run(5)
+        assert len([c for c in run.deck if c.is_upgradable]) == 10
+        run.add_relic("sand_castle")
+        assert sum(c.upgrade_level for c in run.deck) == 6
+
+    def test_war_hammer_upgrades_exactly_four_per_elite(self):
+        # WarHammer.cs:17 pins CardsVar(4) and :26-27 ends in .Take(4).
+        from sts2_rl.rooms import RoomType
+        run = self._run(50)
+        run.add_relic("war_hammer")
+        for relic in run.relics:
+            relic.after_combat_end(run, RoomType.ELITE)
+        assert sum(c.upgrade_level for c in run.deck) == 4
+
+    def test_war_paint_upgrades_two_skills_on_pickup(self):
+        # WarPaint.cs:22-27 — Skill + IsUpgradable, StableShuffle, Take(2).
+        from sts2_rl.cards import CardType
+        run = self._run(11)
+        run.add_relic("war_paint")
+        upgraded = [c for c in run.deck if c.upgrade_level > 0]
+        assert len(upgraded) == 2
+        assert all(c.card_type == CardType.SKILL for c in upgraded)
+
+    def test_whetstone_upgrades_two_attacks_on_pickup(self):
+        # Whetstone.cs:22-27 — Attack + IsUpgradable, StableShuffle, Take(2).
+        from sts2_rl.cards import CardType
+        run = self._run(12)
+        run.add_relic("whetstone")
+        upgraded = [c for c in run.deck if c.upgrade_level > 0]
+        assert len(upgraded) == 2
+        assert all(c.card_type == CardType.ATTACK for c in upgraded)
+
+    def test_stable_shuffle_sort_key_is_the_uppercase_id(self):
+        # ModelId.CompareTo is an ORDINAL compare over the game's UPPERCASE
+        # entry, where '_' (0x5F) sorts after 'Z' but before 'a' — so the sim's
+        # lowercase slug orders blood_wall/bloodletting the opposite way round.
+        # Every StableShuffle relic must key on player._compare_to_key.
+        from sts2_rl.player import _compare_to_key
+        assert _compare_to_key(make_card("blood_wall")) > \
+            _compare_to_key(make_card("bloodletting"))
+        assert "blood_wall" < "bloodletting"      # the defective lowercase key
+
+    def test_fragrant_mushroom_uses_the_uppercase_key(self):
+        import inspect
+        from sts2_rl.relics import fragrant_mushroom, sand_castle, war_hammer
+        from sts2_rl.relics import stone_cracker, war_paint, whetstone
+        for mod in (fragrant_mushroom, sand_castle, war_hammer, stone_cracker,
+                    war_paint, whetstone):
+            src = inspect.getsource(mod)
+            assert "_compare_to_key" in src, mod.__name__
+            assert "(c.id, c.upgrade_level)" not in src, mod.__name__
+
+    def test_stone_cracker_feeds_the_draw_pile_top_first(self):
+        # player.py:264 — the game stores the pile top-at-index-0 and the sim
+        # draws off the END, so StableShuffle must be fed reversed(draw_pile):
+        # equal-comparing cards keep their incoming order.
+        import inspect
+        from sts2_rl.relics import stone_cracker
+        assert "reversed(" in inspect.getsource(stone_cracker)
+
+    def test_paels_tooth_stores_cards_in_ordinal_id_order(self):
+        # PaelsTooth.cs:83 ends in .OrderBy(c => c.Id.Entry, Ordinal) and the
+        # Rewards draw indexes into that store, so the ORDER is load-bearing.
+        run = self._run(23)
+        run.deck[:] = [
+            make_card("strike"), make_card("regret"), make_card("bash"),
+            make_card("defend"), make_card("anger"),
+        ]
+        run.add_relic("paels_tooth")
+        tooth = next(r for r in run.relics if r.id == "paels_tooth")
+        assert [c.id for c in tooth.stored_cards] == [
+            "anger", "bash", "defend", "regret", "strike"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# GAP-QUEUE 53 — relic/_undo_clamp: undo_after_obtained must SUBTRACT
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestUndoAfterObtained:
+    """All five implementers clamped current HP to the restored maximum
+    instead of giving back the heal, leaking HP into the conformance runner's
+    DETECTOR 3 act-boundary assertion."""
+
+    @staticmethod
+    def _run(hp: int, max_hp: int):
+        import random as _random
+        from sts2_rl.run import RunState
+        run = RunState(rng=_random.Random(0))
+        run.max_hp, run.hp = max_hp, hp
+        return run
+
+    def test_grant_then_undo_restores_the_starting_hp(self):
+        # Executed at 75/80 in the audit record: every one of the five left
+        # (80, 80) where the contract requires (75, 80) — a silent +5 HP.
+        for rid in ("mango", "strawberry", "lees_waffle", "looming_fruit",
+                    "pear"):
+            run = self._run(75, 80)
+            relic = make_relic(rid)
+            relic.after_obtained(run)
+            assert (run.hp, run.max_hp) != (75, 80), rid   # it really granted
+            relic.undo_after_obtained(run)
+            assert (run.hp, run.max_hp) == (75, 80), rid
+
+    def test_undo_from_a_damaged_player(self):
+        # lees_waffle heals to FULL, so the undo cannot be a fixed subtraction
+        # of MAX_HP: 40/80 -> 87/87 must come back to 40/80.
+        run = self._run(40, 80)
+        relic = make_relic("lees_waffle")
+        relic.after_obtained(run)
+        assert (run.hp, run.max_hp) == (87, 87)
+        relic.undo_after_obtained(run)
+        assert (run.hp, run.max_hp) == (40, 80)
+        # looming_fruit: 40/80 -> 71/111 -> 40/80 (the record's 31-HP leak).
+        run = self._run(40, 80)
+        relic = make_relic("looming_fruit")
+        relic.after_obtained(run)
+        assert (run.hp, run.max_hp) == (71, 111)
+        relic.undo_after_obtained(run)
+        assert (run.hp, run.max_hp) == (40, 80)
+
+    def test_undo_at_full_hp_is_still_exact(self):
+        run = self._run(80, 80)
+        relic = make_relic("mango")
+        relic.after_obtained(run)
+        assert (run.hp, run.max_hp) == (94, 94)
+        relic.undo_after_obtained(run)
+        assert (run.hp, run.max_hp) == (80, 80)

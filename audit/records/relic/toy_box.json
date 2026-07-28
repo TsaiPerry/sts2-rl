@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\toy_box.py",
-    "sha256": "fb31a6d1f3e971a54be1c6e1e408757a832f9c402a4fe0d2e7b6dafd356b9306"
+    "sha256": "89b48617aee40e528578d93d16a17fec346d0e0407aa572f063f9239c3473099"
   },
   "extra_sources": [
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/ranwid_the_elder.py",
-      "sha256": "d0e4f2982b6cbb00c6d50700886cf5dfae728319278d8eb1784f8ede398f9b2f",
+      "sha256": "f55d8ec03d921439cc395aac26885ae51148697bc6ec10a282875132858e9116",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/relic_trader.py",
-      "sha256": "abfda521b0b2ee7b4a8d8f2c7a832d7221efc653f64af4bcbbe4ed3070a7abbb",
+      "sha256": "0aad9bd118e2ebc907b3035b8b5ff8886a568b525649d93847240c4c4186c4e7",
       "side": "sim"
     },
     {
@@ -61,12 +61,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -131,7 +131,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     }
   ],
@@ -162,10 +162,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (toy_box.py:29-35), invoked by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4: the four pulls, their order, the IsWax marking and the stream they come off are all faithful (guard N2), but the four relics are FORCE-GRANTED where ToyBox.cs:96 offers them on a skippable screen, and each granted relic's own after_obtained fires as a result. LIVE, grade B. See guard G1.",
-      "live": true
+      "maps_to": "after_obtained (sts2_rl/relics/toy_box.py:29-40) -- four PullNextRelicFromFront pulls, each marked is_wax and offered through RunState.offer_relic",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/toy_box.py:33-40 marks each pulled relic `is_wax` and offers it through `run.offer_relic` (ToyBox.cs:96). The four pulls, their order, the IsWax marking and the stream they come off were already faithful. WAS: all four were force-granted and each ran its own after_obtained regardless."
     },
     "AfterCombatEnd": {
       "maps_to": "after_combat_end (toy_box.py:37-42), dispatched by RunState.finish_combat",
@@ -176,9 +175,8 @@
   "guards": [
     {
       "what": "G1: `RewardsCmd.OfferCustom(base.Owner, list)` (ToyBox.cs:96) is a take-or-skip reward screen for four wax relics; the port grants all four unconditionally",
-      "verdict": "gap",
-      "issue": "MECHANISM AUTO-KEEP, one verdict at every site (binding rule 3). RE-VERDICTED from deliberate-divergence to gap by the relic fix pass (2026-07-26); the old rationale's premise -- 'the house rule for NON-CHOICE relic offers' -- is false, because these are choice offers.\nTHE OFFERS ARE DECLINABLE. `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is `new RewardsSet(player).WithCustomRewards(rewards).Offer()` with no skip suppression, and `grep -rn WithSkippingDisallowed src/` returns exactly TWO lines in the whole source: the definition (RewardsSet.cs:115) and its one caller, NeowsBones.cs:43. Neow's Bones is therefore the ONLY non-declinable relic offer in the game; CallingBell.cs:31, ToyBox.cs:96, SmallCapsule.cs:15, LostCoffer.cs:22, Orrery.cs:27 and GlassEye.cs:32 are plain skippable sets, as is the ordinary combat/boss reward screen that BlackStar.cs:23, LavaRock.cs:61 and WongosMysteryTicket.cs:101 append RelicRewards to.\nIT IS NOT AN IDENTICAL OBSERVABLE (binding rule 2), for two independent reasons. (1) A DECLINE IS WRITTEN INTO RUN HISTORY: `RelicReward.OnSkipped` (RelicReward.cs:117-123) does `RelicChoices.Add(new ModelChoiceHistoryEntry(_relic.Id, wasPicked: false))`, and the sim's own conformance runner READS that field (sts2_rl/conformance/runner.py:429-432), while `sts2_rl/conformance/runner.py:435-466 _reconcile_node_relics` is a bespoke replay-time WORKAROUND that deletes relics the sim auto-granted and the save says were not picked. A divergence that needs a workaround is not an identical observable. (2) PICKUP EFFECTS FIRE UNCONDITIONALLY: in C# `AfterObtained` runs inside `RelicReward.OnSelect` (RelicReward.cs:109-115), i.e. only when the player TAKES the relic, whereas the sim's `run.add_relic` fires `after_obtained` at screen-generation time (sts2_rl/run.py:546-553, the call is sts2_rl/run.py:552), so a relic the player would have declined still runs its pickup effect.\nSTILL deliberate-divergence, and correct: relic/neows_bones G2 (the one `WithSkippingDisallowed` site) and the up-to-N card screens relic/claws and relic/glass_eye, whose purposes `transform_optional` / `card_reward` ARE in sts2_rl/driver.py:77 SKIPPABLE_PURPOSES so the driver really does offer a decline. Agrees with audit/records/event/drowning_beacon.json mechanism EV-4 (gap, 8 event sites). Rule 7: RewardsCmd.cs, RelicReward.cs, RewardsSet.cs, conformance/runner.py, run.py, rewards.py and driver.py are cited here and not all hashed by this record.\nAT THIS SITE (LIVE, grade B, escalating to A): ToyBox.cs:87-97 pulls four relics, marks each IsWax and OFFERS them; sts2_rl/relics/toy_box.py:29-35 calls run.add_relic on all four. EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): a seeded run obtains ['toy_box', 'toxic_egg', 'akabeko', 'potion_belt', 'planisphere'] with the last four is_wax, and potion_belt's after_obtained has ALREADY RUN -- which in the game only happens for a relic the player takes. This is the clearest instance of observable (2) in the mechanism above. It escalates to grade A whenever a pulled wax relic's own AfterObtained consumes an RNG stream (a wax Small Capsule or Calling Bell pulls further relics), which the four-relic pull makes reachable. Toy Box is Ancient and granted by a ported shrine option, so both sides are reachable.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/toy_box.py:33-40 marks each of the four wax relics and offers it through `run.offer_relic`, with the C# citation (ToyBox.cs:96) in the comment. WAS: all four were granted outright."
     },
     {
       "what": "G2 (DORMANT): `RelicCmd.Melt` leaves the relic in `Player.Relics` as an inert entry; the port removes it from run.relics entirely",

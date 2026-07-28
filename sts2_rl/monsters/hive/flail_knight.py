@@ -26,7 +26,8 @@ _KNIGHT_PLATING = 6
 
 class FlailKnight(MachineMonster):
     """Starts with RAM (15), then each turn picks among WAR_CHANT (+3 Strength,
-    cannot repeat), FLAIL (9×2, weight 2), and RAM (15, weight 2).
+    cannot repeat), FLAIL (9×2) and RAM (15) — the last two at most twice in a
+    row (all three weight 1).
 
     Source: FlailKnight.cs (non-ascension values)."""
     name = "Flail Knight"
@@ -48,8 +49,14 @@ class FlailKnight(MachineMonster):
         )
         branch = RandomBranchState("RAND")
         branch.add_branch(war_chant, repeat_type=MoveRepeatType.CANNOT_REPEAT)
-        branch.add_branch(flail, weight=2.0)
-        branch.add_branch(ram, weight=2.0)
+        # FlailKnight.cs:50-51 AddBranch(state, 2) is the (state, int
+        # maxRepeats) overload — a repeat limit, not a weight.
+        branch.add_branch(
+            flail, repeat_type=MoveRepeatType.CAN_REPEAT_X_TIMES, max_times=2
+        )
+        branch.add_branch(
+            ram, repeat_type=MoveRepeatType.CAN_REPEAT_X_TIMES, max_times=2
+        )
         war_chant.follow_up = branch
         flail.follow_up = branch
         ram.follow_up = branch

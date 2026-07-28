@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\thrash.py",
-    "sha256": "6ffb7671ded4a4f5e00a8786ac110c677e02eef9139983e4effafceec8e3bdb5"
+    "sha256": "034f36bcc83c695672fb15e1a7c0804bdc5a50b30dc083b3ad0c0613d05717ad"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "d4ced20efcb786cb8b33ad01d88c464e378da97d82877d505780d0fca7b77190",
+      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],

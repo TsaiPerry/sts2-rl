@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\room_full_of_cheese.py",
-    "sha256": "1fb71ca0593f11ab1eb2471a635894e4b75c9b0ac7af73005622b513fcda7644"
+    "sha256": "9d58b362db8ed25c220aadc4131235a00982e49d104cbe1f1bc3f57ccf064603"
   },
   "extra_sources": [
     {
@@ -36,32 +36,47 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     }
   ],
@@ -99,8 +114,8 @@
     },
     {
       "what": "EV-8: Gorge's 8-card offer (RoomFullOfCheese.cs:40-42) builds its offer through CardFactory.CreateForReward, whose tail runs Hook.ModifyCardRewardCreationOptions (CardFactory.cs:215) and Hook.TryModifyCardRewardOptions + Hook.AfterModifyingCardRewardOptions (CardFactory.cs:262-266) unless NoModifyHooks is set -- it is not here. events/room_full_of_cheese.py:37-47 hand-rolls the eight cards with random.sample and never calls rewards.create_reward_cards, so neither hook runs.",
-      "verdict": "gap",
-      "issue": "The sim HAS the offer-side hook: the egg relics implement modify_card_reward_options (relics/_eggs.py:38-41), whose own docstring says the game applies it 'so the card is already upgraded when the player takes it (a recording\\'s TakeCard annotation shows the +)'. A hand-rolled offer never reaches it. EXECUTED (`py audit/tools/event_probes.py cheese`): holding Molten Egg, the GORGE screen offers 8 Commons of which 4 are Attacks, and the sim shows 0 of the 4 upgraded where the game shows 4. The DECK outcome coincides here -- run.add_card still runs the deck-entry hook, so a taken Attack lands upgraded, and the probe confirms none of the taken Commons is upgradable a second time, so no double-upgrade appears either -- but the SCREEN differs, which is what a player and a replay both read, so this is a gap and not a deliberate-divergence (rule 2). LIVE: `py audit/tools/event_probes.py reach` shows molten_egg / toxic_egg / frozen_egg all ported AND in the relic grab bag, and the event needs no gate beyond act 0-1. Related to but distinct from EV-6: EV-6 is 'CreateForReward replaced by GetForCombat' and its three observables (rarity odds, upgrade draw, stream); here the odds are Uniform and NoUpgradeRoll is set by ForNonCombatWithUniformOdds (CardCreationOptions.cs:160-163), so those two legs do not apply and the missing HOOK pass is the defect."
+      "maps_to": "Closed 2026-07-28: GORGE's 8-card offer is built by rewards.create_reward_cards (events/room_full_of_cheese.py:37-55) instead of a hand-rolled random.sample, so CreateForReward's tail runs: create_reward_cards ends in the two hook passes `relic.modify_card_reward_options` then `..._late` over the run's relics (rewards.py:304-315), the port of Hook.TryModifyCardRewardOptions (+Late) at CardFactory.cs:262-266 / Hook.cs:1445-1468. The egg relics' offer-side upgrade (relics/_eggs.py:46-49, the `_late` implementer) therefore reaches the SCREEN, which is what the probe measured as 0-of-4 upgraded.",
+      "verdict": "faithful"
     },
     {
       "what": "`CardCreationFlags.NoRarityModification` is set but `NoCardPoolModifications` is NOT (RoomFullOfCheese.cs:40)",
@@ -109,13 +124,13 @@
     },
     {
       "what": "EV-3: Gorge's eight `rng.NextItem(items)` draws (CardFactory.cs:236-237, reached from RoomFullOfCheese.cs:41) -- these come off `player.PlayerRng.Rewards` (CardFactory.cs:235), not the per-event Rng, but the defect is the same shape and takes EV-3's verdict per rule 3, exactly as the infested_automaton record recorded it rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- GORGE's eight draws go through rewards.create_reward_cards, which draws on `run.rewards_rng` (rewards.py:262-264) -- the PlayerRng.Rewards stream CardFactory uses, matching `base.Rng` (CardFactory.cs:235-237, reached from RoomFullOfCheese.cs:41). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "EV-1: Search's 14 HP loss (RoomFullOfCheese.cs:51) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
       "verdict": "gap",
-      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     },
     {
       "what": "the ChosenCheese hover tip and the `.ThatDoesDamage(14)` option annotation (RoomFullOfCheese.cs:33)",

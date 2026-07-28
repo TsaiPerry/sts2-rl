@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\strike_dummy.py",
-    "sha256": "47e5483cf8e97bfdef196227bc8c04e985c678bb7153172fb746a324d24cc113"
+    "sha256": "30116fce7e5a7ae40dfa802014a1234a65c1fa5eb738ed168d14b41e291d90b6"
   },
   "extra_sources": [
     {
@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/fake_strike_dummy.py",
-      "sha256": "4eeb32a93171856dd92e73d129e7aa0167dd926b2c47a177bdc4634c1d579ae9",
+      "sha256": "d27ab2ccdc958d5f8d84a2b1585826f030861e74f795e3bd18b38e562a29c9b1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/miniature_cannon.py",
-      "sha256": "feb3bdebc5fb0b00dc1cd4724cbf0b805f6e89f2551a1e23ef1cd204079508bb",
+      "sha256": "e6a3275892b95a860ea1b24857e322372d1fd0b06c8e634027e78ecade567f64",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],
@@ -64,14 +64,14 @@
     "ModifyDamageAdditive": {
       "maps_to": "modify_damage_additive (strike_dummy.py:23-32), dispatched by HookSystem.modify_damage_additive (hooks.py:52-64) from DamageCmd.deal (cmds.py:56-57)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and N1 per binding rule 4. The +3 on a Strike-tagged powered attack is right and executed; the props gate has been hoisted out of the listener into the call site (G1) and the dealer/owner clause has been narrowed (G2)."
+      "issue": "NARROWED 2026-07-27. The hoisted-props half (G1) is CLOSED: the hook carries `props`, DamageCmd.deal runs the chain unconditionally (sts2_rl/hooks.py:185-208, sts2_rl/cmds.py:120-133) and sts2_rl/relics/strike_dummy.py self-gates on `is_powered_attack(props)`, which is StrikeDummy.cs:21-23. WHAT REMAINS is guard G2: StrikeDummy.cs:33-36 is `if (dealer != Owner.Creature && cardSource.Owner != Owner) return 0` -- either disjunct alone suffices -- and the port still requires `dealer is self.player` and never consults the card's owner."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): the `props.IsPoweredAttack()` test lives in the LISTENER in C# and in the DISPATCH SITE in the sim -- PROMPT.md bug class 27",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.ModifyDamageInternal walks EVERY listener with no props gate of its own (Hook.cs:2511-2526), and each implementer decides for itself -- StrikeDummy.cs:21-23 bails on `!props.IsPoweredAttack()` (ValuePropExtensions.cs:5-12: Move and not Unpowered). The sim's HookSystem.modify_damage_additive has NO props parameter at all (hooks.py:52-58), so the test was hoisted to the caller: cmds.py:56-57 runs the additive and multiplicative chains only `if is_powered_attack(props)`. This is exactly the shape PROMPT.md bug class 27 records at Hook.ModifyBlock (paels_legion), where the hoist silently skips a listener that wanted the looser predicate. WHY IT IS DORMANT HERE, and the census is EXECUTED rather than assumed (py audit/tools/relic_probes_b15.py b15-censuses): all ELEVEN C# ModifyDamageAdditive implementers gate on IsPoweredAttack -- AccuracyPower, CalcifyPower, LeadershipPower, PhantomBladesPower, StrengthPower, TaintedPower, VigorPower, FakeStrikeDummy, MiniatureCannon, MysticLighter and StrikeDummy -- and the sim's three relic-side listeners (sts2_rl/relics/strike_dummy.py:23, sts2_rl/relics/fake_strike_dummy.py:24, sts2_rl/relics/miniature_cannon.py:22) could not check props even if they wanted to. CENSUS WIDENED, and the old wording CORRECTED, by the 2026-07-26 relic fix pass: it is NOT true that 'the hoisted gate admits and excludes exactly the same set', because sts2_rl/cmds.py:55-58 puts the additive AND the MULTIPLICATIVE chains behind ONE `if is_powered_attack(props)`, and the multiplicative family has a ported implementer that does NOT self-gate: `SurroundedPower.ModifyDamageMultiplicative` (src/Core/Models/Powers/SurroundedPower.cs:46-72) tests only `dealer == null`, `target != base.Owner` and the player's Facing -- no IsPoweredAttack anywhere -- and the sim ports it at sts2_rl/powers.py:2523-2566. So the hoist ALREADY excludes a listener the game would run. DORMANCY STILL HOLDS, by a narrower argument than the old one: Surrounded's owner is the PLAYER (`target != base.Owner -> return 1m`), so the multiplier applies to damage the player RECEIVES from a dealer holding BackAttackLeft/RightPower -- i.e. the two Kaiser Crab arms -- and every ported Kaiser Crab move routes through `_execute_attack` (sts2_rl/monsters/hive/kaiser_crab.py:77, 80, 83, 95, 142, 145, 153) with default MONSTER_MOVE props, which are POWERED. No ported unpowered damage source has a Kaiser Crab arm as its dealer. The full mechanism, both families included, belongs to audit/records/seam/damage_pipeline.json gap G3 (binding rule 3); this entry records the relic's own dropped self-gate and the corrected census. What makes it live: the first ModifyDamageAdditive (or ModifyDamageMultiplicative/Cap) implementer that must run on UNPOWERED damage -- at which point the fix must add the props field to the hook signature, not flip the call-site gate, because relic/brilliant_scarf G1's sibling finding needs the distinction preserved. Recorded rather than waived because 'no ported content needs the looser predicate' is today's content, not the divergence's shape (binding rule 1)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the props gate is back in the LISTENER. `HookSystem.modify_damage_additive` carries a `props` argument and forwards it to every listener (sts2_rl/hooks.py:185-208), DamageCmd.deal runs the chain UNCONDITIONALLY (sts2_rl/cmds.py:120-133 -- Hook.ModifyDamageInternal has no props gate of its own, Hook.cs:2515-2538), and the relic self-gates with `if not is_powered_attack(props): return 0`. WAS: the sim's hook had no props parameter at all and cmds.py hoisted `if is_powered_attack(props)` to the call site, which also excluded the multiplicative listeners that deliberately do NOT gate on Unpowered. sts2_rl/relics/strike_dummy.py's modify_damage_additive is the StrikeDummy.cs:21-23 bail."
     },
     {
       "what": "G2 (DORMANT): C# grants the +3 when EITHER the dealer is the owner's creature OR the Strike card BELONGS to the owner; the port requires the dealer",

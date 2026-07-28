@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..cards import CardRarity, CardType, make_card
+from ..cards import CardRarity, CardType
 from .base import Event, EventOption, register_event
 
 if TYPE_CHECKING:
@@ -45,12 +45,17 @@ class TheFutureOfPotions(Event):
 
     def calculate_vars(self) -> None:
         # PotionToCardType: one roll per held potion, in belt order.
+        er = self.event_rng
         self._card_types: dict[int, CardType] = {}
         for potion in self.run.held_potions:
             types = [CardType.ATTACK, CardType.SKILL, CardType.POWER]
             if potion.rarity in ("common", "token"):
                 types.remove(CardType.POWER)
-            self._card_types[id(potion)] = self.rng.choice(types)
+            # `base.Rng.NextItem(list2)` — the event's own Rng
+            # (TheFutureOfPotions.cs:59).
+            self._card_types[id(potion)] = (
+                er.next_item(types) if er is not None
+                else self.rng.choice(types))
 
     def initial_options(self) -> list[EventOption]:
         options = []
@@ -62,22 +67,30 @@ class TheFutureOfPotions(Event):
         return options
 
     def _trade(self, potion: Potion) -> None:
-        from ..cards.pool import IRONCLAD_POOL, _CARD_CLASSES
+        from ..cards.pool import _CARD_CLASSES, reward_pool_card_ids
+        from ..rewards import RarityOddsType, create_reward_cards
 
         target_rarity = _CARD_RARITY[potion.rarity]
         card_type = self._card_types[id(potion)]
         self.run.discard_potion(potion)
         candidates = [
-            cid for cid in IRONCLAD_POOL
+            cid for cid in reward_pool_card_ids()
             if _CARD_CLASSES[cid].rarity == target_rarity
             and _CARD_CLASSES[cid].card_type == card_type
         ]
-        picks = self.rng.sample(candidates, min(3, len(candidates)))
-        cards = []
-        for cid in picks:
-            card = make_card(cid)
+        # `new CardReward(ForNonCombatWithUniformOdds(Character.CardPool,
+        #  Rarity == targetRarity && Type == PotionToCardType[potion]), 3, ...)`
+        # (TheFutureOfPotions.cs:127-129) — CardFactory.CreateForReward, so the
+        # offer reaches Hook.TryModifyCardRewardOptions (CardFactory.cs:262-266)
+        # before AfterGenerated upgrades every offered card.
+        cards = create_reward_cards(
+            self.run, RarityOddsType.UNIFORM, count=3, mutate_pity=False,
+            pool=candidates,
+        )
+        for card in cards:
             card.upgrade()               # reward.AfterGenerated upgrades all
-            cards.append(card)
-        for card in self.run.select_cards("card_reward", cards, 1):
-            self.run.add_card(card)
+        # The CardReward rides RewardsCmd.OfferCustom (TheFutureOfPotions.cs:130),
+        # so the whole screen can be walked away from — the potion is already
+        # spent either way (PotionCmd.Discard above).
+        self.offer_card_reward(cards)
         self._finish("DONE")

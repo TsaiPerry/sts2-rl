@@ -1,104 +1,104 @@
 {
- "unit": "monster/slimed_berserker",
- "game_source": {
-  "path": "src\\Core\\Models\\Monsters\\SlimedBerserker.cs",
-  "sha256": "b7704ffc1c64d6a38a5e35acd6e0588f5e47171b1579c5e01cecb4d03dad5807"
- },
- "sim_source": {
-  "path": "sts2_rl\\monsters\\glory\\slimed_berserker.py",
-  "sha256": "6a6aebce17e4366c82891fcf7be8e0187b9ff0f6f690b6f2448d15c5cbf1201a"
- },
- "hooks": {
-  "MinInitialHp": {
-   "maps_to": "min_hp = 261 (slimed_berserker.py:29)",
-   "verdict": "faithful",
-   "rationale": "SlimedBerserker.cs:33 GetValueIfAscension(ToughEnemies, 281, 261) -> non-ascension 261."
+  "unit": "monster/slimed_berserker",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\SlimedBerserker.cs",
+    "sha256": "b7704ffc1c64d6a38a5e35acd6e0588f5e47171b1579c5e01cecb4d03dad5807"
   },
-  "MaxInitialHp": {
-   "maps_to": "max_hp = 261 (slimed_berserker.py:30)",
-   "verdict": "faithful",
-   "rationale": "SlimedBerserker.cs:35 `MaxInitialHp => MinInitialHp` = 261."
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\slimed_berserker.py",
+    "sha256": "6a6aebce17e4366c82891fcf7be8e0187b9ff0f6f690b6f2448d15c5cbf1201a"
   },
-  "TakeDamageSfxType": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Slime."
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp = 261 (slimed_berserker.py:29)",
+      "verdict": "faithful",
+      "rationale": "SlimedBerserker.cs:33 GetValueIfAscension(ToughEnemies, 281, 261) -> non-ascension 261."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp = 261 (slimed_berserker.py:30)",
+      "verdict": "faithful",
+      "rationale": "SlimedBerserker.cs:35 `MaxInitialHp => MinInitialHp` = 261."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Slime."
+    },
+    "HasDeathSfx": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "SlimedBerserker.build_machine (slimed_berserker.py:31-51)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against SlimedBerserker.cs:49-64. Four MoveStates with matching ids (VOMIT_ICHOR_MOVE / LEECHING_HUG_MOVE / SMOTHER_MOVE / FURIOUS_PUMMELING_MOVE) in one closed four-cycle. The C# wiring is written awkwardly -- moveState4 is created inside an assignment to moveState.FollowUpState (SlimedBerserker.cs:55) -- so it is worth spelling out: VOMIT -> PUMMELING (:55), PUMMELING -> LEECHING_HUG (:56), LEECHING_HUG -> SMOTHER (:57), SMOTHER -> VOMIT (:58), which is exactly slimed_berserker.py:47-50. INITIAL state VOMIT_ICHOR_MOVE (:63 vs :51). The registration list order differs between the sides and does not matter (monster_state_machine step 23: the list is a registration bag keyed by id, and no walk iterates it). No branch state, so no AddBranch integer and no MonsterAi draw. Intents match: StatusIntent(10) -> STATUS_CARD; DebuffIntent + BuffIntent -> DEBUFF also=(BUFF,); SingleAttackIntent(30) -> ATTACK 30; MultiAttackIntent(4, 4) -> ATTACK damage=4 hits=4."
+    }
   },
-  "HasDeathSfx": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  },
-  "GenerateAnimator": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  },
-  "GenerateMoveStateMachine": {
-   "maps_to": "SlimedBerserker.build_machine (slimed_berserker.py:31-51)",
-   "verdict": "faithful",
-   "rationale": "Node-by-node against SlimedBerserker.cs:49-64. Four MoveStates with matching ids (VOMIT_ICHOR_MOVE / LEECHING_HUG_MOVE / SMOTHER_MOVE / FURIOUS_PUMMELING_MOVE) in one closed four-cycle. The C# wiring is written awkwardly -- moveState4 is created inside an assignment to moveState.FollowUpState (SlimedBerserker.cs:55) -- so it is worth spelling out: VOMIT -> PUMMELING (:55), PUMMELING -> LEECHING_HUG (:56), LEECHING_HUG -> SMOTHER (:57), SMOTHER -> VOMIT (:58), which is exactly slimed_berserker.py:47-50. INITIAL state VOMIT_ICHOR_MOVE (:63 vs :51). The registration list order differs between the sides and does not matter (monster_state_machine step 23: the list is a registration bag keyed by id, and no walk iterates it). No branch state, so no AddBranch integer and no MonsterAi draw. Intents match: StatusIntent(10) -> STATUS_CARD; DebuffIntent + BuffIntent -> DEBUFF also=(BUFF,); SingleAttackIntent(30) -> ATTACK 30; MultiAttackIntent(4, 4) -> ATTACK damage=4 hits=4."
-  }
- },
- "guards": [
-  {
-   "what": "Move numerics",
-   "verdict": "faithful",
-   "rationale": "PummelingDamage GetValueIfAscension(DeadlyEnemies, 5, 4) -> 4 with WithHitCount(4) (and `_pummelingRepeat = 4` at SlimedBerserker.cs:23 agrees) = _PUMMELING_DMG 4 x _PUMMELING_HITS 4; SmotherDamage (..., 33, 30) -> 30 = _SMOTHER_DMG; VomitIchor adds 10 Slimed to the DISCARD (`_vomitSlimeInDiscard = 10` at :27 agrees) = _VOMIT_SLIME 10; LeechingHug applies WeakPower 3m to the targets then StrengthPower 3m to itself = _LEECHING_WEAK 3 / _LEECHING_STR 3, in that order on both sides. All match slimed_berserker.py:13-18. The unused `_leechingDrain = 3` const (SlimedBerserker.cs:25) is dead in the source -- nothing reads it -- so its absence from the port is correct."
-  },
-  {
-   "what": "LeechingHugMove passes a NULL applier for the Weak but the CREATURE for the Strength (SlimedBerserker.cs:77-78); the sim omits both (slimed_berserker.py:65-66)",
-   "verdict": "deliberate-divergence",
-   "rationale": "PROMPT.md class 15's shape -- paired applications rarely carry the same guard set, and here the source itself is asymmetric: `PowerCmd.Apply<WeakPower>(ctx, targets, 3m, null, null)` has a null applier while `PowerCmd.Apply<StrengthPower>(ctx, Creature, 3m, Creature, null)` names the Berserker. The sim's PowerCmd.apply defaults applier to None (cmds.py:271-277) and neither call passes one, so the Weak matches the source exactly and only the Strength differs. Same observable, established by execution rather than assumed and identical to monster/stabbot's guard (governing rule 3): the only four sim sites where `applier` changes an outcome are relics/unsettling_lamp.py:47, powers.py:195 (RitualPower), powers.py:1167 (ViciousPower) and powers.py:3094, and a monster self-buff gives the same answer at all four whether the applier is None or the monster. Concrete trigger: any ported listener branching on `applier is None`, or a power on the monster whose behaviour keys on which creature buffed it."
-  },
-  {
-   "what": "VomitIchorMove's discard-pile add (SlimedBerserker.cs:70 vs slimed_berserker.py:53-57)",
-   "verdict": "faithful",
-   "rationale": "C# is `CardPileCmd.AddToCombatAndPreview<Slimed>(targets, PileType.Discard, 10, null)` at the default CardPilePosition.Bottom; the sim loops CardPileCmd.add_to_discard ten times, which appends (cmds.py:471). No random position is involved on either side -- contrast Noisebot's draw-pile add, which IS CardPilePosition.Random and does burn a Shuffle draw -- so this move consumes no entropy on either side. C#'s `if (player.Creature.IsDead) return` guard (CardPileCmd.cs:1008-1011) has no sim analogue but no observable either, since a dead player ends the combat before any reader sees the pile."
-  },
-  {
-   "what": "StatusIntent(10)'s CardCount is dropped by the sim's Intent (SlimedBerserker.cs:52 vs slimed_berserker.py:32-34)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Same mechanism and same verdict as monster/noisebot's and monster/mecha_knight's guards (governing rule 3): CardCount is read only by StatusIntent's own GetIntentLabel/GetIntentDescription LocStrings, no other C# consumer exists, and no sim consumer of Intent reads a status count. The 10 cards actually added are correct."
-  },
-  {
-   "what": "ShouldShowMoveInBestiary (SlimedBerserker.cs:118-121) and CastSfx/SlimeSfx",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  }
- ],
- "verdict": "deliberate-divergence",
- "audited": "2026-07-27",
- "extra_sources": [
-  {
-   "path": "src\\Core\\Commands\\CardPileCmd.cs",
-   "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
-   "side": "game"
-  },
-  {
-   "path": "src\\Core\\MonsterMoves\\Intents\\StatusIntent.cs",
-   "sha256": "3b9bf8b0cade87ff11671285cc5e656cd353506ce8c5a69e0963e0e1a9944d77",
-   "side": "game"
-  },
-  {
-   "path": "sts2_rl\\cmds.py",
-   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\monsters\\base.py",
-   "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\powers.py",
-   "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\rooms.py",
-   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
-   "side": "sim"
-  }
- ]
+  "guards": [
+    {
+      "what": "Move numerics",
+      "verdict": "faithful",
+      "rationale": "PummelingDamage GetValueIfAscension(DeadlyEnemies, 5, 4) -> 4 with WithHitCount(4) (and `_pummelingRepeat = 4` at SlimedBerserker.cs:23 agrees) = _PUMMELING_DMG 4 x _PUMMELING_HITS 4; SmotherDamage (..., 33, 30) -> 30 = _SMOTHER_DMG; VomitIchor adds 10 Slimed to the DISCARD (`_vomitSlimeInDiscard = 10` at :27 agrees) = _VOMIT_SLIME 10; LeechingHug applies WeakPower 3m to the targets then StrengthPower 3m to itself = _LEECHING_WEAK 3 / _LEECHING_STR 3, in that order on both sides. All match slimed_berserker.py:13-18. The unused `_leechingDrain = 3` const (SlimedBerserker.cs:25) is dead in the source -- nothing reads it -- so its absence from the port is correct."
+    },
+    {
+      "what": "LeechingHugMove passes a NULL applier for the Weak but the CREATURE for the Strength (SlimedBerserker.cs:77-78); the sim omits both (slimed_berserker.py:65-66)",
+      "verdict": "deliberate-divergence",
+      "rationale": "PROMPT.md class 15's shape -- paired applications rarely carry the same guard set, and here the source itself is asymmetric: `PowerCmd.Apply<WeakPower>(ctx, targets, 3m, null, null)` has a null applier while `PowerCmd.Apply<StrengthPower>(ctx, Creature, 3m, Creature, null)` names the Berserker. The sim's PowerCmd.apply defaults applier to None (cmds.py:271-277) and neither call passes one, so the Weak matches the source exactly and only the Strength differs. Same observable, established by execution rather than assumed and identical to monster/stabbot's guard (governing rule 3): the only four sim sites where `applier` changes an outcome are relics/unsettling_lamp.py:47, powers.py:195 (RitualPower), powers.py:1167 (ViciousPower) and powers.py:3094, and a monster self-buff gives the same answer at all four whether the applier is None or the monster. Concrete trigger: any ported listener branching on `applier is None`, or a power on the monster whose behaviour keys on which creature buffed it."
+    },
+    {
+      "what": "VomitIchorMove's discard-pile add (SlimedBerserker.cs:70 vs slimed_berserker.py:53-57)",
+      "verdict": "faithful",
+      "rationale": "C# is `CardPileCmd.AddToCombatAndPreview<Slimed>(targets, PileType.Discard, 10, null)` at the default CardPilePosition.Bottom; the sim loops CardPileCmd.add_to_discard ten times, which appends (cmds.py:471). No random position is involved on either side -- contrast Noisebot's draw-pile add, which IS CardPilePosition.Random and does burn a Shuffle draw -- so this move consumes no entropy on either side. C#'s `if (player.Creature.IsDead) return` guard (CardPileCmd.cs:1008-1011) has no sim analogue but no observable either, since a dead player ends the combat before any reader sees the pile."
+    },
+    {
+      "what": "StatusIntent(10)'s CardCount is dropped by the sim's Intent (SlimedBerserker.cs:52 vs slimed_berserker.py:32-34)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Same mechanism and same verdict as monster/noisebot's and monster/mecha_knight's guards (governing rule 3): CardCount is read only by StatusIntent's own GetIntentLabel/GetIntentDescription LocStrings, no other C# consumer exists, and no sim consumer of Intent reads a status count. The 10 cards actually added are correct."
+    },
+    {
+      "what": "ShouldShowMoveInBestiary (SlimedBerserker.cs:118-121) and CastSfx/SlimeSfx",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Commands\\CardPileCmd.cs",
+      "sha256": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\StatusIntent.cs",
+      "sha256": "3b9bf8b0cade87ff11671285cc5e656cd353506ce8c5a69e0963e0e1a9944d77",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
 }

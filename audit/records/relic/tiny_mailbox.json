@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\tiny_mailbox.py",
-    "sha256": "4dea8ad9376467027523a08bbe4a5a6b5e53542bd8c5711deb24f1fe46683df9"
+    "sha256": "a2a6ec6ed1892997b34f772fe6ba5dc449148ce6e3b0f98e85c45991a25fbb41"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -52,9 +52,9 @@
       "rationale": "TinyMailbox.cs:12. Executed: Uncommon in the transcribed grab bag (relic_pools.py:142 'RELIC.TINY_MAILBOX'), `py audit/tools/relic_probes_b16.py pool`."
     },
     "TryModifyRestSiteHealRewards": {
-      "maps_to": "no counterpart -- the port is a behaviourless stub, though `Relic.modify_rest_site_heal_rewards` exists (relics/base.py:245-249) and is dispatched",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4 (LIVE)."
+      "maps_to": "modify_rest_site_heal_rewards (sts2_rl/relics/tiny_mailbox.py), dispatched by RunState.rest_heal_rewards (sts2_rl/run.py:1265-1267)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/tiny_mailbox.py's `modify_rest_site_heal_rewards` appends POTIONS = 2 entries to `rewards.special_potions` -- the field sts2_rl/rewards.py documents as independent take-or-skip potion offers and the driver surfaces as such -- rolled by `generate_random_potion(run.rewards_rng)` on the parity path. That is TinyMailbox.cs:14-24's two `new PotionReward(player)` entries. RunState.rest_heal_rewards dispatches the hook over every relic (sts2_rl/run.py:1265-1267). WAS: a class body with only id/name/rarity."
     },
     "ModifyExtraRestSiteHealText": {
       "maps_to": "no counterpart",
@@ -65,8 +65,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the two potion rewards after a Rest are missing entirely, and the stub's stated premise is false",
-      "verdict": "gap",
-      "issue": "MECHANISM: TinyMailbox.cs:14-24 adds TWO `new PotionReward(player)` entries to the rest-site heal reward list and returns true. tiny_mailbox.py is a class body with an id, a name and a rarity -- no methods at all -- justified by the docstring 'an out-of-combat rest-site reward, so this is a no-op stub' (tiny_mailbox.py:8-9). PROMPT.md bug class 12 says to check the premise; it is false in four separate ways, all executed (`py audit/tools/relic_probes_b16.py mailbox-rest`): (1) `Relic.modify_rest_site_heal_rewards` exists on the base (relics/base.py:245-249); (2) RunState.rest_heal_rewards dispatches it over every relic (run.py:1097-1110); (3) a SIBLING ported relic already uses it -- relics/dream_catcher.py:22-25, also an Event relic from the same Trash Heap pool -- and the probe shows it producing cards=['feel_no_pain', 'rampage', 'iron_wave'] on the same seed where tiny_mailbox produces nothing; (4) the destination field for exactly this reward shape exists and is consumed: CombatRewards.special_potions (rewards.py:385-388, 'Extra potion offers (PotionReward extras)') is surfaced as an independent take-or-skip offer by driver.py:388-390, and run.random_potion() works (probe: 'clarity'). So the relic is a complete no-op where the game gives two potions per rest. Both sides ported: Uncommon in the grab bag, and the sim has rest sites with a heal option and a reward screen. SCOPE NOTE, stated because it is arguable: the shared contract defers potions, but what is missing here is the RELIC's hook implementation, not any potion mechanic -- the sim's potion-reward pipeline is built, dispatched and consumed, and the same hook is already implemented by a sibling. Filed as a gap on the belt_buckle precedent (audit/records/relic/belt_buckle.json AfterPotionProcured), where a potion-triggered divergence was recorded rather than waived because the divergent observable was ordinary run state. Rule 7: relics/base.py, run.py, rewards.py, driver.py and relics/dream_catcher.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/tiny_mailbox.py's `modify_rest_site_heal_rewards` appends POTIONS = 2 entries to `rewards.special_potions` -- the field sts2_rl/rewards.py documents as independent take-or-skip potion offers and the driver surfaces as such -- rolled by `generate_random_potion(run.rewards_rng)` on the parity path. That is TinyMailbox.cs:14-24's two `new PotionReward(player)` entries. RunState.rest_heal_rewards dispatches the hook over every relic (sts2_rl/run.py:1265-1267). WAS: a class body with only id/name/rarity."
     },
     {
       "what": "N1: `player != base.Owner` (TinyMailbox.cs:16-19) and `LocalContext.IsMe(base.Owner)` (:28-31)",
@@ -89,6 +89,6 @@
       "rationale": "Checked because sweep B's 17-relic IsBeforeAct3TreasureChest cluster is the pool-wide shape for this kind (PROMPT.md bug class 16): TinyMailbox.cs declares neither IsAllowed nor IsAllowedAtNeow, so the sim's defaults (no is_allowed member at all; is_allowed_at_neow True) are correct here and this relic is NOT in that cluster. Confirmed against `py audit/tools/relic_probes.py sweep-isallowed`, whose list of 20 IsAllowed overrides does not include it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

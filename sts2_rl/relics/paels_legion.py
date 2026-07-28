@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..valueprops import ValueProp, is_card_or_monster_move
 from .base import Relic, RelicRarity, register_relic
 
 if TYPE_CHECKING:
@@ -33,16 +34,25 @@ class PaelsLegion(Relic):
         # only ONE play per activation starts the cooldown).
         self._affected_card: "Card | None" = None
 
+    def reset_for_combat(self) -> None:
+        # PaelsLegion.AfterCombatEnd (:198-206).
+        self.cooldown = 0
+        self._affected_card = None
+
     def modify_block_multiplicative(
         self, target: "Creature", amount: int, card: "Card | None" = None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_card_or_monster_move(props):   # PaelsLegion.cs:132
+            return 1.0
         # Owner's card-sourced block only, while awake.
         if card is None or self.cooldown > 0 or target is not self.player:
             return 1.0
         self._affected_card = card
         return 2.0
 
-    def on_card_played(self, card: "Card") -> None:
+    def on_card_played(self, card: "Card",
+                       is_auto_play: bool = False) -> None:
         # AfterCardPlayed: the doubled play ends — start the cooldown.
         if self._affected_card is card:
             self._affected_card = None

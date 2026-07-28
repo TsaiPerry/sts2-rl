@@ -25,7 +25,14 @@ class SunkenStatue(Event):
         self.gold = _BASE_GOLD
 
     def calculate_vars(self) -> None:
-        self.gold = _BASE_GOLD + self.rng.randint(-_GOLD_VARIANCE, _GOLD_VARIANCE)
+        # `base.Rng.NextInt(-10, 11)` — the event's own Rng (SunkenStatue.cs:30).
+        er = self.event_rng
+        variance = (
+            er.next_int_range(-_GOLD_VARIANCE, _GOLD_VARIANCE + 1)
+            if er is not None
+            else self.rng.randint(-_GOLD_VARIANCE, _GOLD_VARIANCE)
+        )
+        self.gold = _BASE_GOLD + variance
 
     def initial_options(self) -> list[EventOption]:
         return [

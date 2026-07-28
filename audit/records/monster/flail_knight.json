@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
-    "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01"
+    "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
   },
   "hooks": {
     "MinInitialHp": {
@@ -31,9 +31,8 @@
     },
     "GenerateMoveStateMachine": {
       "maps_to": "FlailKnight.build_machine (flail_knight.py:40-56)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "FlailKnight.cs:50 AddBranch(FLAIL_MOVE, 2) and :51 AddBranch(RAM_MOVE, 2) are overload #9 (`int maxRepeats`, seam step-13 table row 9): maxRepeats = 2, weight = 1f, repeatType forced to CanRepeatXTimes. flail_knight.py:51-52 write add_branch(flail, weight=2.0) / add_branch(ram, weight=2.0), i.e. weight 2 and CAN_REPEAT_FOREVER. Same bug class as monster_state_machine G1 (the seam owns G1 itself; this entry is the unit-level consequence and does not re-verdict it). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and NEVER a weight (seam seed fact 1 / step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts weight there. Observable: a different intent distribution (seam's `distribution` probe, 100000 rolls, seed 7: sim FLAIL 41.6% / RAM 41.6% / WAR_CHANT 16.8% vs game 36.2% / 36.4% / 27.4%), the loss of the 'never three FLAILs in a row' rule, and a different MonsterAi draw sequence. Re-executed for this record: `py audit/tools/state_machine_probes.py mismatch` prints this pair as MISMATCH with FLAIL/RAM C#(w=1.0 CAN_REPEAT_X_TIMES max=2 cd=0) vs sim:51/52 (w=2.0 CAN_REPEAT_FOREVER max=0 cd=0), matching the seam's description of the site exactly. LIVE: FlailKnight is in KNIGHTS_ELITE (glory/knights.py:129-132), which rooms.py:195 lists in the Glory elite pool - executed by `py audit/tools/monster_probes_b05.py reach` (flail_knight -> pools=['glory.elite'])."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. flail_knight.py:53-58 now reads FlailKnight.cs:50-51's AddBranch(moveState2, 2) / AddBranch(moveState3, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session (branch add order WAR_CHANT, FLAIL, RAM and the initial state RAM_MOVE still match FlailKnight.cs:49-57); `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
     }
   },
   "guards": [
@@ -58,6 +57,6 @@
       "rationale": "C# BuffIntent() carries no amount; the sim returns Intent(MoveType.BUFF, buffs=[(StrengthPower, 3)]) from a callable (flail_knight.py:58-61). Strictly more intent detail than the source shows, on the display side only - no move, roll or damage reads it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27"
 }

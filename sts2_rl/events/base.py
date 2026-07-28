@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    from ..cards import Card
     from ..combat import CombatState
     from ..monsters import Encounter
     from ..potions import Potion
@@ -73,6 +74,16 @@ class Event:
     id: str
     name: str
 
+    # EventModel.LayoutType == EventLayoutType.Combat: the encounter stands
+    # behind the event text, so EventRoom.EnterInternal builds the whole combat
+    # state when the ROOM IS ENTERED (EventRoom.cs:69-72) and the fight option
+    # reuses it. The source's three are PunchOff, TheLanternKey and
+    # TheArchitect (unported).
+    is_combat_layout: bool = False
+    # EventModel.CanonicalEncounter — what a Combat-layout event pre-generates
+    # at room entry and its fight option then hands to the driver.
+    canonical_encounter: "Encounter | None" = None
+
     def __init__(self, run: RunState) -> None:
         self.run = run
         # The game gives each event its own RNG seeded from the run seed +
@@ -97,6 +108,11 @@ class Event:
         # relic + potion, The Lantern Key's card). The driver transfers them
         # to run.pending_reward_extras when it runs the fight.
         self.pending_reward_extras: list["RewardExtra"] = []
+        # Creature.SetUniqueMonsterHpValue's results for a Combat-layout
+        # event's encounter, rolled at room entry by
+        # generate_internal_combat_state. Empty for every other event (and in
+        # legacy runs, which have no Niche stream).
+        self.pregenerated_hp: list[int] = []
 
     # ── Subclass surface ─────────────────────────────────────────────────
 
@@ -113,6 +129,22 @@ class Event:
         """The INITIAL page's options (mirrors GenerateInitialOptions)."""
         raise NotImplementedError
 
+    def offer_pool_potion(self) -> "Potion":
+        """`Owner.PlayerRng.Rewards.NextItem(Character.PotionPool ∪
+        SharedPotionPool)` — the verbatim potion-offer idiom of
+        BattlewornDummy.cs:84-90, EndlessConveyor.cs:152-158,
+        TheLegendsWereTrue.cs:52-59 and Wellspring.cs:32-38.
+
+        ONE draw on the per-player Rewards stream over the whole unlocked pool
+        in pool order (NOT the event's own Rng, and NOT PotionFactory's
+        rarity-then-item pair). The legacy RL path keeps the old shared-rng
+        pick over the sim's implemented reward pool."""
+        if self.run.rng_set is not None:
+            from ..potion_pools import POTION_POOL, make_pool_potion
+            pid = self.run.rewards_rng.next_item([p for p, _ in POTION_POOL])
+            return make_pool_potion(pid)
+        return self.run.random_potion()
+
     def resume_after_combat(self, combat: "CombatState") -> "list[Potion]":
         """Called by the driver after this event's pending_encounter fight is
         won (mirrors EventModel.Resume for events entered with
@@ -124,10 +156,78 @@ class Event:
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     def begin(self) -> Event:
-        """Mirrors BeginEvent: roll vars, then present the initial page."""
+        """Mirrors EventRoom.EnterInternal: BeginEvent (roll vars, then present
+        the initial page — EventModel.cs:239-251), followed by
+        GenerateInternalCombatState for a Combat-layout event
+        (EventRoom.cs:68-72)."""
         self.calculate_vars()
         self._set_state("INITIAL", self.initial_options())
+        if self.is_combat_layout:
+            self.generate_internal_combat_state()
         return self
+
+    # ── Combat-layout events (EventLayoutType.Combat) ────────────────────
+
+    def generate_internal_combat_state(self) -> None:
+        """Port of EventModel.GenerateInternalCombatState (EventModel.cs:383-403).
+
+        Called from the room-entry path for every Combat-layout event, before
+        any option is chosen, so the monster HP rolls are spent even by a
+        player who declines the fight."""
+        from ._combat_layout import pregenerate_monster_hp
+        self.pregenerated_hp = pregenerate_monster_hp(
+            self.run, self.canonical_encounter)
+
+    def internal_combat_encounter(self) -> "Encounter":
+        """The encounter a Combat-layout event's fight option hands to the
+        driver: the state generated at room entry when there is one (mirroring
+        EnterCombatWithoutExitingEvent reusing _combatStateForCombatLayout),
+        otherwise the canonical encounter itself."""
+        if not self.pregenerated_hp:
+            return self.canonical_encounter
+        from ._combat_layout import PregeneratedEncounter
+        return PregeneratedEncounter.of(
+            self.canonical_encounter, self.pregenerated_hp)
+
+    # ── Reward offers (RewardsCmd.OfferCustom) ───────────────────────────
+
+    def _accept_offer(self, purpose: str, payload) -> bool:
+        """Present one take-or-skip reward screen and report whether the player
+        took it.
+
+        `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is a CANCELABLE screen —
+        the source sets `Cancelable = false` explicitly when a pick is forced
+        (BrainLeech.cs:67-70) — so an event's payout is an offer, not a grant:
+        a potion can be declined to keep the belt slot and a card reward can be
+        skipped to keep the deck lean.
+
+        The decision is the run's `reward_offer_selector` — a callable
+        (purpose, payload) -> bool — the headless stand-in for the reward
+        screen, exactly as `run.card_selector` stands in for CardSelectCmd and
+        `run.option_selector` for a pick-one-of-N screen. With none installed
+        every offer is taken."""
+        selector = getattr(self.run, "reward_offer_selector", None)
+        if selector is None:
+            return True
+        return bool(selector(purpose, payload))
+
+    def offer_potion(self, potion: "Potion") -> bool:
+        """`RewardsCmd.OfferCustom` with a single `PotionReward`
+        (DrowningBeacon.cs:39-46). Returns whether it reached the belt."""
+        if not self._accept_offer("potion", potion):
+            return False
+        return self.run.add_potion(potion)
+
+    def offer_card_reward(self, cards: list["Card"]) -> "Card | None":
+        """`RewardsCmd.OfferCustom` with a single `CardReward`
+        (TheFutureOfPotions.cs:127-130): the whole screen is skippable, and
+        taking it picks one of the offered cards. Returns the card taken."""
+        if not cards or not self._accept_offer("card_reward", cards):
+            return None
+        chosen = self.run.select_cards("card_reward", cards, 1)
+        for card in chosen:
+            self.run.add_card(card)
+        return chosen[0] if chosen else None
 
     @property
     def options(self) -> list[EventOption]:

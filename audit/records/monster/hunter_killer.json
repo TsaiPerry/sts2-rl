@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\hunter_killer.py",
-    "sha256": "e74016ea793bee33083c86934fdf3977c0a642f5f574a7f8694b5738e2a312e5"
+    "sha256": "fb3bf4907c34ddb79f0ac3e81d90158f27c8e3b8ba2d9c21f57c232ed4830406"
   },
   "hooks": {
     "MinInitialHp": {
@@ -36,9 +36,8 @@
     },
     "GenerateMoveStateMachine": {
       "maps_to": "HunterKiller.build_machine (hunter_killer.py:34-49)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "HunterKiller.cs:43 AddBranch(PUNCTURE_MOVE, 2) is overload #9 (`int maxRepeats`): maxRepeats = 2, weight 1f, repeatType CanRepeatXTimes. hunter_killer.py:45 writes add_branch(puncture, 2.0), i.e. weight 2.0 and CAN_REPEAT_FOREVER. Same bug class as monster_state_machine G1 (the seam owns G1 itself; this entry is the unit-level consequence and does not re-verdict it). RandomBranchState.AddBranch's positional slot 2 is a cooldown or a maxRepeats and NEVER a weight (seam seed fact 1 / step 13); the sim's add_branch(state, weight=1.0, repeat_type=..., max_times=0, cooldown=0) (state_machine.py:160-167) puts weight there. Observable: sim BITE 25.1% / PUNCTURE 74.9% vs game 40.0% / 60.0% (seam `distribution`, 100000 rolls, seed 7), plus the loss of the 'never three PUNCTUREs in a row' cap and a different MonsterAi draw sequence. Re-executed: `py audit/tools/state_machine_probes.py mismatch` prints PUNCTURE C#(w=1.0 CAN_REPEAT_X_TIMES max=2 cd=0) vs sim:45 (w=2.0 CAN_REPEAT_FOREVER max=0 cd=0) - the seam's description of hive/hunter_killer.py:45 is accurate. LIVE: `hunter_killer` is a Hive normal-pool encounter (rooms.py:162), executed by `py audit/tools/monster_probes_b05.py reach`."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. hunter_killer.py:47-49 now reads HunterKiller.cs:43's AddBranch(moveState3, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session (branch add order BITE then PUNCTURE and the initial state TENDERIZING_GOOP_MOVE still match HunterKiller.cs:42-48); `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
     }
   },
   "guards": [
@@ -63,6 +62,6 @@
       "rationale": "BiteDamage (DeadlyEnemies, 19, 17) -> 17; PunctureDamage (DeadlyEnemies, 8, 7) -> 7 with WithHitCount(3) (HunterKiller.cs:27-29, 68). Sim _BITE_DMG=17, _PUNCTURE_DMG=7, _PUNCTURE_HITS=3. The private const _punctureRepeat = 3 at :21 is unused - the literal 3 is used at :40 and :68 - so there is nothing to port from it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27"
 }

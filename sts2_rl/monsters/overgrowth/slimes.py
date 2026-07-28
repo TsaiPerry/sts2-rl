@@ -42,7 +42,6 @@ class LeafSlimeS(Monster):
             from ...cards import SlimedCard
             from ...cmds import CardPileCmd
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, SlimedCard())
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         # Both branches are CannotRepeat, so the just-performed move is
@@ -132,7 +131,6 @@ class TwigSlimeM(Monster):
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, SlimedCard())
         else:
             self._execute_attack(ctx, 11, 1)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         # Mirror RandomBranchState.GetStateWeight for TwigSlimeM.cs's two

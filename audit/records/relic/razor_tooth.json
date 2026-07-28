@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\razor_tooth.py",
-    "sha256": "64c8c65e0ed8080e8e63dcf1356c4e0b8a86eb9b2f1fd369dd0b347ca5e1fb79"
+    "sha256": "8606da16c61f16f6a7186565fbb767906f5f19b19f683b79a41e52af39173e00"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],

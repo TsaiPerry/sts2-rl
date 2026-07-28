@@ -76,7 +76,7 @@
     },
     {
       "path": "sts2_rl/events/neow.py",
-      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "sha256": "32be19d527d887b8085c5106696635b65271f2974d6c65d1e4ac842ea4862114",
       "side": "sim"
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -131,8 +131,13 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -194,18 +199,18 @@
       "verdict": "faithful"
     },
     {
-      "what": "UNIT GAP (dormant): Distinguished Cape's -9 Max HP is implemented on the EVENT OPTION instead of on the relic. DistinguishedCape.cs:29-31's AfterObtained() runs `CreatureCmd.LoseMaxHp(..., DynamicVars.HpLoss = 9, isFromCard: false)` and only then adds the 3 Apparitions; Vakuu.cs:38's `.ThatDecreasesMaxHp(9m)` is NOT the effect -- EventOption.cs:194-197 shows it is only `ThatWillKillPlayerIf(p => p.MaxHp <= value)`, the red-flash predicate. events/vakuu.py:52-63 `_cape_option` applies the loss itself, and relics/distinguished_cape.py:21-26's after_obtained adds only the Apparitions",
+      "what": "UNIT GAP (dormant): Distinguished Cape's -9 Max HP is implemented on the EVENT OPTION instead of on the relic. DistinguishedCape.cs:29-31's AfterObtained() runs `CreatureCmd.LoseMaxHp(..., DynamicVars.HpLoss = 9, isFromCard: false)` and only then adds the 3 Apparitions; Vakuu.cs:38's `.ThatDecreasesMaxHp(9m)` is NOT the effect -- EventOption.cs:194-197 shows it is only `ThatWillKillPlayerIf(p => p.MaxHp <= value)`, the red-flash predicate. events/vakuu.py:52-63 `_cape_option` applies the loss itself, and relics/distinguished_cape.py:21-25's after_obtained adds only the Apparitions",
       "verdict": "gap",
       "issue": "The relic docstring (relics/distinguished_cape.py:8-11) states the placement as fact -- 'The -9 Max HP comes from the Vakuu event OPTION ..., not the relic itself' -- and it is FALSE, the fourth instance in this stream of a load-bearing sim comment asserting something the source contradicts. EXECUTED (`py audit/tools/event_probes_b.py cape`): at 80/80, run.add_relic('distinguished_cape') on its own leaves the player at 80/80 with 3 Apparitions where the game leaves them at 71/71 with 3 Apparitions; the Vakuu CAPE option reaches 71/71, so the Vakuu path itself COINCIDES and this is a placement defect, not an arithmetic one. DORMANT, with the concrete trigger named and executed: the same probe shows distinguished_cape is Ancient rarity and is NOT in the relic grab bag, and `git grep distinguished_cape sts2_rl` returns only events/vakuu.py, its own relic module and vocab.json -- so the Vakuu option is the only grant path in the sim today. ANY second path (a relic reward, a shop, the grab bag, another Ancient's pool, a recording-driven resync that reconstructs the relic list) silently drops 9 Max HP. Exactly the shape already recorded for event/hungry_for_mushrooms, where Big Mushroom's +20 Max HP lives on the event instead of the relic's after_obtained -- and the sibling relic there, Fragrant Mushroom, does it correctly, as does every other ported pickup effect. Secondary, and unobservable only because EV-2 already applies: the C# order is RelicCmd.Obtain (relic joins the player) THEN AfterObtained's LoseMaxHp, so the Cape is owned while the overflow damage resolves; the sim loses the max HP BEFORE add_relic. FLAGGED FOR THE RELIC STREAM, which owns relics/distinguished_cape.py -- this record hashes only Vakuu.cs and events/vakuu.py (rule 7)."
     },
     {
       "what": "EV-2: the CAPE option's max-HP cost (events/vakuu.py:59 run.lose_max_hp(DistinguishedCape.MAX_HP_LOSS = 9)), whichever side of the relic/event boundary it is implemented on calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+      "maps_to": "Closed 2026-07-28: RunState.lose_max_hp (run.py:366-380) now has the shape of CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-828) -- `new_max = max_hp - amount` UNFLOORED, then `if new_max < hp: lose_hp(hp - new_max)` so the overflow is real HP loss that runs the relic ModifyHpLost pass and the death pass, and only then `max_hp = max(1, new_max)` followed by SetMaxHpInternal's clamp `hp = min(hp, max_hp)` (Creature.cs:493-501). Leg (2) now MATCHes: 80/80 losing 100 max HP kills the player on both sides (`py audit/tools/event_probes.py maxhp`). Leg (1)'s witness does not survive re-reading the source: the probe's hardcoded `C#=71` ignores SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)`, which pulls the GAME back to 70 as well, so Tungsten Rod's -1 is unobservable through HP at any max-HP-loss amount (the overflow can never leave current HP above the new max). Both sides read on 2026-07-28; the sim's 70/70 is correct.",
+      "verdict": "faithful"
     },
     {
       "what": "the CAPE option's other half, and its key",
-      "maps_to": "events/vakuu.py:60 run.add_relic(make_relic('distinguished_cape')), whose after_obtained adds 3 Apparition cards through run.add_card (relics/distinguished_cape.py:21-26) -- matching DistinguishedCape.cs:32-38's loop of CardPileCmd.Add(Apparition, PileType.Deck) and its CardsVar(3). EXECUTED (`py audit/tools/event_probes_b.py cape`): 3 Apparitions on both the relic path and the Vakuu path. The option key is the relic id, the same convention _relic_option uses, so a driver indexes the three options identically.",
+      "maps_to": "events/vakuu.py:60 run.add_relic(make_relic('distinguished_cape')), whose after_obtained adds 3 Apparition cards through run.add_card (relics/distinguished_cape.py:21-25) -- matching DistinguishedCape.cs:32-38's loop of CardPileCmd.Add(Apparition, PileType.Deck) and its CardsVar(3). EXECUTED (`py audit/tools/event_probes_b.py cape`): 3 Apparitions on both the relic path and the Vakuu path. The option key is the relic id, the same convention _relic_option uses, so a driver indexes the three options identically.",
       "verdict": "faithful"
     },
     {

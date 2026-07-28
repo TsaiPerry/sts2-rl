@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\shuriken.py",
-    "sha256": "759c89366bd7c8e91a5c36ee1854454e454ce965c2c49cebbc37ebea76dfc4f2"
+    "sha256": "a7c724f53e7eb032059844ccfbb7e81ad4405a41f8eced0ddbbaaa5f1b201823"
   },
   "extra_sources": [
     {

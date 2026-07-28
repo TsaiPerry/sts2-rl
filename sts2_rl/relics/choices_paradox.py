@@ -23,15 +23,27 @@ class ChoicesParadox(Relic):
     def on_player_turn_started(self, player: PlayerCombatState) -> None:
         if self.turn != 1:
             return
-        from ..cards.pool import random_pool_cards
+        from ..cards.pool import get_distinct_for_combat_parity, random_pool_cards
         from ..cmds import CardPileCmd
 
-        options = random_pool_cards(
-            self.combat._rng, self.CARDS, distinct=True,
-        )
+        # ChoicesParadox.cs:34 passes RunState.Rng.CombatCardGeneration to
+        # GetDistinctForCombat (== UnstableShuffle(rng).Take(5)); parity routes
+        # there, legacy keeps the shared-Random sample byte-for-byte.
+        crng = self.combat.combat_rng
+        if crng.is_parity:
+            options = get_distinct_for_combat_parity(crng.card_gen, self.CARDS)
+        else:
+            options = random_pool_cards(
+                self.combat._rng, self.CARDS, distinct=True,
+            )
         if not options:
             return
         for card in options:
             card.retain = True
-        for card in self.combat.select_cards("obtain", options, 1):
+        # ChoicesParadox.cs:46 is `CardSelectorPrefs(prompt, 1)` — the 2-arg
+        # ctor (CardSelectorPrefs.cs:63-67 -> `this(prompt, n, n)`), so
+        # MinSelect == MaxSelect == 1 and the screen cannot be left empty.
+        # A purpose in driver.SKIPPABLE_PURPOSES would offer a decline the
+        # game forbids.
+        for card in self.combat.select_cards("choose_a_card", options, 1):
             CardPileCmd.add_to_hand(self.hooks, player, card)

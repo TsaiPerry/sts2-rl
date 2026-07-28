@@ -19,12 +19,28 @@ class Toolbox(Relic):
         combat = self.combat
         if combat is None or combat.turn != 1:
             return
-        from ..cards.pool import COLORLESS_POOL, random_pool_cards
+        from ..cards.pool import (
+            COLORLESS_POOL, get_distinct_for_combat_parity, random_pool_cards,
+        )
         from ..cmds import CardPileCmd
 
-        options = random_pool_cards(
-            combat._rng, self.CARDS, distinct=True, pool=COLORLESS_POOL
-        )
-        chosen = combat.select_cards("obtain", options, 1)
+        # Toolbox.cs:27 passes RunState.Rng.CombatCardGeneration to
+        # GetDistinctForCombat (== UnstableShuffle(rng).Take(3)); parity routes
+        # there, legacy keeps the shared-Random sample byte-for-byte.
+        crng = combat.combat_rng
+        if crng.is_parity:
+            options = get_distinct_for_combat_parity(
+                crng.card_gen, self.CARDS, pool=COLORLESS_POOL
+            )
+        else:
+            options = random_pool_cards(
+                combat._rng, self.CARDS, distinct=True, pool=COLORLESS_POOL
+            )
+        # Toolbox.cs:28 is the `FromChooseACardScreen(context, cards, player)`
+        # overload without `canSkip`, which DEFAULTS to false (CardSelectCmd
+        # .cs:216) — the player must take one of the three. The sim models a
+        # decline exactly when the purpose is in driver.SKIPPABLE_PURPOSES, so
+        # this screen must NOT use one that is ("obtain" is).
+        chosen = combat.select_cards("choose_a_card", options, 1)
         for card in chosen:
             CardPileCmd.add_to_hand(combat.hooks, player, card)

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\vambrace.py",
-    "sha256": "95c98caeae4206f9737a2f3de4c8275edfd4be384397baf07d0e66f81cf6bcb5"
+    "sha256": "829070eda07da4b6999a8284b646804938643b4b96f43c3fb0025a67c5c3ca54"
   },
   "extra_sources": [
     {
@@ -26,32 +26,32 @@
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/paels_legion.py",
-      "sha256": "20f9950262269d972fff7aff6d200544ce02c445f956217cf9568890938e5f21",
+      "sha256": "0b3949d545d5a21af06705484f6821e7d47a08d90d444bc3aab5123c346557d3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -62,14 +62,14 @@
       "rationale": "Vambrace.cs:19. Uncommon in the transcribed grab bag (py audit/tools/relic_probes_b17.py pool -> bag=Uncommon), so it is obtainable from any Uncommon pull."
     },
     "BeforeCombatStart": {
-      "maps_to": "NO COUNTERPART -- the port has no on_combat_start",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Vambrace.cs:49-55 clears BOTH state fields (TriggeringCard = null, BlockGainedThisCombat = false) and sets base.Status = Active. The port clears neither, and has no combat-boundary hook at all, so `_used` latches True for the rest of the run from the first block gain of the first combat."
+      "maps_to": "reset_for_combat (sts2_rl/relics/vambrace.py:30-34)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/vambrace.py:30-34 clears BOTH state fields, `_triggering_card` and `_used` (Vambrace.cs:49-55; base.Status is presentation). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "ModifyBlockMultiplicative": {
       "maps_to": "modify_block_multiplicative (vambrace.py:26-34), dispatched by HookSystem.modify_block_multiplicative (hooks.py:111-124) from BlockCmd.apply (cmds.py:145-147)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The 2x factor and the `cardSource == null` bail map exactly (`card is not None`, vambrace.py:32), and the sim's `target is self.player` stands in for C#'s owner check. Three divergences sit on this one method: the never-reset flag (G1), the pipeline-level is_powered_attack gate that skips the whole dispatch for an UNPOWERED card gain where C#'s own gate is the looser IsCardOrMonsterMove (G2), and the fact that C#'s `TriggeringCard != null && TriggeringCard != cardSource` clause (Vambrace.cs:67-70) has no sim counterpart because the sim collapses the latch into the flag (G3)."
+      "issue": "NARROWED 2026-07-27. Two of the three guards on this method are CLOSED. G1 (the never-reset flag): `reset_for_combat` clears `_triggering_card` and `_used` on every attach (sts2_rl/relics/vambrace.py:30-34 = Vambrace.cs:47-53 / :104-110). G2 (the pipeline-level props gate): BlockCmd.apply no longer hoists `is_powered_attack` and the relic self-gates on `is_card_or_monster_move(props)` (sts2_rl/cmds.py:199-233, sts2_rl/relics/vambrace.py:44-45). WHAT REMAINS is G3 -- see that guard."
     },
     "AfterModifyingBlockAmount": {
       "maps_to": "on_block_gained (vambrace.py:36-40) -- the sim has no after-modification companion event, so the port hand-rolls the latch onto the post-application block event",
@@ -82,21 +82,21 @@
       "issue": "Rollup of guard G3 per binding rule 4. Vambrace.cs:98-114 is where the charge is actually spent: BlockGainedThisCombat = true, gated on the played card being the latched TriggeringCard and on the flag not already being set. Dropping this hook is what turns 'double every block gain of one card play' into 'double the first block gain'."
     },
     "AfterCombatEnd": {
-      "maps_to": "NO COUNTERPART",
-      "verdict": "gap",
-      "issue": "The SECOND of C#'s two resets (Vambrace.cs:116-122, mirroring BeforeCombatStart at :49-55). Recorded separately because C# is deliberately redundant here and the sim has neither, so the flag latches for the whole run. Carries guard G1's LIVE label. Exactly the belt_buckle shape (audit/records/relic/belt_buckle.json G2), and the fix is the same one line."
+      "maps_to": "reset_for_combat (sts2_rl/relics/vambrace.py:30-34)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/vambrace.py:30-34 clears both fields, covering C#'s second, deliberately redundant reset (Vambrace.cs:116-122) as well as the first. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_used` is reset in TWO places in C# and NOWHERE in the sim, so the relic works in the first combat of a run only",
-      "verdict": "gap",
-      "issue": "MECHANISM: vambrace.py:22-24 initialises `_used = False` in __init__ and vambrace.py:39-40 sets it True on the first card-sourced block gain; nothing ever sets it back. Relic instances live on RunState.relics and are re-attached to each new CombatState (sts2_rl/relics/base.py:152-154), so combat 2 onward enters modify_block_multiplicative with `_used` already True and returns 1.0. C# clears BlockGainedThisCombat at Vambrace.cs:52 (BeforeCombatStart) and again at :119 (AfterCombatEnd). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py vambrace): the same instance gives Defend = 10 block in combat 1 and Defend = 5 in combat 2, where C# gives 10 in both; `_used` reads True at combat-2 entry. Both sides ported: Uncommon in the transcribed grab bag, and every run has more than one combat. This is the pool-wide belt_buckle shape (PROMPT.md bug class 13) and .superpowers/sdd/content-relic-sweeps.md's sweep A listed this unit as CONFIRMED-carrying and UNAUDITED; this is that verdict, reached by execution at this record's own site rather than inherited. The reader trace bug class 13 demands: the first reader of the stale flag is vambrace.py:32's `not self._used`, consulted on the first card-sourced block gain of combat 2, i.e. immediately. Rule 7: sts2_rl/relics/base.py, sts2_rl/relics/belt_buckle.py and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/vambrace.py:30-34 clears `_triggering_card` and `_used` (Vambrace.cs:47-53 BeforeCombatStart, :104-110 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G2 (LIVE): the sim gates the ENTIRE block-modifier dispatch on is_powered_attack, but Vambrace's own C# gate is the looser IsCardOrMonsterMove() -- so an UNPOWERED card block gain is not doubled",
-      "verdict": "gap",
-      "issue": "MECHANISM: BlockCmd.apply (cmds.py:143-147) runs modify_block_additive/modify_block_multiplicative only `if is_powered_attack(props)` -- Move AND NOT Unpowered (valueprops.py:47-49). C#'s Hook.ModifyBlock has no such gate and leaves it to each listener: Dexterity/Frail/Fasten self-gate on IsPoweredCardOrMonsterMoveBlock (ValuePropExtensions.cs:14-21), but Vambrace.cs:59-62 gates only on IsCardOrMonsterMove() (ValuePropExtensions.cs:23-26), i.e. Move alone. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py vambrace): a fresh Vambrace doubles a powered Defend (5 -> 10) but leaves an UNPOWERED card block gain of 5 at 5, where C# gives 10. Both sides ported: Entrench is a ported Ironclad Event card that gains block with MOVE|UNPOWERED (sts2_rl/cards/trash_heap_cards.py:159-179). RULE 3: this is exactly audit/records/seam/creature_card_cmds.json guard G1, which already verdicts the mechanism `gap`, labels it LIVE, names this relic as one of its two self-gating C# witnesses, and pins test/test_hook_order.py::TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers (verified present by grep per binding rule 8). Same verdict, cited not re-derived; the seam owns the pipeline gate and this record owns the relic's observable. Rule 7: cmds.py, valueprops.py, ValuePropExtensions.cs, sts2_rl/cards/trash_heap_cards.py, test/test_hook_order.py and audit/records/seam/creature_card_cmds.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the props gate is back in the LISTENER. `HookSystem.modify_damage_additive` / `modify_damage_multiplicative` now take a `props` argument and pass it to every listener (sts2_rl/hooks.py:185-232), and DamageCmd.deal runs both chains UNCONDITIONALLY (sts2_rl/cmds.py:120-133) -- Hook.ModifyDamageInternal has no props gate of its own (Hook.cs:2515-2538). BlockCmd.apply is the same shape: the `if is_powered_attack(props)` hoist is gone and both block chains run for every gain, with props forwarded (sts2_rl/cmds.py:199-233), matching Hook.ModifyBlock (Hook.cs:1310-1340). sts2_rl/relics/vambrace.py:44-45 self-gates on `is_card_or_monster_move(props)` -- Move ALONE, Vambrace.cs:59-62's own predicate -- so an UNPOWERED card block gain is doubled again. WAS: BlockCmd.apply skipped the whole dispatch for Unpowered block, so Entrench's MOVE|UNPOWERED gain was never doubled."
     },
     {
       "what": "G3 (LIVE): the two-field latch is collapsed into one flag spent at the wrong moment, so only the FIRST block gain of a card play is doubled instead of every one",

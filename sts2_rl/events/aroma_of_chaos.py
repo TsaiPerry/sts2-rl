@@ -24,7 +24,9 @@ class AromaOfChaos(Event):
     def _let_go(self) -> None:
         chosen = self.run.select_cards("transform", self.run.transformable_cards(), 1)
         if chosen:
-            self.run.transform_card(chosen[0])
+            # CardCmd.TransformToRandom(cardModel, base.Rng) — the replacement
+            # is rolled on the event's own Rng (AromaOfChaos.cs:33).
+            self.run.transform_card(chosen[0], pick_rng=self.event_rng)
         self._finish("LET_GO")
 
     def _maintain_control(self) -> None:

@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from ..hooks import CAT_CARD
+
 if TYPE_CHECKING:
     from ..afflictions import Affliction
     from ..combat import CombatCtx
@@ -52,11 +54,44 @@ def make_card(card_id: str) -> Card:
     return _CARD_CLASSES[card_id]()
 
 
+def create_clone(card: Card) -> Card:
+    """Mirrors CardModel.CreateClone (CardModel.cs:2168) -> MutableClone ->
+    DeepCloneFields: a copy of the card at the same upgrade level that also
+    carries a live COPY of the source's enchantment (CardModel.cs:1204-1209 --
+    ClonePreservingMutability, then EnchantInternal at the source's Amount) and
+    of its affliction (CardModel.cs:1210-1215).
+
+    The game's clone starts as a memberwise copy, so an enchantment's static
+    card modification is already baked into it and ModifyCard is deliberately
+    NOT re-run (EnchantmentModel.cs:350-353); the sim rebuilds the card from
+    its class instead, so the copy re-runs the enchantment's modification to
+    reach the same state.
+
+    Clones only exist in combat -- CreateClone throws for a card outside a
+    combat pile (CardModel.cs:2170-2173). Run-level copies go through
+    ICardScope.CloneCard instead (relics/paels_growth.py, run.py's per-combat
+    deck copy)."""
+    clone = type(card)()
+    for _ in range(card.upgrade_level):
+        clone.upgrade()
+    if card.enchantment is not None:
+        card.enchantment.clone_preserving_mutability().attach(clone)
+    if card.affliction is not None:
+        affliction = type(card.affliction)(card.affliction.amount)
+        affliction.card = clone
+        clone.affliction = affliction
+    return clone
+
+
 class Card(ABC):
     id: str
     name: str
     card_type: CardType
     rarity: CardRarity
+    # Last in its owner's slice of the dispatch walk: C# walks the cards of
+    # AllPiles after powers, relics, potions and orbs
+    # (CombatState.IterateHookListeners, CombatState.cs:449-467).
+    hook_category = CAT_CARD
     target_type: TargetType = TargetType.ANY_ENEMY
     is_playable: bool = True
     is_ethereal: bool = False
@@ -163,6 +198,12 @@ class Card(ABC):
         self._init_vars()
         for _ in range(target):
             self.upgrade()
+        # The rebuild wiped whatever the enchantment had done to the card, so
+        # re-run its modification logic — CardModel.DowngradeInternal does the
+        # same right after re-deriving from the canonical model
+        # (`Enchantment?.ModifyCard()`, CardModel.cs:2145).
+        if self.enchantment is not None:
+            self.enchantment.modify_card()
 
     @property
     def is_upgradable(self) -> bool:
@@ -242,6 +283,9 @@ class Card(ABC):
         self._cost_this_combat = None
         self.captured_x = 0
         self.base_replay_count = 0
+        # CardModel.CurrentPlayIndex — which iteration of the play-count loop
+        # is resolving (CardModel.cs:1906). 0 for an ordinary single play.
+        self.current_play_index = 0
         self.reset_turn_cost_modifiers()
 
     def add_cost_this_turn(self, delta: int) -> None:

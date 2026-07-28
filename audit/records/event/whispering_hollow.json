@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\whispering_hollow.py",
-    "sha256": "74ac8f7769e3af3c30eca08f2392898f3589ac9b9fc0d5686b94427e1de82749"
+    "sha256": "04b2c3e7caab86cf89d71dadf156bee510718119b751382f3310f525b48ba4ee"
   },
   "extra_sources": [
     {
@@ -46,22 +46,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
@@ -71,8 +71,23 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -108,23 +123,23 @@
     },
     {
       "what": "BR-G3 (blast radius): Hug's CardCmd.TransformToRandom (WhisperingHollow.cs:66) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as audit/records/seam/creature_card_cmds.json guard G3 (rule 3, not re-verdicted): a transformed card never passes through Hook.ModifyCardBeingAddedToDeck, so the egg relics (Toxic = Skill, Frozen = Power, Molten = Attack) do not upgrade it, where the sim's RunState.add_card (run.py:345-348) does run that hook. Recorded here so this unit's record shows it is in the radius. EXECUTED (`py audit/tools/event_probes.py deckverbs`): 7 event modules transform (aroma_of_chaos, endless_conveyor, morphic_grove, symbiote, trial, whispering_hollow, wood_carvings) against 24 that add."
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "verdict": "faithful"
     },
     {
       "what": "EV-1: Hug's 9 HP loss (WhisperingHollow.cs:68, ValueProp.Unblockable | Unpowered) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
       "verdict": "gap",
-      "issue": "MECHANISM EV-1, one verdict at all 18 lose_hp sites (rule 3). Fairy in a Bottle (FairyInABottle.cs:33-45: ShouldDie false for its owner, AfterPreventingDeath heals to max(MaxHp*0.3, 1)) IS ported (potions.py:1222-1250) and IS in the reward pool (potion_pools.py:49), but the sim's copy returns early when `self.combat is None` (potions.py:1246-1248) and is only registered as a listener by CombatState (combat.py:164-166), so it is inert during an event. EXECUTED (`py audit/tools/event_probes.py lethal`): a run at 5 HP holding a belt Fairy that loses 15 HP ends DEAD at hp=-10 with the Fairy still in the belt; the game ends alive at 24 HP with the Fairy consumed. LIVE -- both sides ported and reachable, and the divergence ends the run. Secondary: run.lose_hp does not clamp at 0 either, so the sim carries negative HP."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     },
     {
       "what": "EV-9: Gold's two PotionRewards (WhisperingHollow.cs:53-57) -- events/whispering_hollow.py:57-58 rolls run.random_potion() twice calls run.random_potion() (run.py:513-520), a single `self.rng.choice` on the SHARED run rng over every potion class flagged in_reward_pool. This site takes the FULL EV-9 shape, unlike wellspring's: `new PotionReward(base.Owner)` is the ONE-argument ctor (PotionReward.cs:41-44), so Reward.Populate (PotionReward.cs:53-59) rolls PotionFactory.CreateRandomPotionOutOfCombat(player, player.PlayerRng.Rewards) -- and PotionFactory.CreateRandomPotion (PotionFactory.cs:67-80) is `NextFloat()` for the rarity tier THEN `NextItem(where Rarity == tier)`, i.e. TWO Rewards draws per potion and a 10/25/65 rare/uncommon/common split. EXECUTED (`py audit/tools/event_probes_c.py hollow`): the sim's GOLD branch takes 0 event-rng draws (correct -- the game takes none either) but 2 SHARED-rng draws where the game takes 4 Rewards draws.",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-9, one verdict at every random-potion site (rule 3). ALREADY RECORDED as a gap at event/battleworn_dummy (Setting1) and event/endless_conveyor (SUSPICIOUS_CONDIMENT) -- named here so the mechanism has an id, because it is NOT EV-3: EV-3 is 'the sim uses the shared run rng where C# uses the per-event base.Rng', and the stream C# uses here is the per-player PlayerRng.Rewards, which the sim already exposes as run.rewards_rng (run.py:270-274). endless_conveyor's guard labels its own instance '(EV-3)'; that label is imprecise and should be narrowed. EXECUTED (`py audit/tools/event_probes_c.py potionroll`): the sim's reward pool is 48 potion classes split 16 common / 16 uncommon / 16 rare, so a uniform choice gives P(rare) = 0.3333 where the game's PotionFactory tier gives 0.10 (and 0.25 / 0.65 for uncommon / common). Three observables at every site: the wrong stream, the wrong population (in_reward_pool is not the character-pool + SharedPotionPool union the source composes), and no rarity tier. LIVE for parity and, because the rarity tier is a distribution change, for the RL path too."
+      "maps_to": "Closed 2026-07-28: this site takes the FULL EV-9 shape and now gets it. events/whispering_hollow.py:62-67 calls potion_pools.generate_random_potion(run.rewards_rng) twice, and generate_random_potion (potion_pools.py:150-156) IS PotionFactory.CreateRandomPotionOutOfCombat -- a rarity roll (10/25/65) then a NextItem inside that bucket, i.e. TWO Rewards draws per potion over POTION_POOL (Character.PotionPool + SharedPotionPool). That is 4 Rewards draws for the GOLD branch, matching WhisperingHollow.cs:53-57's two one-argument `new PotionReward(base.Owner)`. Was: two uniform `self.rng.choice` picks on the shared rng over the sim's flat 48-class reward pool (P(rare) 0.333 where the game's tier gives 0.10).",
+      "verdict": "faithful"
     },
     {
       "what": "EV-4: Gold's two PotionRewards (WhisperingHollow.cs:53-57) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3); the owning records are event/drowning_beacon (BOTTLE), event/brain_leech (RIP) and event/endless_conveyor (SUSPICIOUS_CONDIMENT). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all ordinary event branches with no exotic gate."
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/whispering_hollow.py:67 (both PotionRewards) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "verdict": "faithful"
     },
     {
       "what": "the HUG option's `.ThatDoesDamage(HpLoss.IntValue)` annotation and HoverTipFactory.Static(StaticHoverTip.Transform) (WhisperingHollow.cs:46)",

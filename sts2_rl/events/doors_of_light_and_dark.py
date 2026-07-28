@@ -2,6 +2,8 @@ from __future__ import annotations
 
 _CARDS = 2  # CardsVar(2)
 
+from ..actmap import stable_shuffle
+from ..player import _compare_to_key
 from .base import Event, EventOption, register_event
 
 
@@ -26,7 +28,16 @@ class DoorsOfLightAndDark(Event):
     def _light(self) -> None:
         upgradable = self.run.upgradable_cards()
         count = min(_CARDS, len(upgradable))
-        for card in self.rng.sample(upgradable, count):
+        # `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)`
+        # (DoorsOfLightAndDark.cs:28-29): the sort (CardModel.CompareTo — the
+        # UPPERCASE ModelId entry, then the upgrade level) makes the pick
+        # independent of the deck's incidental order, and the shuffle runs on
+        # the event's own Rng.
+        er = self.event_rng
+        chosen = stable_shuffle(
+            list(upgradable), er if er is not None else self.rng,
+            key=_compare_to_key)[:count]
+        for card in chosen:
             card.upgrade()
         self._finish("LIGHT")
 

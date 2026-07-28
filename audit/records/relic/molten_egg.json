@@ -46,22 +46,22 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -97,9 +97,9 @@
       "rationale": "Matches MoltenEgg.cs:14. Rule 7 note: the value lives in relics/_eggs.py, which this record does NOT hash -- sweep C's first correction was exactly this shared-base blind spot (a body-only scan reported all three eggs as unimplemented stubs)."
     },
     "IsAllowed": {
-      "maps_to": "no counterpart -- the sim's Relic base declares no is_allowed member",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsAllowed(runState) has NO counterpart on the sim's Relic base at all -- `hasattr(Relic, 'is_allowed')` is False (executed, py audit/tools/relic_probes_b09.py b09-isallowed) -- and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456) is `TotalFloor < 41` in single-player, so the game stops offering this relic from the act-3 treasure chest onward. REACHABILITY (LIVE, executed): with run.total_floor forced to 60, run.pull_relic_from_front still yields lucky_fysh, meal_ticket AND molten_egg on seeds 0/1/2. Both sides ported -- the relic is in the transcribed grab bag (relic_pools.py) and the sim already tracks RunState.total_floor (event gates read it). Observable: pool composition, and a wrong pull shifts every subsequent pull. This is the 17-relic single-fix cluster of .superpowers/sdd/content-relic-sweeps.md sweep B (count CORRECTED to 17 by batch 8) and of relic/amethyst_aubergine's IsAllowed finding in batch 1 -- one verdict per mechanism, binding rule 3, so this entry confirms rather than re-derives. Rule 7: the rationale leans on relics/base.py, relic_pools.py and run.py, which this record does NOT hash."
+      "maps_to": "is_allowed (sts2_rl/relics/_eggs.py:35) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "TryModifyCardRewardOptionsLate": {
       "maps_to": "EggRelic.modify_card_reward_options (relics/_eggs.py:39-42), dispatched once from rewards.create_reward_cards (rewards.py:297-301)",
@@ -120,8 +120,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the IsBeforeAct3TreasureChest pool gate has no sim counterpart",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsAllowed(runState) has NO counterpart on the sim's Relic base at all -- `hasattr(Relic, 'is_allowed')` is False (executed, py audit/tools/relic_probes_b09.py b09-isallowed) -- and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456) is `TotalFloor < 41` in single-player, so the game stops offering this relic from the act-3 treasure chest onward. REACHABILITY (LIVE, executed): with run.total_floor forced to 60, run.pull_relic_from_front still yields lucky_fysh, meal_ticket AND molten_egg on seeds 0/1/2. Both sides ported -- the relic is in the transcribed grab bag (relic_pools.py) and the sim already tracks RunState.total_floor (event gates read it). Observable: pool composition, and a wrong pull shifts every subsequent pull. This is the 17-relic single-fix cluster of .superpowers/sdd/content-relic-sweeps.md sweep B (count CORRECTED to 17 by batch 8) and of relic/amethyst_aubergine's IsAllowed finding in batch 1 -- one verdict per mechanism, binding rule 3, so this entry confirms rather than re-derives. Rule 7: the rationale leans on relics/base.py, relic_pools.py and run.py, which this record does NOT hash."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G2 (LIVE): a deck-level TRANSFORM fires Hook.ModifyCardBeingAddedToDeck in C# and no deck-add hook in the sim, so a transformed-in Attack arrives UN-upgraded",

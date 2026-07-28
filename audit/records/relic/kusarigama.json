@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kusarigama.py",
-    "sha256": "feebca9b9757c9083c5832a15cd6be48bc0b6cf7cd807a0c40893dccdd540d2b"
+    "sha256": "35e10c499545e12fa09663e97d6a7fa892d13c0425a3c0b0bea81cc5910c19f3"
   },
   "extra_sources": [
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -56,22 +56,22 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -123,7 +123,7 @@
     "AfterCardPlayed": {
       "maps_to": "on_card_played (kusarigama.py:35-50)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The arithmetic and the RNG stream are right -- `Type != Attack -> return`, `++`, `% CardsVar(3) == 0`, then a CombatTargets NextItem over the enemy list and DamageVar(6, Unpowered) from the owner -- but the counter advances once per PLAY where C# advances it once per Replay ITERATION (G1, LIVE), and the candidate list is living_enemies() where C# uses HittableEnemies (G2)."
+      "issue": "NARROWED 2026-07-27. The per-Replay half (G1) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600). WHAT REMAINS is guard G2, the candidate list: Kusarigama.cs picks with `RunState.Rng.CombatTargets.NextItem(HittableEnemies)` and sts2_rl/relics/kusarigama.py still passes `self.living_enemies()`, which sts2_rl/relics/base.py:386-389 filters on `not e.is_gone` alone -- no Hook.ShouldAllowHitting term -- so an alive-but-unhittable enemy is still eligible to be drawn."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",
@@ -134,8 +134,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed Attack advances Kusarigama's counter by 1 instead of 2",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop, so a REPLAYED card advances this relic's per-turn counter once per iteration. The sim's _resolve_card_play runs the whole play-count loop (combat.py:477-494) and calls hooks.on_card_played once, after it (combat.py:514), so a doubled card advances the counter by ONE. This is audit/records/seam/hook_dispatch.json gap G4 -- one verdict per mechanism, binding rule 3, and that record already labels it LIVE -- observed at this relic's own site; the seam owns the machinery, this record owns the observable. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-replay): with Throwing Axe held, two Strike plays leave _attacks_this_turn=2 and no 6-damage hit, where C# counts 3 and fires the damage. Throwing Axe makes the first card of each combat play twice (relics/throwing_axe.py:30-36) and is granted by the ported Tanx shrine (events/tanx.py); the Spiral and Glam enchantments (enchantments.py:167, 232), One-Two Punch (powers.py:966) and Duplication (powers.py:3919) reach the same combat.py:469 play-count hook. Rule 7: CardModel.cs, combat.py, relics/throwing_axe.py, events/tanx.py, enchantments.py and powers.py are not hashed by this record. The observable is not a rounding detail: because the trigger is `count % 3 == 0`, a DIFFERENT card fires the relic, and every subsequent trigger in the turn is shifted by one play."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "G2 (DORMANT): `Owner.Creature.CombatState.HittableEnemies` (Kusarigama.cs:115) vs the sim's living_enemies() (kusarigama.py:40)",

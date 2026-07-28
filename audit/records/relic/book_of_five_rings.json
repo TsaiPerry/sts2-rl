@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\book_of_five_rings.py",
-    "sha256": "e3ad2bccdc71504a48c3ea150a500441a2f1e43050979267c897efb3c319c429"
+    "sha256": "c41551898bbae0e22d7bfc454b8f7b3f2daee644d1c15ff950a60d7813621c84"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -41,21 +41,21 @@
       "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "IsAllowed": {
-      "maps_to": "no counterpart in the sim",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456) is `runState.TotalFloor < 41` in single-player, i.e. the relic stops spawning from the Act 3 treasure chest onward. The sim's Relic base (sts2_rl/relics/base.py) declares NO is_allowed member at all, and relic_pools.populate_relic_grab_bags shuffles the whole transcribed pool once at run init with no per-pull eligibility filter, so the relic stays pullable for the entire run. REACHABILITY (LIVE): the relic is in the transcribed shared pool, the sim tracks RunState.total_floor already (event gates use it), and runs reach floor 41. The observable is pool composition -- a late pull hands out a relic the game would have filtered, which also shifts every subsequent pull. CLUSTER (executed: py audit/tools/relic_probes.py sweep-isallowed): TWENTY ported relics override IsAllowed and SIXTEEN share this exact gate -- amethyst_aubergine, book_of_five_rings, bowler_hat, dragon_fruit, frozen_egg, girya, juzu_bracelet, lucky_fysh, meal_ticket, molten_egg, old_coin, planisphere, shovel, toxic_egg, white_beast_statue, white_star. One base-class member plus one filter in the pull path closes all sixteen; see .superpowers/sdd/content-relic-sweeps.md."
+      "maps_to": "is_allowed (sts2_rl/relics/book_of_five_rings.py:31) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/book_of_five_rings.py:31), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterCardChangedPiles": {
-      "maps_to": "no counterpart; Relic.after_card_added_to_deck (relics/base.py:208) is the hook it would map to, and the sim's port implements nothing at all",
-      "verdict": "gap",
-      "issue": "MECHANISM: BookOfFiveRings.cs:67-83 counts every card that enters the owner's deck and heals HealVar(20m).BaseValue every CardsVar(5)th one (`CardsAdded++` then `CardsAddedSinceLastTrigger == 0`, i.e. a running modulo, not a per-combat counter). The sim registers the relic as a behaviourless stub whose docstring says 'deck edits happen between combats, so this is a no-op stub' -- and that premise is FALSE. RunState.add_card (run.py:544-556) runs `relic.after_card_added_to_deck(self, card)` over every relic in the run on every deck add, which is exactly the hook this port needs; the sim also has HP and CreatureCmd.heal. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py batch2): with the relic held and the player at 50 HP, five run.add_card calls leave HP at 50 where C# reaches 70. The relic is Common in the transcribed shared grab bag (relic_pools.py:'RELIC.BOOK_OF_FIVE_RINGS') and card rewards add cards to the deck constantly. CLUSTER: this is one of 30 behaviourless relic ports whose dropped C# hooks all have a live sim dispatch site -- py audit/tools/relic_probes.py sweep-stub-premises, findings in .superpowers/sdd/content-relic-sweeps.md."
+      "maps_to": "after_card_added_to_deck (sts2_rl/relics/book_of_five_rings.py), dispatched by RunState.add_card (sts2_rl/run.py:411-412) and RunState.transform_card (sts2_rl/run.py:582-583)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/book_of_five_rings.py's `after_card_added_to_deck` increments a run-scoped `cards_added` and heals HEAL = 20 whenever `cards_added % CARDS == 0` with CARDS = 5 -- BookOfFiveRings.cs:67-83's running modulo over CardsVar(5)/HealVar(20), with the owner-alive gate as `if run.is_dead: return`. RunState.add_card dispatches the hook over every relic (sts2_rl/run.py:411-412) and RunState.transform_card now does too (sts2_rl/run.py:582-583). WAS: a behaviourless stub whose docstring claimed deck edits happen between combats and so could not be modelled."
     }
   },
   "guards": [
     {
       "what": "N1: the counter is a RUNNING MODULO over the whole run (`CardsAdded % 5`), not a reset-to-zero counter",
-      "verdict": "gap",
-      "issue": "Recorded separately from the hook because a fix that stores 'cards since last heal' and zeroes it would drift from C# the moment anything else touches the counter, and because CardsAdded is a [SavedProperty] -- it survives a save/load, so it is genuinely run-scoped state. Carries AfterCardChangedPiles' LIVE label. The heal amount is HealVar(20m).BaseValue and the period is CardsVar(5), neither with an ascension branch."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/book_of_five_rings.py's `after_card_added_to_deck` increments a run-scoped `cards_added` and heals HEAL = 20 whenever `cards_added % CARDS == 0` with CARDS = 5 -- BookOfFiveRings.cs:67-83's running modulo over CardsVar(5)/HealVar(20), with the owner-alive gate as `if run.is_dead: return`. RunState.add_card dispatches the hook over every relic (sts2_rl/run.py:411-412) and RunState.transform_card now does too (sts2_rl/run.py:582-583). WAS: a behaviourless stub whose docstring claimed deck edits happen between combats and so could not be modelled."
     },
     {
       "what": "N2: `base.Owner.Creature.IsDead` and `card.Owner != base.Owner` early bails (BookOfFiveRings.cs:69-72)",
@@ -68,6 +68,6 @@
       "rationale": "AfterCardChangedPiles fires for every pile transition in the game, including hand->discard during combat; only the Deck pile increments the counter. The sim's after_card_added_to_deck is already deck-only by construction (relics/base.py:208-210 documents it as 'AfterCardChangedPiles, filtered to a card entering the run's deck pile'), so the filter is free when the port is written. Recorded so the fix does not hang the counter off a combat hook."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

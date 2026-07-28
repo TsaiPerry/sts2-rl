@@ -21,12 +21,17 @@ class StoneCracker(Relic):
         if crng.is_parity:
             # StoneCracker.cs: Draw-pile IsUpgradable cards,
             # StableShuffle(Rng.CombatCardSelection).Take(count). StableShuffle
-            # sorts by ModelId (card id, then upgrade level) before the game
-            # UnstableShuffle, so the result is independent of pile order.
+            # sorts by ModelId (CardModel.CompareTo — the game's UPPERCASE
+            # entry compared ordinally, then the upgrade level) before the game
+            # UnstableShuffle. The game stores a pile top-at-index-0 and the sim
+            # draws off the END (player.py:264), so feed the pile in the GAME's
+            # orientation: equal-comparing cards (5 Strikes, 4 Defends) keep
+            # their incoming order under both List.Sort and Python's sort.
             from ..actmap import stable_shuffle
+            from ..player import _compare_to_key
             chosen = stable_shuffle(
-                list(upgradable), crng.card_selection,
-                key=lambda c: (c.id, c.upgrade_level),
+                list(reversed(upgradable)), crng.card_selection,
+                key=_compare_to_key,
             )[:count]
         else:
             chosen = self.combat._rng.sample(upgradable, count)

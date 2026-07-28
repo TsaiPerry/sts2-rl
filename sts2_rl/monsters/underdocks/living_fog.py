@@ -27,6 +27,9 @@ class GasBomb(MachineMonster):
     max_hp = 7
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
+        # Index into LivingFogNormal.Slots of the "bombN" slot this bomb was
+        # spawned into (Creature.SlotName); LivingFog.bloat assigns it.
+        self.slot = 0
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import MinionPower
@@ -44,6 +47,17 @@ class GasBomb(MachineMonster):
         self._execute_attack(ctx, _EXPLODE_DMG, 1)
         from ...cmds import CreatureCmd
         CreatureCmd.kill(ctx.hooks, self)
+
+
+def _slot_index(creature) -> int | None:
+    """Encounter.Slots.IndexOf(creature.SlotName) for LivingFogNormal.Slots =
+    [bomb1..bomb5, livingFog]; None for a creature holding no slot (the game
+    removes a dead creature from Enemies, so a corpse occupies nothing)."""
+    if isinstance(creature, GasBomb):
+        return None if creature.is_gone else creature.slot
+    if isinstance(creature, LivingFog):
+        return _BOMB_SLOTS
+    return None
 
 
 class LivingFog(MachineMonster):
@@ -86,12 +100,31 @@ class LivingFog(MachineMonster):
     def _bloat(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd
         for _ in range(_BLOAT_SPAWNS):
-            # Mirrors GetNextSlot: the scene has 5 bomb slots.
-            live_bombs = sum(
-                1 for e in ctx.enemies if isinstance(e, GasBomb) and not e.is_gone
+            # EncounterModel.GetNextSlot: the FIRST of the encounter's slots
+            # (LivingFogNormal.Slots = [bomb1..bomb5, livingFog]) that no enemy
+            # occupies; an empty result means no room and nothing spawns.
+            occupied = {
+                e.slot for e in ctx.enemies
+                if isinstance(e, GasBomb) and not e.is_gone
+            }
+            slot = next(
+                (s for s in range(_BOMB_SLOTS) if s not in occupied), None
             )
-            if live_bombs < _BOMB_SLOTS:
-                CreatureCmd.add(ctx.hooks, GasBomb(ctx.hooks, self._rng))
+            if slot is None:
+                continue
+            bomb = GasBomb(ctx.hooks, self._rng)
+            bomb.slot = slot
+            # CombatManager.AddCreature re-sorts Enemies by
+            # Encounter.Slots.IndexOf(SlotName) whenever the added creature
+            # carries a slot (SortEnemiesBySlotName), so the bomb takes its
+            # slot's position — ahead of the Living Fog (slot index 5) and of
+            # any bomb in a later slot — instead of being appended.
+            idx = min(
+                (i for i, e in enumerate(ctx.enemies)
+                 if _slot_index(e) is not None and _slot_index(e) > slot),
+                default=len(ctx.enemies),
+            )
+            CreatureCmd.add(ctx.hooks, bomb, index=idx)
         self._execute_attack(ctx, _BLOAT_DMG, 1)
 
     def _super_gas_blast(self, ctx: CombatCtx) -> None:

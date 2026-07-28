@@ -23,7 +23,8 @@ class IronClub(Relic):
         super().__init__()
         self.cards_played = 0
 
-    def on_card_played(self, card: "Card") -> None:
+    def on_card_played(self, card: "Card",
+                       is_auto_play: bool = False) -> None:
         from ..cmds import DrawCmd
 
         self.cards_played += 1

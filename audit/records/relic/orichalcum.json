@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\orichalcum.py",
-    "sha256": "5797b6afca188cd66619524d8ea170a678e96a2dfd831ce913462ff6dfce7a8c"
+    "sha256": "f0e09b0422d790cea8bbbbfd03eae2b7edfe79dda4c73b3d962c7ea0edcb59bc"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "afb8d4f859d69bf03e953f4f7bc8f7bce3265a01ab5dd1f7fb125cb1755f8449",
+      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
       "side": "sim"
     }
   ],
@@ -56,14 +56,14 @@
       "verdict": "faithful"
     },
     "BeforeSideTurnEndVeryEarly": {
-      "maps_to": "collapsed into on_player_turn_end (orichalcum.py:22-25) -- the `player.block == 0` test at orichalcum.py:23 is C#'s VeryEarly SNAPSHOT and the BlockCmd.apply on the next line is the plain-phase grant, with no phase separation between them",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. C# reads the player's Block in a COMPLETE earlier pass and stores the answer in ShouldTrigger (Orichalcum.cs:44-56); the sim reads it inline at grant time, so any other turn-end listener registered before it can add Block first and switch the relic off."
+      "maps_to": "on_player_turn_end_very_early (sts2_rl/relics/orichalcum.py) -- the VeryEarly phase of HookSystem's on_player_turn_end walk (sts2_rl/hooks.py:36-38, 153-180)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. sts2_rl/relics/orichalcum.py's `on_player_turn_end_very_early` is the snapshot's real home. WAS: the check moved into the plain slot and became order-dependent."
     },
     "BeforeSideTurnEnd": {
-      "maps_to": "the BlockCmd.apply at orichalcum.py:24-25, the same method as the VeryEarly snapshot",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The grant itself is faithful -- 6 unpowered Block to the owner -- and C#'s `ShouldTrigger = false` before granting (Orichalcum.cs:62) is subsumed by the sim having no flag at all. What is lost is the guarantee that the snapshot already happened."
+      "maps_to": "on_player_turn_end (sts2_rl/relics/orichalcum.py) -- the PLAIN BeforeSideTurnEnd pass, run after the very_early snapshot",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the guarantee this rollup lost is back. The grant itself was already faithful (6 unpowered Block to the owner); what was missing was the assurance that the snapshot had already happened. sts2_rl/relics/orichalcum.py now takes the snapshot in `on_player_turn_end_very_early` and grants in the plain `on_player_turn_end`, and HookSystem._each runs very_early / early / plain / late as COMPLETE separate listener passes (sts2_rl/hooks.py:36-38, 153-180) -- Hook.cs:1238-1261's three BeforeTurnEnd sub-slots. C#'s `ShouldTrigger = false` before granting (Orichalcum.cs:62) is mirrored by the port clearing `_should_trigger` in the plain slot."
     },
     "BeforeSideTurnStart": {
       "maps_to": "no counterpart",
@@ -74,8 +74,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the deliberate two-phase VeryEarly-then-plain structure is collapsed into one method, so a plain-phase Block granter that runs first switches Orichalcum off",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.cs runs BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then BeforeSideTurnEnd as three COMPLETE listener passes (Hook.cs:1238-1261), and Orichalcum's own doc comment (Orichalcum.cs:38-43) says why it needs the first: 'it needs to check the player's block before PlatingPower triggers (otherwise, PlatingPower will prevent this relic's block gain)'. The sim's hooks.py dispatches on_player_turn_end as a single `for l in list(self._listeners)` pass, so the phase guarantee becomes registration-order luck. THIS RELIC IS THE NAMED WITNESS of audit/records/seam/turn_structure.json gap G12 -- that record cites Orichalcum.cs:44-56 and relics/orichalcum.py:22-25 by name, labels the mechanism LIVE, and pins it with test/test_hook_order.py::TestTurnStructureOrder::test_orichalcum_snapshots_block_before_other_turn_end_listeners (verified present, test_hook_order.py:791, a strict xfail). One verdict per mechanism, binding rule 3: matched, cited, not re-derived. RE-EXECUTED at this site (py audit/tools/relic_probes_b10.py orichalcum) rather than inherited: with a 5-card hand, relics=[cloak_clasp, orichalcum] gives 5 Block at turn end and relics=[orichalcum, cloak_clasp] gives 11, where C# always gives 11 because the VeryEarly pass precedes every plain listener. Orichalcum alone gives 6. LIVE, both sides ported: Orichalcum is Uncommon in the transcribed grab bag, Cloak Clasp is a ported Rare relic granting 1 Block per card in hand from plain BeforeSideTurnEnd (CloakClasp.cs:24, relics/cloak_clasp.py:19-24), and PlatingPower -- the contender the source's own comment names -- is ported (powers.py:1044-1078) and granted at combat start by relic/gorget and by two ported cards (cards/stone_armor.py:38, cards/colorless_powers.py:121). Rule 7: Hook.cs, hooks.py, CloakClasp.cs, relics/cloak_clasp.py, powers.py, relics/gorget.py, cards/stone_armor.py, cards/colorless_powers.py, test/test_hook_order.py and the turn_structure record are NOT hashed by this record. BINDING RULE 3 CROSS-CHECK: audit/records/relic/fake_orichalcum.json (batch 5) audited the knock-off's identical body and reached the SAME four verdicts -- BeforeSideTurnEndVeryEarly gap, BeforeSideTurnEnd gap, BeforeSideTurnStart faithful, the participants asymmetry faithful -- with the same cloak_clasp ordering evidence. No disagreement. Rule 7: relics/fake_orichalcum.py is unhashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. sts2_rl/relics/orichalcum.py now overrides `on_player_turn_end_very_early` to snapshot `player.block > 0` into `_should_trigger` and keeps the grant in the plain `on_player_turn_end` -- Orichalcum.cs:44-56 / :58-66, whose own doc comment says the VeryEarly phase exists so the check precedes PlatingPower. The snapshot therefore precedes EVERY plain-phase listener, so relic/cloak_clasp and relic/ripple_basin can no longer switch it off by pickup order. WAS: both halves sat in one flat on_player_turn_end walk in registration order."
     },
     {
       "what": "N1: BlockVar(6m, ValueProp.Unpowered) (Orichalcum.cs:21) passed as the whole DynamicVar to CreatureCmd.GainBlock (:64) vs BLOCK = 6 with props=ValueProp.UNPOWERED (orichalcum.py:20, :25)",
@@ -103,6 +103,6 @@
       "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

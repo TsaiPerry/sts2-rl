@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\amethyst_aubergine.py",
-    "sha256": "d3f7f1c0d5c9adb136ab5314b0371d739d8b416a1d28006d2118d2c7140677b3"
+    "sha256": "fb04895f2b46aba5c3e5e15111969abe465dd7b9f1b1ea79975706a3a8fe29b0"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -40,14 +40,14 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "no counterpart in the sim",
-      "verdict": "gap",
-      "issue": "AmethystAubergine.cs:20-23 refuses to spawn from the Act 3 treasure chest onward (RelicModel.IsBeforeAct3TreasureChest, RelicModel.cs:452-456: `runState.TotalFloor < 41` in single-player). The sim's Relic base class (sts2_rl/relics/base.py) declares no is_allowed member at all, and relic_pools.populate_relic_grab_bags shuffles the whole transcribed pool once at run init with no per-pull eligibility filter, so Amethyst Aubergine stays pullable for the entire run. REACHABILITY (LIVE): the relic is in the transcribed shared pool as Common (relic_pools.py:'RELIC.AMETHYST_AUBERGINE'), the sim tracks TotalFloor (run.py total_floor, already used by event gates), and runs reach floor 41. The observable is pool composition: a late grab-bag pull can hand out a relic the game would have filtered, which also shifts every subsequent pull. NOTE: the sim has no is_allowed concept for relics at all, so this is one instance of a base-class-wide omission, not an Aubergine-only slip. The pool-wide sweep has since run (py audit/tools/relic_probes.py sweep-isallowed; findings in .superpowers/sdd/content-relic-sweeps.md): TWENTY ported relics override IsAllowed. SIXTEEN of them -- amethyst_aubergine, book_of_five_rings, bowler_hat, dragon_fruit, frozen_egg, girya, juzu_bracelet, lucky_fysh, meal_ticket, molten_egg, old_coin, planisphere, shovel, toxic_egg, white_beast_statue, white_star -- share this exact IsBeforeAct3TreasureChest gate and are all unmodelled, so the fix is one base-class member plus one filter in the pull path, not sixteen separate fixes. The other four are clean or deferred: massive_scroll (Players.Count > 1, never allowed in single-player, absent from the grab bag and already gated at Neow by is_allowed_at_neow=False), silver_crucible and winged_boots (Players.Count == 1, always allowed here), and lasting_candy (gated on the Ironclad's UnlockState, likely a waiver but left for its own batch)."
+      "maps_to": "is_allowed (sts2_rl/relics/amethyst_aubergine.py:33) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/amethyst_aubergine.py:33), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "TryModifyRewards": {
-      "maps_to": "no counterpart; Relic.modify_combat_rewards (relics/base.py:168) is the hook it would map to and the sim's port does not implement it",
-      "verdict": "gap",
-      "issue": "MECHANISM: AmethystAubergine.cs:25-45 appends a GoldReward(15) to the rewards of every combat room, skipping only non-combat rooms and the FINAL act's boss (`room.RoomType == Boss && CurrentActIndex >= Acts.Count - 1`). The sim registers the relic as a behaviourless stub whose docstring says the effect is 'out-of-combat only (the sim has no gold), so this is a no-op stub' -- and that premise is FALSE. The sim has gold (RunState.gold, run.py:325 gain_gold), has a combat rewards screen that rolls and grants it (rewards.py:462-464, 483-485), and runs `relic.modify_combat_rewards(run, rewards)` over the run's relics right after (rewards.py:499-500) -- the exact hook this port needs, already used by black_star, driftwood, lava_rock, paels_wing and wongos_mystery_ticket. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py aubergine-gold): the relic is Common in the transcribed shared grab bag, and a MONSTER reward screen pays rewards.gold=19 / run.gold delta=19 BOTH with and without it, where C# pays 15 more. IMPLEMENTATION NOTE for whoever fixes it: rewards.py grants the gold at line 464/485, BEFORE the modify_combat_rewards loop at 499, so a fix that only mutates rewards.gold would display the 15 without banking it -- it must call run.gain_gold as well, the way the relic-appending hooks grant their own relics."
+      "maps_to": "modify_combat_rewards (sts2_rl/relics/amethyst_aubergine.py) -- the PLAIN TryModifyRewards pass, dispatched at sts2_rl/rewards.py:526-527",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/amethyst_aubergine.py's `modify_combat_rewards` adds GOLD = 15 to `rewards.gold` AND banks it with `run.gain_gold(15)` on Monster/Elite/Boss screens, skipping the FINAL act's boss (`rewards.room_type == RoomType.BOSS and run.is_final_act`) -- AmethystAubergine.cs:25-45, including its `CurrentActIndex >= Acts.Count - 1` clause. The implementation note the old entry left for the fixer was followed: the hook runs after the screen's own gold is granted, so mutating rewards.gold alone would have displayed the 15 without banking it. WAS: a behaviourless stub whose docstring claimed the sim has no gold."
     },
     "AfterModifyingRewards": {
       "maps_to": "no counterpart (Flash() only)",
@@ -63,8 +63,8 @@
     },
     {
       "what": "N2: the final-act-boss exclusion (`CurrentActIndex >= Acts.Count - 1`, AmethystAubergine.cs:39-42)",
-      "verdict": "gap",
-      "issue": "Part of the same unported TryModifyRewards body, recorded separately because a fix that adds the gold but forgets this clause would pay 15 extra on the run's last boss where the game pays nothing. Carries TryModifyRewards' LIVE label: the sim reaches final-act boss rooms (the conformance seeds run to the act-2 boss today) and models CurrentActIndex."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/amethyst_aubergine.py's `modify_combat_rewards` adds GOLD = 15 to `rewards.gold` AND banks it with `run.gain_gold(15)` on Monster/Elite/Boss screens, skipping the FINAL act's boss (`rewards.room_type == RoomType.BOSS and run.is_final_act`) -- AmethystAubergine.cs:25-45, including its `CurrentActIndex >= Acts.Count - 1` clause. The implementation note the old entry left for the fixer was followed: the hook runs after the screen's own gold is granted, so mutating rewards.gold alone would have displayed the 15 without banking it. WAS: a behaviourless stub whose docstring claimed the sim has no gold."
     },
     {
       "what": "N3: GoldVar(15) (AmethystAubergine.cs:18) -- the numeric constant, checked against the non-ascension branch",
@@ -72,6 +72,6 @@
       "rationale": "A bare GoldVar(15) with no AscensionHelper.GetValueIfAscension anywhere in the file, so 15 is the pinned value. The sim has no constant to compare because it has no implementation; recorded so the number is on file for the fix."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

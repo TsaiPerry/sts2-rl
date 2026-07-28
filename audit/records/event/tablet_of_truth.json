@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
@@ -41,8 +41,13 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
     }
   ],
   "hooks": {},
@@ -85,12 +90,12 @@
     {
       "what": "EV-1 (second verb): Decipher's kill branch (TabletOfTruth.cs:106) via events/tablet_of_truth.py:68 calls RunState.kill (run.py:304-305), which sets hp = 0. C#'s CreatureCmd.Kill(creature, force: false) runs Hook.BeforeDeath and then Hook.ShouldDie / Hook.AfterPreventingDeath before the creature actually dies (CreatureCmd.cs:439-448, 489-507), over RunState.IterateHookListeners, which yields the potion belt outside combat (RunState.cs:545-596)",
       "verdict": "gap",
-      "issue": "MECHANISM EV-1, one verdict at every site (rule 3). Recorded at the damage verb as 'RunState.lose_hp'; this is the SAME missing run-level death-prevention pass reached through the second verb, so it takes EV-1's verdict rather than a new one, and EV-1's radius widens from 18 lose_hp sites to those plus run.kill. Note the `force` argument exists precisely to BYPASS the pass ('true in certain built-in cases like abandoning a run', CreatureCmd.cs:436) and the event passes force: false. EXECUTED (`py audit/tools/event_probes.py kill`): a 20/20 run holding a belt Fairy in a Bottle that deciphers three times (costs 3, 6, then 12 against a max of 11, taking the kill branch) ends at max_hp/hp = 1/0 and DEAD with the Fairy still in the belt; the game's ShouldDie pass has the Fairy answer and heal to max(MaxHp*0.3, 1) = 1, leaving the player alive at 1/1 with the Fairy consumed. LIVE -- Fairy in a Bottle is ported (potions.py:1222-1250) and in the reward pool (potion_pools.py:49), and the divergence ends the run."
+      "issue": "NARROWED 2026-07-28 -- STILL A GAP, and this is the verb that moved LEAST. RunState.kill (run.py:347-348) is STILL a bare `self.hp = 0`: no Hook.BeforeDeath, no Hook.ShouldDie / Hook.AfterPreventingDeath pass, and no call into `_resolve_death` -- the pass RunState.lose_hp gained (run.py:315-345). C#'s CreatureCmd.Kill(creature, force: false) reaches KillWithoutCheckingWinCondition (CreatureCmd.cs:448, :489), whose Hook.ShouldDie is at CreatureCmd.cs:505 and whose Hook.AfterPreventingDeath is at CreatureCmd.cs:567, and TabletOfTruth passes force:false. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py kill`): a 20/20 run holding a belt Fairy that deciphers three times ends 1/0 and DEAD with the Fairy still in the belt. Note that wiring run.kill to _resolve_death would not by itself close this: FairyInABottle.after_preventing_death (potions.py:1313-1316) still no-ops outside combat, which is the surviving half of the lose_hp leg."
     },
     {
       "what": "EV-2: every Decipher's max-HP loss (TabletOfTruth.cs:105, 109) via events/tablet_of_truth.py:67, 70 calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+      "maps_to": "Closed 2026-07-28: RunState.lose_max_hp (run.py:366-380) now has the shape of CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-828) -- `new_max = max_hp - amount` UNFLOORED, then `if new_max < hp: lose_hp(hp - new_max)` so the overflow is real HP loss that runs the relic ModifyHpLost pass and the death pass, and only then `max_hp = max(1, new_max)` followed by SetMaxHpInternal's clamp `hp = min(hp, max_hp)` (Creature.cs:493-501). Leg (2) now MATCHes: 80/80 losing 100 max HP kills the player on both sides (`py audit/tools/event_probes.py maxhp`). Leg (1)'s witness does not survive re-reading the source: the probe's hardcoded `C#=71` ignores SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)`, which pulls the GAME back to 70 as well, so Tungsten Rod's -1 is unobservable through HP at any max-HP-loss amount (the overflow can never leave current HP above the new max). Both sides read on 2026-07-28; the sim's 70/70 is correct.",
+      "verdict": "faithful"
     },
     {
       "what": "`.ThatWillKillPlayerIf(p => p.Creature.MaxHp <= DecipherMaxHpLoss)` on both DECIPHER options (TabletOfTruth.cs:47, 71)",

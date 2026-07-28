@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\silken_tress.py",
-    "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee"
+    "sha256": "ae34c594c5c9502ded4b0cf86cb7921cdcde004b1d80c81532ab3ee7dcbabcdf"
   },
   "extra_sources": [
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
@@ -71,22 +71,22 @@
     },
     {
       "path": "sts2_rl/events/neow.py",
-      "sha256": "990212f5939731b3c675fe42d9857b9734c9a113a26f2414ccd81f6ac24db9d1",
+      "sha256": "32be19d527d887b8085c5106696635b65271f2974d6c65d1e4ac842ea4862114",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
       "side": "sim"
     },
     {
@@ -96,17 +96,17 @@
     },
     {
       "path": "sts2_rl/relics/silver_crucible.py",
-      "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d",
+      "sha256": "9a8147346c7c1fa77a0ebb3b1a61402e0e67663fd7686345e6f31fb0686641eb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -129,7 +129,7 @@
     "TryModifyCardRewardOptionsLate": {
       "maps_to": "modify_card_reward_options (silken_tress.py:27-35), dispatched by rewards.create_reward_cards (rewards.py:299-301)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and N1 per binding rule 4. The Glam-enchant loop itself is faithful -- `glam.CanEnchant(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` maps to GlamEnchantment.can_enchant then GlamEnchantment().attach with the default amount 1 -- but the port drops BOTH remaining clauses of the C# guard: the owner check and, more consequentially, `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` (G1, LIVE). It also collapses C#'s two dispatch passes (G2) and mutates in place where C# clones (N1)."
+      "issue": "NARROWED 2026-07-27. The phase half (G2) is CLOSED: the plain and Late passes are separate base members dispatched as two complete walks (sts2_rl/relics/base.py:241-251, sts2_rl/rewards.py:304-315 = Hook.cs:1444-1466), and sts2_rl/relics/silken_tress.py:27 is a Late implementer. WHAT REMAINS is guard G1, the dropped `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` clause (SilkenTress.cs:53-56): the sim still has no card-creation-flag concept at all -- grepping `is_card_reward` over sts2_rl/ returns nothing -- so create_reward_cards' `modify_hooks` argument (which is NoModifyHooks, not IsCardReward) is the only gate, and non-reward generations still burn the one-shot. The owner clause (N1, clone-vs-mutate) is unchanged."
     },
     "AfterModifyingCardRewardOptions": {
       "maps_to": "the `self.is_used = True` tail of modify_card_reward_options (silken_tress.py:35) -- the sim fuses C#'s separate companion hook into the modifier",
@@ -145,8 +145,8 @@
     },
     {
       "what": "G2 (DORMANT): TryModifyCardRewardOptionsLate is C#'s SECOND dispatch pass and the sim runs one flat walk (PROMPT.md class 25)",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.TryModifyCardRewardOptions runs TWO complete listener passes -- every model's TryModifyCardRewardOptions first, then every model's TryModifyCardRewardOptionsLate (Hook.cs:1445-1467) -- so a Late implementer is guaranteed to see the plain pass's edits. The sim has one flat walk over run.relics (rewards.py:299-301), so the guarantee becomes relic-acquisition order. Same shape as audit/records/seam/turn_structure.json guard G12 and PROMPT.md class 25. DORMANT, checked by execution rather than assumed (py audit/tools/relic_probes_b14.py card-reward-flag case (e)): the sim has exactly four modify_card_reward_options implementers -- relics/_eggs.py:39, relics/glitter.py:16, relics/silken_tress.py:27 and relics/silver_crucible.py:28 -- and all four are TryModifyCardRewardOptionsLate in C#. The game's ONLY non-Late implementer is LastingCandy.cs:100, whose port (relics/lasting_candy.py) is a behaviourless stub, so nothing occupies the earlier pass today. Porting Lasting Candy's Power-card substitution makes it live, and directionally: C# guarantees the substituted Power card is in the list BEFORE the Late relics upgrade or enchant it. Rule 7: Hook.cs, LastingCandy.cs, rewards.py, relics/lasting_candy.py, relics/glitter.py, relics/_eggs.py and turn_structure.json are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     {
       "what": "N1: `RunState.CloneCard(card)` then `cardReward.ModifyCard(card2, this)` (SilkenTress.cs:67-69) vs the sim enchanting the offered card in place (silken_tress.py:34) -- PROMPT.md class 17",

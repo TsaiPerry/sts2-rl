@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\burning_sticks.py",
-    "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db"
+    "sha256": "36aa5127b899f310a0392368e2da08fe5430207374cbc6513caad28ce1bea68d"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
       "side": "sim"
     },
     {
@@ -56,31 +56,31 @@
       "verdict": "faithful"
     },
     "AfterRoomEntered": {
-      "maps_to": "no counterpart",
-      "verdict": "gap",
-      "issue": "The FIRST of C#'s two resets: BurningSticks.cs:33-42 clears WasUsedThisCombat on entering any CombatRoom. The sim implements neither this nor the AfterCombatEnd twin. Carries guard G1's LIVE label. Note the sim DOES have a run-level dispatch that could host it -- Relic.after_room_entered (relics/base.py) -- so this is a dropped hook, not a missing pipeline."
+      "maps_to": "reset_for_combat (sts2_rl/relics/burning_sticks.py:24-28), run by Relic.attach on every new CombatState",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat` (BurningSticks.cs:37-45 AfterRoomEntered(CombatRoom), :60-65 AfterCombatEnd -- C# is deliberately redundant and one sim reset covers both). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "AfterCardExhausted": {
       "maps_to": "on_card_exhausted (burning_sticks.py:24-33)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G3 per binding rule 4. The trigger logic matches (first Skill exhausted, clone to hand), but the relic fires in the first combat of a run only (G1) and the copy it makes is a fresh card by id rather than C#'s CardModel.CreateClone (G3)."
+      "issue": "Rollup of guards G1 and G3 per binding rule 4, UPDATED 2026-07-28. The trigger logic matches (first Skill exhausted, clone to hand). G1 is now CLOSED -- `Relic.reset_for_combat` puts `_used_this_combat` back on every new CombatState, so the relic no longer works in the first combat of a run only. G3 is NARROWED but still open: create_clone rebuilds the card from its class (`type(card)()`, cards/base.py:74) and so drops the local keywords and per-instance energy-cost state that CardModel.DeepCloneFields copies, even though it now carries the upgrade level, the enchantment and the affliction. See G3 for the executed witness."
     },
     "AfterCombatEnd": {
-      "maps_to": "no counterpart",
-      "verdict": "gap",
-      "issue": "The SECOND reset (BurningSticks.cs:56-61). Recorded separately from AfterRoomEntered because C# is deliberately redundant here and the sim has neither; with both missing the flag latches for the whole run. Exactly the relic/belt_buckle shape. Carries G1's LIVE label."
+      "maps_to": "reset_for_combat (sts2_rl/relics/burning_sticks.py:24-28)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat`, covering BOTH of C#'s redundant resets (BurningSticks.cs:37-45 and :56-61). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_used_this_combat` is never reset, so Burning Sticks works in the first combat of a run only",
-      "verdict": "gap",
-      "issue": "MECHANISM: burning_sticks.py:22 initialises _used_this_combat = False in __init__ (once per RUN, when RunState.add_relic constructs the relic) and burning_sticks.py:29 sets it True on the first Skill exhaust. Nothing sets it back. Relic instances live on RunState.relics and are re-attached to every new CombatState, so combat 2 onward enters on_card_exhausted with the flag already True and returns immediately. C# clears it in TWO places -- BurningSticks.cs:39 (AfterRoomEntered on any CombatRoom) and :58 (AfterCombatEnd). REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes.py batch3`): the same relic instance carried into a second CombatState reports `combat 1: _used_this_combat=True copy added to hand=1` then `combat 2: _used_this_combat=True copy added to hand=0`, where C# adds a copy in both. Both sides ported: the relic is Shop rarity in the transcribed grab bag (relic_pools.py 'RELIC.BURNING_STICKS', confirmed by `py audit/tools/relic_probes.py batch3-pool`), Skills exhaust constantly, and every run has more than one combat. This is the third confirmed instance of the shape after relic/belt_buckle and relic/centennial_puzzle; the pool-wide list is in .superpowers/sdd/content-relic-sweeps.md sweep A and the fix is the same one line (clear the flag in on_combat_start)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat` (BurningSticks.cs:37-45 AfterRoomEntered(CombatRoom), :60-65 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G3 (LIVE): the copy is rebuilt from the card id, where C# clones the actual card instance",
       "verdict": "gap",
-      "issue": "MECHANISM: BurningSticks.cs:49 calls `card.CreateClone()`, which is `CardScope.CloneCard(this)` -> `ClonePreservingMutability()` (CardModel.cs:2168-2179; CombatState.cs:188-193) -- a full model clone that carries the card's upgrade level, its enchantment, its affliction, its keyword edits and its local energy-cost modifiers. burning_sticks.py:30-32 builds `make_card(card.id)` and replays `card.upgrade_level` upgrades, so ONLY the upgrade level survives. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes.py batch3`): an enchanted Defend reports `original.enchantment=Swift  clone.enchantment=None`. Both sides ported, and by two independent routes: (a) Swift is attached to deck cards by relic/beautiful_bracelet (Ancient, ported, relics/beautiful_bracelet.py:22-29) and the sim's enchantment layer is live (enchantments.py); (b) afflictions are applied to cards IN HAND by ported enemy powers -- Ringing, Entangled, Smog, Tainted and Galvanized all call CardCmd.afflict from powers.py (:1332, :1477, :1742, :2420, :3022) -- so a single combat with no second relic can put per-instance state on a Skill that is then exhausted. Route (b) also makes this reachable in the very combat that applies the state. POOL-WIDE: this is a SHAPE, not a one-off -- every sim port of CreateClone/CreateDupe/CloneCard uses the same shallow rebuild (relics/burning_sticks.py:30, relics/music_box.py:46, relics/paels_growth.py:39, cards/trash_heap_cards.py:18-24 which is Dual Wield's copier, powers.py:827). `py audit/tools/relic_probes.py sweep-clone` enumerates it and the triage is in .superpowers/sdd/content-relic-sweeps.md sweep E."
+      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28: the copy carries more than it used to but it is still REBUILT from the class, which is exactly what this guard claims. CLOSED: sts2_rl/relics/burning_sticks.py calls `create_clone(card)` (sts2_rl/cards/base.py:57-83), so the copy now carries the source's upgrade level plus live copies of its ENCHANTMENT and AFFLICTION -- an enchanted Defend no longer clones as `clone.enchantment=None`. STILL OPEN: create_clone opens with `clone = type(card)()` (cards/base.py:74). BurningSticks.cs:44-52 calls card.CreateClone(), a memberwise MutableClone whose DeepCloneFields (CardModel.cs:1193-1216) also carries `_keywords` (Local sources), `_dynamicVars`, `_energyCost` and `_temporaryStarCosts`. EXECUTED 2026-07-28 (same probe as relic/music_box G1): a source with set_cost_this_combat(0), base_replay_count 1 and is_ethereal True clones to (energy_cost 1, replay 0, ethereal False). LIVE ROUTE FOR A SKILL, which is all this relic ever copies: potions.py, relics/crossbow.py, relics/jeweled_mask.py, relics/vexing_puzzlebox.py and cards/infernal_blade.py all call set_free_this_turn / set_cost_this_combat, so a cost-reduced Skill that is then exhausted returns to hand at FULL cost in the sim and at the modified cost in the game. One mechanism with relic/music_box G1 (binding rule 3); the fix is in create_clone, not in either relic. WAS: the port built `make_card(card.id)` and replayed only the upgrade level. Rule 7: sts2_rl/cards/base.py, sts2_rl/potions.py and the three relic files are cited without being hashed by this record."
     },
     {
       "what": "G2: sweep-upgrade flags burning_sticks.py:24 as an unguarded `Card.upgrade()` (PROMPT.md bug class 14) -- settled by execution as a false positive",

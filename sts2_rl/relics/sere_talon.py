@@ -19,9 +19,19 @@ class SereTalon(Relic):
 
     def after_obtained(self, run) -> None:
         from ..cards import make_card
-        from ..cards.pool import random_curses
+        from ..cards.pool import curse_pool_ids, random_curses
 
-        for curse in random_curses(run.rng, self.CURSES, distinct=True):
-            run.add_card(curse)
+        if run.rng_set is not None:
+            # SereTalon.cs:41: each curse is RunState.Rng.Niche.NextItem over
+            # the generatable curses ordered by Id, removed after each pick
+            # (the sibling NeowsBones.cs does the same thing).
+            curse_opts = sorted(curse_pool_ids())
+            for _ in range(self.CURSES):
+                cid = run.rng_set.niche.next_item(curse_opts)
+                curse_opts = [c for c in curse_opts if c != cid]
+                run.add_card(make_card(cid))
+        else:
+            for curse in random_curses(run.rng, self.CURSES, distinct=True):
+                run.add_card(curse)
         for _ in range(self.WISHES):
             run.add_card(make_card("wish"))

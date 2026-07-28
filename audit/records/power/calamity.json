@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
@@ -78,7 +78,7 @@
     "AfterCardPlayed": {
       "maps_to": "powers.py:3484-3494 CalamityPower.on_card_played (hooks.py:385-389, combat.py:514)",
       "verdict": "gap",
-      "issue": "TWO gaps. (1) THE COUNT: hook_dispatch's G4 (the per-CardPlay bracket): CardModel.cs:1904-1965 constructs a fresh CardPlay per replay iteration and fires Hook.BeforeCardPlayed (:1929) and Hook.AfterCardPlayed (:1959) INSIDE the loop, where combat.py:466 fires before_card_played once before the `for _ in range(play_count)` loop (:477-494) and combat.py:514 fires on_card_played once after it. Already LIVE with a Throwing Axe / Pen Nib witness and not re-verdicted here per binding rule 3; what is recorded is this unit's share of it. Throwing Axe is a ported relic from the ported Tanx shrine (relics/throwing_axe.py:30-36, events/tanx.py:13) and power/duplication and power/one_two_punch are ported replay sources. C# fires BeforeCardPlayed/AfterCardPlayed once per replay iteration, so a Throwing-Axe-doubled or Duplication-doubled Attack generates 2 x Amount cards in the game and Amount in the sim -- combat.py:514 fires on_card_played once per card, outside the `for _ in range(play_count)` loop. (2) THE RNG AND THE POOL HELPER: C# is CardFactory.GetForCombat(pool.GetUnlockedCards().Where(Type == Attack), base.Amount, Rng.CombatCardGeneration) (CalamityPower.cs:48-50) -- the WITH-replacement variant, one rng.NextItem per card (CardFactory.cs:140-150) -- and the sim calls random_pool_cards(combat._rng, ...) (powers.py:3493), the LEGACY shared-rng helper, where cards.pool.get_for_combat_parity (pool.py:164-179) is an already-written, already-documented parity port of exactly this call and takes the card_gen accessor. WRONG RNG STREAM. combat._rng is the SHARED unseeded random.Random (combat.py:88), NOT the per-purpose accessor object -- that is combat.combat_rng, built one line later at combat.py:94, whose seven named accessors (combat_rng.py:17-25: shuffle, monster_ai, card_gen, card_selection, targets, energy, potion_gen) are GameRandomAdapters over the matching RunRngSet streams in a parity run. This is the sixth and seventh power unit in this stream with the same defect -- power/aggression (main report section 4 item 8), then power/hello_world, power/entropy, power/stampede and power/confused in half A -- so it is systematic, not incidental, and it is proposed as its own PROMPT.md bug class in .superpowers/sdd/content-power-report-a.md section 7 item 11. LIVE under seed parity by construction: the draw comes off a different stream in a different order AND every later consumer of the shared rng is perturbed. Third-file citations, not hashed here. The with-replacement SEMANTICS are right on both sides (duplicates allowed -- the sim's docstring at powers.py:3477-3478 says so, and the C# doc comment at CardFactory.cs:131-133 contrasts it with GetDistinctForCombat, which is the call power/hello_world gets wrong in the other direction)."
+      "issue": "NARROWED 2026-07-27. GAP (1), THE COUNT, IS CLOSED: combat.py:574-600 fires `before_card_played` and `on_card_played` inside the playCount loop, per CardModel.cs:1904-1965. WHAT REMAINS is gap (2), THE RNG AND THE POOL HELPER: powers.py:3681 still calls `random_pool_cards(combat._rng, self.amount, CardType.ATTACK)` -- the legacy shared unseeded random.Random -- where CalamityPower.cs:48-50 is `CardFactory.GetForCombat(..., Rng.CombatCardGeneration)` and `cards.pool.get_for_combat_parity` is the already-written parity port taking the card_gen accessor. VERIFIED by grep: `combat.combat_rng` has exactly one user in powers.py (StampedePower, :1111) and this is not it."
     }
   },
   "guards": [

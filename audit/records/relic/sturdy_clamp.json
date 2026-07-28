@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\sturdy_clamp.py",
-    "sha256": "604f42a4a0f9d3cb998c3c146c822d6b560004429d53c6c61824d5a36f056eb4"
+    "sha256": "8c88a47ae07a148e2171b6df592cf9860638f4db01c5c2b35cd40d68d0c1dea1"
   },
   "extra_sources": [
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],
@@ -62,31 +62,31 @@
       "rationale": "SturdyClamp.cs:16 is RelicRarity.Rare. EXECUTED (b15-pool): Rare in the transcribed grab bag -- the same obtainability audit/records/seam/turn_structure.json cites when it names this relic as its block-clear PREVENTER witness."
     },
     "ShouldClearBlock": {
-      "maps_to": "should_clear_block (sturdy_clamp.py:23-25), dispatched by HookSystem.should_clear_block (hooks.py:613-619) from PlayerCombatState.start_turn (player.py:157-159)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G3 per binding rule 4. The predicate itself is a faithful transcription of SturdyClamp.cs:22-29 (veto for the owner, allow for everyone else), but the sim's dispatcher returns a bare bool with no PREVENTER identity and fires the block-clear EVENT only when the clear actually happened."
+      "maps_to": "should_clear_block (sts2_rl/relics/sturdy_clamp.py) -- vetoes the clear for the owner; the dispatcher now returns the preventer identity (sts2_rl/hooks.py:872-889)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the block-clear seam matches Creature.ClearBlock. PlayerCombatState.start_turn now (a) skips the whole clear on the player's TURN 1 -- `if not self._first_turn:` (sts2_rl/player.py:157-168) = Creature.AfterTurnStart's `if (side == Player && TurnNumber == 1) return` (Creature.cs:681-691); (b) passes a `preventer` list through `hooks.should_clear_block` and calls `hooks.after_preventing_block_clear(preventer, self)` on the else-arm (sts2_rl/hooks.py:872-898 = Creature.cs:718-728); and (c) fires `on_block_cleared` UNCONDITIONALLY afterwards (sts2_rl/player.py:169-175), which is CombatManager.cs:492-507's two separate loops. sts2_rl/relics/sturdy_clamp.py caps the retained block from `after_preventing_block_clear` -- a hook dispatched only to the vetoing listener, so SturdyClamp.cs:31-46's `if (this != preventer || creature != Owner.Creature) return` is structurally satisfied. The predicate itself was already a faithful transcription of SturdyClamp.cs:22-29."
     },
     "AfterPreventingBlockClear": {
-      "maps_to": "on_player_turn_start (sturdy_clamp.py:27-30) -- a hand-rolled substitute; the sim has no after_preventing_block_clear hook",
-      "verdict": "gap",
-      "issue": "Rollup of guards G2, G3 and N1 per binding rule 4. The 10-block cap is right, but it runs from a different hook, at a different point in the turn, with no preventer test, and on turn 1 where C# never reaches it."
+      "maps_to": "after_preventing_block_clear (sts2_rl/relics/sturdy_clamp.py), dispatched to the vetoing listener alone by PlayerCombatState.start_turn (sts2_rl/player.py:166-168 via sts2_rl/hooks.py:891-898)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the block-clear seam matches Creature.ClearBlock. PlayerCombatState.start_turn now (a) skips the whole clear on the player's TURN 1 -- `if not self._first_turn:` (sts2_rl/player.py:157-168) = Creature.AfterTurnStart's `if (side == Player && TurnNumber == 1) return` (Creature.cs:681-691); (b) passes a `preventer` list through `hooks.should_clear_block` and calls `hooks.after_preventing_block_clear(preventer, self)` on the else-arm (sts2_rl/hooks.py:872-898 = Creature.cs:718-728); and (c) fires `on_block_cleared` UNCONDITIONALLY afterwards (sts2_rl/player.py:169-175), which is CombatManager.cs:492-507's two separate loops. sts2_rl/relics/sturdy_clamp.py caps the retained block from `after_preventing_block_clear` -- a hook dispatched only to the vetoing listener, so SturdyClamp.cs:31-46's `if (this != preventer || creature != Owner.Creature) return` is structurally satisfied. The 10-block cap now runs from the right hook, at the right point in the turn, only for the preventer, and never on turn 1."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): Hook.AfterBlockCleared is an UNCONDITIONAL second loop in C#; the sim fires on_block_cleared only inside the `if should_clear_block` arm -- and Sturdy Clamp is the named ported PREVENTER",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/turn_structure.json gap G1 at the site that record already names, so per binding rule 3 this entry cites and matches rather than re-deriving. That record's issue text: C# runs the clear and the event as TWO loops (CombatManager.cs:492-499 then :500-507), so AfterBlockCleared fires for every participant including 'one whose clear a ShouldClearBlock listener prevented', and it names 'Sturdy Clamp is a ported Rare relic in ALL_RELICS (relics/sturdy_clamp.py:23-25; SturdyClamp.cs:22-29)' as one of the two ported preventers alongside BarricadePower, with the observed numbers '[sturdy_clamp, horn_cleat] also 0' block at turn 2 where C# gives 14, and '[sturdy_clamp, captains_wheel] with 0' at turn 3 where C# gives 18. Pinned there as test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented (verified by grep per binding rule 8). RE-EXECUTED for this record (py audit/tools/relic_probes_b15.py b15-clamp): with a sentinel relic alongside sturdy_clamp the sim records should_clear_block and NO on_block_cleared. The seam owns the machinery; this record owns the relic's role in it -- holding Sturdy Clamp silently switches off Horn Cleat and Captain's Wheel, which are both in the grab bag."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the block-clear seam matches Creature.ClearBlock. PlayerCombatState.start_turn now (a) skips the whole clear on the player's TURN 1 -- `if not self._first_turn:` (sts2_rl/player.py:157-168) = Creature.AfterTurnStart's `if (side == Player && TurnNumber == 1) return` (Creature.cs:681-691); (b) passes a `preventer` list through `hooks.should_clear_block` and calls `hooks.after_preventing_block_clear(preventer, self)` on the else-arm (sts2_rl/hooks.py:872-898 = Creature.cs:718-728); and (c) fires `on_block_cleared` UNCONDITIONALLY afterwards (sts2_rl/player.py:169-175), which is CombatManager.cs:492-507's two separate loops. sts2_rl/relics/sturdy_clamp.py caps the retained block from `after_preventing_block_clear` -- a hook dispatched only to the vetoing listener, so SturdyClamp.cs:31-46's `if (this != preventer || creature != Owner.Creature) return` is structurally satisfied. WAS: on_block_cleared fired only inside the `if should_clear_block` arm, so a Sturdy-Clamped (or Barricaded) player never re-armed Anchor or Fake Anchor."
     },
     {
       "what": "G2 (LIVE): the cap has no PREVENTER test and runs from the wrong hook at the wrong point in the turn",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/turn_structure.json gap G2, which that record raised specifically about this relic, so per binding rule 3 the verdict is cited and matched. Its mechanism: Creature.ClearBlock (Creature.cs:718-728) passes the vetoing listener OUT of Hook.ShouldClearBlock and fires `Hook.AfterPreventingBlockClear(preventer, creature)` on the else-arm; SturdyClamp.cs:31-46 caps the retained block at 10 there and opens with `if (this != preventer || creature != Owner.Creature) return;`. sts2_rl/hooks.py defines no such hook and hooks.should_clear_block returns a bare bool, so sturdy_clamp.py:27-30 caps from on_player_turn_start instead -- with no preventer test and AFTER the energy reset (player.py:163-169), where C# caps inside AfterTurnStart, before the AfterBlockCleared loop and before SetupPlayerTurn. The consequence the seam proves: Hook.ShouldClearBlock returns the FIRST vetoing listener (Hook.cs:2193-2204) and CombatState.IterateHookListeners walks a player's POWERS before that player's RELICS (CombatState.cs:412-435), so with Barricade AND Sturdy Clamp held the preventer is BarricadePower, Sturdy Clamp's cap never runs, and C# keeps the FULL block. RE-EXECUTED for this record (py audit/tools/relic_probes_b15.py b15-clamp, calling player.start_turn() in isolation so the enemy's attack cannot eat the block and confound the read): 30 block with [sturdy_clamp] -> 10 (correct), 30 block with Barricade + [sturdy_clamp] -> 10 where C# gives 30, 4 block -> 4 (correct), and no relic -> 0 (correct). Both sides ported and obtainable: Barricade is an Ironclad Rare Power card (cards/barricade_card.py, powers.py:140) and Sturdy Clamp is Rare in the grab bag. Pinned in the seam as test_sturdy_clamp_does_not_cap_when_it_is_not_the_preventer (verified by grep)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the block-clear seam matches Creature.ClearBlock. PlayerCombatState.start_turn now (a) skips the whole clear on the player's TURN 1 -- `if not self._first_turn:` (sts2_rl/player.py:157-168) = Creature.AfterTurnStart's `if (side == Player && TurnNumber == 1) return` (Creature.cs:681-691); (b) passes a `preventer` list through `hooks.should_clear_block` and calls `hooks.after_preventing_block_clear(preventer, self)` on the else-arm (sts2_rl/hooks.py:872-898 = Creature.cs:718-728); and (c) fires `on_block_cleared` UNCONDITIONALLY afterwards (sts2_rl/player.py:169-175), which is CombatManager.cs:492-507's two separate loops. sts2_rl/relics/sturdy_clamp.py caps the retained block from `after_preventing_block_clear` -- a hook dispatched only to the vetoing listener, so SturdyClamp.cs:31-46's `if (this != preventer || creature != Owner.Creature) return` is structurally satisfied. WAS: the cap ran from on_player_turn_start with no preventer test at all and after the energy reset, so a Barricaded player's block was capped at 10 by a relic that had prevented nothing."
     },
     {
       "what": "G3 (DORMANT): C# skips the whole ClearBlock call on the player's TURN 1, so neither ShouldClearBlock nor AfterPreventingBlockClear is consulted; the sim runs both",
-      "verdict": "gap",
-      "issue": "MECHANISM, and this is a third divergence the seam's G1/G2 do not cover: Creature.AfterTurnStart opens with `if (side == CombatSide.Player && player.PlayerCombatState?.TurnNumber == 1) return;` (Creature.cs:681-691), so ClearBlock() -- and therefore Hook.ShouldClearBlock and Hook.AfterPreventingBlockClear -- never run at all on the player's first turn. PlayerCombatState.start_turn has no such early return: it calls should_clear_block unconditionally (player.py:157) and sturdy_clamp.py:29-30 then caps the block on turn 1. EXECUTED (b15-clamp): the sim records `t1 should_clear_block`. Consequence: a player entering combat with more than 10 block keeps all of it in C# and is capped to 10 by the sim. REACHABILITY (DORMANT, executed census): an AST scan of every sim on_combat_start body finds exactly ONE that touches block -- powers.py:1054, PlatingPower, whose combat-start grant is `if self.owner.side == 'enemy'` -- so no ported effect can give the PLAYER block before turn 1's start_turn, and the player enters every combat at 0 block (Player.AfterCombatEnd does LoseBlockInternal(Block), Player.cs:833-838). What makes it live: porting a player-side Plating, an event or relic that grants combat-entry block, or any BeforeCombatStart block grant above 10. This is the same turn-1 exemption audit/records/seam/turn_structure.json G1 alludes to ('a player on turn 1 whose AfterTurnStart returned early') but does not verdict as its own divergence; recorded here because it is Sturdy Clamp's cap, not the event, that it changes. Rule 7: leans on player.py, powers.py and Creature.cs, none hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the block-clear seam matches Creature.ClearBlock. PlayerCombatState.start_turn now (a) skips the whole clear on the player's TURN 1 -- `if not self._first_turn:` (sts2_rl/player.py:157-168) = Creature.AfterTurnStart's `if (side == Player && TurnNumber == 1) return` (Creature.cs:681-691); (b) passes a `preventer` list through `hooks.should_clear_block` and calls `hooks.after_preventing_block_clear(preventer, self)` on the else-arm (sts2_rl/hooks.py:872-898 = Creature.cs:718-728); and (c) fires `on_block_cleared` UNCONDITIONALLY afterwards (sts2_rl/player.py:169-175), which is CombatManager.cs:492-507's two separate loops. sts2_rl/relics/sturdy_clamp.py caps the retained block from `after_preventing_block_clear` -- a hook dispatched only to the vetoing listener, so SturdyClamp.cs:31-46's `if (this != preventer || creature != Owner.Creature) return` is structurally satisfied. WAS: PlayerCombatState.start_turn called should_clear_block unconditionally, so the sim capped a turn-1 player's block where C# never reaches ClearBlock at all."
     },
     {
       "what": "N1: `player.block = 10` (sturdy_clamp.py:30) vs `CreatureCmd.LoseBlock(creature, block - 10)` (SturdyClamp.cs:42), and the `block != 0` / `block > 10` structure",
@@ -109,6 +109,6 @@
       "rationale": "SturdyClamp.cs holds only the `_maxRetainedBlock` const and declares no IsAllowed; sturdy_clamp.py adds nothing to __init__. PROMPT.md bug classes 13 and 16 cannot apply, and `py audit/tools/relic_probes.py sweep-reset` / `sweep-isallowed` list the relic in no bucket -- confirmed here by reading both files in full rather than trusting the sweeps (PROMPT.md v6 item 1)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -852,6 +852,7 @@
   "to_draw_top",
   "transform",
   "upgrade",
-  "from_draw"
+  "from_draw",
+  "choose_a_card"
  ]
 }

@@ -37,8 +37,11 @@ class AlchemizeCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         # Alchemize.cs: the potion is CREATED first (two draws on the
         # CombatPotionGeneration stream) and only then handed to
-        # PotionCmd.TryToProcure, which silently drops it if the belt is full —
-        # so a full belt still moves the stream.
+        # PotionCmd.TryToProcure, which silently drops it if the belt is full
+        # or the ShouldProcurePotion gate refuses it (Sozu) — so a refused
+        # potion still moves the stream.
+        from ..potions import try_to_procure
+
         player = ctx.player
         rng_set = ctx.combat.rng_set
         if rng_set is not None:
@@ -50,7 +53,7 @@ class AlchemizeCard(Card):
             from ..potions import random_potion
 
             potion = random_potion(ctx.combat._rng)
-        player.add_potion(potion)
+        try_to_procure(ctx.hooks, player, potion)
 
 
 @register_card

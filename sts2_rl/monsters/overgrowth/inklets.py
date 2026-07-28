@@ -51,17 +51,19 @@ class Inklet(Monster):
             self._execute_attack(ctx, _WHIRLWIND_DMG, _WHIRLWIND_HITS)
         else:
             self._execute_attack(ctx, _PIERCING_DMG, 1)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         self._move_key = self._next_move(self._move_key)
 
     def _next_move(self, current: str) -> str:
         if current == "JAB":
-            # 50/50 between PIERCING_GAZE and WHIRLWIND
+            # 50/50 between PIERCING_GAZE and WHIRLWIND. The ADD ORDER is
+            # observable even at equal weights — the walk subtracts in add
+            # order and returns the first branch at num <= 0 — and Inklet.cs:73
+            # adds PIERCING_GAZE_MOVE before WHIRLWIND_MOVE.
             return weighted_branch_pick(
                 self._hooks.combat.combat_rng.monster_ai,
-                ["WHIRLWIND", "PIERCING_GAZE"], [1, 1],
+                ["PIERCING_GAZE", "WHIRLWIND"], [1, 1],
             )
         # WHIRLWIND and PIERCING_GAZE both return to JAB
         return "JAB"

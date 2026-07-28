@@ -24,7 +24,8 @@ class WhisperingEarring(Relic):
     def modify_max_energy(self, player: PlayerCombatState, amount: int) -> int:
         return amount + self.ENERGY
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_auto_pre_play_phase_entered_late(self, player: PlayerCombatState) -> None:
+        # WhisperingEarring.cs:41 is AfterAutoPrePlayPhaseEntered LATE.
         if self.turn != 1:
             return
         combat = self.combat

@@ -32,7 +32,8 @@ class Kusarigama(Relic):
     def on_player_turn_end(self, player: PlayerCombatState) -> None:
         self._attacks_this_turn = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.ATTACK:
             return
         self._attacks_this_turn += 1

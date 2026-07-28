@@ -49,5 +49,7 @@ class Symbiote(Event):
         chosen = self.run.select_cards(
             "transform", self.run.transformable_cards(), _TRANSFORM_COUNT)
         for card in chosen:
-            self.run.transform_card(card)
+            # CardCmd.TransformToRandom(item, base.Rng) — the event's own Rng
+            # (Symbiote.cs:72).
+            self.run.transform_card(card, pick_rng=self.event_rng)
         self._finish("KILL_WITH_FIRE")

@@ -24,7 +24,7 @@ class SilkenTress(Relic):
     def after_obtained(self, run) -> None:
         run.lose_gold(run.gold)
 
-    def modify_card_reward_options(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards) -> None:
         from ..enchantments import GlamEnchantment
 
         if self.is_used:

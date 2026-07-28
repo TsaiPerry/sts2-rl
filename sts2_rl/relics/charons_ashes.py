@@ -18,7 +18,8 @@ class CharonsAshes(Relic):
 
     DAMAGE = 3
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         from ..cmds import DamageCmd
         for enemy in self.living_enemies():
             DamageCmd.deal(

@@ -69,10 +69,22 @@ class BattlewornDummy(Event):
         if dummy.escaped:  # RanOutOfTime — DEFEAT page
             return []
         if self._setting == 1:
-            return [self.run.random_potion()]
+            # `Owner.PlayerRng.Rewards.NextItem(items)` — one draw on
+            # run.rewards_rng over the unlocked potion pools, via
+            # Event.offer_pool_potion (BattlewornDummy.cs:84-90).
+            return [self.offer_pool_potion()]
         if self._setting == 2:
-            upgradable = self.run.upgradable_cards()
-            self.rng.shuffle(upgradable)
+            # `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)`
+            # (BattlewornDummy.cs:97): the sort is CardModel.CompareTo (the
+            # UPPERCASE ModelId entry, then upgrade level) and the shuffle runs
+            # on the event's own Rng.
+            from ..actmap import stable_shuffle
+            from ..player import _compare_to_key
+
+            er = self.event_rng
+            upgradable = stable_shuffle(
+                self.run.upgradable_cards(),
+                er if er is not None else self.rng, key=_compare_to_key)
             for card in upgradable[:2]:
                 card.upgrade()
             return []

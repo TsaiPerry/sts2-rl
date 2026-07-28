@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\paels_tears.py",
-    "sha256": "08a8c608c493de948a7e2071a51745b6c6d1210a91bb8e9b6ec9b0a9214a44cf"
+    "sha256": "66dd9362f8c589c37c518d9b6a13642b252dd932566c7f96f899c477bd1ef9d6"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     }
   ],
@@ -61,16 +61,16 @@
       "rationale": "PaelsTears.cs:48-55 grants `PlayerCmd.GainEnergy(base.DynamicVars.Energy.BaseValue, base.Owner)` when the flag is set; CanonicalVars is `new EnergyVar(2)` (line 34) and no AscensionHelper.GetValueIfAscension appears in the file, so ENERGY = 2 (paels_tears.py:21) is the pinned non-ascension value. Slot verified by execution, not off the relics/base.py docstring (PROMPT.md bug class 11): `py audit/tools/relic_probes.py turn-order` puts on_player_turn_started after modify_hand_draw and the draw, which is where audit/records/seam/turn_structure.json places AfterPlayerTurnStart / the player-side AfterSideTurnStart (step 23). Note the relic deliberately does NOT clear the flag after granting -- so a second consecutive turn ended with energy left grants again, and a turn ended empty clears it at BeforeSideTurnEnd -- and the sim matches that exactly."
     },
     "AfterCombatEnd": {
-      "maps_to": "no counterpart",
-      "verdict": "gap",
-      "issue": "PaelsTears.cs:57-61 is `HadLeftoverEnergy = false;` and nothing else -- the relic's only reset. The sim clears the flag nowhere. Carries guard G1's LIVE label."
+      "maps_to": "reset_for_combat (sts2_rl/relics/paels_tears.py:27-30)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_tears.py:27-30 clears `had_leftover_energy` (PaelsTears.cs:57-61, the relic's only reset). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `had_leftover_energy` is never reset, so combat 2 opens with +2 free energy on turn 1 (PROMPT.md bug class 13)",
-      "verdict": "gap",
-      "issue": "MECHANISM: paels_tears.py:25 initialises the flag False in __init__ (once per RUN, at RunState.add_relic) and paels_tears.py:28 sets it True whenever a turn ends with energy unspent; nothing ever clears it. C# clears it at PaelsTears.cs:59. Relic instances live on RunState.relics and are re-attached to every CombatState (relics/base.py:152-154), so the flag survives the combat boundary. FIRST READER traced per bug class 13: paels_tears.py:31's `if self.had_leftover_energy`, inside on_player_turn_started -- which fires on TURN 1 of the next combat, before any on_player_turn_end could refresh the flag, so nothing shadows it. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py tears-reset`): combat 1 turn 1 opens at energy 3 with the flag False; one end_turn with the energy unspent sets it True and turn 2 correctly opens at 5; the SAME instance in combat 2 opens turn 1 at energy 5, where a FRESH instance in the identical combat opens at 3. CONFIRMS the pre-diagnosis in .superpowers/sdd/content-relic-sweeps.md sweep A (`player.energy: 3 -> 5`) rather than re-deriving it; this record adds the reader trace and the flag's own before/after. Both sides ported: Ancient from the ported Pael shrine (events/pael.py OPTION_POOL_1 / Pael.cs:30-36), and ending a turn with energy left over is routine. NOTE the sweep table (content-relic-sweeps.md) assigns paels_tears to batch 13 while the batch-11 brief assigns it here; reported in .superpowers/sdd/relic-batch-11-lessons.md so the two are not audited twice. Same one-line fix as belt_buckle G2 / centennial_puzzle / paels_eye G1 / paels_legion G1: clear the flag in an on_combat_start."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_tears.py:27-30 clears `had_leftover_energy` (PaelsTears.cs:60-64 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G2 (LIVE, mechanism owned by relic/paels_eye G3): on a Pael's Eye extra turn the sim skips on_player_turn_end entirely, so the flag is never refreshed before the extra turn reads it",

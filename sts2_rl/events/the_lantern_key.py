@@ -22,6 +22,12 @@ class TheLanternKey(Event):
     id = "the_lantern_key"
     name = "The Lantern Key"
 
+    # TheLanternKey.cs:15-17 — a Combat-layout event, so the Mysterious Knight
+    # (and its HP roll) is generated when the room is entered, not when FIGHT is
+    # chosen.
+    is_combat_layout = True
+    canonical_encounter = MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER
+
     def initial_options(self) -> list[EventOption]:
         return [
             EventOption("RETURN_THE_KEY", self._return_the_key),
@@ -38,7 +44,9 @@ class TheLanternKey(Event):
     def _fight(self) -> None:
         from ..cards import make_card
         from ..rewards import RewardExtra
-        self.pending_encounter = MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER
+        # EnterCombatWithoutExitingEvent reuses the state built at room entry
+        # (ShouldCreateCombat = LayoutType != Combat, EventModel.cs:624-628).
+        self.pending_encounter = self.internal_combat_encounter()
         # TheLanternKey.cs Fight(): SpecialCardReward(new LanternKey) on the
         # fight's reward screen.
         self.pending_reward_extras = [RewardExtra.of_card(make_card("lantern_key"))]

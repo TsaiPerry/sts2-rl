@@ -53,7 +53,12 @@ class HavocCard(Card):
                         if ctx.player.is_dead:
                             break
             else:
-                idx = ctx.combat._rng.choice(living) if (card.target_type == TargetType.ANY_ENEMY and living) else None
+                # CardCmd.cs:77 picks an auto-play's target off
+                # Rng.CombatTargets, not the shared run rng — the same stream
+                # relics/kusarigama.py and parrying_shield.py already use.
+                idx = (ctx.combat.combat_rng.targets.choice(living)
+                       if (card.target_type == TargetType.ANY_ENEMY and living)
+                       else None)
                 card.on_play(ctx, idx)
             ctx.hooks.on_card_played(card)
 

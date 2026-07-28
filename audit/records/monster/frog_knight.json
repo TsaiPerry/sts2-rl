@@ -1,89 +1,89 @@
 {
- "unit": "monster/frog_knight",
- "game_source": {
-  "path": "src\\Core\\Models\\Monsters\\FrogKnight.cs",
-  "sha256": "e52b2bc3122ef118d455ff735e2aadae0c4c2f45d28ae31901e9fcf340c33303"
- },
- "sim_source": {
-  "path": "sts2_rl\\monsters\\glory\\frog_knight.py",
-  "sha256": "46c2955ee2dce16b57b7adfedbedde8e8b45623ce82aa4ceb81b209cd58dad19"
- },
- "hooks": {
-  "MinInitialHp": {
-   "maps_to": "min_hp = 191 (frog_knight.py:34)",
-   "verdict": "faithful",
-   "rationale": "FrogKnight.cs:33 GetValueIfAscension(ToughEnemies, 199, 191) -> non-ascension 191."
+  "unit": "monster/frog_knight",
+  "game_source": {
+    "path": "src\\Core\\Models\\Monsters\\FrogKnight.cs",
+    "sha256": "e52b2bc3122ef118d455ff735e2aadae0c4c2f45d28ae31901e9fcf340c33303"
   },
-  "MaxInitialHp": {
-   "maps_to": "max_hp = 191 (frog_knight.py:35)",
-   "verdict": "faithful",
-   "rationale": "FrogKnight.cs:35 `MaxInitialHp => MinInitialHp` = 191."
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\frog_knight.py",
+    "sha256": "46c2955ee2dce16b57b7adfedbedde8e8b45623ce82aa4ceb81b209cd58dad19"
   },
-  "TakeDamageSfxType": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+  "hooks": {
+    "MinInitialHp": {
+      "maps_to": "min_hp = 191 (frog_knight.py:34)",
+      "verdict": "faithful",
+      "rationale": "FrogKnight.cs:33 GetValueIfAscension(ToughEnemies, 199, 191) -> non-ascension 191."
+    },
+    "MaxInitialHp": {
+      "maps_to": "max_hp = 191 (frog_knight.py:35)",
+      "verdict": "faithful",
+      "rationale": "FrogKnight.cs:35 `MaxInitialHp => MinInitialHp` = 191."
+    },
+    "TakeDamageSfxType": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
+    },
+    "AfterAddedToRoom": {
+      "maps_to": "FrogKnight.__init__ -> PowerCmd.apply(hooks, self, PlatingPower, 15) and self._has_beetle_charged = False (frog_knight.py:37-42)",
+      "verdict": "deliberate-divergence",
+      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (frog_knight.py:37-42). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: FrogKnight.cs:60-65 does TWO things -- PlatingPower at PlatingAmount and `HasBeetleCharged = false`. The amount is GetValueIfAscension(ToughEnemies, 19, 15) -> 15 = _PLATING (frog_knight.py:23). The flag reset is a no-op against a freshly constructed sim instance (a sim monster is never reused across combats; CombatState builds new ones at combat.py:134), and the sim sets the same field to False anyway. One ORDERING subtlety the shared finding does not cover, checked rather than assumed: the sim assigns _has_beetle_charged AFTER super().__init__() has already built the machine and rolled, and the HALF_HEALTH branch's lambdas read that attribute -- but the initial state is the MoveState TONGUE_LASH, so the constructor roll takes step 30's sticky early return, evaluates no condition and never touches the attribute. Executed: `py audit/tools/monster_probes_b07.py branch-order` constructs a live FrogKnight and prints its branch without raising AttributeError."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
+    },
+    "GenerateMoveStateMachine": {
+      "maps_to": "FrogKnight.build_machine (frog_knight.py:44-76)",
+      "verdict": "faithful",
+      "rationale": "Node-by-node against FrogKnight.cs:67-87. Four MoveStates with matching ids (FOR_THE_QUEEN / STRIKE_DOWN_EVIL / TONGUE_LASH / BEETLE_CHARGE), one ConditionalBranchState 'HALF_HEALTH', and the same chain: FOR_THE_QUEEN -> branch, STRIKE_DOWN_EVIL -> FOR_THE_QUEEN, TONGUE_LASH -> STRIKE_DOWN_EVIL, BEETLE_CHARGE -> TONGUE_LASH (FrogKnight.cs:77-80 vs frog_knight.py:69-72). INITIAL state is TONGUE_LASH on both (FrogKnight.cs:86 passes moveState3 = TONGUE_LASH, frog_knight.py:75). No RandomBranchState anywhere, so no AddBranch integer exists to misread and the machine consumes no MonsterAi entropy at all. Intents match: BuffIntent -> BUFF; SingleAttackIntent(21) -> ATTACK 21; SingleAttackIntent(13) + DebuffIntent -> ATTACK 13 also=(DEBUFF,); SingleAttackIntent(35) -> ATTACK 35."
+    }
   },
-  "AfterAddedToRoom": {
-   "maps_to": "FrogKnight.__init__ -> PowerCmd.apply(hooks, self, PlatingPower, 15) and self._has_beetle_charged = False (frog_knight.py:37-42)",
-   "verdict": "deliberate-divergence",
-   "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (frog_knight.py:37-42). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: FrogKnight.cs:60-65 does TWO things -- PlatingPower at PlatingAmount and `HasBeetleCharged = false`. The amount is GetValueIfAscension(ToughEnemies, 19, 15) -> 15 = _PLATING (frog_knight.py:23). The flag reset is a no-op against a freshly constructed sim instance (a sim monster is never reused across combats; CombatState builds new ones at combat.py:134), and the sim sets the same field to False anyway. One ORDERING subtlety the shared finding does not cover, checked rather than assumed: the sim assigns _has_beetle_charged AFTER super().__init__() has already built the machine and rolled, and the HALF_HEALTH branch's lambdas read that attribute -- but the initial state is the MoveState TONGUE_LASH, so the constructor roll takes step 30's sticky early return, evaluates no condition and never touches the attribute. Executed: `py audit/tools/monster_probes_b07.py branch-order` constructs a live FrogKnight and prints its branch without raising AttributeError."
-  },
-  "GenerateAnimator": {
-   "maps_to": "(dropped)",
-   "verdict": "waiver",
-   "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
-  },
-  "GenerateMoveStateMachine": {
-   "maps_to": "FrogKnight.build_machine (frog_knight.py:44-76)",
-   "verdict": "faithful",
-   "rationale": "Node-by-node against FrogKnight.cs:67-87. Four MoveStates with matching ids (FOR_THE_QUEEN / STRIKE_DOWN_EVIL / TONGUE_LASH / BEETLE_CHARGE), one ConditionalBranchState 'HALF_HEALTH', and the same chain: FOR_THE_QUEEN -> branch, STRIKE_DOWN_EVIL -> FOR_THE_QUEEN, TONGUE_LASH -> STRIKE_DOWN_EVIL, BEETLE_CHARGE -> TONGUE_LASH (FrogKnight.cs:77-80 vs frog_knight.py:69-72). INITIAL state is TONGUE_LASH on both (FrogKnight.cs:86 passes moveState3 = TONGUE_LASH, frog_knight.py:75). No RandomBranchState anywhere, so no AddBranch integer exists to misread and the machine consumes no MonsterAi entropy at all. Intents match: BuffIntent -> BUFF; SingleAttackIntent(21) -> ATTACK 21; SingleAttackIntent(13) + DebuffIntent -> ATTACK 13 also=(DEBUFF,); SingleAttackIntent(35) -> ATTACK 35."
-  }
- },
- "guards": [
-  {
-   "what": "HALF_HEALTH conditional: predicate, add order and the integer division (FrogKnight.cs:75-76 vs frog_knight.py:61-68)",
-   "verdict": "faithful",
-   "rationale": "C# branch 1 is `HasBeetleCharged || Creature.CurrentHp >= Creature.MaxHp / 2` -> TONGUE_LASH; branch 2 is the exact complement -> BEETLE_CHARGE. The sim is `self._has_beetle_charged or self.hp >= self.max_hp // 2` and its complement, in the same order. Two details checked rather than assumed: (1) `MaxHp / 2` in C# is INTEGER division on two ints, so at MaxHp 191 the threshold is 95 on both sides -- the sim's `//` reproduces it, where a `/` would have given 95.5 and shifted the trigger by one HP; (2) add order is observable because ConditionalBranchState.GetNextState returns the FIRST true branch and THROWS if none match (ConditionalBranchState.cs:44-54; sim state_machine.py:228-232), and executed (`monster_probes_b07.py branch-order`) the sim prints `FrogKnight.HALF_HEALTH: first-true-wins order ['TONGUE_LASH', 'BEETLE_CHARGE']`, matching FrogKnight.cs:75-76. The complements are exhaustive on both sides so the throw arm is unreachable."
-  },
-  {
-   "what": "HasBeetleCharged is set INSIDE the move, before the damage (FrogKnight.cs:113-115 vs frog_knight.py:92-94)",
-   "verdict": "faithful",
-   "rationale": "Both set the flag as the first statement of BeetleCharge, before the attack resolves. That ordering is load-bearing: the branch is re-evaluated on the roll that follows the move, and if the flag were set after a lethal-to-self attack the monster could charge twice. Both sides also make the flag one-shot for the whole combat -- nothing clears it -- so the Beetle Charge happens at most once, which is what the sim's docstring claims and, unlike PROMPT.md class 24's examples, what the code actually does."
-  },
-  {
-   "what": "Move numerics and their targets",
-   "verdict": "faithful",
-   "rationale": "StrikeDownEvilDamage GetValueIfAscension(DeadlyEnemies, 23, 21) -> 21; TongueLashDamage (..., 14, 13) -> 13 plus FrailPower 2 on the targets; BeetleChargeDamage (..., 40, 35) -> 35; ForTheQueen applies StrengthPower 5m to ITSELF (FrogKnight.cs:93, `base.Creature` as both target and applier). All four match frog_knight.py:18-23 and the move bodies at :78-94, including the self-target on For The Queen and the attack-then-Frail order on Tongue Lash. `applier` is omitted on all three sim applications; see monster/stabbot's guard for the executed same-observable argument (same mechanism, same verdict)."
-  }
- ],
- "verdict": "deliberate-divergence",
- "audited": "2026-07-27",
- "extra_sources": [
-  {
-   "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
-   "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
-   "side": "game"
-  },
-  {
-   "path": "sts2_rl\\monsters\\state_machine.py",
-   "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\cmds.py",
-   "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\powers.py",
-   "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl\\rooms.py",
-   "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
-   "side": "sim"
-  }
- ]
+  "guards": [
+    {
+      "what": "HALF_HEALTH conditional: predicate, add order and the integer division (FrogKnight.cs:75-76 vs frog_knight.py:61-68)",
+      "verdict": "faithful",
+      "rationale": "C# branch 1 is `HasBeetleCharged || Creature.CurrentHp >= Creature.MaxHp / 2` -> TONGUE_LASH; branch 2 is the exact complement -> BEETLE_CHARGE. The sim is `self._has_beetle_charged or self.hp >= self.max_hp // 2` and its complement, in the same order. Two details checked rather than assumed: (1) `MaxHp / 2` in C# is INTEGER division on two ints, so at MaxHp 191 the threshold is 95 on both sides -- the sim's `//` reproduces it, where a `/` would have given 95.5 and shifted the trigger by one HP; (2) add order is observable because ConditionalBranchState.GetNextState returns the FIRST true branch and THROWS if none match (ConditionalBranchState.cs:44-54; sim state_machine.py:228-232), and executed (`monster_probes_b07.py branch-order`) the sim prints `FrogKnight.HALF_HEALTH: first-true-wins order ['TONGUE_LASH', 'BEETLE_CHARGE']`, matching FrogKnight.cs:75-76. The complements are exhaustive on both sides so the throw arm is unreachable."
+    },
+    {
+      "what": "HasBeetleCharged is set INSIDE the move, before the damage (FrogKnight.cs:113-115 vs frog_knight.py:92-94)",
+      "verdict": "faithful",
+      "rationale": "Both set the flag as the first statement of BeetleCharge, before the attack resolves. That ordering is load-bearing: the branch is re-evaluated on the roll that follows the move, and if the flag were set after a lethal-to-self attack the monster could charge twice. Both sides also make the flag one-shot for the whole combat -- nothing clears it -- so the Beetle Charge happens at most once, which is what the sim's docstring claims and, unlike PROMPT.md class 24's examples, what the code actually does."
+    },
+    {
+      "what": "Move numerics and their targets",
+      "verdict": "faithful",
+      "rationale": "StrikeDownEvilDamage GetValueIfAscension(DeadlyEnemies, 23, 21) -> 21; TongueLashDamage (..., 14, 13) -> 13 plus FrailPower 2 on the targets; BeetleChargeDamage (..., 40, 35) -> 35; ForTheQueen applies StrengthPower 5m to ITSELF (FrogKnight.cs:93, `base.Creature` as both target and applier). All four match frog_knight.py:18-23 and the move bodies at :78-94, including the self-target on For The Queen and the attack-then-Frail order on Tongue Lash. `applier` is omitted on all three sim applications; see monster/stabbot's guard for the executed same-observable argument (same mechanism, same verdict)."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
+      "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\state_machine.py",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\cmds.py",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\powers.py",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
 }

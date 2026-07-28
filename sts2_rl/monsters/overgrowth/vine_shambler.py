@@ -30,7 +30,9 @@ class VineShambler(Monster):
         if self._move_key == "SWIPE":
             return Intent(MoveType.ATTACK, damage=_SWIPE_DMG, hits=_SWIPE_HITS)
         if self._move_key == "GRASPING_VINES":
-            return Intent(MoveType.ATTACK, damage=_GRASPING_DMG)
+            # VineShambler.cs:47 — SingleAttackIntent(8) AND CardDebuffIntent.
+            return Intent(MoveType.ATTACK, damage=_GRASPING_DMG,
+                          also=(MoveType.CARD_DEBUFF,))
         return Intent(MoveType.ATTACK, damage=_CHOMP_DMG)
 
     def take_turn(self, ctx: CombatCtx) -> None:

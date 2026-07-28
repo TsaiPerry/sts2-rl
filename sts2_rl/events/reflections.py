@@ -31,18 +31,23 @@ class Reflections(Event):
         ]
 
     def _touch_a_mirror(self) -> None:
+        # Both picks are `base.Rng.NextItem` on the event's own Rng
+        # (Reflections.cs:41/54).
+        er = self.event_rng
         upgraded = [c for c in self.run.deck if c.upgrade_level > 0]
         for _ in range(_DOWNGRADES):
             if not upgraded:
                 break
-            card = self.rng.choice(upgraded)
+            card = (er.next_item(upgraded) if er is not None
+                    else self.rng.choice(upgraded))
             upgraded.remove(card)
             card.downgrade()
         upgradable = [c for c in self.run.deck if c.is_upgradable]
         for _ in range(_UPGRADES):
             if not upgradable:
                 break
-            card = self.rng.choice(upgradable)
+            card = (er.next_item(upgradable) if er is not None
+                    else self.rng.choice(upgradable))
             upgradable.remove(card)
             card.upgrade()
         self._finish("TOUCH_A_MIRROR")

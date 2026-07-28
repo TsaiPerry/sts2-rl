@@ -36,8 +36,14 @@ class RelicTrader(Event):
     def calculate_vars(self) -> None:
         # CalculateVars touches OwnedRelics then NewRelics — same order.
         owned = [r for r in self.run.relics if r.is_tradable]
+        # `GetValidRelics(Owner).ToList().StableShuffle(base.Rng).Take(3)`
+        # (RelicTrader.cs:51): the event's own Rng, and the stabilizing sort is
+        # AbstractModel.CompareTo -> ModelId.CompareTo, an ordinal compare over
+        # the UPPERCASE entry (ModelId.cs:49).
+        er = self.event_rng
         self._owned: list[Relic] = stable_shuffle(
-            owned, self.rng, key=lambda r: r.id)[:3]
+            owned, er if er is not None else self.rng,
+            key=lambda r: r.id.upper())[:3]
         self._new: list[Relic] = []
         for _ in range(3):
             relic = self.run.pull_relic_from_front()

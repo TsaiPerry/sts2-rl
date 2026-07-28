@@ -86,6 +86,13 @@ class WelcomeToWongos(Event):
 
     def _leave(self) -> None:
         upgraded = [c for c in self.run.deck if c.upgrade_level > 0]
-        if upgraded:
+        # `base.Rng.NextItem(upgraded)` — the event's own Rng
+        # (WelcomeToWongos.cs:158).
+        er = self.event_rng
+        if er is not None:
+            card = er.next_item(upgraded)
+            if card is not None:
+                card.downgrade()
+        elif upgraded:
             self.rng.choice(upgraded).downgrade()
         self._finish("LEAVE")

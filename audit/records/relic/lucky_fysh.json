@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lucky_fysh.py",
-    "sha256": "b27391623bb81e4d7937588c28debe1879cefdc7be1c5c26ed2ffebfc04c4a87"
+    "sha256": "ff7404d905889d7206c624b04976ad3e24309e674243bc5e1d8556b4582b43cd"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -56,31 +56,31 @@
       "rationale": "Matches LuckyFysh.cs:15. The flag is consumed by the sim's shop stock filter (run.py:626 filters on `cls.rarity == RelicRarity.SHOP and cls.is_allowed_in_shops`) and by pull_relic_from_front's shop_legal overload (run.py:559-574), so unlike most declarative flags this one is live."
     },
     "IsAllowed": {
-      "maps_to": "no counterpart -- the sim's Relic base declares no is_allowed member",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsAllowed(runState) has NO counterpart on the sim's Relic base at all -- `hasattr(Relic, 'is_allowed')` is False (executed, py audit/tools/relic_probes_b09.py b09-isallowed) -- and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456) is `TotalFloor < 41` in single-player, so the game stops offering this relic from the act-3 treasure chest onward. REACHABILITY (LIVE, executed): with run.total_floor forced to 60, run.pull_relic_from_front still yields lucky_fysh, meal_ticket AND molten_egg on seeds 0/1/2. Both sides ported -- the relic is in the transcribed grab bag (relic_pools.py) and the sim already tracks RunState.total_floor (event gates read it). Observable: pool composition, and a wrong pull shifts every subsequent pull. This is the 17-relic single-fix cluster of .superpowers/sdd/content-relic-sweeps.md sweep B (count CORRECTED to 17 by batch 8) and of relic/amethyst_aubergine's IsAllowed finding in batch 1 -- one verdict per mechanism, binding rule 3, so this entry confirms rather than re-derives. Rule 7: the rationale leans on relics/base.py, relic_pools.py and run.py, which this record does NOT hash."
+      "maps_to": "is_allowed (sts2_rl/relics/lucky_fysh.py:22) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lucky_fysh.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterCardChangedPiles": {
-      "maps_to": "no counterpart; the sim's nearest hook is Relic.after_card_added_to_deck (relics/base.py:208-210), dispatched from RunState.add_card (run.py:352-353), which lucky_fysh.py does not implement",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G3 per binding rule 4: 15 gold is never granted on the deck-add path (G1, the stub's premise is false) and would still be missed on the deck-transform path even after a naive fix (G3)."
+      "maps_to": "after_card_added_to_deck (sts2_rl/relics/lucky_fysh.py), dispatched by RunState.add_card (sts2_rl/run.py:411-412) and RunState.transform_card (sts2_rl/run.py:582-583)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/lucky_fysh.py's `after_card_added_to_deck` calls `run.gain_gold(15)` (LuckyFysh.cs:24-32's GoldVar(15) on a card entering PileType.Deck). WAS: a behaviourless stub whose docstring claimed there is no gold system. The transform route (G3) is covered too: RunState.transform_card fires both deck-add hooks (sts2_rl/run.py:567-570, :582-583)."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the port is a behaviourless stub whose premise -- \"no gold system in the sim\" (lucky_fysh.py:8-9) -- is FALSE (PROMPT.md bug class 12)",
-      "verdict": "gap",
-      "issue": "MECHANISM: LuckyFysh.cs:24-32 fires whenever a card's new pile is PileType.Deck and the card is the owner's, and calls `PlayerCmd.GainGold(base.DynamicVars.Gold.BaseValue, base.Owner)` == 15 (GoldVar(15), LuckyFysh.cs:17). The sim has every piece the port claims is missing: RunState.gold, RunState.gain_gold (run.py:325-333, complete with the Hook.ModifyGoldGained chain), and the after_card_added_to_deck dispatch at run.py:353. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-fysh): with the relic held, two run.add_card calls leave gold at 99 where C# leaves it at 129. Both sides ported: Lucky Fysh is Uncommon in the transcribed grab bag (relic_pools.py:93) and every run adds cards to the deck (card rewards, events, shops, Neow). Pre-diagnosed by .superpowers/sdd/content-relic-sweeps.md sweep C, whose headline finding -- every testable stub premise is false -- holds here; this entry settles it with the executed number and the reachability argument the sweep could not make."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/lucky_fysh.py's `after_card_added_to_deck` calls `run.gain_gold(15)` (LuckyFysh.cs:24-32's GoldVar(15) on a card entering PileType.Deck). WAS: a behaviourless stub whose docstring claimed there is no gold system."
     },
     {
       "what": "G2 (LIVE): the IsBeforeAct3TreasureChest pool gate has no sim counterpart",
-      "verdict": "gap",
-      "issue": "MECHANISM: RelicModel.IsAllowed(runState) has NO counterpart on the sim's Relic base at all -- `hasattr(Relic, 'is_allowed')` is False (executed, py audit/tools/relic_probes_b09.py b09-isallowed) -- and relic_pools.populate_relic_grab_bags shuffles the pool once at run init with no per-pull filter. RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456) is `TotalFloor < 41` in single-player, so the game stops offering this relic from the act-3 treasure chest onward. REACHABILITY (LIVE, executed): with run.total_floor forced to 60, run.pull_relic_from_front still yields lucky_fysh, meal_ticket AND molten_egg on seeds 0/1/2. Both sides ported -- the relic is in the transcribed grab bag (relic_pools.py) and the sim already tracks RunState.total_floor (event gates read it). Observable: pool composition, and a wrong pull shifts every subsequent pull. This is the 17-relic single-fix cluster of .superpowers/sdd/content-relic-sweeps.md sweep B (count CORRECTED to 17 by batch 8) and of relic/amethyst_aubergine's IsAllowed finding in batch 1 -- one verdict per mechanism, binding rule 3, so this entry confirms rather than re-derives. Rule 7: the rationale leans on relics/base.py, relic_pools.py and run.py, which this record does NOT hash."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lucky_fysh.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G3 (LIVE): even a correct after_card_added_to_deck port would miss the DECK-TRANSFORM route into the deck",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardCmd.Transform on a **Deck** pile fires BOTH deck-add hooks -- `Hook.ModifyCardBeingAddedToDeck` (CardCmd.cs:427-434) and `Hook.AfterCardChangedPiles` (CardCmd.cs:447) -- because a transform replacement really does enter the deck. RunState.transform_card (run.py:406-465) fires NEITHER: it deletes the original and appends the replacement straight onto self.deck, bypassing run.add_card (run.py:341-354), which is the only place the sim dispatches either hook. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b09.py b09-molten / b09-fysh): with molten_egg held, `run.add_card(bash)` yields upgrade_level 1 (correct) but `run.transform_card(-> bash)` yields upgrade_level 0 where C# yields 1; with lucky_fysh held, transform_card grants 0 gold where C# grants 15. Both sides ported: deck transforms are reached by relic/astrolabe, relic/pandoras_box and the ported Wood Carvings / Nonupeipe content, and the conformance runner compares the deck as (id, upgrade_level) pairs (conformance/runner.py:618), so the missing upgrade is a parity failure and not merely a play-strength one. ONE mechanism at two sites in this batch (relic/lucky_fysh and relic/molten_egg) -- same verdict at both per binding rule 3; the fix is one call to the add_card hook pair from transform_card, not two relic fixes. Rule 7: leans on run.py and conformance/runner.py, neither hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the deck-TRANSFORM route fires both deck-add hooks. RunState.transform_card now runs `modify_card_being_added_to_deck` over every relic before the insert and `after_card_added_to_deck` after it (sts2_rl/run.py:567-570 and :582-583), with the C# citation in the comment -- CardCmd.Transform on a Deck pile fires Hook.ModifyCardBeingAddedToDeck (CardCmd.cs:427-434) and Hook.AfterCardChangedPiles (CardCmd.cs:447). WAS: transform_card deleted the original and appended the replacement straight onto self.deck, bypassing run.add_card, so Lucky Fysh granted no gold and the egg relics did not upgrade a transformed-in card."
     },
     {
       "what": "N1: `card.Pile != null && pile.Type == PileType.Deck && card.Owner == base.Owner` (LuckyFysh.cs:26-27) vs the sim's hook, which is already narrowed to 'a card was appended to the run deck'",
@@ -98,6 +98,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

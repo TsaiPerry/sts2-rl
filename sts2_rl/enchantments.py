@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .hooks import CAT_CARD
+from .valueprops import is_powered_attack
+
 if TYPE_CHECKING:
     from .cards import Card
     from .combat import CombatState
@@ -38,6 +41,39 @@ class Enchantment:
 
     id: str
     name: str
+    # The game reaches an enchantment through the card that owns it, so it
+    # shares the card slot; registration order keeps it right after its card.
+    hook_category = CAT_CARD
+
+    # Hook.ModifyDamage / Hook.ModifyBlock apply the SOURCE CARD's enchantment
+    # to the running amount before either listener loop (Hook.cs:1487-1499,
+    # 1315-1320), so these are not hooks and are never dispatched: DamageCmd /
+    # BlockCmd call them directly on `card.enchantment`. Defaults are no-ops.
+
+    def on_play(self, card: Card, target: Creature | None = None) -> None:
+        """EnchantmentModel.OnPlay — CardModel.cs:1937-1945 calls it DIRECTLY
+        inside the per-Replay loop, after the card's own OnPlay (:1931) and
+        before Hook.AfterCardPlayed (:1959). It is not a hook.
+
+        The sim wired its two implementers to `before_card_played`, which is
+        wrong twice over: the position (a Corrupted Strike with Rupture 1 dealt
+        10 in the sim and 9 in the game, because the self-damage fired first
+        and Rupture's +1 Strength landed on the Strike) and the count (under
+        Throwing Axe the card is played twice and the game takes 4 self-damage
+        where the sim took 2).
+        """
+
+    def enchant_damage_additive(self, amount: int, props) -> int:
+        return 0
+
+    def enchant_damage_multiplicative(self, amount: int, props) -> float:
+        return 1
+
+    def enchant_block_additive(self, amount: int, props) -> int:
+        return 0
+
+    def enchant_block_multiplicative(self, amount: int, props) -> float:
+        return 1
 
     def __init__(self, amount: int = 1) -> None:
         self.amount = amount
@@ -60,16 +96,39 @@ class Enchantment:
             return False
         return card.enchantment is None
 
+    def modify_card(self) -> None:
+        """Mirrors EnchantmentModel.ModifyCard (EnchantmentModel.cs:355-364)
+        -> OnEnchant: run this enchantment's modification logic on its card.
+        The game calls it when the card is first enchanted, when a downgrade
+        re-derives the card from its canonical model
+        (CardModel.DowngradeInternal, CardModel.cs:2145) and after a load; the
+        sim calls it from the same places plus the per-combat reset. No-op by
+        default -- only enchantments that mutate a static card property
+        override it."""
+
+    def clone_preserving_mutability(self) -> "Enchantment":
+        """Mirrors AbstractModel.ClonePreservingMutability for the enchantment
+        copy CardModel.DeepCloneFields makes (CardModel.cs:1204-1209): a fresh,
+        unattached instance carrying the source's Amount and Status
+        (MemberwiseClone keeps _status; DeepCloneFields only nulls _card)."""
+        clone = make_enchantment(self.id)
+        clone.amount = self.amount
+        clone.disabled = self.disabled
+        return clone
+
     def attach(self, card: Card) -> None:
         """Attach this enchantment to a card for the rest of the run."""
         if not self.can_enchant(card):
             raise ValueError(f"{self.name} cannot enchant {card!r}")
         self.card = card
         card.enchantment = self
+        self.modify_card()
 
     def reset(self) -> None:
         """Reset per-combat status (called by CombatState at setup)."""
         self.disabled = False
+        if self.card is not None:
+            self.modify_card()
 
     def __repr__(self) -> str:
         return self.name
@@ -87,7 +146,7 @@ class SownEnchantment(Enchantment):
     id = "sown"
     name = "Sown"
 
-    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
+    def on_play(self, card: Card, target: Creature | None = None) -> None:
         if card is not self.card or self.disabled:
             return
         from .cmds import EnergyCmd
@@ -132,14 +191,8 @@ class SteadyEnchantment(Enchantment):
     id = "steady"
     name = "Steady"
 
-    def attach(self, card: Card) -> None:
-        super().attach(card)
-        card.retain = True
-
-    def reset(self) -> None:
-        super().reset()
-        if self.card is not None:
-            self.card.retain = True
+    def modify_card(self) -> None:
+        self.card.retain = True
 
 
 @register_enchantment
@@ -206,14 +259,8 @@ class SoulsEnchantment(Enchantment):
     def can_enchant(cls, card: Card) -> bool:
         return super().can_enchant(card) and card.exhausts
 
-    def attach(self, card: Card) -> None:
-        super().attach(card)
-        card.exhausts = False
-
-    def reset(self) -> None:
-        super().reset()
-        if self.card is not None:
-            self.card.exhausts = False
+    def modify_card(self) -> None:
+        self.card.exhausts = False
 
 
 @register_enchantment
@@ -234,7 +281,8 @@ class GlamEnchantment(Enchantment):
             return count + self.amount
         return count
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card is self.card:
             self.disabled = True
 
@@ -246,11 +294,17 @@ class ImbuedEnchantment(Enchantment):
     Source: Imbued.cs — CanEnchantCardType == Skill; AfterAutoPrePlayPhase-
     Entered (turn ≤ 1) auto-plays the card. The sim fires it from the post-draw
     turn-start slot (on_player_turn_started) on turn 1. Granted by Electric
-    Shrymp (Orobas). ShouldStartAtBottomOfDrawPile is cosmetic and not modeled.
+    Shrymp (Orobas).
     """
 
     id = "imbued"
     name = "Imbued"
+    # Imbued.cs:11 is the ONLY ShouldStartAtBottomOfDrawPile implementer in the
+    # whole decompiled game, and it is not cosmetic: CombatManager.cs:657-663
+    # sinks the card before the turn-1 Innate pass, so it never occupies an
+    # opening-hand slot. Observed over 30 seeds with a 9-Strike + 1-Imbued-
+    # Defend deck, the sim's turn-1 hand was 4 cards in 17 of them.
+    should_start_at_bottom_of_draw_pile = True
 
     @classmethod
     def can_enchant(cls, card: Card) -> bool:
@@ -258,13 +312,24 @@ class ImbuedEnchantment(Enchantment):
 
         return super().can_enchant(card) and card.card_type == CardType.SKILL
 
-    def on_player_turn_started(self, player) -> None:
-        if (
-            self.card is not None
-            and self.combat.turn == 1
-            and self.card in player.hand
-        ):
-            self.combat.auto_play(self.card)
+    def after_auto_pre_play_phase_entered(self, player) -> None:
+        """Imbued.cs:19-25 — AfterAutoPrePlayPhaseEntered, guarded only by
+        `player == Card.Owner && TurnNumber <= 1`.
+
+        The sim carried an extra `self.card in player.hand` clause C# does not
+        have. That was survivable while the card could turn up in the opening
+        hand; once the turn-1 ShouldStartAtBottomOfDrawPile pass was ported
+        (turn_structure/G14) the card is guaranteed NOT to be in hand, and the
+        extra clause turned Imbued into a no-op. The bottom-of-pile pass exists
+        precisely SO the card is auto-played from the draw pile rather than
+        occupying an opening-hand slot — `CardCmd.AutoPlay` takes it from
+        whichever pile holds it.
+        """
+        if self.card is None or self.combat is None:
+            return
+        if self.combat.turn > 1:
+            return
+        self.combat.auto_play_card(self.card)
 
 
 @register_enchantment
@@ -286,21 +351,14 @@ class GoopyEnchantment(Enchantment):
     def can_enchant(cls, card: Card) -> bool:
         return super().can_enchant(card) and "defend" in card.tags
 
-    def attach(self, card: Card) -> None:
-        super().attach(card)
-        card.exhausts = True
+    def modify_card(self) -> None:
+        self.card.exhausts = True
 
-    def reset(self) -> None:
-        super().reset()
-        if self.card is not None:
-            self.card.exhausts = True
+    def enchant_block_additive(self, amount: int, props) -> int:
+        return self.amount - 1
 
-    def modify_block_additive(self, target, amount: int, card: Card | None) -> int:
-        if card is self.card:
-            return self.amount - 1
-        return 0
-
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card is self.card:
             self.amount += 1
 
@@ -319,22 +377,12 @@ class TezcatarasEmberEnchantment(Enchantment):
     name = "Tezcatara's Ember"
     damage = 3
 
-    def attach(self, card: Card) -> None:
-        super().attach(card)
-        card._energy_cost = 0
-        card.eternal = True
+    def modify_card(self) -> None:
+        self.card._energy_cost = 0
+        self.card.eternal = True
 
-    def reset(self) -> None:
-        super().reset()
-        if self.card is not None:
-            self.card._energy_cost = 0
-            self.card.eternal = True
-
-    def modify_damage_additive(self, target, amount: int, dealer, card: Card | None) -> int:
-        # DamageCmd only calls this hook for powered attacks.
-        if card is self.card:
-            return self.damage
-        return 0
+    def enchant_damage_additive(self, amount: int, props) -> int:
+        return self.damage if is_powered_attack(props) else 0
 
 
 @register_enchantment
@@ -349,7 +397,11 @@ class SwiftEnchantment(Enchantment):
     id = "swift"
     name = "Swift"
 
-    def on_card_played(self, card: Card) -> None:
+    def on_play(self, card: Card, target: Creature | None = None) -> None:
+        # Swift.cs:15 is EnchantmentModel.OnPlay — the third of the three
+        # ports of that slot. It drew from on_card_played, i.e. during the
+        # AfterCardPlayed dispatch in the CAT_CARD slot, after every power,
+        # relic and potion listener; C# draws before all of them.
         if card is self.card and not self.disabled:
             from .cmds import DrawCmd
 
@@ -374,13 +426,8 @@ class InstinctEnchantment(Enchantment):
 
         return super().can_enchant(card) and card.card_type == CardType.ATTACK
 
-    def modify_damage_multiplicative(
-        self, target, amount: int, dealer, card: Card | None
-    ) -> float:
-        # DamageCmd only calls this hook for powered attacks.
-        if card is self.card:
-            return 2
-        return 1
+    def enchant_damage_multiplicative(self, amount: int, props) -> float:
+        return 2 if is_powered_attack(props) else 1
 
 
 @register_enchantment
@@ -401,11 +448,8 @@ class SharpEnchantment(Enchantment):
 
         return super().can_enchant(card) and card.card_type == CardType.ATTACK
 
-    def modify_damage_additive(self, target, amount: int, dealer, card: Card | None) -> int:
-        # DamageCmd only calls this hook for powered attacks.
-        if card is self.card:
-            return self.amount
-        return 0
+    def enchant_damage_additive(self, amount: int, props) -> int:
+        return self.amount if is_powered_attack(props) else 0
 
 
 @register_enchantment
@@ -425,10 +469,8 @@ class NimbleEnchantment(Enchantment):
     def can_enchant(cls, card: Card) -> bool:
         return super().can_enchant(card) and card.gains_block
 
-    def modify_block_additive(self, target, amount: int, card: Card | None) -> int:
-        if card is self.card:
-            return self.amount
-        return 0
+    def enchant_block_additive(self, amount: int, props) -> int:
+        return self.amount
 
 
 @register_enchantment
@@ -451,13 +493,13 @@ class VigorousEnchantment(Enchantment):
 
         return super().can_enchant(card) and card.card_type == CardType.ATTACK
 
-    def modify_damage_additive(self, target, amount: int, dealer, card: Card | None) -> int:
-        # DamageCmd only calls this hook for powered attacks.
-        if card is self.card and not self.disabled:
-            return self.amount
-        return 0
+    def enchant_damage_additive(self, amount: int, props) -> int:
+        if self.disabled or not is_powered_attack(props):
+            return 0
+        return self.amount
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card is self.card:
             self.disabled = True
 
@@ -483,15 +525,10 @@ class CorruptedEnchantment(Enchantment):
 
         return super().can_enchant(card) and card.card_type == CardType.ATTACK
 
-    def modify_damage_multiplicative(
-        self, target, amount: int, dealer, card: Card | None
-    ) -> float:
-        # DamageCmd only calls this hook for powered attacks.
-        if card is self.card:
-            return 1.5
-        return 1
+    def enchant_damage_multiplicative(self, amount: int, props) -> float:
+        return 1.5 if is_powered_attack(props) else 1
 
-    def before_card_played(self, card: Card, target: Creature | None = None) -> None:
+    def on_play(self, card: Card, target: Creature | None = None) -> None:
         if card is not self.card:
             return
         from .cmds import DamageCmd

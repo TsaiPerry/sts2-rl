@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/joss_paper.py",
-      "sha256": "0422ba5e6305aad13158e75b13c970b306b389340fdc7a49e0815158b956dfb2",
+      "sha256": "837f7fdd3deb3ff71be78435ced91cbb82b698398a9b2f0d0476744578f7ef92",
       "side": "sim"
     }
   ],
@@ -50,8 +50,8 @@
   "guards": [
     {
       "what": "G1 (LIVE, cited not re-derived): a false should_flush_hand skips the flush TAIL, so Joss Paper's deferred Ethereal credit is stranded",
-      "verdict": "gap",
-      "issue": "MECHANISM and OBSERVABLE are audit/records/seam/turn_structure.json guard G4's, which reads: 'a turn that exhausts 5 Ethereal cards leaves the next hand at 6 cards with [joss_paper] and at 5 with [joss_paper, runic_pyramid] -- the deferred credit is stranded (_ethereal_pending stays at 5) and the Joss Paper draw never happens, where the real game draws it either way.' Both sides ported: Runic Pyramid comes from the Darv shrine (events/darv.py:33), Joss Paper is an Uncommon grab-bag relic, and relics/joss_paper.py:42 is the sim's only on_hand_emptied listener. Recorded here because the seam owns the machinery and the content record owns the relic's observable -- the same ownership split relic/unsettling_lamp G1 uses for hook_dispatch G4. EXECUTED for this record, confirming the port's own half (py audit/tools/relic_probes_b14.py pyramid): with no relics the hand goes 5 -> 5 across a turn and should_flush is True; with [runic_pyramid] it goes 5 -> 10 and should_flush is False. Rule 7: turn_structure.json, relics/joss_paper.py and combat.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the flush TAIL runs even when should_flush_hand is false. CombatState.end_turn now calls `self.player.discard_hand(flush=self.hooks.should_flush_hand())` (sts2_rl/combat.py:806) instead of skipping the call, and PlayerCombatState.discard_hand (sts2_rl/player.py:223-240) treats `flush=False` the way FlushPlayerHand does (CombatManager.cs:1327-1346) -- cardsToFlush is empty and the batched Add is skipped, but the tail still fires `on_hand_emptied`. Joss Paper's deferred Ethereal credit is therefore no longer stranded by Runic Pyramid. WAS: the sim guarded the whole flush, so a retain effect suppressing it dropped the tail with it."
     },
     {
       "what": "N1: C#'s `if (player != base.Owner) return true;` (RunicPyramid.cs:12-15) -- the sim's hook takes no player argument at all",

@@ -43,23 +43,26 @@ class PotionCourier(Event):
         ]
 
     def _grab_potions(self) -> None:
-        # Potion offers auto-keep while a belt slot is free (sim convention).
+        # One RewardsCmd.OfferCustom screen carrying three independent
+        # PotionRewards (PotionCourier.cs:36-44) — each is take-or-skip.
         for _ in range(_FOUL_POTIONS):
-            self.run.add_potion(make_potion("foul_potion"))
+            self.offer_potion(make_potion("foul_potion"))
         self._finish("GRAB_POTIONS")
 
     def _ransack(self) -> None:
+        # The pick is rolled first, then offered take-or-skip
+        # (RewardsCmd.OfferCustom — PotionCourier.cs:48-60).
         if self.run.rng_set is not None:
             from ..potion_pools import POTION_POOL, _make
             options = [pid for pid, r in POTION_POOL if r == "uncommon"]
             pid = self.run.rewards_rng.next_item(options)
             if pid is not None:
-                self.run.add_potion(_make(pid, "uncommon"))
+                self.offer_potion(_make(pid, "uncommon"))
         else:
             uncommon = sorted(
                 (cls for cls in ALL_POTIONS.values() if cls.rarity == "uncommon"),
                 key=lambda cls: cls.id,
             )
             if uncommon:
-                self.run.add_potion(self.rng.choice(uncommon)())
+                self.offer_potion(self.rng.choice(uncommon)())
         self._finish("RANSACK")

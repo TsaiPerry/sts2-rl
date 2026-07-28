@@ -27,6 +27,62 @@ if TYPE_CHECKING:
     from .powers import Power, PowerType
 
 
+def _resolve_death(hooks: HookSystem, target: Creature) -> None:
+    """CreatureCmd.KillWithoutCheckingWinCondition's two arms
+    (CreatureCmd.cs:504-570), shared by every path that can bring a creature to
+    0 HP.
+
+    Both arms dispatch `Hook.AfterDeath` — the real one with
+    `wasRemovalPrevented: false` (CreatureCmd.cs:519), the prevented one with
+    `true` (CreatureCmd.cs:566) — and neither floors the creature's HP. The
+    prevented creature is left DEAD AT 0 and the preventer is expected to heal
+    it; C# then re-kills it if nobody did.
+    """
+    preventer: list = []
+    if hooks.should_die(target, preventer):
+        # CreatureCmd.cs:508 — the death stands; a listener may still keep the
+        # corpse in the combat rather than removing it (Decimillipede's
+        # ReattachPower).
+        target.retained_after_death = (
+            not hooks.should_remove_from_combat_after_death(target)
+        )
+        hooks.on_death(target, False)
+        _strip_powers_after_death(hooks, target)
+    else:
+        # CreatureCmd.cs:565-570. The creature stays at 0 HP: `AfterDeath`
+        # fires with wasRemovalPrevented=True, then the preventer is notified
+        # so a healing one (Fairy in a Bottle) can top it up. The sim used to
+        # floor it at 1 HP here, which is the HP number conformance asserts on
+        # and the reason Feed never scored a kill on the Test Subject.
+        #
+        # The else-arm contains no removal logic at all, so a creature whose
+        # death is prevented always stays in the fight: dead at 0 HP and still
+        # taking its turns, which is how Illusion's and Adaptable's revive
+        # moves get to run. Same shape as a withered Decimillipede segment.
+        target.retained_after_death = True
+        hooks.on_death(target, True)
+        hooks.after_preventing_death(preventer, target)
+
+
+def _strip_powers_after_death(hooks: HookSystem, target: Creature) -> None:
+    """Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671) + the
+    `AfterRemoved` tail CreatureCmd.cs:533-537 awaits for each stripped power.
+
+    Strip is the DEFAULT: `PowerModel.ShouldPowerBeRemovedAfterOwnerDeath`
+    returns true (PowerModel.cs:637-640) and only six non-mock powers override
+    it, while `Hook.ShouldPowerBeRemovedOnDeath` has exactly one implementer in
+    the whole game (IllusionPower.cs:59-66). Escape strips silently and takes a
+    different path — this is the death arm only.
+    """
+    doomed = [p for p in list(target.powers.values())
+              if p.should_power_be_removed_after_owner_death()
+              and hooks.should_power_be_removed_on_death(p)]
+    for power in doomed:
+        power._expire()
+    for power in doomed:
+        power.on_removed(target)
+
+
 class DamageCmd:
     @staticmethod
     def deal(
@@ -51,25 +107,49 @@ class DamageCmd:
         if not hooks.should_allow_hitting(target):
             return 0
 
-        # 1. Additive then multiplicative modifiers (Strength, Vulnerable, Weak).
-        #    Only powered attacks are modified (mirrors IsPoweredAttack checks).
-        if is_powered_attack(props):
-            amount = amount + hooks.modify_damage_additive(target, amount, dealer, card)
-            amount = int(amount * hooks.modify_damage_multiplicative(target, amount, dealer, card))
+        # 1. The source card's own enchantment first, then the listener passes.
+        #    Hook.ModifyDamage (Hook.cs:1487-1499) folds EnchantDamageAdditive
+        #    and then EnchantDamageMultiplicative into the running amount
+        #    BEFORE either listener loop, so a Corrupted Strike (base 6) with
+        #    Strength 3 is 6*1.5 = 9 then +3 = 12, not 6+3 = 9 then *1.5 = 13.
+        ench = card.enchantment if card is not None else None
+        if ench is not None:
+            amount += ench.enchant_damage_additive(amount, props)
+            amount *= ench.enchant_damage_multiplicative(amount, props)
 
-        # 2. Damage cap (e.g. Intangible: cap at 1) — applies to all damage types
+        # 2. Additive then multiplicative modifiers (Strength, Vulnerable, Weak).
+        #    EVERY listener is called for EVERY damage: ModifyDamageInternal
+        #    (Hook.cs:2515-2538) has no props gate and leaves the
+        #    IsPoweredAttack test to each implementation. Hoisting it here
+        #    silently dropped the listeners that deliberately do NOT gate on
+        #    Unpowered — Vambrace.cs:59-63, PaelsLegion.cs:132-134 and
+        #    UnmovablePower.cs:27-30 all self-gate on Move ALONE.
+        dmg_modifiers: list = []
+        amount = amount + hooks.modify_damage_additive(
+            target, amount, dealer, card, dmg_modifiers, props)
+        amount = int(hooks.modify_damage_multiplicative(
+            target, amount, dealer, card, dmg_modifiers, props))
+        if dmg_modifiers:
+            hooks.after_modify_damage_amount(dmg_modifiers, target)
+
+        # 3. Damage cap (e.g. Intangible: cap at 1) — applies to all damage types
         cap = hooks.modify_damage_cap(target, dealer, card)
         if cap is not None:
             amount = min(amount, cap)
 
         amount = max(0, amount)
 
-        # 3. Pre-block hit event for attacks (e.g. CurlUp triggers even when
+        # 4. Pre-block hit event for attacks (e.g. CurlUp triggers even when
         #    block absorbs). Non-move damage (Poison, Thorns) is not a "hit".
         if amount > 0 and ValueProp.MOVE in props:
             hooks.on_attacked(target, amount, dealer, card)
 
-        # 4. Block absorption (skipped for unblockable HP loss like Poison)
+        # 4b. Hook.BeforeDamageReceived (CreatureCmd.cs:263) — after the
+        #     modifier passes, before block absorption, and NOT subject to the
+        #     killing-blow skip. Thorns reflects from here.
+        hooks.before_damage_received(target, amount, dealer, card, props)
+
+        # 5. Block absorption (skipped for unblockable HP loss like Poison)
         hp_lost = amount
         if target.block > 0 and ValueProp.UNBLOCKABLE not in props:
             absorbed = min(target.block, amount)
@@ -80,39 +160,23 @@ class DamageCmd:
             if target.block == 0:
                 hooks.on_block_broken(target, dealer, card)
 
-        # 5. HP-loss modifiers applied after block (e.g. Torii: cap at 1, Tungsten Rod: -1)
+        # 6. HP-loss modifiers applied after block (e.g. Torii: cap at 1, Tungsten Rod: -1)
         if hp_lost > 0:
             modifiers: list = []
             hp_lost = hooks.modify_hp_lost(target, hp_lost, dealer, card, modifiers)
             hooks.after_modify_hp_lost(modifiers, target)
 
-        # 6. Apply HP loss
+        # 7. Apply HP loss
         if hp_lost > 0:
             old_hp = target.hp
             target.hp = max(0, target.hp - hp_lost)
             hooks.on_hp_changed(target, target.hp - old_hp)
 
-            # 7. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
+            # 8. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
             if target.hp <= 0:
-                preventer: list = []
-                if hooks.should_die(target, preventer):
-                    # CreatureCmd.cs:508 — the death stands; a listener may
-                    # still keep the corpse in the combat rather than removing
-                    # it (Decimillipede's ReattachPower).
-                    target.retained_after_death = (
-                        not hooks.should_remove_from_combat_after_death(target)
-                    )
-                    hooks.on_death(target)
-                else:
-                    # CreatureCmd.cs:565 — the game leaves the creature at 0 HP
-                    # and lets the preventer heal it (re-killing it if nobody
-                    # does); the sim floors it at 1 HP instead (Illusion never
-                    # heals here), then notifies the preventer so a healing one
-                    # (Fairy in a Bottle) can top it up.
-                    target.hp = 1
-                    hooks.after_preventing_death(preventer, target)
+                _resolve_death(hooks, target)
 
-        # 8. Post-damage events. A killing blow skips the victim's
+        # 9. Post-damage events. A killing blow skips the victim's
         #    AfterDamageReceived (CreatureCmd.cs:392 — `!WasTargetKilled ||
         #    !IsDead`): the hit that kills a creature does not trigger its
         #    on-damage-received powers (e.g. PersonalHive shuffles no Dazed on
@@ -122,6 +186,12 @@ class DamageCmd:
             hooks.on_damage_received(target, hp_lost, dealer, card, props)
         if dealer is not None and hp_lost > 0:
             hooks.on_damage_dealt(dealer, target, hp_lost, card)
+
+        # AttackCommand.Results: every hit of the attack currently bracketed by
+        # before_attack / after_attack, for the listeners that read them
+        # (SuckPower.cs:28-41, PainfulStabsPower.cs:40-44).
+        if hooks._attack_results is not None:
+            hooks._attack_results.append((target, hp_lost))
 
         return hp_lost
 
@@ -137,16 +207,28 @@ class BlockCmd:
     ) -> int:
         """Apply block through the hook pipeline. Returns final block gained.
 
-        Unpowered block (e.g. Block Potion) skips Dexterity/Frail modifiers,
-        mirroring STS2's IsPoweredCardOrMonsterMoveBlock check.
+        `Hook.ModifyBlock` (Hook.cs:1310-1340) calls every listener for every
+        block gain and lets each self-gate on props; Dexterity, Frail and
+        Fasten do, while Vambrace, Pael's Legion and Unmovable deliberately
+        gate on Move ALONE and so must still run for Unpowered block.
         """
         if props is None:
             props = ValueProp.MOVE
-        if is_powered_attack(props):  # same Move-and-not-Unpowered rule as damage
-            amount = amount + hooks.modify_block_additive(target, amount, card)
-            amount = int(amount * hooks.modify_block_multiplicative(target, amount, card))
+        # The source card's own enchantment folds in before either listener
+        # loop (Hook.cs:1315-1320), like the damage side.
+        ench = card.enchantment if card is not None else None
+        if ench is not None:
+            amount += ench.enchant_block_additive(amount, props)
+            amount *= ench.enchant_block_multiplicative(amount, props)
+        blk_modifiers: list = []
+        amount = amount + hooks.modify_block_additive(
+            target, amount, card, blk_modifiers, props)
+        amount = int(hooks.modify_block_multiplicative(
+            target, amount, card, blk_modifiers, props))
         amount = max(0, amount)
         target.block += amount
+        if blk_modifiers:
+            hooks.after_modify_block_amount(blk_modifiers, target, card)
         hooks.on_block_gained(target, amount, card)
         return amount
 
@@ -156,8 +238,19 @@ class CreatureCmd:
 
     @staticmethod
     def heal(hooks: HookSystem, target: Creature, amount: int) -> int:
-        """Heal up to amount HP, capped at max HP. Returns HP actually restored."""
-        if target.is_dead:
+        """Heal up to amount HP, capped at max HP. Returns HP actually restored.
+
+        `CreatureCmd.Heal` (CreatureCmd.cs:691-697) has NO dead-creature guard
+        — its only early return is `IsEnding && !IsPlayer`. The sim's old
+        `if target.is_dead: return 0` was safe only while a prevented death was
+        floored at 1 HP; now that the corpse is left at 0 (CreatureCmd.cs:565),
+        that guard would block the very revives it exists for — Illusion's
+        REVIVE move and Adaptable's respawn both heal a creature that is dead
+        at 0 and retained in combat.
+        """
+        combat = getattr(hooks, "combat", None)
+        if (combat is not None and getattr(combat, "is_over", False)
+                and target.side != "player"):
             return 0
         healed = min(amount, target.max_hp - target.hp)
         if healed > 0:
@@ -196,25 +289,32 @@ class CreatureCmd:
         old_hp = target.hp
         target.hp = 0
         hooks.on_hp_changed(target, -old_hp)
-        if hooks.should_die(target):
-            target.retained_after_death = (
-                not hooks.should_remove_from_combat_after_death(target)
-            )
-            hooks.on_death(target)
-        else:
-            target.hp = 1
+        _resolve_death(hooks, target)
 
     @staticmethod
     def stun(hooks: HookSystem, target: Creature, next_move_key: str | None = None) -> None:
         """Stun a creature: it skips its next turn (mirrors CreatureCmd.Stun).
 
-        next_move_key optionally overrides the move performed after the stunned
-        turn (the source's nextMoveId); by default the creature resumes its
-        pattern where it left off.
+        next_move_key overrides the move performed after the stunned turn (the
+        source's nextMoveId); by default the creature repeats the move it was
+        telegraphing (`StateLog.Last().Id`, Creature.cs:531-535).
+
+        For a MachineMonster this is a MACHINE operation, not a boolean:
+        Creature.StunInternal force-sets a real synthetic "STUNNED" MoveState
+        through SetMoveImmediate, which REFUSES the override while the pending
+        move is pinned by MustPerformOnceBeforeTransitioning
+        (MonsterModel.cs:420-432) — that is also what stops a second stun
+        landing on an already-stunned creature. Hand-rolled monsters have no
+        machine and keep the `_move_key` override.
         """
-        target.stunned = True
-        if next_move_key is not None and hasattr(target, "_move_key"):
+        machine = getattr(target, "machine", None)
+        if machine is not None:
+            if not machine.current.can_transition_away:
+                return
+            target._current_move = machine.stun(next_move_key)
+        elif next_move_key is not None and hasattr(target, "_move_key"):
             target._move_key = next_move_key
+        target.stunned = True
         hooks.on_stunned(target)
 
     @staticmethod
@@ -284,6 +384,16 @@ class PowerCmd:
         """
         from .powers import PowerType
 
+        # PowerCmd.Apply<T> refuses to apply anything to a creature
+        # CanReceivePowers says no to (PowerCmd.cs:73-76), and CanReceivePowers
+        # reuses Hook.ShouldAllowHitting (Creature.cs:308-322). The sim wired
+        # that predicate into DamageCmd.deal but not here, so a *debuff*
+        # landed where damage would not: Vulnerable stuck to a reviving Test
+        # Subject, and the AoE power potions applied to an Eye with Teeth
+        # mid-Illusion-revival that C#'s HittableEnemies excludes.
+        if not hooks.should_allow_hitting(target):
+            return
+
         # C# PowerCmd.Apply runs the "given" power-amount modifiers
         # (Hook.ModifyPowerAmountGiven — e.g. Unsettling Lamp's first-debuff
         # latch + double) BEFORE Artifact negates the debuff
@@ -325,11 +435,16 @@ class PowerCmd:
             target.powers[power_cls.id] = power
             hooks.register(power)
             hooks.on_power_applied(power_cls.id, target, amount, applier)
-
-        # Debuffs landing on the player skip their first duration tick
-        # (mirrors PowerCmd.Apply setting SkipNextDurationTick).
-        if target.side == "player" and power_cls.power_type == PowerType.DEBUFF:
-            power.skip_next_tick = True
+            # Debuffs landing on the player skip their first duration tick.
+            # This belongs to the NEW-power branch only: C# sets
+            # SkipNextDurationTick in Apply (PowerCmd.cs:144-147) and
+            # ModifyAmount (PowerCmd.cs:215-271) never touches it. Setting it
+            # at function scope re-armed the flag on every re-stack, so a
+            # second Vulnerable or Weak stack applied in the same turn skipped
+            # a tick it should have taken and the debuff expired a turn late.
+            if (target.side == "player"
+                    and power_cls.power_type == PowerType.DEBUFF):
+                power.skip_next_tick = True
 
     @staticmethod
     def remove(
@@ -455,9 +570,25 @@ class CardPileCmd:
     def _enter_combat(hooks: HookSystem, card: Card) -> None:
         """Register a newly created card as a hook listener (cards listen for
         their whole combat lifetime, mirroring CardModel = AbstractModel) and
-        fire the entered-combat hook so active powers can afflict it."""
+        fire the entered-combat hook so active powers can afflict it.
+
+        The card's ENCHANTMENT is registered with it, exactly as
+        `CombatState.__init__` does for the starting deck. C# needs no such
+        step — `CombatState.IterateHookListeners` re-enumerates from the piles
+        on every dispatch and adds `cardModel.Enchantment`
+        (CombatState.cs:462-465) — but the sim registers once, so a card
+        created MID-combat used to arrive with an inert enchantment. Since
+        `create_clone` began carrying the enchantment onto copies
+        (enchantment/EG2), that was not merely a dead listener but a crash:
+        Corrupted and Sown reach the engine through `self.combat.hooks` in
+        their `on_play`, and on a copy `combat` was None.
+        """
         card.combat = hooks.combat
         hooks.register(card)
+        if card.enchantment is not None:
+            card.enchantment.combat = hooks.combat
+            if card.enchantment not in hooks._listeners:
+                hooks.register(card.enchantment)
         hooks.on_card_entered_combat(card)
 
     @staticmethod

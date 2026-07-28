@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
       "side": "sim"
     },
     {
@@ -73,7 +73,7 @@
     "ShouldStopCombatFromEnding": {
       "maps_to": "no sim counterpart",
       "verdict": "gap",
-      "issue": "No sim counterpart. C# reads this through Hook.ShouldStopCombatFromEnding at CombatManager.cs:196, inside the win check: while any power returns true the combat cannot end. `hooks.py` defines no such hook and combat.py:272-277 decides the win purely from `is_gone` over the non-minion enemies. The sim reaches the same OUTCOME here by the mid-death spawn / death prevention described on this record's death entry, which keeps `_all_enemies_dead()` false on its own, so DORMANT -- but the mechanism is absent, and a future power wanting to hold combat open without also adding a creature or preventing a death would have nothing to hook. Third-file citations, not hashed here. ENGINE-LEVEL HOME (added 2026-07-26): this mechanism now also carries `gap` at audit/records/seam/creature_card_cmds.json step 8c, which owns the missing hook surface itself; same verdict at every site per rule 3."
+      "issue": "NARROWED 2026-07-27. THE HOOK NOW EXISTS: `hooks.should_stop_combat_from_ending` (hooks.py:813-824) is the last gate of `CombatState._all_enemies_dead` (combat.py:300-303), mirroring CombatManager.cs:196, and three ported powers use it (AdaptablePower powers.py:3529, SteamEruptionPower :2138, InfestedPower :1495). WHAT REMAINS is that THIS power does not implement it -- an AST scan of powers.py finds no `should_stop_combat_from_ending` on its class -- so it still reaches the same outcome by the mid-death spawn / death-prevention route rather than by the mechanism. Dormant, as before; the trigger is now one line rather than a missing hook."
     }
   },
   "guards": [

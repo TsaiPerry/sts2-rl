@@ -37,16 +37,14 @@ class MusicBox(Relic):
         ):
             self._card_being_played = card
 
-    def on_card_played(self, card: "Card") -> None:
+    def on_card_played(self, card: "Card",
+                       is_auto_play: bool = False) -> None:
         if card is not self._card_being_played:
             return
-        from ..cards import make_card
+        from ..cards.base import create_clone
         from ..cmds import CardPileCmd
 
-        copy = make_card(card.id)
-        for _ in range(card.upgrade_level):
-            if copy.is_upgradable:
-                copy.upgrade()
+        copy = create_clone(card)
         copy.is_ethereal = True
         CardPileCmd.add_to_hand(self.hooks, self.player, copy)
         self.used_this_turn = True

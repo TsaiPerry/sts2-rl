@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -47,9 +47,9 @@
       "rationale": "RoyalPoison.cs:16 is `new DamageVar(4m, ValueProp.Unblockable | ValueProp.Unpowered)` and AfterPlayerTurnStart passes the DynamicVar itself to CreatureCmd.Damage (line 23). DamageProps.NON_CARD_HP_LOSS is defined as exactly `ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED` (valueprops.py:44), so the prop pair matches bit for bit -- Unblockable means Block never absorbs it and Unpowered means no Strength/Vulnerable/Weak scaling. No AscensionHelper.GetValueIfAscension in the file, so 4 is the non-ascension value. EXECUTED (`py audit/tools/relic_probes_b13.py royal-poison`): 80 HP -> 76 on turn 1, and a turn 2 entered with 99 Block takes no further loss. NOTE per binding rule 7: valueprops.py is not hashed by this record."
     },
     "AfterPlayerTurnStart": {
-      "maps_to": "on_player_turn_started (royal_poison.py:26-32)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The slot is right -- `py audit/tools/relic_probes.py turn-order` places on_player_turn_started after the draw, where C#'s AfterPlayerTurnStart also sits (turn_structure's C# order: Draw -> AfterPlayerTurnStart -> AfterSideTurnStart) -- and the damage is right. What is missing is the CheckWinCondition C# runs immediately afterwards, so a player this relic kills on turn 1 keeps playing."
+      "maps_to": "on_player_turn_started (sts2_rl/relics/royal_poison.py) -- the post-draw turn-start slot; CombatState._check_win_condition (sts2_rl/combat.py:413-426) follows the setup at :230, :830 and :841-847",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:413-426) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:230), after the extra-turn setup (sts2_rl/combat.py:830) and after each ordinary turn's setup (sts2_rl/combat.py:841-847), which is CombatManager.cs:573. The slot and the damage were already right; the missing CheckWinCondition was the rollup's only gap."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -60,8 +60,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the sim runs no CheckWinCondition after the turn-1 setup, and this relic is the seam record's own named witness",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# calls CheckWinCondition immediately after the player's turn setup and the auto-pre-play phase (CombatManager.cs:573), so a turn-start effect that kills the player ends the fight on the spot. The sim's turn-1 setup (combat.py:208-209 fires on_combat_start then start_turn) is followed by NOTHING -- the only post-setup check is on the end_turn path. THIS IS audit/records/seam/turn_structure.json gap G13, whose issue text names relics/royal_poison.py:25 as one of the four damage-dealing turn-start relics and uses THIS relic to produce its executed evidence; per binding rule 3 the verdict is matched and cited, not re-derived, and the seam owns the machinery while this record owns the relic's observable. RE-EXECUTED here at the relic's own site (`py audit/tools/relic_probes_b13.py royal-poison`): a combat built with relics=[royal_poison] and current_hp=4 comes back with hp=0, is_dead=True, phase=Phase.PLAYER_TURN, is_over=False and 6 valid actions -- the sim hands a dead player a full turn, which they can win the fight in. REACHABILITY (LIVE, both sides ported): the relic is granted by the ported Round Tea Party event and 4 or less HP on entering a fight is ordinary late-act play; no second relic and no card are needed. NOTABLE: two sibling relics on the same hook, relics/festive_popper.py and relics/mercury_hourglass.py, hand-roll a `self._check_win()` call precisely because this check is missing -- and neither that workaround nor Royal Poison's port covers PLAYER death, which is the direction this relic damages in. Royal Poison is the only one of the four whose damage targets the player. Pinned by the seam: test_turn_one_setup_death_ends_the_combat."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:413-426) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:230), after the extra-turn setup (sts2_rl/combat.py:830) and after each ordinary turn's setup (sts2_rl/combat.py:841-847), which is CombatManager.cs:573. A player the relic kills during turn-1 setup no longer keeps playing: `_check_win_condition` tests `self.player.is_dead` first and ends the combat. WAS: the turn-1 setup was followed by nothing, so the sim handed a dead player a full turn."
     },
     {
       "what": "N1: `TurnNumber <= 1` (RoyalPoison.cs:20) vs the port's `self.turn != 1` (royal_poison.py:27)",
@@ -79,6 +79,6 @@
       "rationale": "RoyalPoison.cs has no fields and no reset hook; `py audit/tools/relic_probes.py sweep-reset` puts royal_poison in the 'relics holding no state at all' bucket, so PROMPT.md bug class 13 has nothing to bite. The 'once per combat' behaviour comes entirely from the turn-1 test, which N1 settles. Recorded so the absence reads as a source property."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

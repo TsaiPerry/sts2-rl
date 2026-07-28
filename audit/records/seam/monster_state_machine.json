@@ -165,19 +165,19 @@
   "sim_sources": [
     {
       "path": "sts2_rl/monsters/state_machine.py",
-      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948"
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676"
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0"
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963"
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f"
     },
     {
       "path": "sts2_rl/creatures.py",
@@ -185,15 +185,15 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
     },
     {
       "path": "sts2_rl/monsters/hive/flail_knight.py",
-      "sha256": "17a1b7fd4929dffaadc03cd1751944577c1b6b17a38e3b5637fe9d5f8d2c6d01"
+      "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
     },
     {
       "path": "sts2_rl/monsters/hive/hunter_killer.py",
-      "sha256": "e74016ea793bee33083c86934fdf3977c0a642f5f574a7f8694b5738e2a312e5"
+      "sha256": "fb3bf4907c34ddb79f0ac3e81d90158f27c8e3b8ba2d9c21f57c232ed4830406"
     },
     {
       "path": "sts2_rl/monsters/hive/exoskeleton.py",
@@ -201,23 +201,23 @@
     },
     {
       "path": "sts2_rl/monsters/hive/decimillipede.py",
-      "sha256": "1d5da20a4610eaa091d70e23095bae077ac6658e8cf942b6a5c5ea695cf467e8"
+      "sha256": "9c831062dc870136ea0a7a1224119f0a3a1ef9fbe20b299e7e85e219f5e32bcc"
     },
     {
       "path": "sts2_rl/monsters/glory/scroll_of_biting.py",
-      "sha256": "65d113d84eacd2672a6477241102b9c9f525341da74de95a91c8b573465a7a65"
+      "sha256": "553067979e60041c347356874dcc2f084ebf7c275bfc99d95d63010adf836ab6"
     },
     {
       "path": "sts2_rl/monsters/glory/knights.py",
-      "sha256": "a8e6338a1079a8084d37fd82252dca99a64c7647e4755b0aa5b1cfc959f7cefc"
+      "sha256": "6a095775bb36c20f59234a35a2885a456613f46c41b390ef0212df45c6a4854e"
     },
     {
       "path": "sts2_rl/monsters/glory/fabricator.py",
-      "sha256": "7b0307345bd43c6e10960461d13e7ba788963385affa0a0cf7c41515538b5a15"
+      "sha256": "fbbb6a395caf6cbecfec4090e9870ba56967a6a8014ce8f5c2b3a973da8506e3"
     },
     {
       "path": "sts2_rl/monsters/fake_merchant.py",
-      "sha256": "cf99133082582a02cdedcb5149c9c0ef2f14c5a5e99dce7a12edde725acf5df6"
+      "sha256": "fdfe33aa23b58cd08022468f2cc63cc6c8d906c5563eb23b71490d7b23f101e0"
     },
     {
       "path": "sts2_rl/monsters/underdocks/fossil_stalker.py",
@@ -225,19 +225,19 @@
     },
     {
       "path": "sts2_rl/monsters/underdocks/two_tailed_rat.py",
-      "sha256": "490ada2b22d4ec145b3abcf5ef0d6fa79dc454af1d86d9408e5bb6791a7d6c6e"
+      "sha256": "0a7574ce54f7643bd788be49487ec18f43936cc10d3dc7cce7cea447ddcef24c"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/flyconid.py",
-      "sha256": "f3eb737052a284fa03d9cff4edf7c5cb7de9736076c2b579a27f8eee4fab1c30"
+      "sha256": "702bcbe5b830d0c6b2199f4b2328d24028290098aa5494342ec13ebd02926957"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/slimes.py",
-      "sha256": "0716501b51d2726000d5b74c974d1607e9581d645a83936fd11d370fe04d7d0f"
+      "sha256": "aa0f518c7cce29c7991d16e6d69c46606c2ae786e9b3c0741596cfb62e91288c"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/inklets.py",
-      "sha256": "4bdaa50a52958c75573522e4d4030efb04604f26632f8b93eb26cb61fad3f35d"
+      "sha256": "69b2d1741e443b77acfc723b86b67fe4573a6789824973a7088e79071ef3fe74"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/phrog_parasite.py",
@@ -245,7 +245,7 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/slithering_strangler.py",
-      "sha256": "966738a2e28b66f6ac06d4d3b72b7e7521180ab3daa659fb3cf49056c3b3d98b"
+      "sha256": "8e0893bdecbd3aa8f7e314ae9657fe3dfa61f1b140f217299d10c12b504891ed"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/mawler.py",
@@ -261,11 +261,11 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py",
-      "sha256": "4808b860f919e0adf19c4c09be1b9848e14a79597dd08ccfaf30f02a278fe5e3"
+      "sha256": "709fd5010a01839534bb6ec922456ceaddec9b655bd492c90be4ae8d04d027a9"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/shrinker_beetle.py",
-      "sha256": "c2268b7ba399aa5578d3e61521d8d276b6317d7272a332436c99c52f5567bca9"
+      "sha256": "37bf6cdde5a527615bbb931c083ecd1c8c65cff8573a6096a78806e08d90f57e"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/the_kin.py",
@@ -273,19 +273,19 @@
     },
     {
       "path": "sts2_rl/monsters/hive/thieving_hopper.py",
-      "sha256": "7ddad0338ff1cd176123ab0c74716d8117025511f65b928ee097d8d3a810a6fc"
+      "sha256": "97141f6e0851de74a261d0ad74b0fa219348e587570cddb4444ad4aa98e66efa"
     },
     {
       "path": "sts2_rl/monsters/hive/slumbering_beetle.py",
-      "sha256": "e30a1fa656232c5772290c730657ec3bd4d1b00d72b1fa9aba15f290242b6dc3"
+      "sha256": "3626d45cbc1eb2ba4a3452cf72e041f25be036f7b78c80459adfdb96220c5ec4"
     },
     {
       "path": "sts2_rl/monsters/underdocks/lagavulin_matriarch.py",
-      "sha256": "f827be87be0028436a888d358e883c0b67ce850dc4b96c03fefa9c15fe251aa9"
+      "sha256": "7a3bec9a56c64841929695621deb017a0f3a8c7b8d04b9a9f5a061b4e82be11d"
     },
     {
       "path": "sts2_rl/monsters/underdocks/terror_eel.py",
-      "sha256": "496df4cc9cfa66eeffff147770b88d7f29be7f267a76a1a23d96f22dc31f0aba"
+      "sha256": "314c8d55ff9856dba52e426492d11b02d44fc8562bd52ccab276292b3f04c3cb"
     },
     {
       "path": "sts2_rl/monsters/hive/__init__.py",
@@ -301,7 +301,7 @@
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "73183c9c6c5cf62323231050e8cc10be476224de23b7a6d643760ea7044229e4"
+      "sha256": "1d4cab807ce57957942d4521f122dd008158f1f2fdc25336530aa2ab03c74f97"
     },
     {
       "path": "sts2_rl/rooms.py",
@@ -309,7 +309,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b"
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e"
     },
     {
       "path": "sts2_rl/relics/tanxs_whistle.py",
@@ -321,11 +321,11 @@
     },
     {
       "path": "sts2_rl/monsters/underdocks/corpse_slug.py",
-      "sha256": "467c141df0df171f99cfc105a47db4f44eb683626fb359e0c5df1101be70c7f5"
+      "sha256": "b873b3a979b575466f583359a215dfb4d10b5d9c7289f0684bfbb4b86168ffab"
     },
     {
       "path": "sts2_rl/monsters/hive/ovicopter.py",
-      "sha256": "79189b0410ab49908dad8328810cb95e4beed347b0d1025dac48c2befb12e0c5"
+      "sha256": "2b4e8702585fdf867b6714e5d6c9790c423c49023794d33bd22a1c7b3d073e26"
     },
     {
       "path": "sts2_rl/monsters/hive/the_obscura.py",
@@ -333,7 +333,7 @@
     },
     {
       "path": "sts2_rl/monsters/underdocks/living_fog.py",
-      "sha256": "330d0b8087d6cd0ada73d33d30c5c2a83ad9c80eee6a84c7a44ac5a3c9c28217"
+      "sha256": "bac03221109e2aab80cf4090ae2ee030caa79bf7536b937033f11324e3efa0e4"
     }
   ],
   "steps": [
@@ -403,9 +403,9 @@
     },
     {
       "what": "13. The TEN AddBranch overloads and every integer's role (RandomBranchState.cs:46-113): #1 :46 (int cooldown, R, Func) [throws on CanRepeatXTimes]; #2 :62 (int cooldown, int maxRepeats, Func); #3 :75 (int maxRepeats, Func); #4 :80 (int cooldown, R, float); #5 :85 (R, float); #6 :90 (R, Func); #7 :95 (int maxRepeats, float); #8 :100 (int cooldown, R); #9 :105 (int maxRepeats); #10 :110 (R). NO overload takes a weight as an int \u2014 every weight is a float or Func<float>, defaulting to 1f",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "state_machine.py:160-176 add_branch(state, weight=1.0, repeat_type=CAN_REPEAT_FOREVER, max_times=0, cooldown=0)",
-      "issue": "GAP G1, LIVE. C#'s positional slot 2 is cooldown-or-maxRepeats; the sim's positional slot 2 is WEIGHT, so a positional transliteration converts a repeat limit into a weight. Executed (audit/tools/state_machine_probes.py mismatch, which now PRINTS these totals so they cannot drift again): of the 12 resolved C#<->sim pairs \u2014 one per ported sim MODULE, together covering 13 C# RandomBranchStates because fake_merchant.py folds two (RAND_MOVE, FakeMerchantMonster.cs:55-58, and RAND_ATTACK_MOVE, :66-68) into one row \u2014 7 match and 5 MISREAD. (A first pass stated \"13 resolved / 8 match\", having read the branch-state count as the pair count.) The five: \u2014 FlailKnight.cs:50,51 (maxRepeats 2 -> hive/flail_knight.py:51,52 weight=2.0, CAN_REPEAT_FOREVER); HunterKiller.cs:43 -> hive/hunter_killer.py:45 weight=2.0; ScrollOfBiting.cs:90 -> glory/scroll_of_biting.py:65 weight=2.0; SpectralKnight.cs:52 -> glory/knights.py:111 weight=2.0; FakeMerchantMonster.cs:58 (cooldown 3) -> fake_merchant.py:72-75 weight=_ENRAGE_WEIGHT (=3.0, line 34) with no cooldown, the misreading even written into the docstring at fake_merchant.py:40. Observable, executed (probe `distribution`, 100000 rolls, seed 7, sim vs the same machine with the C# parameters restored): FlailKnight 41.6/41.6/16.8 vs 36.2/36.4/27.4; HunterKiller 25.1/74.9 vs 40.0/60.0; ScrollOfBiting 59.9/20.0/20.0 vs 42.9/28.6/28.6; SpectralKnight 75.1/24.9 vs 60.0/40.0; FakeMerchant ENRAGE 30.0 vs 13.6. Both sides reachable on ported content: the five are exported by monsters/hive/__init__.py:26,31, monsters/glory/__init__.py:30,35 and monsters/fake_merchant.py:117-120 (the ported FakeMerchant event's fight, events/fake_merchant.py:26). Counter-evidence that the MACHINERY is fine: FossilStalker.cs:58-60 and TwoTailedRat.cs:127 carry the same shapes and their ports read them correctly (underdocks/fossil_stalker.py:57 max_times=2, underdocks/two_tailed_rat.py:83 cooldown=3). Census: 61 monster AddBranch call sites in 21 files, 15 of them carrying a non-default cooldown or maxRepeats (probe cs-addbranch)."
+      "issue": "Closed 2026-07-27: every ported RandomBranchState now reads its C# integer arguments as cooldown / maxRepeats rather than as weights. Re-executed in this pass: `py audit/tools/state_machine_probes.py mismatch` reports 12 resolved C#<->sim pairs covering 13 C# RandomBranchStates, 12 MATCH exactly and 0 misread -- the five that misread (Flail Knight, Hunter Killer, Mysterious Knight, Scroll of Biting, Spectral Knight) are all corrected. The sim's add_branch keeps a keyword signature (state, weight, repeat_type, max_times, cooldown), which is a deliberate re-architecture of C#'s ten positional overloads; what this step recorded as a gap was the transliteration error it invited, and no port commits it any more. WAS: 5 of 12 pairs converted a repeat limit or a cooldown into a branch weight."
     },
     {
       "what": "14. GetNextState: max = States.Sum(GetStateWeight), ONE draw rng.NextFloat(max), then walk the branches IN ADD ORDER subtracting each weight and returning the first with num <= 0 \u2014 add order is observable \u2014 RandomBranchState.cs:115-126",
@@ -517,15 +517,15 @@
     },
     {
       "what": "35. MonsterModel.RollMove is `NextMove = MoveStateMachine.RollMove(targets, Creature, RunRng.MonsterAi)` \u2014 the dedicated MonsterAi stream, named at this one site \u2014 MonsterModel.cs:415-418",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "state_machine.py:306-312 _move_rng -> self._hooks.combat.combat_rng.monster_ai, used at 301 and 330",
-      "issue": "GAP G6 (clause a), DORMANT. The seed fact 'the sim uses the shared combat stream' is STALE for the machine itself \u2014 the SP3 parity work moved both machine roll sites onto monster_ai, and every hand-rolled port rolls there too (probe move-rng: flyconid.py, inklets.py, slimes.py, slithering_strangler.py, state_machine.py). What survives is ONE off-stream site: of the three machine.roll_move(...) calls in sts2_rl/, powers.py:2233 passes self.owner._rng, the shared combat random.Random, where C# would use MonsterAi. See step 41 for the C# half and the executed DORMANCY argument."
+      "issue": "Closed 2026-07-27: the one off-stream site is gone. The sim's only remaining machine-walk outside MachineMonster is FlutterPower's stun splice, which now calls `machine.state_log[-1].get_next_state(self.owner, self.owner._move_rng)` (sts2_rl/powers.py) -- and MachineMonster._move_rng is `combat_rng.monster_ai` (sts2_rl/monsters/state_machine.py), the dedicated MonsterAi stream MonsterModel.RollMove names. Both machine roll sites in state_machine.py already passed _move_rng. WAS: FlutterPower rolled on self.owner._rng, the shared combat random.Random."
     },
     {
       "what": "36. SetMoveImmediate(state, forceTransition = false) is GUARDED by NextMove.CanTransitionAway \u2014 a MustPerformOnceBeforeTransitioning move that has not been performed CANNOT be overridden and the call is a silent no-op \u2014 then it sets both NextMove and MoveStateMachine.ForceCurrentState(state) \u2014 MonsterModel.cs:420-432",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "no sim analogue; CreatureCmd.stun (cmds.py:208-218) sets a flag and, only when the target has a _move_key, overwrites it",
-      "issue": "GAP G5, DORMANT. Two halves. (a) The sim has no CanTransitionAway guard anywhere on the override path, so a move pinned by must_perform_once_before_transitioning could be replaced where the game would refuse. (b) CreatureCmd.stun's next_move_key is gated on `hasattr(target, '_move_key')` (cmds.py:216) \u2014 the HAND-ROLLED monsters' field \u2014 so for a MachineMonster the caller's explicit next move evaporates with no error. Executed (probe stun-machine, on a MachineMonster FossilStalker): \"next_move_key='LASH_MOVE' was SILENTLY DROPPED (hasattr _move_key = False)\". Dormant because the one ported caller that passes next_move_key is overgrowth/ceremonial_beast.py:45 and CeremonialBeast is a hand-rolled Monster (ceremonial_beast.py:32) that does have _move_key \u2014 executed, not asserted: probe stun-sites enumerates all 8 sim stun sites and reports `sites passing next_move_key: ['sts2_rl/monsters/overgrowth/ceremonial_beast.py:45']`, and classifies that caller as hand-rolled while the other three monster self-stunners (SlumberingBeetle, LagavulinMatriarch, TerrorEel) are MachineMonsters that pass none. Named trigger: porting CeremonialBeast \u2014 or DecimillipedeSegment / TestSubject / WaterfallGiant, the other MustPerformOnceBeforeTransitioning users (CeremonialBeast.cs:150, DecimillipedeSegment.cs:155, TestSubject.cs:194, WaterfallGiant.cs:202) \u2014 onto MachineMonster, or stunning any existing MachineMonster with an explicit next move."
+      "issue": "Closed 2026-07-27, both halves. (a) CreatureCmd.stun now opens with `if not machine.current.can_transition_away: return` for a MachineMonster (sts2_rl/cmds.py), which is SetMoveImmediate's guard (MonsterModel.cs:420-432) and is what stops a second stun landing on an already-stunned creature -- the synthetic STUNNED state carries must_perform_once_before_transitioning=True. (b) The caller's next move now REACHES a machine monster: the same branch calls `machine.stun(next_move_key)` and only falls back to the hand-rolled `_move_key` field when there is no machine, so the explicit next move no longer evaporates. WAS: no CanTransitionAway guard anywhere, and next_move_key was gated on `hasattr(target, '_move_key')`, silently dropped for every MachineMonster."
     },
     {
       "what": "37. SetUpForCombat builds the machine and the MoveStateMachine setter THROWS if it is set twice; ResetStateMachine is the only way to clear it \u2014 MonsterModel.cs:228-236, 389-392, 409-413",
@@ -541,21 +541,21 @@
     },
     {
       "what": "39. When nextMoveId is null/empty, Stun defaults it to MoveStateMachine.StateLog.Last().Id \u2014 the move that was rolled for THIS turn, i.e. the stun defers the telegraphed move by exactly one turn \u2014 Creature.cs:532-536",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "no sim analogue at all \u2014 the sim's stun never reads state_log",
-      "issue": "GAP G4 (clause a), LIVE. See step 40 for the observable and the liveness proof; recorded separately because this clause is specifically the DEFAULT next move, which is what every ported stun caller but one relies on. Executed inventory (probe stun-sites): 7 of the 8 sim stun sites pass no next move at all \u2014 cards/whistle.py:38, hive/slumbering_beetle.py:68, underdocks/lagavulin_matriarch.py:87, underdocks/terror_eel.py:65, powers.py:1601, powers.py:2071, powers.py:2227 \u2014 and only overgrowth/ceremonial_beast.py:45 passes one (that site is G5's, step 36)."
+      "issue": "Closed 2026-07-27: MonsterMoveStateMachine.stun defaults next_move_id to `self.state_log[-1].id` (sts2_rl/monsters/state_machine.py), which is Creature.cs:535's `MoveStateMachine.StateLog.Last().Id` -- the move the creature was telegraphing, so by default it repeats that move after the stunned turn. That is the default all seven next-move-less sim stun sites rely on."
     },
     {
       "what": "40. A synthetic MoveState('STUNNED', stunMove, new StunIntent()) is built with FollowUpStateId = nextMoveId and MustPerformOnceBeforeTransitioning = true, then handed to SetMoveImmediate \u2014 Creature.cs:537-542. The stun IS a move: it is performed, it pins itself for exactly one turn (step 7), the next roll transitions STUNNED -> nextMoveId with NO branch draw (step 10), and that roll APPENDS nextMoveId to StateLog a SECOND time (step 32)",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "cmds.py:208-218 sets target.stunned = True; combat.py:313-329 skips the turn and clears the flag; state_machine.py:315-318 shows a STUN intent. machine.current, machine.state_log and _current_move are all untouched.",
-      "issue": "GAP G4 (clause b), LIVE. The sim models the INTENT half of a stun and none of the MACHINE half, so the deferred move is never re-logged. LIVENESS, corrected and now executed end to end (probe whistle-route). THE ROUTE IS WHISTLE INTO GLORY. Of the 8 sim stun sites (probe stun-sites) exactly one takes an external target \u2014 cards/whistle.py:38, the ported Tanx Ancient Attack \u2014 and Whistle has exactly one source: rooms.py:206 puts `tanx` in GLORY's ancient_keys and in no other act's (overgrowth ('neow',), underdocks ('neow',), hive ('orobas','pael','tezcatara')), and relics/tanxs_whistle.py:17 grants make_card(\"whistle\") on pickup. Glory is act index 2, the LAST act (run._ACTS_BY_INDEX = [[overgrowth, underdocks], [hive], [glory]]), so the reachable population is Glory's own pools and nothing from an earlier act. Walking every monster in Glory's weak/normal/elite/boss pools, 4 are RandomBranchState machines whose weights read the state log: ScrollOfBiting (scrolls_of_biting_weak / _normal), FlailKnight and SpectralKnight (the `knights` elite, glory/knights.py:131) and SoulNexus (soul_nexus). Executed observable on ScrollOfBiting, the cleanest of them (probe stun-machine, 100000 rolls, seed 7, the machine parked telegraphing CHEW after the reachable prefix CHOMP->MORE_TEETH->CHEW): sim state_log ['CHOMP','MORE_TEETH','CHEW'] -> unchanged by the stun, where C# reaches ['CHOMP','MORE_TEETH','CHEW','CHEW'] after the post-stun roll; and the branch pick on the turn after the deferred CHEW is CHEW 66.5% / CHOMP 33.5% in the sim versus CHOMP 100% in the game, because the duplicated CHEW fills CanRepeatXTimes(2)'s window (step 19) and forces CHOMP. The same probe separates the two causes with a 2x2: restoring the duplicate alone leaves 66.5/33.5 (G1 still hides it), restoring the C# parameters alone gives 50/50, and only both together give the game's 100% \u2014 so G1 (step 13) and G4 are genuinely two gaps and neither can be closed by fixing the other (rule 3). SoulNexus is the control: its three branches are all CannotRepeat (SoulNexus.cs:70-72, n=1), and a duplicate at the tail of the log cannot change a last-1 window, so it is correctly ported AND insensitive. CORRECTION to a first-pass liveness list that cited SlumberingBeetle, LagavulinMatriarch and TerrorEel: all three are inert for this observable and none is on the Whistle route. Executed (probe whistle-route): SlumberingBeetle's only branch is a ConditionalBranchState (hive/slumbering_beetle.py:50-52, reading self.powers, never state_log), LagavulinMatriarch's likewise (underdocks/lagavulin_matriarch.py:63-65), and TerrorEel has NO branch state at all (underdocks/terror_eel.py:53-56 is a pure chain) \u2014 a log duplicate cannot move any of their weights. All three additionally hand-splice the follow-up themselves (force_current_state + _current_move, slumbering_beetle.py:65-66, lagavulin_matriarch.py:83-84, terror_eel.py:62-63), so they already emulate the machine half they would otherwise expose. They are also in earlier acts (hive, underdocks, underdocks) than the Whistle. The same correction removes the clause \"FossilStalker is a ported Underdocks monster\": FossilStalker is the probe vehicle for its correctly-ported CAN_REPEAT_X_TIMES(2) branch and for G5's next_move_key drop, but it is an Underdocks monster and NO ported caller can stun it (its powers are Suck and Latch, not Ravenous/Imbalanced/Flutter, and Whistle cannot reach act 0 from act 2). The gap and its LIVE label stand on the Whistle->Glory route alone."
+      "issue": "Closed 2026-07-27: the stun is a real machine state. MonsterMoveStateMachine.stun builds `MoveState(STUN_STATE_ID, _stunned_move, Intent(MoveType.STUN), must_perform_once_before_transitioning=True)`, points its follow_up at the deferred state, force-sets it through force_current_state and deliberately does NOT register it in `states` (sts2_rl/monsters/state_machine.py) -- clause for clause with Creature.cs:524-544. CombatState._run_enemy_turns then PERFORMS it: a stunned enemy whose current move is STUN_STATE_ID takes its turn, which lifts the MustPerformOnceBeforeTransitioning pin, and the next player-turn-start roll transitions STUNNED -> the deferred move and re-logs it (sts2_rl/combat.py). WAS: the sim skipped a stunned enemy's turn outright and modelled none of the machine half."
     },
     {
       "what": "41. FlutterPower is the one caller that computes nextMoveId itself: StateLog.Last().GetNextState(Owner, Owner.Monster.RunRng.MonsterAi) \u2014 FlutterPower.cs:47. By step 10 that call is DETERMINISTIC (it asks the last logged MoveState for its follow-up, which is the BRANCH's id when the follow-up is a branch), so the MonsterAi rng it is handed is never consumed and the branch is resolved later, by the post-stun roll",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "powers.py:2226-2235 calls machine.roll_move(self.owner, self.owner._rng) instead",
-      "issue": "GAP G6 (clause b), DORMANT. Two divergences at one line. (i) Stream: self.owner._rng is the SHARED combat random.Random, not combat_rng.monster_ai \u2014 executed (probe move-rng, which now scans all of sts2_rl/): of the three machine.roll_move sites, state_machine.py:301 and :330 pass _move_rng and powers.py:2233 is the only one off-stream. (ii) Draw count: roll_move walks all the way to a MoveState, so it CONSUMES a branch draw where FlutterPower.cs:47 consumes none (MoveState.GetNextState is deterministic), and it advances the machine to a concrete move where the game defers the branch to the post-stun roll. DORMANCY, executed and CORRECTING a first-pass LIVE label that the pin itself refuted by XPASSing: FlutterPower has exactly one applier on each side \u2014 ThievingHopper (grep -rl FlutterPower over src/ returns only ThievingHopper.cs, FlutterPower.cs and AbstractModelSubtypes.cs; over sts2_rl/ only powers.py and monsters/hive/thieving_hopper.py:113-114) \u2014 and ThievingHopper's machine is a pure deterministic CHAIN with no RandomBranchState on either side (ThievingHopper.cs:.FollowUpState assignments THIEVERY->FLUTTER->HAT_TRICK->NAB->ESCAPE->ESCAPE; thieving_hopper.py:61-65 identical). A chain roll consumes no draw from any stream, so neither clause is observable today and the resulting state_log is identical. Named trigger: a FlutterPower user whose current move's follow-up is a RandomBranchState \u2014 any of the 12 resolved ported branch ports would do (probe mismatch), and the pin constructs exactly that trigger. Cross-referenced to turn_structure's G9, which owns WHEN the roll happens and is a different mechanism (see the doc's seed-fact-3 reconciliation); neither record re-verdicts the other's site."
+      "issue": "Closed 2026-07-27, both divergences at that line. (i) STREAM: the call is now `self.owner._move_rng` (sts2_rl/powers.py), i.e. combat_rng.monster_ai, matching FlutterPower.cs:47's `Owner.Monster.RunRng.MonsterAi`. (ii) DRAW COUNT: the sim no longer walks the machine here -- it calls `state_log[-1].get_next_state(...)`, which on a MoveState is `follow_up.id`, deterministic (MoveState.cs:67-70), so the splice consumes no branch draw and any branch is resolved by the post-stun roll instead of a turn early. WAS: machine.roll_move on the shared combat random.Random, one draw early and off-stream."
     },
     {
       "what": "42. MachineMonster.__init__ builds the machine and rolls immediately, so _current_move is never the UNSET_MOVE placeholder \u2014 state_machine.py:300-301. By step 30 that first roll returns the initial state unchanged and draws nothing when the initial state is a MoveState, and draws once when it is a branch (LeafSlimeS.cs:59, Flyconid.cs:52, TwoTailedRat.cs:139 all start on a branch)",
@@ -569,9 +569,9 @@
     },
     {
       "what": "44. MachineMonster.current_intent returns Intent(MoveType.STUN) when self.stunned \u2014 state_machine.py:315-318 \u2014 so the intent half of a stun is modelled",
-      "verdict": "gap",
+      "verdict": "faithful",
       "maps_to": "the C# equivalent is the StunIntent on the synthetic STUNNED MoveState (Creature.cs:537)",
-      "issue": "GAP G4 (clause c), LIVE. The sim shows the right intent by special-casing a boolean instead of by making the stun a real state, which is why none of the machine consequences follow (step 40): the stun is not performed as a move, is not pinned by must_perform_once_before_transitioning, and produces no log entry or transition. Same gap, same liveness evidence as step 40 \u2014 the Whistle -> Glory route (probes stun-sites, whistle-route, stun-machine); recorded separately because this is the clause that makes the divergence invisible in a screenshot and visible only in the following turn's move distribution."
+      "issue": "Closed 2026-07-27: the machine consequences now follow, which is what this clause recorded as missing. A stun force-sets a real STUNNED MoveState (sts2_rl/monsters/state_machine.py MonsterMoveStateMachine.stun), the combat loop PERFORMS it, must_perform_once_before_transitioning pins it until it has been performed, and the post-stun roll transitions to the deferred follow-up and logs it -- so the following turn's move distribution matches the game. MachineMonster.current_intent keeps its `if self.stunned` short-circuit, but it is now redundant rather than load-bearing: the current move IS the STUNNED state and its own intent is already Intent(MoveType.STUN). WAS: the boolean was the ONLY model of a stun."
     },
     {
       "what": "45. MachineMonster.take_turn performs the move, calls machine.on_move_performed, then telegraph_next_move \u2014 state_machine.py:320-330",

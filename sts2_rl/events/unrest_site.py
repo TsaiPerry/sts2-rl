@@ -27,7 +27,11 @@ class UnrestSite(Event):
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:
-        return run.hp <= run.max_hp * 0.70
+        # `(decimal)CurrentHp <= (decimal)MaxHp * 0.70m` — exact base-10, so
+        # HP at exactly 70% of max passes. Cross-multiplied by 100 to keep
+        # that exactness; binary float lands just under 70% for some max HP
+        # (90 * 0.70 == 62.99999999999999) and would refuse the event.
+        return run.hp * 100 <= run.max_hp * 70
 
     def initial_options(self) -> list[EventOption]:
         return [

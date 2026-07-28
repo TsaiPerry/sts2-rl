@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\ripple_basin.py",
-    "sha256": "da7a5483e434c950c29ac4741d6832fca472baee64db8925821e442d0d838ee9"
+    "sha256": "20598f4729acbf4a7ed700b9e9dd9d80ac828ba223ebc893564e7d64c0528330"
   },
   "extra_sources": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/relics/orichalcum.py",
-      "sha256": "5797b6afca188cd66619524d8ea170a678e96a2dfd831ce913462ff6dfce7a8c",
+      "sha256": "f0e09b0422d790cea8bbbbfd03eae2b7edfe79dda4c73b3d962c7ea0edcb59bc",
       "side": "sim"
     }
   ],
@@ -52,9 +52,9 @@
       "rationale": "RippleBasin.cs:22 is `new BlockVar(4m, ValueProp.Unpowered)` and BeforeSideTurnEnd passes the DynamicVar itself to CreatureCmd.GainBlock (line 32), so both the amount and the Unpowered prop travel together. The port passes 4 and ValueProp.UNPOWERED separately to BlockCmd.apply, which is the same pair. No AscensionHelper.GetValueIfAscension in the file, so 4 is the non-ascension value."
     },
     "BeforeSideTurnEnd": {
-      "maps_to": "on_player_turn_end (ripple_basin.py:36-39)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The condition and the amount are right; the SLOT is a flattened single listener walk where C# guarantees this relic runs after every VeryEarly and Early listener."
+      "maps_to": "on_player_turn_end (sts2_rl/relics/ripple_basin.py) -- the PLAIN phase of HookSystem's on_player_turn_end walk, run after the very_early and early passes (sts2_rl/hooks.py:153-180)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. The condition and the amount were already right; the SLOT is now a real plain pass that runs after every VeryEarly and Early listener."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (ripple_basin.py:32-34) -- which does real work the C# override does not",
@@ -80,8 +80,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): C# runs BeforeTurnEnd as three complete ordered passes and the sim as one flat listener walk, so Orichalcum's deliberate two-phase snapshot loses to Ripple Basin's block on relic-pickup order",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.BeforeTurnEnd dispatches BeforeSideTurnEndVeryEarly -> BeforeSideTurnEndEarly -> BeforeSideTurnEnd as three separate full passes (Hook.cs:1238-1261). Orichalcum is written for exactly that guarantee, and says so in a source comment: its VeryEarly override snapshots `Block > 0` into ShouldTrigger (Orichalcum.cs:44-56, with the remark 'This uses the _very early_ hook because it needs to check the player's block before PlatingPower triggers') and its plain BeforeSideTurnEnd then grants the 6 Block (Orichalcum.cs:58-66). Ripple Basin's hook is PLAIN BeforeSideTurnEnd (RippleBasin.cs:26), so C# guarantees Orichalcum's snapshot happens first. The sim folds both onto on_player_turn_end (relics/orichalcum.py:22-25 and ripple_basin.py:36-39), and hooks.on_player_turn_end is a single `for l in list(self._listeners)` pass, so the answer becomes listener-registration order -- which is relic PICKUP order on RunState.relics. THIS IS audit/records/seam/turn_structure.json gap G12, which names Ripple Basin as 'the same shape' as Fake Orichalcum and records it as UNEXECUTED; per binding rule 3 the verdict is matched, and the execution the seam left open is done here. EXECUTED (`py audit/tools/relic_probes_b13.py ripple-basin`), player at 0 block with no Attack played: relics=['ripple_basin','orichalcum'] gives 4 Block, relics=['orichalcum','ripple_basin'] gives 10, and C# always gives 10 because the VeryEarly snapshot sees block==0 before any plain listener runs. REACHABILITY (LIVE, both sides ported): both relics are Uncommon in the transcribed shared grab bag, no card needs to be played to reach the state (an attack-free turn is the relic's own trigger condition), and half of all pickup orders produce the wrong number. The sim's Fake Orichalcum (relics/fake_orichalcum.py) is the third member of the same contention set."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. relic/orichalcum's snapshot now lives in `on_player_turn_end_very_early` (Orichalcum.cs:44-56) and Ripple Basin stays on the plain `on_player_turn_end` (RippleBasin.cs:26), so C#'s guarantee that the snapshot happens first holds whatever order the two were picked up in. WAS: one flat walk, so the answer was relic-pickup order -- 4 Block one way, 10 the other."
     },
     {
       "what": "N1: C# asks the combat HISTORY 'was an Attack finished this turn'; the sim keeps a boolean set from on_card_played",
@@ -99,6 +99,6 @@
       "rationale": "Same target, same amount, same Unpowered prop -- so no Dexterity or block-multiplier scaling applies on either side, which is what Unpowered means and is why the relic gives exactly 4. The trailing null is the source card. Checked because a dropped UNPOWERED would make the relic scale with Dexterity and diverge silently on any turn the player holds some."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

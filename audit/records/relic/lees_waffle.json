@@ -6,22 +6,22 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lees_waffle.py",
-    "sha256": "d8b2419a81cb7f20bfc3c657be20d8d4c9cb37240611f138b2760a892b639c53"
+    "sha256": "922faf5a6288be1f96345e8f9bce2f3aad0a31b2ec0d26950677f4518051d80e"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -59,8 +59,8 @@
     },
     {
       "what": "N4: undo_after_obtained (lees_waffle.py:22-26) restores the max HP but not the healed current HP",
-      "verdict": "gap",
-      "issue": "SEPARATE, SIM-ONLY DEFECT worth recording here because this relic is one of only five that implement it: `undo_after_obtained` (relics/base.py:143-150) exists purely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was really picked (sts2_rl/conformance/runner.py:461, 694), and its stated purpose is that 'a discarded max-HP relic (Mango, Pear, ...) leaves its +MaxHp behind and the player-state parity check reads high for the rest of the run'. The implementation gives back the MAX HP but not the CURRENT HP the grant healed: EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp) a player at 40/80 who takes Lee's Waffle reaches 87/87, and undo_after_obtained then leaves 80/80 -- FORTY current HP that the un-granted relic paid for. (From 80/80 the undo is exact.) Contrast relic/looming_fruit, whose undo is wrong by the same mechanism but smaller: 40/80 -> 71/111 -> 71/80, i.e. 31 HP retained.) There is no C# counterpart to diverge from -- nothing in the game un-picks a relic -- so this is filed as a note on the sim's own machinery rather than a source-to-sim verdict, but it defeats exactly the DETECTOR 3 act-boundary HP assertion the helper was written for. Rule 7: relics/base.py and sts2_rl/conformance/runner.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the undo SUBTRACTS the heal instead of clamping. sts2_rl/relics/lees_waffle.py's after_obtained (MAX_HP 7 plus a heal to full, so `_healed` captures both) records the HP the grant actually healed in `_healed` and `undo_after_obtained` does `run.hp = max(1, run.hp - self._healed)` BEFORE `run.lose_max_hp(...)`, so the pair is exact from a damaged player as well as a full one. WAS: the undo called lose_max_hp and then re-clamped `run.hp = min(run.hp, run.max_hp)`, which gives back nothing whenever the post-heal HP is at or below the restored maximum -- the common case -- leaving the conformance runner's relic resync reading high for the rest of the run."
     },
     {
       "what": "N5: no state, no reset, no IsAllowed, no combat hooks",
@@ -73,6 +73,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / DoActivateVisuals / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / TaskHelper.RunSafely of a visuals task are presentation only -- the relic bar's glow, counter, sfx, icon variant and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

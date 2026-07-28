@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\slithering_strangler.py",
-    "sha256": "966738a2e28b66f6ac06d4d3b72b7e7521180ab3daa659fb3cf49056c3b3d98b"
+    "sha256": "8e0893bdecbd3aa8f7e314ae9657fe3dfa61f1b140f217299d10c12b504891ed"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/monsters/state_machine.py",
-      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
       "side": "sim"
     },
     {
@@ -84,9 +84,8 @@
     },
     {
       "what": "SlitheringStranglerNormal's monster composition is picked off the PER-ENCOUNTER selection Rng in the game (SlitheringStranglerNormal.cs:57 `base.Rng.NextItem(Enum.GetValues<SecondaryEnemyType>())`, then :77 `base.Rng.NextItem(_mediumSlimes)` or two small-slime draws - 2 to 3 draws) but the sim's SlitheringStranglerEncounter.create_monsters (slithering_strangler.py:66-77) ignores its `selection_rng` parameter entirely and uses `rng.choice` on the combat rng",
-      "verdict": "gap",
-      "live": true,
-      "issue": "The strangler's escort group is drawn from the wrong RNG stream, so (a) the composition does not match the game's for a given run seed and floor, and (b) the per-encounter selection stream is left UNCONSUMED where the game draws 2-3 values, desynchronising every later draw on it. Executed: `py audit/tools/monster_probes_b02.py enc-rng` reports slithering_strangler_normal consuming 0 draws from the selection stream where the four correctly-ported batch-2 encounters consume 3 / 1 / 3 / 0 exactly as their C# does. LIVE on ported content (rule 6): `slithering_strangler` is in the act-1 normal encounter pool (rooms.py:103) and every monster the branch can pick (SnappingJaxfruit, LeafSlimeM/TwigSlimeM, LeafSlimeS/TwigSlimeS) is ported. Same root cause and same fix shape as the corpse_slug StarterMoveIdx gap recorded on monster/corpse_slug. EncounterModel / monster-slot generation is monster_state_machine boundary hole 4 and is owned by no seam; this entry covers only the encounter code that lives in the unit's own sim file."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: SlitheringStranglerEncounter.create_monsters (slithering_strangler.py:64-87) now routes EVERY composition pick through `selection_rng.next_item`, reproducing SlitheringStranglerNormal.cs:57 (NextItem over Enum.GetValues<SecondaryEnemyType>(), declared SnappingJaxfruit / MediumSlime / SmallSlimes at :12-17 -- the sim's list order ['jaxfruit','medium_slime','small_slimes'] matches), :77 (NextItem over _mediumSlimes = [LeafSlimeM, TwigSlimeM]) and :81-87 (TWO independent NextItem draws over _smallSlimes, i.e. with replacement, which the sim also does). run.py:1299-1309 supplies the stream via rng.make_encounter_rng, seeded as EncounterModel.cs:258-263. WAS: the parameter was ignored and every pick was `rng.choice` on the shared combat rng, leaving the selection stream unconsumed where the game draws 1-3. Legacy runs keep the shared-rng fallback, which is legacy mode's shape."
     },
     {
       "what": "Move-state ids are the C# ids verbatim (CONSTRICT / THWACK / LASH)",
@@ -109,6 +108,6 @@
       "note": "No ShouldDie, no ShouldCreatureBeRemovedFromCombatAfterDeath and no revive on either side."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27"
 }

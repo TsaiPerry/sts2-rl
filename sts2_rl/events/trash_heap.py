@@ -45,10 +45,18 @@ class TrashHeap(Event):
 
     def _dive_in(self) -> None:
         self.run.lose_hp(_HP_LOSS)
-        self.run.add_relic(self.rng.choice(_RELICS))
+        # `base.Rng.NextItem(Relics)` — the event's own Rng (TrashHeap.cs:65).
+        er = self.event_rng
+        relic = (er.next_item(_RELICS) if er is not None
+                 else self.rng.choice(_RELICS))
+        self.run.add_relic(relic)
         self._finish("DIVE_IN")
 
     def _grab(self) -> None:
         self.run.gain_gold(_GOLD)
-        self.run.add_card(make_card(self.rng.choice(_CARDS)))
+        # `base.Rng.NextItem(Cards)` — the event's own Rng (TrashHeap.cs:73).
+        er = self.event_rng
+        card_id = (er.next_item(_CARDS) if er is not None
+                   else self.rng.choice(_CARDS))
+        self.run.add_card(make_card(card_id))
         self._finish("GRAB")

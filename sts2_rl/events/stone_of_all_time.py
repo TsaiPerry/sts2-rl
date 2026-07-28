@@ -40,8 +40,14 @@ class StoneOfAllTime(Event):
 
     def initial_options(self) -> list[EventOption]:
         # GenerateInitialOptions rolls the potion first, then checks the deck.
+        # `base.Rng.NextItem(Potions)` — the event's own Rng
+        # (StoneOfAllTime.cs:77).
+        er = self.event_rng
         held = self.run.held_potions
-        potion = self.rng.choice(held) if held else None
+        if er is not None:
+            potion = er.next_item(held)
+        else:
+            potion = self.rng.choice(held) if held else None
         lift = (
             EventOption("LIFT", lambda p=potion: self._lift(p))
             if potion is not None
@@ -60,7 +66,7 @@ class StoneOfAllTime(Event):
     def _lift(self, potion) -> None:
         self.run.discard_potion(potion)
         self.run.gain_max_hp(_MAX_HP_GAIN)
-        self.rng.randrange(100)          # Rng.NextInt(100), value unused
+        self._burn_dialogue_roll()
         self._finish("LIFT")
 
     def _push(self) -> None:
@@ -69,5 +75,13 @@ class StoneOfAllTime(Event):
             enchantment = make_enchantment("vigorous")
             enchantment.amount = _VIGOROUS_AMOUNT
             enchantment.attach(card)
-        self.rng.randrange(100)          # Rng.NextInt(100), value unused
+        self._burn_dialogue_roll()
         self._finish("PUSH")
+
+    def _burn_dialogue_roll(self) -> None:
+        """`base.Rng.NextInt(100)`, value unused (StoneOfAllTime.cs:97/113)."""
+        er = self.event_rng
+        if er is not None:
+            er.next_int(100)
+        else:
+            self.rng.randrange(100)

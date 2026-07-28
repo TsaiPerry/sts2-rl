@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\game_piece.py",
-    "sha256": "5a79dadfbe0d151134cde028094d9ebfef78da832380d68f2e2b7b88a268f25b"
+    "sha256": "023ae5c043b53d2dd7ed179fce1d400c23845a76ade52669f11f0fa866ccfcc0"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3",
+      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
@@ -51,9 +51,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. GamePiece.cs:16 overrides FlashSfx to the draw sound."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (game_piece.py:19-22), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:515)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The condition and the amount match -- `cardPlay.Card.Type == CardType.Power` then `CardPileCmd.Draw(ctx, Cards.BaseValue, Owner)` with CardsVar(1) (GamePiece.cs:18, 22-26) is `if card.card_type == CardType.POWER: DrawCmd.draw(self.player, 1)` -- but C# fires this hook once per Replay ITERATION and the sim once per play, so a replayed Power card draws 1 where the game draws 2 (G1, LIVE)."
+      "maps_to": "on_card_played (sts2_rl/relics/game_piece.py) -- Power-type test then DrawCmd.draw(1); fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The condition and the amount already matched."
     }
   },
   "guards": [

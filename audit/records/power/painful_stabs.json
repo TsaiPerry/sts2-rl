@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     }
   ],
@@ -53,19 +53,19 @@
     "ShouldCreatureBeRemovedFromCombatAfterDeath": {
       "maps_to": "hooks.py:603 -- NOT implemented by this power",
       "verdict": "gap",
-      "issue": "`=> creature != base.Owner`, i.e. the Test Subject's corpse stays in combat. The sim has the hook (hooks.py:603, consumed at cmds.py:102-104) and this power does not use it -- AdaptablePower on the same creature prevents the death instead (audit/records/power/adaptable.json), so the phase transition works by a different route. Same unused-hook finding as adaptable's and illusion's; folded into that mechanism."
+      "issue": "NARROWED 2026-07-27. The retention observable is closed -- the sim's death-prevention arm now leaves the creature dead at 0 HP with `retained_after_death = True` (cmds.py:62) -- but this power still does not implement `should_remove_from_combat_after_death` (PainfulStabsPower.cs:28-32), because AdaptablePower on the same creature reaches retention by the prevention arm. Folded into power/adaptable's AfterDeath mechanism."
     },
     "AfterAttack": {
       "maps_to": "powers.py:3391-3409 on_damage_received",
       "verdict": "gap",
-      "issue": "WRONG HOOK, and the sim HAS the right one and does not use it. C#'s `AfterAttack(choiceContext, AttackCommand command)` fires ONCE per attack command, after every hit of every target, and is handed the whole `command.Results` (a List<List<DamageResult>>) so it can count hits and act once. The sim ports it onto `on_damage_received` (cmds.py:122), which fires PER HIT and inside the damage pipeline. `hooks.py:344` (before_attack) and `hooks.py:361` (after_attack) both exist -- the main report records them as used by Vigor and Gigantification -- so this is an unused-slot omission, not an absence. Same defect as curl_up's and skittish's (main report section 4 items 5 and 14). Two standing consequences: the KILLING-BLOW guard (cmds.py:121 skips the victim's on_damage_received on a kill, where C#'s AfterAttack is not guarded at all), and effects granted inline being visible to LATER HITS OF THE SAME attack. Third-file citations, not hashed here. Here the Wound COUNT works out the same -- C# adds `base.Amount * num` Wounds once where num is the number of connecting hits (PainfulStabsPower.cs:60-62) and the sim adds `self.amount` per connecting hit (powers.py:3408-3409) -- so the arithmetic is equivalent and the divergences are the two standing ones. (a) KILLING BLOW: this power's target is the PLAYER, so on a lethal hit cmds.py:121 suppresses the sim's on_damage_received and the game's AfterAttack still adds the Wounds. That is not purely academic -- with the ported Lizard Tail preventing the death, cmds.py:112 floors the player at 1 HP and `target.is_dead` is then False, so the sim DOES fire; the two models therefore agree on the prevented-death path and disagree on the real-death path, which is the inverse of damage_pipeline gap G4's shape. (b) TIMING: Wounds arriving in the discard mid-attack rather than after it, which nothing currently reads. Also faithful for the record: C# adds to `PileType.Discard` and the sim uses `CardPileCmd.add_to_discard` -- the pile is right, which matters because Wounds in the DRAW pile would be a different card. Third-file citations, not hashed here."
+      "issue": "NARROWED 2026-07-27, and a NEW residual is recorded. THE HOOK IS FIXED: PainfulStabsPower now implements `after_attack(dealer, card, results)` (powers.py:3577-3596), groups the AttackCommand results by player receiver and adds `Amount * hits` Wounds once per receiver, matching PainfulStabsPower.cs:34-68; `hooks.after_attack` supplies the results (hooks.py:555-567). Divergence (a), the killing blow, and (b), the mid-attack timing, are both gone. WHAT REMAINS: PainfulStabsPower.cs:36's third early-return condition, `!command.DamageProps.IsPoweredAttack()`, is not expressed -- the sim's attack bracket carries no props and powers.py:3583-3589 tests only the dealer and the receiver's side. Dormant today (`Monster._execute_attack`, monsters/base.py:117-128, always brackets powered MOVE damage). NOTE this record's guard on 'the three AfterAttack early-return conditions' still reads `faithful`, which is no longer true of the third one."
     }
   },
   "guards": [
     {
       "what": "PainfulStabsPower.cs:36 the three AfterAttack guards",
-      "verdict": "faithful",
-      "rationale": "`command.Attacker != base.Owner`, `command.TargetSide == base.Owner.Side`, `!command.DamageProps.IsPoweredAttack()` map to powers.py:3400-3405's `dealer is self.owner and target.side == \"player\" and amount > 0 and is_powered_attack(props)`. The props test reads `props` directly, which is the correct form (contrast SlowPower's card-based test)."
+      "verdict": "gap",
+      "issue": "RE-OPENED 2026-07-28. Two of the three early-return conditions map; the THIRD does not, and the AfterAttack hook entry in this record already says so (\"NOTE this record's guard on 'the three AfterAttack early-return conditions' still reads `faithful`, which is no longer true of the third one\") -- the re-derivation pass wrote that sentence and left this entry at `faithful` anyway. PainfulStabsPower.cs:36 is `command.Attacker != base.Owner || command.TargetSide == base.Owner.Side || !command.DamageProps.IsPoweredAttack()`. The sim's after_attack bracket carries no props at all -- `def after_attack(self, dealer, card=None)` (hooks.py:555), which passes only (dealer, card, results) to listeners (hooks.py:566-567) -- and powers.py:3582-3594 tests only `dealer is not self.owner` and, per result, `receiver.side != \"player\"`. So the IsPoweredAttack test has no expression anywhere on this path. DORMANT today (Monster._execute_attack, monsters/base.py:117-128, always brackets powered MOVE damage), and folded with the AfterAttack entry's residual: one mechanism, one verdict. CITATION FIX: the old rationale cited powers.py:3400-3405 for the props test; after the powers.py reshuffle those lines are inside HexPower, and the code they described no longer exists at that location. The two conditions that DO map: `command.Attacker != base.Owner` -> `dealer is not self.owner`, and `command.TargetSide == base.Owner.Side` -> the per-receiver `receiver.side != \"player\"` filter, which is equivalent for a single-player enemy owner."
     },
     {
       "what": "PainfulStabsPower.cs:41 `!list.Any(r => r.UnblockedDamage > 0)` -> return",

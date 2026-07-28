@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\self_forming_clay.py",
-    "sha256": "7f49e386c7b08794e1142c87a392a6c9da390297da086bf046dece09526bc58d"
+    "sha256": "cefd4f24b222b27002bb6d9f7f601b64f05f42485b0a81455fa9b4a21a7ab22e"
   },
   "extra_sources": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     }
   ],
@@ -69,14 +69,14 @@
     "AfterDamageReceived": {
       "maps_to": "on_damage_received (self_forming_clay.py:29-38) for the LATCH, plus on_player_turn_started (self_forming_clay.py:40-46) for the PAYOUT -- the sim replaces C#'s SelfFormingClayPower with a relic-local `_pending_block` counter, so one C# hook plus one whole power map onto two sim methods",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and N3 per binding rule 4. The latch is faithful (owner check, unblocked-damage > 0, +3 per HP-loss event, killing-blow guard inherited from cmds.py:121) but the RE-ARCHITECTURE of the payout is where the divergences are: C# banks the block in a PowerModel that dies with the combat and pays out at AfterBlockCleared, and the sim banks it on the relic instance -- which lives on RunState.relics -- and pays out at on_player_turn_started, ~12 steps later in the turn. That makes state cross the combat boundary (G1, LIVE) and moves the payout past listeners that damage the player in between (G2, LIVE), and it deletes a visible player power (N3)."
+      "issue": "NARROWED 2026-07-27. The combat-boundary half (G1) is CLOSED: `reset_for_combat` zeroes `_pending_block` on every attach (sts2_rl/relics/self_forming_clay.py, sts2_rl/relics/base.py:192-195). WHAT REMAINS is guard G2, the payout SLOT: SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25) pays out in the block-clear pass, before the energy reset and before the hand draw, while the port still pays from `on_player_turn_started` -- the LAST turn-start slot. Anything that damages the player in between (Royal Poison's AfterPlayerTurnStart tick is the ported witness) is still banked and paid in the SAME turn by the sim and next turn by C#. N3 (no SelfFormingClayPower at all) is unchanged."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_pending_block` survives the combat, so a fight that ends before the player's next turn hands free Block to the NEXT combat",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# has no relic-side counter at all. SelfFormingClay.cs:29 applies a SelfFormingClayPower to the owner and SelfFormingClayPower.cs:19-25 pays it out at AfterBlockCleared and then removes itself, so the pending block is a POWER -- and powers do not survive a combat. self_forming_clay.py:27 puts the counter on the relic instead, and relic instances live on RunState.relics and are re-attached to every new CombatState, so anything unspent latches for the rest of the run. REACHABILITY (LIVE, executed with ported content only -- py audit/tools/relic_probes_b14.py clay-carry): playing Hemokinesis (cards/hemokinesis.py:37, a ported Ironclad Uncommon whose 2 HP self-loss goes through DamageCmd) as the killing blow leaves combat 1 over with `_pending_block = 3`, and the next CombatState opens turn 1 with `block = 3` where a fresh instance -- and C# -- gives 0. Both sides ported and nothing further is needed: the relic is Uncommon in the grab bag and every run has more than one combat. Other reachable shapes: any unblocked damage taken during the player's own final turn (Bloodletting, Offering, Brand, Blood Wall all route HP loss through DamageCmd), or a Thorns enemy retaliating on the killing blow (monsters/hive/spiny_toad.py:45 and monsters/underdocks/toadpole.py:75 both apply ThornsPower). CORRECTION TO A SWEEP -- this unit is a FALSE CLEAR: py audit/tools/relic_probes.py sweep-reset files self_forming_clay in the bucket labelled 'RESET AT TURN START, BEFORE ANY READER (art_of_war shape -- genuinely safe)'. The reset is not before the reader: self_forming_clay.py:41-46 pays the block out on line 43 and only zeroes the field on line 46, so it is a consume-then-clear. The sweep's bucket test looks at WHICH METHOD writes a field, never at whether the write precedes the read inside it. That is a seventh sweep-A defect and the third of the false-clear kind; it is reported in .superpowers/sdd/relic-batch-14-lessons.md with the executed evidence. Rule 7: cards/hemokinesis.py, monsters/hive/spiny_toad.py, monsters/underdocks/toadpole.py, run.py, combat.py and relic_probes.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the pending Block no longer crosses the combat boundary. sts2_rl/relics/self_forming_clay.py's `reset_for_combat` zeroes `_pending_block`, and Relic.attach runs it on every new CombatState (sts2_rl/relics/base.py:192-195) -- the sim's equivalent of C# banking the block in a SelfFormingClayPower, which dies with the combat (SelfFormingClay.cs:29, SelfFormingClayPower.cs:19-25). WAS: the counter lived on the relic instance, which lives on RunState.relics, so a fight that ended before the player's next turn handed free Block to the next combat."
     },
     {
       "what": "G2 (LIVE): the payout moved from AfterBlockCleared (turn_structure step ~11) to on_player_turn_started (step 23), so damage taken IN BETWEEN is paid out the same turn instead of the next",

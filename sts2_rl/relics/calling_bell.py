@@ -9,9 +9,10 @@ class CallingBell(Relic):
     specific relics: Anchor, Gremlin Horn and Mummified Hand. Offered by the
     Darv shrine.
 
-    The source offers them via RewardsCmd.OfferCustom (a take-or-skip
-    screen); the sim grants all three, matching how it auto-keeps other
-    non-choice relic offers."""
+    CallingBell.cs:31 hands the three RelicRewards to RewardsCmd.OfferCustom,
+    a take-or-skip screen with three independent declines (the curse is added
+    first, by CardPileCmd.AddCurseToDeck, and is not part of it), so each goes
+    through run.offer_relic."""
 
     id = "calling_bell"
     name = "Calling Bell"
@@ -25,4 +26,4 @@ class CallingBell(Relic):
 
         run.add_card(make_card("curse_of_the_bell"))
         for relic_id in self.RELICS:
-            run.add_relic(relic_id)
+            run.offer_relic(relic_id)

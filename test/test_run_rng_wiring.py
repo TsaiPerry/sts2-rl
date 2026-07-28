@@ -70,3 +70,127 @@ def test_string_seed_seats_the_grab_bag_from_the_parity_deques():
     # Every bag entry is a ported relic, in deque order (unported ids dropped).
     assert first.relic_grab_bag == [r for r in expected
                                     if r in set(first.relic_grab_bag)]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# GAP-QUEUE 47 — relic/_off_stream_draw: a relic that names a stream in C#
+# must ADVANCE that stream's counter, not the legacy shared random.Random.
+#
+# These are counter assertions only. Out-of-combat draws on the unseeded
+# shared rng make gameplay deltas nondeterministic, so gameplay output is
+# never the pin here (see docs: "conformance replay determinism").
+# ═════════════════════════════════════════════════════════════════════════
+
+def _parity_run():
+    from sts2_rl.rng import RunRngType
+    run = RunState(string_seed=SEED)
+    assert run.rng_set.counters()[RunRngType.NICHE] == 0
+    return run
+
+
+def test_astrolabe_rolls_its_transforms_on_niche():
+    # Astrolabe.cs:25 — CreateRandomCardForTransform(..., RunState.Rng.Niche),
+    # once per transformed card (CardsVar(3)).
+    run = _parity_run()
+    run.add_relic("astrolabe")
+    assert run.rng_set.niche.counter == 3
+
+
+def test_new_leaf_rolls_its_transform_on_niche():
+    # NewLeaf.cs:27 — CardCmd.TransformToRandom(item, RunState.Rng.Niche).
+    run = _parity_run()
+    run.add_relic("new_leaf")
+    assert run.rng_set.niche.counter == 1
+
+
+def test_sere_talon_draws_its_curses_on_niche():
+    # SereTalon.cs:39-45 — Rng.Niche.NextItem(availableCurses) per curse,
+    # removed after each pick (Curses = 2).
+    run = _parity_run()
+    run.add_relic("sere_talon")
+    assert run.rng_set.niche.counter == 2
+
+
+def test_war_hammer_shuffles_on_niche():
+    # WarHammer.cs:26 — StableShuffle(RunState.Rng.Niche) over the upgradable
+    # deck cards: one UnstableShuffle == len-1 draws.
+    from sts2_rl.rooms import RoomType
+    run = _parity_run()
+    run.add_relic("war_hammer")
+    upgradable = len([c for c in run.deck if c.is_upgradable])
+    for relic in run.relics:
+        relic.after_combat_end(run, RoomType.ELITE)
+    assert run.rng_set.niche.counter == upgradable - 1
+
+
+def test_sand_castle_shuffles_on_niche():
+    # SandCastle.cs:24 — StableShuffle(RunState.Rng.Niche).
+    run = _parity_run()
+    upgradable = len([c for c in run.deck if c.is_upgradable])
+    run.add_relic("sand_castle")
+    assert run.rng_set.niche.counter == upgradable - 1
+
+
+def test_war_paint_and_whetstone_shuffle_on_niche():
+    from sts2_rl.cards import CardType
+    for rid, card_type in (("war_paint", CardType.SKILL),
+                           ("whetstone", CardType.ATTACK)):
+        run = _parity_run()
+        n = len([c for c in run.deck
+                 if c.card_type == card_type and c.is_upgradable])
+        run.add_relic(rid)
+        assert run.rng_set.niche.counter == n - 1, rid
+
+
+def test_lost_coffer_draws_its_potion_on_the_rewards_stream():
+    # LostCoffer.cs:21 — PotionReward with no rng override, so
+    # PotionFactory.CreateRandomPotionOutOfCombat spends TWO PlayerRng.Rewards
+    # draws (NextFloat for the rarity band, NextItem inside it). The card half
+    # is the control.
+    from sts2_rl.rewards import RarityOddsType, create_reward_cards
+
+    control = RunState(string_seed=SEED)
+    create_reward_cards(control, RarityOddsType.REGULAR, mutate_pity=False)
+    card_half = control.player_rng.rewards.counter
+
+    run = RunState(string_seed=SEED)
+    run.add_relic("lost_coffer")
+    assert run.player_rng.rewards.counter == card_half + 2
+
+
+def test_toolbox_generates_its_options_on_combat_card_generation():
+    # Toolbox.cs:27 — GetDistinctForCombat(..., Rng.CombatCardGeneration).
+    from sts2_rl.combat import CombatState
+    from sts2_rl.relics import make_relic
+    from sts2_rl.rng import RunRngSet
+
+    rs = RunRngSet(SEED)
+    before = rs.combat_card_generation.counter
+    CombatState(rng_set=rs, relics=[make_relic("toolbox")])
+    assert rs.combat_card_generation.counter > before
+
+
+def test_choices_paradox_generates_its_options_on_combat_card_generation():
+    # ChoicesParadox.cs:34 — GetDistinctForCombat(..., CombatCardGeneration).
+    from sts2_rl.combat import CombatState
+    from sts2_rl.relics import make_relic
+    from sts2_rl.rng import RunRngSet
+
+    rs = RunRngSet(SEED)
+    plain = RunRngSet(SEED)
+    CombatState(rng_set=plain)
+    CombatState(rng_set=rs, relics=[make_relic("choices_paradox")])
+    assert (rs.combat_card_generation.counter
+            > plain.combat_card_generation.counter)
+
+
+def test_glass_eye_rolls_for_upgrade_on_every_created_card():
+    # GlassEye.cs:29 sets only CardCreationFlags.NoRarityModification, so
+    # CardFactory.CreateForReward still calls RollForUpgrade per card, and
+    # RollForUpgrade's FIRST statement is `rng.NextFloat()` — before the
+    # IsUpgradable test (CardFactory.cs:288-304). Five 3-card screens =
+    # 15 NextItem + 15 NextFloat = 30 PlayerRng.Rewards draws.
+    run = RunState(string_seed=SEED)
+    assert run.player_rng.rewards.counter == 0
+    run.add_relic("glass_eye")
+    assert run.player_rng.rewards.counter == 30

@@ -85,8 +85,8 @@ class MagiKnight(MachineMonster):
 
 class SpectralKnight(MachineMonster):
     """Hex (make the player's cards Ethereal) → Soul Slash (15) → randomly Soul
-    Slash (weight 2) or Soul Flame (3×3, cannot repeat). The Hex lifts when the
-    Spectral Knight dies.
+    Slash (at most twice in a row) or Soul Flame (3×3, cannot repeat); both
+    branches are weight 1. The Hex lifts when the Spectral Knight dies.
 
     Source: SpectralKnight.cs (non-ascension values)."""
     name = "Spectral Knight"
@@ -108,7 +108,11 @@ class SpectralKnight(MachineMonster):
         hex_move.follow_up = soul_slash
         soul_slash.follow_up = branch
         soul_flame.follow_up = branch
-        branch.add_branch(soul_slash, weight=2.0)
+        # SpectralKnight.cs:52 AddBranch(state, 2) is the (state, int
+        # maxRepeats) overload — a repeat limit, not a weight.
+        branch.add_branch(
+            soul_slash, repeat_type=MoveRepeatType.CAN_REPEAT_X_TIMES, max_times=2
+        )
         branch.add_branch(soul_flame, repeat_type=MoveRepeatType.CANNOT_REPEAT)
         return MonsterMoveStateMachine(
             [hex_move, soul_slash, soul_flame, branch], hex_move

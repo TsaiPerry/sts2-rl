@@ -23,7 +23,8 @@ class ArtOfWar(Relic):
         self._attacks_last_turn = False
         self._attacks_this_turn = False
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.ATTACK:
             return
         if self._attacks_last_turn:

@@ -24,7 +24,8 @@ class Nunchaku(Relic):
         super().__init__()
         self._attacks_played = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.ATTACK:
             return
         self._attacks_played += 1

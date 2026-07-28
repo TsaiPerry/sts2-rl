@@ -22,7 +22,8 @@ class ForgottenSoul(Relic):
 
     DAMAGE = 1
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         if self.combat is None or self.combat.is_over:
             return
         living = self.living_enemies()

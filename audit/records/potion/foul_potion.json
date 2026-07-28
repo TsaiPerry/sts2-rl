@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\potions.py",
-    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+    "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
   },
   "extra_sources": [
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -66,37 +66,37 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "73183c9c6c5cf62323231050e8cc10be476224de23b7a6d643760ea7044229e4",
+      "sha256": "1d4cab807ce57957942d4521f122dd008158f1f2fdc25336530aa2ab03c74f97",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/potion_courier.py",
-      "sha256": "8cd18b6a03397127ffffee5343b3c60f0896c7f641742e7580886ef4b5135276",
+      "sha256": "d3c14c7d840fb61065fcc62fdc302162682b98ba77f9e8015e5081eddc4634a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     }
   ],
@@ -110,13 +110,13 @@
       "maps_to": "no counterpart -- the sim has no out-of-combat potion use at all; CombatState.use_potion (combat.py:583) is the only entry point",
       "verdict": "gap",
       "live": true,
-      "issue": "MECHANISM: PotionUsage.AnyTime means the game's Use button is live outside combat as well as in it, and PotionModel.OnUseWrapper is written for it -- `ICombatState combatState = Owner.Creature.CombatState` may legally be null and every later step null-checks it (PotionModel.cs:294, 298, 334, 336). The sim models no `usage` attribute and has exactly one use path, on CombatState: `py audit/tools/potion_probes.py sweep-usage` finds one `def use_potion` in sts2_rl/, and the conformance layer treats UsePotion as a combat-only command in both the driver and the runner (conformance/combat_driver.py:16, conformance/runner.py:147-150). So the whole out-of-combat arm of this potion is unreachable in the sim: there is no action for it in the env and no replay path for it in the runner. LIVE, and it is one of the four AnyTime potions (blood_potion, entropic_brew, foul_potion, fruit_juice) -- all four are ported, registered and reachable, so a recorded run that drinks one on the map, at a rest site or at a shop cannot be replayed; the UsePotion command falls to the _ROOM_BOUNDARY branch (conformance/runner.py:147-150) rather than being executed, so the belt and the HP the save asserts both drift. Filed as a gap, not a waiver: 'the sim has no path here' is today's content, not the shape of the divergence (binding rule 1)."
+      "issue": "NARROWED 2026-07-27: partly closed. The ENGINE half is done. PotionUsage.AnyTime is now modelled: potions.py:17-20 declares USAGE_COMBAT_ONLY / USAGE_ANY_TIME / USAGE_AUTOMATIC, Potion.usage carries it (potions.py:49-54), this unit sets USAGE_ANY_TIME, and RunState.use_potion is a real out-of-combat entry point that reduces OnUseWrapper to its two non-combat steps -- RemoveBeforeUse, then a per-potion `use_out_of_combat` (potions.py:70-74) -- exactly as PotionModel.cs:294,298,334,336's null-checks allow. EXECUTED (2026-07-27), each of the four AnyTime potions drunk from a bare RunState: Blood Potion resolves, Fruit Juice 80 -> 85 max HP, Foul Potion 99 -> 199 gold, Entropic Brew refills the belt, and a CombatOnly potion (Fire Potion) is refused. WHAT REMAINS: nothing DRIVES that path, so the observable this entry was filed for is unchanged. The RL env still exposes a potion action only inside its combat block, whose potion branch calls CombatState.use_potion; and the conformance layer is untouched -- `_COMBAT_CMDS = {'PlayCard', 'EndTurn', 'UsePotion'}` (conformance/combat_driver.py:16) and the only UsePotion handler is still the in-combat one at conformance/combat_driver.py:263-289. An executed `grep -rn '.use_potion(' sts2_rl/` finds exactly two production callers, both CombatState's. So a recorded run that drinks one of these four on the map, at a rest site or at a shop STILL has no replay path and the belt and the asserted HP still drift. Stays LIVE on that reachability. NOTE the queue's title for this mechanism ('the sim has no out-of-combat potion use at all') is now wrong; the tool table is not this record's to edit."
     },
     "TargetType": {
       "maps_to": "no attribute -- `targeted` stays False and the potion's own `use` walks the creature list (potions.py:413-427)",
       "verdict": "gap",
       "live": false,
-      "issue": "This is the only TargetType in the tier that is a COMPUTED BRANCH rather than a constant: FoulPotion.cs:33-43 returns `TargetType.TargetedNoCreature` when `!CombatManager.Instance.IsInProgress` and `TargetType.AllEnemies` in combat. The TargetedNoCreature arm is what lets the game aim the potion at the MERCHANT -- PotionModel.IsValidTarget returns true for a null target under TargetedNoCreature (PotionModel.cs:256-262). The sim models neither arm and no branch; it has one `use` that assumes combat. DORMANT as a TARGETING divergence specifically, because the sim has no out-of-combat potion use at all to aim (that absence is this record's Usage gap, which is LIVE and is where the observable lives). What would make this entry live on its own: giving the sim an out-of-combat use path without also giving Foul Potion its non-combat arm. Note the sweep reports `-` for this unit's C# TargetType (`py audit/tools/potion_probes.py sweep-attrs`), which is the regex failing to match a property with a body -- not a missing override."
+      "issue": "UPDATED 2026-07-27: still a gap, and its dormancy argument has changed. FoulPotion.cs:33-43 is the tier's only COMPUTED TargetType: `TargetType.TargetedNoCreature` when `!CombatManager.Instance.IsInProgress`, `TargetType.AllEnemies` in combat. The TargetedNoCreature arm is what lets the game aim the potion at the MERCHANT -- PotionModel.IsValidTarget returns true for a null target under it (PotionModel.cs:256-262). The sim still models neither arm and no branch: `targeted` stays False, the in-combat `use` (potions.py:452-470) walks the creature list, and the new `use_out_of_combat` (potions.py:472-478) takes no target argument at all. The premise this entry used to rest on -- 'the sim has no out-of-combat potion use to aim' -- is no longer true: RunState.use_potion exists. It stays DORMANT only because nothing in production drives that path (this record's Usage gap) and because the sim's out-of-combat arm has no target to get wrong. What would make it live: an env action or a replay path for out-of-combat potion use. The sweep still reports `-` for this unit's C# TargetType (`py audit/tools/potion_probes.py sweep-attrs`), which is the regex failing on a property with a body, not a missing override."
     },
     "CanonicalVars (protected override, FoulPotion.cs:45-49)": {
       "maps_to": "DAMAGE = 12 (potions.py:410) and GOLD = 100 (potions.py:411)",
@@ -127,27 +127,26 @@
       "maps_to": "no counterpart -- the sim models no usability check of any kind",
       "verdict": "gap",
       "live": false,
-      "issue": "EXECUTED CENSUS: `grep -rn 'override bool PassesCustomUsabilityCheck' src/` returns exactly one hit in the whole game, FoulPotion.cs:51 -- so this unit is the sole implementer and PotionModel.cs:164's `virtual bool ... => true` is the answer for the other 50. The body refuses the potion unless a combat is in progress, or the current room is a MerchantRoom with an un-opened inventory, or it is the FakeMerchant event (FoulPotion.cs:51-68). The sim has no `passes_custom_usability_check` and no usability gate; CombatState.use_potion's only checks are phase, slot bounds and `automatic` (combat.py:591-601). DORMANT for the same reason as the TargetType branch: the only arm the sim can reach is the in-combat one, where the C# predicate returns true unconditionally (FoulPotion.cs:55-58), so the sim's missing gate refuses nothing it should refuse today. What would make it live: an out-of-combat potion-use path in the sim, at which point Foul Potion would become drinkable in rooms where the game greys it out."
+      "issue": "UPDATED 2026-07-27: still a gap, and closer to live than it was. EXECUTED CENSUS (unchanged): `grep -rn 'override bool PassesCustomUsabilityCheck' src/` returns exactly one hit in the whole game, FoulPotion.cs:51 -- this unit is the sole implementer and PotionModel.cs:164's `virtual bool ... => true` answers for the other 50. The body refuses the potion unless a combat is in progress, or the current room is a MerchantRoom with an un-opened inventory, or it is the FakeMerchant event (FoulPotion.cs:51-68). The sim still has no `passes_custom_usability_check` and no usability gate of any kind: CombatState.use_potion's only checks are phase, slot bounds and `automatic` (combat.py:715-725), and the new RunState.use_potion's only checks are slot bounds and a `usage != USAGE_ANY_TIME` refusal -- so the moment an out-of-combat path is driven this potion is drinkable in every room, which is exactly what guard G1's executed witness shows (100 gold paid from a RunState with no shop). DORMANT today only because no production caller reaches RunState.use_potion (this record's Usage gap)."
     },
     "OnUse (protected override, FoulPotion.cs:71-109)": {
       "maps_to": "FoulPotion.use (potions.py:413-427) -- the in-combat arm only",
       "verdict": "gap",
-      "live": true,
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The C# body is a three-way branch on the room (combat / MerchantRoom / FakeMerchant event); the sim ports the first arm and neither of the other two (G1), and the arm it does port damages the creatures in the OPPOSITE ORDER to the source (G2)."
+      "live": false,
+      "issue": "Rollup of guards G1 and G2 per binding rule 4, NARROWED 2026-07-27. G2 is CLOSED -- the in-combat arm now damages player-then-enemies, the source's `_allies.Concat(_enemies)` order (executed). G1 is partly closed: the C# body is a three-way branch on the room (combat / MerchantRoom / FakeMerchant event), and the sim now ports two of the three EFFECTS but no branch -- `use` is the combat arm and `use_out_of_combat` (potions.py:472-478) runs the MerchantRoom arm unconditionally, in every room, setting a merchant_driven_off flag nothing reads. See guard G1 for the executed witnesses."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the two out-of-combat arms are unported, and the port's docstring names a sim capability that does not exist",
       "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: FoulPotion.cs:79-88 is the shop arm -- drive the merchant off and `PlayerCmd.GainGold(Gold.BaseValue)`, i.e. 100 gold -- and :89-108 is the Fake Merchant arm, which exposes him and starts that fight. potions.py:413-427 implements neither; `use` unconditionally damages the combat creature list, and would raise on ctx.enemies outside a combat. PROMPT.md bug class 12/24: the port's own docstring (potions.py:398-403) asserts that out of combat 'at a real shop it pays GoldVar(100) and drives the merchant off (`RunState.merchant_driven_off`)' -- and `grep -rin merchant_driven_off sts2_rl/` returns exactly that docstring line and nothing else. There is no such attribute, no shop option that throws the potion, and no gold payment; the docstring describes the SOURCE and reads as if it described the port. LIVE: Potion Courier grants three Foul Potions (events/potion_courier.py:47-48) and the ported shop is reachable on every act, so a recorded run that throws one at the merchant diverges by 100 gold plus the whole shop state. PARTIAL CREDIT, stated so a fixer does not double-implement: the Fake Merchant arm's *event* half IS ported -- events/fake_merchant.py:75-97's THROW_POTION option consumes a held Foul Potion via run.discard_potion and starts the fight -- but it is driven from the event's own option list, not from using the potion, so the potion's OnUse still has no path and the potion is discarded rather than USED (no OnUseWrapper, no AfterPotionUsed)."
+      "live": false,
+      "issue": "NARROWED 2026-07-27: partly closed, and the remaining shape has changed. CLOSED: the potion has an out-of-combat arm and the docstring no longer describes a capability the sim lacks -- FoulPotion.use_out_of_combat (potions.py:472-478) sets RunState.merchant_driven_off and pays GoldVar(100) through run.gain_gold, which is FoulPotion.cs:79-88's MerchantRoom arm, and RunState.use_potion routes an AnyTime potion into it. EXECUTED (2026-07-27): a bare RunState holding a Foul Potion goes 99 -> 199 gold and the belt slot nulls. WHAT REMAINS, three things. (1) `RunState.merchant_driven_off` has NO READER -- an executed `grep -rn merchant_driven_off sts2_rl/` returns exactly two hits, the initialiser and this write -- so the merchant is not actually driven off and the shop is unchanged. (2) `use_out_of_combat` has NO room branch, where FoulPotion.cs:71-109 is a three-way branch: the sim runs the MerchantRoom arm in EVERY room (the witness above is a RunState with no shop at all), so at the Fake Merchant event it pays 100 gold where FoulPotion.cs:89-108 starts that fight, and anywhere else it pays 100 gold where the source's final `else` returns without effect. (3) The potion's own PassesCustomUsabilityCheck (this record's separate hook entry) still refuses nothing, so nothing greys the use out. PARTIAL CREDIT unchanged: the Fake Merchant *event* half is ported at events/fake_merchant.py:75-97, driven from the event's option list rather than from using the potion. Downgraded from LIVE to dormant: nothing in production calls RunState.use_potion -- an executed `grep -rn '.use_potion(' sts2_rl/` finds two callers, both CombatState's -- which is precisely this record's Usage gap. Closing Usage makes all three of these live at once."
     },
     {
-      "what": "G2 (LIVE): the in-combat arm damages enemies-then-player where the source damages player-then-enemies",
-      "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: FoulPotion.cs:77 passes `Owner.Creature.CombatState.Creatures.Where(c => !c.IsPet)` to CreatureCmd.Damage, and `Creatures` is `_allies.Concat(_enemies).ToList()` (CombatState.cs:70) -- allies FIRST. potions.py:418 builds `[*ctx.enemies, ctx.player]` -- the player LAST. Same set (the sim has no pets, so the !IsPet filter is inert), opposite order. OBSERVABLE, and it decides a run: with the player on 12 or fewer HP and the last living enemy on 12 or fewer HP, the game damages the player first and the run ends; the sim damages the enemy first, and CombatState.use_potion then tests `_all_enemies_dead()` BEFORE `player.is_dead` (combat.py:612-615) and calls `_end_combat(player_won=True)`. The sim wins the fight the game loses. LIVE: Foul Potion is granted three at a time by the ported Potion Courier event and is usable in any combat. Ordering also matters short of the mutual kill -- an on_damage_received listener on the player sees the enemies' state differently in the two orders. Note the sim's `if creature.is_gone: continue` (potions.py:419-420) has no C# counterpart in the filter, but is harmless: C# hands dead creatures to CreatureCmd.Damage too and the pipeline skips them."
+      "what": "G2 (was LIVE -- CLOSED 2026-07-27): the in-combat arm damages enemies-then-player where the source damages player-then-enemies",
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the order is the source's. potions.py:461 now iterates `[ctx.player, *ctx.enemies]`, matching `CombatState.Creatures = _allies.Concat(_enemies)` (CombatState.cs:70), which FoulPotion.cs:77 hands to CreatureCmd.Damage -- allies first, so the THROWER takes the 12 before anyone else. EXECUTED (2026-07-27) with an on_damage_received spy: the order is ['PlayerCombatState', 'Fuzzy Wurm Crawler']. WAS: `[*ctx.enemies, ctx.player]`, which let the sim WIN a mutual kill the game loses, because CombatState.use_potion tests `_all_enemies_dead()` before `player.is_dead`."
     },
     {
       "what": "N1: the damage set is `Creatures`, NOT `HittableEnemies` -- Foul Potion really does hit the thrower",
@@ -163,7 +162,7 @@
       "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
       "verdict": "gap",
       "live": true,
-      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+      "issue": "NARROWED 2026-07-27 (re-derived from today's code, not from the fix log). HALF of this mechanism is closed and half is not. Order re-read against src/Core/Models/PotionModel.cs:291-342 and against CombatState.use_potion (sts2_rl/combat.py:707-745): :293 RemoveBeforeUse -> combat.py:729-730 (slot nulled, listener detached); :297 Hook.BeforePotionUsed -> combat.py:736, BEFORE the effect at :737; :327 OnUse -> :737; :336 History.PotionUsed (presentation only, still no sim entry); :338 Hook.AfterPotionUsed -> combat.py:738; :340 CheckForEmptyHand -> combat.py:739. CLOSED half (1): BeforePotionUsed now has a real dispatcher (hooks.py:779-790) and its single C# implementer is ported -- powers.py:2741-2744's SurroundedPower.before_potion_used runs the same _update_direction the card path runs, so the Kaiser Crab facing flip happens BEFORE the potion lands instead of a phase late. STILL OPEN half (2): CheckForEmptyHand now has a sim counterpart too -- CombatState._check_for_empty_hand (combat.py:747-758) mirrors CombatManager.cs:887-893's IsInProgress + empty-hand test and is a SECOND on_hand_emptied call site beside the end-of-turn flush at player.py:240 -- but nothing downstream reaches Unceasing Top from it: the sole C# AfterHandEmptied implementer is still wired to on_card_played in the sim, and CombatState.use_potion does not fire on_card_played. EXECUTED WITNESS (2026-07-27): a fresh combat holding Unceasing Top, hand emptied, use_potion(0) on a Block Potion -- hand 0 -> 0 cards, where CombatManager.cs:887-893 runs AfterHandEmptied and draws 1. Rollup stays `gap` per binding rule 4 and matches audit/records/relic/unceasing_top.json G1 (still `gap`) per binding rule 3. LIVE for the reason it always was: the check is reachable from EVERY one of the 51 potions, not only the hand-emptying ones, because C# tests the hand AFTER the use. NOTE the queue's title for this mechanism ('BeforePotionUsed and CheckForEmptyHand are never dispatched') is now half stale; the tool table is not this record's to edit."
     },
     {
       "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\pen_nib.py",
-    "sha256": "7458fb6e6cf67ec60a5a24617a44887d20dc352b4153ef62794934097ee0395e"
+    "sha256": "4caec40e7abbd569a8bf3e141c9360011d5fe2fd0e3533911c603dad5240de1a"
   },
   "extra_sources": [
     {
@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cards/thrash.py",
-      "sha256": "6ffb7671ded4a4f5e00a8786ac110c677e02eef9139983e4effafceec8e3bdb5",
+      "sha256": "034f36bcc83c695672fb15e1a7c0804bdc5a50b30dc083b3ad0c0613d05717ad",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/previews.py",
-      "sha256": "29b3d9f4118bd5cde142eaa71063538a1590d2db00ddf9c0cd9a5aeaad139236",
+      "sha256": "610483acf1c40cde7a8d62fd94e9dc4991efe5244494c612527686dc961839d5",
       "side": "sim"
     },
     {
@@ -61,17 +61,17 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "afb8d4f859d69bf03e953f4f7bc8f7bce3265a01ab5dd1f7fb125cb1755f8449",
+      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
       "side": "sim"
     }
   ],
@@ -97,9 +97,9 @@
       "issue": "Rollup of guards G1 and G2 per binding rule 4. The `cardSource == AttackToDouble -> 2m` arm (PenNib.cs:129-132) is ported exactly, but the port drops the whole `AttackToDouble == null` arm (PenNib.cs:120-128), which is what doubles the PENDING 10th Attack's displayed number -- guard G2. G1 is the replay defect the mark itself inherits."
     },
     "BeforeCardPlayed": {
-      "maps_to": "before_card_played (pen_nib.py:30-35), dispatched by HookSystem.before_card_played (hooks.py:372-384) from CombatState._resolve_card_play (combat.py:466)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The body matches PenNib.cs:136-152 clause for clause -- Attack-type filter, increment-then-wrap, mark the card when the counter wraps to 0 -- but C# fires this hook once per Replay ITERATION (CardModel.cs:1929, inside the `for (i = 0; i < playCount; i++)` loop opened at :1904) and combat.py:466 fires it once per logical play, outside the sim's own play-count loop (combat.py:477). So a replayed Attack advances the game's counter by 2 and the sim's by 1, and from the first combat onward the two codebases double a DIFFERENT Attack. The `cardPlay.Card.Owner != base.Owner` clause (PenNib.cs:142-145) is multiplayer scoping -- see guard N1."
+      "maps_to": "before_card_played (sts2_rl/relics/pen_nib.py), fired once per Replay iteration from inside the play-count loop (sts2_rl/combat.py:574-576)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The body already matched PenNib.cs:136-152 clause for clause."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (pen_nib.py:48-50), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
@@ -110,8 +110,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): both of the relic's event hooks fire once per logical play in the sim and once per Replay ITERATION in the game, so a replayed Attack is counted once instead of twice AND doubled twice instead of once",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)`, builds a fresh CardPlay at :1919-1928 and fires Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1959 INSIDE it. combat.py:466 fires before_card_played before the sim's `for _ in range(play_count)` loop (combat.py:477) and combat.py:514 fires on_card_played after it. Two observables follow: (a) the counter under-counts, so the sim's 10th Attack is a different Attack from the game's for the rest of the run; (b) on the 10th Attack itself the game doubles pass 0 only -- pass 1 re-enters ModifyDamageMultiplicative with AttackToDouble already nulled and takes the `AttacksPlayed == 9` test, which is false (the counter is 1 by then) -- while the sim doubles every pass. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-pennib): Pen Nib is Uncommon in the transcribed grab bag and Throwing Axe (relics/throwing_axe.py:30-35, granted by the ported Tanx shrine) makes the first card of a combat play twice. Observed: one replayed Strike leaves _attacks_played = 1 where the game leaves 2; with the counter primed to 9 the replayed 10th Strike deals 24 where the game deals 18. This is audit/records/seam/hook_dispatch.json guard G4 at the site that record ALREADY NAMES as its ported witness (its issue text cites relics/pen_nib.py:30-35 by line and labels the mechanism a LIVE gap); one verdict per mechanism, binding rule 3, so this entry matches it rather than re-deriving it, and the seam owns the machinery while this record owns Pen Nib's observable. Pinned by the seam's strict xfail: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (test_hook_order.py:1143), which asserts nib._attacks_played == 2. NOTE per binding rule 7: CardModel.cs, combat.py, hooks.py, throwing_axe.py, test_hook_order.py and hook_dispatch.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "G2 (LIVE at the sim's own preview site): the entire `AttackToDouble == null` arm of ModifyDamageMultiplicative (PenNib.cs:120-128) has no counterpart -- the game doubles the PENDING 10th Attack's number for any cardSource that is not in PileType.Play once AttacksPlayed == 9",

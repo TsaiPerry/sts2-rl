@@ -17,11 +17,12 @@ from sts2_rl.cards import (
     InfectionCard,
     WoundCard,
 )
-from sts2_rl.monsters import Encounter
+from sts2_rl.monsters import Encounter, MoveType
 from sts2_rl.monsters.overgrowth.slimes import LeafSlimeS, LeafSlimeM, TwigSlimeM
 from sts2_rl.monsters.overgrowth.fogmog import EyeWithTeeth
 from sts2_rl.monsters.overgrowth.phrog_parasite import PhrogParasite, Wriggler
 from sts2_rl.monsters.overgrowth.vantom import Vantom
+from sts2_rl.monsters.overgrowth.vine_shambler import VineShambler
 from sts2_rl.powers import (
     ArtifactPower,
     PowerType,
@@ -156,7 +157,11 @@ class TestConstrictBehavior:
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, ConstrictPower, 3)
         before = cs.player.hp
+        # These powers are AfterSideTurnEnd in C# (power/_side_turn_slot),
+        # so they moved off the sim's BeforeTurnEnd slot onto
+        # after_player_turn_end. end_turn fires both in order.
         cs.hooks.on_player_turn_end(cs.player)
+        cs.hooks.after_player_turn_end(cs.player)
         assert cs.player.hp == before - 3
 
     def test_constrict_does_not_affect_direct_incoming_damage(self):
@@ -202,7 +207,11 @@ class TestTangledBehavior:
     def test_tangled_removed_at_end_of_player_turn(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, TangledPower, 1)
+        # These powers are AfterSideTurnEnd in C# (power/_side_turn_slot),
+        # so they moved off the sim's BeforeTurnEnd slot onto
+        # after_player_turn_end. end_turn fires both in order.
         cs.hooks.on_player_turn_end(cs.player)
+        cs.hooks.after_player_turn_end(cs.player)
         assert "tangled" not in cs.player.powers
         assert all(c.affliction is None for c in cs.player.all_cards)
 
@@ -291,7 +300,11 @@ class TestRingingBehavior:
     def test_ringing_removed_at_end_of_player_turn(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, RingingPower, 1)
+        # These powers are AfterSideTurnEnd in C# (power/_side_turn_slot),
+        # so they moved off the sim's BeforeTurnEnd slot onto
+        # after_player_turn_end. end_turn fires both in order.
         cs.hooks.on_player_turn_end(cs.player)
+        cs.hooks.after_player_turn_end(cs.player)
         assert "ringing" not in cs.player.powers
         assert all(c.affliction is None for c in cs.player.all_cards)
 
@@ -404,11 +417,16 @@ class TestIllusionBehavior:
         cs = fresh_with(EyeWithTeeth)
         eye = cs.enemies[0]
         DamageCmd.deal(cs.hooks, eye, 999, dealer=cs.player)
-        assert not eye.is_dead
-        assert eye.hp == 1
+        # CreatureCmd.cs:565 leaves a prevented death AT 0 HP and retained in
+        # combat -- it is genuinely dead until its REVIVE move heals it. This
+        # asserted `not is_dead` and `hp == 1` while the sim floored a
+        # prevented death at 1 HP (power/_death_prevention_branch).
+        assert eye.is_dead
+        assert eye.hp == 0
+        assert eye.retained_after_death
         # Unhittable while reviving.
         DamageCmd.deal(cs.hooks, eye, 999, dealer=cs.player)
-        assert eye.hp == 1
+        assert eye.hp == 0
         # Its next turn is spent reviving to full instead of Distracting.
         before = len(cs.player.discard_pile)
         eye.take_turn(cs._ctx())
@@ -543,6 +561,11 @@ class TestLeafSlimeSGoop:
         slime._move_key = "GOOP"
         ctx = cs._ctx()
         slime.take_turn(ctx)
+        # The intent roll is NOT part of taking the turn: CombatManager.cs:
+        # 478-484 rolls every enemy's next move in one pass at the top of the
+        # player's turn (CombatState._roll_enemy_intents), so a test driving
+        # the monster by hand makes that pass itself (turn_structure gap G9).
+        slime.telegraph_next_move()
         assert slime._move_key == "TACKLE"
 
     def test_tackle_does_not_add_cards(self):
@@ -606,6 +629,9 @@ class TestTwigSlimeMStickyShot:
         slime = cs.enemies[0]
         ctx = cs._ctx()
         slime.take_turn(ctx)
+        # The intent roll happens in the player-turn-start pass, not inside
+        # the move (CombatManager.cs:478-484; turn_structure gap G9).
+        slime.telegraph_next_move()
         assert slime._move_key == "POKEY_POUNCE"
 
     def test_pokey_pounce_does_not_add_cards(self):
@@ -762,6 +788,30 @@ class TestVantomDismember:
         vantom.take_turn(ctx)
         wounds = [c for c in cs.player.discard_pile if isinstance(c, WoundCard)]
         assert len({id(w) for w in wounds}) == 3  # distinct objects
+
+    def test_dismember_telegraphs_the_status_intent_too(self):
+        # Vantom.cs:119 builds DISMEMBER_MOVE with TWO intents:
+        # SingleAttackIntent(26) AND StatusIntent(3).
+        cs = fresh_with(Vantom)
+        vantom = cs.enemies[0]
+        vantom._move_key = "DISMEMBER"
+        intent = vantom.current_intent
+        assert intent.move_type == MoveType.ATTACK
+        assert intent.damage == 26 and intent.hits == 1
+        assert intent.has(MoveType.STATUS_CARD)
+
+
+class TestVineShamblerGraspingVines:
+    def test_grasping_vines_telegraphs_the_card_debuff_too(self):
+        # VineShambler.cs:47 builds GRASPING_VINES_MOVE with TWO intents:
+        # SingleAttackIntent(8) AND CardDebuffIntent.
+        cs = fresh_with(VineShambler)
+        shambler = cs.enemies[0]
+        shambler._move_key = "GRASPING_VINES"
+        intent = shambler.current_intent
+        assert intent.move_type == MoveType.ATTACK
+        assert intent.damage == 8 and intent.hits == 1
+        assert intent.has(MoveType.CARD_DEBUFF)
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

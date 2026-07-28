@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from .base import Relic, RelicRarity, RestSiteOption, register_relic
+from .base import (
+    Relic,
+    RelicRarity,
+    RestSiteOption,
+    is_before_act3_treasure_chest,
+    register_relic,
+)
 
 
 @register_relic
@@ -35,3 +41,9 @@ class Girya(Relic):
 
     def _lift(self) -> None:
         self.times_lifted += 1
+
+    @classmethod
+    def is_allowed(cls, run) -> bool:
+        """Girya.cs:45-48: IsBeforeAct3TreasureChest — the relic leaves the
+        pools from floor 41."""
+        return is_before_act3_treasure_chest(run)

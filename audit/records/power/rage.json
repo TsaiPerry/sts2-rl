@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     }
   ],
@@ -46,8 +46,8 @@
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:1012-1014 on_player_turn_end -> Power._expire",
-      "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. LIVE for this unit: Rage blocks on every Attack the owner plays, and Stampede's turn-end auto-plays are Attack plays, so in the game they each grant Rage block and in the sim they do so only if Rage is registered after Stampede. Both are ported Ironclad card powers (cards/rage_card.py-shaped applier and powers.py:1017-1041)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the player-side leg moved off the sim's Hook.BeforeTurnEnd slot (`on_player_turn_end`) onto `after_player_turn_end`, which combat.py:809 dispatches AFTER `_process_turn_end_cards` and the hand flush -- the sim's port of Hook.AfterTurnEnd (CombatManager.cs:1307), the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292). VERIFIED 2026-07-27 by reading combat.py:781-812 and this power's class in powers.py. WAS: the effect ran inside Hook.BeforeTurnEnd, so its order relative to the turn-end card effects, the flush and Stampede's turn-end auto-plays was hook registration order. The registration-order witness is doubly gone: StampedePower also moved, to `after_auto_post_play_phase_entered` (powers.py:1089), which combat.py:789 fires strictly before this slot."
     }
   },
   "guards": [
@@ -68,10 +68,10 @@
     },
     {
       "what": "Rage fires once per CardPlay, not once per Replay iteration",
-      "verdict": "gap",
-      "issue": "hook_dispatch gap G4, same as power/enrage's matching guard: a doubled Attack gives C# two Rage triggers and the sim one. Per binding rule 3 the same verdict, cross-referenced not re-argued -- and note One-Two Punch and Duplication, both audited in this batch, are the ported play-count sources that make it reachable."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: combat.py:574-600 now builds the play bracket INSIDE `for play_index in range(play_count)` -- `before_card_played` at :576 and `on_card_played` at :600 both fire once per replay iteration, mirroring CardModel.cs:1904-1965 (Hook.BeforeCardPlayed :1929 and Hook.AfterCardPlayed :1959, both inside the playCount loop). VERIFIED 2026-07-27 by reading `CombatState._resolve_card_play`. WAS: both fired once per logical play, outside the loop, so a Throwing-Axe- or Duplication-doubled card advanced every Before/AfterCardPlayed listener by 1 where the game advances it by 2."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

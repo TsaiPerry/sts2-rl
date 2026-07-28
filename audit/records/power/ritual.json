@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -73,7 +73,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:198-211 RitualPower._trigger via on_enemy_turn_end / on_player_turn_end",
       "verdict": "gap",
-      "issue": "Slot divergence, separate from the AfterApplied defect. The enemy leg (powers.py:205-207) is the per-creature on_enemy_turn_end rather than on_enemy_side_end, and the player leg (powers.py:209-211) is Hook.BeforeTurnEnd rather than the sim's AfterTurnEnd slot after_player_turn_end (combat.py:665). Since Ritual's effect is a Strength gain on a creature that has already acted, the round-end state is usually the same; it stops being the same as soon as anything between the two slots reads the owner's Strength -- e.g. the intent preview for the next turn, or a second enemy whose move scales off an ally's Strength. Cross-referenced to turn_structure G5 for the enemy leg (see the guard entry)."
+      "issue": "NARROWED 2026-07-27. THE PLAYER LEG IS CLOSED: it is now `after_player_turn_end` (powers.py:236-238), the sim's Hook.AfterTurnEnd slot (combat.py:809 / CombatManager.cs:1307). WHAT REMAINS is the ENEMY leg: powers.py:232-234 is still the per-creature `on_enemy_turn_end`, which runs right after THIS enemy's move, where Hook.AfterTurnEnd runs once at CombatManager.cs:1256 after every enemy has moved. `on_enemy_side_end` is the right slot and this power still does not use it. Cross-referenced to turn_structure G5, as the guard entry records."
     }
   },
   "guards": [

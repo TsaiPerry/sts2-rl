@@ -20,7 +20,8 @@ class DaughterOfTheWind(Relic):
 
     BLOCK = 1
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from ..cards import CardType
         from ..cmds import BlockCmd
         from ..valueprops import DamageProps

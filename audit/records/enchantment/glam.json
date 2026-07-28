@@ -6,9 +6,14 @@
   },
   "sim_source": {
     "path": "sts2_rl\\enchantments.py",
-    "sha256": "a2846f30facec1cc7778e5ada3d6b31a48d17e70274c876e9ad99d205826bee3"
+    "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31"
   },
   "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
     {
       "path": "src/Core/Commands/CardCmd.cs",
       "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
@@ -46,37 +51,42 @@
     },
     {
       "path": "sts2_rl/cards/anger.py",
-      "sha256": "588a6242b446ccf4545873f4722ee3e8a96a48e901ebdbeac2d77f48485e0618",
+      "sha256": "cbd924bb34688bb59491756f54e935a9d271beabd69625b0fb563752057fc043",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56",
+      "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "ac6d010915e82c9316a1050118737fded63d0ff4fc216863ffdcc32bc997617f",
+      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/trash_heap.py",
-      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "sha256": "39c4119afdeb8fd3addebd7c7344966c2f68b2b4203ed7fa77cb619bc94cbdb3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
@@ -86,17 +96,17 @@
     },
     {
       "path": "sts2_rl/relics/burning_sticks.py",
-      "sha256": "b4b3b8a85e917cedc9ddc1d045572543e5f6b13f0614cbb39619fcf22e0c80db",
+      "sha256": "36aa5127b899f310a0392368e2da08fe5430207374cbc6513caad28ce1bea68d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "59eed9edce6c08408c454c9b8df2fd06f0fb35470ccc1f2dfdbbbc3fa1328f0b",
+      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
       "side": "sim"
     },
     {
@@ -106,7 +116,7 @@
     },
     {
       "path": "sts2_rl/relics/silken_tress.py",
-      "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee",
+      "sha256": "ae34c594c5c9502ded4b0cf86cb7921cdcde004b1d80c81532ab3ee7dcbabcdf",
       "side": "sim"
     },
     {
@@ -116,7 +126,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -148,9 +158,9 @@
     {
       "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
       "verdict": "gap",
-      "issue": "MECHANISM EG2, one verdict at every site (rule 3). FIVE ported sim copy sites drop the enchantment, each a `type(card)()` / `make_card(card.id)` rebuild plus a re-upgrade loop with no `card.enchantment` carry: cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, DualWield.cs:35), powers.py:827-830 (JugglingPower.cs:48), relics/music_box.py:46-48 (MusicBox.cs:78), cards/anger.py:36-38 (Anger.cs:27) and relics/burning_sticks.py:30-32 (BurningSticks.cs:49). All five map to a C# `CreateClone()` call, so all five are the same defect. The sim's OTHER copy paths are correct and are what makes this a bug rather than a design choice: relics/bing_bong.py:37 and events/reflections.py:52 use `copy.deepcopy` (the enchantment rides along), relics/paels_growth.py:39-46 re-attaches Clone by hand, and the per-combat deck copy (run.py:1136 `copy.deepcopy`) carries it too. EXECUTED, this unit: `py -c \"import sys;sys.path.insert(0,'.');from sts2_rl.cards import make_card;from sts2_rl.cards.trash_heap_cards import _clone;from sts2_rl.enchantments import make_enchantment;c=make_card('strike');e=make_enchantment('glam');e.amount=2;e.attach(c);print(type(c.enchantment).__name__, _clone(c).enchantment)\"` -> `GlamEnchantment None`. The same one-liner run over all 17 ids prints `None` for every one of the 16 that any probe card accepts (souls needs an Exhaust card, so it was run against fiend_fire). RULE 6, both legs -- reachability of the copy site for THIS unit: any type (executed matrix A/P/S = True/True/True): cards/trash_heap_cards.py:18-24 `_clone` (Dual Wield, hand ATTACK|POWER -- trash_heap_cards.py:143-149), powers.py:827-830 (Juggling, every 3rd ATTACK played), relics/music_box.py:46-48 (first ATTACK played each turn) and cards/anger.py:36-38 (Anger copies itself), plus relics/burning_sticks.py:30-32 (the first SKILL exhausted each combat). Every one of the five sites is ported and reachable (Dual Wield from the ported Trash Heap event pool, events/trash_heap.py:17; Anger from the Ironclad common pool; Juggling from cards/juggling.py; Music Box and Burning Sticks are ported relics). LIVENESS: LIVE. Glam replays the card on its FIRST play each combat, so the copy's Status matters: Dual Wield copies an UNPLAYED hand card, so the game's copy still has Status Normal and replays where the sim's does not. (At the three play-triggered sites -- Juggling, Music Box, Anger -- C#'s ClonePreservingMutability carries Status Disabled too, so those three are dormant for Glam; Dual Wield is what makes it live.) Grants: cards/colorless_skills.py, relics/glitter.py, relics/silken_tress.py. SECONDARY (false docstring): `_clone`'s docstring claims it \"mirrors CreateClone for the sim's needs\". It does not -- CreateClone carries the enchantment AND the affliction; `_clone` carries neither. Fifth entry in this stream's false-docstring list."
+      "issue": "Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: Glam's replay leg is `modify_card_play_count` (enchantments.py:279-282), a HOOK, so it is never dispatched for the copy's own enchantment -- and the ORIGINAL's copy of it self-gates on `card is self.card`, so the copy gets nothing. EXECUTED 2026-07-28: a `create_clone` copy of a Glam Strike played from hand deals 6, not 12. The stated liveness argument is unchanged: Dual Wield copies an UNPLAYED hand card, so C#'s copy still has Status Normal and replays. LIVE."
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-07-28"
 }

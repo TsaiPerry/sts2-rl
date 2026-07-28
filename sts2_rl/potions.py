@@ -5,12 +5,19 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from .hooks import CAT_POTION
+
 if TYPE_CHECKING:
     from .combat import CombatCtx
     from .creatures import Creature
 
 
 _POTION_CLASSES: dict[str, type[Potion]] = {}
+
+# PotionUsage (PotionUsage.cs) — when the Use button is live.
+USAGE_COMBAT_ONLY = "combat_only"
+USAGE_ANY_TIME = "any_time"
+USAGE_AUTOMATIC = "automatic"
 
 
 def register_potion(cls: type[Potion]) -> type[Potion]:
@@ -28,6 +35,9 @@ class Potion:
     id: str
     name: str
     targeted: bool = False
+    # After its owner's relics in the dispatch walk
+    # (CombatState.IterateHookListeners, CombatState.cs:436-443).
+    hook_category = CAT_POTION
     # PotionModel.Rarity — drives the shop price (MerchantPotionEntry.GetCost:
     # Rare 100, Uncommon 75, else 50). Every implemented reward-pool potion is
     # Common in the source; kept as an attr so rarer potions price correctly.
@@ -36,17 +46,31 @@ class Potion:
     # (PotionReward). Event-only potions (Glowwater) set this False so the
     # sim's random_potion helper doesn't offer them.
     in_reward_pool: bool = True
-    # PotionUsage.Automatic (Fairy in a Bottle): the potion is fired by its own
-    # hook, never by the player — the game disables its Use button, so
-    # CombatState.use_potion rejects it and the env masks its actions out.
-    automatic: bool = False
+    # PotionModel.Usage. COMBAT_ONLY is the default; ANY_TIME leaves the Use
+    # button live outside combat too (OnUseWrapper is written for it —
+    # PotionModel.cs:294,298,334,336 all null-check the combat state);
+    # AUTOMATIC potions are fired by their own hook and never by the player
+    # (the game disables the Use button, NPotionPopup.cs:131).
+    usage: str = USAGE_COMBAT_ONLY
     # Back-reference to the combat this potion is sitting in a belt of (mirrors
     # PotionModel.Owner.Creature.CombatState), set while it is registered as a
     # hook listener — the same pattern as Card.combat. Only hook-listening
     # potions (Fairy in a Bottle) need it; `use` gets its ctx passed in.
     combat = None
 
+    @property
+    def automatic(self) -> bool:
+        """PotionUsage.Automatic — CombatState.use_potion rejects it and the
+        env masks its actions out."""
+        return self.usage == USAGE_AUTOMATIC
+
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        raise NotImplementedError
+
+    def use_out_of_combat(self, run) -> None:
+        """`OnUse`'s `combatState == null` arm, for a PotionUsage.AnyTime
+        potion drunk on the map (RunState.use_potion). CombatOnly potions
+        never reach it."""
         raise NotImplementedError
 
     def __repr__(self) -> str:
@@ -161,11 +185,19 @@ class TouchOfInsanity(Potion):
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         combat = ctx.combat
-        # CostsEnergyOrStars: a non-X card whose cost is > 0 (the sim has no
-        # star costs) — i.e. skip cards that are already free.
+        # TouchOfInsanity.cs:22 is an OR over BOTH cost views:
+        # `CostsEnergyOrStars(includeGlobalModifiers: false) ||
+        #  CostsEnergyOrStars(includeGlobalModifiers: true)`. The `false` arm
+        # is CostModifiers.Local (Card.energy_cost here); the `true` arm is
+        # CostModifiers.All, which adds Hook.ModifyEnergyCostInCombat
+        # (CardEnergyCost.cs:116) — so a card made free THIS TURN but raised
+        # globally by Spiked Gauntlets still counts as costing energy. The sim
+        # has no star costs, so `CurrentStarCost` drops out of both arms.
         candidates = [
             c for c in ctx.player.hand
-            if not getattr(c, "energy_cost_x", False) and c.energy_cost > 0
+            if not getattr(c, "energy_cost_x", False)
+            and (c.energy_cost > 0
+                 or ctx.hooks.modify_card_energy_cost(c, c.energy_cost) > 0)
         ]
         if not candidates:
             return
@@ -215,9 +247,11 @@ class GamblersBrew(Potion):
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         player = ctx.player
-        # MinSelect 0 / MaxSelect ~unbounded: "up to the whole hand".
+        # MinSelect 0 / MaxSelect ~unbounded: "up to the whole hand" — the
+        # screen is always shown (CardSelectCmd.cs:708-711) and confirming
+        # none is legal.
         chosen = ctx.combat.select_cards(
-            "discard_and_draw", list(player.hand), len(player.hand)
+            "discard_any", list(player.hand), len(player.hand)
         )
         if not chosen:
             return
@@ -315,12 +349,16 @@ class BloodPotion(Potion):
 
     id = "blood_potion"
     name = "Blood Potion"
+    usage = USAGE_ANY_TIME
     HEAL_PERCENT = 20
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cmds import CreatureCmd
         heal = ctx.player.max_hp * self.HEAL_PERCENT // 100
         CreatureCmd.heal(ctx.hooks, ctx.player, heal)
+
+    def use_out_of_combat(self, run) -> None:
+        run.heal(run.max_hp * self.HEAL_PERCENT // 100)
 
 
 @register_potion
@@ -397,9 +435,9 @@ class FoulPotion(Potion):
     thrower takes 12 too; the AllEnemies TargetType is display-only.
 
     Out of combat the potion is the shop/Fake Merchant "throw it at the
-    merchant" tool: at a real shop it pays GoldVar(100) and drives the
-    merchant off (`RunState.merchant_driven_off`), and at the Fake Merchant
-    event it starts that fight. Granted by the Potion Courier event, and by
+    merchant" tool: at a real shop it drives the merchant off and pays
+    GoldVar(100) (FoulPotion.cs:79-88), and at the Fake Merchant event it
+    starts that fight (:89-108). Granted by the Potion Courier event, and by
     the merchant himself as a Fake Merchant prerequisite.
     """
 
@@ -407,6 +445,7 @@ class FoulPotion(Potion):
     name = "Foul Potion"
     rarity = "event"
     in_reward_pool = False       # Event rarity: never a random reward roll
+    usage = USAGE_ANY_TIME
     DAMAGE = 12
     GOLD = 100
 
@@ -414,8 +453,12 @@ class FoulPotion(Potion):
         from .cmds import DamageCmd
         from .valueprops import DamageProps
 
-        # CombatState.Creatures = all creatures on all sides.
-        for creature in [*ctx.enemies, ctx.player]:
+        # CombatState.Creatures is `_allies.Concat(_enemies)`
+        # (CombatState.cs:70), so the THROWER is damaged first. The order is
+        # observable at the edge: with the player and the last enemy both on
+        # <= DAMAGE HP the game ends the run where killing the enemy first
+        # would win the fight.
+        for creature in [ctx.player, *ctx.enemies]:
             if creature.is_gone:
                 continue
             DamageCmd.deal(
@@ -425,6 +468,14 @@ class FoulPotion(Potion):
                 dealer=ctx.player,
                 props=DamageProps.NON_CARD_UNPOWERED,
             )
+
+    def use_out_of_combat(self, run) -> None:
+        # FoulPotion.cs:79-88, the MerchantRoom arm: the merchant is driven
+        # off (NMerchantRoom.FoulPotionThrown) and the thrower gains GoldVar.
+        # The Fake Merchant arm (:89-108) belongs to the event, which owns the
+        # stall and the fight it starts.
+        run.merchant_driven_off = True
+        run.gain_gold(self.GOLD)
 
 
 @register_potion
@@ -445,18 +496,14 @@ class SkillPotion(Potion):
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cards.base import CardType
         from .cards.pool import get_distinct_for_combat_parity, random_pool_cards
-        from .cmds import CardPileCmd
 
-        combat = ctx.combat
-        crng = combat.combat_rng
+        crng = ctx.combat.combat_rng
         if crng.is_parity:
             cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.SKILL)
-            combat.offer_screen_selection(cards)
         else:
-            cards = random_pool_cards(combat._rng, 3, CardType.SKILL, distinct=True)
-            if cards:
-                cards[0].set_free_this_turn()
-                CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])
+            cards = random_pool_cards(
+                ctx.combat._rng, 3, CardType.SKILL, distinct=True)
+        _choose_a_card_screen(ctx, cards)
 
 
 @register_potion
@@ -474,18 +521,14 @@ class AttackPotion(Potion):
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cards.base import CardType
         from .cards.pool import get_distinct_for_combat_parity, random_pool_cards
-        from .cmds import CardPileCmd
 
-        combat = ctx.combat
-        crng = combat.combat_rng
+        crng = ctx.combat.combat_rng
         if crng.is_parity:
             cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.ATTACK)
-            combat.offer_screen_selection(cards)
         else:
-            cards = random_pool_cards(combat._rng, 3, CardType.ATTACK, distinct=True)
-            if cards:
-                cards[0].set_free_this_turn()
-                CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])
+            cards = random_pool_cards(
+                ctx.combat._rng, 3, CardType.ATTACK, distinct=True)
+        _choose_a_card_screen(ctx, cards)
 
 
 @register_potion
@@ -932,7 +975,13 @@ class Ashwater(Potion):
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cmds import ExhaustCmd
         player = ctx.player
-        chosen = ctx.combat.select_cards("exhaust", list(player.hand), len(player.hand))
+        # MinSelect 0: `FromHand`'s auto-resolve shortcut is `list.Count <=
+        # prefs.MinSelect` (CardSelectCmd.cs:708-711), false for any non-empty
+        # hand, so the screen is ALWAYS shown and confirming none is legal.
+        # Its own purpose label keeps it off "exhaust", which is the
+        # exhaust-exactly-N screens (Burning Pact, Fiend Fire).
+        chosen = ctx.combat.select_cards(
+            "exhaust_any", list(player.hand), len(player.hand))
         for card in chosen:
             ExhaustCmd.exhaust(ctx.hooks, player, card)
 
@@ -1093,22 +1142,17 @@ class ColorlessPotion(Potion):
             get_distinct_for_combat_parity,
             random_pool_cards,
         )
-        from .cmds import CardPileCmd
 
-        combat = ctx.combat
-        crng = combat.combat_rng
+        crng = ctx.combat.combat_rng
         if crng.is_parity:
             cards = get_distinct_for_combat_parity(
                 crng.card_gen, 3, None, COLORLESS_POOL
             )
-            combat.offer_screen_selection(cards)
         else:
             cards = random_pool_cards(
-                combat._rng, 3, None, distinct=True, pool=COLORLESS_POOL
+                ctx.combat._rng, 3, None, distinct=True, pool=COLORLESS_POOL
             )
-            if cards:
-                cards[0].set_free_this_turn()
-                CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])
+        _choose_a_card_screen(ctx, cards)
 
 
 @register_potion
@@ -1126,18 +1170,14 @@ class PowerPotion(Potion):
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cards.base import CardType
         from .cards.pool import get_distinct_for_combat_parity, random_pool_cards
-        from .cmds import CardPileCmd
 
-        combat = ctx.combat
-        crng = combat.combat_rng
+        crng = ctx.combat.combat_rng
         if crng.is_parity:
             cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.POWER)
-            combat.offer_screen_selection(cards)
         else:
-            cards = random_pool_cards(combat._rng, 3, CardType.POWER, distinct=True)
-            if cards:
-                cards[0].set_free_this_turn()
-                CardPileCmd.add_to_hand(ctx.hooks, ctx.player, cards[0])
+            cards = random_pool_cards(
+                ctx.combat._rng, 3, CardType.POWER, distinct=True)
+        _choose_a_card_screen(ctx, cards)
 
 
 @register_potion
@@ -1183,11 +1223,15 @@ class FruitJuice(Potion):
     id = "fruit_juice"
     name = "Fruit Juice"
     rarity = "rare"
+    usage = USAGE_ANY_TIME
     MAX_HP = 5
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cmds import CreatureCmd
         CreatureCmd.gain_max_hp(ctx.hooks, ctx.player, self.MAX_HP)
+
+    def use_out_of_combat(self, run) -> None:
+        run.gain_max_hp(self.MAX_HP)
 
 
 @register_potion
@@ -1198,23 +1242,46 @@ class EntropicBrew(Potion):
     `while (Owner.HasOpenPotionSlots)` create a
     `PotionFactory.CreateRandomPotionOutOfCombat(Rng.CombatPotionGeneration)`
     and `PotionCmd.TryToProcure` it, stopping when procurement fails. The
-    brew's own slot was freed by RemoveBeforeUse, so it refills too."""
+    brew's own slot was freed by RemoveBeforeUse, so it refills too.
+
+    `CreateRandomPotionOutOfCombat` is deliberate even mid-combat
+    (EntropicBrew.cs:23), so the three `CanBeGeneratedInCombat=false` potions
+    (Fairy in a Bottle, Fruit Juice, Regen Potion) ARE reachable from the brew
+    — the legacy arm used to call the in-combat factory, which filters exactly
+    those three and picks uniformly instead of rolling a rarity."""
 
     id = "entropic_brew"
     name = "Entropic Brew"
     rarity = "rare"
+    usage = USAGE_ANY_TIME
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
+        from .potion_pools import (
+            generate_random_potion,
+            legacy_random_potion_out_of_combat,
+        )
         player = ctx.player
         rng_set = ctx.combat.rng_set
         while player.has_open_potion_slot:
             if rng_set is not None:
-                from .potion_pools import generate_random_potion
-
                 potion = generate_random_potion(rng_set.combat_potion_generation)
             else:
-                potion = random_potion(ctx.combat._rng)
-            if not player.add_potion(potion):
+                potion = legacy_random_potion_out_of_combat(ctx.combat._rng)
+            if not try_to_procure(ctx.hooks, player, potion):
+                break
+
+    def use_out_of_combat(self, run) -> None:
+        from .potion_pools import (
+            generate_random_potion,
+            legacy_random_potion_out_of_combat,
+        )
+        while run.has_open_potion_slot:
+            if run.rng_set is not None:
+                potion = generate_random_potion(
+                    run.rng_set.combat_potion_generation)
+            else:
+                potion = legacy_random_potion_out_of_combat(run.rng)
+            if not run.add_potion(potion):
                 break
 
 
@@ -1225,16 +1292,17 @@ class FairyInABottle(Potion):
 
     Source: FairyInABottle.cs — Rare, PotionUsage.Automatic,
     CanBeGeneratedInCombat=false. `ShouldDie` is false for its owner only, and
-    `AfterPreventingDeath` runs the normal use wrapper: RemoveBeforeUse
-    discards it, then `CreatureCmd.Heal(max(MaxHp * 0.3, 1))` — a heal from 0
-    HP, so the player lands exactly on 30% of Max HP. The sim's
-    death-prevention floor has already restored 1 HP by then (see
-    DamageCmd.deal), so the heal tops up to the same total."""
+    `AfterPreventingDeath` (:42-45) runs the FULL use wrapper —
+    `await OnUseWrapper(...)`, not a bare OnUse — so RemoveBeforeUse discards
+    it, `CreatureCmd.Heal(max(MaxHp * 0.3, 1))` runs, and
+    `Hook.AfterPotionUsed` fires. A prevented death now leaves the creature
+    dead at 0 HP (CreatureCmd.cs:565), so the heal lands the player exactly on
+    30% of Max HP."""
 
     id = "fairy_in_a_bottle"
     name = "Fairy in a Bottle"
     rarity = "rare"
-    automatic = True
+    usage = USAGE_AUTOMATIC
     HEAL_PERCENT = 30
 
     # ── Hook listener (the potion listens while it sits in the belt) ──────
@@ -1246,14 +1314,65 @@ class FairyInABottle(Potion):
         combat = self.combat
         if combat is None:
             return
+        # OnUseWrapper (PotionModel.cs:291-342), not a bare OnUse: :293
+        # RemoveBeforeUse, :327 OnUse, :338 Hook.AfterPotionUsed. Reptile
+        # Trinket's 3 temporary Strength and Belt Buckle's Dexterity both hang
+        # off that last dispatch.
         combat.player.discard_potion(self)      # RemoveBeforeUse
         self.use(combat._ctx(), creature)
+        combat.hooks.on_potion_used(self, creature)
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         from .cmds import CreatureCmd
         creature = target or ctx.player
         heal_to = max(creature.max_hp * self.HEAL_PERCENT // 100, 1)
         CreatureCmd.heal(ctx.hooks, creature, heal_to - creature.hp)
+
+
+def _choose_a_card_screen(ctx: CombatCtx, cards: list) -> None:
+    """`CardSelectCmd.FromChooseACardScreen(..., canSkip: true)`
+    (CardSelectCmd.cs:216-261) for the three-card generator potions.
+
+    The generated cards go up as a screen and only the pick is added — the
+    caller's `if (cardModel != null)` means declining adds nothing. Parity
+    defers the pick to the recording's `SelectCardFromScreen`; the legacy arm
+    resolves it inline through `CombatState.select_cards`, so the installed
+    selector is the policy (it may return [] to take the skip). The legacy arm
+    used to take `cards[0]` unconditionally, so the other two candidates did
+    not exist and the screen could never be declined.
+    """
+    combat = ctx.combat
+    combat.offer_screen_selection(cards)
+    if combat.combat_rng.is_parity:
+        return
+    picked = combat.select_cards("choose_a_card", cards, 1)
+    combat.resolve_screen_selection(cards.index(picked[0]) if picked else None)
+
+
+def try_to_procure(hooks, player, potion: Potion) -> bool:
+    """PotionCmd.TryToProcure (PotionCmd.cs:28-54) for a combat-side source.
+
+    The game has exactly ONE procure entry point and it is gated: the
+    `Hook.ShouldProcurePotion` pass runs first (Sozu.cs:17-20 is its only
+    implementer and refuses every potion for its owner), and a successful
+    `AddPotionInternal` fires `Hook.AfterPotionProcured` (Belt Buckle drops
+    its 2 Dexterity there — the half of "while you have no potions" that
+    enforces the *no*). The sim used to split the operation: RunState.add_potion
+    ran the gate, PlayerCombatState.add_potion ran neither half.
+
+    Both hooks dispatch over `runState.IterateHookListeners(combatState)`
+    (Hook.cs:972, :2408), i.e. the combat listener walk while a combat is in
+    progress. The relic-side signature is `(run, potion)`; CombatState has no
+    run handle, and the only implementer reads neither argument.
+    """
+    for _l, fn in hooks._each("should_procure_potion"):
+        if not fn(None, potion):
+            return False
+    if not player.add_potion(potion):
+        return False
+    for _l, fn in hooks._each("after_potion_procured"):
+        fn(potion)
+    return True
 
 
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)

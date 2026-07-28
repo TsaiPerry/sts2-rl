@@ -173,7 +173,9 @@ class Fabricator(MachineMonster):
         if combat is None:
             return
         choices = [m for m in options if m is not self._last_spawned]
-        cls = ctx.hooks.combat._rng.choice(choices)
+        # Fabricator.cs:115 — base.RunRng.MonsterAi.NextItem(items), the same
+        # dedicated stream MonsterModel.RollMove draws from, not the shared rng.
+        cls = combat.combat_rng.monster_ai.choice(choices)
         self._last_spawned = cls
         bot = cls(ctx.hooks, combat._rng)
         from ...cmds import CreatureCmd, PowerCmd

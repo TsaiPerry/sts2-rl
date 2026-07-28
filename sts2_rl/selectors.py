@@ -14,8 +14,12 @@ hidden stochasticity from selection effects:
 * ``"to_draw_top"`` — the cheapest attack, then the cheapest card.
 * ``"curse_of_knowledge"`` — the least crippling of the Knowledge Demon's
   permanent-curse pair (see ``_CURSE_OF_KNOWLEDGE_RANK``).
-* ``"gambling_chip"`` — only Status/Curse cards (the mulligan may return
-  fewer than ``count``; junk is worth redrawing, everything else is kept).
+* ``"gambling_chip"``, ``"exhaust_any"``, ``"discard_any"`` — only
+  Status/Curse cards. These are the MinSelect-0 screens (Gambling Chip's
+  mulligan, Ashwater, Gambler's Brew): the game always shows them and lets
+  the player confirm *any number* including none, so the pick filters the
+  candidates instead of taking ``count`` of them. Junk is worth
+  exhausting/redrawing, everything else is kept.
 * any other purpose — the first candidates, in offered order.
 
 Every branch is a stable sort over the candidate order, so ties resolve
@@ -76,8 +80,11 @@ def scripted_card_selector(
         keyed.sort(
             key=lambda p: (_CURSE_OF_KNOWLEDGE_RANK.get(p[1].id, len(_CURSE_OF_KNOWLEDGE_RANK)), p[0])
         )
-    elif purpose == "gambling_chip":
-        # Gambling Chip's turn-1 mulligan may pick 0..count cards: toss only
-        # the dead weight (Statuses/Curses) and keep everything playable.
+    elif purpose in ("gambling_chip", "exhaust_any", "discard_any"):
+        # A MinSelect-0 screen picks 0..count cards: toss only the dead weight
+        # (Statuses/Curses) and keep everything playable. Gambling Chip's
+        # turn-1 mulligan, Ashwater's exhaust and Gambler's Brew's discard all
+        # build CardSelectorPrefs(prompt, 0, ...), which CardSelectCmd.cs:708
+        # never auto-resolves.
         keyed = [p for p in keyed if _is_junk(p[1])]
     return [card for _, card in keyed[:count]]

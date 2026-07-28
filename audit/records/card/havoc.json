@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\havoc.py",
-    "sha256": "42366d565da62e49fc6eb6a67e15ab89b05ff100a591261659adb13685b3134f"
+    "sha256": "bb2efc3dfa7517e681fa64a5223225b8b90a631208caf98d541b4b590dd65354"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
       "path": "test/test_rng_tripwire.py",
-      "sha256": "f6bed2b1db59d7bab3be63259896987637e4f92d665c830fd7ed6fac0a80eba7",
+      "sha256": "c34c8bc722ef8c237fc8f09cb3bb0b09e789c97f16fc3cc11619ffabc270a008",
       "side": "sim"
     }
   ],
@@ -42,9 +42,9 @@
       "rationale": "`base(1, CardType.Skill, CardRarity.Common, TargetType.Self)` (Havoc.cs:14-17) == cost 1 / SKILL / COMMON / SELF. Havoc has no Exhaust keyword of its own -- the hover tip (Havoc.cs:12) refers to the card it exhausts -- and the sim leaves `exhausts` False."
     },
     "OnPlay": {
-      "maps_to": "HavocCard.on_play (havoc.py:35-64)",
+      "maps_to": "HavocCard.on_play (havoc.py:35-69)",
       "verdict": "gap",
-      "issue": "C# is a single line: `CardPileCmd.AutoPlayFromDrawPile(choiceContext, Owner, 1, CardPilePosition.Top, forceExhaust: true)` (Havoc.cs:21). The sim reimplements the whole verb inline AND, unlike card/cascade -- which reimplements the same verb faithfully -- it does not route the play through `CombatState.auto_play_card`. It calls `card.on_play(ctx, idx)` directly (havoc.py:52, 57), which SKIPS the entire play bracket that `_resolve_card_play` provides (combat.py:441-513): `hooks.on_energy_spent(card, 0)` (so Free Attack and any other BeforeCardPlayed listener never fires -- C#'s AutoPlay reaches `OnPlayWrapper` and runs the full bracket, CardCmd.cs:129), `hooks.before_card_played`, the play-count loop from `modify_card_play_count` (so a Spiral-enchanted or Hidden-Gem'd card plays ONCE instead of twice), the `before_attack`/`after_attack` bracket (so Vigor from Akabeko is not consumed), and `captured_x` for X-cost cards (so a Whirlwind auto-played by Havoc does nothing). It also picks the random target with `ctx.combat._rng.choice(living)` (havoc.py:56) -- the unseeded shared rng -- where `auto_play_card` correctly uses `self.combat_rng.targets` with the CardCmd.cs:77 citation in-line (combat.py:540-546), so Havoc is also one of the 21 cards the `shared-rng` probe lists. LIVE on every count: Havoc is a ported Common, and Akabeko, Hidden Gem, the Spiral enchantment and X-cost cards are all ported. The fix shape is the one card/cascade already uses -- pull the card off the draw pile, then call `ctx.combat.auto_play_card(card)`. Presentation: none in the C# body. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "issue": "NARROWED 2026-07-27 (partly closed). CLOSED: the RNG-stream half. `havoc.py:59-61` now picks the auto-play target with `ctx.combat.combat_rng.targets.choice(living)` instead of `ctx.combat._rng.choice(living)`, which is CardCmd.cs:77's stream; the card no longer appears in `py audit/tools/card_probes.py shared-rng` (20 classes, havoc not among them). STILL OPEN, and this is what the gap now is: Havoc still calls `card.on_play(ctx, idx)` directly (havoc.py:52, 62) instead of routing through `CombatState.auto_play_card`, so it still skips the entire play bracket that `_resolve_card_play` provides (combat.py:520-620, re-read today) -- `hooks.on_energy_spent(card, 0)` (combat.py:657, so Free Attack and every other BeforeCardPlayed listener never fires), the per-play-index `before_card_played` / `after_card_played` bracket, the play-count loop seeded from `1 + card.base_replay_count` (combat.py:553-554, so a Spiral-enchanted or Hidden-Gem'd card plays ONCE instead of twice), the `before_attack` / `after_attack` bracket (Vigor from Akabeko is not consumed), the in-loop `EnchantmentModel.OnPlay` call (combat.py:592-593), and `captured_x` for X-cost cards (combat.py:547-549, so a Whirlwind auto-played by Havoc still does nothing). C#'s `CardPileCmd.AutoPlayFromDrawPile` reaches `OnPlayWrapper` and runs the full bracket (Havoc.cs:21 -> CardCmd.cs:129). The bracket half got LARGER, not smaller, in the fix campaign: `_resolve_card_play` now runs BeforeCardPlayed and AfterCardPlayed once per play index rather than once per logical play, so Havoc drops more per auto-play than it did when this entry was written. LIVE: Havoc is a ported Common and Akabeko, Hidden Gem, the Spiral enchantment and X-cost cards are all ported. The fix shape is unchanged -- pull the card off the draw pile, then call `ctx.combat.auto_play_card(card)`, as card/cascade does. HISTORY -- WHAT THE DIVERGENCE WAS: C# is a single line: `CardPileCmd.AutoPlayFromDrawPile(choiceContext, Owner, 1, CardPilePosition.Top, forceExhaust: true)` (Havoc.cs:21). The sim reimplements the whole verb inline AND, unlike card/cascade -- which reimplements the same verb faithfully -- it does not route the play through `CombatState.auto_play_card`. It calls `card.on_play(ctx, idx)` directly (havoc.py:52, 57), which SKIPS the entire play bracket that `_resolve_card_play` provides (combat.py:441-513): `hooks.on_energy_spent(card, 0)` (so Free Attack and any other BeforeCardPlayed listener never fires -- C#'s AutoPlay reaches `OnPlayWrapper` and runs the full bracket, CardCmd.cs:129), `hooks.before_card_played`, the play-count loop from `modify_card_play_count` (so a Spiral-enchanted or Hidden-Gem'd card plays ONCE instead of twice), the `before_attack`/`after_attack` bracket (so Vigor from Akabeko is not consumed), and `captured_x` for X-cost cards (so a Whirlwind auto-played by Havoc does nothing). It also picks the random target with `ctx.combat._rng.choice(living)` (havoc.py:56) -- the unseeded shared rng -- where `auto_play_card` correctly uses `self.combat_rng.targets` with the CardCmd.cs:77 citation in-line (combat.py:540-546), so Havoc is also one of the 21 cards the `shared-rng` probe lists. LIVE on every count: Havoc is a ported Common, and Akabeko, Hidden Gem, the Spiral enchantment and X-cost cards are all ported. The fix shape is the one card/cascade already uses -- pull the card off the draw pile, then call `ctx.combat.auto_play_card(card)`. Presentation: none in the C# body. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
       "maps_to": "HavocCard._on_upgrade (havoc.py:32-33)",
@@ -65,5 +65,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-07-27"
 }

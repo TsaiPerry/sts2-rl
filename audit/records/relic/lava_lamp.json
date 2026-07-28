@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lava_lamp.py",
-    "sha256": "0a38c80c33d74c99845ee736cb5bff1973e1ae00c8d8fc15365b549b7c288259"
+    "sha256": "a4ebcff4e166e5d0f4639954f12d6d8329ba1a54d349f3cd0eb85633bbf5053d"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
       "side": "sim"
     },
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/relics/silver_crucible.py",
-      "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d",
+      "sha256": "9a8147346c7c1fa77a0ebb3b1a61402e0e67663fd7686345e6f31fb0686641eb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -61,26 +61,26 @@
       "verdict": "faithful"
     },
     "AfterRoomEntered": {
-      "maps_to": "no counterpart; lava_lamp.py is a behaviourless stub (3 class attributes, no methods)",
-      "verdict": "gap",
-      "issue": "LavaLamp.cs:36-40 clears TookDamageThisCombat on EVERY room entry (the parameter is AbstractRoom, not CombatRoom). The sim's Relic base has the hook -- `after_room_entered(run, point, room_type)` (relics/base.py:194-195), dispatched over run.relics at run.py:983 as the room is entered and already used by relic/silver_crucible -- so the pipeline is live and the port simply declines it. EXECUTED (py audit/tools/relic_probes_b08.py b08-lavalamp): `hasattr(Relic, 'after_room_entered')` is True and the relic class body is just ['id', 'name', 'rarity']. Carries guard G1's LIVE label as one third of the missing relic; recorded separately because the flag's LIFETIME is per-room here, not per-combat, which a fix must get right (a combat-start-only reset would leave the flag set after a non-combat room). Rule 7: relics/base.py and run.py are not hashed by this record."
+      "maps_to": "after_room_entered (sts2_rl/relics/lava_lamp.py) -- clears took_damage_this_combat on every room entry, dispatched over run.relics by RunState.enter_point",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27 FOR THIS ARM ONLY. sts2_rl/relics/lava_lamp.py is a real implementation now: `after_room_entered` (lava_lamp.py:31-32) clears `took_damage_this_combat` on EVERY room entry (LavaLamp.cs:36-40, whose parameter is AbstractRoom, not CombatRoom), and `on_damage_received` (lava_lamp.py:34-46) sets it only for the player, for amount > 0, and NOT when ValueProp.UNBLOCKABLE is in props (LavaLamp.cs:48-60). The sim omits LavaLamp.cs:44-47's `CurrentRoom is CombatRoom` gate here as well, but that half is structurally satisfied: `on_damage_received` is dispatched only from DamageCmd.deal (sts2_rl/cmds.py), and out-of-combat HP loss goes through RunState.lose_hp (sts2_rl/run.py:304-316), which fires no such hook -- so the latch cannot be set outside a combat. THE THIRD ARM IS NOT CLOSED: TryModifyCardRewardOptionsLate has no room guard and no structural substitute for one; see that entry and G1, both re-opened 2026-07-28. WAS: a behaviourless stub whose docstring called the whole thing 'a card-reward modifier applied after combat, so this is a no-op stub' -- false at all three sites."
     },
     "AfterDamageReceived": {
-      "maps_to": "no counterpart",
-      "verdict": "gap",
-      "issue": "LavaLamp.cs:42-62 sets TookDamageThisCombat when FOUR guards pass: the current room is a CombatRoom, the target is the owner's creature, `result.UnblockedDamage > 0`, and the damage does NOT carry ValueProp.Unblockable. The sim's HookSystem.on_damage_received exists and passes target, amount, dealer, card and props (hooks.py:453-467), so every one of the four is expressible: the props argument carries the ValueProp typing precisely so listeners can gate on it. Nothing is implemented. Note the Unblockable exclusion is unusual and load-bearing -- Poison and Regret-style HP loss must NOT spoil the relic -- and a fix that gates only on `amount > 0` would be wrong. Carries guard G1's LIVE label. Rule 7: hooks.py are not hashed by this record."
+      "maps_to": "on_damage_received (sts2_rl/relics/lava_lamp.py) -- target is the player, amount > 0, ValueProp.UNBLOCKABLE excluded",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27 FOR THIS ARM ONLY. sts2_rl/relics/lava_lamp.py is a real implementation now: `after_room_entered` (lava_lamp.py:31-32) clears `took_damage_this_combat` on EVERY room entry (LavaLamp.cs:36-40, whose parameter is AbstractRoom, not CombatRoom), and `on_damage_received` (lava_lamp.py:34-46) sets it only for the player, for amount > 0, and NOT when ValueProp.UNBLOCKABLE is in props (LavaLamp.cs:48-60). The sim omits LavaLamp.cs:44-47's `CurrentRoom is CombatRoom` gate here as well, but that half is structurally satisfied: `on_damage_received` is dispatched only from DamageCmd.deal (sts2_rl/cmds.py), and out-of-combat HP loss goes through RunState.lose_hp (sts2_rl/run.py:304-316), which fires no such hook -- so the latch cannot be set outside a combat. THE THIRD ARM IS NOT CLOSED: TryModifyCardRewardOptionsLate has no room guard and no structural substitute for one; see that entry and G1, both re-opened 2026-07-28. WAS: a behaviourless stub whose docstring called the whole thing 'a card-reward modifier applied after combat, so this is a no-op stub' -- false at all three sites."
     },
     "TryModifyCardRewardOptionsLate": {
-      "maps_to": "no counterpart; the sim's slot is Relic.modify_card_reward_options (relics/base.py:172-176), dispatched at rewards.py:299-301",
+      "maps_to": "modify_card_reward_options_late (sts2_rl/relics/lava_lamp.py), dispatched in the second complete pass of rewards.create_reward_cards (sts2_rl/rewards.py:314-315)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. LavaLamp.cs:64-89 clones and Upgrades every upgradable card-reward option when the combat was damage-free."
+      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28: the relic exists, but the reward arm is missing LavaLamp.cs:66-69's room gate. CLOSED (arms 1 and 2): `after_room_entered` (lava_lamp.py:31-32) clears `took_damage_this_combat` on EVERY room entry (LavaLamp.cs:36-40, whose parameter is AbstractRoom, not CombatRoom), and `on_damage_received` (lava_lamp.py:34-46) sets it only for the player, only for amount > 0 and not when ValueProp.UNBLOCKABLE is in props (LavaLamp.cs:48-60). The Late PHASE is real too: rewards.create_reward_cards runs a complete plain pass and then a complete Late pass (sts2_rl/rewards.py:312-315). STILL OPEN (arm 3, the room gate): TryModifyCardRewardOptionsLate opens with `if (!(base.Owner.RunState.CurrentRoom is CombatRoom)) return false;` (LavaLamp.cs:66-69) and sts2_rl/relics/lava_lamp.py:48-53 has NO room guard at all -- it tests only `took_damage_this_combat`. Because `after_room_entered` clears that latch on every room entry, the latch is always False when a NON-combat card screen is built, so the sim upgrades every out-of-combat card offer the game leaves alone. LIVE: four ported callers reach create_reward_cards with modify_hooks defaulting to or set True outside a combat reward -- relics/lead_paperweight.py:24-27, relics/orrery.py:30, events/room_full_of_cheese.py:52 and events/brain_leech.py:44 (its second call at :60-62 correctly passes modify_hooks=False). EXECUTED 2026-07-28 against today's code (RunState(rng=random.Random(0)); relics.append(make_relic('lava_lamp')); create_reward_cards(run, RarityOddsType.REGULAR, count=3, mutate_pity=False, modify_hooks=True)) -> [('drum_of_battle', 1), ('blood_wall', 1), ('true_grit', 1)] -- all three options upgraded with no combat anywhere in sight. This record's own note N2 states the trap verbatim (\"a G1 fix that omits the room check would wrongly upgrade the latter\"); the fix omitted it. WAS: the whole relic was a behaviourless stub whose docstring called it 'a card-reward modifier applied after combat, so this is a no-op stub' -- false at all three sites. Rule 7: relics/orrery.py, events/room_full_of_cheese.py and events/brain_leech.py are not hashed by this record."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the whole relic is missing -- a damage-free combat's card rewards are not upgraded -- and the port's stated premise is FALSE",
       "verdict": "gap",
-      "issue": "MECHANISM: the three hooks above compose into 'if you took no unblockable-excluded damage this combat, every upgradable card reward option arrives Upgraded'. PREMISE CHECK (PROMPT.md bug class 12): lava_lamp.py:8-9 says 'a card-reward modifier applied after combat, so this is a no-op stub'. All three pipelines are live -- the shared sweep-stub-premises already reports AfterRoomEntered -> after_room_entered and TryModifyCardRewardOptionsLate -> modify_card_reward_options as dispatched, and this batch confirms the third. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-lavalamp): Lava Lamp is Shop rarity in the transcribed grab bag (b08-pool), and a MONSTER card reward comes out [('headbutt', 0), ('rampage', 0), ('colossus', 0)] both with and without the relic, while the SAME sim hook with relic/silver_crucible held yields [('headbutt', 1), ('rampage', 1), ('colossus', 1)]. So the sim can do exactly this, today, through the very hook the port declines. The observable is a permanently weaker deck for the rest of the run, and it is deck-parity visible: conformance/runner.py compares the deck as (id, upgrade_level) pairs. Rule 7: relics/base.py, rewards.py, relics/silver_crucible.py, hooks.py and conformance/runner.py are not hashed by this record."
+      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28: the relic exists, but the reward arm is missing LavaLamp.cs:66-69's room gate. CLOSED (arms 1 and 2): `after_room_entered` (lava_lamp.py:31-32) clears `took_damage_this_combat` on EVERY room entry (LavaLamp.cs:36-40, whose parameter is AbstractRoom, not CombatRoom), and `on_damage_received` (lava_lamp.py:34-46) sets it only for the player, only for amount > 0 and not when ValueProp.UNBLOCKABLE is in props (LavaLamp.cs:48-60). The Late PHASE is real too: rewards.create_reward_cards runs a complete plain pass and then a complete Late pass (sts2_rl/rewards.py:312-315). STILL OPEN (arm 3, the room gate): TryModifyCardRewardOptionsLate opens with `if (!(base.Owner.RunState.CurrentRoom is CombatRoom)) return false;` (LavaLamp.cs:66-69) and sts2_rl/relics/lava_lamp.py:48-53 has NO room guard at all -- it tests only `took_damage_this_combat`. Because `after_room_entered` clears that latch on every room entry, the latch is always False when a NON-combat card screen is built, so the sim upgrades every out-of-combat card offer the game leaves alone. LIVE: four ported callers reach create_reward_cards with modify_hooks defaulting to or set True outside a combat reward -- relics/lead_paperweight.py:24-27, relics/orrery.py:30, events/room_full_of_cheese.py:52 and events/brain_leech.py:44 (its second call at :60-62 correctly passes modify_hooks=False). EXECUTED 2026-07-28 against today's code (RunState(rng=random.Random(0)); relics.append(make_relic('lava_lamp')); create_reward_cards(run, RarityOddsType.REGULAR, count=3, mutate_pity=False, modify_hooks=True)) -> [('drum_of_battle', 1), ('blood_wall', 1), ('true_grit', 1)] -- all three options upgraded with no combat anywhere in sight. This record's own note N2 states the trap verbatim (\"a G1 fix that omits the room check would wrongly upgrade the latter\"); the fix omitted it. WAS: the whole relic was a behaviourless stub whose docstring called it 'a card-reward modifier applied after combat, so this is a no-op stub' -- false at all three sites. Rule 7: relics/orrery.py, events/room_full_of_cheese.py and events/brain_leech.py are not hashed by this record."
     },
     {
       "what": "G2 (DORMANT, but the fix must not reproduce it): C# UPGRADES A CLONE -- `RunState.CloneCard(card)` then `CardCmd.Upgrade(card2)` then `cardReward.ModifyCard(card2, this)` (LavaLamp.cs:83-85) -- and the sim has no clone helper",

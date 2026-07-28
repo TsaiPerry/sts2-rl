@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -77,8 +77,8 @@
     },
     "AfterCardPlayed": {
       "maps_to": "powers.py:2858-2866 on_card_played (combat.py:514)",
-      "verdict": "gap",
-      "issue": "The damage TYPING is exact -- C# is `ValueProp.Unblockable | ValueProp.Unpowered` with dealer null and cardSource null (StranglePower.cs:55) and the sim passes `props=DamageProps.NON_CARD_HP_LOSS`, which valueprops.py:44 defines as exactly `UNBLOCKABLE | UNPOWERED`, with no dealer and no card. That is the recurring omitted-`props` shape (power report section 4 item 4) got RIGHT, and it is worth recording as such. The gap is hook_dispatch gap G4, the per-CardPlay bracket: CardModel.cs:1904-1965 builds a fresh CardPlay per Replay iteration and fires BeforeCardPlayed at :1929 and AfterCardPlayed at :1959 INSIDE the `for (int i = 0; i < playCount; i++)` loop, so a doubled card runs Add-then-Remove twice and Strangle deals its damage TWICE; combat.py:466 fires before_card_played once before the `for _ in range(play_count)` loop and combat.py:514 fires on_card_played once after it, so the sim deals it ONCE. G4 is already LIVE with an executed witness and is not re-verdicted; the per-unit consequence is N-times-less Strangle damage on any replayed card. Co-occurrence is reachable: Strangle comes from Mad Science (the ported Act-3 Glory event Tinker Time) and the ported replay sources are Throwing Axe (the Act-3 Tanx shrine), One-Two Punch (powers.py:966), Duplication (powers.py:3919) and two enchantments. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: combat.py:574-600 now builds the play bracket INSIDE `for play_index in range(play_count)` -- `before_card_played` at :576 and `on_card_played` at :600 both fire once per replay iteration, mirroring CardModel.cs:1904-1965 (Hook.BeforeCardPlayed :1929 and Hook.AfterCardPlayed :1959, both inside the playCount loop). VERIFIED 2026-07-27 by reading `CombatState._resolve_card_play`. WAS: both fired once per logical play, outside the loop, so a Throwing-Axe- or Duplication-doubled card advanced every Before/AfterCardPlayed listener by 1 where the game advances it by 2."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2868-2869 on_enemy_side_end",

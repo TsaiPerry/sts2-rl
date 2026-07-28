@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\astrolabe.py",
-    "sha256": "3d81571fbd58e9427aad66ed84f8517df0aa5cdda9c46c76b0157539aaae3abd"
+    "sha256": "53783efec80e451fcbad1278da4218f539cef8a85fdffd519ec6a9501bf99856"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -63,8 +63,8 @@
     },
     {
       "what": "N1: CreateRandomCardForTransform(item, isInCombat: false, Rng.Niche) (Astrolabe.cs:25) vs run.transform_card's default roll (astrolabe.py:23, no pick_rng argument)",
-      "verdict": "gap",
-      "issue": "C# names the Niche stream explicitly. transform_card's signature takes `pick_rng` for exactly this and its docstring (run.py:433-438) states that passing None 'keeps the shared-rng choice' for 'callers not yet parity-wired' -- Astrolabe is one of them, so the three replacement cards are rolled off the legacy shared random.Random instead of the run's Niche stream. REACHABILITY (LIVE for RNG parity, DORMANT for RL play): every conformance seed that picks Astrolabe at the Darv shrine will diverge in both the cards produced AND the downstream Niche stream position, which is the exact failure mode the SP3 grind chases; nothing outside the parity harness observes it. Cheap fix -- pass run.rng_set.niche the way the sibling callers do."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the port now draws on the named stream. sts2_rl/relics/astrolabe.py:26-28 resolves `niche = run.rng_set.niche` and passes it as `run.transform_card(card, pick_rng=niche)`, which is CreateRandomCardForTransform(item, isInCombat: false, Rng.Niche) (Astrolabe.cs:25); the legacy RL path keeps the shared rng by convention. WAS: the call went to the legacy shared random.Random, so the stream was never advanced and every later draw off it read at the wrong position."
     },
     {
       "what": "N2: `prefs.MinSelect` auto-select when the deck has 3 or fewer transformable cards (CardSelectCmd.cs:493-496)",

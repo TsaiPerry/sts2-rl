@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "2566df1cd14646f1e3e08864295d708e1c91a1c53f3e9b5dfa1edbc61edaec56"
+    "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97"
   },
   "extra_sources": [
     {
@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "afb8d4f859d69bf03e953f4f7bc8f7bce3265a01ab5dd1f7fb125cb1755f8449",
+      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
       "side": "sim"
     }
   ],
@@ -70,10 +70,10 @@
   "guards": [
     {
       "what": "THIS CARD IS THE ENTIRE PORTED BLAST RADIUS OF SEAM GAP G1 (block modifiers gated on is_powered_attack)",
-      "verdict": "gap",
-      "issue": "Recorded here with the seam's own verdict (`gap`), not re-verdicted: creature_card_cmds G1 states that `BlockCmd.apply` (cmds.py:145-147) skips the whole `modify_block_additive` / `modify_block_multiplicative` dispatch unless the props are `Move && !Unpowered`, while C#'s `Hook.ModifyBlock` (Hook.cs:1310-1340) calls EVERY listener and lets each self-gate -- and Vambrace (Vambrace.cs:59-63) and Pael's Legion (PaelsLegion.cs:132-134) self-gate only on `IsCardOrMonsterMove()`, which ignores Unpowered. Entrench gains block with exactly `Unpowered | Move`, so the real game doubles Entrench's block under Vambrace and the sim does not. EXECUTED and pool-wide: `py audit/tools/card_probes.py unpowered-block` scans every C# card model for a block gain carrying Unpowered and finds THREE -- Entrench, PillarOfCreation and Shroud -- of which only Entrench is ported. So G1's card-side blast radius is this one unit, exactly the witness the seam already named. LIVE (the seam pins it with a strict xfail); every other block-gaining card audited so far -- armaments 5, blood_wall 16, colossus 5, defend 5, equilibrium 13, evil_eye 8, finesse 4 -- uses a plain `BlockVar(n, ValueProp.Move)` and is correctly doubled on both sides. REGRESSION TEST: `test/test_hook_order.py:296-320` -- `TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers`, a **strict** xfail that builds `make_card(\"entrench\")` with a Vambrace and `ValueProp.MOVE | ValueProp.UNPOWERED` and asserts the game's 20. It flips to an unexpected PASS the moment G1 is fixed, so the fix cannot land silently."
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: `BlockCmd.apply` (sts2_rl/cmds.py:201-233) no longer gates the modifier dispatch on `is_powered_attack`. It now folds the source card's enchantment first and then calls `modify_block_additive` and `modify_block_multiplicative` for EVERY block gain, letting each listener self-gate on props -- which is `Hook.ModifyBlock`'s shape exactly (Hook.cs:1310-1338: the enchantment fold, then two unconditional `IterateCombatHookListeners` loops, then `Math.Max(0, num)`), and it is what Vambrace.cs:57-70 needs, since its only props test is `props.IsCardOrMonsterMove()` and it ignores Unpowered. EXECUTED WITNESS: a CombatState with relics=['vambrace'] and player.block 10, `BlockCmd.apply(..., card=make_card('entrench'), props=MOVE|UNPOWERED)` returns 20 (block 10 -> 30) -- the game's number. The pin `test/test_hook_order.py:266-273 test_unpowered_card_block_still_runs_block_modifiers` is no longer an xfail and passes. Reported to the seam owner: audit/records/seam/creature_card_cmds.json G1 is the mechanism's other site and should carry the same flip (rule 3); this record does not edit records/seam/**. HISTORY -- WHAT THE DIVERGENCE WAS: Recorded here with the seam's own verdict (`gap`), not re-verdicted: creature_card_cmds G1 states that `BlockCmd.apply` (cmds.py:145-147) skips the whole `modify_block_additive` / `modify_block_multiplicative` dispatch unless the props are `Move && !Unpowered`, while C#'s `Hook.ModifyBlock` (Hook.cs:1310-1340) calls EVERY listener and lets each self-gate -- and Vambrace (Vambrace.cs:59-63) and Pael's Legion (PaelsLegion.cs:132-134) self-gate only on `IsCardOrMonsterMove()`, which ignores Unpowered. Entrench gains block with exactly `Unpowered | Move`, so the real game doubles Entrench's block under Vambrace and the sim does not. EXECUTED and pool-wide: `py audit/tools/card_probes.py unpowered-block` scans every C# card model for a block gain carrying Unpowered and finds THREE -- Entrench, PillarOfCreation and Shroud -- of which only Entrench is ported. So G1's card-side blast radius is this one unit, exactly the witness the seam already named. LIVE (the seam pins it with a strict xfail); every other block-gaining card audited so far -- armaments 5, blood_wall 16, colossus 5, defend 5, equilibrium 13, evil_eye 8, finesse 4 -- uses a plain `BlockVar(n, ValueProp.Move)` and is correctly doubled on both sides. REGRESSION TEST: `test/test_hook_order.py:296-320` -- `TestCreatureCardCmdsOrder::test_unpowered_card_block_still_runs_block_modifiers`, a **strict** xfail that builds `make_card(\"entrench\")` with a Vambrace and `ValueProp.MOVE | ValueProp.UNPOWERED` and asserts the game's 20. It flips to an unexpected PASS the moment G1 is fixed, so the fix cannot land silently."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-07-27"
 }

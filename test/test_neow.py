@@ -49,11 +49,14 @@ def test_neow_never_offers_sim_disallowed_relics():
     # Kaleidoscope (needs other characters' pools) and Massive Scroll
     # (multiplayer-only) mirror IsAllowedAtNeow == false here.
     for seed in range(60):
-        _, event = neow_options(seed)
+        run, event = neow_options(seed)
         assert "kaleidoscope" not in event.option_keys()
         assert "massive_scroll" not in event.option_keys()
-    assert not ALL_RELICS["kaleidoscope"].is_allowed_at_neow
-    assert not ALL_RELICS["massive_scroll"].is_allowed_at_neow
+    # IsAllowedAtNeow now DELEGATES to IsAllowed (RelicModel.cs:443-446), so
+    # both are calls taking the run: Kaleidoscope overrides it directly and
+    # Massive Scroll inherits False from its own is_allowed.
+    assert not ALL_RELICS["kaleidoscope"].is_allowed_at_neow(run)
+    assert not ALL_RELICS["massive_scroll"].is_allowed_at_neow(run)
 
 
 def test_neow_mutual_exclusions():
@@ -435,7 +438,7 @@ def test_egg_upgrades_its_card_type_in_the_reward_options(relic_id, card_id):
     run = fresh_run(4)
     run.add_relic(relic_id)
     cards = [make_card(card_id), make_card("bash")]
-    run.relics[-1].modify_card_reward_options(run, cards)
+    run.relics[-1].modify_card_reward_options_late(run, cards)
     assert cards[0].upgrade_level == 1
 
 

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\paels_tooth.py",
-    "sha256": "9dc8b2f331329ddeabcdabf270b0d70e1e11f8139f64231def71c1bb0302b1e4"
+    "sha256": "277f215c4b4b18b2d1d6acf30c10cde6291bcd1700330bc43373f57539200c9a"
   },
   "extra_sources": [
     {
@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -84,8 +84,8 @@
     },
     {
       "what": "G2 (LIVE for RNG parity): C# sorts the stored cards by id before storing them; the sim keeps selection order, and the store is exactly what the Rewards stream indexes into",
-      "verdict": "gap",
-      "issue": "MECHANISM: PaelsTooth.cs:83 ends with `.OrderBy<CardModel, string>((CardModel c) => c.Id.Entry, StringComparer.Ordinal)`, and the foreach at :84-89 appends to SerializableCards in that order. AfterCombatEnd then draws with `PlayerRng.Rewards.NextItem(SerializableCards)` (:99), so the ORDER of the list determines which card a given RNG index returns. paels_tooth.py:28-30 appends in `run.select_cards` order. EXECUTED (`py audit/tools/relic_probes_b11.py tooth-filter`): the same five picks store as `[strike+1, regret, strike, strike, strike]` in the sim and `[regret, strike+1, strike, strike, strike]` under an ordinal sort of the ids -- a different card for index 0. LIVE for RNG parity (the conformance runner compares the deck as (id, upgrade_level) pairs, sts2_rl/conformance/runner.py:618, so a differently-ordered store surfaces as a deck mismatch on any seed that takes Pael's Tooth), and dormant for RL play, where the store order is merely arbitrary. A SECOND, subtler half: the sim's card ids are lowercase snake_case while `Id.Entry` is the source's uppercase entry name, and StringComparer.Ordinal is byte order -- '_' (0x5F) sorts AFTER 'Z' (0x5A) but BEFORE 'a' (0x61) -- so even a sim-side sort must be performed on the UPPERCASED id to match, the same rule audit/records/seam/creature_card_cmds.json records for StableShuffle tie-breaking (binding rule 3)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the stored order is sorted before it is stored. sts2_rl/relics/paels_tooth.py's after_obtained wraps the selection in `sorted(..., key=lambda c: c.id.upper())`, which is PaelsTooth.cs:83's `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)` over the game's UPPERCASE entry, and appends in that order -- load-bearing because AfterCombatEnd indexes the store with `PlayerRng.Rewards.NextItem(SerializableCards)` (PaelsTooth.cs:99), which the port mirrors with `run.player_rng.rewards.next_item(self.stored_cards)`. WAS: the port appended in run.select_cards order, so index 0 was a different card."
     },
     {
       "what": "N1: `item.MutableClone()` before serialising (PaelsTooth.cs:86) -- a full model clone, where the sim stores the live Card object it just removed from the deck (PROMPT.md bug class 17)",

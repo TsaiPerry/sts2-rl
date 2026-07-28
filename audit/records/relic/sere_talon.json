@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\sere_talon.py",
-    "sha256": "0b9296634519bdf1116f5a43a7c1b231e49890cabc3702e6d83add012a7e29d6"
+    "sha256": "5b5af305f047d2fe1a017f29c1e93dea00d547ef2df29caf63b1139de66b6f50"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/relics/fragrant_mushroom.py",
-      "sha256": "68bf0b027cc4917fa80ffff24f6932af4ff3d88ce93b26cb03cfa9fe733169b7",
+      "sha256": "6469eba7f4965bde73d51c15665adbc6906c6251e8cd03f2598470af95d245b3",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -57,16 +57,16 @@
       "rationale": "Matches SereTalon.cs:22, and correctly excludes the relic from the trade events via Relic.is_tradable (relics/base.py:132). Rule 7: relics/base.py is not hashed here."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (sere_talon.py:20-27), dispatched by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guard N1 per binding rule 4. The counts, the pool filter, the distinctness and the curse-then-Wish order all match, but SereTalon.cs:41 draws each curse off `base.Owner.RunState.Rng.Niche` and the sim's random_curses takes the legacy shared RNG with no way to pass a stream (N1)."
+      "maps_to": "after_obtained (sts2_rl/relics/sere_talon.py:20-37): 2 distinct curses drawn NextItem-and-Remove on run.rng_set.niche, then 3 Wish cards",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the only gap in this rollup was N1 (the unconsumed Rng.Niche stream and the wrong draw pattern), and sts2_rl/relics/sere_talon.py:24-32 now does NextItem-and-Remove over `sorted(curse_pool_ids())` on `run.rng_set.niche`, matching SereTalon.cs:39-45. The counts, pool filter, distinctness and the curse-then-Wish order were already faithful."
     }
   },
   "guards": [
     {
       "what": "N1: `Rng.Niche` is named in C# and never consumed, and the draw PATTERN differs (PROMPT.md bug class 16)",
-      "verdict": "gap",
-      "issue": "MECHANISM: SereTalon.cs:39-45 loops `DynamicVars[\"Curses\"].IntValue` times doing `RunState.Rng.Niche.NextItem(availableCurses)` then `availableCurses.Remove(...)`. sere_talon.py:24 calls `random_curses(run.rng, self.CURSES, distinct=True)`, which is `rng.sample(options, k)` on the legacy shared random.Random (cards/pool.py:92-97) -- the helper has no stream parameter, so even a parity run cannot reach the Niche stream. Two divergences in one: the stream is wrong, and `sample(k=2)` is not two NextItem-and-remove draws even against the same generator. The capability plainly exists: the sibling relics/neows_bones.py:30-34 does exactly the C# thing when run.rng_set is present (`sorted(curse_pool_ids())`, then `run.rng_set.niche.next_item` with removal), and relics/fishing_rod.py:31 and relics/fragrant_mushroom.py:34 also reach run.rng_set.niche -- PROMPT.md class 12's 'check whether a sibling already does the thing'. EXECUTED (py audit/tools/relic_probes_b14.py sere-talon): with a parity rng_set attached, add_relic('sere_talon') moves the Niche counter 0 -> 0 while adding ['debt', 'decay', 'wish', 'wish', 'wish']; the sibling neows_bones moves it 0 -> 1 for its single curse. LIVE for RNG parity -- Sere Talon is offered by the ported Vakuu shrine, so any recorded seed that takes it gets the wrong two curses AND leaves every later Niche consumer at the wrong position (monster unique-HP rolls, Fishing Rod, Fragrant Mushroom, Pandora's Box) -- and DORMANT for RL play. Same mechanism and same live/dormant split as relic/astrolabe N1 and this batch's sand_castle G2; binding rule 3. Rule 7: cards/pool.py, relics/neows_bones.py, relics/fishing_rod.py, relics/fragrant_mushroom.py and rng.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the port now draws on the named stream. sts2_rl/relics/sere_talon.py:24-32 now reproduces SereTalon.cs:39-45 exactly -- `sorted(curse_pool_ids())` then `run.rng_set.niche.next_item(...)` with the picked id removed after each draw, which is NextItem-and-Remove rather than the old `rng.sample`; the legacy RL path keeps random_curses. WAS: the call went to the legacy shared random.Random, so the stream was never advanced and every later draw off it read at the wrong position."
     },
     {
       "what": "N2: the candidate pool -- `ModelDb.CardPool<CurseCardPool>().GetUnlockedCards(...)` filtered on `CanBeGeneratedByModifiers` and ordered `orderby c.Id` (SereTalon.cs:34-37)",
@@ -99,6 +99,6 @@
       "rationale": "No fields beyond the two key consts, so nothing to reset on either side -- read both files, with sweep-reset's 'hold no state' bucket as corroboration only. The rest: RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

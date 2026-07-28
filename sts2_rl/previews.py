@@ -51,10 +51,20 @@ def _modified_damage(
     card: Card | None,
     props: ValueProp,
 ) -> int:
-    """Steps 1–2 of DamageCmd.deal: powered modifiers, then the damage cap."""
-    if is_powered_attack(props):
-        amount = amount + hooks.modify_damage_additive(target, amount, dealer, card)
-        amount = int(amount * hooks.modify_damage_multiplicative(target, amount, dealer, card))
+    """Steps 1–2 of DamageCmd.deal: the modifier passes, then the damage cap.
+
+    Mirrors DamageCmd.deal exactly — the source card's enchantment folds in
+    first, then every listener is called and self-gates on props. Pure-read, so
+    it passes no `modifiers` list and notifies nobody.
+    """
+    ench = card.enchantment if card is not None else None
+    if ench is not None:
+        amount += ench.enchant_damage_additive(amount, props)
+        amount *= ench.enchant_damage_multiplicative(amount, props)
+    amount = amount + hooks.modify_damage_additive(
+        target, amount, dealer, card, None, props)
+    amount = int(hooks.modify_damage_multiplicative(
+        target, amount, dealer, card, None, props))
     cap = hooks.modify_damage_cap(target, dealer, card)
     if cap is not None:
         amount = min(amount, cap)
@@ -167,8 +177,15 @@ def preview_card_block(combat: CombatState, card: Card) -> int | None:
         return None
     hooks = combat.hooks
     player = combat.player
-    amount = base + hooks.modify_block_additive(player, base, card)
-    amount = int(amount * hooks.modify_block_multiplicative(player, amount, card))
+    ench = card.enchantment
+    amount = base
+    if ench is not None:
+        amount += ench.enchant_block_additive(amount, ValueProp.MOVE)
+        amount *= ench.enchant_block_multiplicative(amount, ValueProp.MOVE)
+    amount = amount + hooks.modify_block_additive(
+        player, amount, card, None, ValueProp.MOVE)
+    amount = int(hooks.modify_block_multiplicative(
+        player, amount, card, None, ValueProp.MOVE))
     return max(0, amount)
 
 

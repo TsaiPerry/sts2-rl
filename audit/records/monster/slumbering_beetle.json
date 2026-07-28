@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\slumbering_beetle.py",
-    "sha256": "e30a1fa656232c5772290c730657ec3bd4d1b00d72b1fa9aba15f290242b6dc3"
+    "sha256": "3626d45cbc1eb2ba4a3452cf72e041f25be036f7b78c80459adfdb96220c5ec4"
   },
   "hooks": {
     "MinInitialHp": {
@@ -38,9 +38,8 @@
   "guards": [
     {
       "what": "WakeUpMove's body runs at damage time instead of on the beetle's stunned turn",
-      "verdict": "gap",
-      "live": true,
-      "issue": "In the game the damage wake DEFERS its effect. SlumberPower.cs:22-32's AfterDamageReceived decrements on unblocked damage and, at 0, calls CreatureCmd.Stun(Owner, slumberingBeetle.WakeUpMove, 'ROLL_OUT_MOVE') - and CreatureCmd.cs:875-890 / Creature.StunInternal make that delegate the PERFORM body of the synthetic MoveState('STUNNED', stunMove, StunIntent). So WakeUpMove - whose mechanical content is `if HasPower<PlatingPower> -> PowerCmd.Remove` (SlumberingBeetle.cs:104-107) - does not run until the beetle's own enemy-phase turn. The sim runs the whole of wake_up (slumbering_beetle.py:57-68) synchronously inside SlumberPower._count_down, i.e. during the player's turn, the instant the third unblocked hit lands. Executed with `py audit/tools/monster_probes_b05.py beetle-wake` on the ported SLUMBERING_BEETLE_NORMAL encounter: after hit 3, still on the player's turn, the beetle reads powers=[] (Plating gone), stunned=True, move=ROLL_OUT_MOVE - where the game would still show Plating 15 for the rest of that turn and through the enemy-turn-start decrement. LIVE by reachability (rooms.py:162 lists slumbering_beetle in the Hive normal pool; the probe drives the real encounter) - what is NOT proven is a damage-number consequence: PlatingPower grants block at BeforeSideTurnEndEarly (PlatingPower.cs:60-68) rather than reducing incoming hits, and both sides end the enemy turn with no Plating and no Plating block, so today the divergence is a power-list/state divergence inside the player's own turn (visible to a replay comparison and to the RL observation vector) rather than an HP swing. This entry deliberately does not touch the stun machinery itself - monster_state_machine G4/G5 own that, and the sim's stun (cmds.py:208-218) is not re-verdicted here. Rule 7: leans on sts2_rl/powers.py, sts2_rl/cmds.py, sts2_rl/rooms.py and src/Core/Models/Powers/PlatingPower.cs, of which only SlumberPower.cs and CreatureCmd.cs are hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: the damage wake is DEFERRED to the beetle's stunned turn. SlumberingBeetle.wake_up(stunned=True) (slumbering_beetle.py) now parks _wake_up_move on `_pending_stun_move` and calls `CreatureCmd.stun(self._hooks, self, next_move_key='ROLL_OUT_MOVE')`, and the beetle's own `_StunMoveRunner` listener (registered in the CAT_POWER+1 slot) runs that body from on_enemy_turn_start -- which is what CreatureCmd.Stun(Owner, WakeUpMove, 'ROLL_OUT_MOVE') (SlumberPower.cs:29 -> CreatureCmd.cs:875-890 / Creature.StunInternal) does by making WakeUpMove the synthetic STUNNED MoveState's PERFORM body. EXECUTED: `py audit/tools/monster_probes_b05.py beetle-wake` now reports \"hit 3 (still the PLAYER turn): powers=['plating'] stunned=True move=STUNNED\" -- the Plating survives the rest of the player's turn. WAS: the whole of wake_up ran synchronously inside SlumberPower._count_down, dropping Plating during the player's turn and force-setting ROLL_OUT_MOVE. The stun machinery itself is monster_state_machine G4/G5's and is still not re-verdicted here."
     },
     {
       "what": "the natural (turn-count) wake needs no forced state",
@@ -68,7 +67,7 @@
       "rationale": "SlumberingBeetleEncounter (slumbering_beetle.py:80-95) fields BowlbugRock, BowlbugSilk and the beetle in that order; the beetle is audited here and the two bowlbugs belong to another batch."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {

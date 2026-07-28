@@ -32,7 +32,9 @@ class ToyBox(Relic):
             if relic is None:
                 break
             relic.is_wax = True
-            run.add_relic(relic)
+            # ToyBox.cs:96 OFFERS the four (RewardsCmd.OfferCustom): each is
+            # take-or-skip, and a declined one never runs its AfterObtained.
+            run.offer_relic(relic)
 
     def after_combat_end(self, run, room_type) -> None:
         self.combats_seen += 1

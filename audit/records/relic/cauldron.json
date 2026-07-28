@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\cauldron.py",
-    "sha256": "473385d2bd179590995c3ccc6ffca083bb92d1463ac9edfe3ff2be66318d7ab0"
+    "sha256": "15a8bb57f63fe2802b11f52d926fc6be07fd329d45d48a636cd228521eed002d"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -35,16 +35,16 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "no counterpart -- cauldron.py implements no methods at all",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Cauldron.cs:31-34 offers DynamicVars['Potions'].IntValue == 5 PotionRewards on pickup; the port is a behaviourless stub and the player gets nothing."
+      "maps_to": "after_obtained (sts2_rl/relics/cauldron.py:27-40) -- five PotionRewards, each offered through RunState.offer_potion",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the relic's whole effect is ported. sts2_rl/relics/cauldron.py:27-40 offers DynamicVars['Potions'] == 5 PotionRewards on pickup through RunState.offer_potion, each rolled by generate_random_potion on run.player_rng.rewards. WAS: a behaviourless stub."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the stub's premise -- 'out-of-combat pickup effect, stub' -- is false; the sim dispatches after_obtained and has a full potion pipeline",
-      "verdict": "gap",
-      "issue": "MECHANISM: Cauldron.cs:31-55 builds five PotionRewards (the shipping arm is `new PotionReward(base.Owner)` x 5; the fixed Flex/Weak/Vulnerable/Strength/Dexterity list at :16-23 is the TestMode arm, see G2) and hands them to RewardsCmd.OfferCustom. cauldron.py declares nothing but its id, name, rarity and pickup flag. PREMISE CHECKED (PROMPT.md bug class 12, and `py audit/tools/relic_probes.py sweep-stub-premises` reaches the same conclusion mechanically): RunState.add_relic calls `relic.after_obtained(self)` at run.py:552, so the sim already invokes the exact method the port declines to write, and the potion machinery it would need is live -- `RunState.random_potion` (run.py:513), `RunState.add_potion` (run.py:474), `potion_pools.generate_random_potion` with a real rarity roll, and a rewards screen that already offers potions (rewards.py:466-487). REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes.py batch3`): `run.add_relic('cauldron')` leaves the belt at [None, None, None] while the same probe shows `run.random_potion() -> 'liquid_memories'` works and add_potion is callable. Cauldron is Shop rarity in the transcribed grab bag (confirmed by `batch3-pool`), so a shop visit with 150-ish gold reaches it. SCOPE NOTE: the shared contract defers potions, but binding rule 1 is explicit that 'the sim has no such system' is a dormant gap and not a waiver -- and here the system is not even missing, only unused. Same handling as relic/belt_buckle's AfterPotionProcured, which was filed as a gap for the same reason."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the stub is gone. sts2_rl/relics/cauldron.py:27-40 implements after_obtained -- five independent potions, each populated by its own `generate_random_potion(run.player_rng.rewards)` (CreateRandomPotionOutOfCombat off PlayerRng.Rewards, two draws apiece, with a per-reward blacklist so ids may repeat) and each offered through `run.offer_potion` -- which is Cauldron.cs:31-55's shipping arm. WAS: the port declared only id/name/rarity/pickup-flag and the player got nothing."
     },
     {
       "what": "G2: the TestMode arm (Cauldron.cs:16-23, 40-46) is not the shipping behaviour",
@@ -57,6 +57,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

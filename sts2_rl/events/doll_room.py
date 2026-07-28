@@ -50,13 +50,22 @@ class DollRoom(Event):
         self._finish(relic_id.upper())
 
     def _offer(self, page: str, count: int) -> None:
-        dolls = stable_shuffle(list(_DOLLS), self.rng)[:count]
+        # `_dolls.ToList().StableShuffle(base.Rng)` (DollRoom.cs:117/132) —
+        # DollChoice.CompareTo defers to the relic's ModelId, so the sort key
+        # is the UPPERCASE entry, and the shuffle is on the event's own Rng.
+        er = self.event_rng
+        dolls = stable_shuffle(
+            list(_DOLLS), er if er is not None else self.rng, key=str.upper,
+        )[:count]
         self._set_state(page, [
             EventOption(rid, lambda r=rid: self._take(r)) for rid in dolls
         ])
 
     def _choose_random(self) -> None:
-        self._take(self.rng.choice(_DOLLS))
+        # `base.Rng.NextItem(_dolls)` (DollRoom.cs:108).
+        er = self.event_rng
+        self._take(er.next_item(_DOLLS) if er is not None
+                   else self.rng.choice(_DOLLS))
 
     def _take_some_time(self) -> None:
         self.run.lose_hp(_TAKE_TIME_HP_LOSS)

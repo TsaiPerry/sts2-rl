@@ -24,7 +24,16 @@ class SturdyClamp(Relic):
         # Keep the player's block (enemies clear normally).
         return creature is not self.player
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
-        # Block clear was prevented above; cap the carried-over block at 10.
-        if player.block > self.MAX_RETAINED:
-            player.block = self.MAX_RETAINED
+    def after_preventing_block_clear(self, creature: Creature) -> None:
+        # SturdyClamp.cs:31-46 caps the retained block from
+        # AfterPreventingBlockClear, and opens
+        # `if (this != preventer || creature != Owner.Creature) return` — the
+        # hook is dispatched ONLY to the vetoing listener, so reaching this
+        # body already means Sturdy Clamp was the preventer. The sim capped
+        # from on_player_turn_start instead, with no preventer test at all, so
+        # a Barricaded player's block was capped at 10 by a relic that had not
+        # prevented anything.
+        if creature is not self.player:
+            return
+        if creature.block > self.MAX_RETAINED:
+            creature.block = self.MAX_RETAINED

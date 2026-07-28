@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\ranwid_the_elder.py",
-    "sha256": "d0e4f2982b6cbb00c6d50700886cf5dfae728319278d8eb1784f8ede398f9b2f"
+    "sha256": "f55d8ec03d921439cc395aac26885ae51148697bc6ec10a282875132858e9116"
   },
   "extra_sources": [
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -104,8 +104,8 @@
     },
     {
       "what": "EV-3: GenerateInitialOptions' two `base.Rng.NextItem` draws -- the potion (RanwidTheElder.cs:80) and the tradable relic (RanwidTheElder.cs:94) -- which events/ranwid_the_elder.py:44 and :52 take off `self.rng` via random.Random.choice. Right count, right order, right candidate lists; wrong stream. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists ranwid_the_elder among the modules that roll ONLY on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both GenerateInitialOptions picks run on `self.event_rng` (events/ranwid_the_elder.py:45-61), matching `base.Rng` (RanwidTheElder.cs:80, 94). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "verdict": "faithful"
     },
     {
       "what": "BR-relic_trader (blast radius): the grab-bag-runs-dry state. RanwidTheElder.cs:113, :121 and :131 call `RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable()` with no null check at all, so an empty bag is an NRE in the source",

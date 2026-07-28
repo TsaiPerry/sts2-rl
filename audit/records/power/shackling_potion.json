@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -101,12 +101,12 @@
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99",
+      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
       "side": "sim"
     },
     {
@@ -225,9 +225,8 @@
     },
     {
       "what": "G8 (LIVE, grade B): the power's sole applier is Shackling Potion -- a PORTED potion, and its targeting DIVERGES. ShacklingPotion.cs:35 applies over `CombatState.HittableEnemies`; sts2_rl/potions.py:910 loops `[e for e in ctx.enemies if not e.is_gone]`, and unlike DamageCmd the sim's PowerCmd.apply has no should_allow_hitting re-check, so the debuff LANDS on a creature the game refuses to touch",
-      "verdict": "gap",
-      "live": true,
-      "issue": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nWHAT THE RE-DERIVATION FOUND. The amounts are right: src/Core/Models/Potions/ShacklingPotion.cs:26 declares CanonicalVars = new PowerVar<StrengthPower>(7m) with no AscensionHelper.GetValueIfAscension in the file, ShacklingPotion.cs:35 applies `PowerCmd.Apply<ShacklingPotionPower>(choiceContext, creature.CombatState.HittableEnemies, DynamicVars.Strength.IntValue, base.Owner.Creature, null)`, and sts2_rl/potions.py:905 pins STRENGTH = 7 with `applier=ctx.player` matching C#'s `base.Owner.Creature` (parameter `Creature? applier`, src/Core/Commands/PowerCmd.cs:101). TargetType.AllEnemies (ShacklingPotion.cs:22) means no AssertValidForTargetedPotion call and NCombatRoom.PlaySplashVfx (ShacklingPotion.cs:33) is presentation. THE TARGET SET IS NOT RIGHT. `CombatState.HittableEnemies` is `Enemies.Where(e => e.IsHittable)` (src/Core/Combat/CombatState.cs:142) and `IsHittable` is `!IsDead && Hook.ShouldAllowHitting(...)` (src/Core/Entities/Creatures/Creature.cs:285-299). The sim's filter is only `not e.is_gone`, i.e. `not (is_dead or escaped)` (sts2_rl/creatures.py:44-46), with no ShouldAllowHitting leg. WHY THIS SITE IS LIVE WHERE THE OTHERS ARE DORMANT (this is the whole finding). audit/records/power/the_bomb.json G1, audit/records/power/inferno.json and audit/records/power/rolling_boulder.json record the same HittableEnemies-vs-is_gone mismatch as a gap and label it DORMANT, on the argument that `DamageCmd.deal` re-checks should_allow_hitting at entry (sts2_rl/cmds.py:51-52) and returns 0, so nothing lands. THAT ARGUMENT DOES NOT REACH THIS SITE: the applier applies a POWER, and `PowerCmd.apply` (sts2_rl/cmds.py:271-327) has no should_allow_hitting guard anywhere in it. The verdict is the same (gap, binding rule 3); only the liveness differs, and it differs with executed evidence rather than by inheritance. REACHABILITY (LIVE, EXECUTED): a CombatState carrying two Fogmogs (sts2_rl/monsters/overgrowth/fogmog.py:34 applies IllusionPower) driven to the revival state by `DamageCmd.deal(hooks, fogmog, 9999)` reports `is_dead=False is_gone=False is_reviving=True hooks.should_allow_hitting(fogmog)=False`, because IllusionPower.should_die vetoes the death (sts2_rl/powers.py:1566-1575). Shackling Potion then targets 3 creatures where C#'s HittableEnemies has 2, and the reviving Fogmog ends the use holding `('strength', -7), ('shackling_potion', 7)` -- in the game it holds neither. Both sides ported: Shackling Potion is registered by @register_potion and sits in the generation pool at sts2_rl/potion_pools.py:59 (rare); Fogmog is act-1 Overgrowth content, and The Obscura (sts2_rl/monsters/hive/the_obscura.py:38) and Test Subject's AdaptablePower (sts2_rl/monsters/glory/test_subject.py:61) are two more ported routes to an unhittable-but-alive enemy. OBSERVABLE: -7 Strength for a turn on a creature that is about to revive to full HP and attack, i.e. a damage number, plus a `shackling_potion` power the game never applied -- which the sim then reverts on the enemy side's turn end, moving the enemy's Strength a second time. WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/shackling_potion` has no record yet because the whole potion kind is unaudited, and when it is written this entry is where its targeting gap already lives."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: PowerCmd.apply now re-checks `hooks.should_allow_hitting(target)` and returns before any state change (cmds.py:394-395), the port of PowerCmd.Apply<T>'s CanReceivePowers guard (PowerCmd.cs:73-76 -> Creature.cs:308-322). The potion still iterates `[e for e in ctx.enemies if not e.is_gone]` rather than CombatState.HittableEnemies (CombatState.cs:142), but every extra creature that set admits is now rejected at the command -- nothing is applied and no modifier hook fires -- so the executed observable this guard recorded (a reviving Fogmog ending the use holding ('strength', -7) and ('shackling_potion', 7)) can no longer occur. VERIFIED 2026-07-27 by reading cmds.py:369-396."
     }
   ],
   "verdict": "gap",

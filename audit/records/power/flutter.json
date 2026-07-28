@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/hive/thieving_hopper.py",
-      "sha256": "7ddad0338ff1cd176123ab0c74716d8117025511f65b928ee097d8d3a810a6fc",
+      "sha256": "97141f6e0851de74a261d0ad74b0fa219348e587570cddb4444ad4aa98e66efa",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/state_machine.py",
-      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
       "side": "sim"
     }
   ],
@@ -57,8 +57,8 @@
     },
     "AfterDamageReceived": {
       "maps_to": "powers.py:2209-2235 on_damage_received",
-      "verdict": "gap",
-      "issue": "The hook SLOT and the guards are right -- FlutterPower.cs:39 is AfterDamageReceived, cmds.py:121-122 is the sim's after-damage slot with the same CreatureBlow guard, and powers.py:2218 reproduces all three C# conditions (`target == base.Owner && result.UnblockedDamage != 0 && props.IsPoweredAttack()`), this one correctly reading `props` through valueprops.is_powered_attack rather than the card. THE GAP IS THE RNG STREAM of the stun's move re-roll. C# takes the next state from the last logged state on the MonsterAi stream: `base.Owner.Monster.MoveStateMachine.StateLog.Last().GetNextState(base.Owner, base.Owner.Monster.RunRng.MonsterAi)` (FlutterPower.cs:47). The sim calls `machine.roll_move(self.owner, self.owner._rng)` (powers.py:2233-2235) -- `_rng`, the monster's construction rng, NOT `_move_rng`. Every other move roll in the sim goes through MachineMonster._move_rng (monsters/state_machine.py:306-312), which is `self._hooks.combat.combat_rng.monster_ai` and whose own comment says move selection \"happens on the MonsterAi stream (mirrors MonsterModel.RollMove(targets) => MoveStateMachine.RollMove(..., RunRng.MonsterAi))\" and that `self._rng` \"is untouched\". EXECUTED on a parity combat seeded 933T39V18D with THIEVING_HOPPER_WEAK: `combat_rng.is_parity` True, `hopper._rng` is a plain `random.Random` and `hopper._move_rng` is a `GameRandomAdapter`, and `_rng is _move_rng` is False -- so the roll draws from the wrong stream and, worse, does not advance MonsterAi at all. This is the same defect class as power/aggression's (wrong RNG stream), and it is LIVE: the Thieving Hopper is ported Hive content, it self-applies Flutter (monsters/hive/thieving_hopper.py:113-114), and exhausting those stacks with powered attacks is the ordinary way to fight it, so any conformance replay that stuns a hopper diverges on the move chosen AND on every later MonsterAi draw. Secondary: `roll_move` MUTATES the machine's current state where C#'s `StateLog.Last().GetNextState(...)` queries the last LOGGED state, which are not the same state once a ConditionalBranchState is involved. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the stun's follow-up state is now taken from the last LOGGED state on the MonsterAi stream -- `machine.state_log[-1].get_next_state(self.owner, self.owner._move_rng)` (powers.py:2358-2364), where `_move_rng` is `combat.combat_rng.monster_ai` -- and handed to `CreatureCmd.stun` as `next_move_key`, mirroring FlutterPower.cs:47's `StateLog.Last().GetNextState(owner, RunRng.MonsterAi)`. The machine is no longer mutated by a `roll_move` call. VERIFIED 2026-07-27 by reading powers.py:2308-2364. WAS: `machine.roll_move(self.owner, self.owner._rng)` drew off the monster's construction random.Random, never advanced MonsterAi, and walked the machine a turn early."
     }
   },
   "guards": [
@@ -93,6 +93,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

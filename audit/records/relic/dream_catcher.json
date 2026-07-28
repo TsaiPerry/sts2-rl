@@ -36,27 +36,27 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/dense_vegetation.py",
-      "sha256": "7e27f63c6f33dce521f958257f0e09446b61e531316661b95aaa821896fffac4",
+      "sha256": "b5921eba858cdd9bcc301e1287c28edf86b3fe89aa5308b8ff9a624c744e4ff9",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/trash_heap.py",
-      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "sha256": "39c4119afdeb8fd3addebd7c7344966c2f68b2b4203ed7fa77cb619bc94cbdb3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -79,8 +79,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): a MIMICKED rest-site heal fires Hook.ModifyRestSiteHealRewards in C# and nothing in the sim, so Dream Catcher gives no cards on the Dense Vegetation event's Rest option",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# has exactly one rest-heal implementation, HealRestSiteOption.ExecuteRestSiteHeal, and its own doc comment says it is 'public because PlayerCmd.MimicRestSiteHeal calls it for mimicking rest site heals (for example, for DenseVegetation's Rest option)'. That method always runs Heal -> Hook.AfterRestSiteHeal -> Hook.ModifyRestSiteHealRewards -> RewardsCmd.OfferCustom (HealRestSiteOption.cs:107-113), and DreamCatcher.cs:16 IGNORES its isMimicked parameter, so the 3-card choice is offered on the mimic exactly as at a real rest site. The sim has TWO implementations and only one of them fires the hooks: RunState.rest_heal (run.py:1090-1095) plus rest_heal_rewards (run.py:1097-1110) at a real rest site, and events/dense_vegetation.py:65-68's _rest, which calls `self.run.heal(self.run.rest_site_heal_amount())` directly -- executed, the string 'rest_heal_rewards' does not appear in that method and neither does 'after_rest_site_heal'. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py dream-driftwood): with the relic on the run, the real rest screen offers ['drum_of_battle', 'blood_wall', 'true_grit'], while _rest() heals 50 -> 74 and moves the event to page 'REST' with options ['FIGHT'] and no reward screen at all. Both sides ported: Dream Catcher is granted by the Trash Heap event (events/trash_heap.py:15) and Dense Vegetation is a ported event with a Rest option. The same missing dispatch also silences relic/stone_humidifier's AfterRestSiteHeal and relic/tiny_mailbox on the mimic path, so the fix is one call in the event, not one per relic. RULE 7: events/dense_vegetation.py, run.py, driver.py and HealRestSiteOption.cs are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the mimicked rest heal fires the same pair a real rest does. sts2_rl/events/dense_vegetation.py:70-77's `_rest` now calls `self.run.rest_heal()` -- which heals and then runs Hook.AfterRestSiteHeal over the relics (sts2_rl/run.py:1247-1253) -- and `self.run.rest_heal_rewards()`, which dispatches Hook.ModifyRestSiteHealRewards (sts2_rl/run.py:1255-1268), storing the result as the event's pending_rewards. That is HealRestSiteOption.ExecuteRestSiteHeal, the single implementation PlayerCmd.MimicRestSiteHeal calls (HealRestSiteOption.cs:107-113), so Dream Catcher's 3-card choice is offered on the mimic exactly as at a rest site. WAS: the event called `run.heal(run.rest_site_heal_amount())` directly, firing neither hook, so the relic gave nothing on the Dense Vegetation Rest option."
     },
     {
       "what": "G2: `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3, base.Owner)` (DreamCatcher.cs:22) vs `create_reward_cards(run, RarityOddsType.REGULAR)` (dream_catcher.py:23-25)",

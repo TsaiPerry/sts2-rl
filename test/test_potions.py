@@ -32,6 +32,13 @@ def fresh(*potion_ids: str, seed: int = 0, **kwargs) -> CombatState:
     )
 
 
+def _play(cs: CombatState, card) -> None:
+    """Give the player `card`, plenty of energy, and play it."""
+    cs.player.energy = 10
+    cs.player.hand.append(card)
+    assert cs.play_card(len(cs.player.hand) - 1)
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Stat / power potions
 # ══════════════════════════════════════════════════════════════════════════
@@ -549,3 +556,263 @@ class TestPoolCoverage:
         from sts2_rl.rng import snake_case
         for (name, _), (pid, _) in zip(_RAW_POOL, POTION_POOL):
             assert snake_case(name) == pid
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# The choose-a-card screen (CardSelectCmd.FromChooseACardScreen, canSkip)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestChooseACardScreen:
+    """AttackPotion/ColorlessPotion/PowerPotion/SkillPotion each generate three
+    cards and hand them to `CardSelectCmd.FromChooseACardScreen(..., canSkip:
+    true)` (CardSelectCmd.cs:216-261), adding the result only `if (cardModel !=
+    null)`. The legacy (non-parity) arm used to take `cards[0]`
+    unconditionally, so the other two candidates did not exist and the screen
+    could never be declined."""
+
+    POTIONS = ("attack_potion", "colorless_potion", "power_potion", "skill_potion")
+
+    def test_the_screen_pick_is_the_card_that_reaches_the_hand(self):
+        for pid in self.POTIONS:
+            offered: list = []
+
+            def pick_last(purpose, candidates, count, _o=offered):
+                _o[:] = candidates
+                return candidates[-1:]
+
+            cs = fresh(pid, card_selector=pick_last)
+            cs.player.hand = []
+            assert cs.use_potion(0)
+            assert len(offered) == 3, pid
+            assert [c.id for c in cs.player.hand] == [offered[-1].id], pid
+            assert cs.player.hand[0].energy_cost == 0, pid   # SetToFreeThisTurn
+
+    def test_the_screen_can_be_declined(self):
+        # canSkip: true -> `if (cardModel != null)` adds nothing.
+        for pid in self.POTIONS:
+            cs = fresh(pid, card_selector=lambda *a: [])
+            cs.player.hand = []
+            assert cs.use_potion(0)
+            assert cs.player.hand == [], pid
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# MinSelect 0 screens (Ashwater, Gambler's Brew)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestMinSelectZero:
+    """Both potions build `CardSelectorPrefs(prompt, 0, 999999999)`, and
+    `FromHand`'s auto-resolve shortcut is `list.Count <= prefs.MinSelect`
+    (CardSelectCmd.cs:708-711) — false for any non-empty hand at MinSelect 0,
+    so the screen is always shown and the player may confirm none."""
+
+    def test_ashwater_under_the_scripted_selector_exhausts_only_junk(self):
+        from sts2_rl.selectors import scripted_card_selector
+
+        cs = fresh("ashwater", card_selector=scripted_card_selector)
+        cs.player.hand = [make_card("strike"), make_card("wound"),
+                          make_card("defend")]
+        assert cs.use_potion(0)
+        assert [c.id for c in cs.player.exhaust_pile] == ["wound"]
+        assert [c.id for c in cs.player.hand] == ["strike", "defend"]
+
+    def test_gamblers_brew_under_the_scripted_selector_cycles_only_junk(self):
+        from sts2_rl.selectors import scripted_card_selector
+
+        cs = fresh("gamblers_brew", card_selector=scripted_card_selector)
+        cs.player.draw_pile = [make_card("bash")]
+        cs.player.hand = [make_card("strike"), make_card("wound")]
+        assert cs.use_potion(0)
+        assert [c.id for c in cs.player.discard_pile] == ["wound"]
+        assert sorted(c.id for c in cs.player.hand) == ["bash", "strike"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PotionUsage.AnyTime — the out-of-combat use path
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestAnyTimeUsage:
+    """`PotionUsage.AnyTime` means the Use button is live outside combat, and
+    `OnUseWrapper` is written for it (PotionModel.cs:294,298,334,336 all
+    null-check the combat state)."""
+
+    def _run(self, *potion_ids: str):
+        from sts2_rl.run import RunState
+        run = RunState(rng=random.Random(0))
+        run.start_run(acts=["overgrowth"])
+        for pid in potion_ids:
+            run.add_potion(make_potion(pid))
+        return run
+
+    def test_the_four_any_time_potions_are_marked(self):
+        for pid in ("blood_potion", "entropic_brew", "foul_potion", "fruit_juice"):
+            assert make_potion(pid).usage == "any_time", pid
+        assert make_potion("fire_potion").usage == "combat_only"
+        assert make_potion("fairy_in_a_bottle").usage == "automatic"
+
+    def test_fruit_juice_on_the_map_raises_max_hp(self):
+        run = self._run("fruit_juice")
+        max_hp = run.max_hp
+        assert run.use_potion(0)
+        assert run.max_hp == max_hp + 5
+        assert run.potions[0] is None
+
+    def test_blood_potion_on_the_map_heals(self):
+        run = self._run("blood_potion")
+        run.hp = 10
+        assert run.use_potion(0)
+        assert run.hp == 10 + run.max_hp * 20 // 100
+
+    def test_entropic_brew_on_the_map_refills_the_belt(self):
+        run = self._run("entropic_brew")
+        assert run.use_potion(0)
+        assert len(run.held_potions) == run.max_potions
+
+    def test_a_combat_only_potion_cannot_be_drunk_on_the_map(self):
+        run = self._run("fire_potion")
+        assert not run.use_potion(0)
+        assert len(run.held_potions) == 1
+
+    def test_foul_potion_drives_the_merchant_off_for_a_hundred_gold(self):
+        # FoulPotion.cs:79-88 — the MerchantRoom arm.
+        run = self._run("foul_potion")
+        gold = run.gold
+        assert not run.merchant_driven_off
+        assert run.use_potion(0)
+        assert run.merchant_driven_off
+        assert run.gold == gold + 100
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Procurement (PotionCmd.TryToProcure)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestProcurement:
+    def test_combat_side_procurement_runs_the_should_procure_gate(self):
+        # Sozu.cs:17-20 is the source's only ShouldProcurePotion implementer,
+        # and PotionCmd.TryToProcure (PotionCmd.cs:31-39) is the only procure
+        # entry point in the game.
+        from sts2_rl.cards import make_card
+        from sts2_rl.relics import make_relic
+
+        plain = CombatState(rng=random.Random(0), relics=[])
+        _play(plain, make_card("alchemize"))
+        assert plain.player.held_potions != []
+
+        sozu = CombatState(rng=random.Random(0), relics=[make_relic("sozu")])
+        _play(sozu, make_card("alchemize"))
+        assert sozu.player.held_potions == []
+
+    def test_entropic_brew_stops_when_the_gate_refuses(self):
+        from sts2_rl.relics import make_relic
+
+        cs = fresh("entropic_brew", relics=[make_relic("sozu")])
+        assert cs.use_potion(0)
+        assert cs.player.held_potions == []
+
+    def test_belt_buckle_loses_its_dexterity_on_a_procured_potion(self):
+        # BeltBuckle.cs:63-70 (AfterPotionProcured) is the half of "while you
+        # have no potions" that enforces the *no*.
+        from sts2_rl.cards import make_card
+        from sts2_rl.relics import make_relic
+
+        cs = CombatState(rng=random.Random(0), relics=[make_relic("belt_buckle")])
+        assert cs.player.powers["dexterity"].amount == 2
+        _play(cs, make_card("alchemize"))
+        assert cs.player.held_potions != []
+        assert "dexterity" not in cs.player.powers
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Single-unit source fixes
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestSingleUnitFixes:
+    def test_touch_of_insanity_offers_a_globally_costed_card(self):
+        # TouchOfInsanity.cs:22 ORs CostsEnergyOrStars(local) with
+        # CostsEnergyOrStars(global) — a card free THIS TURN but raised by
+        # Spiked Gauntlets still costs energy globally, so it is offered.
+        from sts2_rl.relics import make_relic
+
+        cs = CombatState(rng=random.Random(0),
+                         potions=[make_potion("touch_of_insanity")],
+                         relics=[make_relic("spiked_gauntlets")])
+        card = make_card("inflame")          # a Power card
+        card.set_free_this_turn()            # local cost 0, global cost 1
+        cs.player.hand = [card]
+        assert cs.use_potion(0)
+        assert card._cost_this_combat == 0
+
+    def test_touch_of_insanity_still_skips_a_globally_free_card(self):
+        cs = fresh("touch_of_insanity")
+        card = make_card("strike")
+        card.set_free_this_turn()
+        cs.player.hand = [card]
+        assert cs.use_potion(0)
+        assert card._cost_this_combat is None
+
+    def test_foul_potion_damages_the_thrower_first(self):
+        # CombatState.Creatures is `_allies.Concat(_enemies)`
+        # (CombatState.cs:70) — the thrower before the enemies.
+        cs = fresh("foul_potion", encounter=TWO_CRAWLERS)
+        order: list[str] = []
+        orig = cs.hooks.on_hp_changed
+
+        def watch(creature, delta, _orig=orig):
+            order.append("player" if creature is cs.player else "enemy")
+            return _orig(creature, delta)
+
+        cs.hooks.on_hp_changed = watch
+        assert cs.use_potion(0)
+        assert order == ["player", "enemy", "enemy"]
+
+    def test_fairy_in_a_bottle_runs_the_whole_use_pipeline(self):
+        # FairyInABottle.cs:44 — AfterPreventingDeath awaits OnUseWrapper, so
+        # PotionModel.cs:338's Hook.AfterPotionUsed fires when the fairy pops.
+        from sts2_rl.relics import make_relic
+
+        cs = CombatState(rng=random.Random(0),
+                         potions=[make_potion("fairy_in_a_bottle")],
+                         relics=[make_relic("reptile_trinket")])
+        cs.player.hp = 5
+        DamageCmd.deal(cs.hooks, cs.player, 99, dealer=cs.enemy)
+        assert cs.player.hp == max(cs.player.max_hp * 30 // 100, 1)
+        assert cs.player.powers["reptile_trinket"].amount == 3
+
+    def test_entropic_brew_can_roll_the_out_of_combat_only_potions(self):
+        # EntropicBrew.cs:23 calls CreateRandomPotionOutOfCombat on purpose,
+        # so the three CanBeGeneratedInCombat=false potions ARE reachable.
+        from sts2_rl.potion_pools import legacy_random_potion_out_of_combat
+        rng = random.Random(0)
+        ids = {legacy_random_potion_out_of_combat(rng).id for _ in range(400)}
+        assert ids & {"fruit_juice", "fairy_in_a_bottle", "regen_potion"}
+
+    def test_entropic_brew_rolls_a_rarity_before_it_picks(self):
+        # CreateRandomPotion: one NextFloat picks the bucket (Rare <= 0.1,
+        # Uncommon <= 0.35, else Common), THEN one pick inside it — not a
+        # uniform draw over the whole pool.
+        from sts2_rl.potion_pools import POTION_POOL, legacy_random_potion_out_of_combat
+        rarity = dict(POTION_POOL)
+        rng = random.Random(1)
+        rolled = [legacy_random_potion_out_of_combat(rng).id for _ in range(2000)]
+        rares = sum(1 for pid in rolled if rarity[pid] == "rare")
+        assert 0.05 < rares / len(rolled) < 0.15
+        commons = sum(1 for pid in rolled if rarity[pid] == "common")
+        assert 0.55 < commons / len(rolled) < 0.75
+
+    def test_shackling_potion_skips_an_unhittable_enemy(self):
+        # ShacklingPotion.cs:33 applies over CombatState.HittableEnemies.
+        # PowerCmd.apply's should_allow_hitting backstop (cmds.py:381) is what
+        # enforces the ShouldAllowHitting half today; `not is_gone` covers the
+        # IsDead half.
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.overgrowth.fogmog import EyeWithTeeth
+
+        cs = CombatState(rng=random.Random(0),
+                         potions=[make_potion("shackling_potion")],
+                         encounter=Encounter("pin_illusion", [EyeWithTeeth]))
+        enemy = cs.enemies[0]
+        enemy.hp = 1
+        enemy.powers["illusion"].is_reviving = True
+        assert cs.use_potion(0)
+        assert "shackling_potion" not in enemy.powers

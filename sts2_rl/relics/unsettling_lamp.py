@@ -36,7 +36,8 @@ class UnsettlingLamp(Relic):
     def before_card_played(self, card, target=None) -> None:
         self._in_flight = card
 
-    def on_card_played(self, card) -> None:
+    def on_card_played(self, card,
+                       is_auto_play: bool = False) -> None:
         if card is self._triggering:
             self._finished = True
         self._in_flight = None

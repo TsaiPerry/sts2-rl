@@ -21,6 +21,10 @@ class CentennialPuzzle(Relic):
         super().__init__()
         self._used_this_combat = False
 
+    def reset_for_combat(self) -> None:
+        # CentennialPuzzle.AfterCombatEnd (:53-57).
+        self._used_this_combat = False
+
     def on_damage_received(
         self,
         target: Creature,

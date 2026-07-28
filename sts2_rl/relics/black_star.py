@@ -19,5 +19,6 @@ class BlackStar(Relic):
             return
         relic = run.pull_relic_from_front()
         if relic is not None:
-            run.add_relic(relic)
+            # RelicReward is take-or-skip (RelicReward.cs:109-123).
+            run.offer_relic(relic)
             rewards.relics.append(relic)

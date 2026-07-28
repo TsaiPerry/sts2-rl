@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..cards import make_card
-from ..potions import random_potion
 from .base import Event, EventOption, register_event
 
 if TYPE_CHECKING:
@@ -43,6 +42,9 @@ class TheLegendsWereTrue(Event):
 
     def _slowly_find_an_exit(self) -> None:
         self.run.lose_hp(_HP_LOSS)
-        # Potion offers auto-keep when a slot is free (sim convention).
-        self.run.add_potion(random_potion(self.rng))
+        # `Owner.PlayerRng.Rewards.NextItem(items)` — one draw on
+        # run.rewards_rng over the unlocked potion pools, via
+        # Event.offer_pool_potion (TheLegendsWereTrue.cs:52-59), then a
+        # take-or-skip RewardsCmd.OfferCustom(PotionReward) screen.
+        self.offer_potion(self.offer_pool_potion())
         self._finish("SLOWLY_FIND_AN_EXIT")

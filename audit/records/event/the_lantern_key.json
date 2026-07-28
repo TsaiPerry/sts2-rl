@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\the_lantern_key.py",
-    "sha256": "be2f351346215728d65b10874ca8747dc4566c1a53612aed6dd4b8c9336238ec"
+    "sha256": "29c60d6b668ae35eeab1aa04a606ff574b5a318c63e0bf815c114cc13972a8f5"
   },
   "extra_sources": [
     {
@@ -41,30 +41,39 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/_combat_layout.py",
+      "sha256": "4b2190746fc742403921d3501e555664123f495b8895b71a3cb5c9a41dbdba27",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/punch_off.py",
+      "sha256": "7561453270c1ba7a382c88bf5f21c33a5409f8b1b0f1a0993d76d05afd69c6d9",
       "side": "sim"
     }
   ],
   "hooks": {
     "LayoutType": {
-      "maps_to": "events/the_lantern_key.py has no analogue",
-      "verdict": "gap",
-      "issue": "TheLanternKey.cs:15 `EventLayoutType.Combat` is NOT presentation-only: EventRoom.EnterInternal branches on it to call GenerateInternalCombatState (EventRoom.cs:67-71). See the EV-12 guard below -- this hook is the trigger for that mechanism, so it carries EV-12's verdict rather than the UI waiver its sibling LayoutType overrides get (fake_merchant's Custom layout really is presentation). CORRECTS THIS RECORD'S OWN FIRST CUT, which waived this hook on the reasoning that a Combat layout 'constrains how the room system builds the combat, not what the combat is, and the sim's driver builds the combat from pending_encounter either way'. That reasoning is observationally false in parity mode: the layout decides WHEN the encounter is built, and building it consumes RNG."
+      "maps_to": "events/the_lantern_key.py:28-29 `is_combat_layout = True` + `canonical_encounter = MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER`. CLOSED 2026-07-28: the hook is mapped and load-bearing -- Event.begin (events/base.py:158-167) branches on it as EventRoom.EnterInternal does (EventRoom.cs:67-71), so entering the room spends the Mysterious Knight's Niche roll even on the RETURN_THE_KEY path that never fights. See this record's EV-12 guard.",
+      "verdict": "faithful"
     },
     "CanonicalEncounter": {
       "maps_to": "events/the_lantern_key.py:41 sets `self.pending_encounter = MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER`, the driver's stand-in for the encounter the room system instantiates. EXECUTED (`py audit/tools/event_probes_b.py ids`): the sim encounter generates exactly one monster, MysteriousKnight, matching MysteriousKnightEventEncounter.cs:13-16's single-element GenerateMonsters and its AllPossibleMonsters.",
@@ -104,8 +113,8 @@
     },
     {
       "what": "EV-12 (blast radius): TheLanternKey.cs:15's Combat layout makes EventRoom.EnterInternal build the whole encounter -- monsters, slots and max-HP rolls -- when the ROOM IS ENTERED, before any option is chosen; the sim only records `pending_encounter` (events/the_lantern_key.py:41) and builds monsters later, when the driver runs the fight",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as audit/records/event/punch_off.json's EV-12 guard (rule 3, not re-verdicted); recorded here so this unit's record shows it is in the radius. EXECUTED (`py audit/tools/event_probes_a.py combatlayout`): the probe enumerates every Combat-layout event in the source and TheLanternKey.cs:15 is one of the three (with PunchOff.cs:33 and the unported TheArchitect.cs:52). The observable is RNG position, so it is LIVE for parity and invisible in legacy mode: entering the room costs the game encounter-Rng and Rng.Niche draws that the sim does not take there, and on the RETURN_THE_KEY path the sim never takes them at all. NOTE the divergence is WIDER here than at punch_off: punch_off's two options both end in a fight, so the sim eventually spends the draws on both paths, whereas this event's RETURN_THE_KEY option leaves the event with no combat -- the game has still paid for a Mysterious Knight it never fights."
+      "maps_to": "Closed 2026-07-28: the encounter is built at ROOM ENTRY. events/the_lantern_key.py:28-29 (and events/punch_off.py:61-62) sets `is_combat_layout = True` + `canonical_encounter`, `Event.begin` calls `generate_internal_combat_state` (events/base.py:158-179) -- the port of EventRoom.EnterInternal -> EventModel.GenerateInternalCombatState (EventRoom.cs:67-71, EventModel.cs:383-403) -- and the fight option hands the driver a `PregeneratedEncounter` (events/_combat_layout.py:39-75) so the Niche roll is not repeated, mirroring `ShouldCreateCombat = LayoutType != Combat` (EventModel.cs:624-628). EXECUTED 2026-07-28 (`py audit/tools/event_probes_a.py combatlayout`): Punch-Off now consumes 2 Niche draws at event time on BOTH the NAB and the FIGHT path -- MATCH against the game's 2, where it used to be 0 on both.",
+      "verdict": "faithful"
     },
     {
       "what": "this event rolls NOTHING, so EV-3 does not apply",
@@ -113,6 +122,6 @@
       "verdict": "faithful"
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..valueprops import ValueProp, is_powered_attack
 from .base import Relic, RelicRarity, register_relic
 from ..cards import CardType
 
@@ -40,11 +41,15 @@ class PenNib(Relic):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # PenNib.cs:108
+            return 1.0
         if dealer is self.player and card is not None and card is self._card_to_double:
             return 2.0
         return 1.0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card is self._card_to_double:
             self._card_to_double = None

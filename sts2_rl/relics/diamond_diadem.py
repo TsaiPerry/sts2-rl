@@ -25,7 +25,15 @@ class DiamondDiadem(Relic):
         super().__init__()
         self.cards_played_this_turn = 0
 
-    def on_card_played(self, card: "Card") -> None:
+    def reset_for_combat(self) -> None:
+        # DiamondDiadem.AfterCombatEnd (:78-84). The turn-end reset below is
+        # not enough: a combat that ends inside play_card never reaches
+        # on_player_turn_end, so the counter carried into the next fight and
+        # turn 1 granted no power (3 > 2) where the game grants it.
+        self.cards_played_this_turn = 0
+
+    def on_card_played(self, card: "Card",
+                       is_auto_play: bool = False) -> None:
         self.cards_played_this_turn += 1
 
     def on_player_turn_end(self, player: PlayerCombatState) -> None:

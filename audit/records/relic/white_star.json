@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\white_star.py",
-    "sha256": "4d526c02407bfd7cea2b623d2778868e2d1d6cdb285b1c5f77f02ed7360e7166"
+    "sha256": "f72201aa6c83780acfbe2b625d10169e3692909fbb2772f5a1227108c204872d"
   },
   "extra_sources": [
     {
@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/black_star.py",
-      "sha256": "827347f3ab55418fcbd2d482eaef272e2c1d3635cf607c6936ac7456fb5221dd",
+      "sha256": "4bdc2f6cd45203104534a13d45096b23ac06761b441573da9c6d8d2e1ccb6ea3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/driftwood.py",
-      "sha256": "f1414c00ce2deab22b5f204d53850d56d38ab2bce3e2346e49dbd33358badc64",
+      "sha256": "9cec68bc3f83de97430a84b3ea7c0c2a8ffeced8ad8314ac55e134724bf249fb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     }
   ],
@@ -57,26 +57,26 @@
       "rationale": "WhiteStar.cs:12. Rare in the transcribed grab bag (py audit/tools/relic_probes_b17.py pool -> bag=Rare), so it is obtainable from any Rare pull."
     },
     "IsAllowed": {
-      "maps_to": "NO COUNTERPART -- sts2_rl.relics.base.Relic declares no `is_allowed` member at all (executed: hasattr(Relic, 'is_allowed') is False)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4. WhiteStar.cs:14-17 returns RelicModel.IsBeforeAct3TreasureChest(runState) = `TotalFloor < 41` in single-player (RelicModel.cs:452-456); the sim keeps the relic pullable for the whole run."
+      "maps_to": "is_allowed (sts2_rl/relics/white_star.py:24) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/white_star.py:24), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "TryModifyRewards": {
       "maps_to": "NO COUNTERPART -- the port is a behaviourless stub (white_star.py has no methods at all), although Relic.modify_combat_rewards is a real base hook (sts2_rl/relics/base.py:168-170) dispatched at rewards.py:498-500",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. WhiteStar.cs:19-31 appends `new CardReward(CardCreationOptions.ForRoom(Owner, RoomType.Boss), 3, player)` to every ELITE room's reward list -- a second, Boss-tier three-card choice on top of the elite's normal one. The port appends nothing."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/white_star.py's docstring now says: `rewards.CombatRewards` models exactly ONE pick-one-of-N card group (`cards`) plus independent take-or-skip singles (`special_cards`), and WhiteStar.cs's `new CardReward(CardCreationOptions.ForRoom(owner, RoomType.Boss), 3)` is a SECOND pick-one-of-3 group, which has no field to live in and no driver action to surface it. So the missing piece is a CombatRewards shape change plus a driver seam, not a hook on this class. The relic still adds nothing to an Elite screen where the game adds a Boss-tier 3-card choice."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the extra Boss-tier card reward is never added, and the premise behind the stub is false -- modify_combat_rewards IS dispatched and a sibling relic already uses it at the same gate",
       "verdict": "gap",
-      "issue": "MECHANISM: white_star.py declares only id/name/rarity and its docstring justifies that with 'an out-of-combat reward modifier, so this is a no-op stub'. PROMPT.md bug class 12 applied: the premise is false. rewards.py:498-500 runs `relic.modify_combat_rewards(run, rewards)` over every run relic at the end of generate_combat_rewards, and its own comment names Lava Rock as the ported user. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py rewardstubs): an ELITE screen yields `cards=3 special_cards=0` both with and without the relic, where C# yields the elite's 3 PLUS a Boss-tier 3. The CONTROL in the same probe is decisive and is a SIBLING BY NAME: relic/black_star implements the SAME C# hook at the SAME `RoomType.Elite` gate (BlackStar.cs, ported at sts2_rl/relics/black_star.py:15-23) and its extra reward DOES appear -- relics ['chandelier','book_of_five_rings'] instead of ['chandelier']. So the pipeline is proven live by a relic one letter away in the pool. Both sides ported: Rare in the grab bag, elites are a ported room type, and rewards.CombatRewards already models multiple card offers (`cards` for the pick-one group and `special_cards` for independent take-or-skip offers, rewards.py:376-384) -- though note for whoever fixes it that C# adds a second full CardReward, i.e. a second pick-one-of-3 group, which is neither of those two fields exactly. PROMPT.md bug class 29 checked, not assumed: black_star and white_star are NOT the same relic with a swapped payload -- one adds a RelicReward and the other a Boss-tier CardReward -- and this record is reached on white_star's own merits. Rule 7: rewards.py, sts2_rl/relics/base.py, sts2_rl/relics/black_star.py, BlackStar.cs and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. The premise half is settled: `modify_combat_rewards` IS dispatched (sts2_rl/rewards.py:526-527) and the sibling relic/black_star uses it at the same RoomType.Elite gate. WHAT REMAINS is the structural blocker the port now names: rewards.CombatRewards has one pick-one-of-N `cards` group and a `special_cards` list of independent singles, and WhiteStar.cs adds a SECOND pick-one-of-3 group, which is neither. An Elite screen still yields cards=3 / special_cards=0 with the relic held."
     },
     {
       "what": "G2 (LIVE): the IsAllowed floor gate is entirely unmodelled, so the relic stays offerable past floor 41",
-      "verdict": "gap",
-      "issue": "MECHANISM and REACHABILITY are the same as audit/records/relic/white_beast_statue.json guard G2 in this same batch, and the same verdict is reached per binding rule 3 -- one mechanism, one verdict at every site. EXECUTED (py audit/tools/relic_probes_b17.py isallowed): `hasattr(Relic, 'is_allowed')` is False; at `run.total_floor = 60` the grab bag still contains white_star, and 13 Rare pulls at that floor surface one of the pair. This unit is one of the 17 relics in .superpowers/sdd/content-relic-sweeps.md sweep B's IsBeforeAct3TreasureChest cluster (corrected from 16 by batch 8), first verdicted at audit/records/relic/amethyst_aubergine.json. FIX-ORDERING CONSTRAINT (PROMPT.md v6 binding item 2): RelicModel.IsAllowedAtNeow defaults to IsAllowed(player.RunState) (RelicModel.cs:443-446) and the sim models is_allowed_at_neow as an independent flag (sts2_rl/relics/base.py:159), so the fix must make the Neow flag delegate. Rule 7: RelicModel.cs, sts2_rl/relics/base.py, audit/records/relic/white_beast_statue.json, audit/records/relic/amethyst_aubergine.json and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/white_star.py:24), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "N1: `CardCreationOptions.ForRoom(base.Owner, RoomType.Boss)` and the count 3 (WhiteStar.cs:29) -- the extra reward's rarity odds",
@@ -95,8 +95,8 @@
     },
     {
       "what": "N4: Hook.ModifyRewards runs TWO full passes -- TryModifyRewards then TryModifyRewardsLate (Hook.cs:1981-1999) -- and the sim's modify_combat_rewards is one pass",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 25: a two-pass C# dispatcher is an ordering guarantee that the sim's single duck-typed loop destroys, and the two passes are two different hook NAMES here rather than an X/XLate method pair on one relic, so grepping for 'Late' on this relic alone would miss it. White Star implements the PLAIN pass; the ported relic/driftwood implements TryModifyRewardsLate (Driftwood.cs:14, sts2_rl/relics/driftwood.py:17-19, which sets rewards.can_reroll when there are cards), so C# guarantees White Star's extra CardReward exists before Driftwood decides whether a card reward is rerollable, while the sim's answer depends on the order of run.relics. DORMANT TODAY, for a reason that is entirely about this port: White Star adds nothing, so it cannot contend with anything -- the ordering becomes observable the moment G1 is fixed. That makes this a fix-ordering constraint as much as a gap: a G1 fix must also decide whether the new reward is rerollable, which in C# it is not (Driftwood's own gate reads the reward list it was given). Rule 7: Hook.cs, Driftwood.cs and sts2_rl/relics/driftwood.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: Hook.ModifyRewards' TWO complete passes are modelled. `Relic.modify_combat_rewards` and `Relic.modify_combat_rewards_late` are separate members (sts2_rl/relics/base.py:231-239) and rewards.generate_combat_rewards runs a full plain pass over run.relics and then a full Late pass (sts2_rl/rewards.py:526-529), which is Hook.cs:1981-1999. WAS: one flat loop, so an EARLY implementer's additions were not guaranteed to be visible to a Late one."
     },
     {
       "what": "N5: `undo_after_obtained` is absent from this port",

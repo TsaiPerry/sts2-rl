@@ -164,10 +164,12 @@ def test_orobas_choice_grants_relic_and_finishes():
 # Orobas — the relics
 # ═════════════════════════════════════════════════════════════════════════
 
-def test_sand_castle_upgrades_whole_deck():
+def test_sand_castle_upgrades_six_cards():
+    # SandCastle.cs:20 pins CardsVar(6) and :24-25 ends in .Take(6) — a random
+    # SIX of the upgradable deck cards, not all of them.
     run = fresh_run(5)
     run.add_relic("sand_castle")
-    assert all(c.upgrade_level == 1 for c in run.deck)
+    assert sum(c.upgrade_level for c in run.deck) == 6
 
 
 def test_electric_shrymp_imbues_one_skill():
@@ -969,7 +971,8 @@ def test_war_hammer_upgrades_after_elite():
     assert not any(c.upgrade_level > 0 for c in run.deck)
     combat = run.create_combat(WURM)
     run.finish_combat(combat, room_type=RoomType.ELITE)
-    assert all(c.upgrade_level == 1 for c in run.deck if c.max_upgrade_level)
+    # WarHammer.cs:17 pins CardsVar(4) and :26-27 ends in .Take(4).
+    assert sum(c.upgrade_level for c in run.deck) == 4
 
 
 def test_throwing_axe_first_card_twice():

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\howl_from_beyond.py",
-    "sha256": "3b489bebe90570b2054bcebc8a28f67a9832a4d8d4a762e5e7bf90b1160856f1"
+    "sha256": "e67d62791f714719eab2ca0c388936841b5417d47546dd900040c92e001b024f"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     }
   ],

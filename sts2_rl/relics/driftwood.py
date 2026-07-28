@@ -14,6 +14,6 @@ class Driftwood(Relic):
     name = "Driftwood"
     rarity = RelicRarity.ANCIENT
 
-    def modify_combat_rewards(self, run, rewards) -> None:
+    def modify_combat_rewards_late(self, run, rewards) -> None:
         if rewards.cards:
             rewards.can_reroll = True

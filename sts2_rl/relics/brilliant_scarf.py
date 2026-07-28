@@ -26,12 +26,19 @@ class BrilliantScarf(Relic):
         super().__init__()
         self.cards_played_this_turn = 0
 
-    def modify_card_energy_cost(self, card: "Card", cost: int) -> int:
+    def modify_card_energy_cost_late(self, card: "Card", cost: int) -> int:
+        # BrilliantScarf.cs:57 is TryModifyEnergyCostInCombatLate.
         if self.cards_played_this_turn == self.CARDS - 1:
             return 0
         return cost
 
-    def on_card_played(self, card: "Card") -> None:
+    def on_card_played(self, card: "Card",
+                       is_auto_play: bool = False) -> None:
+        # BrilliantScarf.cs:84-87 opens `if (cardPlay.IsAutoPlay) return;`.
+        # PROMPT.md bug class 29: rainbow_ring and razor_tooth deliberately DO
+        # count auto-plays, so this must NOT be applied to them.
+        if is_auto_play:
+            return
         self.cards_played_this_turn += 1
 
     def on_player_turn_start(self, player: PlayerCombatState) -> None:

@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/relics/red_skull.py",
-      "sha256": "8d85bd8f0c5a8700b24cef96645e2fb9041b48a6acb4d7ffbc997296b1a3caf4",
+      "sha256": "2516e605ad84257c2a339b1bb6c94a28d05955899171a0e2fa51349113e3e78c",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py",
-      "sha256": "4808b860f919e0adf19c4c09be1b9848e14a79597dd08ccfaf30f02a278fe5e3",
+      "sha256": "709fd5010a01839534bb6ec922456ceaddec9b655bd492c90be4ae8d04d027a9",
       "side": "sim"
     }
   ],

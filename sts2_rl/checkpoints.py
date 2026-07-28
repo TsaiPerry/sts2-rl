@@ -98,8 +98,11 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
               f"on the {spec.env_kind!r} env.")
     if ckpt.get("obs_schema") != obs_schema_version(spec):
         hint = " the observation layout changed — retrain."
-        if (ckpt.get("obs_schema") == 3 and obs_schema_version(spec) == 4
-                and spec.env_kind in RUN_SCALE_ENVS):
+        # The v3 -> v4 migration is still offered to a v3 checkpoint even now
+        # that the current version is 5: it is the documented first hop, and it
+        # is the only lossless one (v4 -> v5 shifted every index behind the
+        # widened phase segment, so that hop is a retrain).
+        if (ckpt.get("obs_schema") == 3 and spec.env_kind in RUN_SCALE_ENVS):
             hint = (" v3 → v4 only added features, so a lossless migration "
                     "exists: py migrate_ckpt.py <this checkpoint> <new path>.")
         raise SystemExit(
@@ -212,7 +215,10 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
         raise SystemExit(
             f"can only migrate obs schema 3 → 4; checkpoint has schema "
             f"{ckpt.get('obs_schema')}.")
-    assert RUN_OBS_SCHEMA_VERSION == 4, "migration written for the v4 layout"
+    # This migration targets the v3 -> v4 feature-only bump. v5 widened the
+    # leading phase segment (a new DecisionKind), which shifts every later
+    # index and so needs its own migration rather than a column splice.
+    assert RUN_OBS_SCHEMA_VERSION == 5, "migration written against the v4 layout"
 
     segments = run_obs_segments(card_obs)
     added = sum(w for n, w in segments if n in _V4_NEW_SEGMENTS)

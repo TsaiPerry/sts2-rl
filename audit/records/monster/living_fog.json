@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\underdocks\\living_fog.py",
-    "sha256": "330d0b8087d6cd0ada73d33d30c5c2a83ad9c80eee6a84c7a44ac5a3c9c28217"
+    "sha256": "bac03221109e2aab80cf4090ae2ee030caa79bf7536b937033f11324e3efa0e4"
   },
   "hooks": {
     "MinInitialHp": {
@@ -47,9 +47,8 @@
   "guards": [
     {
       "what": "BLOAT places the spawned Gas Bomb in the wrong enemy-list position",
-      "verdict": "gap",
-      "live": true,
-      "issue": "LivingFog's BLOAT spawn lands in the WRONG PLACE in the enemy list, so the Gas Bomb and the Living Fog take their turns in the opposite order to the game and occupy swapped enemy indices. The game spawns the bomb into a NAMED encounter slot: LivingFog.cs:91 asks Encounter.GetNextSlot(CombatState), which (EncounterModel.cs:245-248) returns the first entry of LivingFogNormal.Slots = [bomb1, bomb2, bomb3, bomb4, bomb5, livingFog] (LivingFogNormal.cs:18) that no live enemy occupies - 'bomb1' - and passes it to CreatureCmd.Add<GasBomb>(CombatState, slot) (LivingFog.cs:95). CombatManager.AddCreature then re-sorts the whole enemy list whenever the new creature has a SlotName (CombatManager.cs:846-851 -> CombatState.SortEnemiesBySlotName, CombatState.cs:495-501, which sorts by Slots.IndexOf(SlotName)). bomb1 is index 0 and livingFog is index 5, so the game's Enemies becomes [GasBomb, LivingFog]. The sim has no slot concept for this encounter: living_fog.py:94 calls CreatureCmd.add(hooks, GasBomb(...)) with the default index=None, which APPENDS (cmds.py:262-265), giving [LivingFog, GasBomb]. Two observables follow. (1) ENEMY TURN ORDER: the game iterates _state.Enemies.ToList() (CombatManager.cs:1072) and the sim iterates list(self.enemies) (combat.py:286), so from the turn after BLOAT the game resolves the bomb's 8-damage DEATH_BLOW BEFORE the Living Fog's move and the sim resolves it AFTER - a different order of damage instances, of on_damage_received listeners and of the bomb's own death inside one enemy phase. (2) ENEMY INDEX: the bomb is index 0 in the game and index 1 in the sim, which the conformance replay compares POSITIONALLY (combat_driver.py:184-191 zips the recorded EnemyState list against the live one), so a recorded Living Fog fight reports an 'enemies' Divergence. Note the sim's `index=` parameter EXISTS and is used elsewhere for exactly this mechanism (cmds.py:243-245 documents it as the Ovicopter egg-slot rule), so the fix is to pass it, not to add machinery.",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: BLOAT now places the Gas Bomb in its encounter slot. living_fog.py gives GasBomb a `slot` field, picks the first free bombN slot (the port of Encounter.GetNextSlot, EncounterModel.cs:245-248, over LivingFogNormal.Slots = [bomb1..bomb5, livingFog], LivingFogNormal.cs:18) and calls `CreatureCmd.add(ctx.hooks, bomb, index=idx)` where idx is the first enemy holding a HIGHER slot index (_slot_index gives the Living Fog 5) -- reproducing CombatManager.AddCreature -> CombatState.SortEnemiesBySlotName (CombatState.cs:495-501). EXECUTED on a real LIVING_FOG_NORMAL combat driven through ADVANCED_GAS then BLOAT: enemies after BLOAT = ['GasBomb', 'LivingFog'], Gas Bomb at index 0, so the bomb's DEATH_BLOW resolves before the Fog's move. WAS: an index-less CreatureCmd.add that APPENDED, giving ['LivingFog','GasBomb'] -- wrong enemy turn order and a positional 'enemies' divergence in replay. The sort is not a random draw, so this holds on the legacy/RL path too.",
       "rationale": "EXECUTED, `py audit/tools/monster_probes_b03.py slot-order`, a real CombatState driven through ADVANCED_GAS then BLOAT: 'SIM enemies after BLOAT : [LivingFog, GasBomb]' / 'GAME enemies after BLOAT : [GasBomb, LivingFog] (slot sort over [bomb1..bomb5, livingFog])'; 'sim next enemy turn acts in order: [LivingFog, GasBomb]' vs 'game next enemy turn acts in order: [GasBomb, LivingFog]'; 'sim index of the Gas Bomb: 1' vs 'game index of the Gas Bomb: 0'. LIVE under rule 6, both sides proved reachable on ported content: 'living_fog' is in the Underdocks normal-encounter pool (rooms.py:135), the encounter is LIVING_FOG_NORMAL (living_fog.py:101-104), and the code path is taken on the second Living Fog turn of every such fight - BLOAT_MOVE is a fixed link in a branchless chain, so it CANNOT be skipped, and the free-slot test passes on turn 2 because no bomb exists yet. Nothing unported is required."
     },
     {
@@ -78,7 +77,7 @@
       "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10: BloatAmount is the only field and never changes. Class 20 (a hook dispatched from the wrong SITE) is the class this unit's gap is closest to and the reason the spawn was traced through CreatureCmd.Add's ENCLOSING call rather than just read locally - which is how the SortEnemiesBySlotName call at CombatManager.cs:850 was found. Class 21: answered in monster/gas_bomb."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -103,12 +102,12 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {

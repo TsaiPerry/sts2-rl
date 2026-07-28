@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\drowning_beacon.py",
-    "sha256": "c8412b0f13e08508820c18751bbdf5ac4e2ea4f51cb30a7143c20c16c9aaa35a"
+    "sha256": "fa07429b27483ff14c3a976dce284a91194c272ccae064b466f7db5e105cf0e8"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c9f057de8325bf93fd5647aa83efa95103275c08ad8421d4e5dc8e7407d0144",
+      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
       "side": "sim"
     },
     {
@@ -26,8 +26,23 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
     }
   ],
   "hooks": {},
@@ -44,8 +59,8 @@
     },
     {
       "what": "EV-4: BottleOption's Glowwater Potion (DrowningBeacon.cs:39-46) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-4, one verdict at every FORCED site (rule 3). The sim does model the offer contract elsewhere -- Event.resume_after_combat RETURNS potions 'to surface as take-or-skip offers (RewardsCmd.OfferCustom)' (events/base.py:116-122), which is how battleworn_dummy hands its Setting1 potion to the driver -- so this is an inconsistency inside the sim, not a missing capability. Declining is a real choice: a colourless card reward can be a card the player does not want in the deck, and a potion offer can be declined to keep a belt slot for a later pick. The source distinguishes the two screens deliberately: BrainLeech's SHARE_KNOWLEDGE sets `Cancelable = false` on its grid pick (BrainLeech.cs:67-70) while its RIP branch uses plain OfferCustom (BrainLeech.cs:58). LIVE at every site listed, all of which are reachable event branches with no exotic gate."
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/drowning_beacon.py:30 (`self.offer_potion(make_potion('glowwater'))`) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "verdict": "faithful"
     },
     {
       "what": "the potion is the right one and the belt rules are respected",
@@ -54,8 +69,8 @@
     },
     {
       "what": "EV-2: ClimbOption's 13 Max HP loss (DrowningBeacon.cs:53) calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-2, one verdict at every lose_max_hp site (rule 3). Two legs, both EXECUTED (`py audit/tools/event_probes.py maxhp`): (1) the overflow is real damage, so HP-loss modifiers apply -- at 80/80 losing 10 max HP with the ported Tungsten Rod relic the sim lands on 70 and the game on 71; (2) losing more max HP than the player has: the game computes the damage against the unfloored new max (80 - 100 = -20, so 100 damage) and kills the player, while the sim floors max HP at 1 first and leaves them alive at 1/1. LIVE on leg (1): Tungsten Rod is a ported relic (relics/tungsten_rod.py:39) and every max-HP-loss event is reachable with it held. Leg (2) needs a max-HP loss larger than the player's max HP, which no ported event amount reaches, so leg (2) alone is dormant."
+      "maps_to": "Closed 2026-07-28: RunState.lose_max_hp (run.py:366-380) now has the shape of CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-828) -- `new_max = max_hp - amount` UNFLOORED, then `if new_max < hp: lose_hp(hp - new_max)` so the overflow is real HP loss that runs the relic ModifyHpLost pass and the death pass, and only then `max_hp = max(1, new_max)` followed by SetMaxHpInternal's clamp `hp = min(hp, max_hp)` (Creature.cs:493-501). Leg (2) now MATCHes: 80/80 losing 100 max HP kills the player on both sides (`py audit/tools/event_probes.py maxhp`). Leg (1)'s witness does not survive re-reading the source: the probe's hardcoded `C#=71` ignores SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)`, which pulls the GAME back to 70 as well, so Tungsten Rod's -1 is unobservable through HP at any max-HP-loss amount (the overflow can never leave current HP above the new max). Both sides read on 2026-07-28; the sim's 70/70 is correct.",
+      "verdict": "faithful"
     },
     {
       "what": "the potion and relic hover tips and the ThatDecreasesMaxHp option annotation (DrowningBeacon.cs:31-32)",
@@ -63,6 +78,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

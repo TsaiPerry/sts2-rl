@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\underdocks\\corpse_slug.py",
-    "sha256": "467c141df0df171f99cfc105a47db4f44eb683626fb359e0c5df1101be70c7f5"
+    "sha256": "b873b3a979b575466f583359a215dfb4d10b5d9c7289f0684bfbb4b86168ffab"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -46,32 +46,32 @@
     },
     {
       "path": "sts2_rl/monsters/state_machine.py",
-      "sha256": "dc9ac4158e81b37a07eedc619b9345d5add0de3fbb5feae68df5d14e9c165948",
+      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/paels_legion.py",
-      "sha256": "20f9950262269d972fff7aff6d200544ce02c445f956217cf9568890938e5f21",
+      "sha256": "0b3949d545d5a21af06705484f6821e7d47a08d90d444bc3aab5123c346557d3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/ruined_helmet.py",
-      "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9",
+      "sha256": "379bd9ed7f301d2bf5b9aa011e275661326b0ae133805956c699150610542f0c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/vambrace.py",
-      "sha256": "95c98caeae4206f9737a2f3de4c8275edfd4be384397baf07d0e66f81cf6bcb5",
+      "sha256": "829070eda07da4b6999a8284b646804938643b4b96f43c3fb0025a67c5c3ca54",
       "side": "sim"
     },
     {
@@ -130,9 +130,8 @@
   "guards": [
     {
       "what": "Where StarterMoveIdx comes from. The game calls `CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves(models, base.Rng)` (CorpseSlugsNormal.cs:32, CorpseSlugsWeak.cs:32), and the helper draws `rng.NextInt(3)` off the PER-ENCOUNTER selection Rng (CorpseSlug.cs:135-144; EncounterModel.cs:49,268 is the stream, reproduced by rng.py:52-67's make_encounter_rng). The sim's CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-84) ignores its `selection_rng` parameter entirely and draws `rng.randrange(3)` off the combat rng.",
-      "verdict": "gap",
-      "live": true,
-      "issue": "Every Corpse Slug in the encounter starts on the WRONG move of the three-move loop, so all three slugs telegraph and perform a different opening move from the game's, for the whole fight. Two separate defects in one line: (1) wrong value - executed, `py audit/tools/monster_probes_b02.py slug-start` compares the game's NextInt(3) against the sim's starters over 10 seed/floor configurations and 6 DISAGREE; (2) the per-encounter selection stream is drawn 0 times where the game draws exactly once, desynchronising every later draw on it. Worse, the sim's draw is not even seed-stable: `CombatState(rng_set=RunRngSet('FIXEDSEED'), encounter=CORPSE_SLUGS_NORMAL)` returns starter indices [2,0,1], [0,1,2], [1,2,0], [1,2,0] on four consecutive runs of the same process, because the combat rng it draws from is the unseeded shared random.Random - so a conformance replay of a Corpse Slug fight is non-deterministic. LIVE on ported content (rule 6): corpse_slugs_weak and corpse_slugs_normal are both in the act-2 encounter pools (rooms.py:130,134,141-142), CorpseSlug itself is fully ported, and the observable is the enemy intent shown on turn 1. The four correctly-ported batch-2 encounters (ruby_raiders_normal, slimes_normal, slimes_weak, the fixed bosses) consume the selection stream exactly as their C# does - executed, `monster_probes_b02.py enc-rng` - so this is a port slip, not a missing capability. Same root cause as the gap recorded on monster/slithering_strangler. EncounterModel / monster-slot generation is monster_state_machine boundary hole 4 and is owned by no seam; this entry covers only the encounter code that lives in the unit's own sim file."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-91) now CONSUMES its `selection_rng` -- `start = selection_rng.next_int(3)` -- reproducing CorpseSlugs{Normal,Weak}.cs:32 -> CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves (CorpseSlug.cs:135-144) drawing NextInt(3) off the per-encounter Rng, and run.py:1299-1309 builds that stream with rng.make_encounter_rng(seed, total_floor, encounter.entry) exactly as EncounterModel.cs:258-263 seeds it. Executed: `py audit/tools/monster_probes_b02.py enc-rng` now reports corpse_slugs_normal and corpse_slugs_weak consuming 1 selection draw against the game's 1 (they consumed 0 before), and the +1-per-slug stagger was already faithful. WAS: the parameter was ignored and the index came off the shared, unseeded combat random.Random, so every slug opened on the wrong move and a replay was not even run-to-run stable. Legacy (no rng_set) runs still fall back to the shared rng at corpse_slug.py:87 -- by construction, since a legacy run has no run seed to derive a per-encounter Rng from."
     },
     {
       "what": "EnsureCorpseSlugsStartWithDifferentMoves' stagger itself: `num = rng.NextInt(3); foreach slug { StarterMoveIdx = num % 3; num++; }` (CorpseSlug.cs:138-143) vs the sim's `(start + i) % 3` (corpse_slug.py:82)",
@@ -178,6 +177,6 @@
       "note": "Neither CorpseSlug.cs nor corpse_slug.py implements ShouldDie, ShouldCreatureBeRemovedFromCombatAfterDeath or a revive; the dying slug really dies and really leaves Enemies on both sides. The devour response is RavenousPower's (monster_state_machine cites underdocks/corpse_slug.py as one of the two INERT power-side stun sites), i.e. the power tier's unit, not this one."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

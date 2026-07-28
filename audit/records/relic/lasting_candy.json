@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lasting_candy.py",
-    "sha256": "32441908cfd6d5de66c0ac7bd1951c39f2424c80e72ec941136b5f6f1533075c"
+    "sha256": "12f1b8e8699860a03b186f2a00cd12d520bde8fcc79e8acffc5c7c19da9650fc"
   },
   "extra_sources": [
     {
@@ -31,32 +31,32 @@
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e4b9df218ccbbd9901d24c704251aa154844028db889deb06269d88057d8e569",
+      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "77d791ebe6db4b220c1b0047c7db8497fba535f16339817071d152559b43abd9",
+      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/silken_tress.py",
-      "sha256": "6b7dca4146b769fc47d694fc0446ffe7a1ca4184f9091d9873d0eb7d1ac1daee",
+      "sha256": "ae34c594c5c9502ded4b0cf86cb7921cdcde004b1d80c81532ab3ee7dcbabcdf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/silver_crucible.py",
-      "sha256": "83c6ca421e6cab5704b6c4e0dafeee2c1a57e3210e9a4d1a654a0c1393f3d57d",
+      "sha256": "9a8147346c7c1fa77a0ebb3b1a61402e0e67663fd7686345e6f31fb0686641eb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     }
   ],
@@ -78,7 +78,7 @@
     "IsAllowed": {
       "maps_to": "no counterpart; sts2_rl.relics.base.Relic declares no is_allowed member at all",
       "verdict": "gap",
-      "issue": "Rollup of guards G2 and G3 per binding rule 4. LastingCandy.cs:80-98 has TWO clauses, and the pool-wide sweep only saw the first: an Ironclad UnlockState.NumberOfRuns == 0 veto (G3, dormant) AND `return RelicModel.IsBeforeAct3TreasureChest(runState)` (G2, LIVE -- the TotalFloor < 41 cluster)."
+      "issue": "NARROWED 2026-07-27. The floor half (G2) is CLOSED: LastingCandy.cs's tail `return RelicModel.IsBeforeAct3TreasureChest(runState)` is now ported at sts2_rl/relics/lasting_candy.py:16-23 and enforced before every pull by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769). WHAT REMAINS is guard G3, the FIRST clause: `runState.Players.Any(p => p.Character is Ironclad && p.UnlockState.NumberOfRuns == 0)` (LastingCandy.cs:82-96) vetoes the relic on a profile's very first Ironclad run, and the sim still has no profile/unlock model at all -- the docstring at sts2_rl/relics/lasting_candy.py:17-22 says so and grepping `UnlockState|NumberOfRuns` over sts2_rl/ still returns nothing but 'fully unlocked' comments. DORMANT: the conformance seeds all come from a veteran profile, where the clause evaluates false and the sim's behaviour coincides."
     },
     "TryModifyCardRewardOptions": {
       "maps_to": "no counterpart; lasting_candy.py is a behaviourless stub (3 class attributes, no methods)",
@@ -99,8 +99,8 @@
     },
     {
       "what": "G2 (LIVE): LastingCandy is the SEVENTEENTH member of the `IsBeforeAct3TreasureChest` (TotalFloor < 41) cluster, not a separate 'unlock gate' unit -- correcting .superpowers/sdd/content-relic-sweeps.md sweep B",
-      "verdict": "gap",
-      "issue": "MECHANISM: LastingCandy.cs:97 ends `return RelicModel.IsBeforeAct3TreasureChest(runState);`, which is `TotalFloor < 41` in single-player (RelicModel.cs:452-456). RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-271) permanently REMOVES every relic whose IsAllowed is false from the rarity deques, so from floor 41 the game stops offering it and every subsequent pull shifts. `sts2_rl.relics.base.Relic` declares no is_allowed member (EXECUTED: `hasattr(Relic, 'is_allowed')` is False) and pull_relic_from_front applies no such filter. SWEEP CORRECTION: sweep B bucket (a) lists SIXTEEN relics and files this one separately in bucket (c) as 'gated on the Ironclad's UnlockState ... likely a waiver, but it needs the per-unit audit'. The reason is mechanical: the sweep's regex captures only the FIRST statement of an IsAllowed body, and Lasting Candy is the pool's ONLY multi-clause body. `py audit/tools/relic_probes_b08.py b08-isallowed` brace-matches every body instead and prints 17 relics containing IsBeforeAct3TreasureChest, with lasting_candy flagged MULTI-CLAUSE and the other 16 all bare `return` statements; the remaining three overrides are the single-player-constant player-count gates. So the single-fix cluster sweep B sizes is 17, and the answer to its open question is: NOT a waiver -- this relic carries the same LIVE pool-composition gap as amethyst_aubergine. REACHABILITY (LIVE, executed): at total_floor=60 a bag containing lasting_candy still yields it, and RunState already tracks total_floor, so the predicate is expressible today. Same mechanism, same verdict as audit/records/relic/amethyst_aubergine.json's IsAllowed entry (binding rule 3). Rule 7: src/Core/Models/RelicModel.cs, src/Core/Runs/RelicGrabBag.cs, relics/base.py and run.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lasting_candy.py:16), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G3 (DORMANT): the FIRST clause -- `runState.Players.Any(p => p.Character is Ironclad && p.UnlockState.NumberOfRuns == 0)` vetoes the relic on a profile's very first Ironclad run",
@@ -109,8 +109,8 @@
     },
     {
       "what": "G4 (DORMANT): the sim's single `modify_card_reward_options` collapses C#'s EARLY and LATE card-reward passes, and Lasting Candy is the only early implementer",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.TryModifyCardRewardOptions (Hook.cs:1445-1467) runs every listener's TryModifyCardRewardOptions in a FIRST full pass, then every listener's TryModifyCardRewardOptionsLate in a SECOND. rewards.py:299-301 is one flat loop, and the sim's `Relic.modify_card_reward_options` docstring (relics/base.py:172-176) names it TryModifyCardRewardOptionsLate. A census of the game source finds Lasting Candy is the ONLY non-mock override of the early pass and nine relics override the Late one (fresnel_lens, frozen_egg, glitter, lava_lamp, molten_egg, silken_tress, silver_crucible, toxic_egg, wing_charm). The phase order is load-bearing precisely for this relic: the added Power option must exist BEFORE Glitter enchants, Silver Crucible upgrades or the eggs upgrade the option list, otherwise the fourth option is left un-enchanted and un-upgraded. DORMANT TODAY only because G1 leaves the early pass empty -- so the flat loop cannot mis-order anything. FIX-ORDERING CONSTRAINT, which is why this is filed separately: fixing G1 inside the existing flat loop introduces the mis-ordering, so the phase split must land with it. The ported Late implementers (relics/glitter.py:16, relics/silver_crucible.py:28, relics/silken_tress.py:27, relics/_eggs.py:39) are all already in the same loop. Rule 7: src/Core/Hooks/Hook.cs, rewards.py, relics/base.py, relics/glitter.py, relics/silver_crucible.py, relics/silken_tress.py and relics/_eggs.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     {
       "what": "N1: IsActivating / DoActivateVisuals / InvokeDisplayAmountChanged / TaskHelper.RunSafely / Cmd.Wait(1f) / Flash (LastingCandy.cs:20, 40-52, 143-145, 149-155)",

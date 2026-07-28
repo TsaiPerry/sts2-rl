@@ -6,6 +6,7 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from ...hooks import CAT_POWER
 from ..base import Encounter, Intent, Monster, MoveType
 from ..state_machine import (
     ConditionalBranchState,
@@ -16,12 +17,36 @@ from ..state_machine import (
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
+    from ...creatures import Creature
     from ...hooks import HookSystem
 
 _ROLLOUT_DMG = 16
 _ROLLOUT_STR = 2
 _PLATING = 15
 _SLUMBER = 3
+
+
+class _StunMoveRunner:
+    """Runs the beetle's pending stun-move body on its own stunned turn.
+
+    `CreatureCmd.Stun(creature, stunMove, nextMoveId)` (CreatureCmd.cs:884-904)
+    does not run `stunMove`: `Creature.StunInternal` (Creature.cs:524-544) hangs
+    it on a synthetic "STUNNED" MoveState, so the body is that move's PERFORM
+    body and runs on the victim's stunned turn. The sim's combat loop skips a
+    stunned enemy's move outright and has no MonsterModel listener category
+    (hook_dispatch G5), so the beetle registers this listener — in the slot
+    CombatState.IterateHookListeners gives a monster, right after its own
+    creature's Powers — and fires the body at the start of that turn."""
+
+    hook_category = CAT_POWER + 1
+
+    def __init__(self, beetle: SlumberingBeetle) -> None:
+        self.beetle = beetle
+        self.owner = beetle  # dispatch-order slot: the beetle's own creature
+
+    def on_enemy_turn_start(self, enemy: Creature) -> None:
+        if enemy is self.beetle:
+            self.beetle._run_pending_stun_move()
 
 
 class SlumberingBeetle(MachineMonster):
@@ -35,7 +60,10 @@ class SlumberingBeetle(MachineMonster):
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         self.is_awake = False
+        # The body handed to CreatureCmd.Stun, waiting for the stunned turn.
+        self._pending_stun_move = None
         super().__init__(hooks, rng or random.Random())
+        hooks.register(_StunMoveRunner(self))
         from ...cmds import PowerCmd
         from ...powers import PlatingPower, SlumberPower
         PowerCmd.apply(hooks, self, PlatingPower, _PLATING)
@@ -55,17 +83,46 @@ class SlumberingBeetle(MachineMonster):
         return MonsterMoveStateMachine([snore, branch, rollout], snore)
 
     def wake_up(self, stunned: bool) -> None:
-        """Called by SlumberPower. Waking removes the Plating; a damage wake
-        costs the beetle its next turn (mirrors WakeUpMove +
-        CreatureCmd.Stun(..., "ROLL_OUT_MOVE"))."""
-        from ...cmds import CreatureCmd, PowerCmd
-        self.is_awake = True
-        PowerCmd.remove(self._hooks, self, "plating")
-        rollout = self.machine.states["ROLL_OUT_MOVE"]
-        self.machine.force_current_state(rollout)
-        self._current_move = rollout
+        """Called by SlumberPower. WakeUpMove (SlumberingBeetle.cs:96-108) sets
+        IsAwake and drops the Plating.
+
+        The natural wake (AfterSideTurnEnd) awaits WakeUpMove inline. The damage
+        wake does NOT: SlumberPower.cs:29 passes it to
+        CreatureCmd.Stun(Owner, WakeUpMove, "ROLL_OUT_MOVE"), which makes it the
+        stunned turn's perform body — so the beetle keeps its Plating for the
+        rest of the player's turn and wakes on its own turn."""
+        from ...cmds import CreatureCmd
         if stunned:
-            CreatureCmd.stun(self._hooks, self)
+            self._pending_stun_move = self._wake_up_move
+            # SlumberPower.cs:29 — CreatureCmd.Stun(Owner, WakeUpMove,
+            # "ROLL_OUT_MOVE"): the id is the stun's FollowUpStateId, so the
+            # machine resumes at ROLL_OUT after the stunned turn. Forcing the
+            # state by hand was this port's stand-in for a nextMoveId that
+            # CreatureCmd.stun used to drop for a MachineMonster.
+            CreatureCmd.stun(self._hooks, self, next_move_key="ROLL_OUT_MOVE")
+            return
+        # The natural wake touches the machine not at all: WakeUpMove
+        # (SlumberingBeetle.cs:96-108) only flips IsAwake and drops the
+        # Plating, and SNORE_MOVE's follow-up is the SNORE_NEXT conditional
+        # whose second arm is `!HasPower<SlumberPower>`
+        # (SlumberingBeetle.cs:115-117) — the next player-turn-start roll walks
+        # it to ROLL_OUT on its own. Force-setting ROLL_OUT here was the old
+        # roll-inside-the-move world's stand-in for that, and now double-
+        # advances (ROLL_OUT's follow-up is itself, so nothing broke visibly on
+        # the beetle; the Matriarch's chain made the same bug fatal).
+        self._wake_up_move()
+
+    def _wake_up_move(self) -> None:
+        """WakeUpMove's body (SlumberingBeetle.cs:96-108)."""
+        from ...cmds import PowerCmd
+        self.is_awake = True
+        if "plating" in self.powers:
+            PowerCmd.remove(self._hooks, self, "plating")
+
+    def _run_pending_stun_move(self) -> None:
+        body, self._pending_stun_move = self._pending_stun_move, None
+        if body is not None:
+            body()
 
     def _snore(self, ctx: CombatCtx) -> None:
         pass

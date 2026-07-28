@@ -225,7 +225,11 @@ class TestRage:
     def test_removed_at_turn_end(self):
         cs = fresh()
         play(cs, RageCard())
+        # These powers are AfterSideTurnEnd in C# (power/_side_turn_slot),
+        # so they moved off the sim's BeforeTurnEnd slot onto
+        # after_player_turn_end. end_turn fires both in order.
         cs.hooks.on_player_turn_end(cs.player)
+        cs.hooks.after_player_turn_end(cs.player)
         assert "rage" not in cs.player.powers
 
 
@@ -256,7 +260,11 @@ class TestOneTwoPunch:
     def test_expires_at_turn_end(self):
         cs = fresh()
         play(cs, OneTwoPunchCard())
+        # These powers are AfterSideTurnEnd in C# (power/_side_turn_slot),
+        # so they moved off the sim's BeforeTurnEnd slot onto
+        # after_player_turn_end. end_turn fires both in order.
         cs.hooks.on_player_turn_end(cs.player)
+        cs.hooks.after_player_turn_end(cs.player)
         assert "one_two_punch" not in cs.player.powers
 
 
@@ -641,7 +649,9 @@ class TestStampede:
         cs.player.hand = [strike]
         cs.player.energy = 0
         before = cs.enemy.hp
-        cs.hooks.on_player_turn_end(cs.player)
+        # StampedePower.cs is AfterAutoPostPlayPhaseEntered, not BeforeTurnEnd
+        # (turn_structure/G8) -- the auto-plays drain in their own phase.
+        cs.hooks.after_auto_post_play_phase_entered(cs.player)
         assert cs.enemy.hp == before - 6
         assert strike in cs.player.discard_pile
         assert cs.player.energy == 0

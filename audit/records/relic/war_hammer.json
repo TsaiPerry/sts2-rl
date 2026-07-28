@@ -6,22 +6,22 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\war_hammer.py",
-    "sha256": "f9d5bab251a2ceb914d995d5f10d3b547580307ac0fe0d4738f4a7f19ed68e83"
+    "sha256": "458a842a3e1c7623be12a4ce164dd662c250e6491d29fe4588f5b92530cf647d"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "220a81cf37d193c75ef7794df077498bc145df34de9f006a1587466ced7536b4",
+      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     },
     {
@@ -37,16 +37,16 @@
       "rationale": "WarHammer.cs:15. Not bag-pullable (Ancient); granted by the ported Tanx shrine (py audit/tools/relic_probes_b17.py pool -> granted_by sts2_rl/events/tanx.py)."
     },
     "AfterCombatVictory": {
-      "maps_to": "after_combat_end (war_hammer.py:15-22), dispatched by RunState.finish_combat (run.py:1206-1208)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N2 per binding rule 4. The room-type gate is right (RoomType.Elite only, executed) but the QUANTITY is not: C# upgrades exactly CardsVar(4) randomly chosen upgradable deck cards and the port upgrades EVERY upgradable card in the deck (G1), and the Rng.Niche stream the choice consumes is never touched (N2)."
+      "maps_to": "after_combat_end (sts2_rl/relics/war_hammer.py:17-37), gated on RoomType.ELITE and `not run.is_dead`; run-level plain pass, dispatched at sts2_rl/run.py:1380-1381 after the Early pass",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: both halves of the rollup are fixed. The QUANTITY is now CardsVar(4) (`count = min(self.CARDS, len(upgradable))`, sts2_rl/relics/war_hammer.py:22-23) and the choice runs through `stable_shuffle(..., run.rng_set.niche, key=_compare_to_key)` (war_hammer.py:28-33), which is StableShuffle(Rng.Niche).Take(4) (WarHammer.cs:26-27). WAS: every upgradable deck card was upgraded and the Niche stream was never touched."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the port upgrades EVERY upgradable card in the deck where C# upgrades exactly 4",
-      "verdict": "gap",
-      "issue": "MECHANISM: WarHammer.cs:26-27 is `Deck.Cards.Where(c => c.IsUpgradable).ToList().StableShuffle(Rng.Niche).Take(Cards.IntValue)` with CanonicalVars = CardsVar(4) (WarHammer.cs:17) -- a random FOUR. war_hammer.py:20-22 is `for card in run.deck: if card.is_upgradable: card.upgrade()`, with no shuffle and no Take. The port's own docstring states the wrong behaviour as if it were the source's ('upgrade ALL upgradable cards in the deck', war_hammer.py:8-9), which is PROMPT.md bug class 19 in its most direct form: a wrong quantity protected by a confident citation of the C# file name. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py warhammer): one Elite victory with the starting deck upgrades all TEN cards (5 Strike, 4 Defend, Bash) where C# upgrades 4; a MONSTER victory upgrades 0 on both sides. Both sides ported: the relic is granted by the ported Tanx shrine and elites are a ported room type whose victory reaches RunState.finish_combat with room_type=ELITE. The divergence compounds -- the relic fires on EVERY elite victory, so a run with three elites upgrades the whole deck instead of at most 12 picks with replacement across a shrinking upgradable set, and sts2_rl/conformance/runner.py:618 compares the deck as (id, upgrade_level) pairs, so any parity run that takes War Hammer diverges immediately. No ascension branch anywhere in WarHammer.cs, so 4 is the pinned non-ascension value. Rule 7: sts2_rl/conformance/runner.py and run.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: sts2_rl/relics/war_hammer.py:22-37 now takes `count = min(4, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- ListExtensions.StableShuffle's CompareTo sort (the UPPERCASE ModelId then the upgrade level, sts2_rl/player.py:23-34) followed by the UnstableShuffle over Rng.Niche, then Take(CardsVar(4)) (WarHammer.cs:26-27). WAS: the port looped the whole deck and upgraded EVERY upgradable card, with no count, no shuffle and no stream, and its docstring stated that wrong rule as if it were the source's."
     },
     {
       "what": "N1: `c.IsUpgradable` (WarHammer.cs:26) vs `card.is_upgradable` (war_hammer.py:21)",
@@ -55,8 +55,8 @@
     },
     {
       "what": "N2 (LIVE for RNG parity, dormant for RL): `StableShuffle(base.Owner.RunState.Rng.Niche)` names an explicit stream and the sim consumes none",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 16's second half. C# draws from the per-player Niche stream to order the candidate list before Take(4) (WarHammer.cs:26); the port performs no shuffle at all, so zero draws are consumed and the stream position is wrong for every subsequent Niche consumer in the run. Distinct from G1: fixing the count by taking the first four cards in deck order would close G1 and leave this open. LIVE for the conformance harness on any seed that takes War Hammer past an elite (the Niche stream is the same one relic/astrolabe's N1 records, and the shuffle is genuinely CONSUMED here -- unlike the `claws` case PROMPT.md class 16 warns about, where the named stream is never touched, StableShuffle always draws). DORMANT for RL play, where stream positions are unobservable. Rule 7: audit/records/relic/astrolabe.json is NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: sts2_rl/relics/war_hammer.py:22-37 now takes `count = min(4, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- ListExtensions.StableShuffle's CompareTo sort (the UPPERCASE ModelId then the upgrade level, sts2_rl/player.py:23-34) followed by the UnstableShuffle over Rng.Niche, then Take(CardsVar(4)) (WarHammer.cs:26-27). WAS: no shuffle was performed at all, so the Rng.Niche stream the game consumes for the choice stayed at its old position for the rest of the run."
     },
     {
       "what": "N3: C#'s hook is AfterCombatVictory; the sim's run-level after_combat_end is dispatched only on a non-fatal combat (run.py:1206-1208), and the port re-checks run.is_dead",
@@ -65,9 +65,8 @@
     },
     {
       "what": "N4 (DORMANT): the ordering of the upgrades against the reward screen, and the flattened AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch",
-      "verdict": "gap",
-      "issue": "RE-VERDICTED from faithful to a DORMANT gap by the 2026-07-26 relic fix pass, to match its two siblings under binding rule 3. `Hook.AfterCombatVictory` (Hook.cs:340-351) makes TWO complete passes over the listeners -- every listener's `AfterCombatVictoryEarly` first, then every listener's `AfterCombatVictory`. War Hammer implements the PLAIN pass (WarHammer.cs:19), so in C# its deck upgrades are guaranteed to run after every Early listener; the sim's run-level `after_combat_end` is one flat walk in `RunState.relics` order (sts2_rl/run.py:1206-1208). That is exactly the position relic/sword_of_stone guard G1 occupies -- also a plain-pass AfterCombatVictory implementer, verdicted `gap` and marked 'DORMANT AT THIS SITE' -- and relic/meat_on_the_bone guard G1 is the same mechanism LIVE (at 38/80 the sim heals 44 where the game heals 56, because index-0 Burning Blood gets to heal first). Per the README, 'no ported content triggers this' is a DORMANT GAP, not a faithful, and dormancy describes today's content rather than the divergence's shape (binding rule 1). DORMANT AT THIS SITE, and the argument is unchanged and still good: the only ported AfterCombatVictoryEarly implementer is relic/meat_on_the_bone, whose effect is a heal, and War Hammer neither reads player HP nor is read by it; the sim runs `finish_combat` before `generate_combat_rewards` (sts2_rl/run.py:1206-1208 then :1210-1213) and `rewards.create_reward_cards` builds options from the card POOL, not the deck, so no ordering against another victory listener changes War Hammer's outcome. WHAT MAKES IT LIVE: porting any AfterCombatVictoryEarly listener that reads or rewrites the DECK, at which point the sim would run it after War Hammer's upgrades instead of before. Grade C (bookkeeping -- hook order only, no numeric effect on ported content). Rule 7: sts2_rl/run.py, sts2_rl/rewards.py, src/Core/Hooks/Hook.cs and audit/records/seam/hook_dispatch.json are NOT hashed here.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the two AfterCombatVictory passes are real now. `Relic.after_combat_end_early` exists on the base (sts2_rl/relics/base.py:334-341) and RunState.finish_combat runs a COMPLETE early pass over run.relics before the plain one (sts2_rl/run.py:1378-1381), mirroring Hook.AfterCombatVictory's two passes (Hook.cs:340-352); the combat-level side is covered by HookSystem._each's phase walk (sts2_rl/hooks.py:153-180, phases very_early/early/plain/late), which relic/meat_on_the_bone now uses via `on_combat_end_early`. War Hammer implements the PLAIN pass and is therefore guaranteed to run after every Early listener, as in C#. WAS: the sim had one flat after_combat_end walk in RunState.relics order."
     },
     {
       "what": "N5: Flash() and CanonicalVars (WarHammer.cs:17, 25)",
@@ -80,6 +79,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. Operational note for the conformance runner: this relic's pickup does nothing, so no unwind is needed at pickup -- but its later upgrades are permanent deck edits, which no undo could reverse in either codebase."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

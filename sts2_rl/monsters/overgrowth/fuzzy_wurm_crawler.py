@@ -48,7 +48,6 @@ class FuzzyWurmCrawler(Monster):
         else:
             for power_cls, amount in intent.buffs:
                 PowerCmd.apply(ctx.hooks, self, power_cls, amount)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         self._advance_move()

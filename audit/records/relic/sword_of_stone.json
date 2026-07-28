@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -52,9 +52,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. SwordOfStone.cs:21 returns ElitesDefeated, and the ElitesDefeated setter's InvokeDisplayAmountChanged (SwordOfStone.cs:36) is the only thing the sim's plain `self.elites_defeated += 1` drops. Neither is read by any non-display path."
     },
     "AfterCombatVictory": {
-      "maps_to": "after_combat_end (sword_of_stone.py:29-42), dispatched by RunState.finish_combat only when the caller passes a room type AND the player survived (run.py:1205-1207)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1, N1, N2 and N3 per binding rule 4. The elite gate, the counter, the threshold and the in-place replacement are all faithful and executed; the divergence is the missing AfterCombatVictoryEarly/plain two-pass distinction the seam owns and the fact that C#'s replacement runs while the combat is still ending."
+      "maps_to": "after_combat_end (sts2_rl/relics/sword_of_stone.py), the run-level PLAIN pass dispatched at sts2_rl/run.py:1380-1381 after the after_combat_end_early pass",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). The elite gate, the counter, the threshold and the in-place replacement were already faithful; the two-pass distinction was the rollup's only gap."
     }
   },
   "guards": [
@@ -65,8 +65,8 @@
     },
     {
       "what": "G1 (DORMANT): AfterCombatVictory is TWO separate C# passes (AfterCombatVictoryEarly then AfterCombatVictory) and the sim has one after_combat_end walk which also stands in for Hook.AfterCombatEnd",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 25 records that `AfterCombatVictoryEarly` is a separate earlier full pass whose only implementer is meat_on_the_bone, and that flattening it is LIVE there (at 38/80 the sim heals 44 where the game heals 56 because index-0 Burning Blood heals first). SwordOfStone implements the PLAIN pass (SwordOfStone.cs:40), so in C# its increment and possible replacement are guaranteed to run after every Early listener; sim `after_combat_end` is a single walk in relic-list order (run.py:1205-1207). Per binding rule 3 the mechanism already carries the verdict `gap`, and this entry cites and matches it. DORMANT AT THIS SITE: the one ported Early implementer heals the player, and neither the elite counter nor the Jade swap reads player HP; conversely nothing reads the relic list between the two passes. C# additionally distinguishes Hook.AfterCombatEnd from Hook.AfterCombatVictory (audit/records/seam/turn_structure.json G10 owns that collapse, also verdicted `gap`), which the sim folds into the same hook -- harmless here because run.py:1205's `not self.is_dead` gate makes the sim's dispatch victory-only, matching this relic's C# hook. What makes it live: a second AfterCombatVictory-side listener whose effect depends on the relic list, or porting an AfterCombatEnd-only listener that must run before the swap."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). Sword of Stone implements the PLAIN pass (SwordOfStone.cs:40) and is now guaranteed to run after every Early listener. WAS: one flat after_combat_end walk in relic-list order. NOTE, unchanged and still open elsewhere: C# also distinguishes Hook.AfterCombatEnd from Hook.AfterCombatVictory and the sim folds both onto after_combat_end; that collapse is audit/records/seam/turn_structure.json G10's, and it is harmless at this site because run.py:1371's `not self.is_dead` gate makes the sim's dispatch victory-only."
     },
     {
       "what": "N2: `RelicCmd.Replace(this, SwordOfJade)` (SwordOfStone.cs:48) vs the port's hand-rolled in-place swap (sword_of_stone.py:38-42)",
@@ -94,6 +94,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -365,3 +365,85 @@ def test_spoils_map_card_uses_the_dedicated_spoils_map_stream():
         return [(p.col, p.row, p.point_type) for p in run.map.all_points()]
 
     assert act2_layout() == act2_layout()
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# GAP-QUEUE 54 — relic/_shop_price: Hook.ModifyMerchantPrice /
+#                Hook.ShouldRefillMerchantEntry
+# ═════════════════════════════════════════════════════════════════════════
+
+def test_membership_card_halves_every_shop_price():
+    """MembershipCard.cs:18-29 returns originalPrice × (50 / 100) and
+    MerchantEntry.Cost (MerchantEntry.cs:19-29) truncates with `(int)`, so an
+    odd price rounds DOWN — 175 → 87, never 88. The audit executed the stub:
+    the same seeded inventory reported the identical 14 costs with and
+    without the relic."""
+    run_a, inv_a = make_shop(9)
+    without = [e.cost for e in inv_a.all_entries]
+
+    run_b = fresh_run(9)
+    run_b.start_act("overgrowth")
+    run_b.gold = 10_000
+    run_b.add_relic("membership_card")
+    inv_b = MerchantInventory.create(run_b)
+    with_card = [e.cost for e in inv_b.all_entries]
+
+    assert with_card == [c // 2 for c in without]
+    assert any(c % 2 for c in without), "need an odd price to pin truncation"
+
+
+def test_the_courier_takes_twenty_percent_off():
+    """TheCourier.cs:20-26 returns originalPrice × (1 − 20/100)."""
+    _, inv_a = make_shop(9)
+    without = [e.cost for e in inv_a.all_entries]
+
+    run_b = fresh_run(9)
+    run_b.start_act("overgrowth")
+    run_b.gold = 10_000
+    run_b.add_relic("the_courier")
+    inv_b = MerchantInventory.create(run_b)
+    assert [e.cost for e in inv_b.all_entries] == [int(c * 0.8) for c in without]
+
+
+def test_shop_price_is_recomputed_on_every_read():
+    """MerchantEntry.Cost is a computed PROPERTY, so being granted Membership
+    Card *inside* a shop immediately halves the rest of that shelf."""
+    run, inv = make_shop(9)
+    entry = inv.card_entries[0]
+    full = entry.cost
+    run.add_relic("membership_card")
+    assert entry.cost == full // 2
+    gold_before = run.gold
+    assert entry.purchase() is True
+    assert run.gold == gold_before - full // 2
+
+
+def test_the_courier_restocks_a_bought_slot():
+    """MerchantEntry.OnTryPurchaseWrapper (MerchantEntry.cs:81-89) calls
+    RestockAfterPurchase instead of ClearAfterPurchase when a listener says
+    yes; TheCourier.ShouldRefillMerchantEntry says yes for its owner."""
+    run, inv = make_shop(9)
+    run.add_relic("the_courier")
+    entry = inv.card_entries[0]
+    first = entry.card
+    assert entry.purchase() is True
+    assert entry.is_stocked, "The Courier restocks the slot"
+    assert entry.card is not first
+    relic_entry = inv.relic_entries[0]
+    assert relic_entry.purchase() is True
+    assert relic_entry.is_stocked
+    potion_entry = inv.potion_entries[0]
+    run.potions = [None] * run.max_potions
+    assert potion_entry.purchase() is True
+    assert potion_entry.is_stocked
+    # MerchantCardRemovalEntry's restock is a no-op (MerchantCardRemovalEntry
+    # .cs:75-77): the service stays used.
+    assert inv.card_removal_entry.purchase() is True
+    assert not inv.card_removal_entry.is_stocked
+
+
+def test_without_the_courier_a_bought_slot_clears():
+    run, inv = make_shop(9)
+    entry = inv.card_entries[0]
+    assert entry.purchase() is True
+    assert not entry.is_stocked

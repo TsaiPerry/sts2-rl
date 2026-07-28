@@ -19,7 +19,8 @@ class MummifiedHand(Relic):
     name = "Mummified Hand"
     rarity = RelicRarity.RARE
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.POWER:
             return
         candidates = [c for c in self.player.hand if c.energy_cost > 0]

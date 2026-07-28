@@ -25,9 +25,11 @@ class Wellspring(Event):
         ]
 
     def _bottle(self) -> None:
-        # RewardsCmd.OfferCustom(PotionReward): headlessly, the potion is
-        # kept when a slot is free and skipped otherwise.
-        self.run.add_potion(self.run.random_potion())
+        # `Owner.PlayerRng.Rewards.NextItem(<character pool + SharedPotionPool>)`
+        # — one draw on run.rewards_rng, via Event.offer_pool_potion
+        # (Wellspring.cs:32-38). The roll happens either way; the potion is
+        # then a take-or-skip RewardsCmd.OfferCustom(PotionReward) screen.
+        self.offer_potion(self.offer_pool_potion())
         self._finish("BOTTLE")
 
     def _bathe(self) -> None:

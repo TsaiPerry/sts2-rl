@@ -65,7 +65,32 @@ class TheInsatiable(MachineMonster):
         for _ in range(_ESCAPE_DRAW):
             CardPileCmd.add_to_draw(ctx.hooks, ctx.player, FranticEscapeCard())
         for _ in range(_ESCAPE_DISCARD):
-            CardPileCmd.add_to_discard(ctx.hooks, ctx.player, FranticEscapeCard())
+            self._add_escape_to_discard(ctx)
+
+    @staticmethod
+    def _add_escape_to_discard(ctx: CombatCtx) -> None:
+        """LiquifyGroundMove passes CardPilePosition.Random for the DISCARDED
+        half too (TheInsatiable.cs:130-137 — one loop over i in [0, 6), the
+        pile type is the only thing that changes at i == 3), and
+        CardPileCmd.cs:512-514 resolves Random to
+        ``Rng.Shuffle.NextInt(Cards.Count + 1)`` for every pile type. So each
+        of these three takes a draw and lands at a random slot, exactly like
+        the draw-pile half; CardPileCmd.add_to_discard has no position argument
+        yet and appends, so the placement is inlined here against the same
+        primitive add_to_draw uses. Unlike the draw pile, the sim's discard
+        shares the game's orientation (index 0 = top, append = bottom), so the
+        game index is used unchanged."""
+        from ...cards import FranticEscapeCard
+        from ...cmds import CardPileCmd
+        card = FranticEscapeCard()
+        crng = ctx.combat.combat_rng
+        count = len(ctx.player.discard_pile)
+        if crng.is_parity:
+            ctx.player.discard_pile.insert(crng.shuffle.randrange(count + 1), card)
+        else:
+            ctx.player.discard_pile.insert(
+                ctx.combat._rng.randrange(count + 1), card)
+        CardPileCmd._enter_combat(ctx.hooks, card)
 
     def _thrash(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _THRASH_DMG, _THRASH_HITS)

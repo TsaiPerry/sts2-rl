@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/paels_eye.py",
-      "sha256": "f56a124736de6ad63266a47e71ab2e16b27e40b3eb513aa3eea51dade6eb73fc",
+      "sha256": "404484e5433027a2742642c9bae296d7ac6533fe9567f2e38bc571ac9db8956b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -70,8 +70,8 @@
     },
     {
       "what": "G1 (DORMANT at this site, LIVE as a mechanism): plain BeforeSideTurnEnd is C#'s THIRD turn-end pass and the sim runs one walk (seam guard G12)",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.BeforeTurnEnd runs BeforeSideTurnEndVeryEarly, then BeforeSideTurnEndEarly, then plain BeforeSideTurnEnd as three complete listener passes (Hook.cs:1238-1261; audit/records/seam/turn_structure.json step 48). ScreamingFlagon.cs:21 implements the plain, LAST one, so C# guarantees the Flagon's 20 damage lands after Orichalcum's and Fake Orichalcum's VeryEarly Block snapshot and after Pael's Eye's Early hand exhaust. hooks.on_player_turn_end is a single walk in relic-registration order. DORMANT AT THIS SITE, checked: the ported VeryEarly/Early listeners are Orichalcum, Fake Orichalcum (Block snapshot) and Pael's Eye (hand exhaust plus the extra turn), and none of them changes the two things the Flagon reads -- the hand's emptiness is decided before the pass opens, and enemy HP is untouched by all three. Pael's Eye's hand EXHAUST would matter (it empties the hand, which is the Flagon's gate) but it is unreachable in combination because the same relic's ShouldTakeExtraTurn short-circuits the pass first -- that is G2, and fixing G2 makes this half live immediately: once the pass runs, C# exhausts the hand in the Early pass and then the Flagon sees an empty hand, while the sim's order decides it. So the fix-ordering note matters here: G2 must be fixed together with the pass separation, not before it. The mechanism is LIVE and verdicted `gap` at the seam (Orichalcum x Cloak Clasp, 5 block vs 11); binding rule 3. Rule 7: Hook.cs, turn_structure.json and relics/orichalcum.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. Screaming Flagon implements the PLAIN, LAST pass (ScreamingFlagon.cs:21) and sts2_rl/relics/screaming_flagon.py stays on `on_player_turn_end`; relic/orichalcum's Block snapshot now runs in the very_early pass and relic/paels_eye's hand exhaust in the early pass (sts2_rl/relics/paels_eye.py:61-78), so the Flagon really does see the post-exhaust hand. The fix-ordering warning this entry recorded is discharged: the pass separation and the ShouldTakeExtraTurn relocation landed together."
     },
     {
       "what": "N1: `combatState.HittableEnemies` (ScreamingFlagon.cs:26) vs the sim's living_enemies() (screaming_flagon.py:27)",

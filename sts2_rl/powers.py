@@ -16,7 +16,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from .valueprops import ValueProp
+from .hooks import CAT_POWER
+from .valueprops import ValueProp, is_card_or_monster_move, is_powered_attack, is_powered_card_or_monster_move_block
 
 if TYPE_CHECKING:
     from .cards import Card
@@ -40,6 +41,9 @@ class Power:
     id: str
     name: str
     power_type: PowerType
+    # First in its owner's slice of the dispatch walk
+    # (CombatState.IterateHookListeners, CombatState.cs:416).
+    hook_category = CAT_POWER
     # Mirrors PowerModel.AllowNegative: powers that can hold a negative amount
     # (Strength, Dexterity). When stacking drops the amount to 0 (or below 0
     # for powers that don't allow negatives) the power is removed, mirroring
@@ -64,6 +68,23 @@ class Power:
     def on_stack(self, amount: int) -> None:
         """Called when more of this power is applied to the same owner. Default: additive."""
         self.amount += amount
+
+    def should_power_be_removed_after_owner_death(self) -> bool:
+        """PowerModel.ShouldPowerBeRemovedAfterOwnerDeath (PowerModel.cs:637-640).
+
+        **Defaults to True** — "Usually true, but false for powers that do
+        things like revive their owner." Only six non-mock powers override it
+        (Adaptable, DieForYou, Minion, PainfulStabs, Reattach, SteamEruption).
+        The sim used to have no strip at all, which inverted this default:
+        every power C# strips survived, so a killed Decimillipede segment came
+        back at 25 HP still holding the Vulnerable it died with.
+        """
+        return True
+
+    def on_removed(self, owner: Creature) -> None:
+        """PowerModel.AfterRemoved — awaited for each power stripped by
+        `Creature.RemoveAllPowersAfterDeath` (CreatureCmd.cs:533-537). Default
+        no-op."""
 
     # ── Internal helpers ─────────────────────────────────────────────────
 
@@ -112,7 +133,10 @@ class StrengthPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> int:
+        if not is_powered_attack(props):   # StrengthPower.cs:21
+            return 0
         if dealer is self.owner and (card is None or not card.is_unpowered):
             return self.amount
         return 0
@@ -131,7 +155,10 @@ class DexterityPower(Power):
         target: Creature,
         amount: int,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> int:
+        if not is_powered_card_or_monster_move_block(props):   # DexterityPower.cs:33
+            return 0
         if target is self.owner:
             return self.amount
         return 0
@@ -166,7 +193,7 @@ class RegenPower(Power):
         if self.owner is enemy:
             self._apply_regen()
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if self.owner is player:
             self._apply_regen()
 
@@ -206,7 +233,7 @@ class RitualPower(Power):
         if self.owner is enemy:
             self._trigger()
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if self.owner is player:
             self._trigger()
 
@@ -236,7 +263,8 @@ class FeelNoPainPower(Power):
     name = "Feel No Pain"
     power_type = PowerType.BUFF
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         from .cmds import BlockCmd
         BlockCmd.apply(self.hooks, self.owner, self.amount)
 
@@ -248,7 +276,8 @@ class DarkEmbracePower(Power):
     name = "Dark Embrace"
     power_type = PowerType.BUFF
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         from .player import PlayerCombatState
         if isinstance(self.owner, PlayerCombatState):
             from .cmds import DrawCmd
@@ -262,7 +291,8 @@ class EnragePower(Power):
     name = "Enrage"
     power_type = PowerType.BUFF
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .cards import CardType
         if card.card_type == CardType.SKILL:
             from .cmds import StrengthCmd
@@ -336,7 +366,7 @@ class ThornsPower(Power):
     name = "Thorns"
     power_type = PowerType.BUFF
 
-    def on_damage_received(
+    def before_damage_received(
         self,
         target: Creature,
         amount: int,
@@ -344,7 +374,16 @@ class ThornsPower(Power):
         card: Card | None,
         props: ValueProp = ValueProp.NONE,
     ) -> None:
+        # ThornsPower.cs:17-24 is BeforeDamageReceived, guarded by
+        # `target == Owner && dealer != null && (props.IsPoweredAttack() ||
+        # cardSource is Omnislice)`. Both halves matter: on the Before hook the
+        # reflect survives a killing blow, and the props gate stops it
+        # reflecting off unpowered non-attack damage (Juggernaut, Panache,
+        # Inferno, Rolling Boulder, The Bomb, Flame Barrier) that the game
+        # ignores. Omnislice is unported, so the second disjunct has no site.
         if target is not self.owner or dealer is None:
+            return
+        if not is_powered_attack(props):
             return
         from .cmds import DamageCmd
         from .valueprops import DamageProps
@@ -406,7 +445,10 @@ class VulnerablePower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # VulnerablePower.cs:33
+            return 1.0
         if target is not self.owner:
             return 1.0
         mult = 1.5
@@ -433,7 +475,10 @@ class WeakPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # WeakPower.cs:30
+            return 1.0
         if dealer is self.owner:
             return 0.75
         return 1.0
@@ -454,7 +499,10 @@ class FrailPower(Power):
         target: Creature,
         amount: int,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_card_or_monster_move_block(props):   # FrailPower.cs:28
+            return 1.0
         if target is self.owner:
             return 0.75
         return 1.0
@@ -535,7 +583,7 @@ class NoDrawPower(Power):
             return True
         return False
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -556,7 +604,7 @@ class NoEnergyGainPower(Power):
             return 0
         return amount
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -575,7 +623,10 @@ class ColossusPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # ColossusPower.cs
+            return 1.0
         if target is self.owner and dealer is not None and "vulnerable" in dealer.powers:
             return 0.5
         return 1.0
@@ -594,13 +645,17 @@ class CorruptionPower(Power):
     def on_stack(self, amount: int) -> None:
         pass  # PowerStackType.Single
 
-    def modify_card_energy_cost(self, card: Card, cost: int) -> int:
+    def modify_card_energy_cost_late(self, card: Card, cost: int) -> int:
+        # CorruptionPower.cs:16 is TryModifyEnergyCostInCombatLate: the Late
+        # pass runs after every plain modifier, so the Skill ends at 0
+        # whatever raised its cost first.
         from .cards import CardType
         if card.card_type == CardType.SKILL:
             return 0
         return cost
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         # ModifyCardPlayResultPileTypeAndPosition: played Skills go to the
         # exhaust pile instead of the discard pile.
         from .cards import CardType
@@ -704,7 +759,9 @@ class HellraiserPower(Power):
     def on_stack(self, amount: int) -> None:
         pass  # PowerStackType.Single
 
-    def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
+    def on_card_drawn_early(self, card: Card, from_hand_draw: bool = False) -> None:
+        # HellraiserPower.cs:37 is AfterCardDrawnEarly -- the Early pass runs
+        # complete before any plain AfterCardDrawn listener sees the draw.
         if "strike" not in card.tags:
             return
         combat = self.hooks.combat
@@ -816,20 +873,26 @@ class JugglingPower(Power):
             combat.history.attack_plays_this_turn() if combat is not None else 0
         )
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .cards import CardType
         if card.card_type != CardType.ATTACK:
             return
         self._attacks_this_turn += 1
         if self._attacks_this_turn == 3:
+            from .cards.base import create_clone
             from .cmds import CardPileCmd
             for _ in range(self.amount):
-                clone = type(card)()
-                for _ in range(card.upgrade_level):
-                    clone.upgrade()
-                CardPileCmd.add_to_hand(self.hooks, self.owner, clone)
+                # CardModel.CreateClone -> DeepCloneFields re-attaches a live
+                # copy of the source's enchantment AND affliction
+                # (CardModel.cs:1204-1215); the hand-rolled rebuild carried
+                # only the upgrade level, so a Juggling copy of an enchanted
+                # Attack behaved as a different card for the rest of the
+                # combat (enchantment/EG2, the fifth copy site).
+                CardPileCmd.add_to_hand(self.hooks, self.owner,
+                                        create_clone(card))
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._attacks_this_turn = 0
 
@@ -976,7 +1039,7 @@ class OneTwoPunchPower(Power):
         self._tick()
         return count + 1
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -1002,14 +1065,15 @@ class RagePower(Power):
     name = "Rage"
     power_type = PowerType.BUFF
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .cards import CardType
         if card.card_type == CardType.ATTACK:
             from .cmds import BlockCmd
             from .valueprops import ValueProp
             BlockCmd.apply(self.hooks, self.owner, self.amount, props=ValueProp.UNPOWERED)
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -1022,7 +1086,8 @@ class StampedePower(Power):
     name = "Stampede"
     power_type = PowerType.BUFF
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_auto_post_play_phase_entered(self, player: Creature) -> None:
+        # StampedePower.cs is AfterAutoPostPlayPhaseEntered, not BeforeTurnEnd.
         if player is not self.owner:
             return
         combat = self.hooks.combat
@@ -1038,7 +1103,12 @@ class StampedePower(Power):
             ]
             if not candidates:
                 continue
-            combat.auto_play_card(combat._rng.choice(candidates))
+            # StampedePower.cs:28 picks on Rng.Shuffle
+            # (`RunState.Rng.Shuffle.NextItem(items)`), not on the legacy
+            # shared rng. Latent until the dispatch-order fix (hook_dispatch
+            # G2) made Stampede's auto-plays run first and reliably, which is
+            # what test_rng_tripwire caught.
+            combat.auto_play_card(combat.combat_rng.shuffle.choice(candidates))
 
 
 class PlatingPower(Power):
@@ -1107,7 +1177,10 @@ class UnmovablePower(Power):
         target: Creature,
         amount: int,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_card_or_monster_move(props):   # UnmovablePower.cs:27
+            return 1.0
         if target is not self.owner or card is None:
             return 1.0
         if card is self._active_card:
@@ -1119,7 +1192,8 @@ class UnmovablePower(Power):
             return 2.0
         return 1.0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card is self._active_card:
             self._plays_used += 1
             self._active_card = None
@@ -1144,7 +1218,10 @@ class FreeAttackPower(Power):
     name = "Free Attack"
     power_type = PowerType.BUFF
 
-    def modify_card_energy_cost(self, card: Card, cost: int) -> int:
+    def modify_card_energy_cost_late(self, card: Card, cost: int) -> int:
+        # FreeAttackPower.cs:14 is TryModifyEnergyCostInCombatLate: the Late
+        # pass runs after Tangled's plain one, so the Attack is free
+        # regardless of which power was applied first.
         from .cards import CardType
         if card.card_type == CardType.ATTACK:
             return 0
@@ -1243,7 +1320,8 @@ class SlowPower(Power):
         super().__init__(owner, amount, hooks, applier)
         self._cards_this_turn = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         self._cards_this_turn += 1
 
     def on_enemy_turn_start(self, enemy: Creature) -> None:
@@ -1256,7 +1334,10 @@ class SlowPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # SlowPower.cs
+            return 1.0
         if target is self.owner and card is not None and not card.is_unpowered:
             return 1.0 + 0.1 * self._cards_this_turn
         return 1.0
@@ -1343,14 +1424,15 @@ class RingingPower(Power):
             return not self._card_played_this_turn
         return True
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         self._card_played_this_turn = True
 
     def on_player_turn_start(self, player: Creature) -> None:
         if player is self.owner:
             self._card_played_this_turn = False
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -1381,12 +1463,15 @@ class ShrinkPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # ShrinkPower.cs
+            return 1.0
         if dealer is self.owner and card is not None and not card.is_unpowered:
             return 0.7
         return 1.0
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner and self.amount > 0:
             self._tick()
 
@@ -1394,7 +1479,8 @@ class ShrinkPower(Power):
         if self.owner.side == "enemy" and self.amount > 0:
             self._tick()
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is self.applier:
             self._expire()
 
@@ -1406,7 +1492,11 @@ class InfestedPower(Power):
     name = "Infested"
     power_type = PowerType.BUFF
 
-    def on_death(self, creature: Creature) -> None:
+    def should_stop_combat_from_ending(self) -> bool:
+        return True   # InfestedPower.cs:37-40
+
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner:
             return
         combat = self.hooks.combat
@@ -1438,7 +1528,7 @@ class ConstrictPower(Power):
             self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_UNPOWERED
         )
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._squeeze()
 
@@ -1446,7 +1536,8 @@ class ConstrictPower(Power):
         if self.owner.side == "enemy" and not self.owner.is_dead:
             self._squeeze()
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is self.applier:
             self._expire()
 
@@ -1489,7 +1580,7 @@ class TangledPower(Power):
             return cost + self.amount
         return cost
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -1541,6 +1632,9 @@ class MinionPower(Power):
     name = "Minion"
     power_type = PowerType.BUFF
 
+    def should_power_be_removed_after_owner_death(self) -> bool:
+        return False   # MinionPower.cs:15-18
+
 
 class IllusionPower(Power):
     """The owner cannot truly die: lethal damage leaves it at 1 HP, untargetable,
@@ -1549,6 +1643,17 @@ class IllusionPower(Power):
     id = "illusion"
     name = "Illusion"
     power_type = PowerType.BUFF
+
+    def should_power_be_removed_on_death(self, power) -> bool:
+        """IllusionPower.cs:59-66 — the source's ONLY implementer of
+        Hook.ShouldPowerBeRemovedOnDeath. An Illusion keeps its buffs
+        (including this power), and keeps a debuff only if it is not an
+        ITemporaryPower."""
+        if power.owner is not self.owner:
+            return True
+        if power.power_type == PowerType.DEBUFF:
+            return not getattr(power, 'is_temporary', False)
+        return False
 
     def __init__(
         self,
@@ -1590,7 +1695,8 @@ class RavenousPower(Power):
     name = "Ravenous"
     power_type = PowerType.BUFF
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if (
             creature is self.owner
             or creature.side != self.owner.side
@@ -1611,23 +1717,21 @@ class SuckPower(Power):
     name = "Suck"
     power_type = PowerType.BUFF
 
-    def on_damage_received(
-        self,
-        target: Creature,
-        amount: int,
-        dealer: Creature | None,
-        card: Card | None,
-        props: ValueProp = ValueProp.NONE,
-    ) -> None:
-        from .valueprops import is_powered_attack
-        if (
-            dealer is self.owner
-            and target.side != self.owner.side
-            and amount > 0
-            and is_powered_attack(props)
-        ):
+    def after_attack(self, dealer: Creature, card: Card | None = None,
+                     results: list | None = None) -> None:
+        # SuckPower.cs:22-46 is AfterAttack over the whole AttackCommand, not
+        # AfterDamageReceived: it counts the HITS that dealt unblocked damage
+        # and applies Amount * that count ONCE. Hanging it on the victim's
+        # AfterDamageReceived also meant the killing-blow guard
+        # (CreatureCmd.cs:392) silently skipped the last hit of a lethal attack.
+        if dealer is not self.owner or not results:
+            return
+        hits = sum(1 for receiver, unblocked in results
+                   if receiver.side != self.owner.side and unblocked > 0)
+        if hits > 0:
             from .cmds import PowerCmd
-            PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.amount)
+            PowerCmd.apply(self.hooks, self.owner, StrengthPower,
+                           self.amount * hits)
 
 
 class ThieveryPower(Power):
@@ -1675,7 +1779,8 @@ class HeistPower(Power):
     name = "Heist"
     power_type = PowerType.BUFF
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner or self.amount <= 0:
             return
         combat = self.hooks.combat
@@ -1695,7 +1800,8 @@ class SurprisePower(Power):
     name = "Surprise"
     power_type = PowerType.BUFF
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner:
             return
         from .cmds import CreatureCmd, PowerCmd
@@ -1741,7 +1847,8 @@ class SmoggyPower(Power):
         from .cmds import CardCmd
         CardCmd.afflict(card, SmogAffliction, 1)
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if not self._is_skill(card):
             return
         self._skill_played_this_turn = True
@@ -1765,7 +1872,7 @@ class SmoggyPower(Power):
         if player is self.owner:
             self._skill_played_this_turn = False
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is not self.owner:
             return
         from .afflictions import SmogAffliction
@@ -1817,7 +1924,7 @@ class SkittishPower(Power):
                 self.hooks, self.owner, self.amount, props=ValueProp.UNPOWERED
             )
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         # End of the opposing (player) side's turn resets the once-per-turn gate.
         self._blocked_this_turn = False
 
@@ -1895,7 +2002,10 @@ class VigorPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> int:
+        if not is_powered_attack(props):   # VigorPower.cs
+            return 0
         if dealer is self.owner:
             return self.amount
         return 0
@@ -1912,7 +2022,8 @@ class VigorPower(Power):
             return
         self._amount_when_attack_started = self.amount
 
-    def after_attack(self, dealer: Creature, card: Card | None = None) -> None:
+    def after_attack(self, dealer: Creature, card: Card | None = None,
+                     results: list | None = None) -> None:
         if dealer is not self.owner or self._amount_when_attack_started is None:
             return
         consumed = self._amount_when_attack_started
@@ -2002,35 +2113,42 @@ class HardenedShellPower(Power):
 
 
 class SteamEruptionPower(Power):
-    """While present, the owner cannot die: a killing blow instead flips it
-    into its ABOUT_TO_BLOW → EXPLODE sequence (Waterfall Giant; mirrors
-    SteamEruptionPower.AfterDeath / ShouldStopCombatFromEnding — the game
-    lets the death happen but keeps the giant in combat at 999999999 HP; the
-    sim prevents the death outright, which is observably the same). The owner
-    must implement trigger_about_to_blow()."""
+    """A killing blow flips the owner into its ABOUT_TO_BLOW → EXPLODE
+    sequence instead of ending the fight (Waterfall Giant).
+
+    The game LETS THE DEATH HAPPEN — SteamEruptionPower overrides no ShouldDie
+    — and then keeps the corpse: `AfterDeath` with `!wasRemovalPrevented`
+    triggers the state (SteamEruptionPower.cs:15-21),
+    `ShouldCreatureBeRemovedFromCombatAfterDeath` returns false for its owner
+    (:28-35), `ShouldStopCombatFromEnding` holds the combat open (:23-26) and
+    `ShouldPowerBeRemovedAfterOwnerDeath` keeps the power itself (:37-40).
+    The sim used to prevent the death from `should_die`, which is
+    `power/_death_prevention_branch`: it left the giant at 1 HP instead of 0
+    and, because a prevented death takes the other arm, `Hook.AfterDeath`
+    never fired for it at all. The owner must implement
+    trigger_about_to_blow()."""
 
     id = "steam_eruption"
     name = "Steam Eruption"
     power_type = PowerType.BUFF
 
-    def should_die(self, creature: Creature) -> bool:
-        if creature is self.owner:
-            self.owner.trigger_about_to_blow()
-            return False
-        return True
+    def should_power_be_removed_after_owner_death(self) -> bool:
+        return False   # SteamEruptionPower.cs:37-40
 
-    def on_damage_received(
-        self,
-        target: Creature,
-        amount: int,
-        dealer: Creature | None,
-        card: Card | None,
-        props: ValueProp = ValueProp.NONE,
-    ) -> None:
-        # After a prevented death, restore the game's "infinite HP" display
-        # (mirrors CreatureCmd.SetMaxAndCurrentHp(999999999)).
-        if target is self.owner and getattr(self.owner, "is_about_to_blow", False):
-            self.owner.hp = self.owner.max_hp = 999_999_999
+    def should_stop_combat_from_ending(self) -> bool:
+        return True    # SteamEruptionPower.cs:23-26
+
+    def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
+        return creature is not self.owner   # SteamEruptionPower.cs:28-35
+
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
+        if was_removal_prevented or creature is not self.owner:
+            return
+        self.owner.trigger_about_to_blow()
+        # CreatureCmd.SetMaxAndCurrentHp(999999999) — the game's "infinite HP"
+        # display while the giant winds up to explode.
+        self.owner.hp = self.owner.max_hp = 999_999_999
 
 
 # ── Hive enemy powers ─────────────────────────────────────────────────────
@@ -2109,13 +2227,14 @@ class TenderPower(Power):
         super().__init__(owner, amount, hooks, applier)
         self._cards_played_this_turn = 0
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         self._cards_played_this_turn += 1
         from .cmds import PowerCmd
         PowerCmd.apply(self.hooks, self.owner, StrengthPower, -1)
         PowerCmd.apply(self.hooks, self.owner, DexterityPower, -1)
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is not self.owner or self._cards_played_this_turn == 0:
             return
         from .cmds import PowerCmd
@@ -2201,7 +2320,10 @@ class FlutterPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # FlutterPower.cs
+            return 1.0
         if target is self.owner:
             return 0.5
         return 1.0
@@ -2224,15 +2346,22 @@ class FlutterPower(Power):
             if hasattr(self.owner, "is_hovering"):
                 self.owner.is_hovering = False
             from .cmds import CreatureCmd
-            CreatureCmd.stun(self.hooks, self.owner)
-            # The stun replaces the telegraphed move: the owner resumes at the
-            # move AFTER it (mirrors Stun(owner, StunnedMove,
-            # StateLog.Last().GetNextState())).
+            # FlutterPower.cs:47 — Stun(owner, StunnedMove,
+            # StateLog.Last().GetNextState(owner, RunRng.MonsterAi)): the stun
+            # replaces the telegraphed move, so the owner resumes at the move
+            # AFTER it. GetNextState on a MoveState is
+            # (FollowUpState?.Id ?? FollowUpStateId) — DETERMINISTIC
+            # (MoveState.cs:67-70) — so the splice itself consumes no draw and
+            # the branch, if any, is resolved by the post-stun roll. Walking
+            # the machine here instead both drew a branch off the shared
+            # combat random.Random and drew it a turn early.
             machine = getattr(self.owner, "machine", None)
+            next_move_key = None
             if machine is not None:
-                self.owner._current_move = machine.roll_move(
-                    self.owner, self.owner._rng
+                next_move_key = machine.state_log[-1].get_next_state(
+                    self.owner, self.owner._move_rng
                 )
+            CreatureCmd.stun(self.hooks, self.owner, next_move_key=next_move_key)
 
 
 class SwipePower(Power):
@@ -2260,7 +2389,8 @@ class SwipePower(Power):
         super().__init__(owner, amount, hooks, applier)
         self.stolen_cards: list[Card] = []
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner:
             return
         combat = self.hooks.combat
@@ -2271,6 +2401,26 @@ class SwipePower(Power):
             origin = combat.deck_card_origins.get(id(card))
             if origin is not None:
                 combat.pending_reward_extras.append(RewardExtra.of_card(origin))
+
+    def on_removed(self, owner: Creature) -> None:
+        """Hand the stolen deck origins to the combat before this power is
+        stripped.
+
+        `SwipePower` does not override ShouldPowerBeRemovedAfterOwnerDeath, so
+        the game strips it on death like any other power — and C# does not need
+        it afterwards, because `Steal()` already removed the deck version at
+        steal time (SwipePower.cs:75). The sim reconciles at combat end
+        instead, from `deck_card_origins`, so the origins have to survive the
+        strip. An ESCAPED hopper keeps the power and is handled by
+        RunState.finish_combat's own walk.
+        """
+        combat = self.hooks.combat
+        if combat is None:
+            return
+        for card in self.stolen_cards:
+            origin = combat.deck_card_origins.get(id(card))
+            if origin is not None:
+                combat.stolen_deck_origins.append(origin)
 
 
 class BurrowedPower(Power):
@@ -2311,6 +2461,9 @@ class ReattachPower(Power):
     name = "Reattach"
     power_type = PowerType.BUFF
 
+    def should_power_be_removed_after_owner_death(self) -> bool:
+        return False   # ReattachPower.cs:98-101
+
     def __init__(
         self,
         owner: Creature,
@@ -2340,7 +2493,8 @@ class ReattachPower(Power):
         # never leaves the combat, so it can reattach later.
         return creature is not self.owner
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         # AfterDeath: the segment withers (hidden DEAD move, unhittable) unless
         # every other segment is already down, in which case the death stands
         # and the fight is over.
@@ -2432,7 +2586,8 @@ class VitalSparkPower(Power):
         if self._is_skill(card) and card.affliction is None:
             self._afflict(card)
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .afflictions import TaintedAffliction
         if isinstance(card.affliction, TaintedAffliction):
             combat = self.hooks.combat
@@ -2448,7 +2603,8 @@ class VitalSparkPower(Power):
             if isinstance(card.affliction, TaintedAffliction):
                 card.affliction.amount = self.amount
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner:
             return
         from .afflictions import TaintedAffliction
@@ -2474,7 +2630,10 @@ class TaintedPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> int:
+        if not is_powered_attack(props):   # TaintedPower.cs
+            return 0
         if target is self.owner:
             return self.amount
         return 0
@@ -2510,7 +2669,8 @@ class CrabRagePower(Power):
     STRENGTH_GAIN = 6
     BLOCK_GAIN = 99
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is self.owner or creature.side != self.owner.side:
             return
         from .cmds import BlockCmd, PowerCmd
@@ -2555,6 +2715,7 @@ class SurroundedPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
         if target is not self.owner or dealer is None:
             return 1.0
@@ -2577,11 +2738,13 @@ class SurroundedPower(Power):
         if target is not None:
             self._update_direction(target)
 
-    def on_potion_used(self, potion, target: Creature | None) -> None:
+    def before_potion_used(self, potion, target: Creature | None) -> None:
+        # SurroundedPower.cs:82 is BeforePotionUsed, not After.
         if target is not None:
             self._update_direction(target)
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature.side == self.owner.side:
             return
         combat = self.hooks.combat
@@ -2627,7 +2790,7 @@ class DisintegrationPower(Power):
     name = "Disintegration"
     power_type = PowerType.DEBUFF
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end_late(self, player: Creature) -> None:
         if player is not self.owner:
             return
         from .cmds import DamageCmd
@@ -2672,7 +2835,8 @@ class SlothPower(Power):
     def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
         return self._cards_played_this_turn < self.amount
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         self._cards_played_this_turn += 1
 
     def on_player_turn_start(self, player: Creature) -> None:
@@ -2723,10 +2887,16 @@ class DiamondDiademPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
-        # The powered-attack gate is applied by the damage pipeline caller
-        # (only is_powered_attack damage runs these hooks, DamageCmd).
+        # DiamondDiademPower.cs:27-30 self-gates. This comment used to read
+        # "the powered-attack gate is applied by the damage pipeline caller",
+        # which was true until damage_pipeline/G3 pushed the gate into the
+        # listeners — after that the halving applied to Poison, Thorns, a Fire
+        # Potion and Disintegration, which the game does not halve.
         if target is not self.owner:
+            return 1.0
+        if not is_powered_attack(props):
             return 1.0
         return 0.5
 
@@ -2783,7 +2953,8 @@ class ReboundPower(Power):
     name = "Rebound"
     power_type = PowerType.BUFF
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         player = self.owner
         # ModifyCardPlayResultPileTypeAndPosition only redirects Discard → Draw
         # top (power cards leave combat, exhausted cards are already gone).
@@ -2793,7 +2964,7 @@ class ReboundPower(Power):
         player.draw_pile.append(card)  # list end = top of draw pile
         self._tick()
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -2855,7 +3026,8 @@ class StranglePower(Power):
     def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         self._amounts[id(card)] = self.amount
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         amount = self._amounts.pop(id(card), None)
         if amount is None or self.owner.is_gone:
             return
@@ -2968,7 +3140,8 @@ class StockPower(Power):
     name = "Stock"
     power_type = PowerType.BUFF
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner or self.amount <= 0:
             return
         combat = self.hooks.combat
@@ -3034,7 +3207,8 @@ class GalvanicPower(Power):
         if self._is_power(card) and card.affliction is None:
             self._afflict(card)
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .afflictions import GalvanizedAffliction
         if not isinstance(card.affliction, GalvanizedAffliction):
             return
@@ -3066,7 +3240,10 @@ class SoarPower(Power):
         amount: int,
         dealer: Creature | None,
         card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # SoarPower.cs
+            return 1.0
         if target is self.owner:
             return 0.5
         return 1.0
@@ -3111,7 +3288,8 @@ class _PossessPower(Power):
     def _stat_power(self) -> type[Power]:
         raise NotImplementedError
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.owner:
             return
         from .cmds import PowerCmd
@@ -3173,7 +3351,8 @@ class DampenPower(Power):
     def on_stack(self, amount: int) -> None:
         pass  # PowerStackType.None
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is not self.applier:
             return
         self._expire()
@@ -3226,7 +3405,8 @@ class HexPower(Power):
         if card.affliction is None:
             self._afflict(card)
 
-    def on_death(self, creature: Creature) -> None:
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
         if creature is self.applier:
             self._expire()
 
@@ -3273,7 +3453,8 @@ class WitheringPresencePower(Power):
         super().__init__(owner, amount, hooks, applier)
         self._cards_left = amount
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         combat = self.hooks.combat
         if combat is None:
             return
@@ -3323,7 +3504,8 @@ class ChainsOfBindingPower(Power):
             return False
         return True
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .afflictions import BoundAffliction
         if isinstance(card.affliction, BoundAffliction):
             self._bound_played = True
@@ -3348,6 +3530,12 @@ class AdaptablePower(Power):
     id = "adaptable"
     name = "Adaptable"
     power_type = PowerType.BUFF
+
+    def should_stop_combat_from_ending(self) -> bool:
+        return True   # AdaptablePower.cs:53-56
+
+    def should_power_be_removed_after_owner_death(self) -> bool:
+        return False   # AdaptablePower.cs:67-70
 
     def __init__(
         self,
@@ -3388,25 +3576,29 @@ class PainfulStabsPower(Power):
     name = "Painful Stabs"
     power_type = PowerType.BUFF
 
-    def on_damage_received(
-        self,
-        target: Creature,
-        amount: int,
-        dealer: Creature | None,
-        card: Card | None,
-        props: ValueProp = ValueProp.NONE,
-    ) -> None:
-        from .valueprops import is_powered_attack
-        if (
-            dealer is self.owner
-            and target.side == "player"
-            and amount > 0
-            and is_powered_attack(props)
-        ):
-            from .cards import WoundCard
-            from .cmds import CardPileCmd
-            for _ in range(self.amount):
-                CardPileCmd.add_to_discard(self.hooks, target, WoundCard())
+    def should_power_be_removed_after_owner_death(self) -> bool:
+        return False   # PainfulStabsPower.cs:24-27
+
+    def after_attack(self, dealer: Creature, card: Card | None = None,
+                     results: list | None = None) -> None:
+        # PainfulStabsPower.cs:34-68 is AfterAttack: it groups the command's
+        # results by player receiver, counts that receiver's hits with unblocked
+        # damage, and adds Amount * count Wounds once per receiver. Hosting it
+        # on AfterDamageReceived put it behind the killing-blow guard.
+        if dealer is not self.owner or not results:
+            return
+        from .cards import WoundCard
+        from .cmds import CardPileCmd
+        by_receiver: dict[int, tuple] = {}
+        for receiver, unblocked in results:
+            if receiver.side != "player" or unblocked <= 0:
+                continue
+            key = id(receiver)
+            got = by_receiver.get(key)
+            by_receiver[key] = (receiver, (got[1] if got else 0) + 1)
+        for receiver, hits in by_receiver.values():
+            for _ in range(self.amount * hits):
+                CardPileCmd.add_to_discard(self.hooks, receiver, WoundCard())
 
 
 class NemesisPower(Power):
@@ -3481,7 +3673,8 @@ class CalamityPower(Power):
     name = "Calamity"
     power_type = PowerType.BUFF
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .cards import CardType
         from .cards.pool import random_pool_cards
         from .cmds import CardPileCmd
@@ -3553,8 +3746,11 @@ class FastenPower(Power):
     power_type = PowerType.BUFF
 
     def modify_block_additive(
-        self, target: Creature, amount: int, card: Card | None
+        self, target: Creature, amount: int, card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> int:
+        if not is_powered_card_or_monster_move_block(props):   # FastenPower.cs:26
+            return 0
         if target is self.owner and card is not None and "defend" in card.tags:
             return self.amount
         return 0
@@ -3569,7 +3765,8 @@ class MayhemPower(Power):
     name = "Mayhem"
     power_type = PowerType.BUFF
 
-    def on_player_turn_started(self, player: Creature) -> None:
+    def after_auto_pre_play_phase_entered(self, player: Creature) -> None:
+        # MayhemPower.cs is AfterAutoPrePlayPhaseEntered.
         if player is not self.owner:
             return
         combat = self.hooks.combat
@@ -3635,7 +3832,8 @@ class PanachePower(Power):
         # registration; skip it (mirrors PanachePower's alreadyApplied flag).
         self._already_applied = False
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         from .cmds import DamageCmd
         from .valueprops import DamageProps
         if not self._already_applied:
@@ -3654,7 +3852,7 @@ class PanachePower(Power):
                 props=DamageProps.NON_CARD_UNPOWERED,
             )
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self.cards_left = self.CARDS_PER_TRIGGER
 
@@ -3671,8 +3869,11 @@ class NoBlockPower(Power):
     power_type = PowerType.DEBUFF
 
     def modify_block_multiplicative(
-        self, target: Creature, amount: int, card: Card | None
+        self, target: Creature, amount: int, card: Card | None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if ValueProp.UNPOWERED in props:   # NoBlockPower.cs:36-39
+            return 1.0
         if target is self.owner and card is not None:
             return 0.0
         return 1.0
@@ -3927,7 +4128,7 @@ class DuplicationPower(Power):
         self._tick()
         return count + 1
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._expire()
 
@@ -3972,7 +4173,10 @@ class GigantificationPower(Power):
         amount: int,
         dealer: Creature | None = None,
         card: Card | None = None,
+        props: ValueProp = ValueProp.NONE,
     ) -> float:
+        if not is_powered_attack(props):   # GigantificationPower.cs
+            return 1.0
         # `cardSource == null` / wrong owner → no multiplier. Unpowered damage
         # never reaches this hook in the sim (DamageCmd gates it), matching the
         # source's IsPoweredAttack guard.
@@ -3982,7 +4186,8 @@ class GigantificationPower(Power):
             return float(self.MULTIPLIER)
         return 1.0
 
-    def after_attack(self, dealer: Creature, card: Card | None = None) -> None:
+    def after_attack(self, dealer: Creature, card: Card | None = None,
+                     results: list | None = None) -> None:
         if card is not None and card is self._card_to_modify:
             self._card_to_modify = None
             self._tick()
@@ -4001,7 +4206,10 @@ class BufferPower(Power):
     name = "Buffer"
     power_type = PowerType.BUFF
 
-    def modify_hp_lost(
+    def modify_hp_lost_late(
+        # BufferPower.cs:20 is ModifyHpLostAfterOstyLate, and its own
+        # source comment is the record's proof that the Late pass is
+        # load-bearing: other listeners may reduce the amount to 0 first.
         self,
         target: Creature,
         amount: int,
@@ -4056,7 +4264,7 @@ class DemisePower(Power):
             self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_HP_LOSS
         )
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
             self._fire()
 

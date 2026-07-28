@@ -86,11 +86,19 @@ class TestCombatHistory:
         play(cs, DefendCard())
         assert cs.history.attack_plays_this_turn() == 2
 
-    def test_doubled_attack_is_one_play(self):
+    def test_doubled_attack_is_two_plays(self):
+        """CardModel.cs:1904-1965 builds a fresh CardPlay per iteration and
+        records History.CardPlayStarted (:1930) / CardPlayFinished (:1955)
+        INSIDE the loop, so a doubled card is TWO plays in history, not one.
+
+        This asserted 1 while the sim fired one hook bracket per logical play
+        (hook_dispatch/G4); the entry's own note says the per-play entry count
+        is deliberate in C# too and should follow the bracket.
+        """
         cs = fresh()
         play(cs, OneTwoPunchCard())
-        play(cs, StrikeCard())  # played twice, one card play
-        assert cs.history.attack_plays_this_turn() == 1
+        play(cs, StrikeCard())  # played twice => two CardPlay entries
+        assert cs.history.attack_plays_this_turn() == 2
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -201,7 +209,8 @@ class _DrumLikeCard(Card):
     def on_play(self, ctx, target_idx=None) -> None:
         pass
 
-    def on_card_exhausted(self, card) -> None:
+    def on_card_exhausted(self, card,
+                          caused_by_ethereal: bool = False) -> None:
         if card is self:
             self.triggered += 1
 

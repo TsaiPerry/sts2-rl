@@ -1,5 +1,52 @@
 # Gap queue — every audited record, aggregated
 
+> ## ⚠ TIER 1 IS CLOSED (2026-07-27/28). READ THIS BEFORE THE BODY.
+>
+> **Sections 1A–1F below describe work that has been DONE.** They are kept as the
+> record of what the divergences were and how they were found — the `divergence`,
+> `observable` and `radius` fields are still the best writeup of each mechanism —
+> but they are **no longer a work list**. The numbers in the Summary and in every
+> section header have been regenerated; the *prose* in Tier 1 has not been
+> rewritten entry by entry, so where an entry says "the sim does X" in the present
+> tense, read it as "the sim did X before this was fixed".
+>
+> What actually changed, measured:
+>
+> | | before | after |
+> |---|---|---|
+> | gap entries | 1612 | **1160** |
+> | distinct mechanisms | 856 | **749** |
+> | mechanisms with a live entry | 319 | **207** |
+> | strict `xfail` pins | 36 | **6** |
+> | suite | 2518 passed | **2857 passed** |
+>
+> **All 6 remaining pins are Tier 2 (dormant) mechanisms** — `power_cmd/G1`,
+> `hook_dispatch/G8` (two tests), `monster_state_machine/G3`, `/G7`, `/G8`. Zero
+> Tier 1 pins remain. Per-kind live entries fell to 0 for `card`, `event` and
+> `enchantment`, and to 3 / 1 / 1 for `monster` / `power` / `relic`.
+>
+> **`potion` is the exception and the honest caveat:** its live count did not
+> move, because 51 of its entries are the single shared guard
+> `potion/_effect_bracket` — one missing re-entrancy bracket carried once per
+> unit — which was never in Tier 1. `potion/_use_pipeline`, which WAS, is closed.
+>
+> **Not everything in Tier 1 closed completely.** `relic/_auto_keep`,
+> part of `relic/_stub`, `potion/_min_select_zero` and `potion/foul_potion`'s
+> Fake Merchant arm are partially closed; each of those entries now carries a
+> narrowed `issue` naming exactly what remains. `docs/superpowers/plans/
+> 2026-07-27-tier1-gap-fixes.md` has the full outcome, including three pins that
+> were themselves WRONG and were corrected, two latent wrong-stream bugs the
+> fixes unmasked (Stampede and Havoc, both caught by `test_rng_tripwire`), one
+> regression the fix campaign introduced and the adversarial audit caught
+> (Diamond Diadem lost its props gate), and one hard crash the same audit found
+> (an enchantment on a mid-combat card copy was never registered).
+>
+> **The verdicts were re-derived per record against the code, then adversarially
+> audited.** That audit returned `sound: false` for five of the eight kinds and
+> named 18 false clears; all 18 were verified and reverted to `gap` before
+> `harness.py rehash` was run. `audit_status.py` now reports **0 stale, 0
+> invalid** across all 846 records.
+
 Every `"verdict": "gap"` entry from `audit/records/**`, de-duplicated **by
 mechanism**, ordered for work, and left **queued, not fixed** (Perry's standing
 decision). The audits found far more than recorded-run convergence ever
@@ -155,29 +202,32 @@ transcription of it and can go stale.
 
 | | |
 |---|---|
-| gap entries across all 846 records | **1612** |
-| — labelled LIVE (own text, or the explicit `live` field) | 658 |
-| — labelled DORMANT (own text, or the explicit `live` field) | 568 |
-| — unlabelled (inherit their mechanism's liveness) | 386 |
-| **distinct mechanisms** | **856** |
-| — with at least one live site | **319** |
-| — dormant at every site | 537 |
-| mechanisms pinned by a `strict=True` xfail | **32** |
-| mechanisms unpinned | 824 |
-| `strict=True` xfails in `test/test_hook_order.py` | 36 (all strict) |
+| gap entries across all 846 records | **1160** |
+| — labelled LIVE (own text, or the explicit `live` field) | 306 |
+| — labelled DORMANT (own text, or the explicit `live` field) | 541 |
+| — unlabelled (inherit their mechanism's liveness) | 313 |
+| **distinct mechanisms** | **749** |
+| — with at least one live site | **207** |
+| — dormant at every site | 542 |
+| mechanisms pinned by a `strict=True` xfail | **5** |
+| mechanisms unpinned | 744 |
+| `strict=True` xfails in `test/test_hook_order.py` | 6 (all strict) |
+
+Regenerated 2026-07-28, after the Tier 1 fix campaign. The pre-campaign numbers
+were 1612 / 658 / 568 / 386 / 856 / 319 / 537 / 32 / 824 / 36.
 
 Per kind (records / gap entries / mechanisms anchored there / entries labelled live):
 
 | kind | records | entries | mechanisms | live |
 |---|---|---|---|---|
-| `seam` | 6 | 227 | 93 | 47 |
-| `power` | 138 | 270 | 172 | 58 |
-| `card` | 202 | 152 | 98 | 54 |
-| `event` | 65 | 103 | 37 | 78 |
-| `enchantment` | 17 | 43 | 10 | 22 |
-| `relic` | 258 | 620 | 404 | 288 |
-| `monster` | 109 | 45 | 18 | 28 |
-| `potion` | 51 | 152 | 24 | 83 |
+| `seam` | 6 | 173 | 84 | 5 |
+| `power` | 138 | 227 | 171 | 28 |
+| `card` | 202 | 147 | 93 | 49 |
+| `event` | 65 | 40 | 21 | 24 |
+| `enchantment` | 17 | 14 | 5 | 11 |
+| `relic` | 258 | 394 | 347 | 128 |
+| `monster` | 109 | 25 | 10 | 6 |
+| `potion` | 51 | 140 | 18 | 55 |
 
 The `power` and `card` rows moved without the monster merge touching them (268→270 and 149→152 entries): those tiers gained entries after this file was last regenerated, which is what the header means by *do not trust a count stated in prose anywhere in this project — re-run `counts`*.
 

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     }
   ],
@@ -52,8 +52,8 @@
     },
     "AfterAutoPrePlayPhaseEntered": {
       "maps_to": "powers.py:3572-3583 MayhemPower.on_player_turn_started (hooks.py:285-295, player.py:186)",
-      "verdict": "gap",
-      "issue": "WRONG PHASE, and this is the finding that makes turn_structure's G8 -- the AutoPrePlay and AutoPostPlay phases do not exist in the sim and their two hooks are hand-rolled onto neighbouring slots. Not re-verdicted here (binding rule 3); the verdict is gap on both sides. LIVE on its AutoPrePlay side, which G8 currently calls dormant. G8's dormancy argument is that 'the two ported users' effects (play cards / auto-play one Skill) do not read any other turn-start listener's output', naming Whispering Earring and the Imbued enchantment -- it does not name MayhemPower, which is C#'s third ported AfterAutoPrePlayPhaseEntered implementer and DOES read other turn-start listeners' output. In the game this hook fires at CombatManager.cs:568 -> RunAutoPrePlayPhase (:613-619), strictly AFTER Hook.AfterSideTurnStart (:522) and after SetupPlayerTurn's Hook.AfterPlayerTurnStart (:675); in the sim it shares on_player_turn_started with every AfterSideTurnStart and AfterPlayerTurnStart power, so the order is hook-REGISTRATION order. THREE EXECUTED WITNESSES, all on ported Colorless power cards a single run can hold (binding rule 6 satisfied on both halves of each): (1) PrepTimePower 3 + Mayhem 1, one Strike on top of the draw pile -- Prep Time applied first makes the auto-played Strike deal 9 (6 + Vigor 3, Vigor consumed), Mayhem first makes it deal 6 and leaves Vigor(3) unspent; the game always deals 9. (2) RollingBoulderPower 5 + Mayhem 1 against a 4-HP enemy -- boulder first kills it, ends the combat and Mayhem's own combat.is_over guard (powers.py:3577) leaves the Strike in the DRAW pile; Mayhem first plays it into the DISCARD pile. The game always resolves the boulder first. (3) DrawCardsNextTurnPower 2 (from the ported card Relax) + Mayhem 1 with Relax on top of the draw pile -- power first expires it and the fresh Draw Cards Next Turn(2) survives, which is the game's answer; Mayhem first stacks 2 -> 4 and the expiry then deletes the whole thing, costing the player two bonus draws."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: the sim now has a real AutoPrePlay phase. `hooks.after_auto_pre_play_phase_entered` (hooks.py:480-486) is dispatched at player.py:221, strictly after `on_player_turn_started` (:218), mirroring CombatManager.cs:556-572's PlayerTurnPhase.AutoPrePlay entered after Hook.AfterSideTurnStart; MayhemPower implements it (powers.py:3763). VERIFIED 2026-07-27 by reading hooks.py, player.py and powers.py. WAS: hand-rolled onto `on_player_turn_started`, so Mayhem's auto-plays raced every other turn-start power on registration order."
     }
   },
   "guards": [

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\girya.py",
-    "sha256": "c21cb8eeff00d24c0bda72db56f8185326d951b5f80827011dd2bc22718b2d2f"
+    "sha256": "df24c25cf55d323527d2df0700447effba2985f91cd0dd6b1e582bc136351516"
   },
   "extra_sources": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -91,9 +91,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Girya.cs:26 is `DisplayAmount => TimesLifted`, a direct readout of state the sim keeps."
     },
     "IsAllowed": {
-      "maps_to": "no counterpart; `Relic` declares no `is_allowed` member at all",
-      "verdict": "gap",
-      "issue": "See guard G1. Girya.cs:45-48 returns RelicModel.IsBeforeAct3TreasureChest(runState) = `TotalFloor < 41` (RelicModel.cs:452-456), so the game stops offering Girya from the Act 3 treasure chest onward and the sim never stops. LIVE, executed (`py audit/tools/relic_probes_b06.py b06-isallowed`)."
+      "maps_to": "is_allowed (sts2_rl/relics/girya.py:46) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/girya.py:46), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (girya.py:22-29)",
@@ -109,8 +109,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): `IsAllowed` -> `IsBeforeAct3TreasureChest` (TotalFloor < 41) is entirely unmodelled",
-      "verdict": "gap",
-      "issue": "Same mechanism and same verdict as audit/records/relic/amethyst_aubergine.json's IsAllowed finding and audit/records/relic/frozen_egg.json G1 (binding rule 3); confirmed here rather than re-derived. Girya is one of the SIXTEEN relics sweep B found sharing this exact predicate (`py audit/tools/relic_probes.py sweep-isallowed`; the cluster is listed in .superpowers/sdd/content-relic-sweeps.md sweep B(a)), so the fix is one base-class member plus one filter in the pull path. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b06.py b06-isallowed`): `'is_allowed' in dir(sts2_rl.relics.base.Relic)` is False while `is_allowed_at_neow` exists, so the concept is provably absent; relic_pools.populate_relic_grab_bags (relic_pools.py:186-198) shuffles each rarity deque once at run init; the only per-pull predicates in run.pull_relic_from_front are is_allowed_in_shops (run.py:592, 614, 626); Girya is Rare in the transcribed grab bag; and RunState already tracks total_floor (run.py:976). The observable is pool composition from floor 41 on, and a wrong pull shifts every subsequent pull. NOTE per binding rule 7: relics/base.py, relic_pools.py and run.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/girya.py:46), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G2 (DORMANT): the Strength lands at BeforeCombatStart in the sim and at AfterRoomEntered in C#, two dispatch points earlier -- and the sim's slot is interleaved with other relics' on_combat_start by registration order where C#'s always precedes every BeforeCombatStart listener",

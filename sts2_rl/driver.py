@@ -48,6 +48,8 @@ if TYPE_CHECKING:
     from .combat import CombatState
     from .events.base import Event
     from .monsters import Encounter
+    from .potions import Potion
+    from .relics import Relic
     from .run import RunState
     from .shop import MerchantInventory
 
@@ -62,6 +64,10 @@ class DecisionKind(Enum):
     COMBAT = "combat"              # a flat combat-block action (full_env.py)
     SELECT_CARDS = "select_cards"  # pick a candidate card (one per request)
     SELECT_OPTION = "select_option"  # pick a generic option (Scroll Boxes)
+    # RelicReward (RelicReward.cs:109-123): take the relic, or skip it. Every
+    # relic offer in the source is declinable except Neow's Bones, the single
+    # `WithSkippingDisallowed` caller (RewardsSet.cs:115 / NeowsBones.cs:43).
+    REWARD_RELIC = "reward_relic"  # take the relic, or skip
 
 
 # Rest-site option order (RestSiteOption.Generate: Heal + Smith; leave last).
@@ -75,7 +81,12 @@ N_REST_OPTIONS = 3
 # MaxSelect (or none at all). `_card_selector` offers a skip action for these and
 # never auto-resolves them. `*_optional` names the up-to-N pickup screens
 # (Claws.cs:24 `CardSelectorPrefs(prompt, 0, CardsVar(6))`, RequireManualConfirmation).
-SKIPPABLE_PURPOSES = frozenset({"card_reward", "obtain", "transform_optional"})
+# "gambling_chip" is GamblingChip.cs:12's `CardSelectorPrefs(prompt, 0,
+# 999999999)` — the same MinSelect-0 shape, so "discard nothing" is a
+# first-class outcome and the whole-hand offer must not be short-circuited.
+SKIPPABLE_PURPOSES = frozenset({
+    "card_reward", "gambling_chip", "obtain", "transform_optional",
+})
 
 
 @dataclass
@@ -90,6 +101,8 @@ class DecisionRequest:
     event: "Event | None" = None                 # EVENT
     shop: "MerchantInventory | None" = None      # SHOP
     rewards: "CombatRewards | None" = None       # REWARD_CARD / REWARD_POTION
+    relic: "Relic | None" = None                 # REWARD_RELIC
+    potion: "Potion | None" = None               # REWARD_POTION (bare offer)
     points: "list[MapPoint]" = field(default_factory=list)   # MAP
     purpose: str = ""                            # SELECT_CARDS / SELECT_OPTION
     candidates: "list[Card]" = field(default_factory=list)   # SELECT_CARDS
@@ -148,6 +161,8 @@ class DecisionRequest:
                 legal.append(0)                  # take (needs a free slot)
             legal.append(1)                      # skip
             return legal
+        if kind == DecisionKind.REWARD_RELIC:
+            return [0, 1]                        # take / skip
         if kind == DecisionKind.COMBAT:
             mask = combat_action_masks(self.combat, self.run.max_potions)
             return [int(i) for i in np.flatnonzero(mask)]
@@ -228,6 +243,7 @@ class RunDriver:
         # Route every mid-resolution selection through the ask seam.
         run.card_selector = self._card_selector
         run.option_selector = self._option_selector
+        run.reward_selector = self._reward_selector
 
     # ── The single decision seam ─────────────────────────────────────────
 
@@ -273,6 +289,26 @@ class RunDriver:
             purpose=purpose,
             n_options=count,
         ))
+
+    def _reward_selector(self, kind: str, item) -> bool:
+        """RunState.offer_relic / offer_potion's take-or-skip seam — a
+        RelicReward or PotionReward handed to `RewardsCmd.OfferCustom` outside
+        a post-combat screen (Small Capsule's pull, Calling Bell's three, Toy
+        Box's four wax relics, Lost Coffer's and Cauldron's potions). Returns
+        whether the player takes it; the run state does the granting."""
+        if kind == "relic":
+            return self._ask(DecisionRequest(
+                kind=DecisionKind.REWARD_RELIC, run=self.run, relic=item,
+            )) == 0
+        # The reward block of the run env reads `rewards.potion`, so wrap the
+        # bare offer the same way _offer_potion does. There is no room behind
+        # a pickup-effect screen; MONSTER is the neutral label rest-site
+        # reward screens already use (RunState.rest_heal_rewards).
+        offer = CombatRewards(room_type=RoomType.MONSTER, potion=item)
+        return self._ask(DecisionRequest(
+            kind=DecisionKind.REWARD_POTION, run=self.run,
+            rewards=offer, potion=item,
+        )) == 0
 
     # ── The run loop ─────────────────────────────────────────────────────
 
@@ -395,6 +431,7 @@ class RunDriver:
         offer = CombatRewards(room_type=room_type, potion=potion)
         take = self._ask(DecisionRequest(
             kind=DecisionKind.REWARD_POTION, run=run, rewards=offer,
+            potion=potion,
         )) == 0
         if take:
             run.add_potion(potion)

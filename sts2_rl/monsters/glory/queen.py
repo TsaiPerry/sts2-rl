@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ...hooks import CAT_POWER
 from ..base import Encounter, Intent, Monster, MoveType
 from ..state_machine import (
     ConditionalBranchState,
@@ -13,6 +14,7 @@ from ..state_machine import (
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
+    from ...creatures import Creature
     from ...hooks import HookSystem
 
 # TorchHeadAmalgam
@@ -85,19 +87,54 @@ class TorchHeadAmalgam(MachineMonster):
         self._execute_attack(ctx, _BEAM_DMG, _BEAM_HITS)
 
 
+class _AmalgamDeathListener:
+    """Stand-in for Queen.AfterDeath (Queen.cs:221-234).
+
+    CombatState.IterateHookListeners (CombatState.cs:413-420) adds a monster's
+    MonsterModel to the listener walk right after that creature's Powers, but
+    the sim has no MonsterModel listener category at all (hook_dispatch G5), so
+    the Queen registers this listener in that slot instead."""
+
+    hook_category = CAT_POWER + 1
+
+    def __init__(self, queen: Queen) -> None:
+        self.queen = queen
+        self.owner = queen  # dispatch-order slot: the Queen's own creature
+
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
+        if isinstance(creature, TorchHeadAmalgam) and not self.queen.is_dead:
+            self.queen.on_amalgam_died()
+
+
 class Queen(MachineMonster):
     """Puppet Strings (Chains of Binding 3) → You Are Mine (Frail/Weak/
     Vulnerable 99) → while the Torch Head Amalgam lives, Burn Bright For Me
     (buff the amalgam + gain 20 block) loops; once the amalgam dies she switches
     to Off With Your Head (3×5) → Execution (15) → Enrage (+2 Strength) → loop.
 
-    Source: Queen.cs (non-ascension values). The game re-telegraphs an
-    in-progress Burn Bright as Enrage the instant the amalgam dies; the sim
-    performs Enrage in its place when the move resolves (the branch already
-    routes every later move past Burn Bright)."""
+    Source: Queen.cs (non-ascension values). The amalgam's death re-telegraphs
+    an in-progress Burn Bright as Enrage on the spot (see on_amalgam_died); the
+    branch already routes every later move past Burn Bright."""
 
     min_hp = 400
     max_hp = 400
+
+    def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
+        super().__init__(hooks, rng or random.Random())
+        hooks.register(_AmalgamDeathListener(self))
+
+    def on_amalgam_died(self) -> None:
+        """Queen.cs:226-232 — HasAmalgamDied/Amalgam are derived state in the
+        sim (`_amalgam_died` reads the combat), so all that is left is the
+        immediate re-telegraph: a pending Burn Bright becomes Enrage via
+        SetMoveImmediate(EnragedState), i.e. NextMove = state PLUS
+        MoveStateMachine.ForceCurrentState(state) (MonsterModel.cs:420-432).
+        ForceCurrentState does not append to the state log."""
+        enraged = self.machine.states["ENRAGE_MOVE"]
+        if self._current_move.id == "BURN_BRIGHT_FOR_ME_MOVE":
+            self._current_move = enraged
+            self.machine.force_current_state(enraged)
 
     def _amalgam(self) -> Monster | None:
         combat = self._hooks.combat
@@ -164,11 +201,6 @@ class Queen(MachineMonster):
         PowerCmd.apply(ctx.hooks, ctx.player, VulnerablePower, _MINE_DEBUFF)
 
     def _burn_bright(self, ctx: CombatCtx) -> None:
-        # If the amalgam died after this was telegraphed, the Queen enrages
-        # instead (mirrors SetMoveImmediate(EnragedState)).
-        if self._amalgam_died():
-            self._enrage(ctx)
-            return
         from ...cmds import BlockCmd, PowerCmd
         from ...powers import StrengthPower
         from ...valueprops import ValueProp

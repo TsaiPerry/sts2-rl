@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\potions.py",
-    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+    "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
   },
   "extra_sources": [
     {
@@ -86,42 +86,42 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/belt_buckle.py",
-      "sha256": "6ded9da9910f07db43c3554b5bc11ce71183f48ce6ff8286449da10fefaaf806",
+      "sha256": "58183b20722a852a92ddf11297e096314d6a7d522f06883e78ad19f6bd949d1c",
       "side": "sim"
     },
     {
@@ -153,15 +153,14 @@
     },
     "ShouldDie": {
       "maps_to": "FairyInABottle.should_die (potions.py:1242-1243), dispatched by hooks.should_die (hooks.py:588-594) from DamageCmd.deal step 7 (cmds.py:96-113)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "The predicate itself is right and the DISPATCH PHASE is wrong. Body: `if (creature != Owner.Creature) return true; return false;` (FairyInABottle.cs:33-40) -- the fairy refuses only its owner's death and consents to everyone else's; potions.py:1243's `return creature.side != 'player'` is that same predicate in a single-player run, where the owner's creature is the only player-side creature. What diverges is WHICH PASS it runs in: Hook.cs:2229-2249 runs every ShouldDie listener first and only then every ShouldDieLate listener, so an early preventer like this one always gets first refusal over a Late one, and LizardTail is deliberately ShouldDieLate so other prevention triggers first. hooks.py:588-594 has ONE flat pass in listener-registration order. This is audit/records/seam/damage_pipeline.json guard N4, whose verdict was CORRECTED from waiver to gap by relic batch 8 precisely because its old rationale was 'FairyInABottle is a potion (out of scope)' and this potion is ported -- so this record is that waiver's counterexample and matches the corrected verdict per binding rule 3. LIVE, executed by that correction and by audit/records/relic/lizard_tail.json G4: with a Fairy in a Bottle held, the sim spends the TAIL (listener order ['LizardTail','FairyInABottle'], hp 41, fairy still in the belt) where the game always spends the fairy first. Both are ported and obtainable together."
+      "verdict": "faithful",
+      "rationale": "Closed 2026-07-27: the phase pass exists. HookSystem._each (hooks.py:153-180) now runs a VeryEarly / Early / plain / Late sweep whenever any current listener phases the hook -- a listener opts in by declaring `<hook>_late` beside `<hook>` -- so Hook.cs:2229-2249's rule that every ShouldDie listener is asked before any ShouldDieLate listener is reproduced, and Lizard Tail's port declares should_die_late rather than should_die. The predicate itself was already right: potions.py:1310-1311 is FairyInABottle.cs:33-40 in a single-player run. EXECUTED (2026-07-27): a combat holding Lizard Tail with a Fairy in a Bottle in the belt, registration order ['LizardTail', 'FairyInABottle'], player taken to 0 from 10 HP -- the FAIRY is spent (belt [None, None, None], hp 24 = 30% of 80) and the Tail is still unused, which is the game's order. WAS: one flat pass in registration order, which spent the Tail first (hp 41, fairy still in the belt)."
     },
     "AfterPreventingDeath": {
       "maps_to": "FairyInABottle.after_preventing_death (potions.py:1245-1250), dispatched by hooks.after_preventing_death from DamageCmd.deal's prevented-death branch (cmds.py:106-113)",
       "verdict": "gap",
-      "live": true,
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The C# body is one line -- `await OnUseWrapper(new ThrowingPlayerChoiceContext(), creature)` (FairyInABottle.cs:42-45) -- i.e. the automatic trigger runs the FULL use pipeline, the same one a manual drink runs. The sim hand-rolls a two-line substitute (`discard_potion` then `self.use(...)`) that reproduces only two of that pipeline's ten steps, and in particular never dispatches Hook.AfterPotionUsed (G1). The heal arithmetic itself is right (N1)."
+      "live": false,
+      "issue": "Rollup of guards G1 and G2 per binding rule 4, NARROWED 2026-07-27. The C# body is one line -- `await OnUseWrapper(new ThrowingPlayerChoiceContext(), creature)` (FairyInABottle.cs:42-45) -- i.e. the automatic trigger runs the FULL use pipeline. The sim's substitute (potions.py:1313-1323) has grown from two steps to three and now DOES dispatch Hook.AfterPotionUsed, so G1's LIVE half is closed and Reptile Trinket / Belt Buckle fire off the fairy again (executed). What remains is dormant residue: PotionModel.cs:297 BeforePotionUsed and PotionModel.cs:340 CheckForEmptyHand are still not run on this path (G1), and `discard_potion` is still the DiscardPotionInternal verb standing in for RemoveBeforeUse (G2). The heal arithmetic itself is right (N1)."
     },
     "OnUse (protected override, FairyInABottle.cs:27-31)": {
       "maps_to": "FairyInABottle.use (potions.py:1252-1256)",
@@ -173,8 +172,8 @@
     {
       "what": "G1 (LIVE): the automatic trigger bypasses OnUseWrapper, so Hook.AfterPotionUsed never fires when the fairy pops",
       "verdict": "gap",
-      "live": true,
-      "issue": "MECHANISM: FairyInABottle.cs:44 goes through `OnUseWrapper`, so every step of PotionModel.cs:291-342 runs -- including :338 `Hook.AfterPotionUsed`. The sim's after_preventing_death (potions.py:1245-1250) calls `combat.player.discard_potion(self)` and then `self.use(combat._ctx(), creature)` directly, and `grep -rn on_potion_used sts2_rl/` shows the ONLY dispatch site is combat.py:610, inside CombatState.use_potion -- which this path does not go through. So in the sim an automatic potion use is invisible to every AfterPotionUsed listener. LIVE on ported content: the two C# AfterPotionUsed implementers are BeltBuckle.cs:81 and ReptileTrinket.cs:22 and both are ported with working on_potion_used handlers (relics/belt_buckle.py:32-33, relics/reptile_trinket.py:23-29 -- audit/records/relic/reptile_trinket.json verdicts that hook faithful at its own site). Concretely: holding Reptile Trinket and a Fairy in a Bottle, the game grants 3 temporary Strength when the fairy saves you and the sim grants none; holding Belt Buckle, the game re-applies 2 Dexterity the moment the fairy leaves the belt and the sim does not. Both relics are in the transcribed grab bag and the fairy is a pooled Rare. This is a DIFFERENT defect from the shared W entry: W is about BeforePotionUsed and CheckForEmptyHand being absent from the pipeline; this is about this unit skipping the pipeline altogether. Also skipped: the belt/run history entries and CheckForEmptyHand."
+      "live": false,
+      "issue": "NARROWED 2026-07-27: partly closed. FairyInABottle.after_preventing_death (potions.py:1313-1323) now ends with `combat.hooks.on_potion_used(self, creature)`, so the automatic trigger DOES reach Hook.AfterPotionUsed, which is what FairyInABottle.cs:42-45's `await OnUseWrapper(...)` guarantees. EXECUTED (2026-07-27): a combat holding Reptile Trinket with a Fairy in a Bottle in the belt, player taken to 0 -- the player ends on {'strength': 3, 'reptile_trinket': 3}, i.e. ReptileTrinket.cs:22-30's 3 temporary Strength now lands where it used to be dropped, and relics/reptile_trinket.py / relics/belt_buckle.py are reachable from the fairy again. WHAT REMAINS: the substitute still runs only three of the wrapper's steps. EXECUTED side by side with one spy listener: the automatic path fires ['on_potion_used'], the manual CombatState.use_potion path fires ['before_potion_used', 'on_potion_used', 'on_hand_emptied']. So PotionModel.cs:297 Hook.BeforePotionUsed and PotionModel.cs:340 CheckForEmptyHand are still skipped when the fairy pops, where the source runs the identical wrapper for both. Downgraded from LIVE to dormant: BeforePotionUsed's sole implementer (SurroundedPower, powers.py:2741-2744) is handed the PLAYER as its target here and its direction switch no-ops on a creature carrying no back-attack marker, and the empty-hand dispatch has no potion-reachable listener (this record's W entry). What would make it live again: any second BeforePotionUsed listener, or wiring Unceasing Top onto the empty-hand hook."
     },
     {
       "what": "G2 (dormant): `discard_potion` is the DiscardPotionInternal verb; OnUseWrapper's first step is RemoveBeforeUse, a different one",
@@ -201,7 +200,7 @@
       "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
       "verdict": "gap",
       "live": true,
-      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+      "issue": "NARROWED 2026-07-27 (re-derived from today's code, not from the fix log). HALF of this mechanism is closed and half is not. Order re-read against src/Core/Models/PotionModel.cs:291-342 and against CombatState.use_potion (sts2_rl/combat.py:707-745): :293 RemoveBeforeUse -> combat.py:729-730 (slot nulled, listener detached); :297 Hook.BeforePotionUsed -> combat.py:736, BEFORE the effect at :737; :327 OnUse -> :737; :336 History.PotionUsed (presentation only, still no sim entry); :338 Hook.AfterPotionUsed -> combat.py:738; :340 CheckForEmptyHand -> combat.py:739. CLOSED half (1): BeforePotionUsed now has a real dispatcher (hooks.py:779-790) and its single C# implementer is ported -- powers.py:2741-2744's SurroundedPower.before_potion_used runs the same _update_direction the card path runs, so the Kaiser Crab facing flip happens BEFORE the potion lands instead of a phase late. STILL OPEN half (2): CheckForEmptyHand now has a sim counterpart too -- CombatState._check_for_empty_hand (combat.py:747-758) mirrors CombatManager.cs:887-893's IsInProgress + empty-hand test and is a SECOND on_hand_emptied call site beside the end-of-turn flush at player.py:240 -- but nothing downstream reaches Unceasing Top from it: the sole C# AfterHandEmptied implementer is still wired to on_card_played in the sim, and CombatState.use_potion does not fire on_card_played. EXECUTED WITNESS (2026-07-27): a fresh combat holding Unceasing Top, hand emptied, use_potion(0) on a Block Potion -- hand 0 -> 0 cards, where CombatManager.cs:887-893 runs AfterHandEmptied and draws 1. Rollup stays `gap` per binding rule 4 and matches audit/records/relic/unceasing_top.json G1 (still `gap`) per binding rule 3. LIVE for the reason it always was: the check is reachable from EVERY one of the 51 potions, not only the hand-emptying ones, because C# tests the hand AFTER the use. NOTE the queue's title for this mechanism ('BeforePotionUsed and CheckForEmptyHand are never dispatched') is now half stale; the tool table is not this record's to edit."
     },
     {
       "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",

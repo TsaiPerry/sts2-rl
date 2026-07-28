@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\royal_stamp.py",
-    "sha256": "f738505e0b01d3bb7bfef5e9654f0b757f03dc6f3d5bb88be6ed7f1e618b9f8c"
+    "sha256": "48118fb1dd6a14259014c2248446962b83c7196e3691f15af859bbfe49ee7df0"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
@@ -39,12 +39,12 @@
     "CanonicalVars": {
       "maps_to": "no counterpart (the port has no amount to carry)",
       "verdict": "gap",
-      "issue": "RoyalStamp.cs:24-28 pins `new CardsVar(1)` and a StringVar naming the enchantment; AfterObtained passes `amount: 1` to CardSelectCmd.FromDeckForEnchantment and `1m` to CardCmd.Enchant<RoyallyApproved> (RoyalStamp.cs:36, 39). The port carries nothing because it implements nothing; the 1/1 pair is part of guard G1's missing behaviour and is recorded here so a fix does not have to re-derive it."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     "AfterObtained": {
       "maps_to": "no counterpart -- the class body is a docstring plus four class attributes (royal_stamp.py:1-14)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. RoyalStamp.cs:32-46 filters the deck to RoyallyApproved-eligible cards, UnstableShuffles that list on Rng.Niche, offers one, and enchants it; the port does none of it and draws no RNG."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -56,12 +56,12 @@
     {
       "what": "G1 (DORMANT, and the port's stated premise is FALSE): 'the sim has no enchantments, so this is a no-op stub' (royal_stamp.py:8-9)",
       "verdict": "gap",
-      "issue": "MECHANISM: RoyalStamp.cs:32-46 resolves the canonical RoyallyApproved enchantment, builds `PileType.Deck.GetPile(Owner).Cards.Where(c => royalStamp.CanEnchant(c))`, offers the shuffled list through CardSelectCmd.FromDeckForEnchantment with amount 1, and calls `CardCmd.Enchant<RoyallyApproved>(cardModel, 1m)` on the pick. THE PREMISE IS FALSE, confirmed by execution (`py audit/tools/relic_probes_b13.py stub-premises`): sts2_rl/enchantments.py ports 17 enchantments and relics/beautiful_bracelet.py:23-29 already performs this exact pickup shape -- filter the deck by `Enchantment.can_enchant`, run.select_cards('enchant', ...), attach with an amount. Sweep C reached the same conclusion for this unit ('AfterObtained dispatched; no enchantments is FALSE'), and this record confirms rather than re-derives it. WHAT IS ACTUALLY MISSING (rule 6, DORMANT with the unported thing NAMED): the RoyallyApproved ENCHANTMENT MODEL -- `'royally_approved' in ALL_ENCHANTMENTS` is False. Porting RoyallyApproved makes it live immediately. Filed as a gap and not a waiver because 'the sim has no such content yet' is today's content, not the divergence's shape (binding rule 1). EXECUTED baseline: `run.add_relic('royal_stamp')` leaves every deck card's enchantment unchanged. Same shape and same disposition as relic/punch_dagger in this batch, whose missing enchantment is Momentum; the two differ in that this one also has G2."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     {
       "what": "G2 (DORMANT for RL play, LIVE for RNG parity): `list.UnstableShuffle(base.Owner.RunState.Rng.Niche)` (RoyalStamp.cs:36) is an RNG draw the sim never makes",
       "verdict": "gap",
-      "issue": "MECHANISM: C# shuffles the eligible-card list on the player's named `Rng.Niche` stream before offering it, so taking Royal Stamp advances Niche by one UnstableShuffle's worth of draws whatever the player then picks. The port has no after_obtained at all, so it consumes NOTHING from any stream. This is PROMPT.md bug class 16's second half, and the class's own warning was checked rather than skipped: the stream is not merely NAMED here, it is CONSUMED -- UnstableShuffle takes the Rng as its ordering source, unlike the CardTransformation case the class cites where an explicit Replacement means GetReplacement never touches it. Note the contrast with relic/punch_dagger in this same batch, whose CardSelectCmd.FromDeckForEnchantment call has no shuffle and therefore no RNG half. REACHABILITY: LIVE for the conformance harness the moment a recorded seed buys Royal Stamp in a shop -- every subsequent Niche draw in that run shifts, which is the same class of divergence batch 1 recorded as relic/astrolabe N1 and which the runner's own comparisons would surface. DORMANT for RL play, where the shared legacy random.Random is not compared against anything. Because the sim grants no enchantment either (G1), a fix must do both halves at once: an after_obtained that shuffles the candidate list on the Niche stream AND attaches the enchantment; implementing G1 alone with the sim's default `pick_rng=None` would reproduce astrolabe N1's exact defect."
+      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     {
       "what": "N1: `CanEnchant` filters the candidate list BEFORE the shuffle and the offer (RoyalStamp.cs:35)",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\driftwood.py",
-    "sha256": "f1414c00ce2deab22b5f204d53850d56d38ab2bce3e2346e49dbd33358badc64"
+    "sha256": "9cec68bc3f83de97430a84b3ea7c0c2a8ffeced8ad8314ac55e134724bf249fb"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "12aca8a17e53fac667933105176129434b50dcc90c4fc5e45d9fce123ebdeca8",
+      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
       "side": "sim"
     },
     {
@@ -41,22 +41,22 @@
     },
     {
       "path": "sts2_rl/events/trash_heap.py",
-      "sha256": "274df0b400c0d7ff86e638ab84cd3bad08e026bf660586bc07dde6e1ab18b1be",
+      "sha256": "39c4119afdeb8fd3addebd7c7344966c2f68b2b4203ed7fa77cb619bc94cbdb3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "fecf8d4500fbbf840ca198e764d77eb0ede2138d891ec1998600a8fda0177cf2",
+      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "5b93dda80740d8c20843603afc6bdeec19624209cfdebb408e862fe074cf144e",
+      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],
@@ -68,7 +68,7 @@
     "TryModifyRewardsLate": {
       "maps_to": "modify_combat_rewards (driftwood.py:17-19), dispatched by rewards.generate_combat_rewards (rewards.py:499-500). relics/base.py:168-170 maps THREE C# hooks -- Hook.ModifyRewards, TryModifyRewards and TryModifyRewardsLate -- onto this one sim method, which is where guard G2 lives (PROMPT.md class 15).",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 (LIVE) and G2 per binding rule 4. The effect itself is right -- card rewards become rerollable, and rewards.py:399-403's one-shot reroll regenerates the options through the same room-typed creation path, matching CardReward.Reroll -- but the sim's hook reaches only the COMBAT reward screen where C#'s reaches every RewardsSet (G1), and the Late phase is flattened (G2)."
+      "issue": "NARROWED 2026-07-27. The phase half (G2) is CLOSED: `modify_combat_rewards_late` is its own base member (sts2_rl/relics/base.py:236-239), rewards.generate_combat_rewards runs a complete plain pass and then a complete Late pass (sts2_rl/rewards.py:526-529 = Hook.cs:1981-1999), and sts2_rl/relics/driftwood.py:17-19 is a Late implementer. WHAT REMAINS is guard G1: Hook.ModifyRewards is called from RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136), which EVERY RewardsSet goes through, so in the game Driftwood marks a CardReward on any screen rerollable; the sim still dispatches modify_combat_rewards / _late only from generate_combat_rewards, while RunState.rest_heal_rewards (sts2_rl/run.py:1255-1268) dispatches modify_rest_site_heal_rewards ALONE. A rest-site card reward therefore still comes back can_reroll=False."
     }
   },
   "guards": [
@@ -79,8 +79,8 @@
     },
     {
       "what": "G2 (DORMANT): the hook is TryModifyRewards**Late** and the sim collapses the plain and Late passes into one flat walk over run.relics, so Driftwood's guaranteed 'after everyone else' position becomes registration-order luck (PROMPT.md class 15)",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# guarantees ordering by running two COMPLETE passes -- every listener's TryModifyRewards, then every listener's TryModifyRewardsLate (Hook.cs:1983-1997) -- and AbstractModel.cs:2113-2115 says of the Late form 'CAREFUL! You should usually use TryModifyRewards instead of this. Works just like TryModifyRewards, but runs after it.' Driftwood is Late for a reason: it must see every CardReward any other listener ADDED. The sim has one pass (`for relic in list(run.relics)`, rewards.py:499-500) and driftwood.py:18's `if rewards.cards:` is evaluated at Driftwood's own position in run.relics, so a card reward appended by a later-registered relic is never marked. This is the same flattening audit/records/seam/turn_structure.json guard G12 and audit/records/seam/hook_dispatch.json record as gaps for their own phased hooks; one verdict per mechanism, binding rule 3. REACHABILITY (DORMANT, and the concrete unported thing is named): no ported plain-phase listener adds a CardReward. The game's four other TryModifyRewards implementers are AmethystAubergine (gold), LavaRock (relics), PrayerWheel, WhiteStar and WongosMysteryTicket, and of those PrayerWheel and WhiteStar -- the two that touch card rewards -- are behaviourless stubs in the sim per .superpowers/sdd/content-relic-sweeps.md sweep C, while lava_rock adds relics rather than cards. Porting Prayer Wheel (whose C# effect is a second card reward) makes it live immediately and in the silent direction: the extra reward would sometimes be rerollable and sometimes not, depending on grab-bag order."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     {
       "what": "G3: C# sets `CanReroll = true` on EACH CardReward in the list (Driftwood.cs:20-23); the sim sets one `can_reroll` flag on the whole CombatRewards (driftwood.py:19)",

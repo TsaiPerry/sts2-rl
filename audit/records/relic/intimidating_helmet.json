@@ -36,22 +36,22 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "afb8d4f859d69bf03e953f4f7bc8f7bce3265a01ab5dd1f7fb125cb1755f8449",
+      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
       "side": "sim"
     }
   ],
@@ -75,7 +75,7 @@
     {
       "what": "G2 (LIVE): C# fires Hook.BeforeCardPlayed INSIDE the play-count loop, so a Replayed 2-cost card grants the 4 Block ONCE PER ITERATION; the sim's on_energy_spent fires once, before the loop",
       "verdict": "gap",
-      "issue": "This is audit/records/seam/hook_dispatch.json gap G4 -- the per-CardPlay bracket -- at a new ported site, and on the BeforeCardPlayed half specifically. CardModel.cs:1919-1929 constructs a fresh CardPlay with PlayIndex = i and fires Hook.BeforeCardPlayed at line 1929 inside `for (int i = 0; i < playCount; i++)`; the sim spends the energy and fires on_energy_spent at combat.py:412-413, before _resolve_card_play is even entered, so it cannot repeat. One verdict per mechanism, binding rule 3: matched, not re-derived. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b07.py helmet-replay): relics=[intimidating_helmet] playing a 2-cost card gives block 4; relics=[intimidating_helmet, throwing_axe], where the first card of the combat plays twice, ALSO gives block 4 (the dark_embrace power stacked to 2, confirming the card really did replay) where the game gives 8. Throwing Axe is granted by the ported Tanx shrine and Intimidating Helmet is Rare in the grab bag, so both sides are ported and co-obtainable. Pinned by the strict xfail hook_dispatch G4 names: test/test_hook_order.py::TestHookDispatchOrder::test_before_card_played_fires_once_per_replay_iteration (verified present at test/test_hook_order.py:1143). Rule 7: audit/records/seam/hook_dispatch.json, CardModel.cs, sts2_rl/combat.py and test/test_hook_order.py are not hashed by this record."
+      "issue": "NARROWED 2026-07-27, and the reason it is NOT closed is worth stating: the engine half landed but this relic does not sit on it. CombatState._resolve_card_play now fires `hooks.before_card_played` INSIDE the play-count loop (sts2_rl/combat.py:574-576), which is Hook.BeforeCardPlayed at CardModel.cs:1929. Intimidating Helmet, however, still listens on `on_energy_spent` (sts2_rl/relics/intimidating_helmet.py:19-22), and that is fired ONCE per logical play, before _resolve_card_play is entered (sts2_rl/combat.py:496-499). So a Replayed 2-cost card still grants 4 Block where the game grants 4 per iteration. Moving the relic onto before_card_played closes this and guard G1 together."
     },
     {
       "what": "N1 (DORMANT): the SLOT -- C# fires BeforeCardPlayed after the card has been added to the Play pile and after GeneratePlayCount; the sim fires on_energy_spent immediately after deducting the energy, before the card leaves the hand",

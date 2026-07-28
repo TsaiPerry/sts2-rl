@@ -50,7 +50,7 @@
       "what": "LIVE GAP -- death is not removal. IllusionPower.cs overrides ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90), NOT ShouldDie; the sim ports it onto should_die (powers.py:1566-1570), so an Eye With Teeth never dies and no on_death listener ever fires for it",
       "verdict": "gap",
       "live": true,
-      "issue": "In the game a lethal hit on an Eye With Teeth REALLY KILLS it -- CurrentHp 0, Hook.AfterDeath dispatched with wasRemovalPrevented FALSE -- and only the REMOVAL from Enemies is vetoed; IllusionPower.AfterDeath then splices a synthetic REVIVE_MOVE via SetMoveImmediate and the creature revives on its next turn. The sim's IllusionPower.should_die returns False, so the creature is floored at 1 HP, `is_dead` stays False and hooks.on_death is never dispatched. Observable: every on_death listener silently loses a trigger. SAME MECHANISM, SAME VERDICT as relic/gremlin_horn.json guard G1 (binding rule 3) -- this record does not re-verdict it, it records that THIS unit is what makes it live, which is what SHARED-FINDINGS section 7's 'death is not removal' clause asks each batch to check. LIVE, both sides reachable on ported content (rule 6): Eye With Teeth is summoned by Fogmog's ILLUSION move (fogmog.py:93-95, Fogmog.cs:66), Fogmog is in the ported overgrowth NORMAL pool (rooms.py:99, key 'fogmog'; executed, `py audit/tools/monster_probes_b01.py reach`), and killing a 6-HP minion needs no other content. gremlin_horn G1 records the executed observation (enemy hp=1, is_dead=False, energy 3 -> 3, hand 5 -> 5). Rule 7: sts2_rl/powers.py, IllusionPower.cs and sts2_rl/rooms.py are hashed in extra_sources; audit/records/relic/gremlin_horn.json is a record, not a source, and is deliberately not hashed."
+      "issue": "NARROWED 2026-07-28. THE on_death HALF IS CLOSED: cmds.py:30-65's `_resolve_death` now mirrors CreatureCmd.KillWithoutCheckingWinCondition's two arms (CreatureCmd.cs:506-570) -- it dispatches `hooks.on_death` on BOTH, with was_removal_prevented False on the real arm (:519) and True on the prevented one (:566), and it no longer floors the prevented creature at 1 HP. EXECUTED on a killed Eye With Teeth: hp=0, is_dead=True, retained_after_death=True, and the on_death listener fires (relics/gremlin_horn.py has no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32, so it now pays out as the game does). WHAT REMAINS: IllusionPower is STILL ported onto `should_die` (powers.py:1671-1675) where IllusionPower.cs implements only ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90) and NO ShouldDie, so the sim takes the death-PREVENTION arm and two things still diverge: (a) Hook.AfterDeath is dispatched with wasRemovalPrevented TRUE where the game passes false, and (b) the prevented arm never reaches `_strip_powers_after_death` (cmds.py:67-84), so Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671, called from CreatureCmd.cs:533 on the real-death arm) never runs. EXECUTED: a Eye With Teeth killed while carrying a player-applied Vulnerable 3 keeps ['illusion', 'minion', 'vulnerable']; the game strips Vulnerable, because it is a non-temporary Debuff and IllusionPower.ShouldPowerBeRemovedOnDeath returns `!(power is ITemporaryPower)` = true for it (IllusionPower.cs:59-66), and keeps only the two Buffs. STILL LIVE and still the same mechanism as relic/gremlin_horn G1 and audit/records/power/illusion.json -- not re-verdicted here. Eye With Teeth is still summoned by Fogmog's ILLUSION move (fogmog.py:93-95, Fogmog.cs:66) in a ported overgrowth NORMAL encounter (rooms.py), so the reachability argument is unchanged."
     },
     {
       "what": "The REVIVE turn: C# splices a MoveState('REVIVE_MOVE', ReviveMove, HealIntent) with FollowUpStateId = StateLog.Last().Id and MustPerformOnceBeforeTransitioning (IllusionPower.cs:77-90); the sim branches inside the monster's own take_turn (fogmog.py:44-52)",
@@ -103,17 +103,17 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {

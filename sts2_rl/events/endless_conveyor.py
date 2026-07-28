@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..cards import make_card
-from ..cards.pool import random_pool_cards
 from .base import Event, EventOption, register_event
 
 if TYPE_CHECKING:
@@ -72,7 +71,10 @@ class EndlessConveyor(Event):
         dishes = [d for d in dishes if d[0] != self.last_dish_id]
 
         total = sum(w for _, w, _ in dishes)
-        roll = self.rng.random() * total  # Rng.NextFloat() * total
+        # `base.Rng.NextFloat() * total` — the event's own Rng
+        # (EndlessConveyor.cs:245).
+        er = self.event_rng
+        roll = (er.next_float() if er is not None else self.rng.random()) * total
         acc = 0.0
         for did, weight, action in dishes:
             acc += weight
@@ -88,23 +90,44 @@ class EndlessConveyor(Event):
         self.run.gain_max_hp(_CAVIAR_MAX_HP)
 
     def _spicy_snappy(self) -> None:
+        # `base.Rng.NextItem(list)` (EndlessConveyor.cs:195).
+        er = self.event_rng
         upgradable = self.run.upgradable_cards()
-        if upgradable:
+        if er is not None:
+            card = er.next_item(upgradable)
+            if card is not None:
+                card.upgrade()
+        elif upgradable:
             self.rng.choice(upgradable).upgrade()
 
     def _jelly_liver(self) -> None:
         for card in self.run.select_cards("transform", self.run.transformable_cards(), 1):
-            self.run.transform_card(card)
+            # CardCmd.TransformToRandom(cardModel, base.Rng) —
+            # EndlessConveyor.cs:168.
+            self.run.transform_card(card, pick_rng=self.event_rng)
 
     def _fried_eel(self) -> None:
-        # ColorlessCardPool has no sim equivalent; approximate with a random
-        # character-pool card.
-        for card in random_pool_cards(self.rng, 1):
+        # `CardFactory.CreateForReward(Owner, 1,
+        #  ForNonCombatWithDefaultOdds(ColorlessCardPool))`
+        # (EndlessConveyor.cs:181-183) — the reward factory on PlayerRng.Rewards
+        # (source Other => the non-mutating base-odds rarity roll), not the
+        # in-combat generator.
+        from ..cards.pool import COLORLESS_POOL
+        from ..rewards import RarityOddsType, create_reward_cards
+
+        for card in create_reward_cards(
+            self.run, RarityOddsType.REGULAR, count=1, mutate_pity=False,
+            pool=list(COLORLESS_POOL),
+        ):
             self.run.add_card(card)
 
     def _suspicious_condiment(self) -> None:
         if self.run.has_open_potion_slot:
-            self.run.add_potion(self.run.random_potion())
+            # `Owner.PlayerRng.Rewards.NextItem(items)` — one draw on
+            # run.rewards_rng over the unlocked potion pools, via
+            # Event.offer_pool_potion (EndlessConveyor.cs:150-162), then a
+            # take-or-skip RewardsCmd.OfferCustom(PotionReward) screen.
+            self.offer_potion(self.offer_pool_potion())
 
     def _clam_roll(self) -> None:
         self.run.heal(_CLAM_ROLL_HEAL)
@@ -141,8 +164,15 @@ class EndlessConveyor(Event):
         )
 
     def _observe_chef(self) -> None:
+        # `CardCmd.Upgrade(base.Rng.NextItem(enumerable2))`
+        # (EndlessConveyor.cs:268).
+        er = self.event_rng
         upgradable = self.run.upgradable_cards()
-        if upgradable:
+        if er is not None:
+            card = er.next_item(upgradable)
+            if card is not None:
+                card.upgrade()
+        elif upgradable:
             self.rng.choice(upgradable).upgrade()
         self._finish("OBSERVE_CHEF")
 

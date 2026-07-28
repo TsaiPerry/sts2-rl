@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kaleidoscope.py",
-    "sha256": "43f37aab77d54df4db2b19033f5f48ee882ad82a1e5faf3b3fff443f8cf5ea2d"
+    "sha256": "1a006e96c627207b6111114ffb63af979d4f9c6bfe10eef8469de30d9a428c81"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/run.py",
-      "sha256": "222a4b444f5b111b10fd4c5bccfd4d0cfc0901138724911e31a7a123a521251b",
+      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
       "side": "sim"
     }
   ],

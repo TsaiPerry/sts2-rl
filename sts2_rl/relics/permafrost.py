@@ -24,7 +24,12 @@ class Permafrost(Relic):
         super().__init__()
         self._activated = False
 
-    def on_card_played(self, card: Card) -> None:
+    def reset_for_combat(self) -> None:
+        # Permafrost.AfterRoomEntered(CombatRoom) (:36-44).
+        self._activated = False
+
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type == CardType.POWER and not self._activated:
             self._activated = True
             from ..cmds import BlockCmd

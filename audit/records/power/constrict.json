@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7"
+    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
   },
   "extra_sources": [
     {
@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
-      "sha256": "8c717ed56b051ebc8fa1af8ecee44d59cbb3f591b6b10384eea04e9f95100c33",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
@@ -53,12 +53,12 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:1433-1447 ConstrictPower._squeeze via on_player_turn_end / on_enemy_side_end",
       "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and before the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. THE CONCRETE ROUTE, which applies to every unit in this group: StampedePower (powers.py:1025-1041) auto-plays Attack cards from ITS on_player_turn_end, i.e. inside the very same dispatch, and _process_turn_end_cards runs more card effects immediately after. So in the game every turn-end auto-play happens while this power is still on the creature, and in the sim whether it does depends on hook-registration order between this power and Stampede. Reproduce the affected population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here. For Constrict the slot matters more than usual because the effect is DAMAGE: the sim squeezes before the turn-end card effects and the flush, so a lethal squeeze cancels turn-end card effects the game has already run. The enemy leg (powers.py:1445-1447) is in the right slot (on_enemy_side_end, combat.py:345). The sim also adds an `is_dead` guard to the enemy leg that C# does not have (powers.py:1446) and omits `dealer = base.Owner` (ConstrictPower.cs:23 vs powers.py:1437-1439) -- the missing dealer suppresses on_damage_dealt and any reflect, but every reflect listener needs IsPoweredAttack and this damage is Unpowered, so that half is dormant with no reachable route."
+      "issue": "NARROWED 2026-07-27. THE SLOT HALF IS CLOSED: the player leg is now `after_player_turn_end` (powers.py:1531), which combat.py:809 fires after the turn-end card effects and the hand flush -- Hook.AfterTurnEnd (CombatManager.cs:1307). WHAT REMAINS, both re-verified in today's code: (1) the sim OMITS the dealer. ConstrictPower.cs:23 is `CreatureCmd.Damage(ctx, Owner, Amount, ValueProp.Unpowered, base.Owner, null)`; powers.py:1527-1529 calls `DamageCmd.deal(hooks, self.owner, self.amount, props=...)` leaving the `dealer` parameter (cmds.py:92) None, so `on_damage_dealt` (cmds.py:187-188) never fires for the squeeze -- dormant for the old reason, every ported reflect listener needs IsPoweredAttack and this damage is Unpowered. (2) the sim ADDS an `is_dead` guard to the enemy leg (powers.py:1536) that ConstrictPower.cs:21's `participants.Contains(base.Owner)` does not have; that matters more now, because a prevented death leaves the creature dead at 0 HP and retained in combat (cmds.py:51-64) rather than floored at 1 HP."
     },
     "AfterDeath": {
       "maps_to": "powers.py:1449-1451 ConstrictPower.on_death",
       "verdict": "gap",
-      "issue": "The `wasRemovalPrevented` guard is missing. C# removes this power only when `!wasRemovalPrevented && creature == base.Applier`; the sim tests only the applier (hooks.py:574-580 carries no wasRemovalPrevented argument at all), so a death whose corpse the combat keeps drops the power in the sim and keeps it in the game. DORMANT: the sim's one retained-corpse mechanism is ReattachPower's Decimillipede (powers.py:2338-2341) and no segment applies this power. Same shape and same verdict as power/shrink's AfterDeath entry. Third-file citations, not hashed here."
+      "issue": "NARROWED 2026-07-27. THE ENGINE HALF IS CLOSED: `hooks.on_death` now carries `was_removal_prevented` and fires on BOTH arms of `_resolve_death` (hooks.py:799-811, cmds.py:49 and :63), mirroring CreatureCmd.cs:519 / :566. WHAT REMAINS is this power's own guard: ConstrictPower.cs:29 is `if (!wasRemovalPrevented && creature == base.Applier)` and powers.py:1539-1542 still tests only `creature is self.applier`, ignoring the argument it is now handed -- so a prevented death of the applier drops the power in the sim and keeps it in the game. Reachability has GROWN rather than shrunk: prevented deaths now really leave a retained creature at 0 HP."
     }
   },
   "guards": [

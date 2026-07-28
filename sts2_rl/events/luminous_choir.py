@@ -36,7 +36,11 @@ class LuminousChoir(Event):
         return run.gold >= _BASE_GOLD and run.has_available_relics()
 
     def calculate_vars(self) -> None:
-        self.gold_cost = _BASE_GOLD - self.rng.randint(0, 49)  # NextInt(0, 50)
+        # `base.Rng.NextInt(0, 50)` — the event's own Rng (LuminousChoir.cs:30).
+        er = self.event_rng
+        discount = (er.next_int_range(0, 50) if er is not None
+                    else self.rng.randint(0, 49))
+        self.gold_cost = _BASE_GOLD - discount
 
     def initial_options(self) -> list[EventOption]:
         options = [EventOption("REACH_INTO_THE_FLESH", self._reach_into_the_flesh)]

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
-    "sha256": "1d5da20a4610eaa091d70e23095bae077ac6658e8cf942b6a5c5ea695cf467e8"
+    "sha256": "9c831062dc870136ea0a7a1224119f0a3a1ef9fbe20b299e7e85e219f5e32bcc"
   },
   "hooks": {
     "MinInitialHp": {
@@ -178,32 +178,32 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\hooks.py",
-      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\relics\\red_skull.py",
-      "sha256": "8d85bd8f0c5a8700b24cef96645e2fb9041b48a6acb4d7ffbc997296b1a3caf4",
+      "sha256": "2516e605ad84257c2a339b1bb6c94a28d05955899171a0e2fa51349113e3e78c",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
-      "sha256": "1d5da20a4610eaa091d70e23095bae077ac6658e8cf942b6a5c5ea695cf467e8",
+      "sha256": "9c831062dc870136ea0a7a1224119f0a3a1ef9fbe20b299e7e85e219f5e32bcc",
       "side": "sim"
     }
   ]

@@ -283,13 +283,49 @@ class TestLivingFog:
         cs.end_turn()  # BLOAT: spawn bomb + 5
         assert cs.player.hp == 80 - 8 - 5
         assert len(cs.enemies) == 2
-        bomb = cs.enemies[1]
+        bomb = cs.enemies[0]  # bomb1 sorts ahead of the fog's livingFog slot
         assert isinstance(bomb, GasBomb)
         assert "minion" in bomb.powers
         assert bomb.current_intent.move_type == MoveType.DEATH_BLOW
         cs.end_turn()  # SUPER_GAS_BLAST 8, bomb explodes for 8 and dies
         assert cs.player.hp == 80 - 8 - 5 - 8 - 8
         assert bomb.is_dead
+
+    def test_bomb_spawns_into_its_slot_ahead_of_the_fog(self):
+        """LivingFogNormal.Slots = [bomb1..bomb5, livingFog], BloatMove takes
+        Encounter.GetNextSlot (the FIRST unoccupied slot -> bomb1) and
+        CombatManager.AddCreature re-sorts Enemies by Slots.IndexOf whenever
+        the added creature carries a slot (SortEnemiesBySlotName). A spawned
+        Gas Bomb therefore lands BEFORE the Living Fog (slot index 5), and
+        successive bombs fill bomb2, bomb3... behind it -- the spawn is not
+        appended at the end of the enemy list."""
+        cs = fresh_with(LivingFog)
+        fog = cs.enemies[0]
+        fog._bloat(cs._ctx())
+        assert [type(e).__name__ for e in cs.enemies] == ["GasBomb", "LivingFog"]
+        first = cs.enemies[0]
+        cs.player.hp = 80
+        fog._bloat(cs._ctx())
+        assert [type(e).__name__ for e in cs.enemies] == [
+            "GasBomb", "GasBomb", "LivingFog"]
+        assert cs.enemies[0] is first  # bomb1 keeps its slot; the new one is bomb2
+
+    def test_a_freed_bomb_slot_is_refilled_from_the_front(self):
+        """GetNextSlot is FirstOrDefault(unoccupied), so once the bomb1
+        occupant dies the next spawn reclaims bomb1 and sorts ahead of the
+        bomb2 occupant."""
+        cs = fresh_with(LivingFog)
+        fog = cs.enemies[0]
+        fog._bloat(cs._ctx())
+        cs.player.hp = 80
+        fog._bloat(cs._ctx())
+        cs.player.hp = 80
+        bomb1, bomb2 = cs.enemies[0], cs.enemies[1]
+        DamageCmd.deal(cs.hooks, bomb1, 999, dealer=cs.player)
+        fog._bloat(cs._ctx())
+        live = [e for e in cs.enemies if isinstance(e, GasBomb) and not e.is_gone]
+        assert live[1] is bomb2
+        assert cs.enemies.index(live[0]) < cs.enemies.index(bomb2)
 
     def test_bomb_count_capped_at_five_slots(self):
         cs = fresh_with(LivingFog)
@@ -401,6 +437,17 @@ class TestPunchConstruct:
         cs.end_turn()  # STRONG_PUNCH 14
         assert cs.player.hp == 80 - 10 - 14
         assert construct._current_move.id == "READY_MOVE"
+
+    def test_punch_off_reduction_cuts_current_hp_not_max(self):
+        # PunchConstruct.cs:75-78 AfterAddedToRoom is
+        # SetCurrentHpInternal(Max(1, CurrentHp - StartingHpReduction)) with
+        # MaxHp fixed at 55 — the constructs come in damaged, not smaller.
+        from sts2_rl.events.punch_off import PUNCH_OFF_EVENT_ENCOUNTER
+        cs = fresh_encounter(PUNCH_OFF_EVENT_ENCOUNTER, seed=4)
+        left, right = cs.enemies
+        assert left.max_hp == 55 and right.max_hp == 55
+        assert left.hp == 53 and right.hp == 49
+        assert left._current_move.id == "FAST_PUNCH_MOVE"
 
     def test_artifact_blocks_first_player_debuff(self):
         cs = fresh_with(PunchConstruct)

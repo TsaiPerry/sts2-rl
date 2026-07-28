@@ -66,7 +66,6 @@ class Flyconid(Monster):
         else:
             self._execute_attack(ctx, _SMASH_DMG, 1)
         self._log.append(self._move_key)
-        self.telegraph_next_move()
 
     def telegraph_next_move(self) -> None:
         # RAND state: all three moves weight 1, gated by cooldown + CannotRepeat.

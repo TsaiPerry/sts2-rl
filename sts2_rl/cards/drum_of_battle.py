@@ -41,7 +41,8 @@ class DrumOfBattleCard(Card):
 
     # ── Card-level hook: pays out whenever it is exhausted ────────────────
 
-    def on_card_exhausted(self, card: Card) -> None:
+    def on_card_exhausted(self, card: Card,
+                          caused_by_ethereal: bool = False) -> None:
         from ..cmds import EnergyCmd
         if card is not self or self.combat is None:
             return

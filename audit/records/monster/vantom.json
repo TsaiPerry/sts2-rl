@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\vantom.py",
-    "sha256": "4625cf2ecfe867b457ab29c54bbff582fc73914554c872acd49818cf3015a146"
+    "sha256": "725799fdca02d71ea3948e605fe9c2bc56c826648b8c54b4f55ed5d11c6c5e4d"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "ef225a27d086ea1172784b4a6e150523e6b5e4d5af68337e724a6b0b2c5da8b0",
+      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "73d5c2153511252ee49108dbf4e7a6e24ed2edb51d860dbb58cfb517fe555676",
+      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
       "side": "sim"
     },
     {
@@ -71,27 +71,27 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/paels_legion.py",
-      "sha256": "20f9950262269d972fff7aff6d200544ce02c445f956217cf9568890938e5f21",
+      "sha256": "0b3949d545d5a21af06705484f6821e7d47a08d90d444bc3aab5123c346557d3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/ruined_helmet.py",
-      "sha256": "575b85148b754370d6b5a43889211a372e700dea4aab2ea1fd7e792177de13b9",
+      "sha256": "379bd9ed7f301d2bf5b9aa011e275661326b0ae133805956c699150610542f0c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "849d2e4adc01dc186d98efe67dd55345b85872085f6348ff75f2e7864e355675",
+      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/vambrace.py",
-      "sha256": "95c98caeae4206f9737a2f3de4c8275edfd4be384397baf07d0e66f81cf6bcb5",
+      "sha256": "829070eda07da4b6999a8284b646804938643b4b96f43c3fb0025a67c5c3ca54",
       "side": "sim"
     },
     {
@@ -150,9 +150,8 @@
   "guards": [
     {
       "what": "DISMEMBER_MOVE is constructed with TWO intents - `new SingleAttackIntent(DismemberDamage)` AND `new StatusIntent(3)` (Vantom.cs:119) - but the port telegraphs only `Intent(MoveType.ATTACK, damage=26)` (vantom.py:44-45), with an empty `also`",
-      "verdict": "gap",
-      "live": true,
-      "issue": "Vantom's Dismember turn is telegraphed as a plain attack where the game shows attack + status-card. The three Wound cards ARE dealt (vantom.py:57-60), so only the telegraph is wrong - but the telegraph is what the player and the policy act on. The dropped intent is observable, not cosmetic: the sim's own observation builders call Intent.has() for exactly this type (env.py:163-167, full_env.py:568-571), so the feature reads 0 where the game shows the second intent icon, and a human player sees one icon instead of two. Executed: `py audit/tools/monster_probes_b02.py intents` compares the C# AbstractIntent[] against the sim Intent (primary + `also`) for all 45 moves in this batch and reports exactly two mismatches, this one and vine_shambler/GRASPING_VINES. LIVE on ported content (rule 6): VANTOM_BOSS is one of the three act-1 boss keys (rooms.py:107) and DISMEMBER is reached on turn 3 of every Vantom fight (executed by the seq probe's move sequence). Counter-evidence that this is a port slip and not a modelling choice: the sim's Intent DOES carry the secondary-intent tuple, kin_priest uses it for the same shape (the_kin.py:87), and axe_ruby_raider uses it for DefendIntent (ruby_raiders.py:31)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-28: DISMEMBER now telegraphs BOTH intents. vantom.py's current_intent returns `Intent(MoveType.ATTACK, damage=26, also=(MoveType.STATUS_CARD,))`, matching Vantom.cs:119's `new MoveState(\"DISMEMBER_MOVE\", DismemberMove, new SingleAttackIntent(DismemberDamage), new StatusIntent(3))`, so Intent.has() -- which env.py:163-167 and full_env.py:568-571 read -- now reports the second intent. WAS: a bare ATTACK intent with an empty `also`. NOTE: the StatusIntent's COUNT (3) is still not representable -- Intent (monsters/base.py:36-59) has no status-count field -- which is the separate dormant mechanism monster/_intent_count_lost (aeonglass/g5, test_subject/g7, the_insatiable/g4) and is not re-verdicted here."
     },
     {
       "what": "InkBlotDamage / InkyLanceDamage x _inkyLanceRepeat / DismemberDamage / _prepareStrength / _dismemberWounds (Vantom.cs:68,70,72,36,32,34 - GetValueIfAscension(DeadlyEnemies, 8, 7), (7, 6), (30, 26); consts 2, 2, 3) vs vantom.py:12-17 (7 / 6 x 2 / 26 / 2 / 3 wounds)",
@@ -199,6 +198,6 @@
       "note": "Vantom's AfterDeath does not veto its own removal and it implements no ShouldDie; ShouldDisappearFromDoom is a vfx predicate, NOT a removal veto (see the hook entry) - which is exactly the confusion this check exists to catch."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

@@ -23,7 +23,8 @@ class LostWisp(Relic):
 
     DAMAGE = 8
 
-    def on_card_played(self, card: Card) -> None:
+    def on_card_played(self, card: Card,
+                       is_auto_play: bool = False) -> None:
         if card.card_type != CardType.POWER or self.combat is None or self.combat.is_over:
             return
         from ..cmds import DamageCmd

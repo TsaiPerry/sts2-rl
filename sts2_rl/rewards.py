@@ -198,10 +198,17 @@ class PotionRewardOdds:
         self.current_value = self.BASE
 
     def roll(self, room_type: RoomType, force: bool = False) -> bool:
-        """Whether this room's rewards include a potion. Mutates the pity."""
+        """Whether this room's rewards include a potion. Mutates the pity.
+
+        PotionRewardOdds.Roll takes its `NextFloat` BEFORE testing the force
+        flag (`float num4 = _rng.NextFloat(); if (flag || num4 < num3)`), so a
+        forced drop still consumes exactly one Rewards draw. Evaluating the
+        draw first rather than short-circuiting on `force` keeps the stream
+        aligned for White Beast Statue, the hook's only implementer."""
         bonus = self.ELITE_BONUS if room_type == RoomType.ELITE else 0.0
         threshold = self.current_value + bonus * 0.5
-        hit = force or _uniform(self._rng) < threshold
+        rolled = _uniform(self._rng) < threshold
+        hit = force or rolled
         self.current_value += -self.STEP if hit else self.STEP
         return hit
 
@@ -295,10 +302,17 @@ def create_reward_cards(
                 card.upgrade()
         cards.append(card)
     if modify_hooks:
-        # Hook.TryModifyCardRewardOptionsLate over the run's relics (Silver
-        # Crucible upgrades the options, Silken Tress enchants them).
+        # Hook.TryModifyCardRewardOptions (Hook.cs:1444-1466) makes TWO
+        # complete passes over the listeners: every relic's plain hook, then
+        # every relic's Late hook. The order is load-bearing — Lasting Candy
+        # ADDS an option in the first pass and the egg relics / Silver Crucible
+        # / Silken Tress / Glitter all upgrade or enchant in the second, so
+        # the added card must be visible to them whichever relic registered
+        # first.
         for relic in list(run.relics):
             relic.modify_card_reward_options(run, cards)
+        for relic in list(run.relics):
+            relic.modify_card_reward_options_late(run, cards)
     return cards
 
 
@@ -366,16 +380,20 @@ class RewardExtra:
 
 @dataclass
 class CombatRewards:
-    """One post-combat reward screen: gold and any relics are granted when the
-    screen is generated (the sim has no skip-gold button); the card choice and
-    the potion are decisions the caller (env/driver) presents to the policy."""
+    """One post-combat reward screen: gold is granted when the screen is
+    generated (the sim has no skip-gold button); the card choice, the potion
+    and each relic are decisions the caller (env/driver) presents to the
+    policy."""
 
     room_type: RoomType
     gold: int = 0
     potion: "Potion | None" = None
     cards: list[Card] = field(default_factory=list)
-    # Relics granted with this screen: the elite's grab-bag relic, plus any
-    # hook-added extras (Lava Rock's two on the act-1 boss).
+    # The RelicRewards on this screen: the elite's grab-bag relic, plus any
+    # hook-added extras (Lava Rock's two on the act-1 boss). Each is OFFERED
+    # take-or-skip as the screen is populated (RunState.offer_relic), so a
+    # declined one is still listed here — its Populate already spent the bag
+    # slot — but never joins run.relics.
     relics: "list[Relic]" = field(default_factory=list)
     # Extra single-card rewards queued during combat (CombatRoom.ExtraRewards:
     # Thieving Hopper's returned card, The Lantern Key's card). Unlike `cards`
@@ -475,7 +493,10 @@ def generate_combat_rewards(
             rarity = roll_relic_rarity(rew)
             relic = run.pull_relic_from_front(rarity=rarity)
             if relic is not None:
-                run.add_relic(relic)
+                # RelicReward is take-or-skip (RelicReward.cs:109-123): offer
+                # it, and list it on the screen either way — the pull already
+                # happened in Populate, so a decline still spends the bag slot.
+                run.offer_relic(relic)
                 rewards.relics.append(relic)
     else:
         # Legacy RL path (pre-SP2 draw order on the shared run.rng).
@@ -489,15 +510,23 @@ def generate_combat_rewards(
         if room_type == RoomType.ELITE:
             relic = run.pull_relic_from_front()
             if relic is not None:
-                run.add_relic(relic)
+                # RelicReward is take-or-skip (RelicReward.cs:109-123): offer
+                # it, and list it on the screen either way — the pull already
+                # happened in Populate, so a decline still spends the bag slot.
+                run.offer_relic(relic)
                 rewards.relics.append(relic)
 
     # Hook.ModifyRewards over the run's relics (Lava Rock adds two relic
     # rewards to the first act's boss screen). A hook that appends to
     # rewards.relics grants them itself (run.add_relic), like the elite
-    # branch above.
+    # branch above. Two complete passes, like the card-reward dispatch
+    # (Hook.cs:1981-1999): TryModifyRewards then TryModifyRewardsLate, so
+    # Driftwood's reroll flag lands on a reward list that already has
+    # everything the plain pass added.
     for relic in list(run.relics):
         relic.modify_combat_rewards(run, rewards)
+    for relic in list(run.relics):
+        relic.modify_combat_rewards_late(run, rewards)
 
     # Pending post-combat extras queued during the fight or attached by a
     # combat event (CombatRoom's ExtraRewards, folded in by
@@ -515,7 +544,10 @@ def generate_combat_rewards(
         elif extra.kind == RewardExtraKind.RELIC:
             relic = extra.relic if extra.relic is not None else run.pull_relic_from_front()
             if relic is not None:
-                run.add_relic(relic)
+                # RelicReward is take-or-skip (RelicReward.cs:109-123): offer
+                # it, and list it on the screen either way — the pull already
+                # happened in Populate, so a decline still spends the bag slot.
+                run.offer_relic(relic)
                 rewards.relics.append(relic)
         elif extra.kind == RewardExtraKind.POTION:
             potion = extra.potion if extra.potion is not None else run.random_potion()

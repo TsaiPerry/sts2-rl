@@ -25,9 +25,10 @@ _PAPER_CUTS = 2
 
 class ScrollOfBiting(MachineMonster):
     """Chomp (14) → More Teeth (+2 Strength) → Chew (5×2) → randomly loop back
-    to Chomp (cannot repeat) or Chew (weight 2). Starts with Paper Cuts 2 (its
-    unblocked hits cost the player max HP). Its opening move is set by
-    ``starter_move_idx`` (the encounter staggers the three/four scrolls).
+    to Chomp (cannot repeat) or Chew (at most twice in a row); both branches
+    are weight 1. Starts with Paper Cuts 2 (its unblocked hits cost the player
+    max HP). Its opening move is set by ``starter_move_idx`` (the encounter
+    staggers the three/four scrolls).
 
     Source: ScrollOfBiting.cs (non-ascension values)."""
     name = "Scroll of Biting"
@@ -62,7 +63,11 @@ class ScrollOfBiting(MachineMonster):
         chew.follow_up = branch
         more_teeth.follow_up = chew
         branch.add_branch(chomp, repeat_type=MoveRepeatType.CANNOT_REPEAT)
-        branch.add_branch(chew, weight=2.0)
+        # ScrollOfBiting.cs:90 AddBranch(state, 2) is the (state, int
+        # maxRepeats) overload — a repeat limit, not a weight.
+        branch.add_branch(
+            chew, repeat_type=MoveRepeatType.CAN_REPEAT_X_TIMES, max_times=2
+        )
         states = [chomp, chew, more_teeth, branch]
         initial = {0: chomp, 1: chew}.get(self._starter_move_idx % 3, more_teeth)
         return MonsterMoveStateMachine(states, initial)
@@ -94,7 +99,13 @@ class _ScrollsEncounter(Encounter):
         self._count = count
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
-        base = rng.randint(0, 2)
+        # Parity (ScrollsOfBiting{Weak,Normal}.cs:22-23): one
+        # `base.Rng.NextInt(3)` on the PER-ENCOUNTER Rng sets the first scroll's
+        # StarterMoveIdx. Legacy keeps the shared-rng draw.
+        if selection_rng is not None:
+            base = selection_rng.next_int(3)
+        else:
+            base = rng.randint(0, 2)
         idxs = [(base + i) % 3 for i in range(min(self._count, 3))]
         if self._count == 4:
             idxs.append(2)

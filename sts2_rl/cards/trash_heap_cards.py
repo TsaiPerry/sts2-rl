@@ -9,19 +9,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .base import Card, CardRarity, CardType, TargetType, register_card
+from .base import (
+    Card, CardRarity, CardType, TargetType, create_clone, register_card,
+)
 
 if TYPE_CHECKING:
     from ..combat import CombatCtx
 
 
 def _clone(card: Card) -> Card:
-    """Duplicate a card, preserving its upgrade level (mirrors CreateClone for
-    the sim's needs — Dual Wield's copies)."""
-    clone = type(card)()
-    for _ in range(card.upgrade_level):
-        clone.upgrade()
-    return clone
+    """Duplicate a card the way CardModel.CreateClone does — same upgrade
+    level, and carrying a live copy of the source's enchantment and affliction
+    (Dual Wield's copies)."""
+    return create_clone(card)
 
 
 @register_card
@@ -281,11 +281,19 @@ class RipAndTearCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd
+        # AttackCommand.cs:601-602 (TargetingRandomOpponents): one
+        # Rng.CombatTargets.NextItem(validTargets) per hit, re-rolled each
+        # time. Parity routes to that stream; legacy keeps the shared
+        # random.Random pick. Same shape as cards/sword_boomerang.py.
+        crng = ctx.combat.combat_rng
         for _ in range(self._hits):
             living = [e for e in ctx.combat.enemies if not e.is_gone]
             if not living:
                 break
-            target = ctx.combat._rng.choice(living)
+            if crng.is_parity:
+                target = crng.targets.choice(living)
+            else:
+                target = ctx.combat._rng.choice(living)
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
 
 

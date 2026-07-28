@@ -47,3 +47,23 @@ class DamageProps:
 def is_powered_attack(props: ValueProp) -> bool:
     """True for damage boosted by Strength/Vulnerable/Weak (mirrors IsPoweredAttack)."""
     return ValueProp.MOVE in props and ValueProp.UNPOWERED not in props
+
+
+def is_powered_card_or_monster_move_block(props: ValueProp) -> bool:
+    """The block-side twin of `is_powered_attack`
+    (ValuePropExtensions.IsPoweredCardOrMonsterMoveBlock) — Dexterity, Frail
+    and Fasten gate on this."""
+    return ValueProp.MOVE in props and ValueProp.UNPOWERED not in props
+
+
+def is_card_or_monster_move(props: ValueProp) -> bool:
+    """`ValuePropExtensions.IsCardOrMonsterMove` (ValuePropExtensions.cs:23-26)
+    — `props.HasFlag(ValueProp.Move)`, **Move alone**.
+
+    Deliberately weaker than `is_powered_attack`: it PERMITS Unpowered. Three
+    listeners gate on this and would be wrong under the powered test —
+    UnmovablePower.cs:27-30, Vambrace.cs:59-63 and PaelsLegion.cs:132-134.
+    Hoisting the powered gate into the pipeline is what stopped all three from
+    ever running on Unpowered block (`damage_pipeline/G3`).
+    """
+    return ValueProp.MOVE in props

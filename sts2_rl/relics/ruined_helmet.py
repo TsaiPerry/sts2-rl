@@ -20,6 +20,10 @@ class RuinedHelmet(Relic):
         super().__init__()
         self._used = False
 
+    def reset_for_combat(self) -> None:
+        # RuinedHelmet.AfterCombatEnd (:57-61).
+        self._used = False
+
     def modify_power_amount(
         self,
         power_cls: type,
