@@ -85,7 +85,19 @@ class CombatState:
         max_potions: int | None = None,
         player_gold: int = 0,
         encounter_selection_rng=None,
+        character=None,
     ) -> None:
+        # The character fighting this combat (CombatManager reaches it as
+        # `Owner.Character`). In-combat card generation draws from
+        # `character.card_pool`, so it has to be reachable from every card,
+        # relic, power and potion — all of which hold a `combat` back-reference.
+        # `RunState.create_combat` passes the run's; a bare CombatState (tests,
+        # the combat-only envs) defaults to Ironclad, as it always has.
+        from .characters import DEFAULT_CHARACTER, get_character
+
+        self.character = get_character(
+            character if character is not None else DEFAULT_CHARACTER
+        )
         self._rng = rng or random.Random()
         # The run's serialized stream set (parity runs only). Kept so combat
         # content that must draw on a RAW game `Rng` — the potion factory's
@@ -236,6 +248,30 @@ class CombatState:
             if not e.is_gone:
                 return e
         return self.enemies[0]
+
+    @property
+    def card_pool(self) -> tuple[str, ...]:
+        """The fighting character's CardPool (`Owner.Character.CardPool`).
+
+        Every in-combat card generator — Stoke, Infernal Blade, Creative AI,
+        Vexing Puzzlebox, the Attack/Skill/Power potions — draws from this, so
+        on a non-Ironclad run they generate that character's cards."""
+        return self.character.card_pool
+
+    @property
+    def potion_pool(self) -> tuple[tuple[str, str], ...]:
+        """GetPotionOptions: the character's potion pool, then the shared one.
+
+        What in-combat potion generation (Alchemize, Entropic Brew) draws
+        from."""
+        from .potion_pools import character_potion_pool
+
+        return character_potion_pool(self.character)
+
+    def owns_potion(self, potion_cls) -> bool:
+        """Whether the fighting character can be offered `potion_cls`
+        (`RunState.owns_potion`, for in-combat generation)."""
+        return potion_cls.character in (None, self.character.id)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -596,6 +632,20 @@ class CombatState:
                 card.enchantment.on_play(card, played_target)
             # Hook.AfterCardPlayed, per iteration and gated on the combat still
             # being in progress (CardModel.cs:1957-1959).
+            #
+            # The gate is `IsInProgress`, NOT `IsOverOrEnding`: Hook.
+            # AfterCardPlayed (Hook.cs:278-294) is one of the dispatchers that
+            # deliberately BYPASS IterateCombatHookListeners, and Hook.cs:275-276
+            # says why — "Dispatched directly, not through the
+            # IterateCombatHookListeners guard: it completes resolution of the
+            # card that caused the kill." IsInProgress stays true between the
+            # killing blow and the teardown (it is cleared only from
+            # CheckWinCondition, CombatManager.cs:1046-1059, which runs after the
+            # whole play action), so C# DOES dispatch on the lethal iteration.
+            # `is_over` is the sim's IsInProgress analogue; using
+            # `is_over_or_ending` here suppressed every AfterCardPlayed listener
+            # on the winning card play. Contrast Hook.BeforeCardPlayed
+            # (Hook.cs:263-270), which IS gated and which the sim does not gate.
             if not self.is_over:
                 self.hooks.on_card_played(card, is_auto_play)
             if self._all_enemies_dead() or self.player.is_dead:
@@ -687,6 +737,12 @@ class CombatState:
         0, so the screen is always shown and confirming NONE is a first-class
         outcome. Defaults to `count`, i.e. the old exactly-N behaviour.
         """
+        # CardSelectCmd's first guard: every C# selection screen returns an
+        # empty list once the combat is over or ending (CardSelectCmd.cs:194-199,
+        # 277-285, 382-394, 694-707). The sim implemented only the
+        # 0-candidate arm.
+        if self.is_over_or_ending:
+            return []
         if not candidates:
             return []
         count = min(count, len(candidates))
@@ -872,3 +928,28 @@ class CombatState:
     @property
     def is_over(self) -> bool:
         return self.phase == Phase.COMBAT_OVER
+
+    @property
+    def is_over_or_ending(self) -> bool:
+        """CombatManager.IsOverOrEnding (CombatManager.cs:204-220).
+
+        `IsOverOrEnding` is `IsEnding || !IsInProgress`, and `IsEnding`
+        (CombatManager.cs:171-202) is "combat is in progress AND either a loss
+        is pending or every primary enemy is dead with nothing vetoing the
+        end". `is_over` alone is only the `!IsInProgress` half: the sim flips
+        `Phase.COMBAT_OVER` inside `_end_combat`, which the card-play paths
+        reach strictly after `_resolve_card_play` returns — so between the
+        killing blow and the teardown C# considers the combat *ending* and the
+        sim considered it live. `_all_enemies_dead` already carries
+        `Hook.ShouldStopCombatFromEnding` (combat.py's `_all_enemies_dead`,
+        mirroring CombatManager.cs:196), which is what holds a fight open
+        around a creature that is dead at 0 HP and about to revive.
+
+        Combat SETUP is exempt in C# (`!CombatManager.IsStarting`,
+        Hook.cs:45-47, so the initial shuffle still reaches listeners); the sim
+        has no setup phase in which every enemy is already dead, so there is
+        nothing to exempt.
+        """
+        return (self.phase == Phase.COMBAT_OVER
+                or self.player.is_dead
+                or self._all_enemies_dead())

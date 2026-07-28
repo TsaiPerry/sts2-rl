@@ -6,7 +6,7 @@ import pytest
 
 from sts2_rl.cards import CardRarity
 from sts2_rl.cards.base import _CARD_CLASSES
-from sts2_rl.cards.pool import pool_card_ids
+from sts2_rl.cards.pool import IRONCLAD_POOL, pool_card_ids
 from sts2_rl.rewards import (
     CARD_REWARD_COUNT,
     GOLD_REWARD_RANGES,
@@ -160,7 +160,7 @@ def test_gold_proportion_scales_monster_only():
 
 def test_reward_cards_are_three_distinct_pool_cards():
     run = fresh_run(3)
-    pool = set(pool_card_ids())
+    pool = set(pool_card_ids(pool=IRONCLAD_POOL))
     cards = create_reward_cards(run, RarityOddsType.REGULAR)
     assert len(cards) == CARD_REWARD_COUNT == 3
     ids = [c.id for c in cards]

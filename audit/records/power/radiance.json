@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
+    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
+      "sha256": "7755c9d3ead187a051c3b1b9e98f94d7de551673ce9e71d3af695b46cb933b90",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717",
+      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
       "side": "sim"
     },
     {

@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/events/whispering_hollow.py",
-      "sha256": "04b2c3e7caab86cf89d71dadf156bee510718119b751382f3310f525b48ba4ee",
+      "sha256": "542975232cb2422d661ffebfe1c70c797d8e3b58d8e8ebd3da3bf09373f24652",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],

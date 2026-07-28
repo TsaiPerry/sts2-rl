@@ -96,6 +96,18 @@ class MonsterState:
         raise NotImplementedError
 
     def register_states(self, states: dict[str, MonsterState]) -> None:
+        # Every C# RegisterStates is `monsterStates.Add(Id, this)`
+        # (MonsterState.cs's three concretes: RandomBranchState.cs:171,
+        # MoveState.cs:74, ConditionalBranchState.cs:58) and Dictionary.Add
+        # THROWS on a duplicate key, so a monster whose graph reuses an id
+        # fails loudly at machine construction. A silent overwrite would let
+        # the second definition win and quietly redirect every follow_up
+        # aimed at the first.
+        if self.id in states and states[self.id] is not self:
+            raise ValueError(
+                f"duplicate state id {self.id!r} in the move graph: "
+                f"{type(states[self.id]).__name__} and {type(self).__name__}"
+            )
         states[self.id] = self
 
     def on_enter_state(self) -> None:
@@ -126,6 +138,12 @@ class MoveState(MonsterState):
         self._intent = intent
         self.must_perform_once_before_transitioning = must_perform_once_before_transitioning
         self.follow_up: MonsterState | None = None
+        # MoveState.cs:23 `FollowUpStateId` — the bare-id form of the same
+        # link, resolved against the machine's state table at roll time.
+        # GetNextState is `(FollowUpState?.Id ?? FollowUpStateId) ?? throw`
+        # (MoveState.cs:67-70), so a monster can forward-reference a state
+        # built later in GenerateMoveStateMachine without a two-pass build.
+        self.follow_up_id: str | None = None
         self._performed_at_least_once = False
 
     @property
@@ -146,9 +164,12 @@ class MoveState(MonsterState):
         self._performed_at_least_once = False
 
     def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
-        if self.follow_up is None:
-            raise RuntimeError(f"MoveState {self.id} has no follow-up state")
-        return self.follow_up.id
+        # MoveState.cs:69 — the object link wins, the bare id is the fallback.
+        if self.follow_up is not None:
+            return self.follow_up.id
+        if self.follow_up_id is not None:
+            return self.follow_up_id
+        raise RuntimeError(f"MoveState {self.id} has no follow-up state")
 
 
 class RandomBranchState(MonsterState):
@@ -177,8 +198,6 @@ class RandomBranchState(MonsterState):
         max_times: int = 0,
         cooldown: int = 0,
     ) -> None:
-        if repeat_type is MoveRepeatType.CAN_REPEAT_X_TIMES and max_times <= 0:
-            raise ValueError("CAN_REPEAT_X_TIMES requires max_times > 0")
         self._branches.append({
             "state_id": state.id,
             "weight": weight,
@@ -213,7 +232,15 @@ class RandomBranchState(MonsterState):
         elif repeat is not MoveRepeatType.CAN_REPEAT_FOREVER:
             # CANNOT_REPEAT is "at most 1 in a row"; X_TIMES is "at most n in a row"
             n = 1 if repeat is MoveRepeatType.CANNOT_REPEAT else branch["max_times"]
-            allowed = 0.0 if len(log) >= n and all(s is state for s in log[-n:]) else 1.0
+            if n <= 0:
+                # RandomBranchState.cs:144-147 with maxTimes 0: num2 = 0, so
+                # `num = (StateLog.Count < num2) ? 1 : 0` is 0 and the
+                # while-loop's `num3 < num2` guard is false, so nothing can
+                # revive it. The branch is PERMANENTLY DISABLED — the machine
+                # is built and played with one fewer option, not rejected.
+                allowed = 0.0
+            else:
+                allowed = 0.0 if len(log) >= n and all(s is state for s in log[-n:]) else 1.0
 
         if branch["cooldown"] > 0:
             recent_moves = [s for s in reversed(log) if s.is_move][: branch["cooldown"]]

@@ -46,7 +46,7 @@ class InfestedAutomaton(Event):
         from ..cards.pool import _CARD_CLASSES
 
         self._offer([
-            cid for cid in reward_pool_card_ids()
+            cid for cid in reward_pool_card_ids(self.run.card_pool)
             if _CARD_CLASSES[cid].card_type == CardType.POWER
         ])
         self._finish("STUDY")
@@ -54,7 +54,7 @@ class InfestedAutomaton(Event):
     def _touch_core(self) -> None:
         # `c.EnergyCost != null && EnergyCost.Canonical == 0 && !CostsX`.
         self._offer([
-            cid for cid in reward_pool_card_ids()
+            cid for cid in reward_pool_card_ids(self.run.card_pool)
             if make_card(cid).energy_cost == 0 and not make_card(cid).energy_cost_x
         ])
         self._finish("TOUCH_CORE")

@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
+      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
       "side": "sim"
     }
   ],

@@ -23,6 +23,7 @@ class TinyMailbox(Relic):
             if run.rng_set is not None:
                 from ..potion_pools import generate_random_potion
                 rewards.special_potions.append(
-                    generate_random_potion(run.rewards_rng))
+                    generate_random_potion(
+                        run.rewards_rng, pool=run.potion_pool))
             else:
                 rewards.special_potions.append(run.random_potion())

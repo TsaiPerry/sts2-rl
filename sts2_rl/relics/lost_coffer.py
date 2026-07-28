@@ -31,7 +31,8 @@ class LostCoffer(Relic):
         if run.rng_set is not None:
             from ..potion_pools import generate_random_potions
 
-            for potion in generate_random_potions(run.player_rng.rewards, 1):
+            for potion in generate_random_potions(
+                run.player_rng.rewards, 1, pool=run.potion_pool):
                 run.offer_potion(potion)
         else:
             run.offer_potion(run.random_potion())

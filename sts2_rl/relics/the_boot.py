@@ -24,13 +24,17 @@ class TheBoot(Relic):
 
     MINIMUM = 5
 
-    def modify_hp_lost(
+    def modify_hp_lost_late(
         self,
         target: Creature,
         amount: int,
         dealer: Creature | None,
         card: Card | None,
     ) -> int:
+        # TheBoot.cs:26 is ModifyHpLostAfterOsty**Late** — the second complete
+        # AfterOsty pass (Hook.cs:1753-1760), after the plain one
+        # (Hook.cs:1745-1752) that Tungsten Rod is on. Sharing Tungsten Rod's
+        # pass made the outcome depend on relic acquisition order.
         if dealer is not self.player or target is self.player:
             return amount
         # IsPoweredAttack: a card attack that isn't marked unpowered.

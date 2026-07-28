@@ -22,7 +22,7 @@ class GlassEye(Relic):
         from ..cards.base import _CARD_CLASSES
         from ..cards.pool import pool_card_ids
 
-        pool = pool_card_ids()
+        pool = pool_card_ids(pool=run.card_pool)
         for rarity in (
             CardRarity.COMMON, CardRarity.COMMON,
             CardRarity.UNCOMMON, CardRarity.UNCOMMON,

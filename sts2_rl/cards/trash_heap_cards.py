@@ -110,7 +110,10 @@ class DistractionCard(Card):
         from ..cards import CardType as _CT
         from ..cards.pool import random_pool_cards
         from ..cmds import CardPileCmd
-        generated = random_pool_cards(ctx.combat._rng, 1, _CT.SKILL, distinct=True)
+        generated = random_pool_cards(
+            ctx.combat._rng, 1, _CT.SKILL, distinct=True,
+            pool=ctx.combat.card_pool,
+        )
         for card in generated:
             card.set_free_this_turn()
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)

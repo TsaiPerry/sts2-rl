@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c"
+    "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     },
     {

@@ -299,7 +299,10 @@ class MetamorphosisCard(Card):
         from ..cards import CardType as _CT
         from ..cards.pool import random_pool_cards
         from ..cmds import CardPileCmd
-        for card in random_pool_cards(ctx.combat._rng, self._cards, _CT.ATTACK):
+        for card in random_pool_cards(
+            ctx.combat._rng, self._cards, _CT.ATTACK,
+            pool=ctx.combat.card_pool,
+        ):
             card.set_cost_this_combat(0)
             CardPileCmd.add_to_draw(ctx.hooks, ctx.player, card)
 

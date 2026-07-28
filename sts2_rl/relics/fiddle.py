@@ -20,7 +20,11 @@ class Fiddle(Relic):
 
     CARDS = 2
 
-    def modify_hand_draw(self, player: PlayerCombatState, count: int) -> int:
+    def modify_hand_draw_late(self, player: PlayerCombatState, count: int) -> int:
+        # Fiddle.cs:15 is ModifyHandDraw**Late** — Hook.ModifyHandDraw runs the
+        # plain pass over every listener and then a complete Late pass
+        # (Hook.cs), so Fiddle's +2 lands after every plain-pass modifier
+        # (Mind Rot's -1) regardless of acquisition order.
         return count + self.CARDS
 
     def should_draw(self, player: PlayerCombatState, from_hand_draw: bool) -> bool:

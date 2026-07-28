@@ -87,7 +87,7 @@
     },
     {
       "path": "sts2_rl\\monsters\\state_machine.py",
-      "sha256": "38e37d071187268704e81eca984f9c2a6ab58c2a64390d4bc22668283bf67656",
+      "sha256": "bcec29d18fdbd56453de4872aad26b727a9eb3afe1a1961d802713b5e7efe68e",
       "side": "sim"
     }
   ]

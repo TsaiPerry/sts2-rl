@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\vexing_puzzlebox.py",
-    "sha256": "5e65caadd45b80578a41755a1abe765a98579f0dde92e68e6f2198fefa03c6be"
+    "sha256": "908a418ec5f25bee66a92e2406a87b4accb4ac856b066b3fce5c0e4ba58b2fee"
   },
   "extra_sources": [
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "66a41b6637f3cc75025236f08425b5b6efa95ee20aa09156ef808ba29e5e23f7",
+      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     }
   ],
@@ -80,8 +80,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the generated card is added in the same single listener pass as relic/whispering_earring's auto-play loop, so whether the Earring plays it depends on the order of run.relics",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# gives the two relics different phases. Vexing Puzzlebox implements Hook.AfterPlayerTurnStart (turn_structure step 22, right after the draw); Whispering Earring implements Hook.AfterAutoPrePlayPhaseEnteredLate, the THIRD of three full listener passes in Hook.AfterAutoPrePlayPhaseEntered (Hook.cs:928-955), which CombatManager enters strictly after steps 22-24 (CombatManager.cs:556-572). So in the game the 0-cost card is always in hand before the Earring's loop opens, and the Earring always plays it. The sim fires both from on_player_turn_started in one pass over the listener list, and relics register in run.relics order. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py earring-order): relics=['vexing_puzzlebox','whispering_earring'] gives cards played ['strike','strike','strike','defend','armaments'] and leaves hand ['defend']; the reverse order gives ['strike','strike','strike','defend'] and leaves hand ['defend','armaments'] -- the generated card is never played. C# always produces the first result. Both sides ported: Vexing Puzzlebox is Rare in the grab bag and Whispering Earring is granted by the ported Vakuu shrine (sts2_rl/events/vakuu.py), so one run can hold both. RULE 3: this is the SAME mechanism audit/records/seam/turn_structure.json guard G8 already verdicts `gap` and labels LIVE, and audit/records/relic/crossbow.json G1 records at the crossbow x earring site (batch 4's executed evidence: enemy at 36 HP vs 45 depending on order). Same verdict, cited not re-derived; this record adds a second, independent ported pair for the same defect. Rule 7: Hook.cs, CombatManager.cs, sts2_rl/events/vakuu.py, audit/records/seam/turn_structure.json and audit/records/relic/crossbow.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "rationale": "The two relics now sit in different sim phases, exactly as the C# does. Vexing Puzzlebox still adds its card from `on_player_turn_started` (sts2_rl/relics/vexing_puzzlebox.py:20-38), which sts2_rl/player.py:218 fires inside `start_turn` right after the hand draw \u2014 the sim's AfterPlayerTurnStart/AfterSideTurnStart slot, i.e. C#'s turn_structure step 22 where VexingPuzzlebox.AfterPlayerTurnStart lives. Whispering Earring no longer shares that slot: sts2_rl/relics/whispering_earring.py:27-44 declares `after_auto_pre_play_phase_entered_late`, and sts2_rl/player.py:221 dispatches `self._hooks.after_auto_pre_play_phase_entered(self)` as a SEPARATE call made after line 218 returns. The phase-suffix machinery that routes `_late` is real and consumed: sts2_rl/hooks.py:36 `_PHASES = ('_very_early','_early','','_late')`, hooks.py:43-61 `_phase_hooks` scans each listener class, hooks.py:148-150 folds them into `self._phased`, and hooks.py:169-176 `_each` runs the four complete passes in order when the hook is phased \u2014 so the Earring runs in the LATE pass of a dispatcher that is itself already after the whole turn-start pass. That is CombatManager's RunAutoPrePlayPhase (CombatManager.cs:566-571, entered after the SetupPlayerTurn/AfterSideTurnStart loop) plus Hook.AfterAutoPrePlayPhaseEntered's three complete passes (Hook.cs:928-954), and WhisperingEarring.cs:41 is the Late one. Ordering is therefore no longer a function of `run.relics` order.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: C# gives the two relics different phases. Vexing Puzzlebox implements Hook.AfterPlayerTurnStart (turn_structure step 22, right after the draw); Whispering Earring implements Hook.AfterAutoPrePlayPhaseEnteredLate, the THIRD of three full listener passes in Hook.AfterAutoPrePlayPhaseEntered (Hook.cs:928-955), which CombatManager enters strictly after steps 22-24 (CombatManager.cs:556-572). So in the game the 0-cost card is always in hand before the Earring's loop opens, and the Earring always plays it. The sim fires both from on_player_turn_started in one pass over the listener list, and relics register in run.relics order. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py earring-order): relics=['vexing_puzzlebox','whispering_earring'] gives cards played ['strike','strike','strike','defend','armaments'] and leaves hand ['defend']; the reverse order gives ['strike','strike','strike','defend'] and leaves hand ['defend','armaments'] -- the generated card is never played. C# always produces the first result. Both sides ported: Vexing Puzzlebox is Rare in the grab bag and Whispering Earring is granted by the ported Vakuu shrine (sts2_rl/events/vakuu.py), so one run can hold both. RULE 3: this is the SAME mechanism audit/records/seam/turn_structure.json guard G8 already verdicts `gap` and labels LIVE, and audit/records/relic/crossbow.json G1 records at the crossbow x earring site (batch 4's executed evidence: enemy at 36 HP vs 45 depending on order). Same verdict, cited not re-derived; this record adds a second, independent ported pair for the same defect. Rule 7: Hook.cs, CombatManager.cs, sts2_rl/events/vakuu.py, audit/records/seam/turn_structure.json and audit/records/relic/crossbow.json are NOT hashed by this record."
     },
     {
       "what": "N1: `CardFactory.GetDistinctForCombat(owner, CardPool.GetUnlockedCards(...), 1, Rng.CombatCardGeneration).First()` (VexingPuzzlebox.cs:21) vs the sim's two-path pick (vexing_puzzlebox.py:29-33)",

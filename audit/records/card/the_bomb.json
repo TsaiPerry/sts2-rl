@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c"
+    "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     }
   ],

@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     },
     {
@@ -70,8 +70,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): cross-listener ORDER -- C# walks a player's Powers before that player's Relics; the sim's flat list registers relics before powers, so Spiked Gauntlets' +1 and a cost-reducing power compose the wrong way round",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/hook_dispatch.json gap G2 at the site that record already names as its executed witness, so per binding rule 3 this entry cites and matches rather than re-deriving: the seam's steps 1, 2, 5, 41 and 43 all carry the same G2 issue text, and it reads 'LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31 (the seam record's own text says :26-32, which is one line past the end of a 31-line file -- a stale citation in audit/records/seam/hook_dispatch.json, reported in .superpowers/sdd/relic-batch-15-lessons.md rather than edited, since that file is read-only to this batch), ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0.' The seam owns the machinery; this record owns the relic's observable. Re-confirmed at the source for this batch: CuriousPower.TryModifyEnergyCostInCombat clamps its own result at 0 (CuriousPower.cs:27-31) and Hook.ModifyEnergyCostInCombat does NOT clamp between listeners or at the end (Hook.cs:1573-1589), so the game's 1 and the sim's 0 are both faithful to their own dispatch order and the divergence is purely the order. EXECUTED for this record (b15-misc): with the relic alone a 1-cost Power (Inflame) reports cost 2 and a 1-cost Attack (Strike) reports 1, which is the correct isolated behaviour -- the divergence needs the second listener the seam names."
+      "verdict": "faithful",
+      "rationale": "C# CombatState.IterateHookListeners (CombatState.cs:410-468) walks each creature's Powers (`list.AddRange(creature.Powers)` at :416) BEFORE that player's Relics (:428-435), so on Hook.ModifyEnergyCostInCombat CuriousPower runs first and SpikedGauntlets second: CuriousPower.cs TryModifyEnergyCostInCombat computes `originalCost - Amount` and clamps to 0 itself, then SpikedGauntlets.cs TryModifyEnergyCostInCombat returns `originalCost + 1m`, giving max(0,1-2)=0 then +1 = 1 on a 1-cost Power card. Today's sim reproduces that: hooks.py:139-146 sorts registration order into (creature, hook_category, index) with CAT_POWER=0 ahead of CAT_RELIC=1 (hooks.py:29-30, powers.py:46, relics/base.py:112), and hooks.py:391-395 chains modify_card_energy_cost over that order. Executed from the repo root, the sim's listener walk is CuriousPower then SpikedGauntlets and a 1-cost Inflame prices at 1, matching the game. The seam's other observation for this site -- that neither engine clamps between listeners in a way that changes this case -- still holds: CuriousPower self-clamps at 0 and the sim's terminal `max(0, cost)` at hooks.py:395 is a no-op on the positive result.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: This is audit/records/seam/hook_dispatch.json gap G2 at the site that record already names as its executed witness, so per binding rule 3 this entry cites and matches rather than re-deriving: the seam's steps 1, 2, 5, 41 and 43 all carry the same G2 issue text, and it reads 'LIVE and executed on Hook.ModifyEnergyCostInCombat: with CuriousPower(2) (CuriousPower.cs:12-32, powers.py:2883, applied by the ported Mad Science card) and Spiked Gauntlets (SpikedGauntlets.cs:27-39, relics/spiked_gauntlets.py:26-31 (the seam record's own text says :26-32, which is one line past the end of a 31-line file -- a stale citation in audit/records/seam/hook_dispatch.json, reported in .superpowers/sdd/relic-batch-15-lessons.md rather than edited, since that file is read-only to this batch), ported Tanx shrine) on a 1-cost Power card the game computes max(0,1-2)=0 then +1 = 1 and the sim computes 1+1=2 then max(0,2-2) = 0.' The seam owns the machinery; this record owns the relic's observable. Re-confirmed at the source for this batch: CuriousPower.TryModifyEnergyCostInCombat clamps its own result at 0 (CuriousPower.cs:27-31) and Hook.ModifyEnergyCostInCombat does NOT clamp between listeners or at the end (Hook.cs:1573-1589), so the game's 1 and the sim's 0 are both faithful to their own dispatch order and the divergence is purely the order. EXECUTED for this record (b15-misc): with the relic alone a 1-cost Power (Inflame) reports cost 2 and a 1-cost Attack (Strike) reports 1, which is the correct isolated behaviour -- the divergence needs the second listener the seam names."
     },
     {
       "what": "G2 (DORMANT at this site): the hook has a PLAIN pass and a LATE pass and the sim has neither",

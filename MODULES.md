@@ -151,6 +151,40 @@ Cosmic Concoction, Bone Brew, Pot of Ghouls, Potion of Doom) are **not**
 ported — an Ironclad run can never roll them, and most need unported systems
 (orbs, Stars, Forge, Osty, Soul cards, Shivs).
 
+### `characters.py` — `Character` + `CHARACTERS`
+
+The character table: one frozen `Character` row per playable character
+(`CharacterModel` and its five subclasses), holding starting HP/gold, max
+energy, base orb slots, the starting deck and relics **in source order**, and
+the character's card / relic / potion pools. `CHARACTERS` is keyed by id and
+declared in `ModelDb.AllCharacters` order — that order is parity-critical
+because Orobas picks the Sea Glass character with a `NextItem` over it.
+
+`RunState(character="ironclad")` and `CombatState(character=...)` resolve a row
+through `get_character`; everything character-dependent reads off it, so there
+are no Ironclad literals in the run layer and no `pool=IRONCLAD_POOL` defaults
+anywhere. The card and potion generators take their pool explicitly and raise
+`TypeError` if it is missing, which turns a forgotten wiring into a loud
+failure instead of a silent Ironclad fallback.
+
+**Content ownership.** `Relic.character` / `Potion.character` name the pool a
+class belongs to (`None` = shared). `relics/` auto-imports every module into
+the global `ALL_RELICS`, so without that attribute a ported Defect relic would
+be rollable in an *Ironclad* run; `RunState.owns_relic` / `owns_potion` apply
+it to every registry scan (the legacy grab bag, the shop bag, the reward-potion
+scans). The scans still iterate in registry order — the bag feeds a shuffle,
+so re-deriving it from a pool roster would change every Ironclad relic pull
+even though the membership is identical.
+
+**Porting a character** is therefore a table row plus content, with no run-layer
+edits: fill that row's `starting_deck`, `card_pool`, `relic_pool` and
+`potion_pool`, add the cards/relics/potions (character relics and potions
+setting `character = "<id>"`), and add the pool tuples to `cards/pool.py`,
+`relic_pools.py` and `potion_pools.py`. Only Ironclad is ported; the other four
+rows carry their real source-verified stats with empty pools, and
+`get_character` raises `NotImplementedError` naming the missing content rather
+than dealing an empty deck.
+
 ### `history.py` â€” `CombatHistory` + entry types
 The combat event log, mirroring `CombatManager.History`. Records typed entries
 (card played / exhausted / damage received) tagged with the turn. Registered as

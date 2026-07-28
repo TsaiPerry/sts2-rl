@@ -17,7 +17,7 @@ class ArcaneScroll(Relic):
         from ..cards.pool import pool_card_ids
 
         rares = [
-            cid for cid in pool_card_ids()
+            cid for cid in pool_card_ids(pool=run.card_pool)
             if _CARD_CLASSES[cid].rarity == CardRarity.RARE
         ]
         if rares:

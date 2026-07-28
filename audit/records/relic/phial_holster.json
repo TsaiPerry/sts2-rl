@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
+      "sha256": "7755c9d3ead187a051c3b1b9e98f94d7de551673ce9e71d3af695b46cb933b90",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/alchemical_coffer.py",
-      "sha256": "e1d39c02a3ea0907e3b4a542f5b25a7a26491b79ddf2704c206d8a0bcb608e45",
+      "sha256": "f9e6aa12198b020a1da16966ad7d30c86840d55f24967f572a69eb470b26e26e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     },
     {

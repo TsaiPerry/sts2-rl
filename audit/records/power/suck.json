@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
+    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {

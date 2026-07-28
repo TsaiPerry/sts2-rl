@@ -25,7 +25,8 @@ class AlchemicalCoffer(Relic):
             from ..potion_pools import generate_random_potions
 
             potions = generate_random_potions(
-                run.rng_set.combat_potion_generation, self.POTION_SLOTS)
+                run.rng_set.combat_potion_generation, self.POTION_SLOTS,
+                pool=run.potion_pool)
         else:
             potions = run.random_potions(self.POTION_SLOTS)
         for potion in potions:

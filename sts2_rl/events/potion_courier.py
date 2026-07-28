@@ -53,14 +53,19 @@ class PotionCourier(Event):
         # The pick is rolled first, then offered take-or-skip
         # (RewardsCmd.OfferCustom — PotionCourier.cs:48-60).
         if self.run.rng_set is not None:
-            from ..potion_pools import POTION_POOL, _make
-            options = [pid for pid, r in POTION_POOL if r == "uncommon"]
+            from ..potion_pools import _make
+            options = [
+                pid for pid, r in self.run.potion_pool if r == "uncommon"
+            ]
             pid = self.run.rewards_rng.next_item(options)
             if pid is not None:
                 self.offer_potion(_make(pid, "uncommon"))
         else:
             uncommon = sorted(
-                (cls for cls in ALL_POTIONS.values() if cls.rarity == "uncommon"),
+                (
+                    cls for cls in ALL_POTIONS.values()
+                    if cls.rarity == "uncommon" and self.run.owns_potion(cls)
+                ),
                 key=lambda cls: cls.id,
             )
             if uncommon:

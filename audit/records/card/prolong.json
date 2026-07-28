@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c"
+    "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8"
   },
   "extra_sources": [
     {

@@ -24,21 +24,23 @@ class DustyTome(Relic):
         self.ancient_card: str | None = None
 
     @staticmethod
-    def candidates() -> list[str]:
+    def candidates(pool: tuple[str, ...]) -> list[str]:
+        """The Ancient-rarity cards of `pool` (the character's CardPool) that
+        Archaic Tooth's transcendence upgrades don't already cover."""
         from ..cards import CardRarity
-        from ..cards.pool import IRONCLAD_POOL, _CARD_CLASSES
+        from ..cards.pool import _CARD_CLASSES
         from .archaic_tooth import ArchaicTooth
 
         excluded = set(ArchaicTooth.TRANSCENDENCE.values())
         return [
-            cid for cid in IRONCLAD_POOL
+            cid for cid in pool
             if _CARD_CLASSES[cid].rarity == CardRarity.ANCIENT
             and cid not in excluded
         ]
 
     def setup_for_player(self, run) -> None:
         """SetupForPlayer: roll the Ancient card when the option is built."""
-        options = self.candidates()
+        options = self.candidates(run.card_pool)
         if not options:
             return
         # DustyTome.cs: AncientCard = PlayerRng.Rewards.NextItem(items).Id.

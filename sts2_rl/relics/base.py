@@ -113,6 +113,14 @@ class Relic:
     # RelicModel.IsAllowedInShops — a handful of relics (Amethyst Aubergine,
     # Bowler Hat, Lucky Fysh, Old Coin, The Courier) opt out of shop stock.
     is_allowed_in_shops: bool = True
+    # Which character's RelicPool this relic belongs to, or None for
+    # SharedRelicPool. The game reaches a relic through
+    # `SharedRelicPool ∪ Player.Character.RelicPool`, so a character relic is
+    # unreachable in another character's run; the sim's bags are built by
+    # scanning ALL_RELICS, and this attribute is what scopes that scan.
+    # `relics/` auto-imports every module into ALL_RELICS, so a character relic
+    # that forgets to set this leaks into every other character's grab bag.
+    character: str | None = None
     # RelicModel.AddsPet — the relic brings an event pet (Pael's Legion).
     # Player.HasEventPet gates Pael's Legion option at the Pael shrine.
     adds_pet: bool = False

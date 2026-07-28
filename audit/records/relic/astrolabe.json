@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],

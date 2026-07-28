@@ -21,7 +21,7 @@
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
+      "sha256": "b8de2a3eefeb49141245e7fede8d92b029cd6fce4e429ce6b0537c8dd80fe707",
       "side": "sim"
     }
   ],

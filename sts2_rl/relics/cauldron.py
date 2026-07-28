@@ -31,7 +31,8 @@ class Cauldron(Relic):
             # CreateRandomPotionOutOfCombat (two Rewards draws apiece) — the
             # blacklist is per-reward, so ids may repeat.
             potions = [
-                generate_random_potion(run.player_rng.rewards)
+                generate_random_potion(
+                    run.player_rng.rewards, pool=run.potion_pool)
                 for _ in range(self.POTIONS)
             ]
         else:

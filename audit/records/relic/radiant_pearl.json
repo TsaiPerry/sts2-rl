@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/orobas.py",
-      "sha256": "2b83ae9ef1fa5a0df65afe3a1f1c5c67f9ddb854b0e9528d1eace6c53909790d",
+      "sha256": "593bb12027e04cdd82a50805712d823e8a42b687b35a9ba98eb2934a80b7436c",
       "side": "sim"
     },
     {

@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/infested_automaton.py",
-      "sha256": "c09ba320f962fb2454daa7a388234eca55ea9be87ca7da19dfbb29d91843e678",
+      "sha256": "9f2a892edd9957367fd788a75a09d0e3e50beabfa8302fd4c16557d89084abe5",
       "side": "sim"
     },
     {

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\petrified_toad.py",
-    "sha256": "653f11ba3db88edecd3993d4d779c1eff0db0112cb061a66cfd48c55177d71f8"
+    "sha256": "da7c0d38ecd9a57caebed6464bfe1b8dc8e8cc0bda5c9321271994a87072079f"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],
@@ -65,8 +65,8 @@
     },
     {
       "what": "G3 (LIVE): the hook is BeforeCombatStart**Late** and the sim has no phase concept, so the outcome of the Belt Buckle interaction depends on relic pickup ORDER where the game's is fixed",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.BeforeCombatStart (src/Core/Hooks/Hook.cs:311-323) runs a COMPLETE listener pass calling BeforeCombatStart, then a second complete pass calling BeforeCombatStartLate. Petrified Toad is the ONLY BeforeCombatStartLate implementer in the whole decompiled game (`grep -rln 'override.*BeforeCombatStartLate' src/` returns src/Core/Models/Relics/PetrifiedToad.cs alone), and it uses the Late phase to guarantee the procure happens after every plain combat-start effect -- notably after Belt Buckle has applied its Dexterity, which is what makes the removal in G2 deterministic. The sim collapses both phases onto on_combat_start, a single walk in relic-registration order. EXECUTED (b12-toad): [belt_buckle, petrified_toad] leaves Dexterity 2, and [petrified_toad, belt_buckle] leaves Dexterity None -- the sim produces two different combat-start states from the same two relics depending on which was picked up first, where the game produces one (1 potion, 0 Dexterity) either way. This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes, 24 of Hook.cs's 147 dispatchers) at a new site; that record labels the mechanism LIVE and one verdict per mechanism applies (binding rule 3), so this entry matches it and contributes the observable. NOTE per binding rule 7: Hook.cs, PetrifiedToad.cs is hashed but hook_dispatch.json and belt_buckle.py are not."
+      "verdict": "faithful",
+      "rationale": "FIXED 2026-07-28. `PetrifiedToad.on_combat_start` was renamed to `on_combat_start_late` (sts2_rl/relics/petrified_toad.py), the pass PetrifiedToad.cs:16's `BeforeCombatStartLate` belongs to. `HookSystem.on_combat_start` dispatches through `_each`'s phase walk, so the rock is procured after every plain-pass combat-start listener -- which is what puts it behind Belt Buckle's belt-widening whatever order the two relics were acquired in. The recorded witness (`py audit/tools/relic_probes_b12.py b12-toad`, which returned two different combat-start states from the same two relics depending on order) no longer diverges. The relic's own docstring already named the C# hook correctly.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: Hook.BeforeCombatStart (src/Core/Hooks/Hook.cs:311-323) runs a COMPLETE listener pass calling BeforeCombatStart, then a second complete pass calling BeforeCombatStartLate. Petrified Toad is the ONLY BeforeCombatStartLate implementer in the whole decompiled game (`grep -rln 'override.*BeforeCombatStartLate' src/` returns src/Core/Models/Relics/PetrifiedToad.cs alone), and it uses the Late phase to guarantee the procure happens after every plain combat-start effect -- notably after Belt Buckle has applied its Dexterity, which is what makes the removal in G2 deterministic. The sim collapses both phases onto on_combat_start, a single walk in relic-registration order. EXECUTED (b12-toad): [belt_buckle, petrified_toad] leaves Dexterity 2, and [petrified_toad, belt_buckle] leaves Dexterity None -- the sim produces two different combat-start states from the same two relics depending on which was picked up first, where the game produces one (1 potion, 0 Dexterity) either way. This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes, 24 of Hook.cs's 147 dispatchers) at a new site; that record labels the mechanism LIVE and one verdict per mechanism applies (binding rule 3), so this entry matches it and contributes the observable. NOTE per binding rule 7: Hook.cs, PetrifiedToad.cs is hashed but hook_dispatch.json and belt_buckle.py are not."
     },
     {
       "what": "N1: the potion itself -- `PotionCmd.TryToProcure<PotionShapedRock>` (PetrifiedToad.cs:19) vs `PotionShapedRock()` (petrified_toad.py:19-20) -- and the belt-full failure mode",

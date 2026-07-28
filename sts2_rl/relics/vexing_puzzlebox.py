@@ -28,9 +28,13 @@ class VexingPuzzlebox(Relic):
         # legacy keeps the shared-Random sample (byte-for-byte RL behaviour).
         crng = self.combat.combat_rng
         if crng.is_parity:
-            cards = get_distinct_for_combat_parity(crng.card_gen, 1)
+            cards = get_distinct_for_combat_parity(
+                crng.card_gen, 1, pool=self.combat.card_pool
+            )
         else:
-            cards = random_pool_cards(self.combat._rng, 1)
+            cards = random_pool_cards(
+                self.combat._rng, 1, pool=self.combat.card_pool
+            )
         if not cards:
             return
         card = cards[0]

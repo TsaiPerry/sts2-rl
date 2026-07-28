@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\stoke.py",
-    "sha256": "68d1657ffe3bbe619abe9187382a0a4ee77b01c7b0c61b485e857e746a92aec5"
+    "sha256": "5026917c7d2c5c2542a196f0b66e1b2b5063fd141ec1960a81126a10b307ee10"
   },
   "hooks": {
     "ctor": {

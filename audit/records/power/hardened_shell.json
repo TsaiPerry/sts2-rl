@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
+    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -91,9 +91,9 @@
       "rationale": "HardenedShellPower.cs:45-49 is `Flash();` and nothing else -- presentation only. Recorded rather than skipped because the sim DOES have the companion notification for this family (hooks.py:149-154 after_modify_hp_lost, fired at cmds.py:87, which hooks.py:150-151 documents as mirroring AfterModifyingHpLostAfterOsty -- the *AfterOsty* event, not this one), so a behavioural BeforeOsty body would have had nowhere to go. It is power_cmd gap G4's shape one family over and costs nothing here."
     },
     "AfterDamageReceived": {
-      "maps_to": "powers.py:1985-1993 on_damage_received",
-      "verdict": "gap",
-      "issue": "Two divergences, one of them the killing-blow class. (a) KILLING BLOW: the sim's on_damage_received is skipped when the hit killed the victim (cmds.py:121, the CreatureCmd.cs:392 guard) -- and C#'s AfterDamageReceived is subject to the same guard, so that half is faithful. (b) The GUARD DIFFERS: C# returns on `result.WasFullyBlocked` and then accumulates `result.UnblockedDamage` (HardenedShellPower.cs:57-62), where the sim accumulates its `amount` argument on `amount > 0` (powers.py:1993-1994). The sim's argument is hp_lost -- POST-block AND POST-modify_hp_lost (cmds.py:86, 122) -- so the cap counts the ALREADY-CAPPED figure, whereas C# counts UnblockedDamage, which is post-block but PRE-HP-loss-modifier. On any hit the cap actually truncates, the game charges the full unblocked amount against the shell and the sim charges only the truncated amount, so the sim's shell absorbs MORE total damage per turn than the game's. LIVE-shaped and reachable in principle the first time the player over-hits a Skulking Colony (a ported Underdocks elite, monsters/underdocks/skulking_colony.py:32-33, Hardened Shell 20 matching SkulkingColony.cs:56's 20m); marked a gap without an executed number because the arithmetic is decided by the same registration order the previous entry executed, and The Boot can re-raise the figure. NOTE the sim's `amount == 0` arm in modify_hp_lost returns `amount` unchanged and the C# one does too, so a fully-blocked hit charges nothing on either side -- WasFullyBlocked is redundant rather than dropped. Third-file citations, not hashed here."
+      "maps_to": "sts2_rl/powers.py:2096-2105 `HardenedShellPower.on_damage_received` (dispatched from sts2_rl/cmds.py:185-186 behind the killing-blow guard, via sts2_rl/hooks.py:677-690)",
+      "verdict": "faithful",
+      "rationale": "Both halves of the entry are faithful. (a) Killing blow: cmds.py:185 `if not target.is_dead` reproduces CreatureCmd.cs:392's `!WasTargetKilled || !IsDead` skip, as the entry itself conceded. (b) Which number: C#'s `result.UnblockedDamage` (HardenedShellPower.cs:62) is produced by Creature.LoseHpInternal (Creature.cs:445-457) from the value returned by BOTH ModifyHpLost phases (CreatureCmd.cs:266 BeforeOsty -- which per Hook.cs:1735 is where HardenedShellPower.cs:32-43's own cap runs -- then :269 AfterOsty), so it is the ALREADY-CAPPED figure, not a pre-modifier one. The sim accumulates hp_lost from cmds.py:166/186, the same already-capped figure (powers.py:2104-2105). Concretely, shell 20 vs a 30-damage unblocked hit charges 20 on both sides, so the sim's shell absorbs exactly as much per turn as the game's -- the entry's LIVE claim does not reproduce. The `WasFullyBlocked` guard (HardenedShellPower.cs:57, defined at CreatureCmd.cs:274 as unblockedDamage == 0) is equivalent to the sim's `amount > 0` given hooks.py:345's `max(0, amount)` clamp.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Two divergences, one of them the killing-blow class. (a) KILLING BLOW: the sim's on_damage_received is skipped when the hit killed the victim (cmds.py:121, the CreatureCmd.cs:392 guard) -- and C#'s AfterDamageReceived is subject to the same guard, so that half is faithful. (b) The GUARD DIFFERS: C# returns on `result.WasFullyBlocked` and then accumulates `result.UnblockedDamage` (HardenedShellPower.cs:57-62), where the sim accumulates its `amount` argument on `amount > 0` (powers.py:1993-1994). The sim's argument is hp_lost -- POST-block AND POST-modify_hp_lost (cmds.py:86, 122) -- so the cap counts the ALREADY-CAPPED figure, whereas C# counts UnblockedDamage, which is post-block but PRE-HP-loss-modifier. On any hit the cap actually truncates, the game charges the full unblocked amount against the shell and the sim charges only the truncated amount, so the sim's shell absorbs MORE total damage per turn than the game's. LIVE-shaped and reachable in principle the first time the player over-hits a Skulking Colony (a ported Underdocks elite, monsters/underdocks/skulking_colony.py:32-33, Hardened Shell 20 matching SkulkingColony.cs:56's 20m); marked a gap without an executed number because the arithmetic is decided by the same registration order the previous entry executed, and The Boot can re-raise the figure. NOTE the sim's `amount == 0` arm in modify_hp_lost returns `amount` unchanged and the C# one does too, so a fully-blocked hit charges nothing on either side -- WasFullyBlocked is redundant rather than dropped. Third-file citations, not hashed here."
     },
     "BeforeSideTurnStart": {
       "maps_to": "powers.py:1996-2001 on_player_turn_start (player.py:169) + on_enemy_turn_start (combat.py:301)",

@@ -74,7 +74,7 @@ class TheFutureOfPotions(Event):
         card_type = self._card_types[id(potion)]
         self.run.discard_potion(potion)
         candidates = [
-            cid for cid in reward_pool_card_ids()
+            cid for cid in reward_pool_card_ids(self.run.card_pool)
             if _CARD_CLASSES[cid].rarity == target_rarity
             and _CARD_CLASSES[cid].card_type == card_type
         ]

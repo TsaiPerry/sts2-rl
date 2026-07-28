@@ -48,11 +48,11 @@ class AlchemizeCard(Card):
             from ..potion_pools import generate_random_potion_in_combat
 
             potion = generate_random_potion_in_combat(
-                rng_set.combat_potion_generation)
+                rng_set.combat_potion_generation, pool=ctx.combat.potion_pool)
         else:
             from ..potions import random_potion
 
-            potion = random_potion(ctx.combat._rng)
+            potion = random_potion(ctx.combat._rng, ctx.combat)
         try_to_procure(ctx.hooks, player, potion)
 
 
@@ -221,7 +221,9 @@ class DiscoveryCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from .pool import random_pool_cards
         from ..cmds import CardPileCmd
-        options = random_pool_cards(ctx.combat._rng, 3, distinct=True)
+        options = random_pool_cards(
+            ctx.combat._rng, 3, distinct=True, pool=ctx.combat.card_pool
+        )
         chosen = ctx.combat.select_cards("obtain", options, 1)
         for card in chosen:
             card.set_free_this_turn()
@@ -702,7 +704,8 @@ class SplashCard(Card):
         from .pool import random_pool_cards
         from ..cmds import CardPileCmd
         options = random_pool_cards(
-            ctx.combat._rng, 3, CardType.ATTACK, distinct=True
+            ctx.combat._rng, 3, CardType.ATTACK, distinct=True,
+            pool=ctx.combat.card_pool,
         )
         if self.upgrade_level > 0:
             for card in options:

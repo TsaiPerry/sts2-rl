@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
+      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
       "side": "sim"
     }
   ],

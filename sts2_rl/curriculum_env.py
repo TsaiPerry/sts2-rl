@@ -62,6 +62,7 @@ from .actmap import (
     _PARENT_CHILD_RESTRICTIONS,
     _UPPER_RESTRICTIONS,
 )
+from .characters import Character, DEFAULT_CHARACTER
 from .run import RunState
 from .run_env import STS2RunEnv
 
@@ -227,8 +228,9 @@ class ColumnRunState(RunState):
         room_weights: dict[str, float] | None = None,
         min_special_floor: int = 6,
         branch_prob: float = 0.0,
+        character: "str | Character" = DEFAULT_CHARACTER,
     ) -> None:
-        super().__init__(rng=rng)
+        super().__init__(rng=rng, character=character)
         self._column_rooms = column_rooms
         self._room_weights = room_weights
         self._min_special_floor = min_special_floor
@@ -304,6 +306,7 @@ class STS2CurriculumRunEnv(STS2RunEnv):
     def _make_run_state(self) -> RunState:
         return ColumnRunState(
             rng=self._rng,
+            character=self._character,
             column_rooms=self._column_rooms,
             room_weights=self._room_weights,
             min_special_floor=self._min_special_floor,

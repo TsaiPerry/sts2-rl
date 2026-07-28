@@ -149,9 +149,13 @@ class MadScienceCard(Card):
             # shared-Random sample (byte-for-byte RL behaviour).
             crng = ctx.combat.combat_rng
             if crng.is_parity:
-                cards = get_distinct_for_combat_parity(crng.card_gen, 1)
+                cards = get_distinct_for_combat_parity(
+                    crng.card_gen, 1, pool=ctx.combat.card_pool
+                )
             else:
-                cards = random_pool_cards(ctx.combat._rng, 1, distinct=True)
+                cards = random_pool_cards(
+                    ctx.combat._rng, 1, distinct=True, pool=ctx.combat.card_pool
+                )
             for card in cards:
                 card.set_free_this_turn()
                 CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)

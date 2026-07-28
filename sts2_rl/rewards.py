@@ -269,8 +269,8 @@ def create_reward_cards(
         # (Rare, CanBeGeneratedInCombat=false) can be offered as rewards; the
         # legacy RL path keeps the combat-filtered pool byte-for-byte.
         pool = (
-            reward_pool_card_ids() if run.rng_set is not None
-            else pool_card_ids()  # Ironclad pool minus Basic/Ancient
+            reward_pool_card_ids(run.card_pool) if run.rng_set is not None
+            else pool_card_ids(pool=run.card_pool)  # minus Basic/Ancient
         )
     chosen_ids: list[str] = []
     cards: list[Card] = []
@@ -482,7 +482,7 @@ def generate_combat_rewards(
             run.gain_gold(rewards.gold)
         if got_potion:
             from .potion_pools import generate_random_potion
-            rewards.potion = generate_random_potion(rew)
+            rewards.potion = generate_random_potion(rew, pool=run.potion_pool)
         rewards.cards = create_reward_cards(run, ROOM_RARITY_ODDS[room_type])
         if room_type == RoomType.ELITE:
             # RelicReward.Populate -> PullNextRelicFromFront(player): the rarity

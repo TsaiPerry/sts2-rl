@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -44,8 +44,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): C#'s AfterBlockCleared is a separate UNCONDITIONAL loop; the sim fires on_block_cleared only inside the `if should_clear_block(...)` arm",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/turn_structure.json guard G1 (step 14) at the site that record already names, and one verdict per mechanism (binding rule 3) means it is cited rather than re-derived. C# runs two separate loops over the same participants -- AfterTurnStart/ClearBlock (CombatManager.cs:492-499), then `Hook.AfterBlockCleared` for EVERY participant (500-507) -- so the event fires for a creature with no block, for a creature whose clear a ShouldClearBlock listener prevented, and for a player on turn 1 whose AfterTurnStart returned early. player.py:157-159 fuses them. LIVE, and the seam's own executed numbers are this relic's: '[captains_wheel] reaches turn 3 with 18 block, [sturdy_clamp, captains_wheel] with 0' -- C# gives 18 in both cases. The preventers are ported content (BarricadePower via the Ironclad Rare card cards/barricade_card.py, and relic/sturdy_clamp), Captain's Wheel is Rare in the transcribed grab bag (confirmed by `py audit/tools/relic_probes.py batch3-pool`), and turn 3 is reached in most fights. The seam owns the machinery; this record owns the relic's observable. Pinned there by test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented."
+      "verdict": "faithful",
+      "rationale": "The divergence this guard names -- on_block_cleared fired only inside the `if should_clear_block(...)` arm -- no longer exists. sts2_rl/player.py:169-175 reproduces C#'s two-loop structure: CombatManager.cs:492-499 runs `foreach (Creature item3 in creaturesStartingTurn) await item3.AfterTurnStart(_state.CurrentSide);` and CombatManager.cs:500-507 then runs a SEPARATE `foreach (Creature item4 in creaturesStartingTurn) await Hook.AfterBlockCleared(_state, item4);` with no condition attached. The sim's player.py:175 and combat.py:363 are that second loop: unconditional, outside the if/else, and (on the player side) outside the `if not self._first_turn:` early-return that mirrors Creature.cs:681-692. Captain's Wheel maps 1:1 -- CaptainsWheel.cs:20-27 `AfterBlockCleared(Creature creature)` with `creature == base.Owner.Creature && base.Owner.PlayerCombatState.TurnNumber == 3` then CreatureCmd.GainBlock(18, Unpowered) vs sts2_rl/relics/captains_wheel.py:19-22 `on_block_cleared` with `target is self.player and self.turn == 3` then BlockCmd.apply(..., 18, props=ValueProp.UNPOWERED). Executed with the ported preventer (relics/sturdy_clamp.py:23-25) held, the sim now grants the 18 the game grants.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: This is audit/records/seam/turn_structure.json guard G1 (step 14) at the site that record already names, and one verdict per mechanism (binding rule 3) means it is cited rather than re-derived. C# runs two separate loops over the same participants -- AfterTurnStart/ClearBlock (CombatManager.cs:492-499), then `Hook.AfterBlockCleared` for EVERY participant (500-507) -- so the event fires for a creature with no block, for a creature whose clear a ShouldClearBlock listener prevented, and for a player on turn 1 whose AfterTurnStart returned early. player.py:157-159 fuses them. LIVE, and the seam's own executed numbers are this relic's: '[captains_wheel] reaches turn 3 with 18 block, [sturdy_clamp, captains_wheel] with 0' -- C# gives 18 in both cases. The preventers are ported content (BarricadePower via the Ironclad Rare card cards/barricade_card.py, and relic/sturdy_clamp), Captain's Wheel is Rare in the transcribed grab bag (confirmed by `py audit/tools/relic_probes.py batch3-pool`), and turn 3 is reached in most fights. The seam owns the machinery; this record owns the relic's observable. Pinned there by test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented."
     },
     {
       "what": "N1: `creature == base.Owner.Creature` (CaptainsWheel.cs:22) vs `target is self.player` (captains_wheel.py:20)",

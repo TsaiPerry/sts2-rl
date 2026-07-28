@@ -1,5 +1,62 @@
 # Gap queue — every audited record, aggregated
 
+> ## ⚠ 2026-07-28 — LEDGER RECONCILED AGAINST THE CODE, AND ALL PINS ARE GREEN.
+>
+> Two things happened after the Tier 1 campaign; read both before trusting a
+> present-tense sentence anywhere below.
+>
+> **1. The ledger was one pass behind the engine, and has been reconciled.** The
+> campaign's per-record verdict re-derivation ran *concurrently with* its own last
+> round of code fixes, so entries were still recorded `gap` that the code had
+> already closed. All **207** then-LIVE mechanisms (368 entries) were re-derived
+> against today's code, and every proposed clear was attacked by two adversarial
+> lenses before being applied:
+>
+> | | |
+> |---|---|
+> | entries re-derived | 368 |
+> | still a real gap | 316 |
+> | proposed clears | 52 |
+> | applied | 44 |
+> | **refuted, kept as gaps with corrected text** | **8** |
+>
+> **2. The six remaining `strict=True` xfail pins are fixed** — `power_cmd/G1`,
+> `monster_state_machine/G3`, `/G7`, `/G8`, and the two `hook_dispatch/G8` tests.
+> `test/test_hook_order.py` is 51 passed, 0 xfailed.
+>
+> **The eight refutations are the reason this section exists.** Several corrected
+> a *narrowing* rather than a fix (`relic/tungsten_rod/g3` — the sim has no
+> BeforeOsty invocation at all, not merely a misplaced Boot); `enchantment/
+> slither/EG2` and `/perfect_fit/EG2` found a second divergence inside the same C#
+> method (`create_clone` still rebuilds from the class, so `CardModel.cs:1202`'s
+> `_energyCost = _energyCost?.Clone(this)` is unported and a copy of a Slither card
+> loses its rolled cost).
+>
+> **One refutation caught a regression this very pass had introduced, and the pin
+> was the cause.** `test_no_listener_runs_after_the_combat_starts_ending` asserted
+> that `Hook.AfterCardPlayed` reaches nobody once the killing blow has landed. The
+> C# says the opposite: `Hook.AfterCardPlayed` (`Hook.cs:278-294`) iterates
+> `IterateHookListeners()` **directly**, and `Hook.cs:275-276` states why —
+> *"Dispatched directly, not through the IterateCombatHookListeners guard: it
+> completes resolution of the card that caused the kill."* Its only gate is
+> `IsInProgress` (`CardModel.cs:1957`), still true between the blow and the
+> teardown. Gating that site on `is_over_or_ending` suppressed **every**
+> `AfterCardPlayed` listener on the winning card play — including Game Piece's
+> `DrawCmd.draw`, which can force a reshuffle and consume RNG, so it was
+> stream-observable for the conformance exporter. Reverted; the pin is rewritten as
+> `test_after_card_played_still_fires_on_the_killing_blow`. **This is the fourth
+> wrong pin this project has found, and the rule holds: when a pin and the C#
+> disagree, the C# wins.** Note the inverse mismatch it exposed, still open:
+> `Hook.BeforeCardPlayed` (`Hook.cs:263-270`) **is** gated in C# and is not gated
+> in the sim.
+>
+> `hook_dispatch/G8` is therefore **not** closed. One of its 20 sites is
+> (`creature_card_cmds/step103b`, CardSelectCmd's screens, via the new
+> `CombatState.is_over_or_ending`). The mechanism needs a fresh witness: **72 of
+> Hook.cs's 146 dispatchers go through `IterateCombatHookListeners` and 73 bypass
+> it on purpose**, so the sim-side gate belongs in `HookSystem._each` scoped to
+> exactly those 72 — and `AfterCardPlayed` is emphatically not one of them.
+>
 > ## ⚠ TIER 1 IS CLOSED (2026-07-27/28). READ THIS BEFORE THE BODY.
 >
 > **Sections 1A–1F below describe work that has been DONE.** They are kept as the
@@ -202,32 +259,44 @@ transcription of it and can go stale.
 
 | | |
 |---|---|
-| gap entries across all 846 records | **1160** |
-| — labelled LIVE (own text, or the explicit `live` field) | 306 |
-| — labelled DORMANT (own text, or the explicit `live` field) | 541 |
-| — unlabelled (inherit their mechanism's liveness) | 313 |
-| **distinct mechanisms** | **749** |
-| — with at least one live site | **207** |
-| — dormant at every site | 542 |
-| mechanisms pinned by a `strict=True` xfail | **5** |
-| mechanisms unpinned | 744 |
-| `strict=True` xfails in `test/test_hook_order.py` | 6 (all strict) |
+| gap entries across all 846 records | **1117** |
+| — labelled LIVE (own text, or the explicit `live` field) | 272 |
+| — labelled DORMANT (own text, or the explicit `live` field) | 537 |
+| — unlabelled (inherit their mechanism's liveness) | 308 |
+| **distinct mechanisms** | **722** |
+| — with at least one live site | **179** |
+| — dormant at every site | 543 |
+| mechanisms pinned by a `strict=True` xfail | **0** |
+| mechanisms unpinned | 722 |
+| `strict=True` xfails in `test/test_hook_order.py` | **0** |
 
-Regenerated 2026-07-28, after the Tier 1 fix campaign. The pre-campaign numbers
-were 1612 / 658 / 568 / 386 / 856 / 319 / 537 / 32 / 824 / 36.
+Regenerated **2026-07-28**, after the ledger-vs-code reconciliation and the
+remaining-pin pass (below). Before it, that day: 1160 / 306 / 541 / 313 / 749 /
+207 / 542 / 5 / 744 / 6. Before the Tier 1 fix campaign: 1612 / 658 / 568 / 386 /
+856 / 319 / 537 / 32 / 824 / 36.
+
+**The xfail count is 0 for the first time.** That is not "no gaps left" — it is
+"every mechanism that had an acceptance test now passes it". 722 mechanisms are
+unpinned, which is the coverage problem `audit/README.md` has flagged since the
+seam tier: a gap with no pin cannot prove its own fix. Adding a pin as a gap is
+worked remains the cheapest way to stop that rotting.
 
 Per kind (records / gap entries / mechanisms anchored there / entries labelled live):
 
 | kind | records | entries | mechanisms | live |
 |---|---|---|---|---|
-| `seam` | 6 | 173 | 84 | 5 |
-| `power` | 138 | 227 | 171 | 28 |
+| `seam` | 6 | 166 | 83 | 5 |
+| `power` | 138 | 224 | 170 | 27 |
 | `card` | 202 | 147 | 93 | 49 |
 | `event` | 65 | 40 | 21 | 24 |
-| `enchantment` | 17 | 14 | 5 | 11 |
-| `relic` | 258 | 394 | 347 | 128 |
+| `enchantment` | 17 | 6 | 4 | 3 |
+| `relic` | 258 | 369 | 323 | 103 |
 | `monster` | 109 | 25 | 10 | 6 |
 | `potion` | 51 | 140 | 18 | 55 |
+
+`enchantment` moved most (14 → 6 entries): seven of the nine `EG2` sites cleared
+once `CardPileCmd._enter_combat` began registering `card.enchantment`, and the
+two that did not are the two an adversarial pass refuted — see below.
 
 The `power` and `card` rows moved without the monster merge touching them (268→270 and 149→152 entries): those tiers gained entries after this file was last regenerated, which is what the header means by *do not trust a count stated in prose anywhere in this project — re-run `counts`*.
 
@@ -4816,6 +4885,51 @@ Sites, for `coverage`: `potion/ashwater/g6`, `potion/attack_potion/g3`,
 `potion/strength_potion/g4`, `potion/swift_potion/g2`,
 `potion/touch_of_insanity/g5`, `potion/vulnerable_potion/g3`,
 `potion/weak_potion/g3`.
+
+## 3G. Mechanisms this file had never named  *(added 2026-07-28)*
+
+**`py audit/tools/gap_queue.py coverage` had been exiting 1 since the Tier 1
+campaign, and nobody had run it.** The campaign's re-derivation split 25 entries
+out of the families they used to be grouped under — a verdict flip on a
+neighbouring entry changes which regex family the remainder matches, so a
+mechanism key can appear that no prose in this file mentions. `coverage` is the
+check that catches exactly that, and the campaign's own definition-of-done listed
+it; `cite-check` was run and `coverage` was not.
+
+They are one entry each and none is a new finding — each is a site of a mechanism
+already described above, re-keyed to its own id. Naming them here is what makes
+`coverage` exit 0 again; the fix for each is its parent mechanism's.
+
+| mechanism | liveness | parent family |
+|---|---|---|
+| `creature_card_cmds/step105` | unlabelled | CardSelectCmd (§2G) |
+| `hook_dispatch/step6` | unlabelled | listener-registry shape (§2D) |
+| `hook_dispatch/step29` | unlabelled | phase passes (§21) |
+| `monster/fabricator/g5` | **live** | monster off-stream draw (§66) |
+| `monster/test_subject/g2` | **live** | death prevention (§19) |
+| `power/calamity/AfterCardPlayed` | unlabelled | per-CardPlay bracket (§16) |
+| `power/constrict/AfterSideTurnEnd` | dormant | side-turn slot (§17) |
+| `power/illusion/AfterDeath` | unlabelled | death prevention (§19) |
+| `power/illusion/ShouldCreatureBeRemovedFromCombatAfterDeath` | unlabelled | death prevention (§19) |
+| `power/nostalgia/g4` | **live** | single-unit power finding (§3A) |
+| `power/painful_stabs/g1` | dormant | single-unit power finding (§3A) |
+| `power/ritual/AfterSideTurnEnd` | unlabelled | side-turn slot (§17) |
+| `power/skittish/AfterSideTurnEnd` | unlabelled | side-turn slot (§17) |
+| `power/tender/AfterSideTurnEnd` | dormant | side-turn slot (§17) |
+| `power/unmovable/ModifyBlockMultiplicative` | unlabelled | block props hoist (§58) |
+| `relic/fragrant_mushroom/AfterObtained` | dormant | StableShuffle (§52) |
+| `relic/intimidating_helmet/g2` | **live** | single-unit relic finding (§3E) |
+| `relic/iron_club/AfterCardPlayed` | unlabelled | per-CardPlay bracket (§16) |
+| `relic/kusarigama/AfterCardPlayed` | unlabelled | per-CardPlay bracket (§16) |
+| `relic/letter_opener/AfterCardPlayed` | unlabelled | per-CardPlay bracket (§16) |
+| `relic/prayer_wheel/TryModifyRewards` | unlabelled | reward late pass (§49) |
+| `relic/stone_cracker/AfterRoomEntered` | unlabelled | StableShuffle (§52) |
+| `relic/white_star/g1` | **live** | `relic/_stub` (§48) |
+| `turn_structure/step26` | unlabelled | turn structure remainder (§2I) |
+| `turn_structure/step47` | unlabelled | turn structure remainder (§2I) |
+
+**Run `coverage` as well as `cite-check` after any regeneration.** Both exit
+non-zero on failure as of 2026-07-27; only one of them was being run.
 
 ---
 

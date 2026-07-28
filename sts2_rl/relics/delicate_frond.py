@@ -18,7 +18,10 @@ class DelicateFrond(Relic):
 
         player = self.player
         pool = sorted(
-            (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
+            (
+                c for c in _POTION_CLASSES.values()
+                if c.in_reward_pool and self.combat.owns_potion(c)
+            ),
             key=lambda c: c.id,
         )
         while player.has_open_potion_slot:

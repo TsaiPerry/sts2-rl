@@ -17,12 +17,13 @@ class ScrollBoxes(Relic):
         from ..cards.base import _CARD_CLASSES
         from ..cards.pool import pool_card_ids
 
+        pool = pool_card_ids(pool=run.card_pool)
         commons = [
-            cid for cid in pool_card_ids()
+            cid for cid in pool
             if _CARD_CLASSES[cid].rarity == CardRarity.COMMON
         ]
         uncommons = [
-            cid for cid in pool_card_ids()
+            cid for cid in pool
             if _CARD_CLASSES[cid].rarity == CardRarity.UNCOMMON
         ]
         # ScrollBoxes.cs GenerateRandomBundles: per bundle, 2 Common then 1

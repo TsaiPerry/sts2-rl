@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97"
+    "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db"
   },
   "extra_sources": [
     {

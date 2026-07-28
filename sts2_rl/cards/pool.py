@@ -67,6 +67,23 @@ CURSE_POOL: tuple[str, ...] = (
 )
 
 
+def _require_pool(pool: tuple[str, ...] | None) -> tuple[str, ...]:
+    """Every generator below takes the card pool explicitly.
+
+    These used to default to ``IRONCLAD_POOL``, which silently made any
+    caller that forgot to thread the run's character through generate
+    *Ironclad* cards. The game always goes through
+    ``Owner.Character.CardPool``, so there is no correct default — a missing
+    pool is a wiring bug, and this turns it into a loud one. Pass
+    ``run.card_pool`` or ``combat.card_pool``."""
+    if pool is None:
+        raise TypeError(
+            "pool is required: pass the character's card pool "
+            "(run.card_pool / combat.card_pool), not the Ironclad default"
+        )
+    return pool
+
+
 def curse_pool_ids(generatable_only: bool = True) -> list[str]:
     """Ids in the curse pool, by default only those a random-curse effect can
     generate (mirrors the CanBeGeneratedByModifiers filter every consumer of
@@ -99,13 +116,13 @@ def random_curses(
 
 def pool_card_ids(
     card_type: CardType | None = None,
-    pool: tuple[str, ...] = IRONCLAD_POOL,
+    pool: tuple[str, ...] | None = None,
 ) -> list[str]:
     """Ids eligible for in-combat card generation (mirrors FilterForCombat:
     Basic and Ancient cards and CanBeGeneratedInCombat=False cards are
     excluded), optionally filtered by card type."""
     ids = []
-    for card_id in pool:
+    for card_id in _require_pool(pool):
         cls = _CARD_CLASSES[card_id]
         if cls.rarity in (CardRarity.BASIC, CardRarity.ANCIENT):
             continue
@@ -117,7 +134,7 @@ def pool_card_ids(
     return ids
 
 
-def reward_pool_card_ids(pool: tuple[str, ...] = IRONCLAD_POOL) -> list[str]:
+def reward_pool_card_ids(pool: tuple[str, ...] | None = None) -> list[str]:
     """Ids eligible for reward/out-of-combat card generation — the game's
     ``CardPool.GetUnlockedCards()`` (``CardCreationOptions.GetPossibleCards``):
     the full unlocked pool in declaration order.
@@ -130,7 +147,7 @@ def reward_pool_card_ids(pool: tuple[str, ...] = IRONCLAD_POOL) -> list[str]:
     while Feed and NotYet (Rare, ``CanBeGeneratedInCombat=false``) ARE eligible
     rewards. For non-ascension Ironclad every pool card is unlocked, so this
     returns the pool as-is."""
-    return list(pool)
+    return list(_require_pool(pool))
 
 
 def random_pool_cards(
@@ -138,7 +155,7 @@ def random_pool_cards(
     count: int,
     card_type: CardType | None = None,
     distinct: bool = False,
-    pool: tuple[str, ...] = IRONCLAD_POOL,
+    pool: tuple[str, ...] | None = None,
     exclude_ids: set[str] | None = None,
 ) -> list[Card]:
     """Generate random cards from a card pool for in-combat effects.
@@ -165,7 +182,7 @@ def get_for_combat_parity(
     rng,
     count: int,
     card_type: CardType | None = None,
-    pool: tuple[str, ...] = IRONCLAD_POOL,
+    pool: tuple[str, ...] | None = None,
 ) -> list[Card]:
     """Parity port of ``CardFactory.GetForCombat`` (Stoke, Calamity, …).
 
@@ -183,7 +200,7 @@ def get_distinct_for_combat_parity(
     rng,
     count: int,
     card_type: CardType | None = None,
-    pool: tuple[str, ...] = IRONCLAD_POOL,
+    pool: tuple[str, ...] | None = None,
 ) -> list[Card]:
     """Parity port of ``CardFactory.GetDistinctForCombat``.
 
@@ -209,15 +226,20 @@ def get_distinct_for_combat_parity(
 _TRANSFORM_RARITIES = (CardRarity.COMMON, CardRarity.UNCOMMON, CardRarity.RARE)
 
 
-def transform_options_in_combat(card: Card) -> list[str]:
+def transform_options_in_combat(
+    card: Card, character_pool: tuple[str, ...] | None = None
+) -> list[str]:
     """The ids an in-combat transform (Entropy) may turn `card` into.
 
     Mirrors CardFactory.GetDefaultTransformationOptions(isInCombat=true):
     Quest cards and Event/Ancient/Token rarities transform out of the
     Colorless pool; Statuses and Curses stay within their own pool (no
-    rarity filter); everything else uses its own pool (Ironclad or
+    rarity filter); everything else uses its own pool (the character's or
     Colorless) filtered to Common/Uncommon/Rare. All options must be
     generatable in combat and differ from the original card.
+
+    `character_pool` is the fighting character's CardPool (`combat.card_pool`)
+    — the fallback branch for an ordinary character card.
     """
     if card.card_type == CardType.CURSE:
         pool, rarity_filter = CURSE_POOL, False
@@ -234,7 +256,7 @@ def transform_options_in_combat(card: Card) -> list[str]:
     elif card.id in COLORLESS_POOL:
         pool, rarity_filter = COLORLESS_POOL, True
     else:
-        pool, rarity_filter = IRONCLAD_POOL, True
+        pool, rarity_filter = _require_pool(character_pool), True
     options = []
     for cid in pool:
         c = _CARD_CLASSES[cid]

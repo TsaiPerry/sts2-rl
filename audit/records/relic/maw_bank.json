@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/shop.py",
-      "sha256": "38009ab6fe516c265c4aee9051cc4c1a4986edb373c361801a2f6dc11f4da7f9",
+      "sha256": "89c0628c5a3e7ef69a3db1b56315b3d861c14a2fa5ea01dd6aba3153f5becc3d",
       "side": "sim"
     }
   ],

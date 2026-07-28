@@ -50,6 +50,31 @@ class Power:
     # PowerCmd.ModifyAmount → ShouldRemoveDueToAmount.
     allow_negative = False
 
+    @classmethod
+    def type_for_amount(cls, amount: int) -> PowerType:
+        """PowerModel.GetTypeForAmount (PowerModel.cs:460-471).
+
+        The SIGN-AWARE type. It is what Artifact tests
+        (`canonicalPower.GetTypeForAmount(amount) != PowerType.Debuff`,
+        ArtifactPower.cs:24), not the static `Type` — so a negative-amount
+        application of a Buff-typed `allow_negative` power (Malaise stealing
+        Strength, Resonance stealing Dexterity) is a Debuff by C#'s rule and
+        Artifact blocks it.
+
+        C#'s first clause is `StackType == Counter && AllowNegative`. The sim
+        has no `PowerStackType` (audit `power_cmd/G5`), but every AllowNegative
+        power in the game is Counter-stacking — StrengthPower.cs:14,
+        DexterityPower.cs:14, FocusPower.cs and ShriekPower.cs declare it
+        outright, and ShrinkPower's is Counter unless IsInfinite — so
+        `allow_negative` alone carries the clause for all ported content.
+        """
+        if amount < 0:
+            if cls.allow_negative:
+                return PowerType.DEBUFF
+            if cls.power_type is PowerType.DEBUFF:
+                return PowerType.BUFF
+        return cls.power_type
+
     def __init__(
         self,
         owner: Creature,
@@ -2988,7 +3013,7 @@ class HelloWorldPower(Power):
         if combat is None:
             return
         commons = [
-            cid for cid in pool_card_ids()
+            cid for cid in pool_card_ids(pool=combat.card_pool)
             if make_card(cid).rarity == CardRarity.COMMON
         ]
         if not commons:
@@ -3683,7 +3708,9 @@ class CalamityPower(Power):
         combat = self.hooks.combat
         if combat is None or combat.is_over:
             return
-        for new_card in random_pool_cards(combat._rng, self.amount, CardType.ATTACK):
+        for new_card in random_pool_cards(
+            combat._rng, self.amount, CardType.ATTACK, pool=combat.card_pool
+        ):
             CardPileCmd.add_to_hand(self.hooks, combat.player, new_card)
 
 

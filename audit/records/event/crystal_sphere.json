@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "82987d49a3061098cf17f53c947ca60ae6aeaf4b86bc5d61bfec83feadd59f3b",
+      "sha256": "8c41cb03e5a2d36200abfccf13a43b0b7da84780102fcd6b2e6ae57265d7e351",
       "side": "sim"
     }
   ],

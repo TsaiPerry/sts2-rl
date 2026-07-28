@@ -782,9 +782,14 @@ class TestSingleUnitFixes:
     def test_entropic_brew_can_roll_the_out_of_combat_only_potions(self):
         # EntropicBrew.cs:23 calls CreateRandomPotionOutOfCombat on purpose,
         # so the three CanBeGeneratedInCombat=false potions ARE reachable.
-        from sts2_rl.potion_pools import legacy_random_potion_out_of_combat
+        from sts2_rl.potion_pools import (
+            POTION_POOL, legacy_random_potion_out_of_combat,
+        )
         rng = random.Random(0)
-        ids = {legacy_random_potion_out_of_combat(rng).id for _ in range(400)}
+        ids = {
+            legacy_random_potion_out_of_combat(rng, POTION_POOL).id
+            for _ in range(400)
+        }
         assert ids & {"fruit_juice", "fairy_in_a_bottle", "regen_potion"}
 
     def test_entropic_brew_rolls_a_rarity_before_it_picks(self):
@@ -794,7 +799,10 @@ class TestSingleUnitFixes:
         from sts2_rl.potion_pools import POTION_POOL, legacy_random_potion_out_of_combat
         rarity = dict(POTION_POOL)
         rng = random.Random(1)
-        rolled = [legacy_random_potion_out_of_combat(rng).id for _ in range(2000)]
+        rolled = [
+            legacy_random_potion_out_of_combat(rng, POTION_POOL).id
+            for _ in range(2000)
+        ]
         rares = sum(1 for pid in rolled if rarity[pid] == "rare")
         assert 0.05 < rares / len(rolled) < 0.15
         commons = sum(1 for pid in rolled if rarity[pid] == "common")

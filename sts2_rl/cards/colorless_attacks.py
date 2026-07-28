@@ -240,7 +240,7 @@ class JackpotCard(Card):
             dealer=ctx.player, card=self,
         )
         options = [
-            cid for cid in pool_card_ids()
+            cid for cid in pool_card_ids(pool=ctx.combat.card_pool)
             if _CARD_CLASSES[cid]()._energy_cost == 0
             and not _CARD_CLASSES[cid].energy_cost_x
         ]

@@ -113,15 +113,15 @@
   "sim_sources": [
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74"
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f"
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff"
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead"
     },
     {
       "path": "sts2_rl/player.py",
@@ -129,7 +129,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
     },
     {
       "path": "sts2_rl/history.py",
@@ -137,7 +137,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60"
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d"
     },
     {
       "path": "sts2_rl/monsters/base.py",
@@ -173,7 +173,7 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "be89a57eaadb928be99c364ad5df77b5d1b29c24892981699abfb53cb1e420dc"
+      "sha256": "96aa8380efc11a6dfd1846039947289400ba25e856a9337196b13c2faf582557"
     },
     {
       "path": "sts2_rl/events/tanx.py",
@@ -185,7 +185,7 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c"
+      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83"
     },
     {
       "path": "sts2_rl/previews.py",
@@ -225,7 +225,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
+      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7"
     },
     {
       "path": "sts2_rl/cards/whirlwind.py",
@@ -289,8 +289,8 @@
     },
     {
       "what": "11. Yield phase: foreach (item in list) if (Contains(item)) yield return item -- the list is eager but Contains is evaluated lazily, per item, when the enumerator reaches it (CombatState.cs:482-488)",
-      "verdict": "gap",
-      "issue": "gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed and REPRODUCIBLE FROM THE COMMITTED TREE: `py -m pytest test/ -q -p audit.tools.stale_listener_plugin`. The plugin (audit/tools/stale_listener_plugin.py) shadows every listener's bound hook method for the duration of one dispatch with a probe that re-checks `listener in hooks._listeners` AT THE MOMENT THE DISPATCHER CALLS IT -- exactly C#'s lazy Contains -- so a listener removed by an earlier listener in the same walk is caught. Over the whole suite (2476 passed / 30 xfailed) and 191,270 instrumented listener calls the only hit is on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
+      "verdict": "faithful",
+      "rationale": "FIXED 2026-07-28. `HookSystem` maintains a `_live` set of registered listener ids (updated by `register`/`unregister`) and `_each` skips any listener that is no longer registered at the moment the walk reaches it -- the lazy `if (Contains(item)) yield return item` of CombatState.cs:482-488. A listener unregistered by an earlier listener in the SAME dispatch is now skipped rather than still invoked; previously the sim walked an eager snapshot with no membership re-check, which is what `audit/tools/stale_listener_plugin.py` was written to instrument. The set keeps the check O(1) on the dispatch path, and `unregister` only drops the mark when the last copy of a listener goes, because `_listeners` can legitimately hold the same object twice.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: gap G7 (no per-item liveness re-check, no IsActiveForHooks): C# yields `if (Contains(item))` LAZILY, per item (CombatState.cs:482-488), and Contains (549-599) drops any relic/potion/card/affliction/enchantment/orb whose HasBeenRemovedFromState is set or whose owner is not IsActiveForHooks (Player.cs:112,272,438,859-870); every sim dispatcher walks a `list(self._listeners)` snapshot with no re-check. DORMANT, evidence executed and REPRODUCIBLE FROM THE COMMITTED TREE: `py -m pytest test/ -q -p audit.tools.stale_listener_plugin`. The plugin (audit/tools/stale_listener_plugin.py) shadows every listener's bound hook method for the duration of one dispatch with a probe that re-checks `listener in hooks._listeners` AT THE MOMENT THE DISPATCHER CALLS IT -- exactly C#'s lazy Contains -- so a listener removed by an earlier listener in the same walk is caught. Over the whole suite (2476 passed / 30 xfailed) and 191,270 instrumented listener calls the only hit is on_enemy_side_end -> IntangiblePower x10 (Nemesis removing Intangible mid-dispatch) -- and C# makes that same call, because the PowerModel arm of Contains (CombatState.cs:599) checks only Owner.CombatState != null and never that the power is still on its owner. Concrete trigger: a listener that melts a relic, discards a potion or removes a card from combat while a later listener of the same category is still pending in that dispatch."
     },
     {
       "what": "12. Contains by type (CombatState.cs:549-599): a PowerModel needs only Owner.CombatState != null (it is NOT checked against its owner's power list); relics/potions/cards/afflictions/enchantments/orbs additionally need !HasBeenRemovedFromState; a monster needs Creature.CombatState != null; badges/modifiers/achievements always pass; anything else throws",
@@ -384,8 +384,8 @@
     },
     {
       "what": "30. Each pass re-enumerates the listener list from scratch, so pass N+1 sees listeners added or removed during pass N (subject to steps 11-12 and 19)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27: the PASSES now exist (guard G3's machinery, sts2_rl/hooks.py _each). WHAT REMAINS is this step's own claim: the passes do NOT re-enumerate. _each binds `order = self._ordered()` ONCE and iterates that same cached list for every suffix, so a listener registered or unregistered during the VeryEarly pass is still absent from / present in the Late pass, where CombatState.IterateHookListeners is re-invoked per pass in C# and rebuilds the list from the creatures each time (CombatState.cs:410-493). Same family as guard G7 (the snapshot walk), one level up. ORIGINAL: there were no passes to re-enumerate."
+      "verdict": "faithful",
+      "rationale": "FIXED 2026-07-28. `HookSystem._each` (sts2_rl/hooks.py) now calls `self._ordered()` inside the phase loop, once per pass, instead of binding one list before the loop -- so pass N+1 sees listeners added or removed during pass N, which is what C# gets for free by calling `IterateCombatHookListeners` separately per pass (Hook.cs:204 and :212 for AfterCardDrawn, :1580 and :1584 for ModifyEnergyCostInCombat). Within a single pass the iteration is still over a snapshot, which is also C#'s shape: `CombatState.IterateHookListeners` (CombatState.cs:410-493) builds a `new List<AbstractModel>` and then re-checks membership per item as it yields.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: NARROWED 2026-07-27: the PASSES now exist (guard G3's machinery, sts2_rl/hooks.py _each). WHAT REMAINS is this step's own claim: the passes do NOT re-enumerate. _each binds `order = self._ordered()` ONCE and iterates that same cached list for every suffix, so a listener registered or unregistered during the VeryEarly pass is still absent from / present in the Late pass, where CombatState.IterateHookListeners is re-invoked per pass in C# and rebuilds the list from the creatures each time (CombatState.cs:410-493). Same family as guard G7 (the snapshot walk), one level up. ORIGINAL: there were no passes to re-enumerate."
     },
     {
       "what": "31. Additive (num += item.ModifyXAdditive(target, num, ...)) and multiplicative (num *= item.ModifyXMultiplicative(target, num, ...)) are SEQUENTIAL chains in which each listener receives the RUNNING value and the dispatcher folds the result in immediately, in decimal (Hook.cs:1320-1337 ModifyBlock, 2515-2538 ModifyDamageInternal)",

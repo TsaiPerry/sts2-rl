@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\potions.py",
-    "sha256": "2fde12373a99adbd32ae4107191d7da370b5e41fefcaccde016f9a35e49fe717"
+    "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7"
   },
   "extra_sources": [
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "5634f7269a5dc65aa7ed9264c956e317a2ba50189991672a86964946a0131d6c",
+      "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -76,12 +76,12 @@
     },
     {
       "path": "sts2_rl/events/potion_courier.py",
-      "sha256": "d3c14c7d840fb61065fcc62fdc302162682b98ba77f9e8015e5081eddc4634a3",
+      "sha256": "1c6169977cac24a7b039ecd75565b46dbed96090e35907ae2468da1c36a5350d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -91,12 +91,12 @@
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "715b1ae351054a3e6214672634fd9b87cb71b0348c74ff7c4b8ce38031504108",
+      "sha256": "7755c9d3ead187a051c3b1b9e98f94d7de551673ce9e71d3af695b46cb933b90",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     }
   ],

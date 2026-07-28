@@ -31,8 +31,9 @@ import copy
 import random
 from typing import TYPE_CHECKING, Callable
 
-from .cards import Card, CardRarity, IRONCLAD_POOL, make_card
+from .cards import Card, CardRarity, make_card
 from .cards.base import _CARD_CLASSES
+from .characters import Character, DEFAULT_CHARACTER, get_character
 from .combat import CombatState
 from .potions import Potion, _POTION_CLASSES
 from .relic_pools import populate_relic_grab_bags
@@ -97,16 +98,25 @@ def roll_relic_rarity(rng) -> RelicRarity:
     return RelicRarity.RARE
 
 
+def build_starting_deck(character: "str | Character" = DEFAULT_CHARACTER) -> list[Card]:
+    """A character's ``CharacterModel.StartingDeck``, in the source's order.
+
+    The order is not cosmetic: the deck is dealt in it and the combat-start
+    ``UnstableShuffle`` is order-dependent."""
+    return [make_card(cid) for cid in get_character(character).starting_deck]
+
+
 def ironclad_starting_deck() -> list[Card]:
-    """Ironclad.cs StartingDeck: 5 Strikes, 4 Defends, 1 Bash."""
-    return (
-        [make_card("strike") for _ in range(5)]
-        + [make_card("defend") for _ in range(4)]
-        + [make_card("bash")]
-    )
+    """Ironclad.cs StartingDeck: 5 Strikes, 4 Defends, 1 Bash.
+
+    Kept as a named helper (it is part of the package's public surface); the
+    roster itself now lives in ``characters.CHARACTERS["ironclad"]``."""
+    return build_starting_deck("ironclad")
 
 
 class RunState:
+    # Ironclad's numbers, kept as class constants for the callers that read
+    # them. The live values come from `self.character` — see __init__.
     STARTING_HP = 80       # Ironclad.cs StartingHp
     STARTING_GOLD = 99     # Ironclad.cs StartingGold
     MAX_POTIONS = 3        # Player potionSlotCount
@@ -123,7 +133,14 @@ class RunState:
         card_selector: Callable[[str, list[Card], int], list[Card]] | None = None,
         total_floor: int = 0,
         string_seed: str | None = None,
+        character: "str | Character" = DEFAULT_CHARACTER,
     ) -> None:
+        # The character being played (CharacterModel). Every character-dependent
+        # value below — starting HP/gold/deck/relics, the card pool content
+        # generation draws from, which relics and potions can appear — reads off
+        # this row. Defaults to Ironclad, so every existing caller and every
+        # recorded RNG draw is unchanged.
+        self.character = get_character(character)
         self.rng = rng or random.Random()
         # ── Parity RNG (SP2) ─────────────────────────────────────────────
         # With a string seed, seat the game's separated streams: the 12
@@ -146,10 +163,12 @@ class RunState:
         # Used by event gates like Punch-Off (>= 6); the sim has no map, so the
         # caller sets this when it matters.
         self.total_floor = total_floor
-        self.deck: list[Card] = deck if deck is not None else ironclad_starting_deck()
-        self.max_hp = max_hp if max_hp is not None else self.STARTING_HP
+        self.deck: list[Card] = (
+            deck if deck is not None else build_starting_deck(self.character)
+        )
+        self.max_hp = max_hp if max_hp is not None else self.character.starting_hp
         self.hp = hp if hp is not None else self.max_hp
-        self.gold = gold if gold is not None else self.STARTING_GOLD
+        self.gold = gold if gold is not None else self.character.starting_gold
         self.relics: list[Relic] = list(relics or [])
         # Potion belt: Player.cs's `_potionSlots` is a FIXED-LENGTH
         # List<PotionModel?> sized to MaxPotionCount, empty slots holding null
@@ -179,9 +198,15 @@ class RunState:
         self.card_selector = card_selector
         # Relic grab bag (RelicGrabBag): every bag-eligible relic in a random
         # order; pulled relics never reappear this run.
+        # `owns_relic` keeps another character's relics out: `relics/`
+        # auto-imports every module into ALL_RELICS, so without it a ported
+        # Defect relic would be rollable in an Ironclad run. The scan ORDER is
+        # deliberately still ALL_RELICS' — the shuffle below consumes it, so
+        # rebuilding the list from a pool roster would change every Ironclad
+        # relic pull even though the membership is identical.
         self.relic_grab_bag: list[str] = [
             relic_id for relic_id, cls in ALL_RELICS.items()
-            if cls.rarity in _BAG_RARITIES
+            if cls.rarity in _BAG_RARITIES and self.owns_relic(cls)
         ]
         self.rng.shuffle(self.relic_grab_bag)
         # ── SP2 parity relic grab bags (Task 8d) ─────────────────────────
@@ -197,7 +222,7 @@ class RunState:
         self.player_relic_bag: dict[str, list[str]] | None = None
         if self.rng_set is not None:
             self.shared_relic_bag, self.player_relic_bag = populate_relic_grab_bags(
-                self.rng_set.up_front)
+                self.rng_set.up_front, self.character.relic_pool)
             # Re-seat the merged pull bag from those deques, in bucket-insertion
             # order. `pull_relic_from_front` scans it for the first relic of the
             # rolled rarity, which over a rarity-grouped list IS
@@ -538,7 +563,7 @@ class RunState:
         """
         if into is None:
             from .cards import COLORLESS_POOL, CURSE_POOL, CardType
-            pool, rarity_filter = IRONCLAD_POOL, True
+            pool, rarity_filter = self.card_pool, True
             if card.card_type == CardType.CURSE:
                 pool, rarity_filter = CURSE_POOL, False
             elif (
@@ -650,23 +675,56 @@ class RunState:
         == null)`."""
         return None in self.potions
 
+    # ── Character scoping ────────────────────────────────────────────────
+    #
+    # The game reaches content through `SharedXPool ∪ Player.Character.XPool`,
+    # so one character's relics and potions are simply unreachable in another's
+    # run. The sim's registries are global (`relics/` auto-imports every module
+    # into ALL_RELICS; @register_potion fills _POTION_CLASSES), so these two
+    # predicates are what re-impose the game's scoping on every registry scan.
+    # A class with `character = None` is shared and always owned.
+
+    def owns_relic(self, relic_cls) -> bool:
+        """Whether this run's character can be offered `relic_cls`."""
+        return relic_cls.character in (None, self.character.id)
+
+    def owns_potion(self, potion_cls) -> bool:
+        """Whether this run's character can be offered `potion_cls`."""
+        return potion_cls.character in (None, self.character.id)
+
+    @property
+    def card_pool(self) -> tuple[str, ...]:
+        """The character's CardPool — what card generation draws from."""
+        return self.character.card_pool
+
+    @property
+    def potion_pool(self) -> tuple[tuple[str, str], ...]:
+        """GetPotionOptions: the character's potion pool, then the shared one."""
+        from .potion_pools import character_potion_pool
+
+        return character_potion_pool(self.character)
+
+    def _reward_potion_classes(self) -> list:
+        """The reward-pool potion classes this character can be offered, in the
+        id order the legacy RL path has always used."""
+        return sorted(
+            (
+                c for c in _POTION_CLASSES.values()
+                if c.in_reward_pool and self.owns_potion(c)
+            ),
+            key=lambda c: c.id,
+        )
+
     def random_potion(self) -> Potion:
         """A uniformly random potion from the implemented pool (approximates
         the character + shared potion pools of PotionReward)."""
-        pool = sorted(
-            (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
-            key=lambda c: c.id,
-        )
-        return self.rng.choice(pool)()
+        return self.rng.choice(self._reward_potion_classes())()
 
     def random_potions(self, count: int, distinct: bool = False) -> list[Potion]:
         """Several random potions from the reward pool (shop stock). With
         `distinct`, avoid repeating a potion id while the pool allows it
         (PotionFactory.CreateRandomPotionsOutOfCombat blacklists picks)."""
-        pool = sorted(
-            (c for c in _POTION_CLASSES.values() if c.in_reward_pool),
-            key=lambda c: c.id,
-        )
+        pool = self._reward_potion_classes()
         if not pool:
             return []
         if not distinct:
@@ -781,7 +839,7 @@ class RunState:
             self._shop_relic_bag = [
                 relic_id for relic_id, cls in ALL_RELICS.items()
                 if cls.rarity == RelicRarity.SHOP and cls.is_allowed_in_shops
-                and cls.is_allowed(self)
+                and cls.is_allowed(self) and self.owns_relic(cls)
             ]
             self.rng.shuffle(self._shop_relic_bag)
         return self._shop_relic_bag
@@ -810,12 +868,13 @@ class RunState:
         guard for any future map-only act); pass `acts` explicitly to override.
         """
         # Character starting relics (CharacterModel.StartingRelics, granted at
-        # run init by Player.PopulateStartingRelics). This single-character sim
-        # is Ironclad, whose only starting relic is Burning Blood
-        # (Ironclad.cs:57). Granted in every run (the game always grants it);
-        # heals 6 HP after each won combat (relics/burning_blood.py).
-        if not any(r.id == "burning_blood" for r in self.relics):
-            self.add_relic("burning_blood")
+        # run init by Player.PopulateStartingRelics), in the source's order.
+        # Granted in every run — the game always grants them. Ironclad's is
+        # Burning Blood (Ironclad.cs:57), which heals 6 HP after each won combat
+        # (relics/burning_blood.py).
+        for relic_id in self.character.starting_relics:
+            if not any(r.id == relic_id for r in self.relics):
+                self.add_relic(relic_id)
         if acts is None:
             from .rooms import act_has_rooms
 
@@ -1318,6 +1377,8 @@ class RunState:
             # Player.Gold live, so it must be visible from turn 1 (which
             # starts during construction).
             player_gold=self.gold,
+            # In-combat generation draws from the character's CardPool.
+            character=self.character,
             **kwargs,
         )
         combat.deck_card_origins = {

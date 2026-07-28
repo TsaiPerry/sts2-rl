@@ -25,6 +25,7 @@ class Crossbow(Relic):
 
         cards = random_pool_cards(
             self.combat._rng, 1, card_type=CardType.ATTACK, distinct=True,
+            pool=self.combat.card_pool,
         )
         for card in cards:
             card.set_free_this_turn()

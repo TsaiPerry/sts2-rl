@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "6c20c21848ac53e57a4bf16c9885c10667ac80e9ae71c09be49f58525f4b0c62",
+      "sha256": "b8de2a3eefeb49141245e7fede8d92b029cd6fce4e429ce6b0537c8dd80fe707",
       "side": "sim"
     }
   ],
@@ -44,8 +44,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): C#'s Hook.AfterBlockCleared is a SEPARATE, UNCONDITIONAL loop over the turn's participants; the sim fires on_block_cleared only inside the `if should_clear_block(...)` arm, so a prevented block clear also cancels Horn Cleat's 14 block",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/turn_structure.json gap G1 (spec step 14) at the site that record already names -- its issue text cites HornCleat.cs:20-27 and relics/horn_cleat.py:19-22 as a NAMED PORTED LISTENER and labels the mechanism LIVE. One verdict per mechanism, binding rule 3: matched, not re-derived, and the seam owns the machinery while this record owns the relic's observable. THE OBSERVABLE HERE: with a Barricade stack or Sturdy Clamp on the player, the real game still grants Horn Cleat's 14 block on turn 2 (C# runs the event loop at CombatManager.cs:500-507 regardless of whether ClearBlock did anything) and the sim grants nothing -- so the relic is dead in exactly the deck that wants block to persist. REACHABILITY (LIVE, both sides ported, and the seam's own executed evidence names this relic's numbers): the seam record OBSERVED '[horn_cleat] reaches turn 2 with 14 block; the same combat with a Barricade stack on the player reaches turn 2 with 0, and with [sturdy_clamp, horn_cleat] also 0'. Barricade is a ported Ironclad Rare Power card and Sturdy Clamp a ported Rare relic; Horn Cleat is Uncommon in the transcribed grab bag (executed by py audit/tools/relic_probes_b07.py pool: bag=Uncommon). Pinned by a strict xfail that names Horn Cleat in its own reason string: test/test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented (verified present at test/test_hook_order.py:601, and it asserts cs.player.block == 14 behind a Barricade). Rule 7: audit/records/seam/turn_structure.json, test/test_hook_order.py, sts2_rl/player.py, relics/sturdy_clamp.py and cards/barricade_card.py are not hashed by this record."
+      "verdict": "faithful",
+      "rationale": "C# CombatManager.cs:492-507 runs the block clear (Creature.AfterTurnStart) and Hook.AfterBlockCleared in TWO separate unconditional loops over creaturesStartingTurn; today's sim reproduces exactly that shape \u2014 player.py:162-175 and combat.py:358-363 both put `on_block_cleared` outside the should_clear_block arm, so a Barricade / Sturdy Clamp veto (sturdy_clamp.py:23-25) no longer suppresses the event. horn_cleat.py:19-22 therefore fires on turn 2 and grants 14 Unpowered Block, matching HornCleat.cs:20-27. The strict xfail the issue named (test/test_hook_order.py:477) has had its marker removed and passes today, asserting player.block == 14 behind a Barricade stack.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: This is audit/records/seam/turn_structure.json gap G1 (spec step 14) at the site that record already names -- its issue text cites HornCleat.cs:20-27 and relics/horn_cleat.py:19-22 as a NAMED PORTED LISTENER and labels the mechanism LIVE. One verdict per mechanism, binding rule 3: matched, not re-derived, and the seam owns the machinery while this record owns the relic's observable. THE OBSERVABLE HERE: with a Barricade stack or Sturdy Clamp on the player, the real game still grants Horn Cleat's 14 block on turn 2 (C# runs the event loop at CombatManager.cs:500-507 regardless of whether ClearBlock did anything) and the sim grants nothing -- so the relic is dead in exactly the deck that wants block to persist. REACHABILITY (LIVE, both sides ported, and the seam's own executed evidence names this relic's numbers): the seam record OBSERVED '[horn_cleat] reaches turn 2 with 14 block; the same combat with a Barricade stack on the player reaches turn 2 with 0, and with [sturdy_clamp, horn_cleat] also 0'. Barricade is a ported Ironclad Rare Power card and Sturdy Clamp a ported Rare relic; Horn Cleat is Uncommon in the transcribed grab bag (executed by py audit/tools/relic_probes_b07.py pool: bag=Uncommon). Pinned by a strict xfail that names Horn Cleat in its own reason string: test/test_hook_order.py::TestTurnStructureOrder::test_block_clear_event_fires_even_when_prevented (verified present at test/test_hook_order.py:601, and it asserts cs.player.block == 14 behind a Barricade). Rule 7: audit/records/seam/turn_structure.json, test/test_hook_order.py, sts2_rl/player.py, relics/sturdy_clamp.py and cards/barricade_card.py are not hashed by this record."
     },
     {
       "what": "G2 (DORMANT): the sim clears the player's block on turn 1 where the game does not, which changes what 'the turn-2 clear' even means for this relic",

@@ -46,6 +46,11 @@ class Potion:
     # (PotionReward). Event-only potions (Glowwater) set this False so the
     # sim's random_potion helper doesn't offer them.
     in_reward_pool: bool = True
+    # Which character's PotionPool this potion belongs to, or None for
+    # SharedPotionPool. `GetPotionOptions` is `Character.PotionPool ∪
+    # SharedPotionPool`, so a character potion never appears in another
+    # character's run; RunState's reward-pool scans consult this.
+    character: str | None = None
     # PotionModel.Usage. COMBAT_ONLY is the default; ANY_TIME leaves the Use
     # button live outside combat too (OnUseWrapper is written for it —
     # PotionModel.cs:294,298,334,336 all null-check the combat state);
@@ -499,10 +504,13 @@ class SkillPotion(Potion):
 
         crng = ctx.combat.combat_rng
         if crng.is_parity:
-            cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.SKILL)
+            cards = get_distinct_for_combat_parity(
+                crng.card_gen, 3, CardType.SKILL, pool=ctx.combat.card_pool
+            )
         else:
             cards = random_pool_cards(
-                ctx.combat._rng, 3, CardType.SKILL, distinct=True)
+                ctx.combat._rng, 3, CardType.SKILL, distinct=True,
+                pool=ctx.combat.card_pool)
         _choose_a_card_screen(ctx, cards)
 
 
@@ -524,10 +532,13 @@ class AttackPotion(Potion):
 
         crng = ctx.combat.combat_rng
         if crng.is_parity:
-            cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.ATTACK)
+            cards = get_distinct_for_combat_parity(
+                crng.card_gen, 3, CardType.ATTACK, pool=ctx.combat.card_pool
+            )
         else:
             cards = random_pool_cards(
-                ctx.combat._rng, 3, CardType.ATTACK, distinct=True)
+                ctx.combat._rng, 3, CardType.ATTACK, distinct=True,
+                pool=ctx.combat.card_pool)
         _choose_a_card_screen(ctx, cards)
 
 
@@ -1173,10 +1184,13 @@ class PowerPotion(Potion):
 
         crng = ctx.combat.combat_rng
         if crng.is_parity:
-            cards = get_distinct_for_combat_parity(crng.card_gen, 3, CardType.POWER)
+            cards = get_distinct_for_combat_parity(
+                crng.card_gen, 3, CardType.POWER, pool=ctx.combat.card_pool
+            )
         else:
             cards = random_pool_cards(
-                ctx.combat._rng, 3, CardType.POWER, distinct=True)
+                ctx.combat._rng, 3, CardType.POWER, distinct=True,
+                pool=ctx.combat.card_pool)
         _choose_a_card_screen(ctx, cards)
 
 
@@ -1204,9 +1218,14 @@ class OrobicAcid(Potion):
         cards = []
         for card_type in (CardType.ATTACK, CardType.SKILL, CardType.POWER):
             if crng.is_parity:
-                cards += get_distinct_for_combat_parity(crng.card_gen, 1, card_type)
+                cards += get_distinct_for_combat_parity(
+                    crng.card_gen, 1, card_type, pool=combat.card_pool
+                )
             else:
-                cards += random_pool_cards(combat._rng, 1, card_type, distinct=True)
+                cards += random_pool_cards(
+                    combat._rng, 1, card_type, distinct=True,
+                    pool=combat.card_pool,
+                )
         for card in cards:
             card.set_free_this_turn()
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)
@@ -1264,9 +1283,12 @@ class EntropicBrew(Potion):
         rng_set = ctx.combat.rng_set
         while player.has_open_potion_slot:
             if rng_set is not None:
-                potion = generate_random_potion(rng_set.combat_potion_generation)
+                potion = generate_random_potion(
+                    rng_set.combat_potion_generation,
+                    pool=ctx.combat.potion_pool)
             else:
-                potion = legacy_random_potion_out_of_combat(ctx.combat._rng)
+                potion = legacy_random_potion_out_of_combat(
+                    ctx.combat._rng, pool=ctx.combat.potion_pool)
             if not try_to_procure(ctx.hooks, player, potion):
                 break
 
@@ -1278,9 +1300,11 @@ class EntropicBrew(Potion):
         while run.has_open_potion_slot:
             if run.rng_set is not None:
                 potion = generate_random_potion(
-                    run.rng_set.combat_potion_generation)
+                    run.rng_set.combat_potion_generation,
+                    pool=run.potion_pool)
             else:
-                potion = legacy_random_potion_out_of_combat(run.rng)
+                potion = legacy_random_potion_out_of_combat(
+                    run.rng, pool=run.potion_pool)
             if not run.add_potion(potion):
                 break
 
@@ -1378,7 +1402,7 @@ def try_to_procure(hooks, player, potion: Potion) -> bool:
 ALL_POTIONS: dict[str, type[Potion]] = dict(_POTION_CLASSES)
 
 
-def random_potion(rng: random.Random) -> Potion:
+def random_potion(rng: random.Random, owner=None) -> Potion:
     """A uniformly random reward-pool potion (mirrors PotionFactory.
     CreateRandomPotionInCombat for the sim's implemented pool; Alchemize).
     Sorted by id so the pick is a pure function of the RNG state."""
@@ -1386,10 +1410,14 @@ def random_potion(rng: random.Random) -> Potion:
     # healing-adjacent potions are off the table in combat (the parity
     # generators read the same set).
     from .potion_pools import NOT_GENERATED_IN_COMBAT
+    # `owner` is the run or combat whose character scopes the pool; None keeps
+    # the whole implemented catalogue (bare-CombatState callers/tests).
+    owns = owner.owns_potion if owner is not None else lambda cls: True
     pool = sorted(
         (
             c for c in _POTION_CLASSES.values()
             if c.in_reward_pool and c.id not in NOT_GENERATED_IN_COMBAT
+            and owns(c)
         ),
         key=lambda c: c.id,
     )

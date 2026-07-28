@@ -61,7 +61,8 @@ class WhisperingHollow(Event):
         for _ in range(2):
             if self.run.rng_set is not None:
                 from ..potion_pools import generate_random_potion
-                potion = generate_random_potion(self.run.rewards_rng)
+                potion = generate_random_potion(
+                    self.run.rewards_rng, pool=self.run.potion_pool)
             else:
                 potion = self.run.random_potion()
             self.offer_potion(potion)

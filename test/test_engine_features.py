@@ -285,7 +285,7 @@ class TestCardPool:
             assert make_card(card_id).id == card_id
 
     def test_generation_excludes_basic_and_ancient(self):
-        eligible = set(pool_card_ids())
+        eligible = set(pool_card_ids(pool=IRONCLAD_POOL))
         assert "strike" not in eligible
         assert "defend" not in eligible
         assert "bash" not in eligible
@@ -295,12 +295,14 @@ class TestCardPool:
 
     def test_type_filter(self):
         rng = random.Random(0)
-        cards = random_pool_cards(rng, 20, card_type=CardType.ATTACK)
+        cards = random_pool_cards(
+            rng, 20, card_type=CardType.ATTACK, pool=IRONCLAD_POOL
+        )
         assert len(cards) == 20
         assert all(c.card_type == CardType.ATTACK for c in cards)
 
     def test_distinct_generation(self):
         rng = random.Random(0)
-        cards = random_pool_cards(rng, 15, distinct=True)
+        cards = random_pool_cards(rng, 15, distinct=True, pool=IRONCLAD_POOL)
         ids = [c.id for c in cards]
         assert len(ids) == len(set(ids)) == 15

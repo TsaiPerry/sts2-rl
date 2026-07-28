@@ -406,7 +406,10 @@ class PowerCmd:
         # then blocked.
         amount = hooks.modify_power_amount(power_cls, target, amount, applier)
 
-        if power_cls.power_type == PowerType.DEBUFF:
+        # ArtifactPower.cs:24 tests `canonicalPower.GetTypeForAmount(amount)`,
+        # not the static Type: a negative-amount application of a Buff-typed
+        # allow_negative power (Strength/Dexterity) is a Debuff by C#'s rule.
+        if power_cls.type_for_amount(amount) == PowerType.DEBUFF:
             artifact = target.powers.get("artifact")
             if artifact is not None:
                 artifact.amount -= 1
@@ -544,7 +547,7 @@ class CardCmd:
         from .cards import make_card
         from .cards.pool import transform_options_in_combat
 
-        options = transform_options_in_combat(card)
+        options = transform_options_in_combat(card, hooks.combat.card_pool)
         if not options:
             return None
         replacement = make_card(hooks.combat._rng.choice(options))

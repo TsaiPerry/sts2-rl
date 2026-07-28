@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_attacks.py",
-    "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4"
+    "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     }
   ],

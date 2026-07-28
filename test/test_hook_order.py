@@ -163,28 +163,20 @@ class TestPowerCmdOrder:
         assert "vulnerable" not in cs.enemy.powers   # debuff blocked
         assert "artifact" not in cs.enemy.powers     # its one stack consumed
 
-    @pytest.mark.xfail(
-        reason="power_cmd audit gap G1 (audit/records/seam/power_cmd.json): "
-               "PowerCmd.apply's Artifact check (cmds.py:299) tests the "
-               "static power_cls.power_type class attribute instead of C#'s "
-               "sign-aware GetTypeForAmount(amount) (PowerModel.cs:460-471, "
-               "consumed by ArtifactPower.cs:24). A negative-amount "
-               "application of a Buff-typed, allow_negative power (Strength/"
-               "Dexterity) is a Debuff by C#'s rule but never even reaches "
-               "the sim's Artifact branch, since power_cls.power_type stays "
-               "BUFF regardless of sign. This test exercises the ENEMY-side "
-               "direction -- the player applying a negative-amount buff to "
-               "an Artifact-holding enemy -- whose only C# sources are "
-               "Malaise.cs:39 and Resonance.cs:33, neither of which is "
-               "ported; porting either makes this live. The mirror-image "
-               "player-side direction (a monster stealing Strength/Dexterity "
-               "off an Artifact-holding player) is unreachable in principle: "
-               "no relic, potion, event, or card anywhere in the game grants "
-               "ArtifactPower to a player -- every ArtifactPower application "
-               "site is a monster self-applying, and the one card that "
-               "mentions it (Expose.cs:40-43) only removes it.",
-        strict=True,
-    )
+    # FIXED 2026-07-28 — was power_cmd audit gap G1
+    # (audit/records/seam/power_cmd.json). PowerCmd.apply's Artifact check
+    # tested the static `power_cls.power_type` class attribute instead of C#'s
+    # sign-aware GetTypeForAmount(amount) (PowerModel.cs:460-471, consumed by
+    # ArtifactPower.cs:24), so a negative-amount application of a Buff-typed,
+    # allow_negative power (Strength/Dexterity) — a Debuff by C#'s rule —
+    # never reached the Artifact branch at all. `Power.type_for_amount` now
+    # ports GetTypeForAmount and PowerCmd.apply consults it.
+    # STILL DORMANT on ported content: this is the ENEMY-side direction, whose
+    # only C# sources are Malaise.cs:39 and Resonance.cs:33, neither ported.
+    # The mirror-image player-side direction is unreachable in principle — no
+    # relic, potion, event or card anywhere in the game grants ArtifactPower to
+    # a player; every application site is a monster self-applying, and the one
+    # card that mentions it (Expose.cs:40-43) only removes it.
     def test_artifact_blocks_negative_signed_debuff(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, ArtifactPower, 1)
@@ -291,24 +283,14 @@ class TestCreatureCardCmdsOrder:
         replacement = run.transform_card(run.deck[0], into=make_card("inflame"))
         assert replacement.upgrade_level == 1  # C#: Frozen Egg upgrades it
 
-    @pytest.mark.xfail(
-        reason="creature_card_cmds audit step 103b / guard G14 "
-               "(audit/records/seam/creature_card_cmds.json): CombatState."
-               "select_cards (combat.py:560-581) implements only the "
-               "0-candidate arm of CardSelectCmd's guards; it has no "
-               "CombatManager.IsEnding / IsOverOrEnding check, where every C# "
-               "selection screen returns an empty list once the combat is over "
-               "(CardSelectCmd.cs:194-199, 277-285, 382-394, 694-707). The sim "
-               "guards exactly one site in this whole family -- "
-               "CombatState.auto_play_card (combat.py:525). DORMANT: the sim "
-               "sets Phase.COMBAT_OVER only inside _end_combat, which the "
-               "card-play paths reach strictly after _resolve_card_play returns "
-               "(combat.py:417-420, 554-557), so no ported select_cards caller "
-               "can run with the phase already flipped; the observable effect "
-               "is that an out-of-band or future combat-ending effect would "
-               "still get a card handed to it.",
-        strict=True,
-    )
+    # FIXED 2026-07-28 — was creature_card_cmds audit step 103b / guard G14
+    # (audit/records/seam/creature_card_cmds.json), the `hook_dispatch/G8`
+    # family. CombatState.select_cards implemented only the 0-candidate arm of
+    # CardSelectCmd's guards; it had no CombatManager.IsEnding /
+    # IsOverOrEnding check, where every C# selection screen returns an empty
+    # list once the combat is over (CardSelectCmd.cs:194-199, 277-285,
+    # 382-394, 694-707). `CombatState.is_over_or_ending` now ports
+    # CombatManager.cs:204-220 and select_cards consults it.
     def test_select_cards_refuses_once_the_combat_is_over(self):
         from sts2_rl.combat import Phase
 
@@ -805,31 +787,36 @@ class TestHookDispatchOrder:
         cs.play_card(0)                 # Throwing Axe plays it twice
         assert nib._attacks_played == 2  # C#: one CardPlay per iteration
 
-    @pytest.mark.xfail(
-        reason="hook_dispatch audit gap G8 (audit/records/seam/hook_dispatch.json, "
-               "spec steps 19-21): Hook.IterateCombatHookListeners "
-               "(Hook.cs:53-63) yields NOTHING to a dispatch that begins once "
-               "CombatManager.IsOverOrEnding is true, and 73 of the 147 "
-               "dispatchers go through it -- the summary comment at "
-               "Hook.cs:31-51 spells out that the check is made once, at "
-               "enumeration start. The sim has no gate at all: combat.py flips "
-               "Phase.COMBAT_OVER only inside _end_combat and no dispatcher "
-               "consults the phase, so every listener still runs on the "
-               "dispatch that follows the killing blow (C# additionally guards "
-               "this particular call site at CardModel.cs:1957). DORMANT: "
-               "every effect currently reachable on that path is combat-scoped "
-               "state the combat then discards -- here Daughter of the Wind's "
-               "1 Block (relics/daughter_of_the_wind.py:23-33) lands on a "
-               "player whose fight is already won. The concrete trigger that "
-               "would make it live is a ported listener on a guarded "
-               "dispatcher that mutates RUN-level state (HP, gold, deck) from "
-               "AfterCardPlayed / AfterCardDrawn / AfterCardExhausted / "
-               "AfterShuffle / AfterEnergySpent; the conformance exporter is "
-               "the nearer-term risk, since extra listener side effects after "
-               "the deciding blow perturb the recorded combat state.",
-        strict=True,
-    )
-    def test_no_listener_runs_after_the_combat_starts_ending(self):
+    # THE PIN WAS WRONG, AND IS CORRECTED HERE (2026-07-28). It asserted
+    # `block == block_before` — that Hook.AfterCardPlayed reaches nobody once
+    # the killing blow has landed — citing hook_dispatch audit gap G8. The C#
+    # says the opposite, and the C# wins:
+    #
+    #   * Hook.AfterCardPlayed (Hook.cs:278-294) iterates
+    #     `combatState.IterateHookListeners()` DIRECTLY, deliberately bypassing
+    #     the IterateCombatHookListeners / IsOverOrEnding guard. Hook.cs:275-276
+    #     states the reason: "Dispatched directly, not through the
+    #     IterateCombatHookListeners guard: it completes resolution of the card
+    #     that caused the kill."
+    #   * Its only gate is `if (CombatManager.Instance.IsInProgress)`
+    #     (CardModel.cs:1957), and IsInProgress is still true between the
+    #     killing blow and the teardown — it is cleared only from
+    #     CheckWinCondition (CombatManager.cs:1046-1059), which runs after the
+    #     whole play action completes.
+    #
+    # So Daughter of the Wind DOES gain its 1 Block on the lethal Attack. A
+    # first pass at G8 gated this site on `is_over_or_ending` and made the
+    # suppression real; that is reverted, and this test now pins the C#
+    # behaviour so the same mistake cannot be made twice.
+    #
+    # G8 ITSELF REMAINS OPEN and now needs a different witness: 72 of Hook.cs's
+    # 146 dispatchers do go through IterateCombatHookListeners, and
+    # `HookSystem._each` still has no gate for them. The one G8 site that IS
+    # closed is CardSelectCmd's (see
+    # test_select_cards_refuses_once_the_combat_is_over). Note the inverse
+    # mismatch one line up in `_resolve_card_play`: Hook.BeforeCardPlayed
+    # (Hook.cs:263-270) IS gated in C# and is not gated in the sim.
+    def test_after_card_played_still_fires_on_the_killing_blow(self):
         cs = CombatState(rng=random.Random(0),
                          relics=[make_relic("daughter_of_the_wind")])
         cs.enemy.hp = 1
@@ -838,7 +825,10 @@ class TestHookDispatchOrder:
         block_before = cs.player.block
         cs.play_card(0)                       # the killing blow
         assert cs._all_enemies_dead()
-        assert cs.player.block == block_before  # C#: nobody was dispatched to
+        # C#: AfterCardPlayed completes the resolution of the card that caused
+        # the kill, so the relic still gets its Block (Hook.cs:275-276,
+        # CardModel.cs:1957).
+        assert cs.player.block == block_before + 1
 
     def test_multiplicative_damage_modifiers_chain_sequentially(self):
         from sts2_rl.powers import ShrinkPower
@@ -1199,30 +1189,16 @@ class TestMonsterStateMachineOrder:
         assert hopper.machine.roll_move(
             hopper, hopper._move_rng).id in ("HAT_TRICK_MOVE", "NAB_MOVE")
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G7 clause (a) (audit/records/seam/"
-               "monster_state_machine.json step 21), DORMANT. C# treats "
-               "CanRepeatXTimes with maxTimes == 0 as a PERMANENTLY DISABLED "
-               "branch -- RandomBranchState.cs:144-147 computes n = 0, "
-               "allowed = (Count < 0) ? 1 : 0 = 0, and the while-loop's "
-               "num3 < num2 guard is false so nothing can revive it -- and "
-               "the machine is built and played with one fewer option. The "
-               "sim raises ValueError at construction instead "
-               "(monsters/state_machine.py:168-169), so a faithful "
-               "transliteration of such a branch would crash at combat "
-               "start. DORMANT: probe cs-addbranch enumerates all 15 "
-               "non-default integer arguments across the 61 monster "
-               "AddBranch call sites and every one is 2 or 3 -- no shipped "
-               "monster passes 0 as maxRepeats -- and probe zero-weight now "
-               "builds 82 of the 83 ported machines (only _Cultist, which "
-               "needs a constructor argument, is unbuilt) without tripping "
-               "this ValueError, so no ported PORT passes 0 either. Named "
-               "trigger: a C# monster model added with AddBranch(state, 0) "
-               "or AddBranch(state, 0, weight). This same guard is why step "
-               "22's apparent coverage of C#'s overload-#1 check is "
-               "incidental (G8 clause c).",
-        strict=True,
-    )
+    # FIXED 2026-07-28 — was monster_state_machine audit gap G7 clause (a)
+    # (audit/records/seam/monster_state_machine.json step 21). C# treats
+    # CanRepeatXTimes with maxTimes == 0 as a PERMANENTLY DISABLED branch:
+    # RandomBranchState.cs:144-147 computes num2 = 0, so
+    # `num = (StateLog.Count < num2) ? 1 : 0` is 0 and the while-loop's
+    # `num3 < num2` guard is false, so nothing can revive it — the machine is
+    # built and played with one fewer option. The sim used to raise ValueError
+    # at construction, so a faithful transliteration of such a branch would
+    # have crashed at combat start; `RandomBranchState._effective_weight` now
+    # zeroes the weight instead and `add_branch` no longer refuses it.
     def test_max_times_zero_disables_the_branch_instead_of_raising(self):
         from sts2_rl.monsters.base import Intent, MoveType
         from sts2_rl.monsters.state_machine import (
@@ -1251,32 +1227,18 @@ class TestMonsterStateMachineOrder:
         ids = {machine.roll_move(owner, rng).id for _ in range(200)}
         assert ids == {"B"}
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G8 clause (a) (audit/records/seam/"
-               "monster_state_machine.json step 3; clauses (b) and (c) are "
-               "steps 37 and 22, the same mechanism at two more sites and so "
-               "the same verdict by rule 3), DORMANT. Every C# "
-               "RegisterStates implementation is monsterStates.Add(Id, this) "
-               "(RandomBranchState.cs:171, MoveState.cs:74, "
-               "ConditionalBranchState.cs:58) and Dictionary.Add THROWS "
-               "ArgumentException on a duplicate key, so a monster with two "
-               "states sharing an id fails loudly at machine construction. "
-               "The sim's states[self.id] = self "
-               "(monsters/state_machine.py:86-87) silently OVERWRITES, so "
-               "the second definition wins and every follow_up aimed at the "
-               "first resolves to the second -- a mis-ported monster gets a "
-               "quietly wrong move graph instead of a crash. DORMANT: probe "
-               "zero-weight builds and fuzzes 82 ported machines over "
-               "6,560,008 transitions (59 via a detached build, the other 23 "
-               "via a live instance) and none collides; ONE machine, "
-               "_Cultist, is still unbuildable, so dormancy is unproven for "
-               "that one. Named trigger: porting a "
-               "monster with a repeated state id -- Fogmog.cs:44-45 is the "
-               "shipped near-miss, two distinct MoveStates (SWIPE_MOVE and "
-               "SWIPE_RANDOM_MOVE) sharing one SwipeMove delegate and "
-               "differing only in id.",
-        strict=True,
-    )
+    # FIXED 2026-07-28 — was monster_state_machine audit gap G8 clause (a)
+    # (audit/records/seam/monster_state_machine.json step 3; clauses (b) and
+    # (c) are steps 37 and 22, the same mechanism at two more sites and so the
+    # same verdict by rule 3). Every C# RegisterStates implementation is
+    # monsterStates.Add(Id, this) (RandomBranchState.cs:171, MoveState.cs:74,
+    # ConditionalBranchState.cs:58) and Dictionary.Add THROWS
+    # ArgumentException on a duplicate key, so a monster with two states
+    # sharing an id fails loudly at machine construction. The sim's
+    # `states[self.id] = self` silently OVERWROTE, so the second definition
+    # won and every follow_up aimed at the first resolved to the second — a
+    # mis-ported monster got a quietly wrong move graph instead of a crash.
+    # `MonsterState.register_states` now raises on a colliding id.
     def test_duplicate_state_id_is_rejected_at_machine_construction(self):
         from sts2_rl.monsters.base import Intent, MoveType
         from sts2_rl.monsters.state_machine import (
@@ -1292,26 +1254,15 @@ class TestMonsterStateMachineOrder:
         with pytest.raises((ValueError, KeyError, RuntimeError)):
             MonsterMoveStateMachine([first, second], first)
 
-    @pytest.mark.xfail(
-        reason="monster_state_machine audit gap G3 (audit/records/seam/"
-               "monster_state_machine.json step 10), DORMANT. "
-               "MoveState.GetNextState is (FollowUpState?.Id ?? "
-               "FollowUpStateId) ?? throw (MoveState.cs:23-25, 67-70) -- the "
-               "game accepts EITHER an object follow-up or a bare state id "
-               "string, resolving the object first. The sim's MoveState has "
-               "only follow_up: MonsterState | None "
-               "(monsters/state_machine.py:116, 136-139), so a monster "
-               "needing a forward reference to a state constructed later in "
-               "GenerateMoveStateMachine cannot be transliterated without "
-               "restructuring build_machine into two passes. DORMANT: "
-               "executed, grep -rn FollowUpStateId over the game tree "
-               "returns exactly two sites -- the declaration itself "
-               "(MoveState.cs:23) and Creature.cs:539, the Stun path, which "
-               "the sim does not model at all (gap G4) -- so no monster "
-               "model uses the string form today. Named trigger: any monster "
-               "model that sets FollowUpStateId on a MoveState.",
-        strict=True,
-    )
+    # FIXED 2026-07-28 — was monster_state_machine audit gap G3
+    # (audit/records/seam/monster_state_machine.json step 10).
+    # MoveState.GetNextState is (FollowUpState?.Id ?? FollowUpStateId) ?? throw
+    # (MoveState.cs:23, 67-70): the game accepts EITHER an object follow-up or
+    # a bare state id string, resolving the object first. The sim's MoveState
+    # had only `follow_up: MonsterState | None`, so a monster needing a forward
+    # reference to a state constructed later in GenerateMoveStateMachine could
+    # not be transliterated without restructuring build_machine into two
+    # passes. `MoveState.follow_up_id` is now the fallback leg.
     def test_move_state_accepts_a_string_follow_up_id(self):
         from sts2_rl.monsters.base import Intent, MoveType
         from sts2_rl.monsters.state_machine import (

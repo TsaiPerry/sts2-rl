@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\fiddle.py",
-    "sha256": "860b198228cbf072ca3d1c7eb46094e9eee8de35e0fd74f98b25600493fbca63"
+    "sha256": "eec1ad37a78f0ee3244a7a0a1a47b49e70af692c4b4902845e28f1465b37ae36"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     },
     {
@@ -134,8 +134,8 @@
     },
     {
       "what": "G2 (DORMANT): the hook is ModifyHandDraw**Late** -- Hook.ModifyHandDraw's second complete listener pass (Hook.cs:1683-1708) -- and hooks.py:217-222 is a single flat fold",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes) at a site that record does not name; one verdict per mechanism, binding rule 3, so this entry does not re-derive it -- the seam owns the machinery, this record owns Fiddle's observable. Fiddle running LAST is load-bearing only against a listener that CLAMPS: the two-pass order guarantees that MindRotPower's `Math.Max(0m, count - Amount)` (MindRotPower.cs:14-21) sees the total WITHOUT Fiddle's +2, while the sim's order is listener-registration order (relics registered at CombatState construction, powers when applied), which puts Fiddle first. DORMANT: an executed census of the sim's nine other modify_hand_draw implementers (grep `def modify_hand_draw` over sts2_rl/ -> powers.py:2648 MindRot, :2746 DrawCardsNextTurn, :3895 Clarity, relics/bag_of_preparation.py:18, big_mushroom.py:29, booming_conch.py:26, paels_blood.py:22, pocketwatch.py:37, pollinous_core.py:31, snecko_eye.py:32) finds exactly ONE clamping listener, MindRot, and addition is commutative everywhere else, so the two orders agree unless the running total reaches 0 at MindRot -- which needs MindRot amount >= 6 against a base of 5 (`cards/knowledge_curses.py:53-63` gives the curse default_power_amount 1, so it takes six stacked Mind Rot curses). Porting any further clamping or multiplicative hand-draw modifier makes it live at any amount."
+      "verdict": "faithful",
+      "rationale": "FIXED 2026-07-28. `Fiddle.modify_hand_draw` was renamed to `modify_hand_draw_late` (sts2_rl/relics/fiddle.py), which is the pass Fiddle.cs:15's `ModifyHandDrawLate` belongs to. `HookSystem.modify_hand_draw` dispatches through `_each`, whose `_PHASES` walk (sts2_rl/hooks.py) runs a complete plain pass and then a complete Late pass, so Fiddle's +2 now lands after every plain-pass modifier (Mind Rot's -1) regardless of acquisition order -- where before, both sat in one flat registration-order pass. The relic's own docstring already named the C# hook correctly; only the method name was wrong.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes) at a site that record does not name; one verdict per mechanism, binding rule 3, so this entry does not re-derive it -- the seam owns the machinery, this record owns Fiddle's observable. Fiddle running LAST is load-bearing only against a listener that CLAMPS: the two-pass order guarantees that MindRotPower's `Math.Max(0m, count - Amount)` (MindRotPower.cs:14-21) sees the total WITHOUT Fiddle's +2, while the sim's order is listener-registration order (relics registered at CombatState construction, powers when applied), which puts Fiddle first. DORMANT: an executed census of the sim's nine other modify_hand_draw implementers (grep `def modify_hand_draw` over sts2_rl/ -> powers.py:2648 MindRot, :2746 DrawCardsNextTurn, :3895 Clarity, relics/bag_of_preparation.py:18, big_mushroom.py:29, booming_conch.py:26, paels_blood.py:22, pocketwatch.py:37, pollinous_core.py:31, snecko_eye.py:32) finds exactly ONE clamping listener, MindRot, and addition is commutative everywhere else, so the two orders agree unless the running total reaches 0 at MindRot -- which needs MindRot amount >= 6 against a base of 5 (`cards/knowledge_curses.py:53-63` gives the curse default_power_amount 1, so it takes six stacked Mind Rot curses). Porting any further clamping or multiplicative hand-draw modifier makes it live at any amount."
     },
     {
       "what": "N1: `player != base.Owner` on BOTH ModifyHandDrawLate (Fiddle.cs:17-20) and ShouldDraw (Fiddle.cs:30-33); the sim checks neither",

@@ -38,10 +38,13 @@ class InfernalBladeCard(Card):
         crng = ctx.combat.combat_rng
         if crng.is_parity:
             # GetDistinctForCombat draws on Rng.CombatCardGeneration.
-            cards = get_distinct_for_combat_parity(crng.card_gen, 1, CardType.ATTACK)
+            cards = get_distinct_for_combat_parity(
+                crng.card_gen, 1, CardType.ATTACK, pool=ctx.combat.card_pool
+            )
         else:
             cards = random_pool_cards(
-                ctx.combat._rng, 1, card_type=CardType.ATTACK, distinct=True
+                ctx.combat._rng, 1, card_type=CardType.ATTACK, distinct=True,
+                pool=ctx.combat.card_pool,
             )
         if cards:
             cards[0].set_free_this_turn()

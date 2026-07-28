@@ -46,7 +46,7 @@ class RoomFullOfCheese(Event):
         # which a hand-rolled offer never reaches (NoModifyHooks is NOT set
         # here).
         commons = [
-            cid for cid in reward_pool_card_ids()
+            cid for cid in reward_pool_card_ids(self.run.card_pool)
             if _CARD_CLASSES[cid].rarity == CardRarity.COMMON
         ]
         cards = create_reward_cards(

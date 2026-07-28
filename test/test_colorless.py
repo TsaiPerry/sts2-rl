@@ -18,6 +18,7 @@ from sts2_rl.cards import (
     transform_options_in_combat,
 )
 from sts2_rl.cards.base import _CARD_CLASSES
+from sts2_rl.cards.pool import IRONCLAD_POOL
 from sts2_rl.cmds import BlockCmd, DrawCmd
 from sts2_rl.powers import VulnerablePower, WeakPower
 from sts2_rl.run import RunState
@@ -70,16 +71,16 @@ class TestColorlessPool:
             assert banned not in ids
 
     def test_quest_cards_transform_into_colorless(self):
-        options = transform_options_in_combat(make_card("byrdonis_egg"))
+        options = transform_options_in_combat(make_card("byrdonis_egg"), IRONCLAD_POOL)
         assert options and all(cid in COLORLESS_POOL for cid in options)
 
     def test_colorless_cards_transform_within_the_pool(self):
-        options = transform_options_in_combat(make_card("finesse"))
+        options = transform_options_in_combat(make_card("finesse"), IRONCLAD_POOL)
         assert "finesse" not in options
         assert options and all(cid in COLORLESS_POOL for cid in options)
 
     def test_ironclad_cards_transform_within_ironclad(self):
-        options = transform_options_in_combat(make_card("bludgeon"))
+        options = transform_options_in_combat(make_card("bludgeon"), IRONCLAD_POOL)
         assert all(cid not in COLORLESS_POOL for cid in options)
 
 

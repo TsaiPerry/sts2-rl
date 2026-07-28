@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
+      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
       "side": "sim"
     },
     {
@@ -81,12 +81,12 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
+      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],

@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
+      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],
@@ -75,8 +75,8 @@
     },
     {
       "what": "N1: `!roomType.IsCombatRoom()` (WhiteBeastStatue.cs:23) -- which room types the force applies to",
-      "verdict": "gap",
-      "issue": "Recorded so a fix uses the right predicate rather than 'monster rooms'. RoomTypeExtensions.IsCombatRoom is `(uint)(room - 1) <= 2u` (RoomTypeExtensions.cs:5-12), i.e. the three room-type enum values immediately after the first one -- Monster, Elite and Boss. So the relic forces a potion on ELITE and BOSS screens too, not just normal fights, and the sim's own ROOM_RARITY_ODDS table covers exactly those three keys (rewards.py:92-96), so the fix has the room types it needs. Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: RoomTypeExtensions.cs and rewards.py are NOT hashed here."
+      "verdict": "faithful",
+      "rationale": "This N-note existed only because the relic was a stub and a fixer might have used 'monster rooms'; it explicitly says it 'carries G1's LIVE label as part of the same missing implementation'. The implementation now exists and uses precisely the predicate the note prescribes. sts2_rl/relics/white_beast_statue.py:15-18 defines `should_force_potion_reward(self, run, room_type)` returning `room_type in (RoomType.MONSTER, RoomType.ELITE, RoomType.BOSS)`. That is exactly RoomTypeExtensions.IsCombatRoom, `(uint)(room - 1) <= 2u`: src/Core/Rooms/RoomType.cs enumerates `Unassigned, Monster, Elite, Boss, Treasure, Shop, Event, ...`, so values 1-3 are Monster/Elite/Boss and nothing else. The hook is consumed, not just declared: sts2_rl/rewards.py:465-468 computes `force = any(relic.should_force_potion_reward(run, room_type) for relic in run.relics)` and feeds it to `run.potion_reward_odds.roll(room_type, force=force)` in BOTH arms \u2014 the parity arm at rewards.py:478 and the legacy/RL arm at rewards.py:507 \u2014 so this is not a parity-only fix. C# side: WhiteBeastStatue.cs:17-28 `ShouldForcePotionReward` returns false on `!roomType.IsCombatRoom()` and true otherwise, and the ownership clause at :19-22 is the waived multiplayer check (record N2).  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Recorded so a fix uses the right predicate rather than 'monster rooms'. RoomTypeExtensions.IsCombatRoom is `(uint)(room - 1) <= 2u` (RoomTypeExtensions.cs:5-12), i.e. the three room-type enum values immediately after the first one -- Monster, Elite and Boss. So the relic forces a potion on ELITE and BOSS screens too, not just normal fights, and the sim's own ROOM_RARITY_ODDS table covers exactly those three keys (rewards.py:92-96), so the fix has the room types it needs. Carries G1's LIVE label as part of the same missing implementation; no independent observable. Rule 7: RoomTypeExtensions.cs and rewards.py are NOT hashed here."
     },
     {
       "what": "N2: `player != base.Owner` (WhiteBeastStatue.cs:19)",
@@ -94,6 +94,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's pickup mutates nothing outside run.relics, now or after a fix (its whole effect is a per-screen predicate)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\the_boot.py",
-    "sha256": "e208c4539f697911e05cc4e54f440e0b5976a35ecca55d0843dd89617248c809"
+    "sha256": "f5923e9f494c46a4cff8aac3190ab5345b91249e6722cb9ed7e0b57001a7ea6a"
   },
   "extra_sources": [
     {
@@ -76,17 +76,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_attacks.py",
-      "sha256": "a8089fc608a002844930213d401938a72ccb5c7ad053c9de998575869f56abc4",
+      "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -106,7 +106,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -126,12 +126,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
       "side": "sim"
     }
   ],

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "67f5e67b0236d897e4998101a22b8256c93ee1d002b50ff4504a83dfa453bd86"
+    "sha256": "e2252c0e6b225be22f1da3051e67dc0f235f6b82ec2ccf0ea6158a20701730df"
   },
   "extra_sources": [
     {

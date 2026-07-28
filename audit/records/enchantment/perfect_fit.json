@@ -76,12 +76,12 @@
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97",
+      "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -111,7 +111,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     },
     {
@@ -136,7 +136,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],
@@ -164,7 +164,7 @@
     {
       "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
       "verdict": "gap",
-      "issue": "Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: Perfect Fit's whole effect is `on_shuffle` (enchantments.py:239-242), a HOOK the copy's enchantment never receives, and the ORIGINAL's copy of the hook moves `self.card`, i.e. the original. EXECUTED 2026-07-28: with the original and a `create_clone` copy both in a 9-card discard pile, `reshuffle_discard_into_draw` puts the ORIGINAL on top and leaves the copy where the shuffle dropped it. LIVE."
+      "issue": "Mostly closed 2026-07-28. All five combat copy sites route through `create_clone` (cards/base.py:57-83; re-attach at :77-78) \u2014 cards/anger.py:38, cards/trash_heap_cards.py:24 (used at :149), powers.py:883-893, relics/music_box.py:47, relics/burning_sticks.py:36 \u2014 and every one of them hands the copy to CardPileCmd, whose `_enter_combat` now sets `card.enchantment.combat` and registers the enchantment as a listener (cmds.py:586-592, reached from add_to_discard :603 / add_to_draw :628 / add_to_hand :643; the only `is_parity` branch on that path is the insert slot at :623, so the registration happens in BOTH arms). EXECUTED 2026-07-28: an original Perfect Fit Strike plus a `create_clone` copy added by `add_to_discard`, all pushed to the discard and `reshuffle_discard_into_draw()` called -> the copy's enchantment is a distinct listener whose `.card` is the copy, its `on_shuffle` (enchantments.py:239-242) runs, and the copy ends at index-from-top 0 with the original at 1. RESIDUAL: with an original and its copy both in the reshuffled set the two engines pick a DIFFERENT winner, because they order the two ModifyShuffleOrder listeners by different keys. C# dispatches through Hook.ModifyShuffleOrder (Hook.cs:2004-2010) -> CombatState.IterateHookListeners (CombatState.cs:410-467, enchantment added at :462-465), which RE-ENUMERATES AllPiles (Hand, Draw, Discard, Exhaust, Play \u2014 PlayerCombatState.cs:70-79) on every dispatch, and CardPileCmd.Shuffle fires the hook at CardPileCmd.cs:877 while the discard pile still holds all of its cards (only drawPile entries are removed, at :878-881); since PerfectFit.cs:12-16 does Remove + Insert(0), the instance sitting LATER IN THE DISCARD PILE fires last and ends on top. The sim dispatches in REGISTRATION order (hooks.py:139-146 \u2014 sort key is (owner rank, hook_category, registration index); the original's enchantment is registered at combat setup, combat.py:128-134, so a mid-combat copy is always later), so the COPY always wins regardless of pile position. EXECUTED 2026-07-28, the natural Anger case (the one copy site that puts the clone into the discard before the original): Anger.cs:27-28 adds the clone to PileType.Discard during OnPlay while the played card is still in PileType.Play, so C#'s discard is [clone, original] and the ORIGINAL ends on top / is drawn first; the sim appends the played card to the discard BEFORE OnPlay (combat.py:537-539, giving [original, clone]) and then hands the top to the registration-latest listener, so it draws the CLONE first (seeds 0/1/2). Same in both arms \u2014 nothing on this path branches on `combat_rng.is_parity`. Unobservable while the twins are state-identical, but the top-of-draw-pile is decided by the wrong key, and it diverges as soon as the twins differ (Music Box's ethereal copy, an in-combat upgrade/affliction on one of them, a cost set this combat).  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: Perfect Fit's whole effect is `on_shuffle` (enchantments.py:239-242), a HOOK the copy's enchantment never receives, and the ORIGINAL's copy of the hook moves `self.card`, i.e. the original. EXECUTED 2026-07-28: with the original and a `create_clone` copy both in a 9-card discard pile, `reshuffle_discard_into_draw` puts the ORIGINAL on top and leaves the copy where the shuffle dropped it. LIVE."
     }
   ],
   "verdict": "gap",

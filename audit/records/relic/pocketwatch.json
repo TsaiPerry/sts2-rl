@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "d3bd24f221b6cc8794a6de751678a20acf0b8bd8d9644def1a2b3585264dbe60",
+      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
       "side": "sim"
     },
     {
@@ -95,8 +95,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): AfterCardPlayed fires per Replay ITERATION in C# and once per logical play in the sim, so a replayed card under-counts and can leave the sim under the 3-card threshold when the game is over it",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at :1959 INSIDE it; combat.py:514 fires on_card_played once, after the sim's whole play-count loop. Pocketwatch's threshold is a COUNT, so an under-count is not cosmetic: it decides whether the relic pays 3 extra cards next turn. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-pocketwatch): three plays of which the first is replayed by Throwing Axe (relics/throwing_axe.py:30-35, granted by the ported Tanx shrine) leave the sim at _played_this_turn = 3 where the game reaches 4; evaluated at the next turn's guard, modify_hand_draw(5) returns 8 for the sim's count and 5 for the game's -- three cards the game withholds and the sim deals, every turn the situation recurs. Both relics are in the transcribed grab bag / ported events and the four other ported replay sources widen it. This is audit/records/seam/hook_dispatch.json guard G4 at a NEW site (that record names Pen Nib as its witness and lists 'every one of the sim's 48 on_card_played listeners' as further exposure -- Pocketwatch is one of them); one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it. NOTE per binding rule 7: CardModel.cs, combat.py, relics/throwing_axe.py and hook_dispatch.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "rationale": "The recorded divergence was that combat.py fired on_card_played once per logical play while CardModel.cs:1904-1958 fires Hook.AfterCardPlayed once per play-count iteration, so a replayed card under-counted Pocketwatch's threshold. Today sts2_rl/combat.py:574-602 places `self.hooks.on_card_played(card, is_auto_play)` at :600 INSIDE the `for play_index in range(play_count)` loop, gated on `not self.is_over` exactly as CardModel.cs:1957 gates on `CombatManager.Instance.IsInProgress`. relics/pocketwatch.py:29-31 therefore increments once per iteration, matching Pocketwatch.cs:34-47's `_cardsPlayedThisTurn++`, and the next turn's modify_hand_draw (:38-43) evaluates the same count the game does.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at :1959 INSIDE it; combat.py:514 fires on_card_played once, after the sim's whole play-count loop. Pocketwatch's threshold is a COUNT, so an under-count is not cosmetic: it decides whether the relic pays 3 extra cards next turn. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-pocketwatch): three plays of which the first is replayed by Throwing Axe (relics/throwing_axe.py:30-35, granted by the ported Tanx shrine) leave the sim at _played_this_turn = 3 where the game reaches 4; evaluated at the next turn's guard, modify_hand_draw(5) returns 8 for the sim's count and 5 for the game's -- three cards the game withholds and the sim deals, every turn the situation recurs. Both relics are in the transcribed grab bag / ported events and the four other ported replay sources widen it. This is audit/records/seam/hook_dispatch.json guard G4 at a NEW site (that record names Pen Nib as its witness and lists 'every one of the sim's 48 on_card_played listeners' as further exposure -- Pocketwatch is one of them); one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it. NOTE per binding rule 7: CardModel.cs, combat.py, relics/throwing_axe.py and hook_dispatch.json are NOT hashed by this record."
     },
     {
       "what": "N1: Pocketwatch does NOT skip auto-plays, where relic/brilliant_scarf's near-identical counter does",

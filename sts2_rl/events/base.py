@@ -140,8 +140,9 @@ class Event:
         rarity-then-item pair). The legacy RL path keeps the old shared-rng
         pick over the sim's implemented reward pool."""
         if self.run.rng_set is not None:
-            from ..potion_pools import POTION_POOL, make_pool_potion
-            pid = self.run.rewards_rng.next_item([p for p, _ in POTION_POOL])
+            from ..potion_pools import make_pool_potion
+            pid = self.run.rewards_rng.next_item(
+                [p for p, _ in self.run.potion_pool])
             return make_pool_potion(pid)
         return self.run.random_potion()
 

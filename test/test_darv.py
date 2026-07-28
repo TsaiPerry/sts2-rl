@@ -4,6 +4,7 @@ docs/superpowers/plans/2026-07-19-shared-events.md."""
 import random
 
 from sts2_rl.cards import make_card
+from sts2_rl.cards.pool import IRONCLAD_POOL
 from sts2_rl.combat import CombatState
 from sts2_rl.driver import SHARED_ANCIENTS, RunDriver
 from sts2_rl.events import make_event
@@ -288,7 +289,7 @@ def test_dusty_tome_adds_an_upgraded_ancient_card():
     run = fresh_run(13)
     tome = make_relic("dusty_tome")
     tome.setup_for_player(run)
-    assert tome.ancient_card in tome.candidates()
+    assert tome.ancient_card in tome.candidates(IRONCLAD_POOL)
     run.add_relic(tome)
     added = [c for c in run.deck if c.id == tome.ancient_card]
     assert len(added) == 1
@@ -298,4 +299,4 @@ def test_dusty_tome_adds_an_upgraded_ancient_card():
 def test_dusty_tome_excludes_transcendence_cards():
     # Break is Bash's transcendence upgrade (Archaic Tooth), so it is never
     # the Dusty Tome's card.
-    assert "break" not in make_relic("dusty_tome").candidates()
+    assert "break" not in make_relic("dusty_tome").candidates(IRONCLAD_POOL)

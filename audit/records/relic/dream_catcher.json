@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
+      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
       "side": "sim"
     },
     {
@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "445272978adce8d0f90889a5a3e3e7cf3605a77ffabd2f4015567aebb61a8a1c",
+      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],
@@ -68,7 +68,7 @@
     "TryModifyRestSiteHealRewards": {
       "maps_to": "modify_rest_site_heal_rewards (dream_catcher.py:22-25), dispatched by RunState.rest_heal_rewards (run.py:1097-1110) and offered by driver.py:521",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 (LIVE) and G3 per binding rule 4. The relic's own body is faithful -- a 3-card, Monster-odds choice appended to the rest-heal reward screen (guard G2) -- and both gaps are in the surrounding dispatch: the MIMICKED rest heal never fires the hook at all (G1), and two relics adding rest rewards would collapse into one choice group instead of two screens (G3)."
+      "issue": "Rollup of guards G1 (STILL LIVE) and G3 (DORMANT) per binding rule 4. The relic's own body is faithful (G2). G1 IS NOT CLOSED \u2014 only two of ExecuteRestSiteHeal's three steps landed. LANDED: sts2_rl/events/dense_vegetation.py:70-77's `_rest` now calls RunState.rest_heal() (sts2_rl/run.py:1306-1312 \u2014 the heal plus the Hook.AfterRestSiteHeal pass at :1311) and RunState.rest_heal_rewards() (run.py:1314-1327 \u2014 the Hook.ModifyRestSiteHealRewards pass at :1326), so relics/dream_catcher.py:22-25 does now run on the mimic and consumes the same Monster-pool card draws and rarity-pity mutation the game does. STILL MISSING: the chain's LAST step, `await RewardsCmd.OfferCustom(player, rewards)` (HealRestSiteOption.cs:112). What rest_heal_rewards() builds is parked on `self.pending_rewards` (dense_vegetation.py:54 init, :76 assignment) and that field is DEAD STATE \u2014 a repo-wide grep finds readers only at test/test_event_gate_precision.py:105-106 and :113-114; RunDriver._run_event (sts2_rl/driver.py:439-464) consumes only `pending_encounter` and `pending_reward_extras`, and the only place rest rewards reach a screen is the REAL rest site at driver.py:555/558 (`run.rest_heal(); self._offer_rewards(run.rest_heal_rewards())`). The conformance runner adds no second consumer (sts2_rl/conformance/runner.py:242 offers only combat rewards). EXECUTED 2026-07-28 (py -c, repo root, seed 16, dream_catcher + tiny_mailbox held): Dense Vegetation's REST builds pending cards ['havoc','bloodletting','second_wind'] and pending special_potions ['soldiers_stew','swift_potion'], `'pending_rewards' in inspect.getsource(RunDriver._run_event)` is False, and deck/potion deltas are 0 \u2014 the game shows the 3-card screen, the sim builds it and drops it on the floor, so Dream Catcher still gives the player NO card on the Dense Vegetation Rest option, which is exactly the observable G1 recorded. The same missing offer now also swallows Tiny Mailbox's two PotionRewards on this path. No dual-mode escape: rest_heal_rewards has no rng_set/is_parity branch, and tiny_mailbox.py:23-29's parity/legacy split only picks the RNG stream \u2014 both arms lose the offer. Note that test_dense_vegetation_rest_builds_the_heal_rewards's docstring (\"so Dream Catcher's 3-card choice is offered before the ambush\", test/test_event_gate_precision.py:99-106) asserts the opposite of what the test checks; it only asserts the container was built. G3 (DORMANT) is unchanged, though its reachability note needs updating: TinyMailbox.cs:14-24 IS now ported (relics/tiny_mailbox.py:18-29) but appends PotionRewards to `rewards.special_potions`, so it is still not a second CARD contributor; C#'s distinct CardReward instances (separate pick-one-of-3 screens) vs the sim's single shared `rewards.cards` list go live only when a second card-adding implementer is ported. Finally, this record's own guard G1 was flipped to `faithful` on 2026-07-27 on the strength of the two landed hooks and must be RE-OPENED; the peer records already carry the correct finding \u2014 audit/records/event/dense_vegetation.json:102 (\"NARROWED 2026-07-28 \u2014 STILL A GAP ... NOTHING consumes event.pending_rewards\") and audit/records/seam/creature_card_cmds.json:305 (\"RE-OPENED 2026-07-28 \u2014 the two HOOKS fire, the OFFER still does not\").  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Rollup of guards G1 (LIVE) and G3 per binding rule 4. The relic's own body is faithful -- a 3-card, Monster-odds choice appended to the rest-heal reward screen (guard G2) -- and both gaps are in the surrounding dispatch: the MIMICKED rest heal never fires the hook at all (G1), and two relics adding rest rewards would collapse into one choice group instead of two screens (G3)."
     },
     "ModifyExtraRestSiteHealText": {
       "maps_to": "no counterpart (dream_catcher.py's docstring names it 'UI-only flavor text on the heal button and isn't modeled')",

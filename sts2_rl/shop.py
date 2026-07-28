@@ -96,12 +96,11 @@ def _create_merchant_card(
     RollWithoutChangingFutureOdds — on the Rewards stream), drop to the next
     rarity that actually has a card of this type, pick uniformly (Shops stream),
     then roll for upgrade (Rewards stream, never upgrades)."""
-    from .cards import IRONCLAD_POOL
     from .rewards import RarityOddsType, _draw_choice, next_allowed_card_rarity
 
     options = [
         cid
-        for cid in IRONCLAD_POOL
+        for cid in run.card_pool
         if _CARD_CLASSES[cid].rarity != CardRarity.BASIC
         and cid not in exclude_ids
     ]
@@ -396,7 +395,8 @@ class MerchantPotionEntry(MerchantEntry):
         if self.run.rng_set is not None:
             from .potion_pools import generate_random_potions
 
-            potions = generate_random_potions(self.run.shops_rng, 1)
+            potions = generate_random_potions(
+                self.run.shops_rng, 1, pool=self.run.potion_pool)
         else:
             potions = self.run.random_potions(1)
         self.potion = potions[0] if potions else None
@@ -542,7 +542,8 @@ class MerchantInventory:
         if self.run.rng_set is not None:
             from .potion_pools import generate_random_potions
 
-            potions = generate_random_potions(self.run.shops_rng, 3)
+            potions = generate_random_potions(
+                self.run.shops_rng, 3, pool=self.run.potion_pool)
         else:
             potions = self.run.random_potions(3, distinct=True)
         for potion in potions:

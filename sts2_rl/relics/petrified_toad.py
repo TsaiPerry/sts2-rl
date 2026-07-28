@@ -15,6 +15,11 @@ class PetrifiedToad(Relic):
     name = "Petrified Toad"
     rarity = RelicRarity.UNCOMMON
 
-    def on_combat_start(self) -> None:
+    def on_combat_start_late(self) -> None:
+        # PetrifiedToad.cs:16 is BeforeCombatStart**Late**, the second complete
+        # pass of Hook.BeforeCombatStart — so the rock is procured after every
+        # plain-pass listener has had its combat-start slot, which is what
+        # keeps it behind Belt Buckle's belt-widening regardless of the order
+        # the two relics were acquired in.
         from ..potions import PotionShapedRock
         self.player.add_potion(PotionShapedRock())

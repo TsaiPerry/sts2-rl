@@ -62,6 +62,7 @@ import numpy as np
 from gymnasium import spaces
 
 from .actmap import ACT_MAP_CONFIGS, MapPointType, _MAP_WIDTH
+from .characters import DEFAULT_CHARACTER
 from .combat import CombatState
 from .driver import DecisionKind, DecisionRequest, RunDriver, RunResult
 from .events import ALL_EVENTS
@@ -317,11 +318,16 @@ class STS2RunEnv(gym.Env):
         act_reward: float = 0.0,
         max_steps: int = 10_000,
         render_mode: str | None = None,
+        character: str = DEFAULT_CHARACTER,
     ) -> None:
         super().__init__()
         if card_obs not in ("hybrid", "features"):
             raise ValueError("card_obs must be 'hybrid' or 'features'")
         self._acts = list(acts) if acts is not None else None
+        # The character every episode is played as (CharacterModel). Only the
+        # RunState changes; the observation/action layout is character-
+        # independent, so RUN_OBS_SCHEMA_VERSION is untouched.
+        self._character = character
         self._ascension = ascension
         self._include_neow = include_neow
         self._card_obs = card_obs
@@ -404,7 +410,7 @@ class STS2RunEnv(gym.Env):
     def _make_run_state(self) -> RunState:
         """Build the RunState the driver plays. Curriculum envs override this
         to install a RunState subclass (e.g. curriculum_env.ColumnRunState)."""
-        return RunState(rng=self._rng)
+        return RunState(rng=self._rng, character=self._character)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)

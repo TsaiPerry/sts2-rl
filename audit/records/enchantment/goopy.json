@@ -66,17 +66,17 @@
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "6df4d65a0a9a315cdfb84782b1a8be4a5ee5d5dc91539d4396b8c106b9f7cd97",
+      "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     },
     {
@@ -121,7 +121,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     }
   ],
@@ -174,10 +174,10 @@
     },
     {
       "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
-      "verdict": "gap",
-      "issue": "Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: the Exhaust keyword and the block bonus at clone time both ride along now (executed 2026-07-28: a `create_clone` copy of a Goopy(2) Defend has exhausts=True and gains 6 block = 5 + (Amount-1)), but the growth leg is `on_card_played` (enchantments.py:349-352), a HOOK the copy's enchantment never receives. EXECUTED 2026-07-28: the copy's Amount is still 2 after it is played; Goopy.cs:36-40 makes C#'s copy 3. LIVE."
+      "verdict": "faithful",
+      "rationale": "Both halves of the entry are closed. The copy carries a live enchantment copy (cards/base.py:77-78 porting CardModel.cs:1204-1209), and `_enter_combat` now registers that enchantment and gives it `combat` (cmds.py:588-591), which is the standing state C# gets from CombatState.cs:462-465 re-enumerating the piles each dispatch. The recorded residual - 'the growth leg is on_card_played, a HOOK the copy's enchantment never receives' - is empirically gone: the copy's Amount goes 2 -> 3 on its own play, matching Goopy.cs:36. The static Exhaust keyword and the Amount-1 block bonus were already riding along and still do (block 6 on a Defend with Amount 2, Goopy.cs:44-47).  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: the Exhaust keyword and the block bonus at clone time both ride along now (executed 2026-07-28: a `create_clone` copy of a Goopy(2) Defend has exhausts=True and gains 6 block = 5 + (Amount-1)), but the growth leg is `on_card_played` (enchantments.py:349-352), a HOOK the copy's enchantment never receives. EXECUTED 2026-07-28: the copy's Amount is still 2 after it is played; Goopy.cs:36-40 makes C#'s copy 3. LIVE."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-28"
 }

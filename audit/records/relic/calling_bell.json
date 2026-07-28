@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e",
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
       "side": "sim"
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "9de90b9e94c1abf227ce78720cecfd6415ff47a8a756d6394ca67ecf2438ce1f",
+      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
       "side": "sim"
     }
   ],
@@ -118,7 +118,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (calling_bell.py:23-28)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The curse half is faithful; the relic half implements the source's TEST-MODE branch, so it grants three fixed relics instead of three pool pulls (G1), consumes none of the three Rewards draws those pulls cost (G2), and auto-keeps what the game offers as a skippable screen (G3, now also a gap -- re-verdicted by the 2026-07-26 fix pass)."
+      "issue": "NARROWED 2026-07-28. Rollup of guards G1, G2 and G3 per binding rule 4. CLOSED (the G3 half): RewardsCmd.OfferCustom's take-or-skip screen is now modelled at this site \u2014 sts2_rl/relics/calling_bell.py:28-29 hands each of the three relics to `run.offer_relic`, and RunState.offer_relic (sts2_rl/run.py:475-496) consults `run.reward_selector` (installed at sts2_rl/driver.py:246, surfaced as a REWARD_RELIC decision at sts2_rl/driver.py:293-302) and calls add_relic only on a take, matching RelicReward.OnSelect / OnSkipped (RelicReward.cs:109-123). The curse half (N1, N2) is unchanged and faithful. STILL OPEN, the whole relic-identity half: (G1) sts2_rl/relics/calling_bell.py:22 still hard-codes `RELICS = ('anchor', 'gremlin_horn', 'mummified_hand')`, i.e. CallingBell.GenerateRewards' TestMode.IsOn arm (CallingBell.cs:39-52), where the shipping arm (CallingBell.cs:53-63) builds `new RelicReward(RelicRarity.Common, Owner)`, `(Uncommon, ...)` and `(Rare, ...)`, each resolved in RelicReward.Populate by `RelicFactory.PullNextRelicFromFront(Player, rarity)` (RelicReward.cs:75-96) \u2014 so every run that takes the Bell gets the same three fixed relics instead of one random Common, one Uncommon and one Rare. (G2) The pull is still never spent: `run.offer_relic` receives a string and materialises it with `make_relic` (sts2_rl/run.py:491-492); `RunState.pull_relic_from_front` (sts2_rl/run.py:699-724) is not called from calling_bell.py at all, so the player's grab bag keeps the three relics the game would have removed (RelicFactory.cs:44-49 also removes each from SharedRelicGrabBag) and every later relic pull in the run is shifted. Note for whoever fixes G2: the pinned-rarity overload does NOT roll rarity (RelicFactory.cs:31-33 calls PullNextRelicFromFront(player, rarity, _ => true) with no RollRarity), so the remaining cost is the three bag consumptions, not three PlayerRng.Rewards draws \u2014 the original G2 text overstated the stream cost. Rule 7: sts2_rl/run.py, sts2_rl/driver.py, src/Core/Rewards/RelicReward.cs and src/Core/Factories/RelicFactory.cs are not hashed here.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Rollup of guards G1, G2 and G3 per binding rule 4. The curse half is faithful; the relic half implements the source's TEST-MODE branch, so it grants three fixed relics instead of three pool pulls (G1), consumes none of the three Rewards draws those pulls cost (G2), and auto-keeps what the game offers as a skippable screen (G3, now also a gap -- re-verdicted by the 2026-07-26 fix pass)."
     }
   },
   "guards": [

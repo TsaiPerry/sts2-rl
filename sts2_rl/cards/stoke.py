@@ -40,9 +40,13 @@ class StokeCard(Card):
         # NextItem per generated card; legacy keeps the shared-Random path.
         crng = ctx.combat.combat_rng
         if crng.is_parity:
-            new_cards = get_for_combat_parity(crng.card_gen, len(hand))
+            new_cards = get_for_combat_parity(
+                crng.card_gen, len(hand), pool=ctx.combat.card_pool
+            )
         else:
-            new_cards = random_pool_cards(ctx.combat._rng, len(hand))
+            new_cards = random_pool_cards(
+                ctx.combat._rng, len(hand), pool=ctx.combat.card_pool
+            )
         for card in new_cards:
             if self.upgrade_level > 0:
                 card.upgrade()

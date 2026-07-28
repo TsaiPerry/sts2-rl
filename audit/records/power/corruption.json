@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
+    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     }
   ],
@@ -36,9 +36,9 @@
       "issue": "Same PowerStackType.Single misreading as power/hellraiser's StackType entry -- C# adds at PowerCmd.cs:236 regardless. Dormant: Corruption reads Amount nowhere. One of the 15 units in `py audit/tools/power_census.py stack`."
     },
     "TryModifyEnergyCostInCombatLate": {
-      "maps_to": "powers.py:597-601 CorruptionPower.modify_card_energy_cost (hooks.py:196-201)",
-      "verdict": "gap",
-      "issue": "PHASE LOSS. This is a phase-suffixed C# hook and the sim has a single unphased dispatch, which is hook_dispatch gap G3 (24 dispatchers lose their phase structure; 27 phase-suffixed hooks declared on AbstractModel). Per binding rule 3 the mechanism keeps G3's `gap` verdict and is cross-referenced rather than re-argued. Third-file citations, not hashed here. Corruption is a LATE-phase cost modifier: C# runs it in Hook.ModifyEnergyCostInCombat's second pass (TryModifyEnergyCostInCombatLate, CorruptionPower.cs:16-25), strictly after every early-phase modifier. The sim's single modify_card_energy_cost pass orders it by registration instead, so Corruption contends with the ported early-phase modifiers -- Curious (powers.py:2883) and Spiked Gauntlets -- by accident of application order. Corruption returning a hard 0 makes it order-sensitive in the worst way: it must WIN over Spiked Gauntlets' +1, and it does so only if it happens to be registered later. Same shape as hook_dispatch G3's own executed Tangled/Free-Attack witness."
+      "maps_to": "sts2_rl/powers.py:648 CorruptionPower.modify_card_energy_cost_late -- the `_late` arm of HookSystem._each (sts2_rl/hooks.py:36, 169-176) as dispatched by HookSystem.modify_card_energy_cost (sts2_rl/hooks.py:391-395)",
+      "verdict": "faithful",
+      "rationale": "The phase loss this entry recorded is gone. C# runs Hook.ModifyEnergyCostInCombat as two complete listener passes -- every TryModifyEnergyCostInCombat (Hook.cs:1580-1583) and then every TryModifyEnergyCostInCombatLate (Hook.cs:1584-1587) -- and Corruption is in the second (CorruptionPower.cs:16). The sim now reproduces exactly that: HookSystem._each (sts2_rl/hooks.py:153-180) re-walks the ordered listener list once per suffix in _PHASES order (hooks.py:36), HookSystem.modify_card_energy_cost (hooks.py:391-395) is a _each consumer, and CorruptionPower declares `modify_card_energy_cost_late` (powers.py:648) rather than the plain method, so its hard 0 lands strictly after every plain-pass modifier (relics/spiked_gauntlets.py:26-31, and the ported Curious/Tangled powers) regardless of registration or acquisition order -- confirmed by execution (`_phase_hooks(CorruptionPower)` == {'modify_card_energy_cost'}, cost 0 in both application orders) and by test/test_hook_order.py's passing energy-cost order tests.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: PHASE LOSS. This is a phase-suffixed C# hook and the sim has a single unphased dispatch, which is hook_dispatch gap G3 (24 dispatchers lose their phase structure; 27 phase-suffixed hooks declared on AbstractModel). Per binding rule 3 the mechanism keeps G3's `gap` verdict and is cross-referenced rather than re-argued. Third-file citations, not hashed here. Corruption is a LATE-phase cost modifier: C# runs it in Hook.ModifyEnergyCostInCombat's second pass (TryModifyEnergyCostInCombatLate, CorruptionPower.cs:16-25), strictly after every early-phase modifier. The sim's single modify_card_energy_cost pass orders it by registration instead, so Corruption contends with the ported early-phase modifiers -- Curious (powers.py:2883) and Spiked Gauntlets -- by accident of application order. Corruption returning a hard 0 makes it order-sensitive in the worst way: it must WIN over Spiked Gauntlets' +1, and it does so only if it happens to be registered later. Same shape as hook_dispatch G3's own executed Tangled/Free-Attack witness."
     },
     "ModifyCardPlayResultPileTypeAndPosition": {
       "maps_to": "powers.py:603-613 CorruptionPower.on_card_played",

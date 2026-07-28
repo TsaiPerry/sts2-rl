@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\mad_science.py",
-    "sha256": "be89a57eaadb928be99c364ad5df77b5d1b29c24892981699abfb53cb1e420dc"
+    "sha256": "96aa8380efc11a6dfd1846039947289400ba25e856a9337196b13c2faf582557"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {

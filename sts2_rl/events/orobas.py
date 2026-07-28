@@ -13,6 +13,7 @@ Port of Orobas.cs GenerateInitialOptions: three relic options —
 """
 from __future__ import annotations
 
+from ..characters import ALL_CHARACTER_IDS as ALL_CHARACTERS
 from ..relics import ALL_RELICS  # noqa: F401  (parity with neow's imports)
 from .ancient import AncientEvent
 from .base import EventOption, register_event
@@ -25,11 +26,9 @@ _PRISMATIC_ODDS = 1 / 3
 # ModelDb.AllCharacters (ModelDb.cs:123), in source order. Orobas opens by
 # picking the Sea Glass character from the OTHER unlocked ones; the sim models
 # a fully-unlocked run (as the card/potion pools do), so that pick is a real
-# NextItem over these minus the player's own character (Ironclad).
-ALL_CHARACTERS: tuple[str, ...] = (
-    "ironclad", "silent", "regent", "necrobinder", "defect",
-)
-PLAYER_CHARACTER = "ironclad"
+# NextItem over these minus the player's own character. The order is
+# parity-critical, which is why ALL_CHARACTERS is imported from the character
+# registry above rather than kept as a second hand-maintained copy.
 
 
 @register_event
@@ -51,7 +50,7 @@ class OrobasEvent(AncientEvent):
         def pick(opts):
             return er.next_item(opts) if er is not None else self.rng.choice(opts)
 
-        others = [c for c in ALL_CHARACTERS if c != PLAYER_CHARACTER]
+        others = [c for c in ALL_CHARACTERS if c != run.character.id]
         pick(others)  # the Sea Glass character; only its draw matters here
         roll = er.next_float() if er is not None else self.rng.random()
         pool1 = list(OPTION_POOL_1)

@@ -209,3 +209,119 @@ record than to restate; the queue rows give id, liveness and the lead clause.
 - Surgical changes only; every changed line traces to a named entry.
 - Test-driven: failing test first, watch it fail, then fix.
 - Stage freely, commit never.
+
+---
+
+# Outcome — 2026-07-28
+
+## Measured
+
+```
+py -m pytest test/ -q               25 failed, 2840 passed, 25 deselected, 7 xfailed
+py -m pytest test/test_hook_order.py -q          51 passed, 0 xfailed   (was 45 / 6)
+py audit/tools/gap_queue.py counts   1117 entries / 722 mechanisms / 0 pinned
+py audit/tools/gap_queue.py pins     0 strict xfails
+py audit/tools/audit_status.py       846 records, 0 invalid, 0 stale
+py audit/tools/harness.py validate   846 record(s), 0 invalid
+py audit/tools/gap_queue.py cite-check   0 problem(s)          exit 0
+py audit/tools/gap_queue.py coverage     0 missing / 0 unlisted exit 0
+```
+
+**The suite floor moved, and not because of this work.** A character-porting
+refactor (`sts2_rl/characters.py` + ~40 files) landed uncommitted in the same
+working tree mid-session and is paused, not finished. Of the 25 failures, 2 are
+the pre-existing missing `933T39V18D/floor_49` fixture and **23 are that
+refactor** — every failing frame is in `curriculum_env.py:305`,
+`cards/pool.py:80`, `potion_pools.py:169` or `dusty_tome.candidates()`, none in a
+file this pass touched. The arithmetic closes exactly: 2857 (baseline) − 23 +
+6 (pins now passing) = 2840. `test/test_characters.py` is that refactor's own new
+file and is deselected above.
+
+## Task 0 — the ledger reconciliation
+
+All 207 then-LIVE mechanisms (368 entries) re-derived against today's code by 24
+read-only agents; every proposed clear attacked by two adversarial lenses.
+
+| | |
+|---|---|
+| entries re-derived | 368 |
+| still a real gap | 316 |
+| proposed clears | 52 |
+| applied (18 faithful + 26 narrowed) | 44 |
+| **refuted, kept as gaps with corrected text** | **8** |
+
+The prompt's two named examples were already closed and were confirmed; so were
+`relic/fake_orichalcum`, `power/corruption`, `enchantment/imbued` and 7 of 9
+`enchantment/EG2` sites. **The 8 refutations were all real**, at roughly the
+prompt's predicted ratio.
+
+## The regression this pass introduced, and how it was caught
+
+`test_no_listener_runs_after_the_combat_starts_ending` **was a wrong pin**, and
+following it caused a real defect. It asserted that `Hook.AfterCardPlayed`
+reaches nobody once the killing blow lands. The C# says the opposite:
+`Hook.AfterCardPlayed` (`Hook.cs:278-294`) iterates `IterateHookListeners()`
+**directly**, and `Hook.cs:275-276` says why — *"Dispatched directly, not through
+the IterateCombatHookListeners guard: it completes resolution of the card that
+caused the kill."* Its only gate is `IsInProgress` (`CardModel.cs:1957`), still
+true between the blow and the teardown.
+
+Gating that site on the new `is_over_or_ending` suppressed **every**
+`AfterCardPlayed` listener on the winning card play — including Game Piece's
+`DrawCmd.draw`, which can force a reshuffle and consume RNG, so it was
+stream-observable for the conformance exporter. The adversarial verification pass
+caught it, both sides were re-read at source, the change was reverted, and the pin
+was rewritten as `test_after_card_played_still_fires_on_the_killing_blow`.
+**Fourth wrong pin on this project; the rule held.**
+
+## Closed
+
+- **All six strict-xfail pins.** `power_cmd/G1` (`Power.type_for_amount` ports
+  `GetTypeForAmount`, so Artifact is sign-aware); `monster_state_machine/G3`
+  (`MoveState.follow_up_id`), `/G7` (`max_times == 0` disables the branch rather
+  than raising), `/G8` (`register_states` rejects a colliding id);
+  `hook_dispatch/G8`'s CardSelectCmd half (`CombatState.is_over_or_ending` +
+  `select_cards`).
+- **`hook_dispatch/G3` re-homes**: Fiddle → `modify_hand_draw_late`, Petrified
+  Toad → `on_combat_start_late`, The Boot → `modify_hp_lost_late`.
+- **`HookSystem._each` structure**: each phase pass now re-enumerates
+  (`hook_dispatch/step30`), and a `_live` id set gives the lazy `Contains`
+  re-check of `CombatState.cs:482-488` (`hook_dispatch/step11`, a `G7` site).
+- **The `coverage` hole.** `gap_queue.py coverage` had been exiting 1 since the
+  Tier 1 campaign — 25 mechanisms the re-derivation split out and the queue never
+  named. New §3G names them all; `coverage` exits 0. **The campaign ran
+  `cite-check` and not `coverage`; run both.**
+
+## NOT done — the remaining backlog, unchanged
+
+- **§A remainder.** `relic/_auto_keep`, `relic/_stub`, `potion/_min_select_zero`
+  (`select_cards` has `min_select` and still **no caller passes it**;
+  `scripted_card_selector` handles the three MinSelect-0 purposes but not
+  `"choose_a_card"`), `potion/foul_potion`'s Fake Merchant arm, and
+  `power/_side_turn_slot`.
+- **The turn-start split**, which is the biggest single remaining Tier 1 item and
+  is now precisely scoped: `AfterPlayerTurnStart` (`CombatManager.cs:675`) and
+  `AfterSideTurnStart` (`CombatManager.cs:522`) are **two different C# hooks**
+  collapsed onto one `on_player_turn_started` — 9 relics on the first and 14 on
+  the second share one flat pass, and the phase machinery cannot help because
+  these are not two suffixes of one hook. It needs a real side-scoped turn-start
+  dispatcher, which is also what `power/_side_turn_slot`'s `AfterSideTurnStart`
+  leg (plating, rampart, crimson_mantle, inferno) is waiting on. Executed
+  witnesses: `relic_probes_b09.py b09-simple` and `relic_probes_b12.py
+  b12-pendulum`.
+- **`hook_dispatch/G8` proper.** 19 of 20 sites open. Census done: **72 of
+  Hook.cs's 146 dispatchers go through `IterateCombatHookListeners`; 73 bypass it
+  deliberately** (the kill/death/combat-end sequence). The gate belongs in
+  `HookSystem._each` scoped to exactly those 72 — and the sim↔C# hook-name map is
+  the real work, since the sim renames most hooks (`on_card_drawn` ←
+  `AfterCardDrawn`, `on_player_turn_start` ← `AfterSideTurnStart`, …). Also open
+  and newly found: `Hook.BeforeCardPlayed` **is** gated in C# and is not gated in
+  the sim — the inverse mismatch.
+- **§C Tier 2 families** and **§D Tier 3** entirely.
+
+## For whoever picks this up
+
+`rehash --all` was run with the character refactor in the tree, on its author's
+explicit instruction that records staled by it can still be trusted. It is
+paused, not finished — when it resumes, staleness re-fires, which is the detector
+working.

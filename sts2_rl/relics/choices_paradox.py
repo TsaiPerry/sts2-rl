@@ -31,10 +31,13 @@ class ChoicesParadox(Relic):
         # there, legacy keeps the shared-Random sample byte-for-byte.
         crng = self.combat.combat_rng
         if crng.is_parity:
-            options = get_distinct_for_combat_parity(crng.card_gen, self.CARDS)
+            options = get_distinct_for_combat_parity(
+                crng.card_gen, self.CARDS, pool=self.combat.card_pool
+            )
         else:
             options = random_pool_cards(
                 self.combat._rng, self.CARDS, distinct=True,
+                pool=self.combat.card_pool,
             )
         if not options:
             return

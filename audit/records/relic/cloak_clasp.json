@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff",
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f",
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74",
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828",
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
       "side": "sim"
     }
   ],
@@ -69,8 +69,8 @@
     },
     {
       "what": "G2 (LIVE): the AutoPostPlay phase does not exist, so end-of-turn auto-plays that C# runs BEFORE this relic can run after it",
-      "verdict": "gap",
-      "issue": "audit/records/seam/turn_structure.json guard G8 owns this mechanism and verdicts it a gap; cited and matched under binding rule 3. C# enters a dedicated AutoPostPlay phase strictly BEFORE Hook.BeforeTurnEnd (CombatManager.cs:1160-1176), so every end-of-turn auto-play has already resolved -- and already left the hand -- when Cloak Clasp counts cards. The sim has no such phase: StampedePower fires from on_player_turn_end (powers.py:1025), the same walk this relic is in, so the answer depends on listener order. The seam's executed evidence is again this relic's: 'with a 5-card hand and Stampede 2, forcing Stampede first gives 3 block (the C# answer), the natural relics-before-powers order gives 5'. The ported Howl From Beyond card (cards/howl_from_beyond.py:45) is the same shape. Recorded separately from G1 because they are different missing structures -- G1 is sub-phase ordering WITHIN BeforeTurnEnd, G2 is a whole phase BEFORE it -- and fixing either alone leaves the other."
+      "verdict": "faithful",
+      "rationale": "CombatManager.cs:1160-1176 (read today) sets `player.PlayerCombatState.Phase = PlayerTurnPhase.AutoPostPlay`, awaits `Hook.AfterAutoPostPlayPhaseEntered(...)` for every player, then at CombatManager.cs:1172-1175 flips each player to `PlayerTurnPhase.End`, and only at CombatManager.cs:1177-1180 fires `Hook.BeforeTurnEnd`. sts2_rl/combat.py:789 then :793 reproduces exactly that ordering as a STEP, not a listener, so it no longer depends on registration order. CloakClasp.cs:24-36 implements `BeforeSideTurnEnd` and reads `PileType.Hand.GetPile(base.Owner).Cards` at that moment; sts2_rl/relics/cloak_clasp.py:19-23 implements on_player_turn_end -- the sim's Hook.BeforeTurnEnd slot (hooks.py:498-501) -- and reads len(player.hand) there. Both C# AutoPostPlay implementers that the sim ports (StampedePower.cs:18 -> powers.py:1089; HowlFromBeyond.cs:32 -> cards/howl_from_beyond.py:45) now drain in the earlier phase, so the hand Cloak Clasp counts is the post-auto-play hand on both sides; executed, both give 3.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: audit/records/seam/turn_structure.json guard G8 owns this mechanism and verdicts it a gap; cited and matched under binding rule 3. C# enters a dedicated AutoPostPlay phase strictly BEFORE Hook.BeforeTurnEnd (CombatManager.cs:1160-1176), so every end-of-turn auto-play has already resolved -- and already left the hand -- when Cloak Clasp counts cards. The sim has no such phase: StampedePower fires from on_player_turn_end (powers.py:1025), the same walk this relic is in, so the answer depends on listener order. The seam's executed evidence is again this relic's: 'with a 5-card hand and Stampede 2, forcing Stampede first gives 3 block (the C# answer), the natural relics-before-powers order gives 5'. The ported Howl From Beyond card (cards/howl_from_beyond.py:45) is the same shape. Recorded separately from G1 because they are different missing structures -- G1 is sub-phase ordering WITHIN BeforeTurnEnd, G2 is a whole phase BEFORE it -- and fixing either alone leaves the other."
     },
     {
       "what": "N1: `participants.Contains(base.Owner.Creature)` (CloakClasp.cs:26)",

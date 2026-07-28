@@ -81,7 +81,7 @@
   "sim_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "1c3040357c0be4bc63e7abc2cbf7f30cda57344af1f46f2f3c57fe71de8405ff"
+      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead"
     },
     {
       "path": "sts2_rl/player.py",
@@ -89,19 +89,19 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "cd805d5dd00a9f45b911a47fa8b517a157559dc38419d959c7934e804ab5621e"
+      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "faffd9f588c2bd3974ca238691299fb4dc12445623395b134f3de82efa06fd0f"
+      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "731ce3eb7cc5cb7364ac10ecf874ef08bff05ca8211a4b504b224cfec74f9d74"
+      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "bdb609474ea9e9a7ff25dddd5b340b80ca6ca52fab1cd837163264731071d828"
+      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
     },
     {
       "path": "sts2_rl/relics/vambrace.py",
@@ -626,8 +626,8 @@
     },
     {
       "what": "103b. CardSelectCmd: every selection screen guards CombatManager.IsEnding / IsOverOrEnding -> empty",
-      "verdict": "gap",
-      "issue": "See guard G14 (the combat-over / IsEnding guard family). REFUTED BY EXECUTION, and downgraded from `faithful`. CombatState.select_cards (combat.py:560-581) implements only the 0-candidate half; there is no phase check anywhere in it, and RunState.select_cards has none either. Re-verified 2026-07-25: with `cs.phase = Phase.COMBAT_OVER` and two candidates, `cs.select_cards(\"test\", cards, 1)` returns 1 card ([Defend]) where every C# screen returns an empty list. Dormant: the sim only transitions to Phase.COMBAT_OVER inside _end_combat, which the card-play path reaches strictly AFTER _resolve_card_play has returned (combat.py:417-420 for manual play, combat.py:554-557 for auto-play), so no ported select_cards caller -- all of them card OnPlay effects (cards/wish.py:34, cards/colorless_skills.py:222, 708, cards/colorless_attacks.py:443) or out-of-combat events -- can run with the phase already flipped. Reachable today only by an out-of-band call, which is how the reviewer's probe found it. Pinned: test/test_hook_order.py::TestCreatureCardCmdsOrder::test_select_cards_refuses_once_the_combat_is_over."
+      "verdict": "faithful",
+      "rationale": "FIXED 2026-07-28. `CombatState.is_over_or_ending` (sts2_rl/combat.py) ports `CombatManager.IsOverOrEnding` (CombatManager.cs:204-220) -- IsEnding or not-in-progress, where IsEnding is in-progress AND (player dead OR every primary enemy gone with `Hook.ShouldStopCombatFromEnding` not vetoing, CombatManager.cs:171-202) -- and `CombatState.select_cards` returns an empty list when it is true, which is CardSelectCmd's first guard at every selection screen (CardSelectCmd.cs:194-199, 277-285, 382-394, 694-707). The sim previously implemented only the 0-candidate arm. Pinned by test_select_cards_refuses_once_the_combat_is_over, whose strict xfail marker is deleted and which now passes.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: See guard G14 (the combat-over / IsEnding guard family). REFUTED BY EXECUTION, and downgraded from `faithful`. CombatState.select_cards (combat.py:560-581) implements only the 0-candidate half; there is no phase check anywhere in it, and RunState.select_cards has none either. Re-verified 2026-07-25: with `cs.phase = Phase.COMBAT_OVER` and two candidates, `cs.select_cards(\"test\", cards, 1)` returns 1 card ([Defend]) where every C# screen returns an empty list. Dormant: the sim only transitions to Phase.COMBAT_OVER inside _end_combat, which the card-play path reaches strictly AFTER _resolve_card_play has returned (combat.py:417-420 for manual play, combat.py:554-557 for auto-play), so no ported select_cards caller -- all of them card OnPlay effects (cards/wish.py:34, cards/colorless_skills.py:222, 708, cards/colorless_attacks.py:443) or out-of-combat events -- can run with the phase already flipped. Reachable today only by an out-of-band call, which is how the reviewer's probe found it. Pinned: test/test_hook_order.py::TestCreatureCardCmdsOrder::test_select_cards_refuses_once_the_combat_is_over."
     },
     {
       "what": "104. CardSelectCmd AUTO-SELECT: !RequireManualConfirmation && count <= MinSelect -> return ALL candidates with no player choice",

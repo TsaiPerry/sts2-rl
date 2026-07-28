@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\infernal_blade.py",
-    "sha256": "37ff6079bd824334debd034331858e9b884ddbfc2eb0adf0e45bec24427deb61"
+    "sha256": "0e4d85c28371e22a429d774b3e3310d22753fcbe8e491340f40dd466d42c6719"
   },
   "extra_sources": [
     {

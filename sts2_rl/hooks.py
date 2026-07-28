@@ -76,6 +76,12 @@ class HookSystem:
 
     def __init__(self) -> None:
         self._listeners: list[Any] = []
+        # id() of every currently-registered listener. `CombatState.
+        # IterateHookListeners` (CombatState.cs:482-488) yields an item only
+        # `if (Contains(item))`, evaluated as the enumeration reaches it — so a
+        # listener unregistered by an earlier listener in the SAME dispatch is
+        # skipped. A membership set keeps that check O(1) on the dispatch path.
+        self._live: set[int] = set()
         # Back-reference to the owning CombatState; set by CombatState.__init__.
         # Lets powers reach combat-level state (e.g. Infested spawning Wrigglers).
         self.combat: Any = None
@@ -96,10 +102,15 @@ class HookSystem:
 
     def register(self, listener: Any) -> None:
         self._listeners.append(listener)
+        self._live.add(id(listener))
         self._epoch += 1
 
     def unregister(self, listener: Any) -> None:
         self._listeners.remove(listener)
+        # `_listeners` can legitimately hold the same object twice; only drop
+        # the liveness mark when the last copy goes.
+        if not any(l is listener for l in self._listeners):
+            self._live.discard(id(listener))
         self._epoch += 1
 
     # ── Dispatch order and phases ────────────────────────────────────────
@@ -165,16 +176,29 @@ class HookSystem:
         `_phased` is recomputed with the order cache — so the common case stays
         a single walk.
         """
-        order = self._ordered()
+        # `_phased` is refreshed as a side effect of `_ordered()`, so it has to
+        # be current before the branch below reads it.
+        self._ordered()
+        live = self._live
         if hook in self._phased:
             for suffix in _PHASES:
                 name = hook + suffix
-                for l in order:
+                # Each pass is its own IterateCombatHookListeners call in C#
+                # (Hook.cs:204 and :212 for AfterCardDrawn, :1580 and :1584 for
+                # ModifyEnergyCostInCombat), so `_ordered()` is re-read per
+                # pass: a listener registered by an earlier pass is visible to
+                # a later one. Binding it once meant the plain pass could not
+                # see what the VeryEarly pass had added.
+                for l in self._ordered():
+                    if id(l) not in live:
+                        continue
                     fn = getattr(l, name, None)
                     if fn is not None:
                         yield l, fn
             return
-        for l in order:
+        for l in self._ordered():
+            if id(l) not in live:
+                continue
             fn = getattr(l, hook, None)
             if fn is not None:
                 yield l, fn
