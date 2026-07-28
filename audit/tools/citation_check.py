@@ -13,9 +13,14 @@ it against the sim repo and the game root, and report:
 
   MISSING     the cited path does not exist on either side
   OUT-OF-RANGE the line number is past the end of the file
-  UNHASHED    the citation resolves, but the record does not hash that file
-              (rule 7 wants this stated in the rationale, so this is a
-              REMINDER, not a failure -- see --strict)
+  UNHASHED    the citation resolves, but no source list in the record hashes
+              that file -- ``game_source``/``sim_source``, the plural seam
+              lists AND ``extra_sources`` are all consulted.  Split by whether
+              the citation carries a LINE NUMBER, because that is the scope of
+              binding rule 7 and of ``backfill_sources.py``'s own regex: a bare
+              ``SpeedPotion.cs`` in a prose comparison pins no line and cannot
+              go stale in a way that invalidates a verdict, so only the
+              line-numbered set fails under ``--strict``.
 
 It never judges whether a citation is *apt*; only whether it is real. A green
 run means nobody invented a path or a line number.
@@ -47,9 +52,13 @@ _CITE = re.compile(
 )
 
 # Cited but deliberately not hashed by any record: the pipeline's own machinery
-# and its pins. Documented in docs/audit/seams/hook_dispatch.md's fix-pass
+# and its pins. Documented in audit/seams/hook_dispatch.md's fix-pass
 # section -- hashing the harness would make every record stale whenever any
 # source list changes, and a broken pin fails loudly on its own.
+# `backfill_sources.py` mirrors this list and PRUNES entries under it; the two
+# tools disagreed until 2026-07-27, which is why appending four pins to
+# test/test_hook_order.py staled nine card and relic records whose own cited
+# lines had not moved.
 _NEVER_HASHED = ("audit/tools/", "test/")
 
 

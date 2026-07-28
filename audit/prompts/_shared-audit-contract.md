@@ -32,8 +32,15 @@ Several sessions run against sibling worktrees of one repo and merge later.
 Merges stay trivial only while ownership holds.
 
 **Nobody but the seam session touches:**
-`audit/tools/harness.py` · `test/test_hook_order.py` · `audit/records/seam/**` ·
-`audit/seams/**` · `.superpowers/sdd/progress.md`
+`audit/tools/harness.py` · `audit/records/seam/**` · `audit/seams/**` ·
+`.superpowers/sdd/progress.md`
+
+`test/test_hook_order.py` is seam-owned **for everything except gap pins**. A
+content stream may add `strict=True` xfails there only when its own stream
+prompt says so, and only inside one clearly-named class of its own
+(`TestPotionContentPins` is the precedent, 2026-07-27) so the widening stays
+visible and the block stays movable. Anything else in that file is still the
+seam session's.
 
 **One owner each:**
 
@@ -44,6 +51,7 @@ Merges stay trivial only while ownership holds.
 | `audit/records/card/**` | card stream |
 | `audit/records/event/**`, `audit/records/enchantment/**` | event+enchantment stream |
 | `audit/records/monster/**` | monster stream |
+| `audit/records/potion/**` | potion stream |
 | `audit/content/<kind>/**` | that kind's stream (narration docs, if you write any — never `audit/content/` directly) |
 | `audit/tools/PROMPT.md`, `audit/tools/name_overrides.json` | **relic stream only** |
 | `audit/GAP-QUEUE.md` | gap-queue stream |
@@ -112,8 +120,10 @@ paths, ascension values (the sim uses non-ascension numbers by convention).
 anymore").** The old clause read "Out of scope everywhere: potions (deferred by
 Perry)" and it has been deleted, not narrowed. `potion` is now an ordinary
 audit kind — 51 sim units, `audit/records/potion/`, in
-`harness.py roster potion` — and it is **unaudited**, exactly like `monster`.
-Unaudited is a fact the tools report; out-of-scope was a claim that hid things.
+`harness.py roster potion` — and as of **2026-07-27 it is audited**, like
+`monster`: 51 records, 152 gap entries, 83 live. Out-of-scope was a claim that
+hid things; unaudited was a fact the tools report; audited is a set of records
+you must now **match rather than re-derive** under binding rule 3.
 
 Two consequences, both binding:
 
@@ -130,7 +140,17 @@ Two consequences, both binding:
   caused. It also protected a false claim: `damage_pipeline` N4 waived the
   two-phase `ShouldDie` ordering because "FairyInABottle is out of scope", and
   the potion turned out to be ported at `sts2_rl/potions.py:1242` with a real
-  `should_die`. Re-read any verdict that cites the old clause.
+  `should_die`. Re-read any verdict that cites the old clause. **Four relic
+  records still assert the deleted clause as a live premise** — `alchemical_
+  coffer`, `lost_coffer`, `phial_holster`, `potion_belt` each say "POTION IS NOT
+  AN AUDITED KIND — there is no `potion` roster kind and no
+  `audit/records/potion/`". Both halves are false; that is the relic stream's
+  to correct.
+
+**The `live` boolean is now the expected form on every gap entry.** `monster`
+(45/45) and `potion` (152/152) state it on every one; the older tiers leave most
+unstated, and `audit_status.py`'s `live` column counts records, not entries.
+Absence means *not stated*, never *dormant*.
 
 Numeric constants are checked against the **non-ascension** branch of
 `AscensionHelper.GetValueIfAscension(...)`.

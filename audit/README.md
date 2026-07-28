@@ -21,29 +21,34 @@ they are what the tools in `tools/` do. They never judge faithfulness.
 
 ## Status
 
-**Audited and merged here: all 6 engine seams, plus the power, card, event,
-enchantment and relic content tiers — 686 records, 0 invalid.** Every one has
-been through an independent review pass and a fix pass. The relic tier (258
-records) merged on 2026-07-26.
+**Audited and merged here: all 6 engine seams and all 7 content tiers — 846
+records, 0 invalid, 0 stale.** Every one has been through an independent review
+pass and a fix pass. The relic tier (258 records) merged on 2026-07-26;
+`monster` (109) and `potion` (51) merged on 2026-07-27, which completes the
+kind list. **One unit still has no record: the sim-only `card/sweep`** (see
+[Sim-only units](#sim-only-units)) — so a whole-project claim here now covers
+all seven content kinds, and 1 of 847 units.
 
-**Not audited at all: `monster` (109 units) and `potion` (51).** The monster
-stream is gated on the `monster_state_machine` seam, which is done, so it can
-start. **`potion` became a kind on 2026-07-26**, when Perry replaced the shared
-contract's blanket "potions are out of scope" clause with an ordinary unaudited
-kind — so those 51 units were not merely unaudited, they were *invisible*, and
-ten entries across the card and power tiers had waived real behaviour on the
-clause. Anything here that reads as a whole-project claim covers **5 of the 7
-content kinds**; 160 units are not looked at yet, and `GAP-QUEUE.md` says so in
-its header too.
+**`potion` is the tier to read if you want to know what an *exclusion* costs.**
+It became a kind on 2026-07-26, when Perry replaced the shared contract's
+blanket "potions are out of scope" clause; until then those 51 units were not
+merely unaudited, they were *invisible*, and ten entries across the card and
+power tiers had waived real behaviour on the clause.
 
-**What the relic merge did to the tiers that were already "done" is the reason
-to keep that caveat loud.** Merging one kind did not merely append its own
-gaps: it unblocked `power/diamond_diadem` (whose verdict had been waiting on a
-record that did not exist), corrected two stale seam citations, flipped a seam
-`waiver` to a `gap` by disproving its "no ported listener" claim, raised a seam
-guard from dormant to LIVE, and turned up **`UnmovablePower` × `Entrench`** — a
-live gap that the `power` and `seam` records had between them recorded as
-`faithful` and omitted from a census. Expect the same from `monster`.
+**What each merge did to the tiers that were already "done" is the reason to
+keep the caveat loud.** The relic merge unblocked `power/diamond_diadem` (whose
+verdict had been waiting on a record that did not exist), corrected two stale
+seam citations, flipped a seam `waiver` to a `gap` by disproving its "no ported
+listener" claim, raised a seam guard from dormant to LIVE, and turned up
+**`UnmovablePower` × `Entrench`** — a live gap that the `power` and `seam`
+records had between them recorded as `faithful` and omitted from a census. The
+potion merge did the same: it supplied the executed witness `seam/power_cmd` G6
+records as missing (which moved `power/_should_allow_hitting` to 8 sites and
+gave it its first pin), flipped `damage_pipeline/N4` from dormant to LIVE at its
+second site, and turned up a **framework root with no seam** — see
+[`PotionModel` has no seam](#potionmodel-has-no-seam). It also broke four tools,
+each of which is fixed and pinned by a test; do not assume the next kind will
+not.
 
 Do not trust a status number written in prose, including in this file. Run it:
 
@@ -54,32 +59,36 @@ py audit/tools/gap_queue.py counts  # gap entries, mechanisms, pins
 
 Three things to expect from that output rather than be surprised by:
 
-- **`stale` is nonzero whenever `sts2_rl/` has uncommitted edits.** Records
-  hash every file their verdicts cite, so a working-tree change to an audited
-  file marks its records stale on sight — editing `cmds.py` alone stales 146.
-  That is the detector working. See [Staleness](#staleness).
+- **`stale` is nonzero whenever a hashed file moves underneath a record** — an
+  uncommitted edit to `sts2_rl/` is the usual cause (editing `cmds.py` alone
+  stales 146), but a *merge* does it too, and so does appending to a file a
+  record cites. That is the detector working. See [Staleness](#staleness).
 - **Most records roll up to `gap`**, because one gap anywhere in a record makes
   the record a gap. Gaps are **queued, not fixed** — a standing decision, not
   an oversight.
-- **The `live` column is nearly all zero** even though most gap entries are
-  labelled live in prose. The `live` boolean is a newer field; the relic tier's
-  fix pass is the first to populate it as data, so `relic` and one `power`
-  record report a real number and everything else reports 0 because nothing was
-  stated, not because nothing is live. Until the other tiers catch up, liveness
-  lives in `GAP-QUEUE.md` rather than in the status table.
+- **The `live` column is uneven, and the unevenness is about record vintage,
+  not liveness.** It counts *records carrying at least one `live: true` entry*,
+  not live entries. `monster` (45/45 gap entries) and `potion` (152/152) state
+  the boolean on every gap and report 24 and 51; `relic`, `power` and `card`
+  report 12, 5 and 1 because most of their entries state nothing either way.
+  Absence means *not stated*, not dormant. `potion`'s 51 is one shared wrapper
+  gap per record, not 51 distinct mechanisms.
 
-> **Content gaps still have no acceptance tests of their own.** All 31 pinned
-> mechanisms are seam-anchored; not one content-anchored mechanism has a
-> `strict=True` xfail. The relic merge softened this without fixing it — relic
-> entries now sit under four *already-pinned* seam mechanisms
-> (`damage_pipeline/G3`, `hook_dispatch/G3`, `hook_dispatch/G4`,
-> `turn_structure/G13`), so those particular relic gaps can prove themselves.
-> Every other content fix still cannot. Adding pins as gaps are worked is the
-> cheapest way to keep that from rotting, and `GAP-QUEUE.md` entry 51
+> **Content gaps have their first acceptance tests, and only their first.** The
+> potion tier added `TestPotionContentPins` to `test/test_hook_order.py` — four
+> `strict=True` xfails anchored in `audit/records/potion/**`, the first
+> content-anchored pins in the project — taking the file to 36. Every other
+> content tier's fixes still cannot prove themselves except where they sit under
+> an already-pinned seam mechanism (`damage_pipeline/G3`, `hook_dispatch/G3`,
+> `hook_dispatch/G4`, `turn_structure/G13`). Adding pins as gaps are worked is
+> the cheapest way to keep that from rotting, and `GAP-QUEUE.md` entry 51
 > (`relic/_combat_reset`, 16 sites, one parametrised test) is the highest-value
-> place to start. Note the ownership snag: `test/test_hook_order.py` is
-> seam-tier-owned, so content pins need either that ownership widened or a
-> sibling module the same `gap_queue.py pins` scanner reads.
+> place to start. On the ownership snag: `test/test_hook_order.py` is
+> seam-tier-owned and the potion stream's prompt overrode that explicitly,
+> confining its pins to one named class so the widening is visible and movable.
+> Either widen the contract the same way for the next tier or give content pins
+> a sibling module the `gap_queue.py pins` scanner reads — but note the scanner
+> now resolves a content-anchored pin, which it did not before 2026-07-27.
 
 ---
 
@@ -89,20 +98,35 @@ Three things to expect from that output rather than be surprised by:
 audit/
   README.md          you are here
   GAP-QUEUE.md       every gap in every audited kind, de-duplicated by
-                     mechanism, ordered for work (monster + potion unaudited)
+                     mechanism, ordered for work — all 7 kinds
   records/
     seam/*.json      the 6 engine-seam audit records — the evidence
-    power/ card/ event/ enchantment/ relic/             680 content records
-    monster/ potion/                                    empty; stream never run
+    power/ card/ event/ enchantment/
+    relic/ monster/ potion/                             840 content records
+  content/<kind>/    per-tier narration docs, written by that tier's stream:
+                     potion/shared-mechanisms.md   the PotionModel.OnUseWrapper
+                                                   pipeline, recorded once
+                     monster/SHARED-FINDINGS.md    the monster tier's
+                                                   cross-batch findings
+                     power/gap-ledger.md           the power tier's ledger
   seams/*.md         the 6 seam narration docs — the ordering specs
   tools/             the harness, the status tool, the queue generator, probes
-  prompts/           the shared contract + the 9 stream prompts
+  prompts/           the shared contract + the 10 stream prompts
 ```
 
 **Deliberately not here:** `test/test_hook_order.py`, `test/test_audit_harness.py`
 and `test/test_audit_status.py` stay in `test/`. They are pytest suite members;
-the 32 strict-xfail gap pins have to run with the normal suite so that fixing a
+the 36 strict-xfail gap pins have to run with the normal suite so that fixing a
 gap turns a *suite* red-to-green, not a side script.
+
+**`test/` and `audit/tools/` are never hashed by a record**, even when a
+verdict cites a pin or a probe with a line number. Both `citation_check.py` and
+`backfill_sources.py` enforce that (`_NEVER_HASHED`), and they disagreed until
+2026-07-27: backfill had pinned 28 such entries, so appending four pins to
+`test/test_hook_order.py` staled nine card and relic records whose own cited
+lines had not moved by a byte. A record still *says* it rests on the pin, and
+the pin still has to pass — it is the hash that was wrong, because a pin file
+changes whenever any other pin is added.
 
 ---
 
@@ -118,18 +142,23 @@ dormant.
 | **B** | state divergence — changes a damage/block/HP number, a hand, a pile, a deck entry; the next conformance assert fires |
 | **C** | bookkeeping only — hook order or event identity, no numeric effect on ported content |
 
-**The queue covers 5 of the 7 content kinds.** `seam`, `power`, `card`, `event`,
-`enchantment` and `relic` are in it; **`monster` (109 units) and `potion` (51)
-are not audited at all**, so a mechanism that lives only there is missing from
-the queue because nobody looked, not because it was cleared. The queue's header
-says so first, before any number.
+**The queue covers all 7 content kinds** as of 2026-07-27. It did not for a
+day, and the way it failed is worth keeping: `gap_queue.py` carries its **own**
+kind list, so when `potion` became a roster kind and 51 finished records landed,
+`counts` printed `NOT AUDITED : potion` while `audit_status.py` — which derives
+its kinds from the harness — reported the same records audited. Two tools, two
+answers, and only the one nobody reads was right.
+`test/test_audit_status.py::TestQueueGeneratorCoversEveryKind` now pins the two
+lists together so the next kind cannot go missing the same way.
 
 **Entries are not jobs, and the relic tier is the sharpest illustration yet.**
-1410 gap entries across the 686 records de-duplicate to 809 mechanisms; the
+1612 gap entries across the 846 records de-duplicate to 856 mechanisms; the
 relic tier alone contributes 620 entries that collapse to 404, with 16 recurring
 families carrying 227 of them. The extreme case is `relic/_is_allowed` — **34
 recorded sites and one missing base-class member.** The largest cross-kind
-mechanism is now `hook_dispatch/G4` at 36 sites across four kinds.
+mechanism is `hook_dispatch/G4` at 36 sites across four kinds, and the potion
+tier's `potion/_use_pipeline` and `potion/_effect_bracket` are 51 sites each —
+one shared wrapper gap recorded once per unit, not 102 jobs.
 
 Fixing one site of a mechanism generally clears all of them, so treating the
 entries as independent overstates the work badly, and the overstatement is worse
@@ -140,15 +169,30 @@ each one carries a **fix recipe**: sites, impact grade, divergence
 (sim `file:line` vs C# `file:line`), observable, dormancy trigger, pin, which
 sim file changes and roughly how, and the blast radius.
 
-**The pins are the acceptance test.** 31 mechanisms — all of them
-seam-*anchored* — are pinned by a `strict=True` xfail in
-`test/test_hook_order.py`; **no content-anchored mechanism has a pin of its
-own**, though since the relic merge some content entries do fall under four
-already-pinned seam mechanisms. Strict means the
-test *fails* if it unexpectedly passes — so when you fix the gap the pin flips
-from xfail to a failure, and you delete the marker in the same commit. That is
-the fix's proof. `py audit/tools/gap_queue.py pins` lists what is pinned and
+**The pins are the acceptance test.** 36 `strict=True` xfails in
+`test/test_hook_order.py` pin 32 mechanisms: 32 pins are seam-anchored and
+**four are content-anchored**, the potion tier's `TestPotionContentPins` and the
+first in the project. Strict means the test *fails* if it unexpectedly passes —
+so when you fix the gap the pin flips from xfail to a failure, and you delete
+the marker in the same commit. That is the fix's proof.
+`py audit/tools/gap_queue.py pins` lists what each pin resolves to and
 `unpinned` lists the mechanisms with no pin yet.
+
+Two things a pin can do wrong, both of which happened and are now checked by
+`test/test_audit_status.py::TestPinsResolveToAMechanism`:
+
+- **anchor nothing.** Until 2026-07-27 `pins()` derived a mechanism only from
+  the six seam names, so a content-anchored pin resolved to a mechanism
+  literally called `None/G1` — counted as a pin, pinning nothing. `pins` now
+  prints `UNRESOLVED` and exits 1 rather than swallowing it.
+- **anchor the wrong thing, which is worse.** The potion AoE pin names
+  `seam/power_cmd` G6, correctly and per rule 3 — but G6 is a *two-headed*
+  guard ("No `CombatManager.IsEnding` / `CanReceivePowers` guard backstop") and
+  the queue merges `power_cmd/G6` into `hook_dispatch/G8`, the IsEnding family.
+  A LIVE, failing pin was therefore credited to a *dormant* 22-site mechanism
+  while the LIVE 8-site one it actually proves read "unpinned". `_PIN_OVERRIDE`
+  fixes that site explicitly; a pin credited to the wrong mechanism is worse
+  than one credited to none, because it reports coverage in two places at once.
 
 Fixing anything in `sts2_rl/` marks the records that hashed those files stale
 — see [Staleness](#staleness). That is why fixes run as their own stream
@@ -225,7 +269,21 @@ The enumeration follows the unit's **immediate base class**, which normally
 lives in another file: `FlexPotionPower.cs` declares one member and inherits
 seven from `TemporaryStrengthPower`, so the record owes eight verdicts, not one.
 Following stops at the framework roots (`PowerModel`, `CardModel`, …) — that
-layer is audited once by the seam tier, not 680 times.
+layer is meant to be audited once by the seam tier rather than 840 times.
+
+<a id="potionmodel-has-no-seam"></a>
+> **`PotionModel` has no seam, and that hole is invisible to every tool here.**
+> `MODEL_ROOT_CLASSES` is a *promise* that the seam tier covers each framework
+> root. For `PotionModel` it does not: there are six seams and none of them is
+> the potion pipeline, so `PotionModel.OnUseWrapper`
+> (`src/Core/Models/PotionModel.cs:291-342`) — the entire use path for all 51
+> potions, carrying `Hook.BeforePotionUsed` and `CheckForEmptyHand`, neither of
+> which the sim dispatches — was verdicted nowhere. `validate` cannot notice,
+> because a root class is exactly what it is told to stop at. The potion tier
+> recorded it once in [`content/potion/shared-mechanisms.md`](content/potion/shared-mechanisms.md)
+> and carries one rollup guard per record (`potion/_use_pipeline`, 51 sites).
+> **The fix is a `potion_pipeline` seam, or extending `creature_card_cmds`.**
+> Worth a check that every other root class names its covering seam.
 
 A hook key is matched on the identifier it starts with, so a record may annotate
 one with provenance: `"Type (inherited, TemporaryStrengthPower.cs:32-42)"`.
@@ -249,11 +307,14 @@ All run from the repo root. None of them judges faithfulness.
 | `py audit/tools/harness.py skeleton <kind>/<id>` | writes `audit/records/<kind>/<id>.json` with every `public override` enumerated and verdicts blank. Refuses to overwrite. `--sim-only` for a unit with no C# counterpart |
 | `py audit/tools/harness.py validate` | completeness + vocabulary check over every record. **Staleness is not validation's job** |
 | `py audit/tools/harness.py rehash <unit>` | re-pins a record's source hashes after a re-audit. **Not a re-audit** — see [Staleness](#staleness) |
-| `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from every `records/<kind>/` — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json`. Names the unaudited kinds rather than reporting them as 0 gaps |
-| `py audit/tools/gap_queue.py cite-check` | every `file:line` in `GAP-QUEUE.md` resolves to a real line |
-| `py audit/tools/gap_queue.py coverage` | every mechanism and every gap entry is findable in `GAP-QUEUE.md` |
+| `py audit/tools/gap_queue.py counts` | the gap numbers above, regenerated from every `records/<kind>/` — also `list`, `mechanisms`, `pins`, `unpinned`, `refs`, `json`. Reads the kinds in its own `CONTENT_KINDS`, and names any kind it is *not* reading rather than reporting it as 0 gaps |
+| `py audit/tools/gap_queue.py cite-check` | every `file:line` in `GAP-QUEUE.md` resolves to a real line. **Exits non-zero on failure** — it did not until 2026-07-27, when `main()` stopped discarding the command's return value |
+| `py audit/tools/gap_queue.py coverage` | every mechanism and every gap entry is findable in `GAP-QUEUE.md`. Same exit-code fix; before it, a regeneration verified by exit code could pass while the queue was two dozen mechanisms short |
+| `py audit/tools/citation_check.py [path]` | every `file:line` in a *record* resolves to a real line, and every file cited with a line number is hashed by that record — binding rule 7's enforcer. Consults `extra_sources` as well as the singular pair. `--strict` also fails on rule-7 misses |
+| `py audit/tools/backfill_sources.py` | writes the `extra_sources` entry for every third file a record cites with a line number, so rule 7 holds without hand-transcribing hashes. `--prune` removes entries under `_NEVER_HASHED` (`test/`, `audit/tools/`), `--no-add` keeps that surgical |
 | `py audit/tools/dormancy_probes.py [probe]` | re-derives every "executed evidence" number `hook_dispatch` states about which classes implement which hook |
 | `py audit/tools/state_machine_probes.py [probe]` | the same for `monster_state_machine` — the `AddBranch` overload census, the roll-distribution diff, the rule-7 citation sweep |
+| `py audit/tools/relic_probes*.py`, `monster_probes*.py`, `potion_probes.py` | each tier's pool-wide sweeps and executed witnesses. `potion_probes.py` carries `sweep-attrs` / `-usage` / `-onuse` / `-overrides` / `-hooks` / `-vars` plus the executed gap witnesses `aoe-power`, `touch-of-insanity` and `pin-append` |
 | `py -m pytest test/ -q -p audit.tools.stale_listener_plugin` | instruments every hook dispatch to test `hook_dispatch` gap G7's dormancy over the whole suite |
 
 Two files in `tools/` are content, not code: **`PROMPT.md`** is the versioned
@@ -319,7 +380,7 @@ record; it was a review finding on three consecutive seam tasks.
 
 ## Adding a stream
 
-The folder is built for five content streams to extend it concurrently without
+The folder is built for content streams to extend it concurrently without
 colliding. A stream is one worktree, one branch, one directory.
 
 1. Read **[`prompts/_shared-audit-contract.md`](prompts/_shared-audit-contract.md)**
@@ -342,7 +403,7 @@ Paths below are relative to `audit/` except the two that are not in it:
 | `records/card/**` | card stream |
 | `records/event/**`, `records/enchantment/**` | event+enchantment stream |
 | `records/monster/**` | monster stream |
-| `records/potion/**` | potion stream (not started; kind created 2026-07-26) |
+| `records/potion/**`, `content/potion/**`, `tools/potion_probes.py`, `TestPotionContentPins` in `test/test_hook_order.py` | potion stream (complete 2026-07-27; the pins are a prompt-authorised exception to the seam-tier rule below, confined to one named class) |
 | `GAP-QUEUE.md` | gap-queue stream |
 | `records/seam/**`, `seams/**`, `tools/harness.py`, `test/test_hook_order.py` | seam tier only |
 | `sts2_rl/**` | gap-fix stream only, once authorised |
