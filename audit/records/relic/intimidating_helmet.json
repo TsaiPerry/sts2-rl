@@ -48,11 +48,6 @@
       "path": "sts2_rl/powers.py",
       "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
       "side": "sim"
-    },
-    {
-      "path": "test/test_hook_order.py",
-      "sha256": "c1deb8102e1a92975c9090d88ec4d15a463992010d2e8c906eb93b2076b62c49",
-      "side": "sim"
     }
   ],
   "hooks": {

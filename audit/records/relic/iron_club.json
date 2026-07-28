@@ -38,11 +38,6 @@
       "path": "sts2_rl/player.py",
       "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
       "side": "sim"
-    },
-    {
-      "path": "test/test_hook_order.py",
-      "sha256": "c1deb8102e1a92975c9090d88ec4d15a463992010d2e8c906eb93b2076b62c49",
-      "side": "sim"
     }
   ],
   "hooks": {

@@ -43,11 +43,6 @@
       "path": "sts2_rl/relics/cloak_clasp.py",
       "sha256": "0be75771fbd507ec9984fabce3b9d1f0041a8a768bee9f09a9779a30c33aae67",
       "side": "sim"
-    },
-    {
-      "path": "test/test_hook_order.py",
-      "sha256": "c1deb8102e1a92975c9090d88ec4d15a463992010d2e8c906eb93b2076b62c49",
-      "side": "sim"
     }
   ],
   "hooks": {

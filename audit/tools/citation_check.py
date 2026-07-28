@@ -63,6 +63,19 @@ def _iter_text(record: dict):
 
 
 def _hashed_paths(record: dict) -> set[str]:
+    """Every path this record actually hashes, in all THREE shapes.
+
+    ``extra_sources`` was missing here until 2026-07-27 and it is the shape
+    that matters most: the singular ``game_source``/``sim_source`` pair only
+    ever covers a content record's own two files, and audit/README.md's
+    Staleness section makes ``extra_sources`` the sanctioned home for every
+    other file a verdict cites -- which ``backfill_sources.py`` exists to
+    populate. Omitting it made UNHASHED report the exact citations the
+    pipeline had just pinned on purpose: 315 of the potion tier's 1035, and
+    every content record written since ``extra_sources`` landed. The count
+    over-reported, so nothing was ever falsely cleared, but ``--strict`` was
+    unusable on any record that used the mechanism it is supposed to enforce.
+    """
     out = set()
     for key in ("game_source", "sim_source"):
         src = record.get(key)
@@ -72,10 +85,39 @@ def _hashed_paths(record: dict) -> set[str]:
         for src in record.get(key) or []:
             if src.get("path"):
                 out.add(src["path"].replace("\\", "/"))
+    # `extra_sources` entries are mixed game/sim and each names its own root in
+    # a `side` field, but the paths this set is compared against are already
+    # root-relative on both sides (see `check`), so the side is not needed to
+    # match -- only to resolve, which `_resolve` does from the roots directly.
+    for src in record.get("extra_sources") or []:
+        if isinstance(src, dict) and src.get("path"):
+            out.add(str(src["path"]).replace("\\", "/"))
     return out
 
 
-def _resolve(path: str, hashed: set[str]) -> tuple[Path | None, str, bool]:
+def _own_paths(record: dict) -> set[str]:
+    """Just the unit's OWN two files -- the singular pair.
+
+    Kept apart from `_hashed_paths` because it is the tie-breaker for a bare
+    basename: a record hashes its own `Relics/Byrdpip.cs` AND, through
+    `extra_sources`, the unrelated `Monsters/Byrdpip.cs` it cites for
+    contrast, so once `extra_sources` joined the hashed set (2026-07-27) a bare
+    `Byrdpip.cs:72` had two candidates and got reported ambiguous. The
+    docstring of `_resolve` already states the right rule -- "a record citing a
+    bare basename almost always means its own unit's file" -- so the singular
+    pair wins outright and ambiguity is reported only when it does not settle
+    it.
+    """
+    out = set()
+    for key in ("game_source", "sim_source"):
+        src = record.get(key)
+        if src and src.get("path"):
+            out.add(src["path"].replace("\\", "/"))
+    return out
+
+
+def _resolve(path: str, hashed: set[str],
+             own: set[str] | None = None) -> tuple[Path | None, str, bool]:
     """Find the cited file under the sim repo or the game root.
 
     Returns (path, label, ambiguous). `hashed` is the record's own hashed
@@ -83,8 +125,11 @@ def _resolve(path: str, hashed: set[str]) -> tuple[Path | None, str, bool]:
     `Byrdpip.cs` (a 32-line Monsters one and a 73-line Relics one), and a
     naive rglob picked the monster, reporting a correct `Byrdpip.cs:69-72`
     citation as out of range. A record citing a bare basename almost always
-    means its own unit's file, so prefer that.
+    means its own unit's file, so prefer that -- and `own`, the singular
+    game_source/sim_source pair, is what "its own unit's file" means when the
+    hashed set holds more than one candidate.
     """
+    own = own or set()
     norm = path.replace("\\", "/")
     for root, label in ((_REPO, "sim"), (DEFAULT_GAME_ROOT, "game")):
         cand = root / norm
@@ -111,11 +156,16 @@ def _resolve(path: str, hashed: set[str]) -> tuple[Path | None, str, bool]:
         for root, label in ((_REPO, "sim"), (DEFAULT_GAME_ROOT, "game")):
             cand = root / rel
             if cand.is_file():
-                found.append((cand, label))
+                found.append((cand, label, rel in own))
                 break
     if len(found) == 1:
         return found[0][0], found[0][1], False
     if len(found) > 1:
+        # The unit's own file settles it; two `extra_sources` candidates with
+        # the same basename and no own-file among them stay ambiguous.
+        mine = [f for f in found if f[2]]
+        if len(mine) == 1:
+            return mine[0][0], mine[0][1], False
         return found[0][0], found[0][1], True
     # (b) fall back to a tree search, and SAY SO when it is ambiguous
     #
@@ -141,12 +191,14 @@ def check(paths: list[Path], strict: bool = False) -> int:
     oor: list[str] = []
     ambig: list[str] = []
     unhashed: set[tuple[str, str]] = set()
+    unhashed_bare: set[tuple[str, str]] = set()
     seen = 0
 
     for rec_path in paths:
         record = json.loads(rec_path.read_text(encoding="utf-8"))
         unit = record.get("unit", rec_path.stem)
         hashed = _hashed_paths(record)
+        own = _own_paths(record)
         cited: dict[str, int] = {}
         for text in _iter_text(record):
             for m in _CITE.finditer(text):
@@ -155,7 +207,7 @@ def check(paths: list[Path], strict: bool = False) -> int:
                 cited[path] = max(cited.get(path, 0), line)
         for path, line in sorted(cited.items()):
             seen += 1
-            resolved, label, ambiguous = _resolve(path, hashed)
+            resolved, label, ambiguous = _resolve(path, hashed, own)
             if resolved is None:
                 missing.append(f"{unit}: cited path does not exist: {path}")
                 continue
@@ -173,7 +225,15 @@ def check(paths: list[Path], strict: bool = False) -> int:
                 _REPO if label.startswith("sim") else DEFAULT_GAME_ROOT)
             ).replace("\\", "/")
             if rel not in hashed and not rel.startswith(_NEVER_HASHED):
-                unhashed.add((unit, rel))
+                # Binding rule 7 is scoped to citations that carry a LINE
+                # NUMBER ("Every file you cite with a line number must be
+                # hashed by the record"), and `backfill_sources.py`'s
+                # CITATION_RE requires one for the same reason -- a bare
+                # `SpeedPotion.cs` in a prose comparison pins nothing and
+                # cannot go stale in a way that invalidates a verdict. Keeping
+                # both sets, but only the line-numbered one is a rule-7
+                # finding, is what makes --strict usable.
+                (unhashed if line else unhashed_bare).add((unit, rel))
 
     print(f"{len(paths)} record(s), {seen} citation(s) checked")
     for label, rows in (("MISSING", missing), ("OUT-OF-RANGE", oor),
@@ -181,9 +241,13 @@ def check(paths: list[Path], strict: bool = False) -> int:
         print(f"\n{label}: {len(rows)}")
         for row in rows:
             print(f"  {row}")
-    print(f"\nUNHASHED (rule 7 wants these named in the rationale): "
-          f"{len(unhashed)}")
+    print(f"\nUNHASHED, cited WITH a line number (binding rule 7 -- pin these "
+          f"in extra_sources or name them in the rationale): {len(unhashed)}")
     for unit, rel in sorted(unhashed):
+        print(f"  {unit}: {rel}")
+    print(f"\nUNHASHED, cited as a bare filename (advisory, outside rule 7 -- "
+          f"no line is pinned, so it cannot go stale): {len(unhashed_bare)}")
+    for unit, rel in sorted(unhashed_bare):
         print(f"  {unit}: {rel}")
 
     bad = len(missing) + len(oor) + (len(unhashed) if strict else 0)

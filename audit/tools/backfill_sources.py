@@ -67,6 +67,28 @@ CITATION_RE = re.compile(r"(?<![\w./\\-])([A-Za-z_][\w./\\+-]*\.(?:cs|py)):(\d+)
 # repo root and this prefix are both tried before the basename index.
 SIM_PREFIX = "sts2_rl"
 
+# Never pinned, and PRUNED when found -- the pipeline's own machinery and its
+# pins.  This mirrors `citation_check._NEVER_HASHED` verbatim, and until
+# 2026-07-27 the two tools contradicted each other: citation_check declined to
+# demand these, and this tool pinned them anyway, 28 of them.  The contradiction
+# had a cost.  A record that hashes `test/test_hook_order.py` goes stale every
+# time ANY pin is added anywhere in that file -- appending the four potion pins
+# staled nine card and relic records whose own cited lines had not moved by a
+# byte -- and a record hashing `audit/tools/relic_probes.py` goes stale when a
+# probe is edited.  Neither is a fact about the audited unit, so neither is a
+# verdict that needs re-checking; and citation_check's rationale for the
+# exclusion is the right one ("a broken pin fails loudly on its own").
+#
+# Pruning removes a hash that should never have been written; it changes no
+# verdict text and no line citation, so the record still SAYS it rests on the
+# pin and the pin still has to pass.
+_NEVER_HASHED = ("audit/tools/", "test/")
+
+
+def _never_hashed(rel: str) -> bool:
+    return rel.replace("\\", "/").startswith(_NEVER_HASHED)
+
+
 _SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".mypy_cache",
               ".venv", "venv", "env", "node_modules", "build", "dist"}
 
@@ -219,9 +241,10 @@ def _insert_extra_sources(record: dict, entries: list[dict]) -> dict:
     return out
 
 
-def backfill_record(path: Path, resolver: Resolver, write: bool = True) -> dict:
+def backfill_record(path: Path, resolver: Resolver, write: bool = True,
+                    prune: bool = False, add: bool = True) -> dict:
     """Backfill one record. Returns a per-record stats dict; writes only when
-    something was actually added."""
+    something was actually added (or pruned)."""
     record = json.loads(path.read_text(encoding="utf-8"))
     unit = record.get("unit", "")
     kind = unit.partition("/")[0]
@@ -229,6 +252,7 @@ def backfill_record(path: Path, resolver: Resolver, write: bool = True) -> dict:
         "unit": unit or f"?/{path.stem}", "cited": 0, "resolved": 0,
         "covered": 0, "already": 0, "added": 0, "unresolved": [],
         "mispathed": [], "past_eof": [], "changed": False,
+        "pruned": 0, "pruned_paths": [],
     }
     if kind == "seam":
         stats["skipped"] = "seam record -- uses the plural source lists"
@@ -237,6 +261,20 @@ def backfill_record(path: Path, resolver: Resolver, write: bool = True) -> dict:
     own = _own_sources(record, resolver.game_root)
     covered = [p for p in own.values()]
     existing = list(record.get("extra_sources") or [])
+    if prune:
+        kept = [e for e in existing
+                if not (isinstance(e, dict) and e.get("path")
+                        and _never_hashed(str(e["path"])))]
+        stats["pruned"] = len(existing) - len(kept)
+        if stats["pruned"]:
+            stats["pruned_paths"] = [
+                str(e["path"]).replace("\\", "/") for e in existing
+                if isinstance(e, dict) and e.get("path")
+                and _never_hashed(str(e["path"]))
+            ]
+            existing = kept
+            record["extra_sources"] = existing
+            stats["changed"] = True
     have: list[Path] = []
     for entry in existing:
         if isinstance(entry, dict) and entry.get("path"):
@@ -267,20 +305,30 @@ def backfill_record(path: Path, resolver: Resolver, write: bool = True) -> dict:
             continue
         if any(_same_file(target, s) for s in seen):
             continue
+        rel = _rel(target, side, resolver.game_root)
+        if _never_hashed(rel):
+            # The pipeline's own machinery and its pins -- see _NEVER_HASHED.
+            stats["skipped_never_hashed"] = (
+                stats.get("skipped_never_hashed", 0) + 1)
+            continue
         seen.append(target)
         additions.append({
-            "path": _rel(target, side, resolver.game_root),
+            "path": rel,
             "sha256": harness.file_sha256(target),
             "side": side,
         })
 
+    if not add:
+        additions = []
     stats["added"] = len(additions)
     if additions:
         additions.sort(key=lambda e: (e["side"], e["path"]))
         record = _insert_extra_sources(record, existing + additions)
         stats["changed"] = True
-        if write:
-            path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    elif stats["pruned"]:
+        record = _insert_extra_sources(record, existing)
+    if stats["changed"] and write:
+        path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return stats
 
 
@@ -305,15 +353,26 @@ def main(argv=None) -> int:
                     help="report what would be added, write nothing")
     ap.add_argument("--verbose", action="store_true",
                     help="one line per record instead of only the totals")
+    ap.add_argument("--prune", action="store_true",
+                    help="also REMOVE extra_sources entries under the "
+                         "_NEVER_HASHED prefixes (audit/tools/, test/) that an "
+                         "earlier run pinned; they cause false staleness "
+                         "whenever a pin or a probe is edited")
+    ap.add_argument("--no-add", action="store_true",
+                    help="do not add anything; report only, or prune only when "
+                         "combined with --prune. Use this to make a prune a "
+                         "surgical change instead of a tree-wide backfill")
     args = ap.parse_args(argv)
 
     resolver = Resolver()
-    rows = [backfill_record(p, resolver, write=not args.dry_run)
+    rows = [backfill_record(p, resolver, write=not args.dry_run,
+                            prune=args.prune, add=not args.no_add)
             for p in _targets(args)]
     rows = [r for r in rows if "skipped" not in r]
 
     totals = {k: sum(r[k] for r in rows)
-              for k in ("cited", "resolved", "covered", "already", "added")}
+              for k in ("cited", "resolved", "covered", "already", "added",
+                        "pruned")}
     changed = sum(1 for r in rows if r["changed"])
 
     if args.verbose:
@@ -364,6 +423,21 @@ def main(argv=None) -> int:
           f"{sum(len(r['unresolved']) for r in rows)} unresolvable")
     print(f"{verb} {totals['added']} extra_sources entr(ies) across "
           f"{changed} record(s)")
+    skipped = sum(r.get("skipped_never_hashed", 0) for r in rows)
+    if skipped:
+        print(f"skipped {skipped} citation(s) under {_NEVER_HASHED} "
+              f"(the pipeline's own machinery and its pins -- see "
+              f"_NEVER_HASHED)")
+    if args.prune:
+        pruned_by = {}
+        for r in rows:
+            for p in r.get("pruned_paths", []):
+                pruned_by.setdefault(p, []).append(r["unit"])
+        pverb = "would prune" if args.dry_run else "PRUNED"
+        print(f"{pverb} {totals['pruned']} previously-pinned entr(ies) under "
+              f"{_NEVER_HASHED}:")
+        for p, units in sorted(pruned_by.items()):
+            print(f"  {p}   [{len(units)}] {', '.join(sorted(units))}")
     return 0
 
 

@@ -36,6 +36,7 @@ Run: py audit/tools/potion_probes.py [probe]   (no arg = every probe)
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -388,9 +389,107 @@ def touch_of_insanity() -> None:
           f"=> offered = {bool(sim_candidates)}")
 
 
+# ── pin-append ────────────────────────────────────────────────────────────
+def pin_append() -> None:
+    """Justify the re-pin of the records staled by appending pins.
+
+    Adding `TestPotionContentPins` to `test/test_hook_order.py` changes that
+    file's hash, and nine card/relic records hash it through `extra_sources`
+    because they cite a pin's `file:line`. `audit/README.md` is explicit that a
+    stale record needs a re-audit by an agent and not a regenerated hash — so
+    the re-audit question here is exactly: *did anything those nine records
+    cite actually change?*
+
+    This probe answers it mechanically, so the answer is reproducible rather
+    than asserted:
+
+      1. the pre-pin file is a strict PREFIX of the post-pin file (append only);
+      2. every `test/test_hook_order.py:N` any record cites is inside that
+         prefix and its line CONTENT is unchanged.
+
+    Both true ⇒ every verdict resting on those citations still holds and
+    `harness.py rehash` is the sanctioned last step. Either false ⇒ a real
+    re-audit is owed and the probe says so.
+    """
+    import hashlib
+    import subprocess
+
+    pin_file = _REPO / "test" / "test_hook_order.py"
+    rel = "test/test_hook_order.py"
+
+    def blob(ref: str) -> str | None:
+        p = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=_REPO,
+                           capture_output=True)
+        return p.stdout.decode("utf-8") if p.returncode == 0 else None
+
+    def sha(text: str) -> str:
+        return hashlib.sha256(
+            text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+    # The baseline is whatever hash the stale records still carry.
+    stored: set[str] = set()
+    citing: dict[str, set[int]] = {}
+    for path in sorted((_REPO / "audit" / "records").rglob("*.json")):
+        rec = json.loads(path.read_text(encoding="utf-8"))
+        for src in rec.get("extra_sources") or []:
+            if str(src.get("path", "")).replace("\\", "/").endswith(rel):
+                stored.add(src["sha256"])
+        blobtext = json.dumps(rec)
+        lines = {int(m) for m in re.findall(
+            r"test[/\\]test_hook_order\.py:(\d+)", blobtext)}
+        for lo, hi in re.findall(
+                r"test[/\\]test_hook_order\.py:(\d+)-(\d+)", blobtext):
+            lines |= set(range(int(lo), int(hi) + 1))
+        if lines:
+            citing[rec["unit"]] = lines
+
+    current = pin_file.read_text(encoding="utf-8")
+    cur_sha = sha(current)
+    print(f"records hashing {rel}: {len(stored)} distinct sha256 stored")
+    for s in sorted(stored):
+        print(f"  stored {s[:16]}  {'== current' if s == cur_sha else '!= current (STALE)'}")
+    print(f"current  {cur_sha[:16]}  ({len(current.splitlines())} lines)")
+
+    # Find the committed revision matching the stored hash.
+    baseline = None
+    for ref in ("audit-pipeline", "main", "HEAD~5", "HEAD~4", "HEAD~3"):
+        t = blob(ref)
+        if t is not None and sha(t) in stored:
+            baseline = (ref, t)
+            break
+    if baseline is None:
+        print("INCONCLUSIVE -- no reachable revision of the pin file matches the "
+              "hash the records store; a real re-audit is owed")
+        return
+    ref, old = baseline
+    old_lines, new_lines = old.splitlines(), current.splitlines()
+    append_only = old_lines == new_lines[: len(old_lines)]
+    print(f"baseline revision: {ref} ({len(old_lines)} lines)")
+    print(f"(1) append-only (old is a strict prefix of new): {append_only}")
+
+    moved = []
+    for unit, lines in sorted(citing.items()):
+        for n in sorted(lines):
+            if n > len(old_lines) or old_lines[n - 1] != new_lines[n - 1]:
+                moved.append(f"{unit} cites :{n}")
+    print(f"(2) cited lines whose content changed: {len(moved)}")
+    for m in moved:
+        print(f"    {m}")
+    print(f"    (checked {sum(len(v) for v in citing.values())} citations "
+          f"across {len(citing)} records)")
+    if append_only and not moved:
+        print("VERDICT: no cited line moved or changed -- every verdict resting "
+              "on this file still holds, so `py audit/tools/harness.py rehash "
+              "<unit>...` is the sanctioned last step of the re-audit.")
+    else:
+        print("VERDICT: a cited line moved or changed -- REHASH IS NOT ENOUGH, "
+              "those records need a real re-audit.")
+
+
 PROBES = {
     "aoe-power": aoe_power,
     "touch-of-insanity": touch_of_insanity,
+    "pin-append": pin_append,
     "sweep-attrs": sweep_attrs,
     "sweep-usage": sweep_usage,
     "sweep-onuse": sweep_onuse,

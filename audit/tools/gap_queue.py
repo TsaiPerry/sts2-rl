@@ -5,11 +5,19 @@ writes engine code; it only parses ``audit/records/<kind>/*.json`` plus the xfai
 pins in ``test/test_hook_order.py`` so the queue's counts are reproducible
 instead of transcribed.
 
-Seven kinds are read: the 6 engine-seam records and the six content tiers that
-have landed (``power``, ``card``, ``event``, ``enchantment``, ``relic``, and
-``monster`` since 2026-07-27).  ``potion`` is **not audited** -- its record
-directory is empty and the queue says so in its header rather than implying
-coverage it does not have.
+Eight kinds are read: the 6 engine-seam records and the seven content tiers,
+all of which have now landed -- ``power``, ``card``, ``event``,
+``enchantment``, ``relic``, ``monster`` (2026-07-27) and ``potion``
+(2026-07-27).  ``UNAUDITED_KINDS`` is empty for the first time; the machinery
+is kept because it is what stopped the queue implying coverage it did not have,
+and the next kind added to ``harness.GAME_MODEL_DIRS`` needs it again.
+
+**The kind list here is not derived from the harness, so it can silently omit a
+kind.**  It did: ``potion`` became a roster kind on 2026-07-26 and 51 completed
+records were invisible to this generator until 2026-07-27 -- ``counts`` reported
+them ``NOT AUDITED`` while ``audit_status`` reported them audited.
+``test/test_audit_status.py`` now pins ``CONTENT_KINDS`` against
+``harness.GAME_MODEL_DIRS`` so that cannot recur.
 
 A gap entry may carry an explicit ``"live": true|false`` field.  When it does,
 that field IS the liveness: ``_liveness``'s prose scan is a heuristic written
@@ -77,16 +85,20 @@ SEAMS = [
 ]
 
 # Kinds with records on this branch, in queue order.  ``relic`` joined
-# 2026-07-26; ``monster`` joined 2026-07-27 (109/109 units).  ``potion`` is
-# deliberately absent: that stream has not run, and listing it here with 0
-# records would read as "audited, no gaps".
-CONTENT_KINDS = ["power", "card", "event", "enchantment", "relic", "monster"]
+# 2026-07-26; ``monster`` and ``potion`` joined 2026-07-27, which completes the
+# seven content kinds ``harness.GAME_MODEL_DIRS`` defines.
+CONTENT_KINDS = ["power", "card", "event", "enchantment", "relic", "monster",
+                 "potion"]
 KINDS = ["seam"] + CONTENT_KINDS
 # Kinds the pipeline defines but has NOT audited -- reported by ``counts`` so a
 # reader of the queue cannot mistake it for complete coverage.  The unit counts
 # are ``py audit/tools/harness.py roster <kind>``'s "N sim units" line.
-UNAUDITED_KINDS = ["potion"]
-_UNAUDITED_UNITS = {"potion": 51}
+# EMPTY since 2026-07-27, for the first time.  Kept rather than deleted: it is
+# the mechanism that kept the queue honest while six kinds were outstanding, and
+# an eighth kind would need it again.  ``counts`` prints the NOT AUDITED line
+# only when this is non-empty -- an unguarded print emitted a dangling label.
+UNAUDITED_KINDS: list[str] = []
+_UNAUDITED_UNITS: dict[str, int] = {}
 
 # --- mechanism merges the records themselves declare -------------------------
 # key: mechanism key as auto-derived, value: canonical mechanism key.
@@ -142,6 +154,29 @@ _CROSS_RECORD = {
     # event BR-G3: "audit/records/seam/creature_card_cmds.json ... G3", the
     # deck-transform-bypasses-the-deck-entry-pipeline mechanism.
     "event/BR-G3": "creature_card_cmds/G3",
+    # --- potion tier (merged 2026-07-27) ------------------------------------
+    # "This is audit/records/seam/damage_pipeline.json guard N4, whose verdict
+    #  was CORRECTED from waiver to gap by relic batch 8 precisely because its
+    #  old rationale was 'FairyInABottle is a potion (out of scope)' and this
+    #  potion is ported -- so this record is that waiver's counterexample and
+    #  matches the corrected verdict per binding rule 3."  N4's own body already
+    #  names FairyInABottle; the merge is what flips N4 from dormant to LIVE,
+    #  because the potion entry carries live:true and N4 had no live site.
+    "potion/fairy_in_a_bottle/ShouldDie": "damage_pipeline/N4",
+    # "SAME MECHANISM as audit/records/relic/petrified_toad.json G1 and G2, both
+    #  LIVE with executed witnesses, so this entry matches them per binding
+    #  rule 3 and contributes a fourth trigger."  The potion entry names BOTH of
+    #  the toad's guards (the ShouldProcurePotion gate and the
+    #  AfterPotionProcured dispatch) because `player.add_potion` drops both at
+    #  once; it is keyed to G1, the gate, and the toad's G2 keeps its own key.
+    "potion/entropic_brew/g1": "relic/petrified_toad/g1",
+    # "The mechanism itself is already owned: audit/records/relic/
+    #  potion_belt.json and audit/records/relic/alchemical_coffer.json ... This
+    #  entry matches those verdicts per binding rule 3 and contributes the
+    #  amplification" -- Entropic Brew is the potion whose OUTPUT is the belt
+    #  size, so a wrong slot count is a wrong number of CombatPotionGeneration
+    #  draw pairs rather than only a wrong capacity.
+    "potion/entropic_brew/g5": "relic/potion_belt/AfterObtained",
     # event BR-38a: the rest-site heal hooks.  NOTE the event record cites this
     # as "turn_structure.json step 38a"; step 38a is in creature_card_cmds.json
     # (turn_structure's step 38 is EndOfTurnCleanup, a different gap).  The
@@ -454,6 +489,75 @@ _FAMILIES = [
      r"Rng\.Niche|PlayerRng\.Rewards|legacy shared|shared run stream|off-stream|"
      r"off the wrong stream",
      "relic/_off_stream_draw"),
+
+    # --- potion tier (merged 2026-07-27) -------------------------------------
+    # The potion records number their guards per record like the relic tier, so
+    # every entry would otherwise anchor its own mechanism -- 152 of them, two
+    # thirds being the SAME two shared guards repeated 51 times each.  Each
+    # pattern below was executed against the corpus and returns exactly the site
+    # count in its comment; three of the eight resolve to a mechanism another
+    # tier already owns, which is the cross-record merge binding rule 3 asks for.
+
+    # 51 sites.  The shared PotionModel.OnUseWrapper rollup, carried once per
+    #  record because PotionModel is one of harness.MODEL_ROOT_CLASSES (so no
+    #  unit record enumerates it) AND no seam record covers it -- the coverage
+    #  hole audit/content/potion/shared-mechanisms.md exists to name.  MUST be a
+    #  TITLE leg: a body regex on `OnUseWrapper` matches 59 entries and swallows
+    #  fairy_in_a_bottle's own three plus the four Usage gaps.  NOT merged into
+    #  power/surrounded/BeforePotionUsed or relic/unceasing_top/g2: the guard
+    #  rolls up BOTH of those, so keying it to either would hide the other.
+    ("potion", r"^W: the shared PotionModel\.OnUseWrapper pipeline", None, None,
+     "potion/_use_pipeline"),
+    # 51 sites.  The missing BeginCardOrPotionEffect/EndCardOrPotionEffect
+    #  re-entrancy bracket.  DELIBERATELY NOT merged into relic/unceasing_top/g3
+    #  (the card-play half of the same missing counter): the guard's own text
+    #  refuses the merge -- "recorded separately because the OUTER frame here is
+    #  a potion, so a fix that brackets only card plays would leave this half
+    #  open".  All 51 carry live:false.
+    ("potion", r"^W4: PotionModel\.cs:324-331 brackets OnUse", None, None,
+     "potion/_effect_bracket"),
+    # 4 sites (2 units x guard + rule-4 OnUse rollup).  "Shared with
+    #  potion/gamblers_brew, the only other MinSelect-0 potion; one mechanism,
+    #  two sites."  NOT loosened to a bare `MinSelect`: that also matches
+    #  touch_of_insanity's OnUse ("MinSelect 1, one pick"), a different family.
+    ("potion", None, None, r"MinSelect[ -]0", "potion/_min_select_zero"),
+    # 8 sites (4 units x guard + OnUse rollup).  "Shared mechanism across
+    #  attack_potion, skill_potion, power_potion and colorless_potion
+    #  (orobic_acid has no screen and is not a site)."  The bare phrase
+    #  `choose-a-card screen` matches 9 and steals orobic_acid's OnUse, whose
+    #  text is the deliberate PROMPT.md-class-29 counter-example.  MUST precede
+    #  the FilterForCombat family: the four OnUse rollups name both and lead
+    #  with the screen.
+    ("potion", None, None,
+     r"FromChooseACardScreen|legacy arm skips the choose-a-card screen|"
+     r"never offers the choose-a-card screen",
+     "potion/_choose_a_card_screen"),
+    # 6 sites.  "Same mechanism as the entry on potion/attack_potion,
+    #  potion/skill_potion, potion/power_potion and potion/colorless_potion."
+    #  CROSS-STREAM: the fix lands in cards/pool.py's pool_card_ids, which the
+    #  CARD tier owns -- the queue's recipe must not say "edit a potion file".
+    ("potion", None, None, r"FilterForCombat",
+     "potion/_filter_for_combat_event_rarity"),
+    # 4 sites.  The four AnyTime potions, whose whole out-of-combat arm has no
+    #  sim path: `py audit/tools/potion_probes.py sweep-usage` finds exactly one
+    #  `def use_potion` in sts2_rl/, on CombatState.
+    ("potion", None, None, r"PotionUsage\.AnyTime", "potion/_any_time_usage"),
+    # 4 sites.  StrengthCmd.apply drops the applier the C# passes, while the
+    #  same potion passes it for its Dexterity half.  Dormant, executed.
+    ("potion", None, None,
+     r"N\(applier\)|StrengthCmd\.apply drops the applier",
+     "potion/_strength_applier"),
+    # 4 sites, merged into a mechanism the power and monster tiers already own.
+    #  The records say "the SAME mechanism as audit/records/seam/power_cmd.json
+    #  guard G6 ... what this record contributes is the concrete witness G6 says
+    #  it lacks".  DO NOT key this on power_cmd/G6: _CROSS_RECORD sends that to
+    #  hook_dispatch/G8, the IsEnding gate, because G6 is a TWO-HEADED guard
+    #  ("No CombatManager.IsEnding / CanReceivePowers guard backstop").  The
+    #  potion records cite only its CanReceivePowers head, which the queue
+    #  already owns as power/_should_allow_hitting -- and the monster tier's own
+    #  rule above resolves the identical text the same way.
+    ("potion", None, None, r"CanReceivePowers|G\(AoE-power\)",
+     "power/_should_allow_hitting"),
 ]
 
 # Individual content entries whose family the regex table gets wrong, or which
@@ -550,6 +654,13 @@ MECHANISM_TITLES = {
     "event/EV-12": "a Combat-layout event builds its encounter at the wrong moment",
     "enchantment/EG1": "EnchantmentModel.OnPlay is a direct in-loop call, not a hook",
     "enchantment/EG2": "CreateClone re-attaches the enchantment; five sim copy sites drop it",
+    "potion/_use_pipeline": "PotionModel.OnUseWrapper is covered by no seam: BeforePotionUsed and CheckForEmptyHand are never dispatched",
+    "potion/_effect_bracket": "no BeginCardOrPotionEffect/EndCardOrPotionEffect re-entrancy bracket around a potion",
+    "potion/_any_time_usage": "PotionUsage.AnyTime: the sim has no out-of-combat potion use at all",
+    "potion/_choose_a_card_screen": "the generated-card potions skip FromChooseACardScreen outside a parity replay",
+    "potion/_min_select_zero": "CardSelectorPrefs MinSelect 0: select_cards has no minimum, so the whole hand is always taken",
+    "potion/_filter_for_combat_event_rarity": "pool_card_ids drops Basic/Ancient but not Event, where FilterForCombat drops all three",
+    "potion/_strength_applier": "StrengthCmd.apply drops the applier the C# call passes",
 }
 
 # "1. Guard:", "17.4 Second loop:", "38a. PlayerCmd", "102b. CardPile" -- the
@@ -798,9 +909,60 @@ def extract():
 
 _XFAIL = re.compile(r"@pytest\.mark\.xfail")
 
+# A pin that cites a CONTENT record, in either of the two orders the pins
+# actually use.  Content records number their guards PER RECORD, so the record
+# path alone is not an entry -- the id is what makes it one.
+#
+#   id first : "potion audit gap G1 (audit/records/potion/foul_potion.json)"
+#   path first: "audit/records/relic/unceasing_top.json guard G1"
+#
+# Both fail CLOSED (no match -> UNRESOLVED, which cmd_pins prints), never to a
+# wrong key.  Only the first order appears in the tree today; the second is the
+# shape the seam pins use for their own cross-references and costs nothing to
+# accept.
+_ID = r"G\([^)]{1,32}\)|[GN]\d+|(?:EV|EG|BR)-?[A-Z]?\d+[a-z]?"
+_CONTENT_ANCHOR = re.compile(
+    r"(?:\b(?:gap|guard)s?\s+(?P<id1>" + _ID + r")\s*\(?\s*"
+    r"audit/records/(?P<kind1>\w+)/(?P<unit1>\w+)\.json"
+    r"|audit/records/(?P<kind2>\w+)/(?P<unit2>\w+)\.json[^.]{0,80}?"
+    r"\b(?:gap|guard)s?\s+(?P<id2>" + _ID + r"))",
+    re.IGNORECASE,
+)
+
+# Pins whose reason names a mechanism the auto-resolver gets WRONG, with the
+# reason it is wrong.  Kept tiny and explicit: a pin credited to the wrong
+# mechanism is worse than one credited to none, because the queue then reports
+# the real mechanism as unpinned AND the wrong one as covered.
+_PIN_OVERRIDE = {
+    # This pin deliberately names seam/power_cmd G6 (the potion records match
+    # that guard's verdict per rule 3), but G6 is TWO-HEADED -- "No
+    # CombatManager.IsEnding / CanReceivePowers guard backstop" -- and
+    # _CROSS_RECORD sends power_cmd/G6 to hook_dispatch/G8, the IsEnding family.
+    # The pin asserts the CanReceivePowers head, which the queue owns as
+    # power/_should_allow_hitting.  Without this the only failing pin for a LIVE
+    # 8-site mechanism is credited to a DORMANT 22-site one.
+    "test/test_hook_order.py::TestPotionContentPins::"
+    "test_aoe_power_potion_skips_an_unhittable_enemy": ["power/_should_allow_hitting"],
+}
+
 
 def pins():
-    """Parse the strict xfail pins out of test/test_hook_order.py."""
+    """Parse the strict xfail pins out of test/test_hook_order.py.
+
+    Each pin resolves to the mechanism it asserts.  Two anchor shapes:
+
+    * a SEAM pin names one of the six seams and a gap/step id -- the original
+      shape, and still the only one that can name a *step*;
+    * a CONTENT pin cites ``audit/records/<kind>/<unit>.json`` and the entry id
+      that record uses.  Added 2026-07-27 with the potion tier, which wrote the
+      project's first content-anchored pins; before it, three of those four
+      resolved to a mechanism literally named ``None/G1``.
+
+    Precedence is SEAM-FIRST, because a content pin routinely cites a seam
+    record as the mechanism it matches under rule 3 and that citation is the
+    more authoritative one -- but ``_PIN_OVERRIDE`` exists for the case where
+    the seam guard being cited is broader than the head the pin asserts.
+    """
     src = PIN_FILE.read_text(encoding="utf-8").splitlines()
     out = []
     cls = None
@@ -835,6 +997,15 @@ def pins():
                 if gid
                 else re.findall(r"\bstep[s]? (\d+[a-z]?(?:\s*,\s*\d+[a-z]?)*)", reason)
             )
+            # Content anchors: every (kind/unit, entry id) pair the reason cites.
+            # Collected even when a seam matched, so `pins` can show what a pin
+            # claims and `unpinned` can be audited against it.
+            records = [
+                {"unit": f"{m.group('kind1') or m.group('kind2')}/"
+                         f"{m.group('unit1') or m.group('unit2')}",
+                 "id": m.group("id1") or m.group("id2")}
+                for m in _CONTENT_ANCHOR.finditer(reason)
+            ]
             out.append(
                 {
                     "line": i + 1,
@@ -843,6 +1014,9 @@ def pins():
                     "seam": seam,
                     "gap": gid,
                     "steps": steps,
+                    "records": records,
+                    "anchor": ("seam" if seam else
+                               ("content" if records else None)),
                     "reason": reason[:400],
                 }
             )
@@ -851,27 +1025,48 @@ def pins():
     return out
 
 
-def pin_map():
-    """mechanism key -> list of pinning tests."""
-    entries = extract()
-    by_key = {}
-    for e in entries:
-        by_key.setdefault(e["id"], e["mechanism"])
-    out = {}
-    for p in pins():
-        if not p["seam"]:
-            continue
-        keys = []
+def pin_mechanisms(p, by_key, by_record):
+    """The mechanism keys one pin asserts, in resolution order.
+
+    ``by_key`` maps an entry id to its mechanism (the seam path); ``by_record``
+    maps a content record's unit to the {local_id: mechanism} of its entries.
+    An empty return means the pin anchors nothing the queue knows about, which
+    ``cmd_pins`` prints as UNRESOLVED rather than swallowing.
+    """
+    if p["test"] in _PIN_OVERRIDE:
+        return list(_PIN_OVERRIDE[p["test"]])
+    keys = []
+    if p["seam"]:
         if p["gap"]:
             keys.append(f"{p['seam']}/{p['gap']}")
         for s in p["steps"]:
             for tok in re.findall(r"\d+[a-z]?", s):
                 keys.append(f"{p['seam']}/step{tok}")
-        mechs = []
-        for k in keys:
-            k = _resolve(k)
-            mechs.append(by_key.get(k, k))
-        for m in dict.fromkeys(mechs):
+    mechs = [by_key.get(_resolve(k), _resolve(k)) for k in keys]
+    if not mechs:
+        # Content anchor.  A content record numbers its guards per record, and
+        # the entry builder's local id for `G(AoE-power)` or `G1` is `g<N>` --
+        # the POSITION in the guards list -- so the id cannot be reconstructed
+        # from the citation.  Match on the entry's own `what` prefix instead.
+        for r in p["records"]:
+            for local, (mech, what) in by_record.get(r["unit"], {}).items():
+                if what.strip().upper().startswith(r["id"].upper()):
+                    mechs.append(mech)
+    return list(dict.fromkeys(mechs))
+
+
+def pin_map():
+    """mechanism key -> list of pinning tests."""
+    entries = extract()
+    by_key = {}
+    by_record = {}
+    for e in entries:
+        by_key.setdefault(e["id"], e["mechanism"])
+        by_record.setdefault(e["record"], {})[e["local_id"]] = (
+            e["mechanism"], e["what"])
+    out = {}
+    for p in pins():
+        for m in pin_mechanisms(p, by_key, by_record):
             out.setdefault(m, []).append(p["test"])
     return out
 
@@ -913,8 +1108,13 @@ def cmd_counts():
             f"  {kind:14s} {rc[kind]:4d} / {len(es):4d} / {len(anchored):4d} / "
             f"{sum(1 for e in es if e['liveness'] == 'live'):4d}"
         )
-    print("  NOT AUDITED  : " + ", ".join(
-        f"{k} ({_UNAUDITED_UNITS.get(k, '?')} C# units)" for k in UNAUDITED_KINDS))
+    if UNAUDITED_KINDS:
+        print("  NOT AUDITED  : " + ", ".join(
+            f"{k} ({_UNAUDITED_UNITS.get(k, '?')} sim units)"
+            for k in UNAUDITED_KINDS))
+    else:
+        print("  NOT AUDITED  : none -- all 7 content kinds and 6 seams have "
+              "records (first true 2026-07-27)")
     print()
     print("per seam record (entries / mechanisms anchored there / live entries):")
     for seam in SEAMS:
@@ -960,11 +1160,28 @@ def cmd_mechanisms():
 
 
 def cmd_pins():
+    entries = extract()
+    by_key, by_record = {}, {}
+    for e in entries:
+        by_key.setdefault(e["id"], e["mechanism"])
+        by_record.setdefault(e["record"], {})[e["local_id"]] = (
+            e["mechanism"], e["what"])
+    unresolved = 0
     for p in pins():
+        mechs = pin_mechanisms(p, by_key, by_record)
+        # A pin that anchors nothing is invisible non-coverage: it counts as a
+        # pin in `counts` while pinning no mechanism, so a typo'd unit stem or a
+        # gap id the record does not use degrades silently.  Say so.
+        shown = ", ".join(mechs) if mechs else "UNRESOLVED"
+        unresolved += not mechs
         print(
             f"{p['line']:5d} strict={p['strict']} {p['test'].split('::', 1)[1]:70s} "
-            f"{p['seam']}/{p['gap']} steps={p['steps']}"
+            f"anchor={p['anchor']} -> {shown}"
         )
+    if unresolved:
+        print(f"\n{unresolved} pin(s) resolve to no mechanism -- they are "
+              f"counted as pins and pin nothing.")
+    return 1 if unresolved else 0
 
 
 def cmd_unpinned():
@@ -1116,12 +1333,20 @@ COMMANDS = {
 
 
 def main(argv):
+    """Run one command and RETURN ITS EXIT CODE.
+
+    Until 2026-07-27 this discarded the return value, so ``coverage`` and
+    ``cite-check`` -- which audit/GAP-QUEUE.md calls "the two that fail loudly
+    if this file drifts from the records" and audit/README.md lists as checks --
+    printed their failures and exited 0 every time.  A regeneration verified by
+    exit code would have passed while the queue was two dozen mechanisms short.
+    Commands that only print return None, which is 0.
+    """
     if len(argv) != 2 or argv[1] not in COMMANDS:
         print(__doc__)
         print("commands: " + ", ".join(COMMANDS))
         return 2
-    COMMANDS[argv[1]]()
-    return 0
+    return COMMANDS[argv[1]]() or 0
 
 
 if __name__ == "__main__":

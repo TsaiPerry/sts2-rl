@@ -317,3 +317,106 @@ def test_exit_codes(tmp_path, monkeypatch):
     rec["hooks"]["Rarity"]["verdict"] = "nonsense"
     _write(audits, rec)
     assert audit_status.main(["--kind", "relic"]) == 2
+
+
+class TestQueueGeneratorCoversEveryKind:
+    """`gap_queue.py` keeps its own kind list, and that list can silently omit
+    a completed tier.
+
+    It did. `potion` became a roster kind in `harness.GAME_MODEL_DIRS` on
+    2026-07-26 and 51 finished records landed on 2026-07-27, and for that whole
+    window `py audit/tools/gap_queue.py counts` printed
+    `NOT AUDITED : potion (51 C# units)` and left 152 gap entries out of
+    `audit/GAP-QUEUE.md` -- while `audit_status.py`, which derives its kinds
+    from the harness, reported the same records audited. Two tools, two answers,
+    and only the one nobody was reading was right.
+
+    These assertions are the cheap fix: the queue generator must account for
+    every kind the harness defines, either as audited or as explicitly
+    unaudited.
+    """
+
+    def test_every_harness_kind_is_known_to_the_queue_generator(self):
+        from audit.tools import gap_queue
+
+        harness_kinds = set(harness.GAME_MODEL_DIRS)
+        known = set(gap_queue.CONTENT_KINDS) | set(gap_queue.UNAUDITED_KINDS)
+        assert harness_kinds - known == set(), (
+            "gap_queue.py does not know about these kinds, so their records "
+            "are invisible to GAP-QUEUE.md: "
+            f"{sorted(harness_kinds - known)}"
+        )
+
+    def test_the_queue_generator_invents_no_kind(self):
+        from audit.tools import gap_queue
+
+        known = set(gap_queue.CONTENT_KINDS) | set(gap_queue.UNAUDITED_KINDS)
+        assert known - set(harness.GAME_MODEL_DIRS) == set()
+
+    def test_a_kind_is_audited_or_unaudited_but_not_both(self):
+        from audit.tools import gap_queue
+
+        assert not (set(gap_queue.CONTENT_KINDS)
+                    & set(gap_queue.UNAUDITED_KINDS))
+
+    def test_a_kind_with_records_is_not_listed_unaudited(self):
+        """The specific shape of the 2026-07-26 defect: records on disk while
+        the generator calls the kind unaudited."""
+        from audit.tools import gap_queue
+
+        wrong = [
+            kind for kind in gap_queue.UNAUDITED_KINDS
+            if (gap_queue.RECORDS / kind).is_dir()
+            and any((gap_queue.RECORDS / kind).glob("*.json"))
+        ]
+        assert wrong == [], (
+            f"these kinds have records but gap_queue reports them NOT AUDITED: "
+            f"{wrong}"
+        )
+
+
+class TestPinsResolveToAMechanism:
+    """A strict xfail pin that anchors no mechanism is invisible non-coverage.
+
+    `gap_queue.pins()` derived a mechanism only from the six seam names until
+    2026-07-27, so the project's first content-anchored pins resolved to a
+    mechanism literally named `None/G1` -- counted in `strict xfail pins` while
+    pinning nothing, and leaving the LIVE mechanism they prove reported as
+    `unpinned`.
+    """
+
+    def test_every_pin_resolves(self):
+        from audit.tools import gap_queue
+
+        entries = gap_queue.extract()
+        by_key, by_record = {}, {}
+        for e in entries:
+            by_key.setdefault(e["id"], e["mechanism"])
+            by_record.setdefault(e["record"], {})[e["local_id"]] = (
+                e["mechanism"], e["what"])
+        unresolved = [
+            p["test"] for p in gap_queue.pins()
+            if not gap_queue.pin_mechanisms(p, by_key, by_record)
+        ]
+        assert unresolved == [], (
+            "these pins are counted as pins but anchor no mechanism: "
+            f"{unresolved}"
+        )
+
+    def test_no_pin_resolves_to_a_mechanism_with_no_entries(self):
+        from audit.tools import gap_queue
+
+        entries = gap_queue.extract()
+        known = {e["mechanism"] for e in entries}
+        by_key, by_record = {}, {}
+        for e in entries:
+            by_key.setdefault(e["id"], e["mechanism"])
+            by_record.setdefault(e["record"], {})[e["local_id"]] = (
+                e["mechanism"], e["what"])
+        bogus = {
+            m
+            for p in gap_queue.pins()
+            for m in gap_queue.pin_mechanisms(p, by_key, by_record)
+            if m not in known
+        }
+        assert bogus == set(), f"pins name unknown mechanisms: {sorted(bogus)}"
