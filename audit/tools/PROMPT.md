@@ -1,4 +1,26 @@
-# Audit prompt — source-to-sim unit audits (v6)
+# Audit prompt — source-to-sim unit audits (v7)
+
+> **v7 (2026-07-27, after the potion tier — the last content kind).** Bug
+> classes 30–33 added, each from a unit that exhibited it. Two calibration facts
+> first, because both cost a real verdict:
+>
+> **1. A C# XML `<summary>` can contradict the method body. Verdict the body.**
+> Classes 12/19/24 all cover a claim in the *sim's* comments. This is the source
+> side. `CardCmd.cs:162-167` says `DiscardAndDraw` "will wait to trigger the
+> discard-related hooks until after the draw is complete"; the body fires
+> `Hook.AfterCardDiscarded` inside the per-card loop *before* the draw
+> (`CardCmd.cs:186-195`) and defers only the Sly auto-play. Trusting the summary
+> would have filed a false gap against `potion/gamblers_brew`, whose port is
+> correct.
+>
+> **2. A framework root with no seam is a coverage hole no tool can report.**
+> `harness.MODEL_ROOT_CLASSES` stops base-class following at each root on the
+> promise that the seam tier covers that layer once. For `PotionModel` it does
+> not — there is no potion seam — so `PotionModel.OnUseWrapper`, the entire use
+> path for all 51 potions, was verdicted nowhere, and `validate` cannot notice
+> because a root is exactly what it is told to stop at. Before auditing a kind,
+> check that its root class names a covering seam; if it does not, say so in the
+> record and once in `audit/content/<kind>/`.
 
 > **v6 (2026-07-26, after relic batches 9–13):** bug classes 24–29 added, each
 > from a defect a batch actually exhibited. Three binding items:
@@ -278,6 +300,38 @@ checks completeness. Read BOTH files fully before writing any verdict.
     at those two sites. Copying across would have filed two false gaps. Same
     trap in reverse for the `undo_after_obtained` family below.
 
+30. **A port's docstring can describe the SOURCE and read as if it described
+    the PORT.** Distinct from classes 12/19/24: the sentence is *true of the
+    C#*, so grepping the C# confirms it and only grepping the SIM catches it.
+    `potions.py:398-403` states that out of combat Foul Potion "pays
+    GoldVar(100) and drives the merchant off (`RunState.merchant_driven_off`)" —
+    a faithful description of `FoulPotion.cs:79-88`, and `grep -rin
+    merchant_driven_off sts2_rl/` returns exactly that docstring line. There is
+    no such attribute and no such code path (`potion/foul_potion` G1, LIVE).
+31. **A boolean port of a multi-valued enum agrees with every sweep and still
+    loses information.** `potion_probes.py sweep-attrs` reports 0 mismatches
+    over 51 units × 5 attributes — because `TargetType` has five values and the
+    sim models one boolean (`targeted`), so `AllEnemies`/`Self`/`AnyPlayer` all
+    read `False` and only `AnyEnemy` is distinguished. A sweep over a lossy
+    mapping cannot report a mismatch it cannot represent; say so in the bucket
+    label. `PotionUsage` is the same shape and it *did* hide a live gap — the
+    sim models only `Automatic`, so `AnyTime`'s whole out-of-combat arm is
+    missing for four ported potions and nothing in the roster or the sweeps
+    says so (`potion/_any_time_usage`, 4 sites, LIVE).
+32. **A two-headed guard cannot be cited whole.** `seam/power_cmd` G6 is "No
+    `CombatManager.IsEnding` / `CanReceivePowers` guard backstop" — two
+    mechanisms in one entry — and the queue merges `power_cmd/G6` into the
+    IsEnding family. A potion record citing G6 for its `CanReceivePowers` half,
+    and a pin citing the same, were both filed against the wrong mechanism:
+    a LIVE 8-site finding credited to a dormant 22-site one. When you match a
+    seam guard under rule 3, name the *head* you are matching, and check whether
+    the queue already owns it separately (it did: `power/_should_allow_hitting`).
+33. **A shared wrapper recorded once per unit is one mechanism, not N.** The
+    potion tier carries `W`/`W4` on all 51 records because `PotionModel` is a
+    root with no seam (calibration fact 2). That is the right way to record it —
+    but it needs a `gap_queue._FAMILIES` rule the same day, or the queue gains
+    102 mechanisms and reads as 102 jobs.
+
 ## Sweep the shape before you audit the units
 
 Classes 12, 13 and 16 are **pool-wide shapes**, not per-unit quirks: the same
@@ -289,7 +343,11 @@ over the whole roster and let the batches confirm rather than discover.
 `sweep-reset` / `sweep-reset-exec` (class 13), `sweep-isallowed` (class 16),
 `sweep-stubs` / `sweep-stub-premises` (class 12), `sweep-upgrade` (class 14),
 `sweep-clone` (class 17); findings in
-`.superpowers/sdd/content-relic-sweeps.md`. They cost ~1 h and turned up two
+`.superpowers/sdd/content-relic-sweeps.md`. `audit/tools/potion_probes.py` is
+the second worked example and shows the other half of the pattern — three of its
+probes (`aoe-power`, `touch-of-insanity`, `pin-append`) are not sweeps at all but
+**executed witnesses for individual gaps**, which is what turns a "LIVE" label
+into evidence. They cost ~1 h and turned up two
 live gaps (`centennial_puzzle`, `paels_eye`) that batch 1 could not have seen,
 plus a 16-relic single-fix cluster. **Write the equivalent for your own kind.**
 
@@ -314,8 +372,10 @@ unit. A checklist entry that never fired is noise the next 700 units pay for.
 **Potions: IN SCOPE (changed 2026-07-26 by Perry — "don't ignore potions
 anymore").** This line used to read "Potions: out of scope entirely" and it is
 deleted, not narrowed. `potion` is now an ordinary audit kind — 51 sim units,
-`audit/records/potion/`, `py audit/tools/harness.py roster potion` — and it is
-**unaudited**, like `monster`. **A potion may never be the reason for a
+`audit/records/potion/`, `py audit/tools/harness.py roster potion` — and as of
+**2026-07-27 it is audited**, like `monster`: 51 records, 152 gap entries, 83
+live. Rule 3 applies to those records like any other tier's — match a potion
+verdict, do not re-derive it. **A potion may never be the reason for a
 `waiver` again.** "The applier is a potion" is a dormancy argument at best, and
 usually not even that: the potion is probably ported (51 classes registered, 48
 in the reward pool, and the belt is asserted slot-by-slot by the conformance

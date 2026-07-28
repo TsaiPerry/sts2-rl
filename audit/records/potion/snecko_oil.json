@@ -1,0 +1,149 @@
+{
+  "unit": "potion/snecko_oil",
+  "game_source": {
+    "path": "src\\Core\\Models\\Potions\\SneckoOil.cs",
+    "sha256": "1cf94d78db62d8973208535c690fb680ec36a68ac7f8082076fb01c472431f98"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\potions.py",
+    "sha256": "5bb444cb19b486459ae9f75173b7ca275c87c79e14c7020396eaa33047f79c99"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/History/Entries/PotionUsedEntry.cs",
+      "sha256": "0caaac65c5a7490a2cbe506bc14320fe9745ef8b29e5b3d2a94d768ababea030",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/SurroundedPower.cs",
+      "sha256": "e45d9c106a130f991f1c56ca620de9cf97f57096e1b5c400fc7d86acf0227971",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "f10c84efd373e2c6bf6283cbd88da556045d15b657cf388e206c0352cb7af883",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/cascade.py",
+      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "de6f1cb802f22773f1d0d1ec8132e67cf2dc7edcc0e302ddad615d39dbd4d174",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "351acc27ce4b62f37d5f9d93cb88e087b5c4de6ac3a7de43105c57c2bd85d963",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/combat_driver.py",
+      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "d9419bf7fdb562fae7df6bd8e5864420a2952a3f616ed936bcd5fbc5d9ef16cd",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "e79fdc3f4bed064cd27e1695df81463b2af7f8b353f82ab59a09dbf5a3b51a0d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "b3dbb02683cba19edbaf16582d72b176caea22acb85cd1b27a8f96d9e0aa6801",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "27813e81e0b2c950b237fcdae64bc04e98ed453755daa5c9f505026000769bd7",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "Potion.rarity = 'rare' (potions.py:1042), read by shop.MerchantPotionEntry pricing and by potion_pools.POTION_POOL's rarity bucket (potion_pools.py:38-65)",
+      "verdict": "faithful",
+      "rationale": "EXECUTED, not asserted: `py audit/tools/potion_probes.py sweep-attrs` extracts PotionRarity from every C# model and diffs it against the sim class attribute over all 51 units and reports 0 mismatches. Rarity is observable in the sim (it sets the shop price and the reward-roll bucket), so this is a behavioural verdict rather than a field copy."
+    },
+    "Usage": {
+      "maps_to": "no explicit attribute; the sim's only potion-use entry point is CombatState.use_potion (combat.py:583-616), which cannot be reached outside a combat",
+      "verdict": "faithful",
+      "rationale": "PotionUsage.CombatOnly means the game's Use button is live only during a fight. The sim reaches that by construction: `py audit/tools/potion_probes.py sweep-usage` finds exactly one `def use_potion` in sts2_rl/, on CombatState, and the conformance driver only dispatches the recording's UsePotion command inside a live fight (conformance/combat_driver.py:16,263-289). The absence of a `usage` attribute is therefore not a dropped guard for this unit -- but it IS a real gap for the four AnyTime potions, which is where the divergence is filed (blood_potion, entropic_brew, foul_potion, fruit_juice)."
+    },
+    "TargetType": {
+      "maps_to": "no attribute -- `targeted` stays False, so CombatState.use_potion passes target=None (combat.py:608) and the potion applies to ctx.player (potions.py:1045-1053)",
+      "verdict": "faithful",
+      "rationale": "TargetType.AnyPlayer in a single-player run always resolves to the owner: PotionModel.EnqueueManualUse defaults `target` to `Owner.Creature` when it is a valid target (PotionModel.cs:240-243) and IsValidTarget's Self/AnyPlayer arms accept exactly that creature (PotionModel.cs:280-287). The multiplayer half -- AnyPlayer letting you throw the potion at an ally, and CanThrowAtAlly (PotionModel.cs:381-388) gating it on `RunState.Players.Count > 1` -- is out of scope by the shared contract and noted in maps_to rather than verdicted as a divergence."
+    },
+    "CanonicalVars (protected override, SneckoOil.cs:27)": {
+      "maps_to": "CARDS = 7 (potions.py:1043)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(7)`; no ascension branch."
+    },
+    "OnUse (protected override, SneckoOil.cs:43-57)": {
+      "maps_to": "SneckoOil.use (potions.py:1045-1053)",
+      "verdict": "gap",
+      "live": false,
+      "issue": "Rollup of guards N2 and N3 per binding rule 4. The structure is right and it is the part a replay would notice: draw 7 FIRST, then walk the resulting hand in order and take ONE `Rng.CombatEnergyCosts.NextInt(4)` per non-X card (SneckoOil.cs:47-56 vs potions.py:1048-1053). What diverges is the second filter clause the port drops (N2) and the until-played half of SetThisTurnOrUntilPlayed (N3), both dormant."
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: the draw comes first, so the seven new cards ARE randomised; and the draw count on the stream matches",
+      "verdict": "faithful",
+      "rationale": "SneckoOil.cs:47 draws before :48 reads the hand, so the potion randomises the cards it just drew as well as the ones already held; potions.py:1048-1050 does the same. One CombatEnergyCosts NextInt(4) per eligible card, in hand order, on both sides -- the sim reads `ctx.combat.combat_rng.energy` (potions.py:1049) and calls `randrange(4)` per card. A wrong count or a wrong stream here would be grade A, so it is verdicted rather than folded into OnUse."
+    },
+    {
+      "what": "N2 (dormant): the C# skips a card whose unmodified cost is NEGATIVE and the port has no such clause",
+      "verdict": "gap",
+      "live": false,
+      "issue": "SneckoOil.cs:51 guards each card with `if (item.EnergyCost.GetWithModifiers(CostModifiers.None) >= 0)` on top of the `!c.EnergyCost.CostsX` filter at :48. potions.py:1051-1053 ports only the CostsX half. DORMANT because the sim has no representation for a negative cost at all: Card.energy_cost clamps with `max(0, ...)` (cards/base.py:232) and the stored `_energy_cost` is set from the card's own class attribute, so no ported card can present a negative unmodified cost for the guard to catch. What would make it live: giving the sim an unclamped cost representation (the game uses negative values as sentinels), at which point the sim would randomise a card the game skips AND take an extra CombatEnergyCosts draw doing it -- which is a stream desync, so this dormant entry is worth more than its grade suggests."
+    },
+    {
+      "what": "N3 (dormant): `SetThisTurnOrUntilPlayed` also expires when the card is PLAYED; the sim models only the end-of-turn half",
+      "verdict": "gap",
+      "live": false,
+      "issue": "SneckoOil.cs:53 calls `EnergyCost.SetThisTurnOrUntilPlayed(...)`, whose name states two expiry conditions. The sim's counterpart is Card.set_cost_this_turn (cards/base.py:252-258) and its own docstring concedes the difference: 'The game's modifier also expires when the card is played; the sim only tracks the end-of-turn half, which differs solely for a card played and returned to hand in the same turn.' Verdicted against the CODE and the claim holds -- `_cost_this_turn` is cleared only by reset_turn_cost_modifiers (cards/base.py:265-268), called at turn start (player.py:154-155), and nothing in the play path clears it. DORMANT: the divergence needs a card that is played and returns to the hand in the same turn while carrying a randomised cost, and no such route is exercised today. What would make it live: porting any effect that returns a played card to hand within the turn (the game's Rebound-shaped cards). Not this record's mechanism to fix -- cards/base.py is shared, and relic/snecko_eye is the other consumer -- but no existing record verdicts it, so it is filed here rather than dropped."
+    },
+    {
+      "what": "N4: `TestEnergyCostOverride` is a TestMode branch and the port takes the shipping arm",
+      "verdict": "faithful",
+      "rationale": "PROMPT.md bug class 18 checked explicitly: SneckoOil.cs:59-66's NextEnergyCost returns `TestEnergyCostOverride` when it is >= 0 and the Rng draw otherwise, and the setter is guarded by `TestMode.AssertOn()` (:37) so the field can only be set from test code. The default is -1 (:19), so the shipping game always takes `Rng.CombatEnergyCosts.NextInt(4)` -- which is the arm potions.py:1053 ports. This is the trap that caught relic/calling_bell, and this unit does not fall into it."
+    },
+    {
+      "what": "W: the shared PotionModel.OnUseWrapper pipeline every potion resolves through (audit/content/potion/shared-mechanisms.md)",
+      "verdict": "gap",
+      "live": true,
+      "issue": "MECHANISM, shared by all 51 units and recorded once per record because PotionModel is one of harness.py's MODEL_ROOT_CLASSES, so no unit record enumerates it -- and unlike CardModel/PowerModel/RelicModel it is NOT covered by any seam record either, which is the coverage hole audit/content/potion/shared-mechanisms.md exists to name. src/Core/Models/PotionModel.cs:291-342 in order: :293 RemoveBeforeUse (sim combat.py:603-606 nulls the slot and detaches the listener before the effect -- faithful); :297 Hook.BeforePotionUsed; :327 OnUse (this record's own hooks); :336 CombatManager.History.PotionUsed (no sim entry -- PotionUsedEntry.cs:9-38 adds only a Description string and an executed grep of src/ finds no game reader, so presentation only); :338 Hook.AfterPotionUsed (sim hooks.py:566-571 on_potion_used, dispatched at combat.py:610 -- faithful); :340 CheckForEmptyHand. TWO of those are LIVE gaps, and both are already owned by another record, so this entry MATCHES their verdicts per binding rule 3 rather than re-deriving them. (1) BeforePotionUsed has no sim dispatcher at all -- hooks.py declares only on_potion_used, whose own docstring says it mirrors AfterPotionUsed -- and its single C# implementer SurroundedPower.cs:82 is ported at powers.py:2523, so throwing a potion at the far Kaiser Crab arm does not turn the player to face it: audit/records/power/surrounded.json, gap, live. (2) CombatManager.cs:887-893 CheckForEmptyHand has exactly two callers, CardModel.cs:1992 and PotionModel.cs:340, and the sim's only on_hand_emptied call site is player.py:197 -- the end-of-turn flush CombatManager.cs:880-883 explicitly excludes: audit/records/relic/unceasing_top.json G1, gap, LIVE, executed with a potion witness. Reachable from EVERY potion, not only the hand-emptying ones, because C# tests the hand AFTER the use. Rollup `gap` per binding rule 4."
+    },
+    {
+      "what": "W4: PotionModel.cs:324-331 brackets OnUse in BeginCardOrPotionEffect/EndCardOrPotionEffect and the sim has no re-entrancy depth counter",
+      "verdict": "gap",
+      "live": false,
+      "issue": "CombatManager.cs:889's `!IsExecutingCardOrPotionEffect(player)` is what stops a nested effect from triggering the empty-hand check early, and PotionModel.cs:324-331 is what puts a potion inside that bracket. The sim has no counterpart anywhere. DORMANT for the same reason audit/records/relic/unceasing_top.json G2 is dormant -- the ported cards that auto-play another card mid-resolution (cards/cascade.py:58, cards/colorless_skills.py:117) do not touch the draw pile between the inner and outer ends -- but recorded separately because the OUTER frame here is a potion, so a fix that brackets only card plays would leave this half open. What would make it live: any ported potion or card that empties the hand and then moves the draw pile from inside a nested auto-play."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-07-27"
+}

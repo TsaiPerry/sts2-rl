@@ -85,9 +85,17 @@ _CLASS_DECL_RE = re.compile(
 
 # Base classes whose members are the *framework*, not the unit. Every power
 # derives from PowerModel, so enumerating PowerModel's own overrides into all
-# 134 power records would add the same noise 134 times — and that layer is
-# already audited, once, by the seam tier (hook_dispatch hashes
-# AbstractModel.cs and the model files). Base-class following stops here.
+# 138 power records would add the same noise 138 times — and that layer is
+# audited, once, by the seam tier (hook_dispatch hashes AbstractModel.cs and
+# the model files). Base-class following stops here.
+#
+# THIS IS A PROMISE, AND ONE ROOT DOES NOT KEEP IT. There is no potion seam, so
+# stopping at PotionModel means PotionModel.OnUseWrapper — the whole use path
+# for all 51 potions — is verdicted nowhere, and `validate` cannot notice
+# because a root is exactly what it is told to stop at. Recorded once in
+# audit/content/potion/shared-mechanisms.md and carried as one guard per potion
+# record until a `potion_pipeline` seam exists. Before adding a root here,
+# check which seam covers it.
 MODEL_ROOT_CLASSES = frozenset({
     "AbstractModel", "AfflictionModel", "BadgeModel", "CardModel",
     "CreatureModel", "EnchantmentModel", "EventModel", "ModifierModel",

@@ -1707,3 +1707,177 @@ class TestMonsterStateMachineOrder:
         owner.machine = machine
         machine._performed_first_move = True
         assert machine.roll_move(owner, random.Random(0)).id == "TARGET"
+
+
+class TestPotionContentPins:
+    """Content-anchored pins from the `potion` tier (audit/records/potion/**).
+
+    Until this class landed every strict-xfail pin in this file was
+    seam-anchored, so a content fix had no acceptance test of its own
+    (audit/README.md's standing caveat). Each pin below names its record, the
+    sim and C# sites, live-or-dormant, and the observable -- and each one
+    FAILS at the assertion its reason describes rather than erroring, which is
+    what stops an xfail from reading as coverage it does not provide.
+
+    OWNERSHIP NOTE: audit/prompts/_shared-audit-contract.md reserves this file
+    for the seam session. audit/prompts/2026-07-26-content-potion.md overrides
+    that for this stream ("add a strict=True xfail to test/test_hook_order.py"),
+    and audit/README.md already flags the snag. The pins are confined to this
+    one class so the widening is easy to see and easy to move.
+    """
+
+    @staticmethod
+    def _reviving_illusion_combat():
+        """A combat whose only enemy is mid-Illusion-revival: alive at 1 HP,
+        so `not is_gone`, but refused by should_allow_hitting."""
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.overgrowth.fogmog import EyeWithTeeth
+
+        cs = CombatState(
+            starting_deck=[make_card("strike") for _ in range(5)],
+            rng=random.Random(0),
+            encounter=Encounter("pin_illusion", [EyeWithTeeth]),
+        )
+        enemy = cs.enemies[0]
+        enemy.hp = 1
+        enemy.powers["illusion"].is_reviving = True
+        return cs, enemy
+
+    @pytest.mark.xfail(
+        reason="potion audit gap G(AoE-power) (audit/records/potion/"
+               "potion_of_binding.json and audit/records/potion/"
+               "shackling_potion.json), LIVE. It is seam/power_cmd guard G6 at "
+               "a content site: C# walks CombatState.HittableEnemies "
+               "(CombatState.cs:142 = Enemies.Where(IsHittable), and "
+               "IsHittable is !IsDead && Hook.ShouldAllowHitting, "
+               "Creature.cs:285-299) and PowerCmd.Apply additionally refuses "
+               "!target.CanReceivePowers (PowerCmd.cs:103). The sim filters on "
+               "`not is_gone` (potions.py:747, creatures.py:44-46) and "
+               "cmds.py:270-332's PowerCmd.apply has no CanReceivePowers "
+               "guard at any point. LIVE and executed (py audit/tools/"
+               "potion_probes.py aoe-power): an Eye with Teeth mid-Illusion-"
+               "revival (powers.py:1566-1575; summoned by Fogmog, "
+               "monsters/overgrowth/fogmog.py:95, Parafright/The Obscura the "
+               "Hive twin) sits at 1 HP, so the sim keeps it and lands "
+               "weak 1 + vulnerable 1 where the game applies nothing at all. "
+               "The DAMAGE AoE potions are NOT affected -- DamageCmd.deal "
+               "applies should_allow_hitting itself (cmds.py:51-52) -- so the "
+               "fix belongs in PowerCmd.apply, not in the potions.",
+        strict=True,
+    )
+    def test_aoe_power_potion_skips_an_unhittable_enemy(self):
+        from sts2_rl.potions import PotionOfBinding
+
+        cs, enemy = self._reviving_illusion_combat()
+        PotionOfBinding().use(cs._ctx())
+        assert "weak" not in enemy.powers
+        assert "vulnerable" not in enemy.powers
+
+    @pytest.mark.xfail(
+        reason="potion audit gap G1 (audit/records/potion/"
+               "touch_of_insanity.json), LIVE. TouchOfInsanity.cs:22 filters "
+               "the hand with `c.CostsEnergyOrStars(includeGlobalModifiers: "
+               "false) || c.CostsEnergyOrStars(includeGlobalModifiers: true)` "
+               "-- an OR over CostModifiers.Local and CostModifiers.All "
+               "(CardModel.cs:1578-1595). The sim tests `not c.energy_cost_x "
+               "and c.energy_cost > 0` (potions.py:166-169) and "
+               "Card.energy_cost (cards/base.py:222-232) is the LOCAL cost "
+               "only, so the `true` arm is dropped. LIVE and executed (py "
+               "audit/tools/potion_probes.py touch-of-insanity): with Spiked "
+               "Gauntlets held (relics/spiked_gauntlets.py:26-31, +1 to Power "
+               "cards, a TryModifyEnergyCostInCombat global modifier) and a "
+               "Power card made free this turn, local cost is 0 and global "
+               "cost is 1, so the game offers the card and the sim's candidate "
+               "list is empty -- the potion does nothing (potions.py:170-171) "
+               "where the game hands the player a permanent 0-cost card. All "
+               "three components ported: Spiked Gauntlets from the Glory Tanx "
+               "shrine (events/tanx.py:13), a free Power card from Power "
+               "Potion or Orobic Acid, Touch of Insanity a pooled Uncommon "
+               "(potion_pools.py:63).",
+        strict=True,
+    )
+    def test_touch_of_insanity_offers_a_globally_costed_card(self):
+        from sts2_rl.potions import TouchOfInsanity
+
+        cs = CombatState(
+            starting_deck=[make_card("strike") for _ in range(5)],
+            rng=random.Random(0),
+            relics=[make_relic("spiked_gauntlets")],
+        )
+        card = make_card("inflame")          # a Power card
+        card.set_free_this_turn()            # local cost 0, global cost 1
+        cs.player.hand = [card]
+        TouchOfInsanity().use(cs._ctx())
+        # SetToFreeThisCombat == EnergyCost.SetThisCombat(0).
+        assert card._cost_this_combat == 0
+
+    @pytest.mark.xfail(
+        reason="potion audit gap G1 (audit/records/potion/"
+               "fairy_in_a_bottle.json), LIVE. FairyInABottle.cs:42-45's "
+               "AfterPreventingDeath runs the FULL use pipeline -- `await "
+               "OnUseWrapper(new ThrowingPlayerChoiceContext(), creature)` -- "
+               "so PotionModel.cs:338's Hook.AfterPotionUsed fires when the "
+               "fairy pops. The sim's after_preventing_death "
+               "(potions.py:1245-1250) calls discard_potion and then "
+               "potion.use directly, and the ONLY on_potion_used dispatch site "
+               "in sts2_rl/ is combat.py:610 inside CombatState.use_potion -- "
+               "which this path does not go through. LIVE: both C# "
+               "AfterPotionUsed implementers are ported and working at their "
+               "own sites -- ReptileTrinket.cs:22 -> "
+               "relics/reptile_trinket.py:23-29 (3 temporary Strength, "
+               "verdicted faithful by audit/records/relic/"
+               "reptile_trinket.json) and BeltBuckle.cs:81 -> "
+               "relics/belt_buckle.py:32-33. Observable: the game grants 3 "
+               "Strength when the fairy saves you and the sim grants none.",
+        strict=True,
+    )
+    def test_fairy_in_a_bottle_fires_after_potion_used(self):
+        from sts2_rl.potions import FairyInABottle
+
+        cs = CombatState(
+            starting_deck=[make_card("strike") for _ in range(5)],
+            rng=random.Random(0),
+            potions=[FairyInABottle()],
+            relics=[make_relic("reptile_trinket")],
+        )
+        cs.player.hp = 5
+        DamageCmd.deal(cs.hooks, cs.player, 99, dealer=cs.enemy,
+                       props=DamageProps.CARD)
+        # The fairy prevented the death and healed to 30% of max HP...
+        assert cs.player.hp == max(cs.player.max_hp * 30 // 100, 1)
+        # ...and the use should have been an AfterPotionUsed for the trinket.
+        assert "reptile_trinket" in cs.player.powers
+
+    @pytest.mark.xfail(
+        reason="potion audit gap G2 (audit/records/potion/foul_potion.json), "
+               "LIVE. FoulPotion.cs:77 damages `CombatState.Creatures.Where(c "
+               "=> !c.IsPet)` and Creatures is `_allies.Concat(_enemies)` "
+               "(CombatState.cs:70) -- the ALLIES first, i.e. the thrower "
+               "before the enemies. potions.py:418 builds `[*ctx.enemies, "
+               "ctx.player]` -- the player LAST. Same set (the sim has no "
+               "pets), opposite order. LIVE: Potion Courier grants three Foul "
+               "Potions (events/potion_courier.py:47-48) and it is usable in "
+               "any combat. Observable at its sharpest with the player and "
+               "the last living enemy both on <= 12 HP: the game damages the "
+               "player first and the run ends, while the sim kills the enemy "
+               "first and CombatState.use_potion then tests "
+               "_all_enemies_dead() BEFORE player.is_dead (combat.py:612-615) "
+               "and calls _end_combat(player_won=True) -- the sim wins the "
+               "fight the game loses.",
+        strict=True,
+    )
+    def test_foul_potion_damages_the_thrower_first(self):
+        from sts2_rl.potions import FoulPotion
+
+        cs = fresh()
+        order: list[str] = []
+        orig = cs.hooks.on_hp_changed
+
+        def watch(creature, delta, _orig=orig):
+            order.append("player" if creature is cs.player else "enemy")
+            return _orig(creature, delta)
+
+        cs.hooks.on_hp_changed = watch
+        FoulPotion().use(cs._ctx())
+        assert order, "the potion damaged nobody"
+        assert order[0] == "player"

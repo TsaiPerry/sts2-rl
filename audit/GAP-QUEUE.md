@@ -17,31 +17,47 @@ py audit/tools/gap_queue.py cite-check    # every file:line here resolves
 ```
 
 **Last regenerated 2026-07-27, with the `monster` tier (109 units, 45 gap
-entries, 28 live).** Six of seven content kinds are now aggregated here; only
-`potion` is missing.
+entries, 28 live) and the `potion` tier (51 units, 152 gap entries, 83 live).**
+**All seven content kinds and all six seams are now aggregated here** — the
+first time that has been true.
 
 Do not trust a count stated in prose anywhere in this project — including this
 file. Re-run `counts`.
 
 ## What this queue does NOT cover
 
-**Six of the seven content kinds are audited. One is not.**
+**Every content kind is audited and aggregated. One unit is not, by design.**
 
 | kind | units | records | in this queue |
 |---|---|---|---|
 | seam (engine) | 6 seams | 6 | yes |
 | power | 138 | 138 | yes |
-| card | 202 | 202 | yes |
+| card | 203 | 202 | yes — `card/sweep` is sim-only and has no record |
 | event | 65 | 65 | yes |
 | enchantment | 17 | 17 | yes |
 | relic | 258 | 258 | yes — **merged 2026-07-26** |
 | monster | 109 | 109 | yes — **merged 2026-07-27** |
-| **potion** | **51** | **0** | **no — kind created 2026-07-26** |
+| **potion** | **51** | **51** | yes — **merged 2026-07-27** |
 
-51 sim units have no record at all, and a record is the only thing that turns
-a divergence into a queue entry. So a mechanism that lives only in a potion
-model is not absent from this queue because it was cleared — it is absent
-because nobody looked.
+What this queue still cannot cover is the residue named below: emergent
+interactions between two individually-faithful units, and any mechanism that
+lives somewhere no record reaches. **One such place is now known and named:**
+`PotionModel` is a framework root, so `harness.MODEL_ROOT_CLASSES` stops
+base-class following there on the promise that a seam covers it — and **no seam
+does**. `PotionModel.OnUseWrapper` is the entire use path for all 51 potions and
+was verdicted nowhere until the potion tier recorded it as one guard per record
+(entry 46 below, `potion/_use_pipeline`, 51 sites). Check the other twelve roots
+in `MODEL_ROOT_CLASSES` against `SEAMS` before assuming this is the only one.
+
+**The tooling did not see this tier for a day, and that is worth recording as a
+queue-integrity fact.** `gap_queue.py` keeps its own `CONTENT_KINDS`, so while
+51 finished records sat on disk `counts` printed `NOT AUDITED : potion (51 C#
+units)` and `audit_status.py` — which derives kinds from the harness — reported
+them audited. 152 gap entries were missing from this file and nothing failed:
+`coverage` and `cite-check` printed their complaints and exited 0, because
+`main()` discarded the command's return value. Both are fixed, and
+`test/test_audit_status.py::TestQueueGeneratorCoversEveryKind` pins the kind
+lists together.
 
 **The 11 unclaimed monster hook overrides are now claimed.** They were listed
 here as a hole: 11 C# monster models override an `AbstractModel` hook and no
@@ -139,16 +155,16 @@ transcription of it and can go stale.
 
 | | |
 |---|---|
-| gap entries across all 795 records | **1460** |
-| — labelled LIVE (own text, or the explicit `live` field) | 575 |
-| — labelled DORMANT (own text, or the explicit `live` field) | 499 |
+| gap entries across all 846 records | **1612** |
+| — labelled LIVE (own text, or the explicit `live` field) | 658 |
+| — labelled DORMANT (own text, or the explicit `live` field) | 568 |
 | — unlabelled (inherit their mechanism's liveness) | 386 |
-| **distinct mechanisms** | **832** |
-| — with at least one live site | **305** |
-| — dormant at every site | 527 |
-| mechanisms pinned by a `strict=True` xfail | **31** |
-| mechanisms unpinned | 801 |
-| `strict=True` xfails in `test/test_hook_order.py` | 32 (all strict) |
+| **distinct mechanisms** | **856** |
+| — with at least one live site | **319** |
+| — dormant at every site | 537 |
+| mechanisms pinned by a `strict=True` xfail | **32** |
+| mechanisms unpinned | 824 |
+| `strict=True` xfails in `test/test_hook_order.py` | 36 (all strict) |
 
 Per kind (records / gap entries / mechanisms anchored there / entries labelled live):
 
@@ -161,8 +177,22 @@ Per kind (records / gap entries / mechanisms anchored there / entries labelled l
 | `enchantment` | 17 | 43 | 10 | 22 |
 | `relic` | 258 | 620 | 404 | 288 |
 | `monster` | 109 | 45 | 18 | 28 |
+| `potion` | 51 | 152 | 24 | 83 |
 
 The `power` and `card` rows moved without the monster merge touching them (268→270 and 149→152 entries): those tiers gained entries after this file was last regenerated, which is what the header means by *do not trust a count stated in prose anywhere in this project — re-run `counts`*.
+
+**Read the `potion` row carefully: 152 entries over 51 records is the highest
+entries-per-record ratio in the table, and it is not 152 findings.** 102 of them
+are two shared guards (`potion/_use_pipeline`, `potion/_effect_bracket`) carried
+once per unit because `PotionModel` is a framework root with no seam — see
+[What this queue does NOT cover](#what-this-queue-does-not-cover). The tier's
+real shape is **24 mechanisms**, 8 of which have more than one site and 17 of
+which are single-unit findings.
+
+**Four pins are content-anchored for the first time** (`TestPotionContentPins`),
+which is why the xfail count moved 32→36 while pinned mechanisms moved only
+31→32: three of the four pin potion mechanisms that had no pin, and the fourth
+pins `power/_should_allow_hitting`, which was already in the queue as unpinned.
 
 Per seam record, which is how the engine tier was originally reported:
 
@@ -183,6 +213,8 @@ doing its job across kinds rather than within one.
 
 | mechanism | sites | what collapses |
 |---|---|---|
+| `potion/_use_pipeline` | 51 | **one un-seamed framework root**, recorded once per potion |
+| `potion/_effect_bracket` | 51 | one missing re-entrancy bracket, recorded once per potion |
 | `hook_dispatch/G4` | 36 | one loop boundary, now recorded across **4 kinds** |
 | `relic/_is_allowed` | 34 | **one missing `Relic.is_allowed` member**, on 19 relics |
 | `power/_side_turn_slot` | 29 | one wiring bug in `combat.py`, recorded on 29 powers |
@@ -1113,10 +1145,14 @@ fires; the stream itself survives.
   is the general form of leg 2; `power/_killing_blow_guard` is the family leg 1
   belongs to.
 
-### 25. `power/_should_allow_hitting` — `PowerCmd.apply` has no `CanReceivePowers` backstop  [LIVE] [**unpinned**]
+### 25. `power/_should_allow_hitting` — `PowerCmd.apply` has no `CanReceivePowers` backstop  [LIVE] [pinned]  ← **pinned 2026-07-27 by the potion tier**
 
 - **sites** `power/adaptable/ShouldAllowHitting`, `power/illusion/…`,
-  `power/reattach/…` (3 entries, identical text, verdict carried per rule 3).
+  `power/reattach/…` (3 entries, identical text, verdict carried per rule 3),
+  `monster/the_obscura/g1`, and four potion entries added 2026-07-27:
+  `potion/potion_of_binding/OnUse`, `potion/potion_of_binding/g1`,
+  `potion/shackling_potion/OnUse`, `potion/shackling_potion/g1`. **8 entries
+  across 3 kinds.**
 - **impact** B — a power lands on a creature the game refuses to apply to.
 - **divergence** C#'s `PowerCmd.Apply<T>` refuses to apply anything to a creature
   `CanReceivePowers` says no to, and `CanReceivePowers` reuses
@@ -1131,8 +1167,16 @@ fires; the stream itself survives.
   proving the predicate *is* wired into the damage path and only the power path
   is missing it. Bash/Vulnerable is ported basic-pool Ironclad content and the
   revive window is the ordinary flow of the fight.
-- **pin** Unpinned. The seam's `power_cmd/G6` pin is on the *other* clause of
-  that entry (the `IsEnding` gate), so it does not cover this.
+- **pin** `test/test_hook_order.py::TestPotionContentPins::test_aoe_power_potion_skips_an_unhittable_enemy`
+  (strict, failing). **Read the pin's history before trusting any pin's
+  attribution.** Its `reason` names `seam/power_cmd` G6 — correctly, per rule 3
+  — but G6 is a *two-headed* guard ("No `CombatManager.IsEnding` /
+  `CanReceivePowers` guard backstop") and this queue merges `power_cmd/G6` into
+  `hook_dispatch/G8`, the `IsEnding` family. So the pin scanner filed a LIVE,
+  failing, executed pin against a **dormant** 22-site mechanism while this
+  entry, the one it actually proves, read `unpinned`. `gap_queue._PIN_OVERRIDE`
+  now redirects it. A pin credited to the wrong mechanism is worse than one
+  credited to none: it reports coverage in two places at once.
 - **fix** Add the guard at the top of `sts2_rl/cmds.py`'s `PowerCmd.apply`:
   return without applying when `hooks.should_allow_hitting(target)` is false.
   Failing test asserts the Vulnerable does not land on the reviving Test Subject.
@@ -1144,6 +1188,20 @@ fires; the stream itself survives.
   `StrengthPower 3m` to `GetTeammatesOf(Creature)`, which includes a reviving
   Parafright, and the sim's `PowerCmd.apply` has no `CanReceivePowers` backstop.
   A concrete site of the mechanism rather than a new one.
+- **potion sites added 2026-07-27, with a second executed witness and the
+  contrast that localises the fix.** Potion of Binding and Shackling Potion walk
+  `CombatState.HittableEnemies` (`CombatState.cs:142`), which the sim ports as
+  `[e for e in ctx.enemies if not e.is_gone]` — no `ShouldAllowHitting` term.
+  `py audit/tools/potion_probes.py aoe-power` builds an Eye with Teeth
+  mid-Illusion-revival (summoned by Fogmog,
+  `sts2_rl/monsters/overgrowth/fogmog.py:95`) and prints
+  `should_allow_hitting False`, C# `HittableEnemies` empty, sim filter keeps 1 —
+  then Potion of Binding lands `weak 1` + `vulnerable 1` and Shackling Potion
+  lands `strength -7`, where the game applies nothing. **The same probe shows
+  Explosive Ampoule changing nothing on that creature**, because `DamageCmd.deal`
+  applies the predicate itself (`sts2_rl/cmds.py:51-52`). That contrast is the
+  argument for fixing `PowerCmd.apply` rather than the potions' target filters:
+  the damage path is already correct at every site.
 
 ### 26. `event/EV-2` — `lose_max_hp` has no overflow damage and floors max HP first  [LIVE] [**unpinned**]
 
@@ -1935,8 +1993,11 @@ Fixing one site of any of them generally clears every site.
 
 ### 57. `damage_pipeline/N4` — the two-phase `ShouldDie` / `ShouldDieLate` priority is one pass  [LIVE] [**unpinned**]  ← corrected by the relic tier
 
-- **sites** `damage_pipeline/N4` (1 entry). **Re-verdicted `waiver` → `gap` by
-  the relic stream's batch 8**, carried into this branch by the merge.
+- **sites** `damage_pipeline/N4`, `potion/fairy_in_a_bottle/ShouldDie`
+  (2 entries). **Re-verdicted `waiver` → `gap` by the relic stream's batch 8**,
+  carried into this branch by the merge, and given its second site by the potion
+  tier on 2026-07-27 — the potion whose supposed out-of-scope-ness was the
+  waiver's whole rationale now carries the same verdict at its own site.
 - **impact** B — the wrong death-prevention resource is spent.
 - **divergence** C# runs an early `ShouldDie` pass before the late one, so a
   potion that prevents death always resolves before a relic that does. The sim
@@ -1954,6 +2015,9 @@ Fixing one site of any of them generally clears every site.
   where C# implements `ShouldCreatureBeRemovedFromCombatAfterDeath`.
 - **radius** A worked example of the queue's own warning that "no ported content
   triggers this" is a dormant gap and not a waiver — here it was not even dormant.
+  The potion tier's own record (`audit/records/potion/fairy_in_a_bottle.json`,
+  `ShouldDie`) states the loop closed: "this record is that waiver's
+  counterexample and matches the corrected verdict per binding rule 3".
 
 ### 58. `power/unmovable/g2` — the block props hoist, at a listener the census missed  [LIVE] [pinned]  ← found by the relic tier's rule-3 review
 
@@ -1989,6 +2053,13 @@ Fixing one site of any of them generally clears every site.
 ---
 
 ## 1D. Potion scope — live gaps unmasked by deleting the exclusion  *(2026-07-26)*
+
+> **Historical section, and deliberately kept as one.** It records what the
+> *exclusion* hid, in the window between deleting the clause (2026-07-26) and
+> auditing the kind (2026-07-27). The tier itself is now
+> [section 1F](#1f-potion-tier--live-gaps-merged-2026-07-27); these five entries
+> are the ones that existed before it and are not re-listed there. Read this
+> section for the failure mode, 1F for the coverage.
 
 These five were not found by auditing anything new. **They were already in the
 records, waived, and the waiver's entire support was the contract clause "Out of
@@ -2402,6 +2473,205 @@ mechanism and gets no number of its own.
   `kin_priest` and `axe_ruby_raider` use it — so this is an omission at two
   sites, not a missing capability. Of 45 moves checked by probe, exactly these
   two mismatch.
+
+---
+
+## 1F. Potion tier — live gaps  *(merged 2026-07-27)*
+
+51 records, 152 gap entries, 83 labelled live, **24 mechanisms**. The entry
+count is the highest per record in the project and it is not 152 findings:
+102 entries are the two shared guards below, carried once per unit.
+
+Nothing in this section was reachable before 2026-07-26 — see
+[1D](#1d-potion-scope--live-gaps-unmasked-by-deleting-the-exclusion-2026-07-26)
+for why. Four of these mechanisms carry the project's first **content-anchored
+pins**.
+
+### 46a. `potion/_use_pipeline` — `PotionModel.OnUseWrapper` is covered by no seam  [LIVE] [**unpinned**]
+
+- **sites** 51 — one per potion record (`potion/<unit>/gN`, the guard each
+  record labels `W`). Full list: `potion/ashwater/g5`, `potion/attack_potion/g6`,
+  `potion/beetle_juice/g2`, `potion/blessing_of_the_forge/g4`,
+  `potion/block_potion/g2`, `potion/blood_potion/g4`,
+  `potion/bottled_potential/g3`, `potion/clarity/g2`,
+  `potion/colorless_potion/g7`, `potion/cure_all/g2`,
+  `potion/dexterity_potion/g2`, `potion/distilled_chaos/g5`,
+  `potion/droplet_of_precognition/g5`, `potion/duplicator/g2`,
+  `potion/energy_potion/g1`, `potion/entropic_brew/g6`,
+  `potion/explosive_ampoule/g3`, `potion/fairy_in_a_bottle/g6`,
+  `potion/fire_potion/g2`, `potion/flex_potion/g2`, `potion/fortifier/g2`,
+  `potion/foul_potion/g5`, `potion/fruit_juice/g2`, `potion/fysh_oil/g3`,
+  `potion/gamblers_brew/g5`, `potion/gigantification_potion/g1`,
+  `potion/glowwater/g3`, `potion/heart_of_iron/g1`, `potion/liquid_bronze/g1`,
+  `potion/liquid_memories/g3`, `potion/lucky_tonic/g1`,
+  `potion/mazaleths_gift/g2`, `potion/orobic_acid/g4`,
+  `potion/potion_of_binding/g5`, `potion/potion_shaped_rock/g2`,
+  `potion/powdered_demise/g1`, `potion/power_potion/g5`,
+  `potion/radiant_tincture/g1`, `potion/regen_potion/g2`,
+  `potion/shackling_potion/g4`, `potion/ship_in_a_bottle/g1`,
+  `potion/skill_potion/g5`, `potion/snecko_oil/g5`, `potion/soldiers_stew/g3`,
+  `potion/speed_potion/g1`, `potion/stable_serum/g1`,
+  `potion/strength_potion/g3`, `potion/swift_potion/g1`,
+  `potion/touch_of_insanity/g4`, `potion/vulnerable_potion/g2`,
+  `potion/weak_potion/g2`.
+- **impact** B, twice over — a missing hook dispatch and a missing draw.
+- **divergence** `PotionModel.cs:291-342` is the use pipeline for every potion:
+  `:293` `RemoveBeforeUse`, `:297` `Hook.BeforePotionUsed`, `:327` `OnUse`,
+  `:336` `History.PotionUsed`, `:338` `Hook.AfterPotionUsed`, `:340`
+  `CheckForEmptyHand`. The sim implements `RemoveBeforeUse`
+  (`sts2_rl/combat.py:603-606`) and `AfterPotionUsed`
+  (`sts2_rl/combat.py:610`) and **neither of the other two dispatches**.
+  Structurally, `PotionModel` is in `harness.MODEL_ROOT_CLASSES`, so no unit
+  record enumerates it — and no seam record covers it either, so this layer was
+  audited nowhere at all.
+- **observable** Two, both already owned and matched here per rule 3 rather than
+  re-derived. (1) `Hook.BeforePotionUsed` has exactly one implementer,
+  `SurroundedPower.cs:82`, ported at `sts2_rl/powers.py:2523`: throwing a
+  targeted potion at the far Kaiser Crab arm does not turn the player to face
+  it — `power/surrounded/BeforePotionUsed`, entry in
+  [1D](#1d-potion-scope--live-gaps-unmasked-by-deleting-the-exclusion-2026-07-26).
+  (2) `CheckForEmptyHand` (`CombatManager.cs:887-893`) has two callers,
+  `CardModel.cs:1992` and `PotionModel.cs:340`, and the sim's only
+  `on_hand_emptied` site is `sts2_rl/player.py:197` — the end-of-turn flush
+  `CombatManager.cs:880-883` explicitly excludes: `relic/unceasing_top`'s G1,
+  executed with an Ashwater witness. Reachable from **every** potion, because C#
+  tests the hand *after* the use.
+- **pin** Unpinned as a mechanism. Its two observables are pinned at their own
+  sites' entries.
+- **fix** Two independent one-liners in `sts2_rl/combat.py`'s `use_potion`: add
+  a `before_potion_used` dispatcher and call it before `potion.use`, and call
+  the empty-hand check after. **The structural fix is a `potion_pipeline`
+  seam** (or extending `creature_card_cmds` to cover `PotionModel`, `PotionCmd`
+  and `Player`'s belt verbs); until one exists every future potion record will
+  carry this guard again.
+- **radius** 51 records. Also the reason to check the other twelve entries in
+  `MODEL_ROOT_CLASSES` against the six seams — this is the only root known to be
+  uncovered, and nothing would have reported a second one.
+- **narration** `audit/content/potion/shared-mechanisms.md`.
+
+### 46b. `potion/_choose_a_card_screen` — the generated-card potions skip `FromChooseACardScreen`  [LIVE] [**unpinned**]
+
+- **sites** 8 — `potion/attack_potion/OnUse`, `potion/attack_potion/g2`,
+  `potion/colorless_potion/OnUse`, `potion/colorless_potion/g3`,
+  `potion/power_potion/OnUse`, `potion/power_potion/g2`,
+  `potion/skill_potion/OnUse`, `potion/skill_potion/g2`.
+- **impact** B — a different card enters the hand, and the skip option does not
+  exist.
+- **divergence** Each of the four potions generates three cards and hands them
+  to `CardSelectCmd.FromChooseACardScreen(..., canSkip: true)`
+  (`CardSelectCmd.cs:216-261`), adding the result only `if (cardModel != null)`.
+  The sim forks on `combat.combat_rng.is_parity`: the parity arm defers to
+  `CombatState.offer_screen_selection` (`sts2_rl/combat.py:618-637`) and honours
+  a recorded `SelectCardFromScreen skip`; the **legacy arm takes `cards[0]`
+  unconditionally**.
+- **observable** The RL env and every non-parity test take the legacy arm
+  (`sts2_rl/full_env.py:788` builds the env with no `rng_set`), so in training
+  the potion is deterministic in generated order, the other two candidates do
+  not exist, and the potion can never be declined. The observation encoder reads
+  the resulting hand.
+- **dormancy** Live. `orobic_acid` is **not** a site and the distinction is
+  deliberate: it has no screen at all in the source, which its record records as
+  a PROMPT.md class-29 counter-example.
+- **pin** Unpinned.
+- **fix** Give the legacy arm the same `offer_screen_selection` path with a
+  policy hook for the pick, or expose the choice as an env action.
+- **radius** 4 potions; the generation half (`GetDistinctForCombat` → one
+  `UnstableShuffle` on `Rng.CombatCardGeneration`) is verdicted faithful at all
+  four, so the draw counts are already right and this is a state-only fix.
+
+### 46c. `potion/_any_time_usage` — `PotionUsage.AnyTime` has no sim path at all  [LIVE] [**unpinned**]
+
+- **sites** 4 — `potion/blood_potion/Usage`, `potion/entropic_brew/Usage`,
+  `potion/foul_potion/Usage`, `potion/fruit_juice/Usage`.
+- **impact** B, and A for a replay — a recorded run that drinks one of these
+  outside combat cannot be replayed at all.
+- **divergence** `PotionUsage.AnyTime` means the Use button is live outside
+  combat, and `OnUseWrapper` is written for it (`PotionModel.cs:294,298,334,336`
+  all null-check the combat state). The sim models no `usage` attribute and has
+  exactly one use path: `py audit/tools/potion_probes.py sweep-usage` finds one
+  `def use_potion` in `sts2_rl/`, on `CombatState`. The conformance layer agrees
+  — `UsePotion` is a combat-only command in both
+  `sts2_rl/conformance/combat_driver.py:16` and
+  `sts2_rl/conformance/runner.py:147-150`.
+- **observable** All four potions are ported and reachable. Drinking Fruit Juice
+  on the map changes max HP, which the runner asserts at the next act boundary;
+  the `UsePotion` command instead falls to the room-boundary branch and is never
+  executed, so the belt and the HP both drift.
+- **pin** Unpinned.
+- **fix** A run-level `use_potion` on `RunState` plus a `usage` attribute; the
+  four potions' own effects are already implemented.
+
+### 46d. `potion/_min_select_zero` — `CardSelectorPrefs` MinSelect 0 is not modelled  [LIVE] [**unpinned**]
+
+- **sites** 4 — `potion/ashwater/OnUse`, `potion/ashwater/g1`,
+  `potion/gamblers_brew/OnUse`, `potion/gamblers_brew/g1`.
+- **impact** B — a whole hand's worth of cards.
+- **divergence** Both potions build `CardSelectorPrefs(prompt, 0, 999999999)`.
+  `FromHand`'s auto-resolve shortcut is `list.Count <= prefs.MinSelect`
+  (`CardSelectCmd.cs:708-711`), false for any non-empty hand at MinSelect 0, so
+  the screen is always shown and the player may confirm none.
+  `CombatState.select_cards` (`sts2_rl/combat.py:575-581`) has no
+  minimum/maximum pair at all — it clamps `count` and returns exactly that many
+  — and both installed selectors return the full count
+  (`sts2_rl/selectors.py:83`, `sts2_rl/combat.py:581`).
+- **observable** Ashwater **always exhausts the entire hand** and Gambler's Brew
+  always cycles it. Both are pooled Uncommons.
+- **dormancy** Live for the env; the conformance replay is unaffected, because
+  `combat_driver.py:74-111` reads the recorded `SelectHandCards` picks.
+- **pin** Unpinned.
+- **fix** Give `select_cards` a `min_select`; the mechanism is already
+  expressible — `selectors.py:79-82`'s `gambling_chip` branch filters the
+  candidates instead of taking `count`.
+
+### 46e–46l. Potion single-unit live findings
+
+Eight mechanisms, one unit each, each with its own record entry. Listed compactly
+because none shares a site with anything else.
+
+- **`potion/foul_potion/g2`** — the in-combat arm damages **enemies then player**
+  where `CombatState.Creatures` is `_allies.Concat(_enemies)`
+  (`CombatState.cs:70`), i.e. the thrower first (`sts2_rl/potions.py:418`).
+  Grade B, and worse at the edge: with the player and the last enemy both on ≤12
+  HP the game ends the run and the sim calls `_end_combat(player_won=True)`,
+  because `use_potion` tests `_all_enemies_dead()` before `player.is_dead`
+  (`sts2_rl/combat.py:612-615`). **Pinned** —
+  `TestPotionContentPins::test_foul_potion_damages_the_thrower_first`.
+- **`potion/foul_potion/g1`** and **`potion/foul_potion/OnUse`** — both
+  out-of-combat arms unported: the shop arm (drive the merchant off +
+  `GoldVar(100)`, `FoulPotion.cs:79-88`) and the Fake Merchant arm (`:89-108`).
+  The port's docstring cites `RunState.merchant_driven_off`, which does not
+  exist — `grep -rin merchant_driven_off sts2_rl/` returns only that docstring.
+  Partial credit: the Fake Merchant *event* option is ported
+  (`sts2_rl/events/fake_merchant.py:75-97`) but it **discards** the potion
+  rather than using it, so no `OnUseWrapper` and no `AfterPotionUsed`.
+- **`potion/fairy_in_a_bottle/g1`** and
+  **`potion/fairy_in_a_bottle/AfterPreventingDeath`** — the automatic trigger
+  calls `potion.use` directly (`sts2_rl/potions.py:1245-1250`) instead of
+  `OnUseWrapper` (`FairyInABottle.cs:44`), so `Hook.AfterPotionUsed` never fires
+  when the fairy pops. Both C# implementers are ported and working at their own
+  sites (`relics/reptile_trinket.py:23-29`, `relics/belt_buckle.py:32-33`): the
+  game grants 3 temporary Strength when the fairy saves you and the sim grants
+  none. **Pinned** —
+  `TestPotionContentPins::test_fairy_in_a_bottle_fires_after_potion_used`,
+  whose first assertion (the 30%-of-max-HP heal) *passes*, confirming the
+  record's arithmetic by execution before the second one fails.
+- **`potion/touch_of_insanity/g1`** and **`potion/touch_of_insanity/OnUse`** —
+  the candidate filter is an OR over `CostModifiers.Local` and `.All`
+  (`TouchOfInsanity.cs:22`, `CardModel.cs:1578-1595`) and the sim tests only
+  `c.energy_cost > 0`, which is the local cost
+  (`sts2_rl/cards/base.py:222-232`). Executed
+  (`py audit/tools/potion_probes.py touch-of-insanity`): with Spiked Gauntlets
+  held and a Power card made free this turn, local cost 0 / global cost 1, the
+  game offers the card and the sim's candidate list is empty — the potion does
+  nothing. **Pinned** —
+  `TestPotionContentPins::test_touch_of_insanity_offers_a_globally_costed_card`.
+- **`potion/entropic_brew/g2`** and **`potion/entropic_brew/OnUse`** — the
+  legacy generator is the wrong factory. The source calls
+  `CreateRandomPotionOutOfCombat` **on purpose** (`EntropicBrew.cs:23`), so
+  Fairy in a Bottle, Fruit Juice and Regen Potion are reachable from the brew;
+  `sts2_rl/potions.py:1216`'s legacy arm calls `random_potion`, which filters
+  exactly those three and picks uniformly instead of rolling a rarity. The
+  parity arm is correct. Live for the RL env, which never builds an `rng_set`.
 
 ---
 
@@ -4445,6 +4715,60 @@ Three more holes this aggregation noticed, on top of the seam tier's two:
 
 ---
 
+## 3F. `potion` — dormant and single-site mechanisms  *(merged 2026-07-27)*
+
+Twelve mechanisms. The first is a 51-site family; the rest are one unit each.
+Every one carries an explicit `live: false` in its record — the potion tier
+states the boolean on all 152 entries, so nothing here is inheriting its
+liveness from a neighbour.
+
+| mechanism | sites | dormant because | goes live when |
+|---|---|---|---|
+| `potion/_effect_bracket` | 51 | `PotionModel.cs:324-331` brackets `OnUse` in `BeginCardOrPotionEffect`/`EndCardOrPotionEffect` and the sim has no re-entrancy depth counter; the ported cards that auto-play mid-resolution do not move the draw pile between the inner and outer ends | a potion or card empties the hand and then moves the draw pile from inside a nested auto-play. **Deliberately not merged** into `relic/unceasing_top`'s card-play half: the guard's own text refuses it, because a fix that brackets only card plays leaves this half open |
+| `potion/_filter_for_combat_event_rarity` | 6 | `CardFactory.FilterForCombat` drops Basic, Ancient **and Event** (`CardFactory.cs:159-162`); `cards/pool.py:108-117` drops the first two. Executed: both pools' Event buckets are empty (IRONCLAD 85→78, COLORLESS 53→50) | any Event-rarity card is added to `IRONCLAD_POOL` or `COLORLESS_POOL`. **CROSS-STREAM: the fix lands in `cards/pool.py`, which the card tier owns** — the recipe is not "edit a potion file" |
+| `potion/_strength_applier` | 4 | `StrengthCmd.apply` (`sts2_rl/cmds.py:349-361`) drops the applier the C# passes; no ported listener reads a `StrengthPower`'s applier, and Unsettling Lamp's guard returns early for a self-targeted buff either way | a listener reads a `StrengthPower`'s applier, or Strength is applied to an **enemy** through `StrengthCmd`. Note the same potion passes the applier for its Dexterity half — the two halves of `fysh_oil` disagree |
+| `potion/snecko_oil/g2` | 1 | `SneckoOil.cs:51` skips a card whose unmodified cost is negative; the sim clamps costs at 0 (`cards/base.py:232`) so no card can present one | an unclamped cost representation. **Grade A when it wakes**, not B: the skipped card also skips a `CombatEnergyCosts` draw |
+| `potion/snecko_oil/g3` | 1 | `SetThisTurnOrUntilPlayed` also expires on play; `set_cost_this_turn` models only the end-of-turn half, and its own docstring says so | any effect that returns a played card to hand within the turn. **No other record verdicts this**, and `relic/snecko_eye` is the other consumer |
+| `potion/snecko_oil/OnUse` | 1 | rollup of the two above | — |
+| `potion/gamblers_brew/g3` | 1 | the Sly auto-play deferral (`CardCmd.cs:201-204`) has no sim counterpart; `grep -rn '\bsly\b' sts2_rl/` returns one hit, a docstring | any card with the Sly keyword is ported |
+| `potion/gamblers_brew/g4` | 1 | the sim fires `on_card_discarded` *before* the pile move where C# fires it after (`CardCmd.cs:192-194`); executed, the sim has no `on_card_discarded` listener at all | any listener on `on_card_discarded` that reads the discard pile |
+| `potion/fairy_in_a_bottle/g2` | 1 | the sim uses the *Discard* verb where C# uses `RemoveBeforeUse` (`PotionModel.cs:221-234`); harmless today because `discard_potion` dispatches nothing | `Hook.AfterPotionDiscarded` is wired to `discard_potion` — which `relic/belt_buckle` needs. **Recorded so that fix does not silently create a defect** |
+| `potion/foul_potion/TargetType` | 1 | the tier's only computed `TargetType` branch (`FoulPotion.cs:33-43`: `TargetedNoCreature` out of combat, `AllEnemies` in it), unported | the sim gains an out-of-combat use path without also giving Foul Potion its non-combat arm |
+| `potion/foul_potion/PassesCustomUsabilityCheck` | 1 | **the game's only implementer** of that hook (executed grep), unported; the only arm the sim can reach returns true unconditionally | the sim gains an out-of-combat use path, at which point Foul Potion becomes drinkable in rooms the game greys out |
+| `potion/orobic_acid/OnUse` | 1 | rollup of `potion/_filter_for_combat_event_rarity` at that unit | — |
+
+Sites, for `coverage`: `potion/ashwater/g6`, `potion/attack_potion/g3`,
+`potion/attack_potion/g7`, `potion/beetle_juice/g3`,
+`potion/blessing_of_the_forge/g5`, `potion/block_potion/g3`,
+`potion/blood_potion/g5`, `potion/bottled_potential/g4`, `potion/clarity/g3`,
+`potion/colorless_potion/g4`, `potion/colorless_potion/g8`,
+`potion/cure_all/g3`, `potion/dexterity_potion/g3`, `potion/distilled_chaos/g6`,
+`potion/droplet_of_precognition/g6`, `potion/duplicator/g3`,
+`potion/energy_potion/g2`, `potion/entropic_brew/g7`,
+`potion/explosive_ampoule/g4`, `potion/fairy_in_a_bottle/g2`,
+`potion/fairy_in_a_bottle/g7`, `potion/fire_potion/g3`, `potion/flex_potion/g3`,
+`potion/fortifier/g3`, `potion/foul_potion/PassesCustomUsabilityCheck`,
+`potion/foul_potion/TargetType`, `potion/foul_potion/g6`,
+`potion/fruit_juice/g3`, `potion/fysh_oil/OnUse`, `potion/fysh_oil/g1`,
+`potion/fysh_oil/g4`, `potion/gamblers_brew/g3`, `potion/gamblers_brew/g4`,
+`potion/gamblers_brew/g6`, `potion/gigantification_potion/g2`,
+`potion/glowwater/g4`, `potion/heart_of_iron/g2`, `potion/liquid_bronze/g2`,
+`potion/liquid_memories/g4`, `potion/lucky_tonic/g2`, `potion/mazaleths_gift/g3`,
+`potion/orobic_acid/OnUse`, `potion/orobic_acid/g2`, `potion/orobic_acid/g5`,
+`potion/potion_of_binding/g6`, `potion/potion_shaped_rock/g3`,
+`potion/powdered_demise/g2`, `potion/power_potion/g3`, `potion/power_potion/g6`,
+`potion/radiant_tincture/g2`, `potion/regen_potion/g3`,
+`potion/shackling_potion/g5`, `potion/ship_in_a_bottle/g2`,
+`potion/skill_potion/g3`, `potion/skill_potion/g6`, `potion/snecko_oil/OnUse`,
+`potion/snecko_oil/g2`, `potion/snecko_oil/g3`, `potion/snecko_oil/g6`,
+`potion/soldiers_stew/g4`, `potion/speed_potion/g2`, `potion/stable_serum/g2`,
+`potion/strength_potion/OnUse`, `potion/strength_potion/g1`,
+`potion/strength_potion/g4`, `potion/swift_potion/g2`,
+`potion/touch_of_insanity/g5`, `potion/vulnerable_potion/g3`,
+`potion/weak_potion/g3`.
+
+---
+
 # Record inconsistencies found while aggregating
 
 Rule 3 signals: a gap whose text contradicts another record's, or its own. This
@@ -4659,6 +4983,71 @@ machinery's reachability from its own vantage point.
     hand-off, not a finding — but it was reproduced in this queue as the
     "look at this one first" recommendation for the 11 unclaimed overrides, and
     it is now corrected in place.
+
+## 2026-07-27, the potion tier merge — the scope-decision failure, one merge later
+
+19. **Four relic records still assert the deleted potion clause as a live
+    premise.** `relic/alchemical_coffer`, `relic/lost_coffer`,
+    `relic/phial_holster` and `relic/potion_belt` each carry, verbatim:
+    "SCOPE RULING (2026-07-26 relic fix pass, applied at every potion site in
+    this tier). The shared contract's 'Out of scope everywhere: potions
+    (deferred by Perry)' means **POTION IS NOT AN AUDITED KIND — there is no
+    `potion` roster kind and no `audit/records/potion/`.**"
+    Both halves are false: `audit/tools/harness.py:61` created the roster kind
+    on 2026-07-26 and `audit/records/potion/` holds 51 records. Three of the four
+    entries are `gap`/`live: true` and one (`phial_holster`) is a `faithful`
+    resting on it. **This is section
+    [1D](#1d-potion-scope--live-gaps-unmasked-by-deleting-the-exclusion-2026-07-26)'s
+    own thesis recurring one merge later** — a dormancy claim that describes a
+    *scope decision* rather than a fact about today's content. Reported to the
+    relic stream, not edited. Distinguish these from the ten records
+    (`card/alchemize`, `power/{buffer,clarity,demise,flex_potion,gigantification,radiance,regen,shackling_potion,speed_potion}`)
+    that quote the clause as explicit "RE-VERDICTED … has been DELETED" history:
+    that is correct and should stay.
+
+20. **28 `extra_sources` hashes should never have been written, in 27 records
+    owned by three other streams.** `citation_check.py` declares
+    `_NEVER_HASHED = ("audit/tools/", "test/")` — the pipeline's own machinery
+    and its pins are cited but not hashed, because "a broken pin fails loudly on
+    its own" — and `backfill_sources.py` had no such exclusion, so it pinned
+    them. The consequence is false staleness: a record hashing
+    `test/test_hook_order.py` goes stale whenever **any** pin is added anywhere
+    in that file, and one hashing `audit/tools/relic_probes.py` goes stale when a
+    probe is edited. Appending the four potion pins staled nine records whose own
+    cited lines had not moved by a byte. The tool is fixed; the data is a
+    hand-off, by owning stream:
+
+    | stream | records | pinned path |
+    |---|---|---|
+    | `card` (18) | `anointed`, `beat_down`, `discovery`, `distraction`, `havoc`, `hidden_gem`, `jack_of_all_trades`, `jackpot`, `metamorphosis`, `rip_and_tear`, `seeker_strike`, `splash`, `volley` | `test/test_rng_tripwire.py` |
+    | | `feel_no_pain`, `mad_science` | `test/test_shared_enchantments.py` |
+    | | `feel_no_pain` | `test/test_ironclad_cards.py` |
+    | | `apotheosis`, `entrench`, `primal_force` | `test/test_hook_order.py` — **stale** |
+    | `relic` (8) | `mystic_lighter`, `permafrost` | `audit/tools/relic_probes.py` |
+    | | `horn_cleat`, `intimidating_helmet`, `iron_club`, `joss_paper`, `orichalcum`, `pen_nib` | `test/test_hook_order.py` — **stale** |
+    | `power` (1) | `surrounded` | `test/test_hive.py` |
+
+    Each stream applies
+    `py audit/tools/backfill_sources.py --prune --no-add --kind <kind>`.
+    **The nine marked stale above are already re-audited and re-pinned** (they
+    went stale when the potion pins were appended, so clearing them was the
+    potion stream's to finish). The re-audit is
+    `py audit/tools/potion_probes.py pin-append`, and it is three checks rather
+    than a hash rewrite: the pin file changed by **append only**; none of the 72
+    line citations across those records moved or changed content; and every test
+    those records name still exists and is still a `strict=True` xfail. Only
+    then `harness.py rehash`, which re-pinned exactly one `extra_sources` entry
+    per record and nothing else. The prune is still owed for all 27 — it is the
+    durable fix, because a re-pin only buys time until the next pin is added.
+
+21. **A pin was credited to the wrong mechanism, and the queue reported coverage
+    in two places at once.** See entry 25's **pin** row: a two-headed seam guard
+    (`power_cmd/G6`, "No `CombatManager.IsEnding` / `CanReceivePowers` guard
+    backstop") is merged into the `IsEnding` family, so a pin citing it for its
+    *other* head landed on a dormant 22-site mechanism while the LIVE 8-site one
+    it proves read `unpinned`. The general lesson for rule-3 cross-references:
+    **when you match a seam guard, name the head you are matching**, and check
+    whether the queue already owns that head separately — it did.
 
 **And once more, two records disagreeing about one mechanism meant neither was
 right.** `ShouldDisappearFromDoom` (nine C# monster models) drew a dormant `gap`

@@ -85,9 +85,11 @@ def collect(kinds=None, game_root: Path | None = None,
                 stats["stale"] += 1
             if record.get("verdict") == "gap":
                 stats["gaps"] += 1
-            # `live` counts records carrying at least one gap entry explicitly
-            # marked live: true. It reads low until records adopt the key —
-            # absence is "not stated", not "dormant".
+            # `live` counts RECORDS carrying at least one gap entry explicitly
+            # marked live: true — not live entries. Absence is "not stated",
+            # not "dormant", so older tiers read low; the monster and potion
+            # tiers state it on every entry (45/45 and 152/152). potion's 51
+            # is one shared wrapper gap per record, not 51 mechanisms.
             if any(e.get("live") is True for e in harness.record_entries(record)):
                 stats["live"] += 1
         out[kind] = stats
